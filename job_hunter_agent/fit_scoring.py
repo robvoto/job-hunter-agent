@@ -231,10 +231,9 @@ def build_fit_highlights(
             ]
         ]
     )
-    cap_template = highlight_labels.get(
-        "capability_match_sentence",
-        "The ad asks for {capability}, and your profile includes this.",
-    )
+    cap_template = str(highlight_labels.get("capability_match_sentence") or "").strip()
+    if "{capability}" not in cap_template or "show" not in cap_template.lower():
+        cap_template = "The ad asks for {capability}, and your profile shows this experience."
     for _strong, area in matched_profile_areas:
         label = friendly_capability_label(area)
         if not label:

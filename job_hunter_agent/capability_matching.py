@@ -119,53 +119,99 @@ def _display_review_signal_label(value: str) -> str:
     return friendly_capability_label(cleaned)
 
 
+_WORK_TYPE_REVIEW_LABELS = (
+    "contract",
+    "permanent",
+    "ftc",
+    "full time contract",
+    "full-time contract",
+    "contract/temp",
+    "temporary",
+)
+
+
+def _is_work_type_review_label(label: str) -> bool:
+    cleaned = compact_whitespace(label).lower()
+    if not cleaned:
+        return False
+    return any(token == cleaned or token in cleaned for token in _WORK_TYPE_REVIEW_LABELS)
+
+
+def _review_signal_evidence_phrase(label: str, profile: Optional[dict]) -> str:
+    if not isinstance(profile, dict):
+        return "related experience"
+
+    matches = find_profile_capability_matches(label, profile)
+    evidence: list[str] = []
+    for bucket in ("core", "supporting", "strong", "working", "basic"):
+        for item in matches.get(bucket) or []:
+            cleaned = compact_whitespace(item)
+            if cleaned:
+                evidence.append(cleaned)
+
+    evidence = dedupe_preserve_order(evidence)
+    if not evidence:
+        return "related experience"
+    if len(evidence) == 1:
+        return evidence[0]
+    return list_to_phrase(evidence[:2])
+
+
+def humanize_reviewed_signal_match(label: str, profile: Optional[dict] = None) -> str:
+    cleaned = _display_review_signal_label(label)
+    if not cleaned:
+        return ""
+
+    if _is_work_type_review_label(cleaned):
+        return ""
+
+    evidence_phrase = _review_signal_evidence_phrase(cleaned, profile)
+    if evidence_phrase == "related experience":
+        return f"The ad mentions {cleaned}, and your profile shows related experience."
+    return f"The ad mentions {cleaned}, and your profile shows {evidence_phrase}."
+
+
 def reviewed_signal_match_summary(
     record: dict, profile: Optional[dict] = None
 ) -> dict[str, list[str]]:
     existing = record.get("reviewed_signal_matches")
     if isinstance(existing, dict):
+        active_profile = profile or {}
+
+        def _humanized(bucket: str) -> list[str]:
+            items: list[str] = []
+            for item in existing.get(bucket) or []:
+                if _is_work_type_review_label(item):
+                    continue
+                sentence = humanize_reviewed_signal_match(item, active_profile)
+                if sentence:
+                    items.append(sentence)
+            return dedupe_preserve_order(items)
+
         return {
-            "matched": dedupe_preserve_order(
-                [
-                    label
-                    for label in (
-                        _display_review_signal_label(item) for item in existing.get("matched") or []
-                    )
-                    if label
-                ]
-            ),
-            "evidence_only": dedupe_preserve_order(
-                [
-                    label
-                    for label in (
-                        _display_review_signal_label(item)
-                        for item in existing.get("evidence_only") or []
-                    )
-                    if label
-                ]
-            ),
-            "ignored": dedupe_preserve_order(
-                [
-                    label
-                    for label in (
-                        _display_review_signal_label(item) for item in existing.get("ignored") or []
-                    )
-                    if label
-                ]
-            ),
-            "unresolved": dedupe_preserve_order(
-                [
-                    label
-                    for label in (
-                        _display_review_signal_label(item)
-                        for item in existing.get("unresolved") or []
-                    )
-                    if label
-                ]
-            ),
+            "matched": _humanized("matched"),
+            "evidence_only": _humanized("evidence_only"),
+            "ignored": _humanized("ignored"),
+            "unresolved": _humanized("unresolved"),
         }
     source_text = get_trusted_full_description(record) or build_scoring_source_text(record)
-    return reviewed_signal_matches_for_text(source_text)
+    summary = reviewed_signal_matches_for_text(source_text)
+    active_profile = profile or {}
+    return {
+        key: [
+            sentence
+            for sentence in (
+                (
+                    ""
+                    if _is_work_type_review_label(item)
+                    else humanize_reviewed_signal_match(item, active_profile)
+                )
+                for item in values
+            )
+            if sentence
+        ]
+        for key, values in summary.items()
+    }
 
 
 def find_profile_capability_matches(details_text: str, profile: dict) -> Dict[str, List[str]]:

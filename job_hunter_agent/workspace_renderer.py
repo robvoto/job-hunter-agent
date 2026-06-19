@@ -54,11 +54,14 @@ from job_hunter_agent.profile_gaps import (
     classify_requirement_status,
     compute_profile_gaps,
 )
+from job_hunter_agent.preferences import get_match_preferences
 from job_hunter_agent.profile_store import (
     ENGAGEMENT_TYPE_OPTIONS,
+    Engagement,
     VALID_ENGAGEMENT_TYPES,
     get_match_levels,
     load_profile,
+    normalize_engagement_type_preferences,
 )
 from job_hunter_agent.record_schema import (
     RECORD_DUPLICATE_LINKS_KEY,
@@ -259,12 +262,97 @@ def _is_capability_entry(label: str) -> bool:
 def _all_work_types_selected(active_profile: Optional[dict]) -> bool:
     if not isinstance(active_profile, dict):
         return False
-    from job_hunter_agent.preferences import get_match_preferences
-    from job_hunter_agent.profile_store import normalize_engagement_type_preferences
 
     prefs = get_match_preferences(active_profile)
     selected = frozenset(normalize_engagement_type_preferences(prefs.get("engagement_type")))
     return selected == VALID_ENGAGEMENT_TYPES
+
+
+def _work_type_fit_reason(record: dict, active_profile: Optional[dict]) -> str:
+    if _all_work_types_selected(active_profile):
+        return ""
+
+    work_type_label = display_work_type_label(record)
+    if not work_type_label:
+        return ""
+
+    prefs = get_match_preferences(active_profile or {})
+    selected = set(normalize_engagement_type_preferences(prefs.get("engagement_type")))
+    if not selected:
+        return ""
+
+    if work_type_label in {"Contract", "FTC"} and Engagement.CONTRACT in selected:
+        return "This matches your contract preference."
+    if work_type_label == "Permanent" and Engagement.PERMANENT in selected:
+        return "This matches your permanent preference."
+    if work_type_label == "FTC" and Engagement.FULL_TIME_CONTRACT in selected:
+        return "This matches your FTC preference."
+    return ""
+
+
+def _visible_reason_text(reason: str, active_profile: Optional[dict]) -> str:
+    cleaned = compact_whitespace(reason)
+    if not cleaned:
+        return ""
+    lowered = cleaned.lower()
+    if cleaned.startswith("[") and "requirement" in lowered:
+        return ""
+    if lowered.startswith("competitive signal") or lowered.startswith("signal elsewhere"):
+        return ""
+    if "role-family" in lowered:
+        if "alternative" in lowered:
+            return "The job title matches one of your alternative roles"
+        return "The job title matches one of your target roles"
+    if lowered.startswith("description fit is"):
+        return "The job ad strongly matches your BA / technical BA experience"
+    if lowered.startswith("work type"):
+        return ""
+    return cleaned
+
+
+def _score_gap_text(key: str, default: str, **kwargs: object) -> str:
+    try:
+        return default.format(**kwargs)
+    except Exception:
+        return default
+
+
+def _humanize_score_breakdown_label(label: str, active_profile: Optional[dict]) -> str:
+    cleaned = compact_whitespace(label)
+    if not cleaned:
+        return ""
+    lowered = cleaned.lower()
+    if "role-family" in lowered:
+        if "alternative" in lowered or "also-consider" in lowered:
+            return "The job title matches one of your alternative roles"
+        return "The job title matches one of your target roles"
+    if lowered.startswith("description fit is"):
+        return "The job ad strongly matches your BA / technical BA experience"
+    if lowered.startswith("work type"):
+        if _all_work_types_selected(active_profile):
+            return ""
+        if "contract" in lowered:
+            return "This matches your contract preference"
+        if "permanent" in lowered:
+            return "This matches your permanent preference"
+        if "ftc" in lowered:
+            return "This matches your FTC preference"
+        return "Work type matches your preference"
+    if lowered.startswith("[") and "requirement supported:" in lowered:
+        match = re.search(
+            r"requirement supported:\s*(.*?)(?:\s*\|\s*capability:.*)?$",
+            cleaned,
+            re.IGNORECASE,
+        )
+        if match:
+            requirement = compact_whitespace(match.group(1))
+            if requirement:
+                return f"Requirement matched: {requirement}"
+    if cleaned == "Passed content filters":
+        return "Passed content filters"
+    if cleaned == "Already viewed by you":
+        return "Already viewed by you"
+    return cleaned
 
 
 def visible_fit_reasons(
@@ -273,10 +361,22 @@ def visible_fit_reasons(
     max_items: int = 4,
     include_values: bool = False,
     active_profile: Optional[dict] = None,
+    work_type_reason: str = "",
+    work_type_value: Optional[int] = None,
 ) -> List[str]:
-    reasons = dedupe_preserve_order(
-        [compact_whitespace(item) for item in fit_highlights if compact_whitespace(item)]
-    )
+    reason_items: list[tuple[str, Optional[int]]] = []
+    seen_reasons: set[str] = set()
+
+    for item in fit_highlights:
+        reason = compact_whitespace(item)
+        if not reason:
+            continue
+        normalized = reason.lower()
+        if normalized in seen_reasons:
+            continue
+        reason_items.append((reason, None))
+        seen_reasons.add(normalized)
+
     excluded = {
         "Passed content filters",
     }
@@ -287,43 +387,44 @@ def visible_fit_reasons(
     for item in score_breakdown:
         label = compact_whitespace(item.get("label") or "")
         value = int(item.get("value", 0) or 0)
-        # Per-capability entries (tagged [canonical], [alias:...], [contextual_llm]) are scoring
-        # internals already surfaced via fit_highlights — skip them here.
-        if not label or value <= 0 or label in excluded or _is_capability_entry(label):
-            is_pref_signal = (
-                label.startswith("Work mode")
-                or label.startswith("Work type")
-                or label.startswith("Sector")
-            )
-            if not (is_pref_signal and label not in reasons):
-                continue
+        if not label or value <= 0 or label in excluded:
+            continue
+        if _is_capability_entry(label):
+            continue
+        if label.startswith("[") and "requirement" in label.lower():
+            continue
         if suppress_work_type and label.startswith("Work type"):
             continue
-        if label not in reasons:
-            reasons.append(label)
-        if len(reasons) >= max_items:
+
+        reason = _visible_reason_text(label, active_profile)
+        if not reason:
+            continue
+        normalized = reason.lower()
+        if normalized in seen_reasons:
+            continue
+        reason_items.append((reason, value))
+        seen_reasons.add(normalized)
+        if len(reason_items) >= max_items:
             break
 
-    reasons = reasons[:max_items]
+    reason_items = reason_items[:max_items]
+
+    if work_type_reason:
+        normalized = compact_whitespace(work_type_reason).lower()
+        if normalized and normalized not in seen_reasons:
+            reason_items.append((compact_whitespace(work_type_reason), work_type_value))
+            seen_reasons.add(normalized)
 
     if include_values:
         formatted_reasons = []
-        for reason in reasons:
-            val = next(
-                (
-                    int(i.get("value", 0) or 0)
-                    for i in score_breakdown
-                    if compact_whitespace(i.get("label") or "") == reason
-                ),
-                None,
-            )
+        for reason, val in reason_items:
             if val is not None:
                 formatted_reasons.append(f"{reason}: {val:+d}")
             else:
                 formatted_reasons.append(reason)
         return formatted_reasons
 
-    return reasons
+    return [reason for reason, _ in reason_items]
 
 
 def negative_score_reasons(
@@ -356,20 +457,15 @@ def score_gap_reasons(record: dict, score_breakdown: List[dict], max_items: int 
         if _is_capability_entry(compact_whitespace(item.get("label") or ""))
     ]
     evidence_points = sum(int(item.get("value", 0) or 0) for item in capability_entries)
-    gap_labels = _workspace_ui_labels().get("score_gap_labels", {})
-    capability_gap_label = "Capability support is limited: {count} matches contributed to scoring"
-    if isinstance(gap_labels, dict):
-        capability_gap_label = str(
-            gap_labels.get("capability_support_limited") or capability_gap_label
-        )
     gaps: List[str] = []
 
     if not any(
         label.startswith("Posted within") or label == "Still relatively recent" for label in labels
     ):
         gaps.append(
-            _workspace_label(
-                "score_gap_labels", "no_recent_posted_signal", "No reliable recent-posted signal"
+            _score_gap_text(
+                "no_recent_posted_signal",
+                "Posting date wasn't clear, so the age could not be counted.",
             )
         )
 
@@ -377,23 +473,26 @@ def score_gap_reasons(record: dict, score_breakdown: List[dict], max_items: int 
         salary = compact_whitespace(record.get("salary") or "")
         if not salary or salary == "N/A":
             gaps.append(
-                _workspace_label(
-                    "score_gap_labels",
+                _score_gap_text(
                     "no_comparable_salary_rate",
-                    "No comparable salary/rate found",
+                    "No salary info was available, so pay fit could not be compared.",
                 )
             )
 
     if evidence_points < 12:
         capability_count = len(capability_entries)
-        gaps.append(capability_gap_label.format(count=capability_count))
+        if capability_count == 0:
+            gaps.append("No capability matches were counted for this card.")
+        elif capability_count == 1:
+            gaps.append("1 capability match was counted for this card.")
+        else:
+            gaps.append(f"{capability_count} capability matches were counted for this card.")
 
     if full_description_confidence(record) == "LOW":
         gaps.append(
-            _workspace_label(
-                "score_gap_labels",
+            _score_gap_text(
                 "limited_description_confidence",
-                "Scoring confidence is limited because the full description was not captured",
+                "The full description wasn't captured clearly, so some scoring may be missing.",
             )
         )
 
@@ -682,8 +781,23 @@ def render_job_card(
     match_levels = get_match_levels(scoring_profile or load_profile())
     fit_label = score_to_match_label(fit_points, match_levels)
     fit_tone_class = score_to_tone_class(fit_points, scoring_profile)
+    work_type_reason = _work_type_fit_reason(record, active_profile)
+    work_type_value = next(
+        (
+            int(item.get("value", 0) or 0)
+            for item in score_breakdown
+            if compact_whitespace(item.get("label") or "").lower().startswith("work type")
+            and int(item.get("value", 0) or 0) > 0
+        ),
+        None,
+    )
     visible_reasons = visible_fit_reasons(
-        fit_highlights, score_breakdown, include_values=active_debug_mode, active_profile=scoring_profile
+        fit_highlights,
+        score_breakdown,
+        include_values=active_debug_mode,
+        active_profile=scoring_profile,
+        work_type_reason=work_type_reason,
+        work_type_value=work_type_value,
     )
     description_issue = fit_confidence_level == "LOW"
     work_mode = str(display_record.get("work_mode") or "N/A")
@@ -997,10 +1111,13 @@ def render_job_card(
     )
 
     _posted_raw = posted_display_label(record)
-    posted_display = "Unknown" if not _posted_raw or _posted_raw == "N/A" else _posted_raw
+    posted_display = "" if not _posted_raw or _posted_raw == "N/A" else _posted_raw
     meta_items = []
+    if posted_display:
+        meta_items.append(
+            f'<span class="job-meta-item"><strong>Posted</strong> {safe_html(str(posted_display))}</span>'
+        )
     for label, value, always_show in [
-        ("Posted", posted_display, True),
         ("Location", display_record.get("location"), False),
         ("Work mode", display_work_mode_label(display_record), False),
         (
@@ -1133,60 +1250,61 @@ def render_job_card(
     raw_coverage = display_record.get(RECORD_REQUIREMENT_COVERAGE_KEY)
     merged_requirement_rows: dict[str, dict[str, Any]] = {}
     merged_requirement_order: list[str] = []
-    if requirement_statuses or isinstance(raw_coverage, list):
-        status_labels = {
-            STATUS_CONFIRMED_HAVE: "In profile",
-            STATUS_CONFIRMED_DO_NOT_HAVE: "Not in profile",
-            STATUS_UNKNOWN: "Check",
-        }
-        coverage_status_labels = {
-            "supported": "Supported",
-            "partially_supported": "Partial",
-            "not_shown": "Not shown",
-            "mismatch": "Mismatch",
-        }
-        importance_label_keys = {
-            "mandatory": "importance_mandatory",
-            "strongly_preferred": "importance_strongly_preferred",
-            "preferred": "importance_preferred",
-            "nice_to_have": "importance_nice_to_have",
-        }
+    # When requirement_coverage is available, show only those rows (they are more
+    # detailed and LLM-verified). Skip the short job_requirements bullets to avoid
+    # showing the same requirements twice with different text.
+    has_coverage = isinstance(raw_coverage, list) and len(raw_coverage) > 0
+    coverage_status_labels = {
+        "supported": "In profile",
+        "partially_supported": "Partial match",
+        "not_shown": "",
+        "mismatch": "Not in profile",
+    }
+    profile_status_labels = {
+        STATUS_CONFIRMED_HAVE: "In profile",
+        STATUS_CONFIRMED_DO_NOT_HAVE: "Not in profile",
+        STATUS_UNKNOWN: "",
+    }
+    importance_label_keys = {
+        "mandatory": "importance_mandatory",
+        "strongly_preferred": "importance_strongly_preferred",
+        "preferred": "importance_preferred",
+        "nice_to_have": "importance_nice_to_have",
+    }
 
-        def _requirement_key(value: str) -> str:
-            return compact_whitespace(value).lower()
+    def _requirement_key(value: str) -> str:
+        return compact_whitespace(value).lower()
 
+    if has_coverage:
+        # Coverage path: one row per coverage entry, no job_requirements duplication
+        for item in raw_coverage:
+            if not isinstance(item, dict):
+                continue
+            req_text = compact_whitespace(str(item.get("requirement") or ""))
+            if not req_text:
+                continue
+            key = _requirement_key(req_text)
+            if key not in merged_requirement_rows:
+                merged_requirement_rows[key] = {"requirement": req_text}
+                merged_requirement_order.append(key)
+            row = merged_requirement_rows[key]
+            row["coverage_status"] = str(item.get("status") or "not_shown").strip().lower()
+            row["importance"] = str(item.get("importance") or "preferred").strip().lower()
+            row["capability_name"] = compact_whitespace(str(item.get("capability_name") or ""))
+            row["matched_job_text"] = compact_whitespace(str(item.get("matched_job_text") or ""))
+    else:
+        # Fallback: no coverage — show job_requirements with profile-match status
         for item in requirement_statuses:
             req_text = compact_whitespace(str(item.get("requirement") or ""))
             if not req_text:
                 continue
             key = _requirement_key(req_text)
-            row = merged_requirement_rows.get(key)
-            if row is None:
-                row = {"requirement": req_text}
-                merged_requirement_rows[key] = row
+            if key not in merged_requirement_rows:
+                merged_requirement_rows[key] = {"requirement": req_text}
                 merged_requirement_order.append(key)
-            row["profile_status"] = item.get("status")
+            merged_requirement_rows[key]["profile_status"] = item.get("status")
 
-        if isinstance(raw_coverage, list):
-            for item in raw_coverage:
-                if not isinstance(item, dict):
-                    continue
-                req_text = compact_whitespace(str(item.get("requirement") or ""))
-                if not req_text:
-                    continue
-                key = _requirement_key(req_text)
-                row = merged_requirement_rows.get(key)
-                if row is None:
-                    row = {"requirement": req_text}
-                    merged_requirement_rows[key] = row
-                    merged_requirement_order.append(key)
-                row["coverage_status"] = str(item.get("status") or "not_shown").strip().lower()
-                row["importance"] = str(item.get("importance") or "preferred").strip().lower()
-                row["capability_name"] = compact_whitespace(str(item.get("capability_name") or ""))
-                row["matched_job_text"] = compact_whitespace(
-                    str(item.get("matched_job_text") or "")
-                )
-
+    if requirement_statuses or isinstance(raw_coverage, list):
         requirement_items_html = ""
         for key in merged_requirement_order:
             row = merged_requirement_rows.get(key)
@@ -1201,27 +1319,27 @@ def render_job_card(
             cap_name = compact_whitespace(str(row.get("capability_name") or ""))
             matched_text = compact_whitespace(str(row.get("matched_job_text") or ""))
 
-            if profile_status == STATUS_CONFIRMED_HAVE:
+            if coverage_status == "supported":
+                css_modifier = "supported"
+            elif coverage_status == "partially_supported":
+                css_modifier = "partially-supported"
+            elif coverage_status == "mismatch":
+                css_modifier = "mismatch"
+            elif coverage_status == "not_shown" and importance == "mandatory":
+                css_modifier = "mandatory-not-shown"
+            elif coverage_status == "not_shown":
+                css_modifier = "not-shown"
+            elif profile_status == STATUS_CONFIRMED_HAVE:
                 css_modifier = "confirmed-have"
             elif profile_status == STATUS_CONFIRMED_DO_NOT_HAVE:
                 css_modifier = "confirmed-do-not-have"
-            elif profile_status == STATUS_UNKNOWN:
-                css_modifier = "unknown"
-            elif coverage_status == "not_shown" and importance == "mandatory":
-                css_modifier = "mandatory-not-shown"
-            elif coverage_status:
-                css_modifier = coverage_status.replace("_", "-")
             else:
                 css_modifier = "unknown"
 
-            if profile_status in status_labels:
-                status_label = status_labels[profile_status]
-            elif coverage_status:
-                status_label = coverage_status_labels.get(
-                    coverage_status, coverage_status.replace("_", " ").title()
-                )
+            if coverage_status:
+                status_label = coverage_status_labels.get(coverage_status, "")
             else:
-                status_label = "Check"
+                status_label = profile_status_labels.get(profile_status, "")
 
             importance_label = ""
             if importance:
@@ -1246,12 +1364,17 @@ def render_job_card(
                 if importance_label
                 else ""
             )
+            status_html = (
+                f'<span class="job-requirement-status">{safe_html(status_label)}</span>'
+                if status_label
+                else ""
+            )
 
             requirement_items_html += (
                 f'<li class="job-requirement-item job-requirement-item--{safe_html(css_modifier)}">'
                 f'<span class="job-requirement-text">{safe_html(req_text)}{detail_html}</span>'
                 f"{importance_html}"
-                f'<span class="job-requirement-status">{safe_html(status_label)}</span>'
+                f"{status_html}"
                 f"</li>"
             )
 
@@ -1409,10 +1532,22 @@ def render_job_card(
             "</div>"
         )
     if negative_items:
+        humanized_negative_items = []
+        seen_humanized: set[str] = set()
+        for item in negative_items:
+            cleaned_item = compact_whitespace(item)
+            if not cleaned_item:
+                continue
+            humanized = _humanize_check_item(cleaned_item)
+            normalized = compact_whitespace(humanized).lower()
+            if not normalized or normalized in seen_humanized:
+                continue
+            seen_humanized.add(normalized)
+            humanized_negative_items.append(humanized)
         insight_sections.append(
             '<div class="job-insight-group job-insight-warning">'
             "<strong>Things to check before applying</strong>"
-            f"<ul>{''.join(f'<li>{_humanize_check_item(item)}</li>' for item in negative_items)}</ul>"
+            f"<ul>{''.join(f'<li>{safe_html(item)}</li>' for item in humanized_negative_items)}</ul>"
             "</div>"
         )
     if active_debug_mode:
@@ -1428,18 +1563,18 @@ def render_job_card(
         if gap_reasons:
             insight_sections.append(
                 '<div class="job-insight-group is-secondary">'
-                "<strong>What we couldn't score</strong>"
+                "<strong>Debug: scoring notes</strong>"
                 f"<ul>{''.join(f'<li>{safe_html(item)}</li>' for item in gap_reasons)}</ul>"
                 "</div>"
             )
     if active_debug_mode and score_breakdown:
         score_breakdown_html = "".join(
-            f"<li>{safe_html(re.sub(r'\\s*\\[alias:[^\\]]*\\]', '', str(item['label'])).strip())}: {('0' if int(item['value']) == 0 else '{:+d}'.format(int(item['value'])))}</li>"
+            f"<li>{safe_html(_humanize_score_breakdown_label(re.sub(r'\\s*\\[alias:[^\\]]*\\]', '', str(item['label'])).strip(), active_profile))}: {('0' if int(item['value']) == 0 else '{:+d}'.format(int(item['value'])))}</li>"
             for item in score_breakdown
         )
         insight_sections.append(
             '<div class="job-insight-group is-secondary">'
-            "<strong>Score details</strong>"
+            "<strong>Debug: score details</strong>"
             f"<ul>{score_breakdown_html}</ul>"
             "</div>"
         )
@@ -1491,7 +1626,7 @@ def render_job_card(
             )
         llm_review_html = (
             '<details class="job-insights job-llm-review">'
-            "<summary>LLM fit review</summary>"
+            "<summary>Debug: LLM fit review</summary>"
             f"{''.join(llm_review_parts)}"
             "</details>"
         )

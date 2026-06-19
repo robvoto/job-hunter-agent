@@ -440,6 +440,22 @@ def test_visible_fit_reasons_backfills_from_positive_score_drivers():
     ]
 
 
+def test_visible_fit_reasons_humanize_title_match_values():
+    reasons = workspace_renderer.visible_fit_reasons(
+        [],
+        [
+            {"label": "Preferred role-family match", "value": 15},
+            {"label": "Description fit is excellent", "value": 78},
+        ],
+        include_values=True,
+    )
+
+    assert reasons == [
+        "The job title matches one of your target roles: +15",
+        "The job ad strongly matches your BA / technical BA experience: +78",
+    ]
+
+
 def test_build_fit_highlights_recomputes_instead_of_reusing_stale_highlights(monkeypatch):
     monkeypatch.setattr(
         fit_scoring,
@@ -829,7 +845,7 @@ def test_job_card_shows_unknown_posted_date_when_missing():
         _test_profile(),
     )
 
-    assert '<span class="job-meta-item"><strong>Posted</strong> Unknown</span>' in html
+    assert "<strong>Posted</strong>" not in html
 
 
 def test_job_card_shows_reviewed_signal_transparency_groups(monkeypatch):
@@ -870,10 +886,10 @@ def test_job_card_shows_reviewed_signal_transparency_groups(monkeypatch):
     )
 
     assert "<strong>Your approved experience appears in this ad</strong>" in html
-    assert "<li>Stakeholder management</li>" in html
-    assert "<li>Jira</li>" in html
+    assert "The ad mentions Stakeholder management, and your profile shows related experience." in html
+    assert "The ad mentions Jira, and your profile shows related experience." in html
     assert "<strong>Filtered out</strong>" in html
-    assert "<li>Project</li>" in html
+    assert "The ad mentions Project, and your profile shows related experience." in html
     # Unresolved signals (Banking) only render in debug mode
 
 
@@ -1364,7 +1380,7 @@ def test_positive_note_does_not_repeat_first_why_it_fits_bullet():
     )
 
     assert "Strongest fit:" not in html
-    cap_sentence = "The ad asks for Multi-client delivery, and your profile includes this."
+    cap_sentence = "The ad asks for Multi-client delivery, and your profile shows this experience."
     assert html.count(cap_sentence) == 1
 
 
@@ -1821,7 +1837,7 @@ def test_render_job_card_shows_llm_review_section_in_debug_mode():
         debug_mode=True,
     )
 
-    assert "LLM fit review" in html
+    assert "Debug: LLM fit review" in html
     assert "Final decision: KEPT" in html
     assert "Final score" in html
     assert "LLM fit grade" in html
@@ -1836,6 +1852,43 @@ def test_render_job_card_shows_llm_review_section_in_debug_mode():
         "Possible capability match — mentioned in the job, but not strong enough to affect the score.: +0"
         not in html
     )
+
+
+def test_render_job_card_hides_debug_fit_sections_in_normal_mode():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-normal-fit-sections",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "decision": "KEEP",
+            "llm_decision": "KEEP",
+            "llm_fit_grade": "STRONG",
+            "llm_debug_reason": "Strong requirement coverage — 3 supported requirements with direct capability links.",
+            RECORD_FIT_SCORE_KEY: 72,
+            RECORD_FIT_SCORE_BREAKDOWN_KEY: [
+                {"label": "Base fit", "value": 72, "section": "llm_fit"},
+                {"label": "Possible capability match — mentioned in the job, but not strong enough to affect the score.", "value": 0, "section": "capability"},
+            ],
+            RECORD_LLM_ELAPSED_MS_KEY: 1234,
+            RECORD_LLM_COST_USD_KEY: 0.0123,
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "seek",
+        },
+        _capability_profile(),
+        debug_mode=False,
+    )
+
+    assert "Debug: LLM fit review" not in html
+    assert "Debug: score details" not in html
+    assert "Debug: scoring notes" not in html
 
 
 def test_posted_filter_options_show_explicit_day_windows():
@@ -2129,6 +2182,19 @@ def _all_work_types_profile():
     }
 
 
+def _contract_only_profile():
+    return {
+        **_test_profile(),
+        "match_preferences": {
+            "home_location": "Sydney NSW",
+            "prefer_sector": True,
+            "engagement_type": ["contract"],
+            "preferred_contract_months": 12,
+            "short_contract_months": 6,
+        },
+    }
+
+
 def test_fit_card_never_shows_internal_scoring_labels():
     """No raw internal labels should appear in the rendered job card HTML."""
     profile = {
@@ -2217,7 +2283,7 @@ def test_fit_card_capability_match_uses_sentence_format():
         _capability_profile(),
     )
 
-    assert "and your profile includes this" in html
+    assert "and your profile shows this experience" in html
     assert "Strong capability match:" not in html
 
 
@@ -2251,6 +2317,7 @@ def test_work_type_not_a_fit_reason_when_all_types_accepted():
         fit_section = html[start:end]
     assert "Work type" not in fit_section
     assert "Contract" not in fit_section
+    assert "<strong>Work type</strong> Contract" in html
 
 
 def test_work_type_is_fit_reason_when_user_prefers_permanent():
@@ -2275,7 +2342,32 @@ def test_work_type_is_fit_reason_when_user_prefers_permanent():
         _permanent_only_profile(),
     )
 
-    assert "Work type" in html
+    assert "This matches your permanent preference." in html
+
+
+def test_work_type_is_fit_reason_when_user_prefers_contract():
+    """Contract should appear as a fit reason only when contract preference is explicit."""
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-work-type-contract",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Contract/Temp",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "seek",
+        },
+        _contract_only_profile(),
+    )
+
+    assert "This matches your contract preference." in html
 
 
 def test_nv1_check_item_renders_as_human_readable():
@@ -2320,6 +2412,76 @@ def test_nv1_check_item_in_rendered_card():
 
     assert "NV1 clearance" in html
     assert "nv1 explicitly required but not shown" not in html.lower()
+    start = html.index("Things to check before applying")
+    end = html.index("</div>", start)
+    check_section = html[start:end]
+    assert check_section.lower().count("nv1 clearance") == 1
+
+
+def test_reviewed_signal_matches_render_as_plain_english_sentences(monkeypatch):
+    """Approved review signals should render as plain-English evidence sentences."""
+    profile = {
+        **_capability_profile(),
+        "match_preferences": _all_work_types_profile()["match_preferences"],
+    }
+    monkeypatch.setattr(
+        capability_matching,
+        "load_registry",
+        lambda: {
+            "stakeholder": {
+                "signal": "stakeholder management",
+                "decision": "use",
+                "original_texts": ["stakeholder management"],
+            },
+            "contract": {
+                "signal": "contract",
+                "decision": "use",
+                "original_texts": ["contract"],
+            },
+        },
+    )
+
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-reviewed-signal-sentence",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": (
+                "Strong stakeholder management, Jira, banking exposure, and project coordination needed."
+            ),
+            "fit_source_text": (
+                "Strong stakeholder management, Jira, banking exposure, and project coordination needed."
+            ),
+            "description_source": "jobAdDetails",
+            RECORD_DETAILS_STATUS_KEY: DETAILS_STATUS_OK,
+            "fit_highlights": [],
+            "reviewed_signal_matches": {
+                "matched": ["stakeholder management", "contract"],
+                "evidence_only": [],
+                "ignored": [],
+                "unresolved": [],
+            },
+            "source": "seek",
+        },
+        profile,
+    )
+
+    assert "The ad mentions Stakeholder management, and your profile shows" in html
+    assert "Primary stakeholder engagement" in html
+    assert "This matches your contract preference." not in html
+    assert "<strong>Work type</strong> Permanent" in html
+    approved_start = html.index("<strong>Your approved experience appears in this ad</strong>")
+    approved_end = html.index("</div>", approved_start)
+    approved_section = html[approved_start:approved_end]
+    assert "contract" not in approved_section.lower()
 
 
 def test_fit_section_heading_uses_human_friendly_language():
@@ -2363,3 +2525,45 @@ def test_fit_section_heading_uses_human_friendly_language():
     assert "Things to check before applying" in html
     assert "Why it fits" not in html
     assert "What lowers it" not in html
+
+
+def test_score_gap_notes_use_friendly_copy():
+    notes = workspace_renderer.score_gap_reasons(
+        {
+            "job_key": "test-gap-notes",
+            "salary": "N/A",
+            "full_description": "A detailed description that is safely captured. " * 20,
+            "description_source": "jobAdDetails",
+        },
+        [{"label": "Location: no preference set", "value": 0}],
+    )
+
+    assert any("No capability matches were counted" in note for note in notes)
+    assert all("scoring confidence is low" not in note.lower() for note in notes)
+
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-gap-notes",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "A detailed description that is safely captured. " * 20,
+            "fit_source_text": "A detailed description that is safely captured. " * 20,
+            "description_source": "jobAdDetails",
+            RECORD_DETAILS_STATUS_KEY: DETAILS_STATUS_OK,
+            "fit_highlights": [],
+            "source": "seek",
+        },
+        _test_profile(),
+        debug_mode=True,
+    )
+
+    assert "Debug: scoring notes" in html
+    assert "What we couldn't score" not in html

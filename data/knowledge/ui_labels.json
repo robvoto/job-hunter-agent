@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 39,
+  "version": 40,
   "updated_at": "2026-06-19",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -318,7 +318,7 @@
   "fit_highlight_labels": {
     "strong_capability_match": "Strong capability match",
     "capability_match": "Capability match",
-    "capability_match_sentence": "The ad asks for {capability}, and your profile includes this.",
+    "capability_match_sentence": "The ad asks for {capability}, and your profile shows this experience.",
     "matched_signal": "Related term found",
     "long_contract": "12+ month contract",
     "permanent_role": "Permanent role",
@@ -327,10 +327,10 @@
   },
   "score_gap_labels_description": "Display labels for workspace score-gap explanations.",
   "score_gap_labels": {
-    "capability_support_limited": "Only {count} skill match found — scoring confidence is low",
-    "no_recent_posted_signal": "Posting date unclear — may be older than it looks",
-    "no_comparable_salary_rate": "No salary info found — couldn't check pay fit",
-    "limited_description_confidence": "Job description wasn't fully captured — scoring may be off"
+    "capability_support_limited": "No capability matches were counted for this card",
+    "no_recent_posted_signal": "Posting date wasn't clear, so the age could not be counted",
+    "no_comparable_salary_rate": "No salary info was available, so pay fit could not be compared",
+    "limited_description_confidence": "The full description wasn't captured clearly, so some scoring may be missing"
   },
   "duplicate_labels_description": "Display labels and copy for workspace duplicate and related-job cards.",
   "duplicate_labels": {

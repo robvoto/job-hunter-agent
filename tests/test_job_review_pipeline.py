@@ -28,6 +28,7 @@ from job_hunter_agent.record_schema import (
     RECORD_DETAILS_TEXT_KEY,
     RECORD_HARD_BLOCK_REASONS_KEY,
     RECORD_JOB_KEY,
+    RECORD_JOB_QUALITY_SIGNALS_KEY,
     RECORD_LLM_COST_USD_KEY,
     RECORD_LLM_DECISION_KEY,
     RECORD_LLM_ELAPSED_MS_KEY,
@@ -278,6 +279,35 @@ def test_review_outcome_is_source_neutral_for_equivalent_normalized_jobs(monkeyp
     assert fit_score_breakdown(seek_record, _review_profile()) == fit_score_breakdown(
         linkedin_record, _review_profile()
     )
+
+
+def test_review_pre_detail_rejects_closed_jobs_before_title_review(monkeypatch):
+    record = _base_record("linkedin", "linkedin_full_description", "description")
+    record[RECORD_JOB_QUALITY_SIGNALS_KEY] = [
+        {
+            "kind": "job_closed",
+            "label": "Job Closed",
+            "evidence": "External page indicates this role is no longer available.",
+            "needs_review": True,
+        }
+    ]
+
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "analyze_title_filters",
+        lambda title, profile: (_ for _ in ()).throw(
+            AssertionError("title analysis should not run for closed jobs")
+        ),
+    )
+
+    outcome, updated_record, _, should_fetch = review_pre_detail_normalized_job(
+        record, _review_context("LinkedIn")
+    )
+
+    assert outcome[RECORD_DECISION_KEY] == "REJECT"
+    assert outcome[RECORD_REJECT_REASON_KEY] == "JOB_CLOSED"
+    assert should_fetch is False
+    assert updated_record[RECORD_REJECT_REASON_KEY] == "JOB_CLOSED"
 
 
 def test_hard_block_rejection_registers_learning_signal(monkeypatch):

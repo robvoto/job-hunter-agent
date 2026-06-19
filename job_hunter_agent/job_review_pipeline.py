@@ -38,6 +38,7 @@ _REASON_LABELS: dict[str, str] = {
     "ALREADY_APPLIED": "you already applied to this one",
     "DUPLICATE_URL": "duplicate listing",
     "DUPLICATE_JOB_KEY": "duplicate listing",
+    "JOB_CLOSED": "no longer accepting applications",
     "NO_JOB_KEY": "missing job ID",
     "NO_URL": "missing job URL",
     "OK": "passed",
@@ -127,6 +128,7 @@ from job_hunter_agent.record_schema import (
     RECORD_FULL_DESCRIPTION_KEY,
     RECORD_HARD_BLOCK_REASONS_KEY,
     RECORD_JOB_KEY,
+    RECORD_JOB_QUALITY_SIGNALS_KEY,
     RECORD_JOB_REQUIREMENTS_KEY,
     RECORD_LLM_COST_USD_KEY,
     RECORD_LLM_DEBUG_REASON_KEY,
@@ -347,6 +349,15 @@ _DETAILS_STATUS_REJECT_REASON = {
     "navigation_error": "DETAILS_NAVIGATION_ERROR",
     "empty": "NO_DETAILS",
 }
+
+
+def _has_job_closed_signal(record: dict) -> bool:
+    for signal in record.get(RECORD_JOB_QUALITY_SIGNALS_KEY) or []:
+        if not isinstance(signal, dict):
+            continue
+        if str(signal.get("kind") or "").strip().lower() == "job_closed":
+            return True
+    return False
 
 
 def _source_tag(context: ReviewPipelineContext) -> str:
@@ -692,6 +703,24 @@ def review_pre_detail_normalized_job(
     if not record.get(RECORD_URL_KEY):
         record[RECORD_DECISION_KEY] = "REJECT"
         record[RECORD_REJECT_REASON_KEY] = "NO_URL"
+        _finalize(record, context)
+        return _build_outcome(record), record, skill_observations, False
+
+    if _has_job_closed_signal(record):
+        reject_reason = "JOB_CLOSED"
+        record[RECORD_DECISION_KEY] = "REJECT"
+        record[RECORD_REJECT_REASON_KEY] = reject_reason
+        _pipeline_log(
+            "CARD_GATE",
+            record,
+            context.source_name,
+            result="REJECT",
+            reason=reject_reason,
+        )
+        print(
+            f"{source_tag} REJECTED (closed) [{reject_reason}] {title} @ {company} "
+            "(no longer accepting applications)"
+        )
         _finalize(record, context)
         return _build_outcome(record), record, skill_observations, False
 

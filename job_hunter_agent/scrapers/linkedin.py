@@ -37,6 +37,7 @@ from job_hunter_agent.record_schema import (
     RECORD_DESCRIPTION_SOURCE_KEY,
     RECORD_DETAILS_TEXT_KEY,
     RECORD_JOB_KEY,
+    RECORD_JOB_QUALITY_SIGNALS_KEY,
     RECORD_LOCATION_KEY,
     RECORD_POSTED_AGE_DAYS_KEY,
     RECORD_SALARY_KEY,
@@ -167,6 +168,14 @@ class LinkedInScraper(BaseJobScraper):
                     len(record[RECORD_DETAILS_TEXT_KEY]),
                 )
 
+                closed_signals = self._detect_closed_job_signals(record)
+                if closed_signals:
+                    record[RECORD_JOB_QUALITY_SIGNALS_KEY] = closed_signals
+                    logger.info(
+                        "%s closed listing detected; will reject before detail review",
+                        target_tag,
+                    )
+
                 pre_outcome, record, _, should_fetch_details = review_pre_detail_normalized_job(
                     record, review_context
                 )
@@ -278,7 +287,11 @@ class LinkedInScraper(BaseJobScraper):
                 or ""
             )
             rules = load_dodgy_job_rules()
-            signals: list = []
+            signals: list = [
+                signal
+                for signal in (current_record.get(RECORD_JOB_QUALITY_SIGNALS_KEY) or [])
+                if isinstance(signal, dict)
+            ]
             signals.extend(detect_cv_farming_signals(details_text, rules))
             signals.extend(detect_broad_engagement_signal(current_record))
 
@@ -316,6 +329,27 @@ class LinkedInScraper(BaseJobScraper):
             after_description_loaded=_after_description_loaded,
             before_preference_filters=_before_preference_filters,
         )
+
+    def _detect_closed_job_signals(self, record: dict) -> list[dict]:
+        from job_hunter_agent.job_quality import (  # noqa: PLC0415
+            SIGNAL_KIND_JOB_CLOSED,
+            detect_external_date_signals,
+            fetch_external_html,
+            load_dodgy_job_rules,
+        )
+
+        page_url = str(record.get(RECORD_URL_KEY) or "").strip()
+        if not page_url:
+            return []
+
+        page_html = fetch_external_html(page_url)
+        if not page_html:
+            return []
+
+        rules = load_dodgy_job_rules()
+        run_date = datetime.fromisoformat(self.run_iso).date()
+        signals = detect_external_date_signals(page_html, None, rules, run_date)
+        return [signal for signal in signals if signal.get("kind") == SIGNAL_KIND_JOB_CLOSED]
 
     def _fetch_jobspy(self, target: dict):
         from jobspy import scrape_jobs  # noqa: PLC0415
