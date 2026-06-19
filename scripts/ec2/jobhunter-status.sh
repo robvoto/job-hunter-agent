@@ -12,3 +12,9 @@ echo
 curl -sI "$HEALTH_URL" | head -3 || true
 echo
 curl -sI "$PUBLIC_URL" | head -3 || true
+
+if [[ "${1:-}" == "-f" || "${1:-}" == "--follow" ]]; then
+  echo
+  echo "==> Tailing log (Ctrl+C to stop)"
+  sudo journalctl -u "$SERVICE" -f
+fi
