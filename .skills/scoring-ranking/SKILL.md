@@ -25,6 +25,14 @@ Use before editing `fit_scoring.py`, `capability_matching.py`, `signal_detection
 - `data/match_level_defaults.json`: match band thresholds.
 - `data/parsing_rules.json`: labels/display text where already owned there.
 
+## Breakdown label ownership
+Score breakdown labels shown to users must come from `data/knowledge/ui_labels.json`, never hardcoded:
+- `grade_labels`: human-readable LLM grade descriptions (e.g. "The job ad matches your experience well")
+- `title_match_labels`: human-readable title match descriptions (e.g. "The job title matches one of your target roles")
+- `fit_highlight_labels.capability_match_sentence`: template for capability matches shown in fit reasons
+
+When changing these labels, bump `ui_labels.json` version so `db_seed --upgrade` re-seeds the DB on deploy.
+
 ## Checklist
 - No `.get(..., fallback)` for scoring business data.
 - No inline `{level: points}` maps.

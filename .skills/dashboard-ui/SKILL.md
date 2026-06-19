@@ -43,12 +43,13 @@ Read only the relevant section when needed:
 
 ## Workspace output sync
 The browser reads the generated workspace HTML, not just the source template.
+Checked-in per-user snapshots under `data/users/<user_id>/workspace_results.html` can lag behind the renderer and must not be treated as the source of truth.
 
 Workflow:
 1. Identify the live output path first:
    - `job_hunter_agent/workspace_service.py::render_html()`
    - `job_hunter_agent/paths.py::get_workspace_results_path()`
-   - current per-user `workspace_results.html` when the user is looking at the rendered page
+   - the current per-user `workspace_results.html` when the user is looking at the rendered page
 2. Edit the owning source:
    - `templates/results.html` for template copy/layout
    - `workspace_service.py` for values injected into the template
@@ -56,6 +57,26 @@ Workflow:
 4. Verify the live page, not only the source file.
 
 Do not assume `templates/results.html` changes are visible immediately.
+
+## Fit explanation language rules
+The job card insight sections use human-friendly copy — do not revert to internal labels:
+- Section heading: "Why this looks like a good fit" (not "Why it fits")
+- Negative section: "Things to check before applying" (not "What lowers it")
+- Signal transparency: "Your approved experience appears in this ad" (not "Matched profile support")
+- Capability matches: "The ad asks for {capability}, and your profile includes this." — template lives in `ui_labels.json` → `fit_highlight_labels.capability_match_sentence`
+- NV1/clearance risks: converted to plain English by `_humanize_check_item()` in `workspace_renderer.py`
+- Work type only appears as a fit reason when the user has a specific work type preference (not when all types are accepted)
+- All display label text lives in `data/knowledge/ui_labels.json` (`grade_labels`, `title_match_labels`, `fit_highlight_labels`); never hardcode label strings in renderer or scoring code
+
+## Candidate application history display
+When a rejection history match exists, the expanded `<details>` section shows:
+1. Company — Date (most prominent)
+2. Role (only if non-empty)
+3. Evidence (full text, no truncation)
+4. Confidence
+5. Review reason (only if flagged)
+
+The badge ("Rejected before" / "Possible previous application") is determined by status + confidence. The expanded section must not repeat the status label.
 
 ## Validation
 - Check the rendered page or smallest relevant browser/template path.
