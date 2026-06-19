@@ -12,25 +12,26 @@ Deploy Job Hunter on AWS EC2.
 
 What this does:
   1. moves to the app repo
-  2. confirms Git working tree state
-  3. pulls latest GitHub code using --ff-only
-  4. syncs dependencies from pyproject.toml using uv
-  5. loads /etc/job-hunter/job-hunter.env
-  6. applies production runtime path defaults
-  7. runs db_seed --upgrade
-  8. verifies required production knowledge files
-  9. verifies the repo-managed AWS service contract is installed
-  10. restarts job-hunter.service
-  11. waits briefly, then proves the app is alive with curl
+  2. stashes any local uncommitted changes, then pulls latest GitHub code
+  3. syncs dependencies from pyproject.toml using uv
+  4. installs Playwright Chromium browser binary
+  5. installs Playwright system OS dependencies (libatk, libgbm, etc.)
+  6. installs repo-managed helper commands into /usr/local/bin
+  7. installs repo-managed systemd service (xvfb-run + full PATH)
+  8. loads /etc/job-hunter/job-hunter.env
+  9. applies production runtime path defaults
+  10. runs db_seed --upgrade
+  11. verifies required production knowledge files exist
+  12. restarts job-hunter.service
+  13. waits briefly, then proves the app is alive with curl
 
 Usage:
   deploy-jobhunter
   deploy-jobhunter --help
 
 Important:
-  - This is the normal update/deploy command, not a first-install script.
-  - Do not manually pip install production dependencies on AWS.
-  - Dependencies belong in pyproject.toml and uv.lock.
+  - Safe to run on every deploy — all steps are idempotent.
+  - Do not manually install Python packages on AWS; use pyproject.toml.
 HELP
 }
 
@@ -40,12 +41,14 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
 fi
 
 echo "==> Deploying Job Hunter"
-echo "Teaching: deployment must pull GitHub and sync from pyproject.toml with uv."
 
 cd "$APP_DIR"
 
 echo "==> Git status before pull"
 git status --short
+
+echo "==> Stash any local changes so pull can proceed"
+git stash --include-untracked --quiet && echo "  (stashed)" || true
 
 echo "==> Pull latest code"
 git pull --ff-only
@@ -59,8 +62,17 @@ fi
 echo "==> Sync production dependencies"
 uv sync --no-dev
 
-echo "==> Install/update Playwright Chromium"
+echo "==> Install/update Playwright Chromium browser"
 uv run playwright install chromium
+
+echo "==> Install Playwright OS system dependencies"
+sudo "$(uv run which python)" -m playwright install-deps chromium
+
+echo "==> Install repo-managed helper commands"
+sudo bash "$APP_DIR/scripts/ec2/install-helpers.sh"
+
+echo "==> Install repo-managed systemd service"
+sudo bash "$APP_DIR/scripts/ec2/install-jobhunter-service.sh"
 
 echo "==> Load production secrets/env file"
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -102,30 +114,19 @@ for required_file in "${required_runtime_files[@]}"; do
   echo "Found: $required_file"
 done
 
-echo "==> Verify AWS service contract"
-service_cat="$(sudo systemctl cat "$SERVICE")"
-if ! grep -q '^ExecStart=/usr/bin/xvfb-run ' <<<"$service_cat"; then
-  echo "ERROR: $SERVICE.service is not using /usr/bin/xvfb-run. Run: sudo -E $APP_DIR/scripts/ec2/install-jobhunter-service.sh" >&2
-  exit 1
-fi
-if ! grep -q '^Environment="PATH=.*/usr/bin' <<<"$service_cat"; then
-  echo "ERROR: $SERVICE.service PATH does not include system binary paths. Run: sudo -E $APP_DIR/scripts/ec2/install-jobhunter-service.sh" >&2
-  exit 1
-fi
-
 echo "==> Restart service"
 sudo systemctl restart "$SERVICE"
 
 echo "==> Wait for app startup"
-sleep 3
+sleep 5
 
 echo "==> Service status"
 sudo systemctl status "$SERVICE" --no-pager
 
 echo "==> Recent logs"
-sudo journalctl -u "$SERVICE" -n 80 --no-pager
+sudo journalctl -u "$SERVICE" -n 40 --no-pager
 
 echo "==> HTTP health check"
-curl -I "$HEALTH_URL"
+curl -sI "$HEALTH_URL" | head -5
 
 echo "==> Done"
