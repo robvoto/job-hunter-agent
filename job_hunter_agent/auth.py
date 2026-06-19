@@ -241,7 +241,14 @@ def set_session_cookie(
         return
     value = _build_session_cookie_value(user, config.session_secret)
     name, secure_flag = _get_session_cookie_params(request)
-    max_age_days = int(os.getenv("JOB_HUNTER_SESSION_MAX_AGE_DAYS", "7"))
+    try:
+        from job_hunter_agent.global_settings import get_global_settings
+
+        max_age_days = get_global_settings().get("playwright_settings", {}).get(
+            "session_max_age_days", 7
+        )
+    except Exception:
+        max_age_days = int(os.getenv("JOB_HUNTER_SESSION_MAX_AGE_DAYS", "7"))
     response.set_cookie(
         name,
         value,

@@ -484,6 +484,8 @@
     "playwright_viewport_height_help": "Shared browser viewport height used by the source connector runtime.",
     "playwright_selector_timeout_label": "Playwright selector timeout",
     "playwright_selector_timeout_help": "How long the scraper waits for selectors before failing a browser interaction.",
+    "session_max_age_days_label": "Session duration (days)",
+    "session_max_age_days_help": "How many days a login session lasts before the user must sign in again. Takes effect on next login.",
     "search_limits_heading": "Search limits",
     "search_limits_copy": "These bounds control what the search defaults can be set to. They are global, shared limits.",
     "search_window_min_label": "Search window minimum (days)",

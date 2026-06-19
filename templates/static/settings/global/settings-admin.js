@@ -34,6 +34,7 @@ export const JobHunterAdminSettings = (function () {
     playwright_viewport_width: ['playwright_settings', 'playwright_viewport_width'],
     playwright_viewport_height: ['playwright_settings', 'playwright_viewport_height'],
     playwright_selector_timeout: ['playwright_settings', 'playwright_selector_timeout'],
+    session_max_age_days: ['playwright_settings', 'session_max_age_days'],
     search_limit_date_range_days_min: ['limits.search', 'date_range_days'],
     search_limit_date_range_days_max: ['limits.search', 'date_range_days'],
     search_limit_seek_max_pages_min: ['limits.search', 'seek_max_pages'],
@@ -215,6 +216,7 @@ export const JobHunterAdminSettings = (function () {
     setBounds('search_default_linkedin_hours_old', searchLimits.linkedin_hours_old);
     setBounds('search_default_linkedin_results_per_search', searchLimits.linkedin_results_per_search);
     setFieldValue('default_country_suffix', defaultCountrySuffix);
+    setFieldValue('session_max_age_days', playwrightSettings.session_max_age_days);
     requireElement('playwright_headless').checked = playwrightSettings.headless !== false;
     setFieldValue('playwright_viewport_width', playwrightSettings.playwright_viewport_width);
     setFieldValue('playwright_viewport_height', playwrightSettings.playwright_viewport_height);
@@ -477,15 +479,15 @@ export const JobHunterAdminSettings = (function () {
           'playwright_selector_timeout',
           currentPlaywright.playwright_selector_timeout,
         ),
+        session_max_age_days: readNumber('session_max_age_days', currentPlaywright.session_max_age_days),
       },
     };
   }
 
   function initKnowledgeSyncControls(showStatus) {
-    const input = document.getElementById('knowledge_sync_db_file');
     const button = document.getElementById('knowledge_sync_button');
     const status = document.getElementById('knowledge_sync_status');
-    if (!input || !button || !status || typeof window.jobHunterFetch !== 'function') {
+    if (!button || !status || typeof window.jobHunterFetch !== 'function') {
       return;
     }
     if (button.dataset.syncBound === 'true') {
@@ -501,58 +503,21 @@ export const JobHunterAdminSettings = (function () {
       }
     };
 
-    const triggerDownload = (blob, filename) => {
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = filename || 'knowledge-sync.merged.db';
-      anchor.style.display = 'none';
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    };
-
     button.addEventListener('click', async () => {
-      const file = input.files?.[0];
-      if (!file) {
-        setStatus('Choose a desktop database file first.', 'error');
-        return;
-      }
-
       const originalLabel = button.textContent;
       button.disabled = true;
-      button.textContent = 'Uploading...';
-      setStatus(`Uploading ${file.name}, merging approved knowledge into AWS, and preparing the merged desktop copy...`, 'loading');
+      button.textContent = 'Syncing...';
+      setStatus('Syncing approved knowledge with AWS...', 'loading');
 
       try {
         const response = await window.jobHunterFetch('/api/admin/knowledge-sync', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/octet-stream',
-            'X-Source-Filename': file.name,
-          },
-          body: file,
         });
         if (!response.ok) {
           const payload = await response.json().catch(() => ({}));
           throw new Error(payload.error || 'Could not sync knowledge.');
         }
-        const mergedKeysHeader = response.headers.get('X-Sync-Updated-Keys') || '[]';
-        const mergedFilename = response.headers.get('X-Sync-Download-Filename') || 'knowledge-sync.merged.db';
-        let mergedKeys = [];
-        try {
-          mergedKeys = JSON.parse(mergedKeysHeader);
-        } catch {
-          mergedKeys = [];
-        }
-        const summary = Array.isArray(mergedKeys) && mergedKeys.length
-          ? `Merged knowledge keys: ${mergedKeys.join(', ')}`
-          : 'Knowledge was already in sync.';
-        const mergedBlob = await response.blob();
-        triggerDownload(mergedBlob, mergedFilename);
-        setStatus(`${summary} Your merged desktop copy is downloading now.`, 'success');
-        input.value = '';
+        setStatus('Synced approved knowledge with AWS.', 'success');
       } catch (error) {
         setStatus(error.message || 'Could not sync knowledge.', 'error');
       } finally {

@@ -407,6 +407,8 @@ _GLOBAL_SETTINGS_LABEL_KEYS = (
     "playwright_viewport_height_help",
     "playwright_selector_timeout_label",
     "playwright_selector_timeout_help",
+    "session_max_age_days_label",
+    "session_max_age_days_help",
     "search_limits_heading",
     "search_limits_copy",
     "search_window_min_label",

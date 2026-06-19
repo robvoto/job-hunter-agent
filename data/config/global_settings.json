@@ -406,6 +406,7 @@
     "rule_suggestion_min_count": 2
   },
   "playwright_settings": {
+    "session_max_age_days": 7,
     "headless": true,
     "playwright_viewport_width": 1400,
     "playwright_viewport_height": 900,

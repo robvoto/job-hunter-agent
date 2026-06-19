@@ -79,6 +79,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_PLAYWRIGHT_SELECTOR_TIMEOUT,
     KEY_PLAYWRIGHT_VIEWPORT_HEIGHT,
     KEY_PLAYWRIGHT_VIEWPORT_WIDTH,
+    KEY_SESSION_MAX_AGE_DAYS,
     KEY_PREFERENCE_WEIGHTS,
     KEY_REPEATED_LISTING_MIN_SPAN_DAYS,
     KEY_REPEATED_LISTING_MIN_TIMES_SEEN,
@@ -1024,6 +1025,9 @@ def normalize_global_settings(
             ),
             KEY_PLAYWRIGHT_HEADLESS: bool(playwright_source.get(KEY_PLAYWRIGHT_HEADLESS, True)),
             KEY_PLAYWRIGHT_BROWSER_MODE: browser_mode,
+            KEY_SESSION_MAX_AGE_DAYS: _require_int(
+                playwright_source, KEY_SESSION_MAX_AGE_DAYS, 7, 1, 365
+            ),
         },
         KEY_CANDIDATE_APPLICATION_HISTORY: candidate_application_history_source
         if isinstance(candidate_application_history_source, dict)

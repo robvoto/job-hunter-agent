@@ -5,15 +5,10 @@
           <section class="panel">
             <div class="panel-header">
               <h2>Knowledge Sync</h2>
-              <p class="panel-copy">Use this to merge approved learning between your desktop app and AWS. It updates the live AWS knowledge store and downloads a merged desktop copy so you can keep the same shared learning on both sides.</p>
+              <p class="panel-copy">Use this to sync approved learning between your desktop app and AWS. The app reads your local database automatically, updates AWS, and brings the merged learning back into your local copy.</p>
             </div>
-
-            <label for="knowledge_sync_db_file">Desktop database file</label>
-            <input id="knowledge_sync_db_file" type="file" accept=".db,.sqlite,.sqlite3,application/x-sqlite3">
-            <div class="field-help">Pick the desktop app database you want to sync. The merged result will include any approved learning already present in AWS.</div>
-
-            <button id="knowledge_sync_button" type="button" class="btn btn-secondary">Upload and merge knowledge</button>
-            <div id="knowledge_sync_status" class="field-help">Choose the desktop database file, then upload it here. The app will merge shared knowledge into AWS and download the merged desktop copy.</div>
+            <button id="knowledge_sync_button" type="button" class="btn btn-secondary">Sync knowledge with AWS</button>
+            <div id="knowledge_sync_status" class="field-help">Click once. The app will sync your local approved knowledge with AWS automatically.</div>
           </section>
 
           <section class="panel">
@@ -118,6 +113,10 @@
             <label for="playwright_selector_timeout">Playwright selector timeout (seconds)</label>
             <input id="playwright_selector_timeout" type="number" min="1" max="60" step="1">
             <div class="field-help">How long the scraper waits for selectors before failing a browser interaction. The UI shows seconds, but the runtime still stores milliseconds.</div>
+
+            <label for="session_max_age_days">Session duration (days)</label>
+            <input id="session_max_age_days" type="number" min="1" max="365" step="1">
+            <div class="field-help">How many days a login session lasts before the user is asked to sign in again. Takes effect on next login.</div>
           </section>
 
           <section class="panel">
