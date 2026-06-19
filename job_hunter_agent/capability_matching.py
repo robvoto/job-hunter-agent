@@ -24,7 +24,14 @@ from job_hunter_agent.scoring_utils import (
     build_scoring_source_text,
     find_profile_experience_year_in_text,
 )
-from job_hunter_agent.signal_registry import load_approved_signal_catalog, load_registry
+from job_hunter_agent.signal_registry import (
+    CATEGORY_CAPABILITY_CONCEPT,
+    CATEGORY_CV_FARMING_PATTERN,
+    CATEGORY_HARD_BLOCKER_PATTERN,
+    CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE,
+    load_approved_signal_catalog,
+    load_registry,
+)
 from job_hunter_agent.signal_schema import (
     CATEGORY_HARD_BLOCKER_PATTERN,
     LEARNING_CATEGORY_KEY,
@@ -42,7 +49,10 @@ from job_hunter_agent.text_processing import (
     list_to_phrase,
 )
 
-_REVIEW_SIGNAL_EXCLUDED_CATEGORIES = frozenset()
+_REVIEW_SIGNAL_EXCLUDED_CATEGORIES = frozenset({
+    CATEGORY_CV_FARMING_PATTERN,
+    CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE,
+})
 _REVIEW_SIGNAL_EXCLUDED_CATEGORIES_WITH_HARD_BLOCKERS = _REVIEW_SIGNAL_EXCLUDED_CATEGORIES | {
     CATEGORY_HARD_BLOCKER_PATTERN
 }
@@ -100,7 +110,7 @@ def reviewed_signal_matches_for_text(details_text: str) -> dict[str, list[str]]:
         if (
             not label
             or not isinstance(terms, list)
-            or category in _REVIEW_SIGNAL_EXCLUDED_CATEGORIES_WITH_HARD_BLOCKERS
+            or category != CATEGORY_CAPABILITY_CONCEPT
         ):
             continue
         if not any(text_contains_term(lowered, term) for term in terms):
