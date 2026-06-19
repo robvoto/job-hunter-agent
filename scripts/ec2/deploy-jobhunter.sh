@@ -42,6 +42,9 @@ fi
 
 echo "==> Deploying Job Hunter"
 
+# uv is typically installed per-user; ensure common locations are on PATH
+export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
+
 cd "$APP_DIR"
 
 echo "==> Git status before pull"
@@ -55,9 +58,11 @@ git pull --ff-only
 
 echo "==> Check uv"
 if ! command -v uv >/dev/null 2>&1; then
-  echo "ERROR: uv is required but was not found on PATH." >&2
-  exit 1
+  echo "==> uv not found — installing"
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  export PATH="$HOME/.local/bin:$PATH"
 fi
+echo "uv: $(uv --version)"
 
 echo "==> Sync production dependencies"
 uv sync --no-dev
