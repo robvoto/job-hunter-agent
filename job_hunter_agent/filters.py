@@ -13,6 +13,14 @@ from job_hunter_agent.signal_schema import TITLE_REASON_POTENTIAL_MATCH
 from job_hunter_agent.title_normalization_rules import normalize_title_text
 
 TITLE_BLOCK_SEGMENT_SPLIT_RE = re.compile(r"\s*\|\s*|\s[-\u2013\u2014/:]\s|[(),\[\]]")
+_TITLE_QUALIFIER_SPLIT_RE = re.compile(r"\s*[\|\u2013\u2014:()\[\]]\s*|\s+-\s*|-\s+")
+_TITLE_QUALIFIER_SKIP_WORDS = frozenset({
+    "senior", "junior", "lead", "principal", "associate", "graduate", "entry",
+    "level", "specialist", "consultant", "manager", "director", "head",
+    "contract", "permanent", "casual", "part", "full", "time", "temp",
+    "temporary", "fixed", "term", "month", "months", "year", "years",
+    "remote", "hybrid", "onsite", "office",
+})
 
 
 def _normalize_title_pattern_text(value: str) -> str:
@@ -89,23 +97,42 @@ def analyze_title_filters(title: str, profile: dict[str, Any] | None = None) -> 
             result["reason"] = reason
             return result
 
+    domain_qualifier = _detect_title_domain_qualifier(normalized_title)
+
     if is_direct_match:
         if _has_numeric_title_level(normalized_title):
             result.update(
                 {"ok": True, "reason": TITLE_REASON_POTENTIAL_MATCH, "match_family": "primary"}
             )
+            if domain_qualifier:
+                result["warning_reason"] = f"DOMAIN_QUALIFIER:{domain_qualifier}"
             return result
         result.update({"ok": True, "reason": "OK", "match_family": "primary"})
+        if domain_qualifier:
+            result["warning_reason"] = f"DOMAIN_QUALIFIER:{domain_qualifier}"
         return result
 
     if is_adjacent_match:
         result.update(
             {"ok": True, "reason": TITLE_REASON_POTENTIAL_MATCH, "match_family": "secondary"}
         )
+        if domain_qualifier:
+            result["warning_reason"] = f"DOMAIN_QUALIFIER:{domain_qualifier}"
         return result
 
     result.update({"ok": False, "reason": "TITLE_NOT_TARGET", "match_family": "none"})
     return result
+
+
+def _detect_title_domain_qualifier(title: str) -> str:
+    parts = [p.strip() for p in _TITLE_QUALIFIER_SPLIT_RE.split(title) if p.strip()]
+    if len(parts) < 2:
+        return ""
+    qualifier = parts[-1]
+    tokens = qualifier.lower().split()
+    if not tokens or all(t in _TITLE_QUALIFIER_SKIP_WORDS or t.isdigit() for t in tokens):
+        return ""
+    return qualifier
 
 
 def normalize_title_block_phrase(value: str) -> str:

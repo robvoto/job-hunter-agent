@@ -8,6 +8,7 @@ scraped job text based on parsing rules.
 
 import copy
 import re
+from datetime import date
 from html import escape
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
@@ -94,7 +95,36 @@ def extract_salary(details_text: str) -> str:
     return ""
 
 
-def parse_seek_posted_age_days(posted_text: str) -> Optional[float]:
+_ABSOLUTE_DATE_MONTHS = {
+    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+    "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+}
+_ABSOLUTE_DATE_RE = re.compile(
+    r"(?:(\d{1,2})\s+([a-z]{3})\s+(\d{4})|([a-z]{3})\s+(\d{1,2}),?\s+(\d{4})|(\d{4})-(\d{2})-(\d{2}))",
+    re.IGNORECASE,
+)
+
+
+def _parse_absolute_posted_date(text: str, today: Optional[date] = None) -> Optional[float]:
+    m = _ABSOLUTE_DATE_RE.search(text.strip())
+    if not m:
+        return None
+    try:
+        if m.group(1):  # day month year: "5 Jun 2026"
+            d = date(int(m.group(3)), _ABSOLUTE_DATE_MONTHS[m.group(2).lower()[:3]], int(m.group(1)))
+        elif m.group(4):  # month day year: "Jun 5, 2026"
+            d = date(int(m.group(6)), _ABSOLUTE_DATE_MONTHS[m.group(4).lower()[:3]], int(m.group(5)))
+        else:  # ISO: "2026-06-05"
+            d = date(int(m.group(7)), int(m.group(8)), int(m.group(9)))
+        ref = today or date.today()
+        return float(max(0, (ref - d).days))
+    except (KeyError, ValueError):
+        return None
+
+
+def parse_seek_posted_age_days(
+    posted_text: str, today: Optional[date] = None
+) -> Optional[float]:
     if not posted_text:
         return None
 
@@ -121,17 +151,17 @@ def parse_seek_posted_age_days(posted_text: str) -> Optional[float]:
         return None
 
     match = re.fullmatch(pattern, value)
-    if not match:
-        return None
+    if match:
+        amount = int(match.group("amount"))
+        unit = match.group("unit").lower()
+        if unit not in unit_days:
+            return None
+        try:
+            return float(amount) * float(unit_days[unit])
+        except Exception as exc:
+            print(
+                f"[UTILS][WARN] Failed to calculate seek age days from relative text '{posted_text}': {exc}"
+            )
+            return None
 
-    amount = int(match.group("amount"))
-    unit = match.group("unit").lower()
-    if unit not in unit_days:
-        return None
-    try:
-        return float(amount) * float(unit_days[unit])
-    except Exception as exc:
-        print(
-            f"[UTILS][WARN] Failed to calculate seek age days from relative text '{posted_text}': {exc}"
-        )
-        return None
+    return _parse_absolute_posted_date(posted_text, today)

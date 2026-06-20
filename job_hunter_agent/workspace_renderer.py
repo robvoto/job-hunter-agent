@@ -26,7 +26,7 @@ from job_hunter_agent.description_trust import (
     full_description_confidence,
     get_trusted_full_description,
 )
-from job_hunter_agent.filters import suggest_title_block_phrases
+from job_hunter_agent.filters import _detect_title_domain_qualifier, suggest_title_block_phrases
 from job_hunter_agent.fit_scoring import (
     build_fit_highlights,
     fit_score_and_breakdown_displayed,
@@ -761,6 +761,12 @@ def render_job_card(
     if not applied_record and applied_pool:
         similar_applied_record = find_confirmed_duplicate(record, applied_pool)
         is_possible_repost = similar_applied_record is not None
+    domain_qualifier = _detect_title_domain_qualifier(str(record.get("title") or ""))
+    if domain_qualifier:
+        soft_risk_reasons = dedupe_preserve_order([
+            *soft_risk_reasons,
+            f"The title specifies a '{domain_qualifier}' domain — check the description confirms this matches your background.",
+        ])
     display_record["hard_block_reasons"] = blocking_reasons
     display_record["role_snapshot"] = role_summary
     display_record["fit_highlights"] = fit_highlights
@@ -1370,11 +1376,20 @@ def render_job_card(
                 else ""
             )
 
+            add_to_profile_html = ""
+            if css_modifier in ("mismatch", "not-shown", "mandatory-not-shown", "unknown"):
+                add_to_profile_html = (
+                    f'<a class="req-add-to-profile" href="/settings#section-matrix" '
+                    f'data-prefill="{safe_html(req_text)}" '
+                    f'title="Add this to your capability profile" target="_blank" rel="noopener">'
+                    f'+ Add to profile</a>'
+                )
             requirement_items_html += (
                 f'<li class="job-requirement-item job-requirement-item--{safe_html(css_modifier)}">'
                 f'<span class="job-requirement-text">{safe_html(req_text)}{detail_html}</span>'
                 f"{importance_html}"
                 f"{status_html}"
+                f"{add_to_profile_html}"
                 f"</li>"
             )
 

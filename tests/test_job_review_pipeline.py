@@ -28,7 +28,6 @@ from job_hunter_agent.record_schema import (
     RECORD_DETAILS_TEXT_KEY,
     RECORD_HARD_BLOCK_REASONS_KEY,
     RECORD_JOB_KEY,
-    RECORD_JOB_QUALITY_SIGNALS_KEY,
     RECORD_LLM_COST_USD_KEY,
     RECORD_LLM_DECISION_KEY,
     RECORD_LLM_ELAPSED_MS_KEY,
@@ -283,14 +282,10 @@ def test_review_outcome_is_source_neutral_for_equivalent_normalized_jobs(monkeyp
 
 def test_review_pre_detail_rejects_closed_jobs_before_title_review(monkeypatch):
     record = _base_record("linkedin", "linkedin_full_description", "description")
-    record[RECORD_JOB_QUALITY_SIGNALS_KEY] = [
-        {
-            "kind": "job_closed",
-            "label": "Job Closed",
-            "evidence": "External page indicates this role is no longer available.",
-            "needs_review": True,
-        }
-    ]
+    record[RECORD_DETAILS_TEXT_KEY] = (
+        "This role is no longer accepting applications. "
+        "Please do not submit a new application."
+    )
 
     monkeypatch.setattr(
         job_review_pipeline,

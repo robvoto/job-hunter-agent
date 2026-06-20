@@ -6,6 +6,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass
+from datetime import date
 from typing import Any, Callable, Optional
 
 from job_hunter_agent.config import DEBUG_MODE
@@ -88,6 +89,7 @@ from job_hunter_agent.fit_scoring import (
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
 from job_hunter_agent.history import apply_kept_job_reuse, can_reuse_kept_job, finalize_record
 from job_hunter_agent.job_types import infer_work_type_from_description
+from job_hunter_agent.job_quality import detect_external_date_signals, load_dodgy_job_rules
 from job_hunter_agent.llm_gate import (
     LLMCallError,
     get_session_cost_usd,
@@ -356,6 +358,22 @@ def _has_job_closed_signal(record: dict) -> bool:
         if not isinstance(signal, dict):
             continue
         if str(signal.get("kind") or "").strip().lower() == "job_closed":
+            return True
+
+    rules = load_dodgy_job_rules()
+    job_text_candidates = [
+        record.get(RECORD_DETAILS_TEXT_KEY),
+        record.get(RECORD_FULL_DESCRIPTION_KEY),
+        record.get(RECORD_TEASER_KEY),
+    ]
+    for text in job_text_candidates:
+        cleaned = compact_whitespace(text)
+        if not cleaned:
+            continue
+        if any(
+            signal.get("kind") == "job_closed"
+            for signal in detect_external_date_signals(cleaned, None, rules, date.today())
+        ):
             return True
     return False
 
