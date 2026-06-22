@@ -22,9 +22,9 @@ import argparse
 import shutil
 from pathlib import Path
 
-from dotenv import load_dotenv
+from job_hunter_agent.runtime_helpers import load_repo_dotenv
 
-load_dotenv()
+load_repo_dotenv()
 
 from job_hunter_agent.database import init_db
 from job_hunter_agent.global_settings import seed_global_settings_from_file

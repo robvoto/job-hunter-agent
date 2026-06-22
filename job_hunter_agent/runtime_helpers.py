@@ -22,6 +22,19 @@ CLI_FLAG_RESET_NEW_TO_YOU = "--reset-new-to-you"
 DESKTOP_RUNTIME_ENV_VAR = "JOB_HUNTER_DESKTOP_MODE"
 
 
+def load_repo_dotenv(env_path: Path | None = None, *, override: bool = False) -> bool:
+    """Load the repo-level .env file explicitly.
+
+    This avoids relying on python-dotenv's caller/working-directory discovery,
+    which can miss the file in debugger and wrapper-script launch modes.
+    """
+    from dotenv import load_dotenv
+
+    if env_path is None:
+        env_path = Path(__file__).resolve().parent.parent / ".env"
+    return load_dotenv(dotenv_path=env_path, override=override)
+
+
 def has_cli_flag(argv: list[str], flag: str) -> bool:
     return flag in argv
 

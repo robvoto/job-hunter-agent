@@ -15,9 +15,9 @@ import argparse
 import logging
 import sys
 
-from dotenv import load_dotenv
+from job_hunter_agent.runtime_helpers import load_repo_dotenv
 
-load_dotenv()
+load_repo_dotenv()
 
 from job_hunter_agent.profile_store import (
     load_profile,

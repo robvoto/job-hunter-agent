@@ -5,6 +5,7 @@ from job_hunter_agent import llm_gate, profile_learning, profile_store, source_l
 
 def test_openai_api_key_is_ignored_in_desktop_runtime_path(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-ignored")
+    monkeypatch.setenv("JOB_HUNTER_DESKTOP_MODE", "1")
     monkeypatch.setattr(llm_gate, "client", None)
 
     assert llm_gate._build_openai_client() is None

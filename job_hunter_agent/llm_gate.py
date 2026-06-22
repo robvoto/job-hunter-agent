@@ -20,6 +20,7 @@ preventing silent failures and aiding in debugging.
 
 from __future__ import annotations
 
+import os
 import hashlib
 import json as _json_mod
 import logging
@@ -86,6 +87,7 @@ from job_hunter_agent.llm_protocol import (
     LLM_SECTION_LABEL_CLASSIFICATION_SHAPE,
 )
 from job_hunter_agent.paths import LLM_COSTS_PATH as _LLM_COSTS_PATH
+from job_hunter_agent.runtime_helpers import is_desktop_runtime
 
 # Import at module level to allow monkeypatching in tests
 from job_hunter_agent.profile_store import (
@@ -324,11 +326,17 @@ class LLMCallError(RuntimeError):
 def _build_openai_client() -> OpenAI | None:
     """Return the configured LLM client.
 
-    Provider keys must come from explicit user/provider configuration, not process
-    environment variables. Until that provider-key store exists, LLM calls remain
-    disabled rather than silently using developer or machine-level keys.
+    Desktop runtime intentionally stays offline. Normal server/runtime entrypoints
+    load `.env` before importing this module, so a configured OPENAI_API_KEY is
+    available here without relying on ad hoc shell state.
     """
-    return None
+    if is_desktop_runtime():
+        return None
+
+    api_key = str(os.environ.get("OPENAI_API_KEY") or "").strip()
+    if not api_key:
+        return None
+    return OpenAI(api_key=api_key)
 
 
 client = _build_openai_client()

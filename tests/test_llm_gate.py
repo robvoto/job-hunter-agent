@@ -5,8 +5,19 @@ import pytest
 from job_hunter_agent import llm_gate
 
 
-def test_openai_environment_key_is_not_used(monkeypatch):
+def test_openai_environment_key_enables_llm_outside_desktop(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "must-not-be-used")
+
+    client = llm_gate._build_openai_client()
+
+    assert client is not None
+    monkeypatch.setattr(llm_gate, "client", client)
+    assert llm_gate.llm_is_enabled() is True
+
+
+def test_openai_environment_key_is_ignored_in_desktop_runtime(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "must-not-be-used")
+    monkeypatch.setenv("JOB_HUNTER_DESKTOP_MODE", "1")
 
     assert llm_gate._build_openai_client() is None
     assert llm_gate.llm_is_enabled() is False

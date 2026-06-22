@@ -20,9 +20,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from dotenv import load_dotenv
+from job_hunter_agent.runtime_helpers import load_repo_dotenv
 
-load_dotenv()
+load_repo_dotenv()
 
 from job_hunter_agent.fit_scoring import fit_score_displayed
 from job_hunter_agent.history import viewed_by_user

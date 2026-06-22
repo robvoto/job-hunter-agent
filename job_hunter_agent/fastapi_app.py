@@ -26,9 +26,9 @@ import os
 import sys
 from urllib.parse import parse_qsl, quote, urlsplit
 
-from dotenv import load_dotenv
+from job_hunter_agent.runtime_helpers import load_repo_dotenv
 
-load_dotenv()
+load_repo_dotenv()
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
