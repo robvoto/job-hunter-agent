@@ -1,5 +1,6 @@
 """Tests for profile learning."""
 
+import logging
 import hashlib as _hashlib
 from unittest.mock import patch
 
@@ -370,7 +371,7 @@ def _reset_cv_extraction_cache():
     profile_learning._cv_extraction_cache_loaded = False
 
 
-def test_llm_extract_from_cv_cache_hit_skips_save():
+def test_llm_extract_from_cv_cache_hit_skips_save(caplog):
     """A cache hit must return the stored result without calling save."""
     cv_text = "Test CV for cache-hit test"
     lookback, alias_limit = 5, 3
@@ -388,11 +389,30 @@ def test_llm_extract_from_cv_cache_hit_skips_save():
     with (
         patch("job_hunter_agent.profile_learning._ensure_cv_extraction_cache_loaded"),
         patch("job_hunter_agent.io_utils.save_cv_extraction_cache", side_effect=saved.append),
+        caplog.at_level(logging.INFO, logger="job_hunter_agent.profile_learning"),
     ):
         result = profile_learning._llm_extract_from_cv(cv_text, lookback, alias_limit)
 
     assert result == fake_result
     assert saved == [], "save must not be called on a cache hit"
+    assert "[ONBOARDING][LLM_CACHE_HIT] purpose=cv_extraction" in caplog.text
+    assert "capabilities=1" in caplog.text
+
+
+def test_llm_extract_from_cv_logs_when_client_is_unavailable(caplog, monkeypatch):
+    cv_text = "Test CV for unavailable-client test"
+    lookback, alias_limit = 5, 3
+
+    _reset_cv_extraction_cache()
+    monkeypatch.setattr(profile_learning, "_ensure_cv_extraction_cache_loaded", lambda: None)
+    monkeypatch.setattr("job_hunter_agent.llm_gate.client", None)
+
+    with caplog.at_level(logging.INFO, logger="job_hunter_agent.profile_learning"):
+        result = profile_learning._llm_extract_from_cv(cv_text, lookback, alias_limit)
+
+    assert result == {}
+    assert "[ONBOARDING][LLM_CALL_SKIPPED] purpose=cv_extraction" in caplog.text
+    assert "reason=missing_openai_api_key" in caplog.text
 
 
 def test_llm_extract_from_cv_loads_disk_cache_before_calling_llm():

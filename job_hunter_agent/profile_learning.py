@@ -16,6 +16,7 @@ the normalization and validation of extracted data to ensure consistency.
 
 import hashlib
 import logging
+import os
 import re
 import traceback
 from datetime import datetime
@@ -278,7 +279,15 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         f"icon-v2:{lookback_years}:{alias_limit}:{source_text}".encode()
     ).hexdigest()[:16]
     if cache_key in _cv_extraction_cache:
-        return _cv_extraction_cache[cache_key]
+        cached = _cv_extraction_cache[cache_key]
+        _cap_log(
+            "[ONBOARDING][LLM_CACHE_HIT] purpose=cv_extraction "
+            f"cache_key={cache_key} "
+            f"capabilities={len(cached.get(KEY_CAPABILITIES, []) or [])} "
+            f"role_titles={len(cached.get('role_titles', []) or [])} "
+            f"target_queries={len(cached.get(KEY_TARGET_OCCUPATION_QUERIES, []) or [])}"
+        )
+        return cached
 
     try:
         from job_hunter_agent.llm_gate import _log_llm_call, client, get_llm_model
@@ -286,6 +295,19 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         return {}
 
     if client is None:
+        reason = (
+            "desktop_runtime"
+            if is_desktop_runtime()
+            else (
+                "missing_openai_api_key"
+                if not str(os.environ.get("OPENAI_API_KEY") or "").strip()
+                else "llm_client_unavailable"
+            )
+        )
+        _cap_log(
+            "[ONBOARDING][LLM_CALL_SKIPPED] purpose=cv_extraction "
+            f"cache_key={cache_key} reason={reason}"
+        )
         return {}
     profile_extraction_max_output_tokens = get_llm_profile_extraction_max_output_tokens()
     prompt = (
@@ -331,6 +353,14 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         )
         traceback.print_exc()
         raise
+
+    _cap_log(
+        "[ONBOARDING][LLM_CALL_DONE] purpose=cv_extraction "
+        f"cache_key={cache_key} "
+        f"capabilities={len(result.get(KEY_CAPABILITIES, []) or [])} "
+        f"role_titles={len(result.get('role_titles', []) or [])} "
+        f"target_queries={len(result.get(KEY_TARGET_OCCUPATION_QUERIES, []) or [])}"
+    )
 
     _cv_extraction_cache[cache_key] = result
     try:
