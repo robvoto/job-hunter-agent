@@ -95,7 +95,9 @@
         theme: "base",
         flowchart: {
           useMaxWidth: true,
-          curve: "basis"
+          curve: "basis",
+          nodeSpacing: 30,
+          rankSpacing: 50
         },
         themeVariables: {
           fontFamily: 'Inter, "Segoe UI", Arial, sans-serif'
@@ -136,7 +138,7 @@ flowchart TD
     D1 --> Z1((End: Needs review or skipped))
 
     D -- Yes --> E[Run rule-based checks before AI]
-    E -. Business note .-> En[Quick checks run first&lt;br/&gt;to save time and AI cost]
+    E -. Business note .-> En[any error quick checks run first&lt;br/&gt;to save time and AI cost]
 
     E --> F{Blocked by a clear rule?}
     F -- Yes --> F1[Reject before AI&lt;br/&gt;record the reason]

@@ -125,7 +125,9 @@ def diagram_viewer(diagram_name: str):  # type: ignore[no-untyped-def]
         theme: "base",
         flowchart: {{
           useMaxWidth: true,
-          curve: "basis"
+          curve: "basis",
+          nodeSpacing: 30,
+          rankSpacing: 50
         }},
         themeVariables: {{
           fontFamily: 'Inter, "Segoe UI", Arial, sans-serif'
