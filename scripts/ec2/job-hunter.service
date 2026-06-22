@@ -7,6 +7,7 @@ User=ubuntu
 WorkingDirectory=/home/ubuntu/job-hunter-agent
 EnvironmentFile=/etc/job-hunter/job-hunter.env
 Environment="PATH=/home/ubuntu/job-hunter-agent/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="TZ=Australia/Sydney"
 Environment="JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data"
 Environment="JOB_HUNTER_OUTPUT_DIR=/var/lib/job-hunter/output"
 Environment="JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/job_hunter.db"
