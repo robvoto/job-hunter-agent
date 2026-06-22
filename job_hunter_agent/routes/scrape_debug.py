@@ -14,6 +14,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+@router.post("/api/test/clean-search")
+def api_test_clean_search():  # type: ignore[no-untyped-def]
+    if not srv.DEBUG_MODE:
+        return json_response({"error": "Test mode only"}, 403)
+    try:
+        result = srv.clear_current_user_search_state()
+    except Exception as exc:
+        return json_response({"error": str(exc)}, 400)
+    return json_response(result)
+
+
 @router.post("/api/test/reset-user")
 def api_test_reset_user():  # type: ignore[no-untyped-def]
     if not srv.DEBUG_MODE:

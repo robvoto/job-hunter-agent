@@ -18,6 +18,7 @@ function initAccountBar() {
   const testPanel = document.getElementById('job_hunter_account_test_panel');
   const testTrigger = document.getElementById('job_hunter_account_test_trigger');
   const testMenu = document.getElementById('job_hunter_account_test_menu');
+  const cleanSearchBtn = document.getElementById('job_hunter_clean_search_btn');
   const resetUserBtn = document.getElementById('job_hunter_reset_user_btn');
 
   function setUserMenuOpen(open) {
@@ -66,9 +67,8 @@ function initAccountBar() {
   });
 
   // Test action buttons are wired here so they work on every page, not just Settings.
-  if (resetUserBtn) {
+  if (cleanSearchBtn || resetUserBtn) {
     const testLabels = window.__JOB_HUNTER_ONBOARDING_FLOW_LABELS__ || {};
-    let resetUserInFlight = false;
 
     function postTestAction(path) {
       return jobHunterFetch(path, {
@@ -78,28 +78,58 @@ function initAccountBar() {
       });
     }
 
-    resetUserBtn?.addEventListener('click', async (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      if (resetUserInFlight) return;
-      const confirmed = window.confirm(
-        [testLabels.reset_user_confirm_title, testLabels.reset_user_confirm_body_1, testLabels.reset_user_confirm_body_2]
-          .filter(Boolean).join('\n\n')
-      );
-      if (!confirmed) return;
-      try {
-        resetUserInFlight = true;
-        resetUserBtn.disabled = true;
-        const resp = await postTestAction('/api/test/reset-user');
-        const payload = await resp.json().catch(() => ({}));
-        if (!resp.ok) throw new Error(payload.error || testLabels.reset_user_error || 'Error');
-        window.location.href = payload.redirect_to || '/start';
-      } catch (err) {
-        window.alert(err.message || testLabels.reset_user_error || 'Reset failed');
-      } finally {
-        resetUserInFlight = false;
-        resetUserBtn.disabled = false;
-      }
+    function bindConfirmedTestAction(button, config) {
+      if (!button) return;
+      let inFlight = false;
+      button.addEventListener('click', async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (inFlight) return;
+        const confirmed = window.confirm(
+          (config.confirmLines || []).filter(Boolean).join('\n\n')
+        );
+        if (!confirmed) return;
+        try {
+          inFlight = true;
+          button.disabled = true;
+          const resp = await postTestAction(config.path);
+          const payload = await resp.json().catch(() => ({}));
+          if (!resp.ok) throw new Error(payload.error || config.errorText || 'Error');
+          const redirectTo = payload.redirect_to || config.defaultRedirect;
+          if (redirectTo) {
+            window.location.href = redirectTo;
+          } else {
+            window.location.reload();
+          }
+        } catch (err) {
+          window.alert(err.message || config.errorText || 'Action failed');
+        } finally {
+          inFlight = false;
+          button.disabled = false;
+        }
+      });
+    }
+
+    bindConfirmedTestAction(cleanSearchBtn, {
+      path: '/api/test/clean-search',
+      confirmLines: [
+        testLabels.clean_search_confirm_title,
+        testLabels.clean_search_confirm_body_1,
+        testLabels.clean_search_confirm_body_2,
+      ],
+      errorText: testLabels.clean_search_error || 'Could not clear search results.',
+      defaultRedirect: '/workspace',
+    });
+
+    bindConfirmedTestAction(resetUserBtn, {
+      path: '/api/test/reset-user',
+      confirmLines: [
+        testLabels.reset_user_confirm_title,
+        testLabels.reset_user_confirm_body_1,
+        testLabels.reset_user_confirm_body_2,
+      ],
+      errorText: testLabels.reset_user_error || 'Reset failed',
+      defaultRedirect: '/start',
     });
   }
 }

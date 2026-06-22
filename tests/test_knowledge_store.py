@@ -307,6 +307,7 @@ def test_upgrade_fixes_stale_ui_labels_missing_shared_labels(isolated_db):
             "account_menu_workspace_shortcut_aria_label": "Open workspace",
             "account_menu_test_label": "Test",
             "account_menu_test_actions_label": "Test actions",
+            "account_menu_clean_search_label": "Clean Search",
             "account_menu_reset_user_label": "Reset User",
             "add_button_label": "+",
             "add_button_aria_label": "Add item",

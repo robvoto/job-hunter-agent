@@ -177,6 +177,7 @@ _SHARED_UI_LABEL_KEYS = (
     "account_menu_workspace_shortcut_aria_label",
     "account_menu_test_label",
     "account_menu_test_actions_label",
+    "account_menu_clean_search_label",
     "account_menu_reset_user_label",
     "add_button_label",
     "add_button_aria_label",
@@ -577,6 +578,27 @@ def load_search_source_labels() -> dict[str, str]:
             f"ui_labels.json is missing search_source_labels values: {', '.join(missing)}"
         )
     return {key: str(labels[key]).strip() for key in _SEARCH_SOURCE_LABEL_KEYS}
+
+
+def clear_current_user_search_state() -> dict[str, Any]:
+    """Clear only the current user's search/result state."""
+    clear_job_history()
+    clear_workspace_pool()
+    clear_review_data()
+    clear_run_stats()
+    clear_audit_rows()
+
+    output_path = get_workspace_results_path()
+    try:
+        output_path.unlink(missing_ok=True)
+    except Exception as exc:
+        print(f"[SERVER_HELPERS][WARN] Failed to remove workspace results {output_path}: {exc}")
+
+    return {
+        "ok": True,
+        "message": "Search results cleared. Profile and settings were preserved.",
+        "redirect_to": "/workspace",
+    }
 
 
 def load_settings_alerts_labels() -> dict[str, str]:
@@ -1227,19 +1249,9 @@ class SettingsHandler:
         save_profile(DEFAULT_PROFILE)
         save_source_materials(DEFAULT_SOURCE_MATERIALS)
 
-        clear_job_history()
+        clear_current_user_search_state()
         clear_user_settings()
-        clear_workspace_pool()
         clear_agent_state()
-        clear_review_data()
-        clear_run_stats()
-        clear_audit_rows()
-
-        for output_path in [get_workspace_results_path()]:
-            try:
-                output_path.unlink(missing_ok=True)
-            except Exception:
-                pass
 
         return {
             "ok": True,

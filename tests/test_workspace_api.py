@@ -8,6 +8,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 import job_hunter_agent.routes.workspace_api as workspace_api
+import job_hunter_agent.routes.scrape_debug as scrape_debug
+import job_hunter_agent.paths as paths
 from job_hunter_agent import source_connector, workspace_service
 from job_hunter_agent.database import db_conn
 from job_hunter_agent.fastapi_app import create_app
@@ -70,6 +72,118 @@ def test_api_review_data_returns_saved_suggested_tuning(monkeypatch, isolated_db
     assert response.status_code == 200
     payload = response.json()
     assert payload["suggested_tuning"]["capability_suggestions"][0]["skill"] == "Process mapping"
+
+
+def test_api_clean_search_clears_only_search_state(monkeypatch, isolated_db, tmp_path):
+    monkeypatch.setattr(
+        "job_hunter_agent.fastapi_app.read_session_user",
+        lambda request: {"user_id": "test_user", "email": "test@example.com", "role": "admin"},
+    )
+    monkeypatch.setattr("job_hunter_agent.fastapi_app.verify_csrf_token", lambda request, token: True)
+    monkeypatch.setattr(scrape_debug.srv, "DEBUG_MODE", True)
+
+    fake_users_dir = tmp_path / "users"
+    fake_user_dir = fake_users_dir / "test_user"
+    fake_user_dir.mkdir(parents=True, exist_ok=True)
+    workspace_path = fake_user_dir / "workspace_results.html"
+    workspace_path.write_text("<html><body>stale</body></html>", encoding="utf-8")
+
+    monkeypatch.setattr(paths, "USERS_DIR", fake_users_dir)
+
+    with db_conn() as conn:
+        conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", ("test_user",))
+        conn.execute(
+            "INSERT INTO user_profile (user_id, data) VALUES (?, ?)",
+            ("test_user", "{}"),
+        )
+        conn.execute(
+            "INSERT INTO user_settings (user_id, data) VALUES (?, ?)",
+            ("test_user", "{}"),
+        )
+        conn.execute(
+            "INSERT INTO job_history (user_id, job_key, source, platform_id, data) VALUES (?, ?, ?, ?, ?)",
+            ("test_user", "seek:1", "seek", "1", "{}"),
+        )
+        conn.execute(
+            "INSERT INTO workspace_pool (user_id, data) VALUES (?, ?)",
+            ("test_user", "{}"),
+        )
+        conn.execute(
+            "INSERT INTO review_data (user_id, data) VALUES (?, ?)",
+            ("test_user", "{}"),
+        )
+        conn.execute(
+            "INSERT INTO run_stats (user_id, run_id, data) VALUES (?, 'latest', ?)",
+            ("test_user", "{}"),
+        )
+        conn.execute(
+            "INSERT INTO audit_records (user_id, event, data) VALUES (?, 'latest_scrape_run', ?)",
+            ("test_user", "[]"),
+        )
+        conn.execute(
+            "INSERT INTO candidate_application_history (user_id, job_key, data) VALUES (?, ?, ?)",
+            ("test_user", "seek:1", "{}"),
+        )
+
+    client = TestClient(create_app())
+    response = client.post("/api/test/clean-search", json={})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "ok": True,
+        "message": "Search results cleared. Profile and settings were preserved.",
+        "redirect_to": "/workspace",
+    }
+    assert not workspace_path.exists()
+
+    with db_conn() as conn:
+        assert conn.execute(
+            "SELECT COUNT(*) FROM job_history WHERE user_id = ?",
+            ("test_user",),
+        ).fetchone()[0] == 0
+        assert conn.execute(
+            "SELECT COUNT(*) FROM workspace_pool WHERE user_id = ?",
+            ("test_user",),
+        ).fetchone()[0] == 0
+        assert conn.execute(
+            "SELECT COUNT(*) FROM review_data WHERE user_id = ?",
+            ("test_user",),
+        ).fetchone()[0] == 0
+        assert conn.execute(
+            "SELECT COUNT(*) FROM run_stats WHERE user_id = ?",
+            ("test_user",),
+        ).fetchone()[0] == 0
+        assert conn.execute(
+            "SELECT COUNT(*) FROM audit_records WHERE user_id = ? AND event = 'latest_scrape_run'",
+            ("test_user",),
+        ).fetchone()[0] == 0
+        assert conn.execute(
+            "SELECT COUNT(*) FROM user_profile WHERE user_id = ?",
+            ("test_user",),
+        ).fetchone()[0] == 1
+        assert conn.execute(
+            "SELECT COUNT(*) FROM user_settings WHERE user_id = ?",
+            ("test_user",),
+        ).fetchone()[0] == 1
+        assert conn.execute(
+            "SELECT COUNT(*) FROM candidate_application_history WHERE user_id = ?",
+            ("test_user",),
+        ).fetchone()[0] == 1
+
+
+def test_api_clean_search_is_debug_only(monkeypatch, isolated_db):
+    monkeypatch.setattr(
+        "job_hunter_agent.fastapi_app.read_session_user",
+        lambda request: {"user_id": "test_user", "email": "test@example.com", "role": "admin"},
+    )
+    monkeypatch.setattr("job_hunter_agent.fastapi_app.verify_csrf_token", lambda request, token: True)
+    monkeypatch.setattr(scrape_debug.srv, "DEBUG_MODE", False)
+
+    client = TestClient(create_app())
+    response = client.post("/api/test/clean-search", json={})
+
+    assert response.status_code == 403
+    assert response.json() == {"error": "Test mode only"}
 
 
 def test_api_results_html_surfaces_last_run_error(monkeypatch, tmp_path):

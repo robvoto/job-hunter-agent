@@ -123,6 +123,9 @@ def _build_top_utility_bar_html(
             f' aria-label="{_html_escape(shared_labels["account_menu_test_actions_label"])}">'
             f'<div class="account-bar-test-menu-title">{_html_escape(shared_labels["account_menu_test_actions_label"])}</div>'
             '<div class="account-bar-test-menu-separator" aria-hidden="true"></div>'
+            f'<button class="account-bar-test-action account-bar-test-action--danger" id="job_hunter_clean_search_btn" type="button" role="menuitem">'
+            f"{_html_escape(shared_labels['account_menu_clean_search_label'])}"
+            "</button>"
             f'<button class="account-bar-test-action" id="job_hunter_reset_user_btn" type="button" role="menuitem">'
             f"{_html_escape(shared_labels['account_menu_reset_user_label'])}"
             "</button>"
