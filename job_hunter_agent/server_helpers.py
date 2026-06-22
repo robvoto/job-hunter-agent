@@ -41,6 +41,7 @@ from job_hunter_agent.io_utils import (
     clear_agent_state,
     clear_audit_rows,
     clear_job_history,
+    load_job_history,
     clear_review_data,
     clear_run_stats,
     clear_user_settings,
