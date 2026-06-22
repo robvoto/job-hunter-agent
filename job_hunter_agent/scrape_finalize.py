@@ -219,6 +219,7 @@ def _log_run_summary(run_stats: dict, audit_rows: list[dict]) -> None:
                 "llm_calls": llm_calls,
                 "llm_errors": llm_errors,
                 "llm_cache_hits": llm_cache_hits,
+                "llm_truncations": run_stats.get("llm_truncation_count", 0),
                 "final_keep": run_stats.get("kept_count", 0),
                 "final_review": final_review,
                 "final_reject": run_stats.get("rejected_count", 0),
@@ -236,6 +237,7 @@ def _print_run_summary(run_stats: dict) -> None:
     rejected = run_stats.get("rejected_count", 0)
     flagged = run_stats.get("cards_with_flags_count", 0)
     llm_cost = float(run_stats.get("llm_total_cost_usd", 0.0) or 0.0)
+    llm_truncations = int(run_stats.get("llm_truncation_count", 0) or 0)
     duration = _format_duration(run_stats)
 
     bar = "=" * 52
@@ -246,6 +248,7 @@ def _print_run_summary(run_stats: dict) -> None:
     if flagged:
         lines.append(f"  Flagged:    {flagged}  (review suggestions available)")
     lines.append(f"  Total LLM cost: ${llm_cost:.4f}")
+    lines.append(f"  LLM truncations: {llm_truncations}")
     if duration:
         lines.append(f"  Duration:   {duration}")
     flags = _format_issue_flag_summary(run_stats)
@@ -253,7 +256,7 @@ def _print_run_summary(run_stats: dict) -> None:
         lines.append(f"  Flags:     {flags}")
     if DEBUG_MODE:
         lines.append(
-            f"  (debug) pages_read={pages} cards_seen={seen} cards_read={read} kept={kept} rejected={rejected} flags={flagged} cost=${llm_cost:.6f}"
+            f"  (debug) pages_read={pages} cards_seen={seen} cards_read={read} kept={kept} rejected={rejected} flags={flagged} truncations={llm_truncations} cost=${llm_cost:.6f}"
         )
     lines.append(bar)
     logger.info("\n".join(lines))
@@ -268,6 +271,7 @@ def finalize_scrape_run(
     """Persist scrape outputs and rebuild the workspace HTML."""
 
     from job_hunter_agent.llm_gate import get_session_cost_usd
+    from job_hunter_agent.source_learning import get_llm_truncation_count
 
     kept_records = deduplicate_across_sources(kept_records)
 
@@ -289,6 +293,7 @@ def finalize_scrape_run(
             "cards_with_flags_count": 0,
             "issue_flag_summary": [],
             "llm_total_cost_usd": round(get_session_cost_usd(), 6),
+            "llm_truncation_count": get_llm_truncation_count(),
             "last_run_attempt_at": context.run_iso,
         }
 
@@ -363,6 +368,7 @@ def finalize_scrape_run(
     run_stats["last_run_attempt_at"] = context.run_iso
 
     run_stats["llm_total_cost_usd"] = round(get_session_cost_usd(), 6)
+    run_stats["llm_truncation_count"] = get_llm_truncation_count()
 
     run_stats["pool_was_empty_before_run"] = pool_was_empty
 

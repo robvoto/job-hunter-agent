@@ -51,6 +51,18 @@ from job_hunter_agent.text_processing import compact_whitespace
 from job_hunter_agent.runtime_helpers import is_desktop_runtime
 
 
+_llm_truncation_count = 0
+
+
+def get_llm_truncation_count() -> int:
+    return _llm_truncation_count
+
+
+def reset_llm_truncation_count() -> None:
+    global _llm_truncation_count
+    _llm_truncation_count = 0
+
+
 def deterministic_review_outcome(
     record: dict,
     profile: dict,
@@ -315,6 +327,10 @@ def resolve_llm_review_payload(
     description_chars_sent = len(truncated_input)
 
     truncation_applied = len(llm_input_text) > max_llm_chars
+
+    if truncation_applied:
+        global _llm_truncation_count
+        _llm_truncation_count += 1
 
     llm_fp = build_llm_cache_key(truncated_input)
 

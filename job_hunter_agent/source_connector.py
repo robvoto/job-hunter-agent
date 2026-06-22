@@ -48,6 +48,7 @@ CONSOLE_BANNER_WIDTH = 60
 def scrape_jobs_direct() -> str:
     from job_hunter_agent.global_settings import get_playwright_headless
     from job_hunter_agent.llm_gate import get_llm_model, reset_session_cost
+    from job_hunter_agent.source_learning import reset_llm_truncation_count
 
     get_user_id_for_runtime()
     clear_run_stop_request()
@@ -55,6 +56,7 @@ def scrape_jobs_direct() -> str:
     context = build_scrape_run_context(sys.argv)
     require_profile_ready_for_review(load_profile())
     reset_session_cost()
+    reset_llm_truncation_count()
     search_keywords = str(context.search_settings.get("keywords") or "").strip()
     search_locations = [
         str(value).strip()

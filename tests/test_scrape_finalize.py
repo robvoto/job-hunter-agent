@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from job_hunter_agent import scrape_finalize, workspace_service
+from job_hunter_agent import scrape_finalize, source_learning, workspace_service
 from job_hunter_agent.database import db_conn
 from job_hunter_agent.record_schema import (
     RECORD_FIT_LABEL_KEY,
@@ -136,6 +136,8 @@ def test_finalize_scrape_run_writes_outputs(monkeypatch, tmp_path, capsys, caplo
         lambda payload: calls.append(("write_run_stats", payload)),
     )
 
+    monkeypatch.setattr(source_learning, "get_llm_truncation_count", lambda: 3)
+
     monkeypatch.setattr(
         scrape_finalize,
         "write_review_data",
@@ -168,6 +170,8 @@ def test_finalize_scrape_run_writes_outputs(monkeypatch, tmp_path, capsys, caplo
     assert any(name == "write_debug_json" for name, _ in calls)
 
     assert any(name == "write_run_stats" for name, _ in calls)
+    write_run_stats_payload = next(payload for name, payload in calls if name == "write_run_stats")
+    assert write_run_stats_payload["llm_truncation_count"] == 3
 
     assert any(name == "write_review_data" for name, _ in calls)
 
@@ -471,9 +475,11 @@ def test_print_run_summary_uses_explicit_pages_and_cost_labels(caplog):
             "rejected_count": 3,
             "cards_with_flags_count": 1,
             "llm_total_cost_usd": 0.123456,
+            "llm_truncation_count": 4,
         }
     )
 
     log_text = caplog.text
     assert "Pages read: 3" in log_text
     assert "Total LLM cost: $0.1235" in log_text
+    assert "LLM truncations: 4" in log_text

@@ -206,3 +206,25 @@ def test_resolve_llm_review_payload_partial_cache_calls_llm(monkeypatch):
     assert called["count"] == 1
     assert payload["payload_source"] == "llm"
     assert payload["fit_review"] == {"decision": "KEEP", "grade": "STRONG"}
+
+
+def test_resolve_llm_review_payload_counts_truncations(monkeypatch):
+    record = _build_record(description="x" * 100)
+    llm_cache = {}
+
+    source_learning.reset_llm_truncation_count()
+    monkeypatch.setattr(source_learning, "llm_is_enabled", lambda: True)
+    monkeypatch.setattr(source_learning, "get_llm_max_chars", lambda: 10)
+    monkeypatch.setattr(
+        source_learning,
+        "llm_should_consider_with_learning",
+        lambda *_: {
+            "fit_review": {"decision": "KEEP", "grade": "SOLID"},
+            "learning_candidates": [],
+            "job_requirements": [],
+        },
+    )
+
+    source_learning.resolve_llm_review_payload(record, llm_cache)
+
+    assert source_learning.get_llm_truncation_count() == 1
