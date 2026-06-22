@@ -41,6 +41,10 @@ from job_hunter_agent.io_utils import (
     clear_agent_state,
     clear_audit_rows,
     clear_job_history,
+    # Backwards compatibility shim: historically some server routes called
+    # `srv.load_job_history()` (i.e. via `from job_hunter_agent import server_helpers as srv`).
+    # Re-exporting `load_job_history` here avoids breaking older deployed
+    # installs that haven't been updated yet.
     load_job_history,
     clear_review_data,
     clear_run_stats,
