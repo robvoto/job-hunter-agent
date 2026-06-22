@@ -767,20 +767,34 @@ def render_job_card(
             *soft_risk_reasons,
             f"The title specifies a '{domain_qualifier}' domain — check the description confirms this matches your background.",
         ])
+    _record_source = str(record.get("source") or "").lower().strip()
+    if _record_source == "linkedin" and record.get("posted_age_days") is None:
+        soft_risk_reasons = dedupe_preserve_order([
+            *soft_risk_reasons,
+            "Freshness unknown — LinkedIn did not provide a post date for this listing. Confirm it is still open before applying.",
+        ])
     display_record["hard_block_reasons"] = blocking_reasons
     display_record["role_snapshot"] = role_summary
     display_record["fit_highlights"] = fit_highlights
     display_record["soft_risk_reasons"] = soft_risk_reasons
     display_record["missing_profile_support"] = missing_profile_support
     try:
-        fit_points = fit_score_displayed(display_record, scoring_profile)
-        _, score_breakdown = fit_score_and_breakdown_displayed(display_record, scoring_profile)
+        fit_points, score_breakdown = fit_score_and_breakdown_displayed(display_record, scoring_profile)
     except RuntimeError as _score_exc:
-        logger.exception(
-            "[RENDERER][SCORING_ERROR] job=%s title=%r — rendered with score 0: %s",
+        _review_note = (
+            "LLM started review but grade is missing (partial pipeline run)"
+            if display_record.get("llm_decision")
+            else "LLM never reviewed this job (pipeline not run or job was pre-filtered)"
+        )
+        _debug_note = (
+            " — visible because --debug bypasses eligibility filtering" if active_debug_mode else ""
+        )
+        logger.warning(
+            "[RENDERER] job=%s title=%r showing score 0: %s%s",
             display_record.get("job_key", "<unknown>"),
             str(display_record.get("title") or "").strip(),
-            _score_exc,
+            _review_note,
+            _debug_note,
         )
         fit_points = 0
         score_breakdown = []
@@ -1681,6 +1695,15 @@ def render_job_card(
             "</details>"
         )
 
+    action_rec_html = ""
+    if not applied_record and not hidden_record and not blocking_reasons:
+        if fit_points >= 70:
+            action_rec_html = '<div class="job-action-rec job-action-rec--apply">Recommended: Apply</div>'
+        elif fit_points >= 55:
+            action_rec_html = '<div class="job-action-rec job-action-rec--review">Recommended: Review before applying</div>'
+        else:
+            action_rec_html = '<div class="job-action-rec job-action-rec--stretch">Lower priority — apply only if other options are limited</div>'
+
     if applied_record:
         actions_html = (
             '<div class="job-actions">'
@@ -1760,6 +1783,7 @@ def render_job_card(
         f"{profile_gaps_html}"
         f"{candidate_history_html}"
         f"{context_html}"
+        f"{action_rec_html}"
         f"{actions_html}"
         "</article>"
     )
