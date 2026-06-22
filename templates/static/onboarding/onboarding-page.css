@@ -844,3 +844,30 @@ body {
 .onboarding-priority-card.onb-field {
   margin-top: 0;
 }
+
+.extraction-preview-banner {
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  background: color-mix(in srgb, var(--accent, #0066cc) 6%, var(--bg-surface, #fff));
+  border: 1px solid color-mix(in srgb, var(--accent, #0066cc) 20%, transparent);
+  border-radius: var(--radius-md, 6px);
+}
+
+.extraction-preview-summary {
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+}
+
+.extraction-preview-note {
+  font-size: 0.88rem;
+  color: var(--text-muted, #6c757d);
+  margin: 4px 0;
+}
+
+.extraction-preview-caution {
+  font-size: 0.85rem;
+  color: var(--text-muted, #6c757d);
+  margin: 6px 0 0;
+  font-style: italic;
+}

@@ -692,6 +692,21 @@ async function createProfile() {
   if (extractionMessage) {
     console.info('[ONBOARDING] Draft profile extraction summary:', pageLimitNotice ? `${extractionMessage} ${pageLimitNotice}` : extractionMessage);
   }
+  showExtractionPreview(payload);
+}
+
+function showExtractionPreview(payload) {
+  const banner = document.getElementById('extraction_preview_banner');
+  const summaryEl = document.getElementById('extraction_preview_summary');
+  const noteEl = document.getElementById('extraction_preview_note');
+  if (!banner || !summaryEl || !noteEl) return;
+  const counts = payload?.extraction_counts || {};
+  const summaryText = formatExtractionSummary(counts);
+  summaryEl.textContent = summaryText || '';
+  const notice = String(payload?.page_limit_notice || '').trim();
+  noteEl.textContent = notice;
+  noteEl.hidden = !notice;
+  banner.hidden = false;
 }
 
 function continueFromReview() {
