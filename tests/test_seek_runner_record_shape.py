@@ -1,5 +1,6 @@
 """Tests for seek runner record shape."""
 
+import logging
 from types import SimpleNamespace
 
 from job_hunter_agent.record_schema import (
@@ -51,6 +52,8 @@ from job_hunter_agent.record_schema import (
 )
 from job_hunter_agent.scrapers.base import normalize_jobspy_record
 from job_hunter_agent.scrapers.seek_runner import (
+    _classify_seek_list_page_text,
+    _log_seek_list_page_diagnostics,
     _seek_run_progress,
     _seek_source_metadata,
     build_seek_card_record,
@@ -93,6 +96,38 @@ class _FakeCard:
 class _FakeDetailPage:
     def evaluate(self, script):
         return None
+
+
+class _FakeLocator:
+    def __init__(self, count: int):
+        self._count = count
+
+    def count(self):
+        return self._count
+
+
+class _FakeListPage:
+    def __init__(self, *, title: str, url: str, body_text: str, card_count: int):
+        self._title = title
+        self._url = url
+        self._body_text = body_text
+        self._card_count = card_count
+
+    def title(self):
+        return self._title
+
+    @property
+    def url(self):
+        return self._url
+
+    def inner_text(self, selector):
+        if selector == "body":
+            return self._body_text
+        raise AssertionError(f"unexpected selector: {selector}")
+
+    def locator(self, selector):
+        assert selector == 'article[data-automation="normalJob"], article[data-automation="premiumJob"]'
+        return _FakeLocator(self._card_count)
 
 
 def test_seek_card_record_keeps_expected_shape_and_review_buckets(monkeypatch):
@@ -238,6 +273,35 @@ def test_seek_source_metadata_omits_blank_ats_id():
 
     assert metadata[RECORD_SOURCE_PLATFORM_JOB_ID_KEY] == "PLAT-1"
     assert RECORD_SOURCE_ATS_REQUISITION_ID_KEY not in metadata
+
+
+def test_seek_list_page_text_classification_flags_cloudflare_challenge():
+    text = "Help us keep SEEK secure, confirm you are human."
+
+    assert _classify_seek_list_page_text(text) == "challenge_page"
+
+
+def test_seek_list_page_diagnostics_logs_challenge_state(caplog):
+    page = _FakeListPage(
+        title="SEEK - Australia's no. 1 jobs, employment, career and recruitment site",
+        url="https://www.seek.com.au/jobs?keywords=data+analyst&where=Sydney&daterange=3",
+        body_text="Help us keep SEEK secure, confirm you are human.",
+        card_count=0,
+    )
+
+    with caplog.at_level(logging.INFO, logger="job_hunter_agent.scrapers.seek_runner"):
+        status = _log_seek_list_page_diagnostics(
+            "[SEEK p1/3]",
+            page,
+            TimeoutError("wait timed out"),
+            selector_timeout=8000,
+        )
+
+    assert status == "challenge_page"
+    assert "card_selector_count=0" in caplog.text
+    assert "body_status=challenge_page" in caplog.text
+    assert "wait_for_selector failed with TimeoutError" in caplog.text
+    assert "SEEK list page looks like a Cloudflare challenge page" in caplog.text
 
 
 def test_seek_run_progress_includes_title_and_company():

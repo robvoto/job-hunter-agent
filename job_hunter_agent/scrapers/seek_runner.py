@@ -72,7 +72,18 @@ _BROWSER_ARGS = ["--disable-blink-features=AutomationControlled"]
 _WEBDRIVER_INIT = "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
 RUN_PROGRESS_TITLE_SEPARATOR = " @ "
 RUN_PROGRESS_ELAPSED_PREFIX = "elapsed "
-
+_SEEK_LIST_PAGE_CHALLENGE_MARKERS = (
+    "help us keep seek secure",
+    "enable javascript and cookies to continue",
+    "verification successful. waiting for www.seek.com.au to respond",
+    "__cf_chl",
+    "challenge-error-text",
+)
+_SEEK_LIST_PAGE_BLOCK_MARKERS = (
+    "access denied",
+    "temporarily unavailable",
+    "request unsuccessful",
+)
 
 def _format_seek_elapsed(elapsed_s: float | int | None) -> str:
     elapsed = max(int(float(elapsed_s or 0)), 0)
@@ -80,6 +91,66 @@ def _format_seek_elapsed(elapsed_s: float | int | None) -> str:
     if minutes:
         return f"{minutes}m {seconds:02d}s"
     return f"{seconds}s"
+
+
+def _classify_seek_list_page_text(text: str) -> str:
+    lowered = re.sub(r"\s+", " ", str(text or "").strip().lower())
+    if not lowered:
+        return "empty"
+    if any(marker in lowered for marker in _SEEK_LIST_PAGE_CHALLENGE_MARKERS):
+        return "challenge_page"
+    if any(marker in lowered for marker in _SEEK_LIST_PAGE_BLOCK_MARKERS):
+        return "blocked_page"
+    return "ok"
+
+
+def _log_seek_list_page_diagnostics(
+    page_tag: str,
+    list_page,
+    exc: Exception,
+    *,
+    selector_timeout: int,
+) -> str:
+    try:
+        page_title = list_page.title()
+    except Exception as title_exc:
+        page_title = f"<title unavailable: {title_exc}>"
+
+    try:
+        page_url_actual = list_page.url
+    except Exception as url_exc:
+        page_url_actual = f"<url unavailable: {url_exc}>"
+
+    try:
+        body_text = (list_page.inner_text("body") or "")[:500].replace("\n", " ")
+    except Exception as body_exc:
+        body_text = f"<body unavailable: {body_exc}>"
+
+    try:
+        selector_count = list_page.locator(SELECTOR_CARDS).count()
+    except Exception as count_exc:
+        selector_count = -1
+        logger.info("%s card selector count unavailable: %s", page_tag, count_exc)
+
+    page_status = _classify_seek_list_page_text(body_text)
+    logger.info(
+        "%s title=%r actual_url=%s card_selector_count=%s body_status=%s body_len=%d "
+        "selector_timeout_ms=%d body_snippet=%r",
+        page_tag,
+        page_title,
+        page_url_actual,
+        selector_count,
+        page_status,
+        len(body_text),
+        selector_timeout,
+        body_text,
+    )
+    logger.info("%s wait_for_selector failed with %s", page_tag, type(exc).__name__)
+    if page_status == "challenge_page":
+        logger.warning("%s SEEK list page looks like a Cloudflare challenge page", page_tag)
+    elif page_status == "blocked_page":
+        logger.warning("%s SEEK list page looks blocked or unavailable", page_tag)
+    return page_status
 
 
 def _seek_run_progress(
@@ -652,33 +723,28 @@ def seek_scrape_to_records(
                             SELECTOR_CARDS, timeout=playwright_selector_timeout
                         )
                     except Exception as exc:
-                        logger.info(
-                            "%s no visible job cards; stopping target [%s]",
+                        page_status = _log_seek_list_page_diagnostics(
                             page_tag,
-                            type(exc).__name__,
+                            list_page,
+                            exc,
+                            selector_timeout=playwright_selector_timeout,
                         )
                         try:
-                            page_title = list_page.title()
-                            page_url_actual = list_page.url
-                            body_text = (list_page.inner_text("body") or "")[:500].replace(
-                                "\n", " "
-                            )
-                            logger.info(
-                                "%s page_title=%r actual_url=%s body_snippet=%r",
-                                page_tag,
-                                page_title,
-                                page_url_actual,
-                                body_text,
-                            )
                             screenshot_path = pathlib.Path("output") / "seek_timeout_debug.png"
                             list_page.screenshot(path=str(screenshot_path), full_page=False)
                             logger.info("%s screenshot saved to %s", page_tag, screenshot_path)
                         except Exception as diag_exc:
                             logger.info("%s diagnostic capture failed: %s", page_tag, diag_exc)
-                        if _bot_challenge_blocked or headless:
+                        if page_status in {"challenge_page", "blocked_page"} or _bot_challenge_blocked or headless:
                             raise BotChallengeDetected(
-                                f"SEEK headless page did not load cards and needs a visible retry (headless={headless})"
+                                "SEEK list page did not load job cards "
+                                f"(status={page_status}, headless={headless})"
                             ) from exc
+                        logger.info(
+                            "%s no visible job cards; stopping target [%s]",
+                            page_tag,
+                            type(exc).__name__,
+                        )
                         break
 
                     job_cards = list_page.query_selector_all(SELECTOR_CARDS)
