@@ -68,6 +68,7 @@ Examples:
 - source-specific description cleanup patterns
 
 These files may contain patterns, mappings, labels, and structured rule definitions. They should not become hidden operational control panels.
+Managed UI copy must be validated at load time so mojibake or other encoding-corruption slips fail loudly before render instead of hiding behind fallback text.
 
 ### Python modules
 

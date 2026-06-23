@@ -24,6 +24,53 @@ from typing import Any
 
 from job_hunter_agent.database import db_conn
 
+_UI_LABELS_MOJIBAKE_MARKERS = (
+    "â€™",
+    "â€œ",
+    "â€�",
+    "â€˜",
+    "â€ž",
+    "â€“",
+    "â€”",
+    "â€¦",
+    "Ã¢",
+    "Ãƒ",
+    "�",
+)
+
+
+def _iter_string_values(value: Any, path: str = ""):
+    if isinstance(value, dict):
+        for key, item in value.items():
+            child_path = f"{path}.{key}" if path else str(key)
+            yield from _iter_string_values(item, child_path)
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            child_path = f"{path}[{index}]" if path else f"[{index}]"
+            yield from _iter_string_values(item, child_path)
+    elif isinstance(value, str):
+        yield path or "<root>", value
+
+
+def validate_ui_labels_payload(payload: Any) -> None:
+    """Reject obviously corrupted UI copy before it can be rendered.
+
+    We do not try to repair text here. Managed copy must be valid UTF-8 in the
+    source JSON or database row so the failure is loud and actionable.
+    """
+
+    if not isinstance(payload, dict):
+        raise ValueError("ui_labels must be a JSON object")
+
+    for path, text in _iter_string_values(payload):
+        for marker in _UI_LABELS_MOJIBAKE_MARKERS:
+            if marker in text:
+                raise ValueError(
+                    "ui_labels contains suspicious mojibake at "
+                    f"{path}: {text!r}. Fix the source JSON text instead of "
+                    "shipping fallback copy."
+                )
+
 
 def get_knowledge(key: str, db_path: Path | None = None) -> Any | None:
     """Return parsed knowledge for key, or None if not seeded."""
@@ -97,6 +144,8 @@ def upgrade_knowledge_from_dir(
     for json_file in sorted(source_dir.glob("*.json")):
         key = json_file.stem
         file_data = json.loads(json_file.read_text(encoding="utf-8"))
+        if key == "ui_labels":
+            validate_ui_labels_payload(file_data)
         db_data = get_knowledge(key, db_path)
 
         if db_data is None:
@@ -147,6 +196,8 @@ def seed_knowledge_from_dir(
     for json_file in sorted(source_dir.glob("*.json")):
         key = json_file.stem
         data = json.loads(json_file.read_text(encoding="utf-8"))
+        if key == "ui_labels":
+            validate_ui_labels_payload(data)
         with db_conn(db_path) as conn:
             if overwrite:
                 conn.execute(

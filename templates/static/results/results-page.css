@@ -71,12 +71,13 @@
 .badge-viewed { background: var(--state-viewed-bg); color: var(--state-viewed-text); border: 1px solid var(--state-viewed-border); }
 .badge-source-seek { background: var(--brand-seek-bg); color: var(--brand-seek-text); border: 1px solid var(--brand-seek-border); }
 .badge-source-linkedin { background: var(--brand-linkedin-bg); color: var(--brand-linkedin-text); border: 1px solid var(--brand-linkedin-border); }
+.badge-source-apsjobs { background: var(--state-info-bg); color: var(--state-info-text); border: 1px solid var(--state-info-border); }
 .badge-source-neutral { background: var(--state-success-bg); color: var(--state-success-text); }
 .badge-sector-public { background: var(--state-neutral-bg); color: var(--state-neutral-text); }
 .badge-fit-high { background: var(--state-success-bg); color: var(--state-success-text); }
 .badge-fit-medium { background: var(--state-warning-bg); color: var(--state-warning-text); }
 .badge-fit-borderline { background: var(--state-neutral-bg); color: var(--state-neutral-text); }
-/* badge-warning covers amber/advisory signals: Posting evidence (fallback), Potential Duplicates, Description Issue */
+/* badge-warning covers amber/advisory signals: Posting evidence, Potential Duplicates, Description Issue */
 .badge-warning { background: var(--state-warning-bg); color: var(--state-warning-text); }
 
 /* Dark professional: badge-new uses token-driven orange-subtle; source badges use brand tokens */

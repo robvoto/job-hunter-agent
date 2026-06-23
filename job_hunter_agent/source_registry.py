@@ -9,6 +9,8 @@ SOURCE_SEEK = "seek"
 
 SOURCE_LINKEDIN = "linkedin"
 
+SOURCE_APSJOBS = "apsjobs"
+
 
 def _normalize_source_registry(payload: dict[str, Any]) -> dict[str, Any]:
 

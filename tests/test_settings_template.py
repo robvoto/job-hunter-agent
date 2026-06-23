@@ -40,6 +40,14 @@ def test_source_document_suffixes_are_rendered_read_only():
     assert "CV Files" in html
 
 
+def test_global_settings_admin_js_handles_seek_assisted_verification_toggle():
+    js = SETTINGS_ADMIN_JS_PATH.read_text(encoding="utf-8")
+
+    assert "seek_assisted_verification_enabled" in js
+    assert "playwrightSettings.seek_assisted_verification_enabled === true" in js
+    assert "document.getElementById('seek_assisted_verification_enabled').checked" in js
+
+
 def test_global_settings_page_renders_admin_partial(monkeypatch):
 
     monkeypatch.setattr(
@@ -64,6 +72,7 @@ def test_global_settings_page_renders_admin_partial(monkeypatch):
     assert "Sync knowledge with AWS" in html
 
     assert 'id="source_document_allowed_suffixes"' in html
+    assert 'id="seek_assisted_verification_enabled"' in html
 
     assert "account-bar-shortcut" not in html
 

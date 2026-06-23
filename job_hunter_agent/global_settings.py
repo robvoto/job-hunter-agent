@@ -236,6 +236,14 @@ def get_playwright_browser_mode() -> str:
     )
 
 
+def get_seek_assisted_verification_enabled() -> bool:
+    return bool(
+        load_global_settings()["playwright_settings"].get(
+            KEY_SEEK_ASSISTED_VERIFICATION_ENABLED, False
+        )
+    )
+
+
 def get_salary_limits() -> dict[str, dict[str, int]]:
     return load_global_settings()[KEY_LIMITS]["salary"]
 

@@ -412,6 +412,7 @@
     "playwright_viewport_height": 900,
     "playwright_selector_timeout": 8000,
     "playwright_browser_mode": "ephemeral",
+    "seek_assisted_verification_enabled": false,
     "seek_parallel_detail_workers": 3
   },
   "candidate_application_history": {

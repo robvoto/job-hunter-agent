@@ -114,10 +114,13 @@ For detailed maintenance rules, see `.skills/suggested-tuning/SKILL.md`.
   Orchestration for daily scheduled runs and notification state.
 
 - `job_hunter_agent/source_connector.py`
-  Current source connector and workspace renderer for SEEK and LinkedIn.
+  Current source connector and workspace renderer for SEEK, LinkedIn, and APSJobs.
 
-- `job_hunter_agent/scrapers/seek.py` / `job_hunter_agent/scrapers/linkedin.py`
+- `job_hunter_agent/scrapers/seek.py` / `job_hunter_agent/scrapers/linkedin.py` / `job_hunter_agent/scrapers/apsjobs.py`
   Source-specific extraction logic.
+
+- `job_hunter_agent/posting_utils.py`
+  Shared posted-date parsing and display helpers. Use visible relative text from the source page; do not invent hidden fallback date paths.
 
 - `job_hunter_agent/filters.py`
   Deterministic title and content filtering.

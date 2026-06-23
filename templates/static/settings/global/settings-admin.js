@@ -31,6 +31,7 @@ export const JobHunterAdminSettings = (function () {
     search_default_linkedin_easy_apply_only: ['search_settings', 'linkedin_easy_apply_only'],
     default_country_suffix: ['default_country_suffix', null],
     playwright_headless: ['playwright_settings', 'headless'],
+    seek_assisted_verification_enabled: ['playwright_settings', 'seek_assisted_verification_enabled'],
     playwright_viewport_width: ['playwright_settings', 'playwright_viewport_width'],
     playwright_viewport_height: ['playwright_settings', 'playwright_viewport_height'],
     playwright_selector_timeout: ['playwright_settings', 'playwright_selector_timeout'],
@@ -218,6 +219,7 @@ export const JobHunterAdminSettings = (function () {
     setFieldValue('default_country_suffix', defaultCountrySuffix);
     setFieldValue('session_max_age_days', playwrightSettings.session_max_age_days);
     requireElement('playwright_headless').checked = playwrightSettings.headless !== false;
+    requireElement('seek_assisted_verification_enabled').checked = playwrightSettings.seek_assisted_verification_enabled === true;
     setFieldValue('playwright_viewport_width', playwrightSettings.playwright_viewport_width);
     setFieldValue('playwright_viewport_height', playwrightSettings.playwright_viewport_height);
     setFieldValue(
@@ -473,6 +475,7 @@ export const JobHunterAdminSettings = (function () {
       playwright_settings: {
         ...currentPlaywright,
         headless: document.getElementById('playwright_headless').checked,
+        seek_assisted_verification_enabled: document.getElementById('seek_assisted_verification_enabled').checked,
         playwright_viewport_width: readNumber('playwright_viewport_width', currentPlaywright.playwright_viewport_width),
         playwright_viewport_height: readNumber('playwright_viewport_height', currentPlaywright.playwright_viewport_height),
         playwright_selector_timeout: readSecondsAsMilliseconds(

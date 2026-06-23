@@ -216,6 +216,44 @@ def test_ui_labels_json_contains_required_onboarding_and_server_keys():
     assert not missing, f"ui_labels.json is missing required keys: {missing}"
 
 
+def test_seed_rejects_mojibake_ui_labels(tmp_db, knowledge_dir):
+    bad_ui_labels = {
+        "kind": "ui_labels",
+        "name": "ui_labels",
+        "version": 43,
+        "workspace_page_labels": {
+            "hero_title": "Build your job profile",
+            "results_helper_copy": "If a title clearly doesnâ€™t match what you want, block it.",
+        },
+    }
+    (knowledge_dir / "ui_labels.json").write_text(json.dumps(bad_ui_labels), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="mojibake"):
+        seed_knowledge_from_dir(knowledge_dir, tmp_db)
+
+
+def test_load_ui_labels_rejects_mojibake_from_db(tmp_db, monkeypatch):
+    from job_hunter_agent.io_utils import load_ui_labels
+
+    set_knowledge(
+        "ui_labels",
+        {
+            "kind": "ui_labels",
+            "name": "ui_labels",
+            "version": 43,
+            "workspace_page_labels": {
+                "hero_title": "Build your job profile",
+                "results_helper_copy": "If a title clearly doesnâ€™t match what you want, block it.",
+            },
+        },
+        tmp_db,
+    )
+    monkeypatch.setenv("JOB_HUNTER_DB_PATH", str(tmp_db))
+
+    with pytest.raises(ValueError, match="mojibake"):
+        load_ui_labels()
+
+
 def test_ui_labels_json_version_bumps_when_contents_change():
     from pathlib import Path
 
@@ -378,7 +416,7 @@ def test_upgrade_fixes_stale_ui_labels_missing_workspace_labels(isolated_db):
             "sector_option_public": "Public sector",
             "sector_option_private": "Private sector",
             "match_level_label": "Match level",
-            "results_helper_copy": "Job sites often return broad results even when the search is correct. If a title clearly doesn&#8217;t match what you want, you can block similar roles directly from the title. This helps remove repeated noise from future results.",
+            "results_helper_copy": "Job sites often return broad results even when the search is correct. If a title clearly doesn't match what you want, you can block similar roles directly from the title. This helps remove repeated noise from future results.",
             "results_helper_dismiss_button": "Dismiss",
             "applied_jobs_heading": "Applied Jobs",
             "applied_jobs_copy": "This area is for jobs where you have already sent your CV. They are tracked separately so they do not clutter the live shortlist.",

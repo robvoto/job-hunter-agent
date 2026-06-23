@@ -440,7 +440,7 @@ class TestAbsoluteDateFromHtml:
 
 
 class TestAbsoluteDateViaDetect:
-    """Ensure the absolute-date fallback path is exercised through the main function."""
+    """Ensure the absolute-date path is exercised through the main function."""
 
     def test_iso_date_triggers_mismatch(self, rules):
         # RUN_DATE = 2026-05-11; posted 2025-11-11 = ~181 days ago

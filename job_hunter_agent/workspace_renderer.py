@@ -1592,18 +1592,19 @@ def render_job_card(
         if gap_reasons:
             insight_sections.append(
                 '<div class="job-insight-group is-secondary">'
-                "<strong>Debug: scoring notes</strong>"
+                f"<strong>{safe_html(_workspace_label('workspace_card_labels', 'debug_score_notes_summary', 'Why this score is lower'))}</strong>"
                 f"<ul>{''.join(f'<li>{safe_html(item)}</li>' for item in gap_reasons)}</ul>"
                 "</div>"
             )
     if active_debug_mode and score_breakdown:
         score_breakdown_html = "".join(
-            f"<li>{safe_html(_humanize_score_breakdown_label(re.sub(r'\\s*\\[alias:[^\\]]*\\]', '', str(item['label'])).strip(), active_profile))}: {('0' if int(item['value']) == 0 else '{:+d}'.format(int(item['value'])))}</li>"
+            f"<li>{safe_html(_humanize_score_breakdown_label(re.sub(r'\\s*\\[alias:[^\\]]*\\]', '', str(item['label'])).strip(), active_profile))}: {'{:+d}'.format(int(item['value']))}</li>"
             for item in score_breakdown
+            if int(item["value"]) != 0
         )
         insight_sections.append(
             '<div class="job-insight-group is-secondary">'
-            "<strong>Debug: score details</strong>"
+            f"<strong>{safe_html(_workspace_label('workspace_card_labels', 'debug_score_breakdown_summary', 'How this score was calculated'))}</strong>"
             f"<ul>{score_breakdown_html}</ul>"
             "</div>"
         )
@@ -1667,33 +1668,40 @@ def render_job_card(
         _ch_run_date = _cand_hist_details["run_date"]
         _ch_confidence = _cand_hist_details["confidence"]
         _ch_evidence_raw = _cand_hist_details["evidence"]
-        _ch_evidence = (
-            _ch_evidence_raw[:100] + "..." if len(_ch_evidence_raw) > 100 else _ch_evidence_raw
-        )
-        _ch_formatted_date = _ch_run_date
-        try:
-            _dt = datetime.strptime(_ch_run_date, "%Y-%m-%d")
-            _ch_formatted_date = f"{_dt.day} {_dt.strftime('%B %Y')}"
-        except ValueError:
-            pass
-        _ch_items = []
-        _ch_header_parts = [p for p in [_ch_company, _ch_formatted_date] if p]
-        if _ch_header_parts:
-            _ch_items.append(" — ".join(_ch_header_parts))
-        if _ch_role:
-            _ch_items.append(f"Role: {_ch_role}")
-        if _ch_evidence_raw:
-            _ch_items.append(f"Evidence: {_ch_evidence_raw}")
-        if _ch_confidence:
-            _ch_items.append(f"Confidence: {_ch_confidence}")
-        if _cand_hist_review_reason:
-            _ch_items.append(f"Review reason: {_cand_hist_review_reason}")
-        candidate_history_html = (
-            '<details class="job-candidate-history">'
-            "<summary>Candidate application history</summary>"
-            f"<ul>{''.join(f'<li>{safe_html(item)}</li>' for item in _ch_items)}</ul>"
-            "</details>"
-        )
+        # Skip the details block when there's nothing actionable to show — low
+        # confidence with no evidence or role means the LLM failed at import and
+        # the only data is the raw company name from the sheet, which the badge
+        # already signals.
+        if not (_ch_confidence == "low" and not _ch_evidence_raw and not _ch_role):
+            _ch_evidence = (
+                _ch_evidence_raw[:100] + "..." if len(_ch_evidence_raw) > 100 else _ch_evidence_raw
+            )
+            _ch_formatted_date = _ch_run_date
+            for _fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+                try:
+                    _dt = datetime.strptime(_ch_run_date, _fmt)
+                    _ch_formatted_date = f"{_dt.day} {_dt.strftime('%B %Y')}"
+                    break
+                except ValueError:
+                    pass
+            _ch_items = []
+            _ch_header_parts = [p for p in [_ch_company, _ch_formatted_date] if p]
+            if _ch_header_parts:
+                _ch_items.append(" — ".join(_ch_header_parts))
+            if _ch_role:
+                _ch_items.append(f"Role: {_ch_role}")
+            if _ch_evidence_raw:
+                _ch_items.append(f"Evidence: {_ch_evidence_raw}")
+            if _ch_confidence:
+                _ch_items.append(f"Confidence: {_ch_confidence}")
+            if _cand_hist_review_reason:
+                _ch_items.append(f"Review reason: {_cand_hist_review_reason}")
+            candidate_history_html = (
+                '<details class="job-candidate-history">'
+                "<summary>Candidate application history</summary>"
+                f"<ul>{''.join(f'<li>{safe_html(item)}</li>' for item in _ch_items)}</ul>"
+                "</details>"
+            )
 
     action_rec_html = ""
     if not applied_record and not hidden_record and not blocking_reasons:

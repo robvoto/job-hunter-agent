@@ -230,7 +230,7 @@ def test_rendered_workspace_html_content(tmp_path):
             "sector_option_public": "Public sector",
             "sector_option_private": "Private sector",
             "match_level_label": "Match level",
-            "results_helper_copy": "Job sites often return broad results even when the search is correct. If a title clearly doesn&#8217;t match what you want, you can block similar roles directly from the title. This helps remove repeated noise from future results.",
+            "results_helper_copy": "Job sites often return broad results even when the search is correct. If a title clearly doesn't match what you want, you can block similar roles directly from the title. This helps remove repeated noise from future results.",
             "results_helper_dismiss_button": "Dismiss",
             "applied_jobs_heading": "Applied Jobs",
             "applied_jobs_copy": "This area is for jobs where you have already sent your CV. They are tracked separately so they do not clutter the live shortlist.",

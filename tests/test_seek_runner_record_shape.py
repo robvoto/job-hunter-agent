@@ -53,10 +53,15 @@ from job_hunter_agent.record_schema import (
 from job_hunter_agent.scrapers.base import normalize_jobspy_record
 from job_hunter_agent.scrapers.seek_runner import (
     _classify_seek_list_page_text,
+    _classify_seek_list_page_failure,
     _log_seek_list_page_diagnostics,
     _seek_run_progress,
     _seek_source_metadata,
+    _wait_for_seek_user_verification,
     build_seek_card_record,
+    SEEK_BOT_CHALLENGE,
+    SEEK_HUMAN_VERIFICATION,
+    SEEK_TIMEOUT_NO_CARDS,
 )
 
 
@@ -279,6 +284,43 @@ def test_seek_list_page_text_classification_flags_cloudflare_challenge():
     text = "Help us keep SEEK secure, confirm you are human."
 
     assert _classify_seek_list_page_text(text) == "challenge_page"
+
+
+def test_seek_list_page_failure_classification_uses_marker_priority():
+    assert (
+        _classify_seek_list_page_failure(
+            "SEEK jobs",
+            "Help us keep SEEK secure, confirm you are human.",
+            selector_count=0,
+        )
+        == SEEK_HUMAN_VERIFICATION
+    )
+    assert (
+        _classify_seek_list_page_failure("Just a moment", "", selector_count=0)
+        == SEEK_BOT_CHALLENGE
+    )
+    assert (
+        _classify_seek_list_page_failure("SEEK jobs", "No cards yet", selector_count=0)
+        == SEEK_TIMEOUT_NO_CARDS
+    )
+
+
+def test_seek_user_verification_wait_succeeds_when_cards_appear(monkeypatch):
+    calls = []
+
+    class _WaitPage:
+        def wait_for_selector(self, selector, timeout):
+            calls.append((selector, timeout))
+
+    monkeypatch.setattr(
+        "job_hunter_agent.scrapers.seek_runner.set_run_progress", lambda message: None
+    )
+
+    assert _wait_for_seek_user_verification(_WaitPage(), "[SEEK p1/3]", 5000) is True
+    assert calls == [(
+        'article[data-automation="normalJob"], article[data-automation="premiumJob"]',
+        5000,
+    )]
 
 
 def test_seek_list_page_diagnostics_logs_challenge_state(caplog):

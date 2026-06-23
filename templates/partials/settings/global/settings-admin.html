@@ -107,6 +107,17 @@
             </label>
             <div class="field-help">When enabled, the scraper browser runs invisibly in the background. Required on AWS and any server without a display. Disable only for local debugging to watch the browser.</div>
 
+            <label class="toggle-switch" for="seek_assisted_verification_enabled">
+              <span class="toggle-switch-copy">
+                <span class="toggle-switch-title">Assisted SEEK verification</span>
+              </span>
+              <span class="toggle-switch-control">
+                <input id="seek_assisted_verification_enabled" type="checkbox" role="switch">
+                <span class="toggle-switch-ui"></span>
+              </span>
+            </label>
+            <div class="field-help">When enabled, a visible persistent SEEK browser can pause for manual human verification and then continue the scrape in the same session.</div>
+
             <label for="default_country_suffix">Default country suffix</label>
             <input id="default_country_suffix" type="text" maxlength="64" autocomplete="off">
             <div class="field-help">Used when the workspace trims repeated location suffixes from display text.</div>
@@ -400,5 +411,4 @@
           </section>
           </div>
         </section>
-
 

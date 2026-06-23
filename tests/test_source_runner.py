@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from job_hunter_agent import source_runner
 from job_hunter_agent.run_context import ScrapeRunContext
-from job_hunter_agent.source_registry import SOURCE_LINKEDIN, SOURCE_SEEK
+from job_hunter_agent.source_registry import SOURCE_APSJOBS, SOURCE_LINKEDIN, SOURCE_SEEK
 from job_hunter_agent.source_runner import SourceRunResult, run_enabled_sources
 
 
@@ -47,6 +47,10 @@ def _seek_result(**kwargs) -> SourceRunResult:
 
 def _li_result(**kwargs) -> SourceRunResult:
     return SourceRunResult(source=SOURCE_LINKEDIN, **kwargs)
+
+
+def _aps_result(**kwargs) -> SourceRunResult:
+    return SourceRunResult(source=SOURCE_APSJOBS, **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -243,7 +247,10 @@ def test_seek_headless_bot_challenge_retries_visible_browser(monkeypatch):
     def fake_seek_scrape_to_records(*, headless, **kwargs):
         calls.append(headless)
         if headless:
-            raise source_runner.BotChallengeDetected("headless challenge")
+            raise source_runner.BotChallengeDetected(
+                "SEEK is showing a bot challenge page and did not reach job cards.",
+                failure_class=source_runner.SEEK_BOT_CHALLENGE,
+            )
         return ([{"job_key": "seek:1"}], [], [])
 
     monkeypatch.setattr(source_runner, "seek_scrape_to_records", fake_seek_scrape_to_records)
@@ -255,7 +262,7 @@ def test_seek_headless_bot_challenge_retries_visible_browser(monkeypatch):
     assert result.kept_records == [{"job_key": "seek:1"}]
 
 
-def test_seek_headless_timeout_retries_visible_browser(monkeypatch):
+def test_seek_headless_timeout_no_cards_does_not_retry_visible_browser(monkeypatch):
     context = _make_context([SOURCE_SEEK])
     context.headless = True
     context.profile = {"search_settings": {"keywords": "Business Analyst", "locations": ["Sydney"]}}
@@ -264,19 +271,54 @@ def test_seek_headless_timeout_retries_visible_browser(monkeypatch):
     def fake_seek_scrape_to_records(*, headless, **kwargs):
         calls.append(headless)
         if headless:
-            raise source_runner.BotChallengeDetected("headless timeout waiting for cards")
+            raise source_runner.BotChallengeDetected(
+                "SEEK timed out before any job cards appeared.",
+                failure_class=source_runner.SEEK_TIMEOUT_NO_CARDS,
+            )
         return ([{"job_key": "seek:1"}], [], [])
 
     monkeypatch.setattr(source_runner, "seek_scrape_to_records", fake_seek_scrape_to_records)
 
     result = source_runner._run_seek_source(context)
 
-    assert calls == [True, False]
-    assert result.error is None
-    assert result.kept_records == [{"job_key": "seek:1"}]
+    assert calls == [True]
+    assert result.error is not None
+    assert result.kept_records == []
 
 
-def test_seek_visible_bot_challenge_is_treated_as_non_fatal_source_skip(monkeypatch):
+def test_apsjobs_runs_when_government_selected(monkeypatch):
+    context = _make_context([])
+    context.profile = {"match_preferences": {"prefer_sector": ["government"]}}
+    aps_called = []
+
+    monkeypatch.setattr(source_runner, "_run_seek_source", lambda ctx: _seek_result())
+    monkeypatch.setattr(source_runner, "_run_linkedin_source", lambda ctx: _li_result())
+    monkeypatch.setattr(
+        source_runner, "_run_apsjobs_source", lambda ctx: aps_called.append(True) or _aps_result()
+    )
+
+    run_enabled_sources(context)
+
+    assert aps_called == [True]
+
+
+def test_apsjobs_skips_when_government_not_selected(monkeypatch):
+    context = _make_context([])
+    context.profile = {"match_preferences": {"prefer_sector": ["private"]}}
+    aps_called = []
+
+    monkeypatch.setattr(source_runner, "_run_seek_source", lambda ctx: _seek_result())
+    monkeypatch.setattr(source_runner, "_run_linkedin_source", lambda ctx: _li_result())
+    monkeypatch.setattr(
+        source_runner, "_run_apsjobs_source", lambda ctx: aps_called.append(True) or _aps_result()
+    )
+
+    run_enabled_sources(context)
+
+    assert aps_called == []
+
+
+def test_seek_visible_bot_challenge_returns_error_result(monkeypatch):
     context = _make_context([SOURCE_SEEK])
     context.headless = True
     context.profile = {"search_settings": {"keywords": "Business Analyst", "locations": ["Sydney"]}}
@@ -284,14 +326,42 @@ def test_seek_visible_bot_challenge_is_treated_as_non_fatal_source_skip(monkeypa
 
     def fake_seek_scrape_to_records(*, headless, **kwargs):
         calls.append(headless)
-        raise source_runner.BotChallengeDetected(f"challenge (headless={headless})")
+        raise source_runner.BotChallengeDetected(
+            f"challenge (headless={headless})",
+            failure_class=source_runner.SEEK_BOT_CHALLENGE,
+        )
 
     monkeypatch.setattr(source_runner, "seek_scrape_to_records", fake_seek_scrape_to_records)
 
     result = source_runner._run_seek_source(context)
 
     assert calls == [True, False]
-    assert result.error is None
+    assert result.error is not None
+    assert result.kept_records == []
+
+
+def test_seek_human_verification_sets_user_facing_progress(monkeypatch):
+    context = _make_context([SOURCE_SEEK])
+    context.headless = False
+    context.profile = {"search_settings": {"keywords": "Business Analyst", "locations": ["Sydney"]}}
+    messages: list[str] = []
+
+    def fake_progress(message: str) -> None:
+        messages.append(message)
+
+    def fake_seek_scrape_to_records(*, headless, **kwargs):
+        raise source_runner.BotChallengeDetected(
+            "SEEK is asking for human verification from the AWS browser. LinkedIn still ran. Use Assisted SEEK Mode to continue.",
+            failure_class=source_runner.SEEK_HUMAN_VERIFICATION,
+        )
+
+    monkeypatch.setattr(source_runner, "set_run_progress", fake_progress)
+    monkeypatch.setattr(source_runner, "seek_scrape_to_records", fake_seek_scrape_to_records)
+
+    result = source_runner._run_seek_source(context)
+
+    assert messages[-1].startswith("SEEK is asking for human verification")
+    assert result.error is not None
     assert result.kept_records == []
 
 

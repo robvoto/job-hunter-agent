@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime
 from typing import List
 from urllib.error import URLError
@@ -51,6 +52,7 @@ from job_hunter_agent.salary import load_salary
 from job_hunter_agent.scrapers.base import BaseJobScraper, normalize_jobspy_record
 from job_hunter_agent.scrapers.location_adapters import to_jobspy
 from job_hunter_agent.source_registry import SOURCE_LINKEDIN
+from job_hunter_agent.posting_utils import parse_visible_posted_age_days
 from job_hunter_agent.work_mode_extraction import (
     WORK_MODE_UNKNOWN,
     extract_from_text,
@@ -79,6 +81,30 @@ def _fetch_job_html(record: dict) -> str:
             return response.read().decode("utf-8", errors="replace")
     except (URLError, TimeoutError, ValueError):
         return ""
+
+
+def _extract_linkedin_posted_age_days(html: str, run_date) -> float | None:
+    if not html:
+        return None
+
+    visible_text = re.sub(r"<script\b.*?</script>|<style\b.*?</style>", " ", html, flags=re.I | re.S)
+    visible_text = re.sub(r"<[^>]+>", " ", visible_text)
+    visible_text = re.sub(r"\s+", " ", visible_text).strip().lower()
+    return parse_visible_posted_age_days(visible_text, run_date)
+
+
+def _backfill_linkedin_posted_age(record: dict, run_iso: str) -> None:
+    if record.get(RECORD_POSTED_AGE_DAYS_KEY) is not None:
+        return
+
+    html = _fetch_job_html(record)
+    if not html:
+        return
+
+    run_date = datetime.fromisoformat(run_iso).date()
+    posted_age_days = _extract_linkedin_posted_age_days(html, run_date)
+    if posted_age_days is not None:
+        record[RECORD_POSTED_AGE_DAYS_KEY] = posted_age_days
 
 
 class LinkedInScraper(BaseJobScraper):
@@ -157,6 +183,7 @@ class LinkedInScraper(BaseJobScraper):
                     salary_rules=salary_rules,
                     job_type_rules=job_type_rules,
                 )
+                _backfill_linkedin_posted_age(record, self.run_iso)
                 record[RECORD_DESCRIPTION_SOURCE_KEY] = "linkedin_full_description"
                 record[RECORD_DETAILS_TEXT_KEY] = str(record.get(RECORD_DETAILS_TEXT_KEY) or "")
                 logger.info(

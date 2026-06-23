@@ -1,13 +1,15 @@
 {
   "kind": "system_config",
   "name": "source_registry",
-  "version": 1,
+  "version": 2,
   "domain_to_source_map": {
     "seek.com.au": "seek",
-    "linkedin.com": "linkedin"
+    "linkedin.com": "linkedin",
+    "apsjobs.gov.au": "apsjobs"
   },
   "source_display_labels": {
     "seek": "SEEK",
-    "linkedin": "LinkedIn"
+    "linkedin": "LinkedIn",
+    "apsjobs": "APSJobs"
   }
 }

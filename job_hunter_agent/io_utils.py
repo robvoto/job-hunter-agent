@@ -204,8 +204,11 @@ def load_parsing_rules() -> Dict[str, Any]:
 
 def load_ui_labels() -> Dict[str, Any]:
     from job_hunter_agent.knowledge_store import get_knowledge
+    from job_hunter_agent.knowledge_store import validate_ui_labels_payload
 
-    return get_knowledge("ui_labels") or {}
+    payload = get_knowledge("ui_labels") or {}
+    validate_ui_labels_payload(payload)
+    return payload
 
 
 def load_work_mode_rules() -> Dict[str, Any]:

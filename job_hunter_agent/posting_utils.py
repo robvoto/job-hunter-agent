@@ -7,11 +7,12 @@ date logic to ensure consistent timing and age signals across the workspace.
 """
 
 import re
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Optional, Set
 
 from job_hunter_agent.io_utils import normalize_posted_text
 from job_hunter_agent.job_identity import normalize_job_key
+from job_hunter_agent.text_processing import compact_whitespace
 
 
 def parse_timestamp(value: Optional[str]) -> Optional[datetime]:
@@ -72,6 +73,68 @@ def posted_datetime_from_age(
         return None
 
 
+def parse_visible_posted_age_days(
+    value: Optional[str], run_date: Optional[date] = None
+) -> Optional[float]:
+    text = compact_whitespace(normalize_posted_text(value)).lower()
+    if not text or text == "n/a":
+        return None
+
+    if re.search(r"\b(today|just now)\b", text):
+        return 0.0
+    if re.search(r"\byesterday\b", text):
+        return 1.0
+
+    relative_match = re.search(
+        r"\b(?:(?:posted|advertised|published)\s+(?:on\s+)?)?"
+        r"(?P<amount>\d+)\s+"
+        r"(?P<unit>minute|hour|day|week|month|year)s?\s+ago\b",
+        text,
+    )
+    if relative_match:
+        amount = float(relative_match.group("amount"))
+        unit = relative_match.group("unit")
+        multipliers = {
+            "minute": 1 / 1440,
+            "hour": 1 / 24,
+            "day": 1.0,
+            "week": 7.0,
+            "month": 30.0,
+            "year": 365.0,
+        }
+        return amount * multipliers[unit]
+
+    if run_date is None:
+        return None
+
+    absolute_candidates = [
+        r"\b(?:posted|advertised|published)?\s*(?:on\s+)?(?P<date>\d{4}-\d{2}-\d{2})\b",
+        r"\b(?:posted|advertised|published)?\s*(?:on\s+)?(?P<date>\d{1,2}\s+[A-Za-z]+\s+\d{4})\b",
+        r"\b(?:posted|advertised|published)?\s*(?:on\s+)?(?P<date>[A-Za-z]+\s+\d{1,2},?\s+\d{4})\b",
+    ]
+    for pattern in absolute_candidates:
+        match = re.search(pattern, text)
+        if not match:
+            continue
+        raw_date = compact_whitespace(match.group("date"))
+        for fmt in (
+            "%Y-%m-%d",
+            "%d %B %Y",
+            "%d %b %Y",
+            "%B %d, %Y",
+            "%b %d, %Y",
+            "%d %B, %Y",
+            "%d %b, %Y",
+        ):
+            try:
+                parsed = datetime.strptime(raw_date, fmt).date()
+            except ValueError:
+                continue
+            return float(max((run_date - parsed).days, 0))
+
+    return None
+
+
 def format_posted_date_label(
     posted_text: Optional[str], posted_age_days: Optional[float], reference_time: Optional[datetime]
 ) -> str:
@@ -128,27 +191,15 @@ def posted_display_label(record: dict, now: Optional[datetime] = None) -> str:
     posted_text = normalize_posted_text(record.get("posted"))
     posted_age_days = record.get("posted_age_days")
     reference_time = posted_reference_time(record)
-    posted_at = posted_datetime_from_age(posted_age_days, reference_time)
-    relative_label = relative_posted_age_label(posted_at, now) if posted_at else ""
     posted_date_label = format_posted_date_label(
         posted_text,
         posted_age_days,
         reference_time,
     )
-
-    if (
-        posted_date_label != "Unknown"
-        and posted_age_days is not None
-        and is_relative_posted_text(posted_text)
-    ):
-        return f"{posted_date_label} ({relative_label})" if relative_label else posted_date_label
-    if posted_age_days is not None and posted_age_days >= 1 and posted_text not in ("N/A", ""):
-        if posted_date_label != "Unknown" and posted_date_label != posted_text:
-            if relative_label:
-                return f"{posted_date_label} ({relative_label})"
-            return posted_date_label
+    if posted_age_days is not None and posted_date_label != "Unknown":
+        return posted_date_label
     if posted_text in ("N/A", "") and posted_date_label != "Unknown":
-        return f"{posted_date_label} ({relative_label})" if relative_label else posted_date_label
+        return posted_date_label
     return posted_text
 
 

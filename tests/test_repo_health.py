@@ -13,6 +13,7 @@ from job_hunter_agent.profile_store import (
 )
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
+_MOJIBAKE_MARKERS = ("â€™", "â€œ", "â€�", "â€˜", "â€ž", "â€“", "â€”", "â€¦", "Ã¢", "Ãƒ", "�")
 
 
 def test_no_legacy_directory_remains():
@@ -206,6 +207,30 @@ def test_workspace_title_block_copy_is_managed_and_explains_impact():
     assert "before Job Hunter spends time reading the full ad" in card_labels["title_block_button_tooltip"]
     assert "avoids spending time or AI tokens on repeated noise" in card_labels["title_block_guidance_copy"]
     assert "_workspace_label(\"workspace_card_labels\", \"title_block_guidance_copy\"" in renderer
+
+
+def test_ui_labels_json_does_not_contain_mojibake_markers():
+    import json
+
+    labels = json.loads((ROOT_DIR / "data" / "knowledge" / "ui_labels.json").read_text(encoding="utf-8"))
+    offenders = []
+
+    def walk(value, path=""):
+        if isinstance(value, dict):
+            for key, item in value.items():
+                child = f"{path}.{key}" if path else str(key)
+                walk(item, child)
+        elif isinstance(value, list):
+            for index, item in enumerate(value):
+                child = f"{path}[{index}]" if path else f"[{index}]"
+                walk(item, child)
+        elif isinstance(value, str):
+            if any(marker in value for marker in _MOJIBAKE_MARKERS):
+                offenders.append(f"{path}: {value!r}")
+
+    walk(labels)
+
+    assert not offenders, f"ui_labels.json contains mojibake markers: {offenders}"
 
 
 def test_recent_roles_label_no_longer_exists_in_runtime_ui():

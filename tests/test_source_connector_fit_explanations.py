@@ -1844,14 +1844,7 @@ def test_render_job_card_shows_llm_review_section_in_debug_mode():
     assert "Time taken" in html
     assert "Estimated LLM cost" in html
     assert "Debug reason" in html
-    assert (
-        "Possible capability match — mentioned in the job, but not strong enough to affect the score."
-        in html
-    )
-    assert (
-        "Possible capability match — mentioned in the job, but not strong enough to affect the score.: +0"
-        not in html
-    )
+    assert "Base fit: +72" in html
 
 
 def test_render_job_card_hides_debug_fit_sections_in_normal_mode():
@@ -2047,7 +2040,7 @@ def test_posted_display_anchors_relative_text_to_retrieval_date():
         now=datetime.fromisoformat("2026-04-22T12:00:00+10:00"),
     )
 
-    assert label == "19 Apr 2026 (3 days ago)"
+    assert label == "19 Apr 2026"
 
 
 def test_posted_display_converts_today_to_retrieved_date():
@@ -2062,7 +2055,7 @@ def test_posted_display_converts_today_to_retrieved_date():
         now=datetime.fromisoformat("2026-04-22T12:00:00+10:00"),
     )
 
-    assert label == "21 Apr 2026 (yesterday)"
+    assert label == "21 Apr 2026"
 
 
 def test_posted_display_shows_today_against_current_render_date():
@@ -2077,7 +2070,7 @@ def test_posted_display_shows_today_against_current_render_date():
         now=datetime.fromisoformat("2026-04-22T12:00:00+10:00"),
     )
 
-    assert label == "22 Apr 2026 (today)"
+    assert label == "22 Apr 2026"
 
 
 def test_hard_blocked_job_still_shows_other_fit_evidence():
@@ -2565,5 +2558,5 @@ def test_score_gap_notes_use_friendly_copy():
         debug_mode=True,
     )
 
-    assert "Debug: scoring notes" in html
+    assert "Why this score is lower" in html
     assert "What we couldn't score" not in html
