@@ -78,6 +78,7 @@ def test_save_global_settings_normalizes_values(isolated_db):
                 ],
             },
             "playwright_settings": {
+                "playwright_browser_mode": "persistent",
                 "seek_assisted_verification_enabled": "true",
             },
         }
@@ -140,6 +141,7 @@ def test_save_global_settings_normalizes_values(isolated_db):
     ]
 
     assert saved["playwright_settings"]["seek_assisted_verification_enabled"] is True
+    assert saved["playwright_settings"]["playwright_browser_mode"] == "persistent"
 
 
 def test_save_global_settings_normalizes_source_document_suffixes(isolated_db):

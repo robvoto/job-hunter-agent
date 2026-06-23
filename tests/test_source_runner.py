@@ -365,6 +365,29 @@ def test_seek_human_verification_sets_user_facing_progress(monkeypatch):
     assert result.kept_records == []
 
 
+def test_seek_assisted_verification_sets_visibility_warning(monkeypatch):
+    context = _make_context([SOURCE_SEEK])
+    context.headless = False
+    context.profile = {"search_settings": {"keywords": "Business Analyst", "locations": ["Sydney"]}}
+    messages: list[str] = []
+
+    def fake_progress(message: str) -> None:
+        messages.append(message)
+
+    def fake_seek_scrape_to_records(**kwargs):
+        return ([{"job_key": "seek:1"}], [], [])
+
+    monkeypatch.setattr(source_runner, "get_seek_assisted_verification_enabled", lambda: True)
+    monkeypatch.setattr(source_runner, "set_run_progress", fake_progress)
+    monkeypatch.setattr(source_runner, "seek_scrape_to_records", fake_seek_scrape_to_records)
+
+    result = source_runner._run_seek_source(context)
+
+    assert source_runner.SEEK_ASSISTED_VISIBILITY_WARNING in messages
+    assert result.error is None
+    assert result.kept_records == [{"job_key": "seek:1"}]
+
+
 def test_linkedin_scraper_exception_is_caught_and_printed(monkeypatch, capsys):
     """Verify _run_linkedin_source catches scraper exceptions and prints them."""
     context = _make_context([SOURCE_LINKEDIN])

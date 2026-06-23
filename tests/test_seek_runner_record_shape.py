@@ -54,11 +54,13 @@ from job_hunter_agent.scrapers.base import normalize_jobspy_record
 from job_hunter_agent.scrapers.seek_runner import (
     _classify_seek_list_page_text,
     _classify_seek_list_page_failure,
+    _handle_seek_list_page_failure,
     _log_seek_list_page_diagnostics,
     _seek_run_progress,
     _seek_source_metadata,
     _wait_for_seek_user_verification,
     build_seek_card_record,
+    BotChallengeDetected,
     SEEK_BOT_CHALLENGE,
     SEEK_HUMAN_VERIFICATION,
     SEEK_TIMEOUT_NO_CARDS,
@@ -323,6 +325,60 @@ def test_seek_user_verification_wait_succeeds_when_cards_appear(monkeypatch):
     )]
 
 
+def test_seek_human_verification_recovery_continues_without_bot_challenge(monkeypatch):
+    class _RecoverPage:
+        def wait_for_selector(self, selector, timeout):
+            return None
+
+    monkeypatch.setattr(
+        "job_hunter_agent.scrapers.seek_runner.set_run_progress", lambda message: None
+    )
+
+    assert (
+        _handle_seek_list_page_failure(
+            "[SEEK p1/3]",
+            _RecoverPage(),
+            TimeoutError("human verification"),
+            {"title": "Help us keep SEEK secure", "selector_count": 0},
+            page_status="challenge_page",
+            failure_class=SEEK_HUMAN_VERIFICATION,
+            headless=False,
+            use_persistent_browser=True,
+            assisted_verification_enabled=True,
+            playwright_selector_timeout=5000,
+        )
+        is True
+    )
+
+
+def test_seek_human_verification_timeout_raises_classified_bot_challenge(monkeypatch):
+    class _TimeoutPage:
+        def wait_for_selector(self, selector, timeout):
+            raise TimeoutError("still blocked")
+
+    monkeypatch.setattr(
+        "job_hunter_agent.scrapers.seek_runner.set_run_progress", lambda message: None
+    )
+
+    try:
+        _handle_seek_list_page_failure(
+            "[SEEK p1/3]",
+            _TimeoutPage(),
+            TimeoutError("human verification"),
+            {"title": "Help us keep SEEK secure", "selector_count": 0},
+            page_status="challenge_page",
+            failure_class=SEEK_HUMAN_VERIFICATION,
+            headless=False,
+            use_persistent_browser=True,
+            assisted_verification_enabled=True,
+            playwright_selector_timeout=5000,
+        )
+    except BotChallengeDetected as exc:
+        assert exc.failure_class == SEEK_HUMAN_VERIFICATION
+    else:  # pragma: no cover - defensive guard
+        raise AssertionError("expected BotChallengeDetected")
+
+
 def test_seek_list_page_diagnostics_logs_challenge_state(caplog):
     page = _FakeListPage(
         title="SEEK - Australia's no. 1 jobs, employment, career and recruitment site",
@@ -343,7 +399,7 @@ def test_seek_list_page_diagnostics_logs_challenge_state(caplog):
     assert "card_selector_count=0" in caplog.text
     assert "body_status=challenge_page" in caplog.text
     assert "wait_for_selector failed with TimeoutError" in caplog.text
-    assert "SEEK list page looks like a Cloudflare challenge page" in caplog.text
+    assert "SEEK list page looks like a SEEK bot challenge page" in caplog.text
 
 
 def test_seek_run_progress_includes_title_and_company():

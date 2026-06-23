@@ -46,6 +46,9 @@ def test_global_settings_admin_js_handles_seek_assisted_verification_toggle():
     assert "seek_assisted_verification_enabled" in js
     assert "playwrightSettings.seek_assisted_verification_enabled === true" in js
     assert "document.getElementById('seek_assisted_verification_enabled').checked" in js
+    assert "playwright_browser_mode" in js
+    assert "playwrightSettings.playwright_browser_mode || 'ephemeral'" in js
+    assert "playwright_browser_mode:" in js
 
 
 def test_global_settings_page_renders_admin_partial(monkeypatch):
@@ -72,7 +75,9 @@ def test_global_settings_page_renders_admin_partial(monkeypatch):
     assert "Sync knowledge with AWS" in html
 
     assert 'id="source_document_allowed_suffixes"' in html
+    assert 'id="playwright_browser_mode"' in html
     assert 'id="seek_assisted_verification_enabled"' in html
+    assert '<option value="persistent">Persistent</option>' in html
 
     assert "account-bar-shortcut" not in html
 

@@ -80,6 +80,10 @@ SEEK_HUMAN_VERIFICATION = "SEEK_HUMAN_VERIFICATION"
 SEEK_BOT_CHALLENGE = "SEEK_BOT_CHALLENGE"
 SEEK_TIMEOUT_NO_CARDS = "SEEK_TIMEOUT_NO_CARDS"
 SEEK_UNKNOWN_FAILURE = "SEEK_UNKNOWN_FAILURE"
+SEEK_ASSISTED_VISIBILITY_WARNING = (
+    "Assisted SEEK verification requires a visible browser session. On AWS this requires "
+    "VNC/noVNC or a local scraper worker."
+)
 _SEEK_HUMAN_VERIFICATION_MARKERS = (
     "help us keep seek secure",
     "confirm you are human",
@@ -216,7 +220,7 @@ def _log_seek_list_page_diagnostics(
     )
     logger.info("%s wait_for_selector failed with %s", page_tag, type(exc).__name__)
     if page_status == "challenge_page":
-        logger.warning("%s SEEK list page looks like a Cloudflare challenge page", page_tag)
+        logger.warning("%s SEEK list page looks like a SEEK bot challenge page", page_tag)
     elif page_status == "blocked_page":
         logger.warning("%s SEEK list page looks blocked or unavailable", page_tag)
     return page_status
@@ -239,6 +243,91 @@ def _wait_for_seek_user_verification(list_page, page_tag: str, timeout_ms: int) 
         return False
     logger.info("[SEEK][USER_VERIFICATION_RESOLVED] %s manual verification completed", page_tag)
     return True
+
+
+def _handle_seek_list_page_failure(
+    page_tag: str,
+    list_page,
+    exc: Exception,
+    snapshot: dict[str, object],
+    *,
+    page_status: str,
+    failure_class: str,
+    headless: bool,
+    use_persistent_browser: bool,
+    assisted_verification_enabled: bool,
+    playwright_selector_timeout: int,
+) -> bool:
+    page_title = str(snapshot["title"])
+    if failure_class == SEEK_HUMAN_VERIFICATION:
+        logger.warning(
+            "[SEEK][HUMAN_VERIFICATION_DETECTED] %s title=%r status=%s headless=%s persistent=%s",
+            page_tag,
+            page_title,
+            page_status,
+            headless,
+            use_persistent_browser,
+        )
+        if assisted_verification_enabled and use_persistent_browser and not headless:
+            page_recovered = _wait_for_seek_user_verification(
+                list_page, page_tag, playwright_selector_timeout
+            )
+            if page_recovered:
+                logger.info(
+                    "[SEEK][HUMAN_VERIFICATION_RESOLVED] %s continuing scrape after manual verification",
+                    page_tag,
+                )
+                set_run_progress("SEEK human verification resolved; continuing scrape.")
+                return True
+            set_run_progress(_SEEK_FAILURE_MESSAGES[SEEK_HUMAN_VERIFICATION])
+            raise BotChallengeDetected(
+                _SEEK_FAILURE_MESSAGES[SEEK_HUMAN_VERIFICATION],
+                failure_class=SEEK_HUMAN_VERIFICATION,
+            ) from exc
+        logger.warning(
+            "%s assisted SEEK verification requires a visible browser session; "
+            "on AWS this needs VNC/noVNC or a local scraper worker",
+            page_tag,
+        )
+        set_run_progress(SEEK_ASSISTED_VISIBILITY_WARNING)
+        raise BotChallengeDetected(
+            _SEEK_FAILURE_MESSAGES[SEEK_HUMAN_VERIFICATION],
+            failure_class=SEEK_HUMAN_VERIFICATION,
+        ) from exc
+    if failure_class == SEEK_BOT_CHALLENGE:
+        logger.warning(
+            "[SEEK][BOT_CHALLENGE_DETECTED] %s title=%r status=%s headless=%s persistent=%s",
+            page_tag,
+            page_title,
+            page_status,
+            headless,
+            use_persistent_browser,
+        )
+        set_run_progress(_SEEK_FAILURE_MESSAGES[SEEK_BOT_CHALLENGE])
+        raise BotChallengeDetected(
+            _SEEK_FAILURE_MESSAGES[SEEK_BOT_CHALLENGE],
+            failure_class=SEEK_BOT_CHALLENGE,
+        ) from exc
+    if failure_class == SEEK_TIMEOUT_NO_CARDS:
+        logger.info(
+            "[SEEK][TIMEOUT_NO_CARDS] %s title=%r status=%s cards=%s",
+            page_tag,
+            page_title,
+            page_status,
+            snapshot["selector_count"],
+        )
+        set_run_progress(_SEEK_FAILURE_MESSAGES[SEEK_TIMEOUT_NO_CARDS])
+        return False
+    logger.warning(
+        "[SEEK][UNKNOWN_FAILURE] %s title=%r status=%s headless=%s persistent=%s",
+        page_tag,
+        page_title,
+        page_status,
+        headless,
+        use_persistent_browser,
+    )
+    set_run_progress(_SEEK_FAILURE_MESSAGES[SEEK_UNKNOWN_FAILURE])
+    return False
 
 
 def _seek_run_progress(
@@ -786,34 +875,29 @@ def seek_scrape_to_records(
 
                     logger.info("%s url=%s", page_tag, page_url)
 
-                    page_recovered = False
                     stop_target = False
                     try:
                         list_page.goto(page_url, wait_until="domcontentloaded")
-                        # Cloudflare challenge ("Just a moment...") auto-resolves via JS, but takes
-                        # 3–5s before redirecting to the real SEEK page. Wait for it to clear first
-                        # so the card selector timeout counts from after the redirect, not from the
-                        # challenge page load.
-                        _bot_challenge_blocked = False
+                        # SEEK's bot challenge page ("Just a moment...") can auto-resolve via JS,
+                        # but may take a few seconds before redirecting to the real SEEK page.
+                        # Wait for it to clear first so the card selector timeout counts from
+                        # after the redirect, not from the challenge page load.
                         try:
                             if "just a moment" in (list_page.title() or "").lower():
-                                _bot_challenge_blocked = True
                                 logger.info(
-                                    "%s Cloudflare challenge detected; waiting for auto-resolve",
+                                    "%s SEEK bot challenge detected; waiting for auto-resolve",
                                     page_tag,
                                 )
                                 list_page.wait_for_function(
                                     "() => !document.title.toLowerCase().includes('just a moment')",
                                     timeout=15000,
                                 )
-                                _bot_challenge_blocked = False
-                                logger.info("%s Cloudflare challenge resolved", page_tag)
+                                logger.info("%s SEEK bot challenge resolved", page_tag)
                         except Exception:
-                            pass  # _bot_challenge_blocked stays True if challenge did not resolve
+                            pass
                         list_page.wait_for_selector(
                             SELECTOR_CARDS, timeout=playwright_selector_timeout
                         )
-                        page_recovered = True
                     except Exception as exc:
                         page_status = _log_seek_list_page_diagnostics(
                             page_tag,
@@ -829,67 +913,19 @@ def seek_scrape_to_records(
                             logger.info("%s screenshot saved to %s", page_tag, screenshot_path)
                         except Exception as diag_exc:
                             logger.info("%s diagnostic capture failed: %s", page_tag, diag_exc)
-                        if failure_class == SEEK_HUMAN_VERIFICATION:
-                            logger.warning(
-                                "[SEEK][HUMAN_VERIFICATION_DETECTED] %s title=%r status=%s headless=%s persistent=%s",
-                                page_tag,
-                                snapshot["title"],
-                                page_status,
-                                headless,
-                                use_persistent_browser,
-                            )
-                            if (
-                                assisted_verification_enabled
-                                and use_persistent_browser
-                                and not headless
-                            ):
-                                page_recovered = _wait_for_seek_user_verification(
-                                    list_page, page_tag, playwright_selector_timeout
-                                )
-                                if not page_recovered:
-                                    raise BotChallengeDetected(
-                                        _SEEK_FAILURE_MESSAGES[SEEK_HUMAN_VERIFICATION],
-                                        failure_class=SEEK_HUMAN_VERIFICATION,
-                                    ) from exc
-                            set_run_progress(_SEEK_FAILURE_MESSAGES[SEEK_HUMAN_VERIFICATION])
-                            raise BotChallengeDetected(
-                                _SEEK_FAILURE_MESSAGES[SEEK_HUMAN_VERIFICATION],
-                                failure_class=SEEK_HUMAN_VERIFICATION,
-                            ) from exc
-                        if failure_class == SEEK_BOT_CHALLENGE:
-                            logger.warning(
-                                "[SEEK][BOT_CHALLENGE_DETECTED] %s title=%r status=%s headless=%s persistent=%s",
-                                page_tag,
-                                snapshot["title"],
-                                page_status,
-                                headless,
-                                use_persistent_browser,
-                            )
-                            set_run_progress(_SEEK_FAILURE_MESSAGES[SEEK_BOT_CHALLENGE])
-                            raise BotChallengeDetected(
-                                _SEEK_FAILURE_MESSAGES[SEEK_BOT_CHALLENGE],
-                                failure_class=SEEK_BOT_CHALLENGE,
-                            ) from exc
-                        if failure_class == SEEK_TIMEOUT_NO_CARDS:
-                            logger.info(
-                                "[SEEK][TIMEOUT_NO_CARDS] %s title=%r status=%s cards=%s",
-                                page_tag,
-                                snapshot["title"],
-                                page_status,
-                                snapshot["selector_count"],
-                            )
-                            set_run_progress(_SEEK_FAILURE_MESSAGES[SEEK_TIMEOUT_NO_CARDS])
-                            stop_target = True
-                        else:
-                            logger.warning(
-                                "[SEEK][UNKNOWN_FAILURE] %s title=%r status=%s headless=%s persistent=%s",
-                                page_tag,
-                                snapshot["title"],
-                                page_status,
-                                headless,
-                                use_persistent_browser,
-                            )
-                            set_run_progress(_SEEK_FAILURE_MESSAGES[SEEK_UNKNOWN_FAILURE])
+                        _handle_seek_list_page_failure(
+                            page_tag,
+                            list_page,
+                            exc,
+                            snapshot,
+                            page_status=page_status,
+                            failure_class=failure_class,
+                            headless=headless,
+                            use_persistent_browser=use_persistent_browser,
+                            assisted_verification_enabled=assisted_verification_enabled,
+                            playwright_selector_timeout=playwright_selector_timeout,
+                        )
+                        if failure_class in {SEEK_TIMEOUT_NO_CARDS, SEEK_UNKNOWN_FAILURE}:
                             stop_target = True
                     if stop_target:
                         break

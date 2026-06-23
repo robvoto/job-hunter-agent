@@ -16,6 +16,7 @@ from job_hunter_agent.scrapers.apsjobs import APSJobsScraper
 from job_hunter_agent.scrapers.seek import build_seek_search_targets
 from job_hunter_agent.scrapers.seek_runner import (
     BotChallengeDetected,
+    SEEK_ASSISTED_VISIBILITY_WARNING,
     SEEK_BOT_CHALLENGE,
     SEEK_HUMAN_VERIFICATION,
     seek_scrape_to_records,
@@ -52,6 +53,12 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
             context.profile, context.configured_date_range, context.sort_newest_first
         )
         headless = bool(getattr(context, "headless", False))
+        assisted_verification_enabled = (
+            get_seek_assisted_verification_enabled() or context.dashboard_debug_mode
+        )
+        if assisted_verification_enabled:
+            logger.warning("[SEEK] %s", SEEK_ASSISTED_VISIBILITY_WARNING)
+            set_run_progress(SEEK_ASSISTED_VISIBILITY_WARNING)
         _seek_kwargs = dict(
             profile=context.profile,
             search_targets=search_targets,
@@ -66,9 +73,7 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
             playwright_viewport_height=context.playwright_viewport_height,
             playwright_selector_timeout=context.playwright_selector_timeout,
             seek_parallel_detail_workers=context.seek_parallel_detail_workers,
-            assisted_verification_enabled=(
-                get_seek_assisted_verification_enabled() or context.dashboard_debug_mode
-            ),
+            assisted_verification_enabled=assisted_verification_enabled,
         )
         try:
             kept, audit, skills = seek_scrape_to_records(**_seek_kwargs, headless=headless)

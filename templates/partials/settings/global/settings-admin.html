@@ -107,6 +107,13 @@
             </label>
             <div class="field-help">When enabled, the scraper browser runs invisibly in the background. Required on AWS and any server without a display. Disable only for local debugging to watch the browser.</div>
 
+            <label for="playwright_browser_mode">Playwright browser mode</label>
+            <select id="playwright_browser_mode" class="jh-select">
+              <option value="ephemeral">Ephemeral</option>
+              <option value="persistent">Persistent</option>
+            </select>
+            <div class="field-help">Persistent mode keeps the same browser session alive across the run. Use it for Assisted SEEK verification so the manual browser check can continue in the same session.</div>
+
             <label class="toggle-switch" for="seek_assisted_verification_enabled">
               <span class="toggle-switch-copy">
                 <span class="toggle-switch-title">Assisted SEEK verification</span>
@@ -411,4 +418,3 @@
           </section>
           </div>
         </section>
-

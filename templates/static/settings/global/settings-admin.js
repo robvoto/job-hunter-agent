@@ -31,6 +31,7 @@ export const JobHunterAdminSettings = (function () {
     search_default_linkedin_easy_apply_only: ['search_settings', 'linkedin_easy_apply_only'],
     default_country_suffix: ['default_country_suffix', null],
     playwright_headless: ['playwright_settings', 'headless'],
+    playwright_browser_mode: ['playwright_settings', 'playwright_browser_mode'],
     seek_assisted_verification_enabled: ['playwright_settings', 'seek_assisted_verification_enabled'],
     playwright_viewport_width: ['playwright_settings', 'playwright_viewport_width'],
     playwright_viewport_height: ['playwright_settings', 'playwright_viewport_height'],
@@ -219,6 +220,10 @@ export const JobHunterAdminSettings = (function () {
     setFieldValue('default_country_suffix', defaultCountrySuffix);
     setFieldValue('session_max_age_days', playwrightSettings.session_max_age_days);
     requireElement('playwright_headless').checked = playwrightSettings.headless !== false;
+    setFieldValue(
+      'playwright_browser_mode',
+      playwrightSettings.playwright_browser_mode || 'ephemeral',
+    );
     requireElement('seek_assisted_verification_enabled').checked = playwrightSettings.seek_assisted_verification_enabled === true;
     setFieldValue('playwright_viewport_width', playwrightSettings.playwright_viewport_width);
     setFieldValue('playwright_viewport_height', playwrightSettings.playwright_viewport_height);
@@ -475,6 +480,8 @@ export const JobHunterAdminSettings = (function () {
       playwright_settings: {
         ...currentPlaywright,
         headless: document.getElementById('playwright_headless').checked,
+        playwright_browser_mode:
+          document.getElementById('playwright_browser_mode').value || currentPlaywright.playwright_browser_mode,
         seek_assisted_verification_enabled: document.getElementById('seek_assisted_verification_enabled').checked,
         playwright_viewport_width: readNumber('playwright_viewport_width', currentPlaywright.playwright_viewport_width),
         playwright_viewport_height: readNumber('playwright_viewport_height', currentPlaywright.playwright_viewport_height),
