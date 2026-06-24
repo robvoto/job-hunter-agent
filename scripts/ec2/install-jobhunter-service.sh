@@ -20,7 +20,7 @@ install -m 0644 "$SERVICE_SOURCE" "$SERVICE_TARGET"
 systemctl daemon-reload
 systemctl enable "$SERVICE_NAME"
 
-grep -q '^ExecStart=/usr/bin/xvfb-run ' "$SERVICE_TARGET" \
-  || { echo "ERROR: service ExecStart must use xvfb-run" >&2; exit 1; }
+grep -q '^ExecStart=/home/ubuntu/job-hunter-agent/scripts/ec2/run-jobhunter-browser-session.sh' "$SERVICE_TARGET" \
+  || { echo "ERROR: service ExecStart must use the AWS browser session wrapper" >&2; exit 1; }
 
 echo "Service installed: $SERVICE_TARGET"

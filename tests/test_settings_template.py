@@ -78,12 +78,53 @@ def test_global_settings_page_renders_admin_partial(monkeypatch):
     assert 'id="playwright_browser_mode"' in html
     assert 'id="seek_assisted_verification_enabled"' in html
     assert '<option value="persistent">Persistent</option>' in html
+    assert 'href="/aws-browser-session"' in html
+    assert "Open AWS browser session instructions" in html
 
     assert "account-bar-shortcut" not in html
 
     assert 'class="nav-item nav-item-workspace">↩ Workspace</a>' in html
 
     assert "__JOB_HUNTER_SETTINGS_SECTION_" not in html
+
+
+def test_aws_browser_session_page_renders_admin_instructions(monkeypatch):
+    monkeypatch.setattr(
+        _fa,
+        "read_session_user",
+        lambda request: {"user_id": "test", "email": "test@example.com", "role": "admin"},
+    )
+
+    monkeypatch.setattr(_pages, "issue_csrf_token", lambda request: "csrf-token")
+    monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: True)
+    monkeypatch.setattr(_pages, "is_admin", lambda request: True)
+
+    client = TestClient(create_app())
+
+    html = client.get("/aws-browser-session").text
+
+    assert "AWS browser session" in html
+    assert "Open the secure browser tunnel" in html
+    assert "ssh -L 7900:127.0.0.1:7900 ubuntu@YOUR_EC2_HOST" in html
+    assert "http://127.0.0.1:7900/vnc.html?autoconnect=1&amp;resize=remote" in html
+
+
+def test_aws_browser_session_page_redirects_non_admin(monkeypatch):
+    monkeypatch.setattr(
+        _fa,
+        "read_session_user",
+        lambda request: {"user_id": "test", "email": "test@example.com", "role": "candidate"},
+    )
+    monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: True)
+    monkeypatch.setattr(_pages, "issue_csrf_token", lambda request: "csrf-token")
+    monkeypatch.setattr(_pages, "is_admin", lambda request: False)
+
+    client = TestClient(create_app())
+
+    response = client.get("/aws-browser-session", follow_redirects=False)
+
+    assert response.status_code == 302
+    assert "/login?next=%2Faws-browser-session" in response.headers["location"]
 
 
 def test_global_settings_layout_css_prevents_panel_overflow():

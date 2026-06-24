@@ -40,6 +40,7 @@ LOGIN_PATH = "/login"
 LOGOUT_PATH = "/logout"
 
 GLOBAL_SETTINGS_PATH = "/global-settings"
+AWS_BROWSER_SESSION_PATH = "/aws-browser-session"
 
 ONBOARDING_PATH = "/start"
 

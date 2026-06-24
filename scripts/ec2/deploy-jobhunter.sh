@@ -23,10 +23,11 @@ Steps:
   2. Reset any tracked file edits, pull latest code from GitHub
   3. Sync Python dependencies (uv)
   4. Install Playwright Chromium browser + OS system libraries
-  5. Install repo-managed helper commands into /usr/local/bin
-  6. Install repo-managed systemd service (xvfb-run)
-  7. Run db_seed --upgrade
-  8. Restart job-hunter.service and health-check
+  5. Install AWS browser session packages (Xvfb, x11vnc, noVNC)
+  6. Install repo-managed helper commands into /usr/local/bin
+  7. Install repo-managed systemd service (AWS browser session wrapper)
+  8. Run db_seed --upgrade
+  9. Restart job-hunter.service and health-check
 HELP
   exit 0
 fi
@@ -63,6 +64,10 @@ uv run playwright install chromium
 
 echo "==> Playwright OS deps"
 sudo "$(uv run which python)" -m playwright install-deps chromium
+
+echo "==> AWS browser session packages"
+sudo apt-get update
+sudo apt-get install -y xvfb x11vnc novnc websockify
 
 echo "==> Install helpers"
 sudo bash "$APP_DIR/scripts/ec2/install-helpers.sh"

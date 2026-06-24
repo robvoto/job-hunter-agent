@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>__JOB_HUNTER_PAGE_TITLE__</title>
+  <link rel="stylesheet" href="/static/theme/themes.css">
+  <link rel="stylesheet" href="/static/settings/shared/settings-page.css">
+  __JOB_HUNTER_BOOTSTRAP_SCRIPTS__
+  <script src="/static/common/csrf.js"></script>
+  <script type="module" src="/static/common/console-bridge.js"></script>
+  <script src="/static/theme/theme-switcher.js"></script>
+  <script type="module" src="/static/common/account-bar.js"></script>
+  <style>
+    /* Local layout exception: browser-session command snippets only. */
+    .browser-session-command {
+      margin: 12px 0 0;
+      padding: 14px 16px;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      background: var(--bg-muted);
+      color: var(--text-primary);
+      font-family: var(--font-mono, monospace);
+      font-size: 0.92rem;
+      line-height: 1.5;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body data-test-mode="__JOB_HUNTER_DEBUG_MODE_BOOL__" data-page-mode="admin">
+  <header class="settings-header">
+    <div class="settings-header__inner">__JOB_HUNTER_TOP_UTILITY_BAR__</div>
+  </header>
+  <div class="job-hunter-wait-mount" id="job_hunter_wait_mount" hidden></div>
+  <div class="settings-container">
+    <nav class="settings-sidebar" aria-label="Page sections">
+      <div class="sidebar-brand">
+        <a href="/global-settings" class="nav-item nav-item-workspace">Back to global settings</a>
+      </div>
+      <div class="sidebar-nav">
+        <div class="sidebar-group-label sidebar-group-label-global">AWS session</div>
+        <button class="nav-item is-active" type="button">Browser access</button>
+      </div>
+    </nav>
+
+    <main class="settings-main">
+      <div class="settings-content-area">
+        <section class="hero">
+          <div class="hero-text">
+            <h1>__JOB_HUNTER_PAGE_HEADING__</h1>
+            <p>__JOB_HUNTER_PAGE_COPY__</p>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h2>How to open the session</h2>
+            <p class="panel-copy">The browser runs on the EC2 instance under a private display. Use a tunnel from your machine to the AWS host, then open the local noVNC page.</p>
+          </div>
+
+          <div class="subpanel">
+            <h3 class="panel-subheading">SSH tunnel</h3>
+            <pre class="browser-session-command">ssh -L 7900:127.0.0.1:7900 ubuntu@YOUR_EC2_HOST</pre>
+            <div class="field-help">If you use AWS Systems Manager Session Manager instead of SSH, forward local port 7900 to the instance's 127.0.0.1:7900 port.</div>
+          </div>
+
+          <div class="subpanel">
+            <h3 class="panel-subheading">Open noVNC</h3>
+            <pre class="browser-session-command">http://127.0.0.1:7900/vnc.html?autoconnect=1&amp;resize=remote</pre>
+            <div class="field-help">If the tunnel is active, this page shows the browser running on the EC2 display. Use it only for admin access while SEEK is waiting for human verification.</div>
+          </div>
+
+          <div class="subpanel">
+            <h3 class="panel-subheading">When SEEK blocks</h3>
+            <div class="field-help">Keep the browser session open, complete the verification check, then return to the workspace. SEEK will resume once job cards appear.</div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

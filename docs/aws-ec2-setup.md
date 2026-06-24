@@ -94,11 +94,12 @@ Environment file: /etc/job-hunter/job-hunter.env
 Persistent data: /var/lib/job-hunter/data
 Persistent output: /var/lib/job-hunter/output
 Service: job-hunter.service
-ExecStart: /usr/bin/xvfb-run -a -s "-screen 0 1400x900x24" /home/ubuntu/job-hunter-agent/.venv/bin/python -m job_hunter_agent.fastapi_app
+ExecStart: /home/ubuntu/job-hunter-agent/scripts/ec2/run-jobhunter-browser-session.sh
 Local bind: 127.0.0.1:8765
 Docker: not used
 Xvfb wired into service: YES
-Playwright headless setting: OFF (headed via Xvfb)
+noVNC/VNC wired into service: YES (localhost only)
+Playwright headless setting: OFF (headed in the AWS browser session)
 ```
 
 `/var/lib/job-hunter` is mounted on a separate data disk.
@@ -295,7 +296,8 @@ python3 --version
 nginx -v
 tmux -V
 which Xvfb
-which xvfb-run
+which x11vnc
+which websockify
 which xauth
 ```
 
@@ -515,7 +517,7 @@ Environment="TZ=Australia/Sydney"
 Environment="JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data"
 Environment="JOB_HUNTER_OUTPUT_DIR=/var/lib/job-hunter/output"
 Environment="JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/job_hunter.db"
-ExecStart=/usr/bin/xvfb-run -a -s "-screen 0 1400x900x24" /home/ubuntu/job-hunter-agent/.venv/bin/python -m job_hunter_agent.fastapi_app
+ExecStart=/home/ubuntu/job-hunter-agent/scripts/ec2/run-jobhunter-browser-session.sh
 Restart=always
 RestartSec=5
 
@@ -532,15 +534,16 @@ sudo systemctl restart job-hunter && jobhunter-status -f   # + live log tail
 
 ---
 
-## 14. Xvfb for non-headless Playwright on AWS
+## 14. AWS browser session for non-headless Playwright
 
-Xvfb is active. The service runs Chromium in headed mode via a virtual display so SEEK scraping avoids Cloudflare bot challenges.
+Xvfb is active. The service runs Chromium in headed mode via a virtual display and exposes it through localhost-only noVNC/VNC so SEEK scraping can pause for human verification when needed.
 
 ```text
 Installed: yes
-Wired into job-hunter.service: YES (via xvfb-run)
+Wired into job-hunter.service: YES (AWS browser session wrapper)
 Playwright headless setting: OFF
 Viewport: 1400x900
+Browser access: localhost-only noVNC/VNC
 ```
 
 `deploy-jobhunter` installs and maintains this automatically via `scripts/ec2/job-hunter.service`.
@@ -724,7 +727,7 @@ ps auxww | grep -E "Xvfb|xvfb|chromium|chrome|playwright" | grep -v grep
 Expected for AWS non-headless scraping after Xvfb is wired:
 
 ```text
-xvfb-run or Xvfb is active for the service
+Xvfb and the AWS browser session wrapper are active for the service
 Chromium appears during scrape
 ```
 
@@ -829,7 +832,8 @@ Check Xvfb installation:
 
 ```bash
 which Xvfb
-which xvfb-run
+which x11vnc
+which websockify
 which xauth
 ```
 
@@ -901,7 +905,7 @@ deploy-jobhunter
 5. Installs Playwright Chromium browser binary
 6. Installs Playwright OS system libraries (`libatk`, `libgbm`, etc.)
 7. Installs repo-managed helpers into `/usr/local/bin`
-8. Installs repo-managed systemd service (`xvfb-run` + full PATH)
+8. Installs repo-managed systemd service (AWS browser session wrapper + full PATH)
 9. Runs `db_seed --upgrade`
 10. Restarts `job-hunter.service` and health-checks
 

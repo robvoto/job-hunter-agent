@@ -63,7 +63,7 @@ RUN_PROGRESS_ITEM_SEPARATOR = " | "
 
 
 class BotChallengeDetected(Exception):
-    """Raised when SEEK needs manual help or a visible browser retry after a blocked page."""
+    """Raised when SEEK needs manual help or an AWS browser session retry after a blocked page."""
 
     def __init__(self, message: str, *, failure_class: str = "SEEK_UNKNOWN_FAILURE") -> None:
         super().__init__(message)
@@ -80,10 +80,7 @@ SEEK_HUMAN_VERIFICATION = "SEEK_HUMAN_VERIFICATION"
 SEEK_BOT_CHALLENGE = "SEEK_BOT_CHALLENGE"
 SEEK_TIMEOUT_NO_CARDS = "SEEK_TIMEOUT_NO_CARDS"
 SEEK_UNKNOWN_FAILURE = "SEEK_UNKNOWN_FAILURE"
-SEEK_ASSISTED_VISIBILITY_WARNING = (
-    "Assisted SEEK verification requires a visible browser session. On AWS this requires "
-    "VNC/noVNC or a local scraper worker."
-)
+SEEK_ASSISTED_BROWSER_SESSION_ENABLED = "AWS-assisted SEEK browser session is enabled."
 _SEEK_HUMAN_VERIFICATION_MARKERS = (
     "help us keep seek secure",
     "confirm you are human",
@@ -97,8 +94,7 @@ _SEEK_BLOCK_MARKERS = (
 )
 _SEEK_FAILURE_MESSAGES = {
     SEEK_HUMAN_VERIFICATION: (
-        "SEEK is asking for human verification from the AWS browser. LinkedIn still ran. "
-        "Use Assisted SEEK Mode to continue."
+        "SEEK needs human verification. Open the AWS browser session and complete the check."
     ),
     SEEK_BOT_CHALLENGE: "SEEK is showing a bot challenge page and did not reach job cards.",
     SEEK_TIMEOUT_NO_CARDS: "SEEK timed out before any job cards appeared.",
@@ -285,11 +281,11 @@ def _handle_seek_list_page_failure(
                 failure_class=SEEK_HUMAN_VERIFICATION,
             ) from exc
         logger.warning(
-            "%s assisted SEEK verification requires a visible browser session; "
-            "on AWS this needs VNC/noVNC or a local scraper worker",
+            "%s assisted SEEK verification requires AWS browser session access; "
+            "on AWS this needs VNC/noVNC or secure admin port forwarding",
             page_tag,
         )
-        set_run_progress(SEEK_ASSISTED_VISIBILITY_WARNING)
+        set_run_progress(_SEEK_FAILURE_MESSAGES[SEEK_HUMAN_VERIFICATION])
         raise BotChallengeDetected(
             _SEEK_FAILURE_MESSAGES[SEEK_HUMAN_VERIFICATION],
             failure_class=SEEK_HUMAN_VERIFICATION,

@@ -238,7 +238,7 @@ def test_seek_exception_printed_and_continued(monkeypatch, capsys):
     assert kept[0]["job_key"] == "linkedin:1"
 
 
-def test_seek_headless_bot_challenge_retries_visible_browser(monkeypatch):
+def test_seek_headless_bot_challenge_retries_aws_browser_session(monkeypatch):
     context = _make_context([SOURCE_SEEK])
     context.headless = True
     context.profile = {"search_settings": {"keywords": "Business Analyst", "locations": ["Sydney"]}}
@@ -254,6 +254,7 @@ def test_seek_headless_bot_challenge_retries_visible_browser(monkeypatch):
         return ([{"job_key": "seek:1"}], [], [])
 
     monkeypatch.setattr(source_runner, "seek_scrape_to_records", fake_seek_scrape_to_records)
+    monkeypatch.setattr(source_runner, "get_seek_assisted_verification_enabled", lambda: True)
 
     result = source_runner._run_seek_source(context)
 
@@ -262,7 +263,7 @@ def test_seek_headless_bot_challenge_retries_visible_browser(monkeypatch):
     assert result.kept_records == [{"job_key": "seek:1"}]
 
 
-def test_seek_headless_timeout_no_cards_does_not_retry_visible_browser(monkeypatch):
+def test_seek_headless_timeout_no_cards_does_not_retry_aws_browser_session(monkeypatch):
     context = _make_context([SOURCE_SEEK])
     context.headless = True
     context.profile = {"search_settings": {"keywords": "Business Analyst", "locations": ["Sydney"]}}
@@ -278,6 +279,29 @@ def test_seek_headless_timeout_no_cards_does_not_retry_visible_browser(monkeypat
         return ([{"job_key": "seek:1"}], [], [])
 
     monkeypatch.setattr(source_runner, "seek_scrape_to_records", fake_seek_scrape_to_records)
+
+    result = source_runner._run_seek_source(context)
+
+    assert calls == [True]
+    assert result.error is not None
+    assert result.kept_records == []
+
+
+def test_seek_headless_bot_challenge_without_assisted_mode_does_not_retry(monkeypatch):
+    context = _make_context([SOURCE_SEEK])
+    context.headless = True
+    context.profile = {"search_settings": {"keywords": "Business Analyst", "locations": ["Sydney"]}}
+    calls: list[bool] = []
+
+    def fake_seek_scrape_to_records(*, headless, **kwargs):
+        calls.append(headless)
+        raise source_runner.BotChallengeDetected(
+            "SEEK is showing a bot challenge page and did not reach job cards.",
+            failure_class=source_runner.SEEK_BOT_CHALLENGE,
+        )
+
+    monkeypatch.setattr(source_runner, "seek_scrape_to_records", fake_seek_scrape_to_records)
+    monkeypatch.setattr(source_runner, "get_seek_assisted_verification_enabled", lambda: False)
 
     result = source_runner._run_seek_source(context)
 
@@ -332,6 +356,7 @@ def test_seek_visible_bot_challenge_returns_error_result(monkeypatch):
         )
 
     monkeypatch.setattr(source_runner, "seek_scrape_to_records", fake_seek_scrape_to_records)
+    monkeypatch.setattr(source_runner, "get_seek_assisted_verification_enabled", lambda: True)
 
     result = source_runner._run_seek_source(context)
 
@@ -351,7 +376,7 @@ def test_seek_human_verification_sets_user_facing_progress(monkeypatch):
 
     def fake_seek_scrape_to_records(*, headless, **kwargs):
         raise source_runner.BotChallengeDetected(
-            "SEEK is asking for human verification from the AWS browser. LinkedIn still ran. Use Assisted SEEK Mode to continue.",
+            "SEEK needs human verification. Open the AWS browser session and complete the check.",
             failure_class=source_runner.SEEK_HUMAN_VERIFICATION,
         )
 
@@ -360,12 +385,12 @@ def test_seek_human_verification_sets_user_facing_progress(monkeypatch):
 
     result = source_runner._run_seek_source(context)
 
-    assert messages[-1].startswith("SEEK is asking for human verification")
+    assert messages[-1].startswith("SEEK needs human verification")
     assert result.error is not None
     assert result.kept_records == []
 
 
-def test_seek_assisted_verification_sets_visibility_warning(monkeypatch):
+def test_seek_assisted_verification_sets_browser_session_enabled_message(monkeypatch):
     context = _make_context([SOURCE_SEEK])
     context.headless = False
     context.profile = {"search_settings": {"keywords": "Business Analyst", "locations": ["Sydney"]}}
@@ -383,7 +408,7 @@ def test_seek_assisted_verification_sets_visibility_warning(monkeypatch):
 
     result = source_runner._run_seek_source(context)
 
-    assert source_runner.SEEK_ASSISTED_VISIBILITY_WARNING in messages
+    assert any(message == "AWS-assisted SEEK browser session is enabled." for message in messages)
     assert result.error is None
     assert result.kept_records == [{"job_key": "seek:1"}]
 

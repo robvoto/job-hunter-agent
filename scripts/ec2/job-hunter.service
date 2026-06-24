@@ -8,13 +8,18 @@ WorkingDirectory=/home/ubuntu/job-hunter-agent
 EnvironmentFile=/etc/job-hunter/job-hunter.env
 Environment="PATH=/home/ubuntu/job-hunter-agent/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 ## Set timezone for the process so timestamps in logs match the expected
-## local timezone in production (helps when reading files produced by
-## xvfb-run / the app). This was added to ensure logs use Australia/Sydney.
+## local timezone in production (helps when reading files produced by the
+## AWS browser session wrapper and the app. This was added to ensure logs
+## use Australia/Sydney.
 Environment="TZ=Australia/Sydney"
 Environment="JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data"
 Environment="JOB_HUNTER_OUTPUT_DIR=/var/lib/job-hunter/output"
 Environment="JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/job_hunter.db"
-ExecStart=/usr/bin/xvfb-run -a -s "-screen 0 1400x900x24" /home/ubuntu/job-hunter-agent/.venv/bin/python -m job_hunter_agent.fastapi_app
+Environment="JOB_HUNTER_AWS_BROWSER_DISPLAY_NUM=99"
+Environment="JOB_HUNTER_AWS_BROWSER_SCREEN=1400x900x24"
+Environment="JOB_HUNTER_AWS_BROWSER_VNC_PORT=5901"
+Environment="JOB_HUNTER_AWS_NOVNC_PORT=7900"
+ExecStart=/home/ubuntu/job-hunter-agent/scripts/ec2/run-jobhunter-browser-session.sh
 Restart=always
 RestartSec=5
 

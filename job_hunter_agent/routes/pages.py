@@ -15,6 +15,7 @@ from job_hunter_agent.auth import (
     read_session_user,
 )
 from job_hunter_agent.config import (
+    AWS_BROWSER_SESSION_PATH,
     GLOBAL_SETTINGS_PATH,
     LOGOUT_PATH,
     ONBOARDING_DEBUG_ALIAS_PATH,
@@ -24,6 +25,7 @@ from job_hunter_agent.global_settings import KEY_SEEK_MAX_PAGES
 from job_hunter_agent.locations import default_location_value, load_location_options
 from job_hunter_agent.paths import (
     GLOBAL_SETTINGS_HTML_PATH,
+    AWS_BROWSER_SESSION_HTML_PATH,
     ONBOARDING_HTML_PATH,
     SETTINGS_GLOBAL_PARTIALS_DIR,
     SETTINGS_HTML_PATH,
@@ -700,6 +702,30 @@ def page_admin_profile(request: Request):  # type: ignore[no-untyped-def]
         return html_response(html)
 
     return html_response("<h1>Template missing</h1><p>Missing templates/global-settings.html</p>")
+
+
+@router.get(AWS_BROWSER_SESSION_PATH)
+def page_aws_browser_session(request: Request):  # type: ignore[no-untyped-def]
+
+    if not srv._onboarding_complete():
+        return RedirectResponse(ONBOARDING_PATH, status_code=302)
+
+    if not is_admin(request):
+        return auth_required_response(AWS_BROWSER_SESSION_PATH, True)
+
+    if AWS_BROWSER_SESSION_HTML_PATH.exists():
+        html = _render_template_with_locations(
+            request,
+            AWS_BROWSER_SESSION_HTML_PATH,
+            page_mode="admin",
+            page_title="AWS browser session - Job Hunter",
+            page_heading="AWS browser session",
+            page_copy="Open the secure browser tunnel from here when SEEK asks for human verification.",
+        )
+
+        return html_response(html)
+
+    return html_response("<h1>Template missing</h1><p>Missing templates/aws-browser-session.html</p>")
 
 
 @router.get("/profile")

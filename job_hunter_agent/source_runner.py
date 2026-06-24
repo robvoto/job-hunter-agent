@@ -16,7 +16,7 @@ from job_hunter_agent.scrapers.apsjobs import APSJobsScraper
 from job_hunter_agent.scrapers.seek import build_seek_search_targets
 from job_hunter_agent.scrapers.seek_runner import (
     BotChallengeDetected,
-    SEEK_ASSISTED_VISIBILITY_WARNING,
+    SEEK_ASSISTED_BROWSER_SESSION_ENABLED,
     SEEK_BOT_CHALLENGE,
     SEEK_HUMAN_VERIFICATION,
     seek_scrape_to_records,
@@ -57,8 +57,8 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
             get_seek_assisted_verification_enabled() or context.dashboard_debug_mode
         )
         if assisted_verification_enabled:
-            logger.warning("[SEEK] %s", SEEK_ASSISTED_VISIBILITY_WARNING)
-            set_run_progress(SEEK_ASSISTED_VISIBILITY_WARNING)
+            logger.warning("[SEEK] %s", SEEK_ASSISTED_BROWSER_SESSION_ENABLED)
+            set_run_progress(SEEK_ASSISTED_BROWSER_SESSION_ENABLED)
         _seek_kwargs = dict(
             profile=context.profile,
             search_targets=search_targets,
@@ -82,11 +82,23 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
             if failure_class not in {SEEK_HUMAN_VERIFICATION, SEEK_BOT_CHALLENGE} or not headless:
                 set_run_progress(str(exc))
                 raise
+            if not assisted_verification_enabled:
+                logger.warning(
+                    "[SEEK] Headless SEEK run hit %s but AWS browser session mode is disabled",
+                    failure_class,
+                )
+                set_run_progress(str(exc))
+                return SourceRunResult(
+                    source=SOURCE_SEEK,
+                    error=exc,
+                    _job_history_snapshot=job_history,
+                    _llm_cache_snapshot=llm_cache,
+                )
             logger.warning(
-                "[SEEK] Headless SEEK run hit %s; retrying with headless=False",
+                "[SEEK] Headless SEEK run hit %s; retrying with AWS browser session",
                 failure_class,
             )
-            set_run_progress("SEEK retrying with visible browser after a SEEK challenge")
+            set_run_progress("SEEK needs human verification. Open the AWS browser session and complete the check.")
             try:
                 kept, audit, skills = seek_scrape_to_records(**_seek_kwargs, headless=False)
             except BotChallengeDetected as retry_exc:

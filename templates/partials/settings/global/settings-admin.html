@@ -123,7 +123,16 @@
                 <span class="toggle-switch-ui"></span>
               </span>
             </label>
-            <div class="field-help">When enabled, a visible persistent SEEK browser can pause for manual human verification and then continue the scrape in the same session.</div>
+            <div class="field-help">When enabled, the SEEK browser runs in persistent AWS-assisted mode so manual human verification can resume in the same session.</div>
+
+            <section class="subpanel">
+              <div class="panel-header">
+                <h2>AWS browser session</h2>
+                <p class="panel-copy">Open the admin-only browser session page when SEEK pauses for human verification. The EC2 browser is exposed through a localhost-only noVNC/VNC tunnel.</p>
+              </div>
+              <a class="btn btn-secondary" href="/aws-browser-session">Open AWS browser session instructions</a>
+              <div class="field-help">Use this from an admin session only. The browser stays on AWS; you connect through a secure tunnel to the instance.</div>
+            </section>
 
             <label for="default_country_suffix">Default country suffix</label>
             <input id="default_country_suffix" type="text" maxlength="64" autocomplete="off">
