@@ -342,7 +342,19 @@ def save_global_settings(settings: dict[str, Any]) -> dict[str, Any]:
         )
     except Exception:
         current_normalized = None
-    normalized = normalize_global_settings(settings)
+    # The admin UI PATCHes only the sections it renders. Preserve the hidden
+    # runtime-owned candidate history section when the request omits it, so the
+    # browser settings form does not collapse it to an empty dict.
+    merged_settings = dict(settings) if isinstance(settings, dict) else {}
+    if (
+        isinstance(current_normalized, dict)
+        and KEY_CANDIDATE_APPLICATION_HISTORY not in merged_settings
+        and KEY_CANDIDATE_APPLICATION_HISTORY in current_normalized
+    ):
+        merged_settings[KEY_CANDIDATE_APPLICATION_HISTORY] = current_normalized[
+            KEY_CANDIDATE_APPLICATION_HISTORY
+        ]
+    normalized = normalize_global_settings(merged_settings)
     _db_save(normalized)
     load_global_settings.cache_clear()
     log_settings_change(

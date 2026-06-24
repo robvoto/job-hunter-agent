@@ -165,6 +165,24 @@ def test_save_global_settings_normalizes_source_document_suffixes(isolated_db):
     assert global_settings.get_allowed_source_document_suffixes_label() == ".docx, .md, .txt"
 
 
+def test_save_global_settings_preserves_unedited_top_level_sections(isolated_db):
+    global_settings.load_global_settings.cache_clear()
+
+    before = global_settings.load_global_settings()
+    before_history = before["candidate_application_history"]
+
+    saved = global_settings.save_global_settings(
+        {
+            "playwright_settings": {
+                "headless": False,
+            },
+        }
+    )
+
+    assert saved["playwright_settings"]["headless"] is False
+    assert saved["candidate_application_history"] == before_history
+
+
 def test_load_global_settings_requires_seeded_table(tmp_path, monkeypatch):
 
     db = tmp_path / "empty.db"
