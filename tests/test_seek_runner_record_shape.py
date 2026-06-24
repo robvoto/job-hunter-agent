@@ -58,6 +58,7 @@ from job_hunter_agent.scrapers.seek_runner import (
     _log_seek_list_page_diagnostics,
     _seek_run_progress,
     _seek_source_metadata,
+    _wait_for_seek_bot_challenge_or_manual_verification,
     _wait_for_seek_user_verification,
     build_seek_card_record,
     BotChallengeDetected,
@@ -282,7 +283,7 @@ def test_seek_source_metadata_omits_blank_ats_id():
     assert RECORD_SOURCE_ATS_REQUISITION_ID_KEY not in metadata
 
 
-def test_seek_list_page_text_classification_flags_cloudflare_challenge():
+def test_seek_list_page_text_classification_flags_challenge_page():
     text = "Help us keep SEEK secure, confirm you are human."
 
     assert _classify_seek_list_page_text(text) == "challenge_page"
@@ -292,13 +293,17 @@ def test_seek_list_page_failure_classification_uses_marker_priority():
     assert (
         _classify_seek_list_page_failure(
             "SEEK jobs",
-            "Help us keep SEEK secure, confirm you are human.",
+            "Help us keep SEEK secure, please verify.",
             selector_count=0,
         )
         == SEEK_HUMAN_VERIFICATION
     )
     assert (
         _classify_seek_list_page_failure("Just a moment", "", selector_count=0)
+        == SEEK_BOT_CHALLENGE
+    )
+    assert (
+        _classify_seek_list_page_failure("SEEK jobs", "confirm you are human", selector_count=0)
         == SEEK_BOT_CHALLENGE
     )
     assert (
@@ -323,6 +328,72 @@ def test_seek_user_verification_wait_succeeds_when_cards_appear(monkeypatch):
         'article[data-automation="normalJob"], article[data-automation="premiumJob"]',
         5000,
     )]
+
+
+def test_seek_bot_challenge_wait_succeeds_when_cards_appear(monkeypatch):
+    calls = []
+
+    class _ChallengePage:
+        def title(self):
+            return "Just a moment"
+
+        def inner_text(self, selector):
+            assert selector == "body"
+            return "confirm you are human"
+
+        def wait_for_selector(self, selector, timeout):
+            calls.append((selector, timeout))
+
+    monkeypatch.setattr(
+        "job_hunter_agent.scrapers.seek_runner.set_run_progress", lambda message: None
+    )
+
+    assert (
+        _wait_for_seek_bot_challenge_or_manual_verification(
+            _ChallengePage(),
+            "[SEEK p1/3]",
+            headless=False,
+            use_persistent_browser=True,
+            assisted_verification_enabled=True,
+            playwright_selector_timeout=5000,
+        )
+        is True
+    )
+    assert calls == [(
+        'article[data-automation="normalJob"], article[data-automation="premiumJob"]',
+        5000,
+    )]
+
+
+def test_seek_bot_challenge_timeout_raises_classified_bot_challenge(monkeypatch):
+    class _TimeoutPage:
+        def title(self):
+            return "Just a moment"
+
+        def inner_text(self, selector):
+            assert selector == "body"
+            return "confirm you are human"
+
+        def wait_for_selector(self, selector, timeout):
+            raise TimeoutError("still blocked")
+
+    monkeypatch.setattr(
+        "job_hunter_agent.scrapers.seek_runner.set_run_progress", lambda message: None
+    )
+
+    try:
+        _wait_for_seek_bot_challenge_or_manual_verification(
+            _TimeoutPage(),
+            "[SEEK p1/3]",
+            headless=False,
+            use_persistent_browser=True,
+            assisted_verification_enabled=True,
+            playwright_selector_timeout=5000,
+        )
+    except BotChallengeDetected as exc:
+        assert exc.failure_class == SEEK_BOT_CHALLENGE
+    else:  # pragma: no cover - defensive guard
+        raise AssertionError("expected BotChallengeDetected")
 
 
 def test_seek_human_verification_recovery_continues_without_bot_challenge(monkeypatch):

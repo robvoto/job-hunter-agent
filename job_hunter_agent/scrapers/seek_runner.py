@@ -83,10 +83,12 @@ SEEK_UNKNOWN_FAILURE = "SEEK_UNKNOWN_FAILURE"
 SEEK_ASSISTED_BROWSER_SESSION_ENABLED = "AWS-assisted SEEK browser session is enabled."
 _SEEK_HUMAN_VERIFICATION_MARKERS = (
     "help us keep seek secure",
-    "confirm you are human",
     "enable javascript and cookies",
 )
-_SEEK_BOT_CHALLENGE_MARKERS = ("just a moment",)
+_SEEK_BOT_CHALLENGE_MARKERS = (
+    "just a moment",
+    "confirm you are human",
+)
 _SEEK_BLOCK_MARKERS = (
     "access denied",
     "temporarily unavailable",
@@ -102,6 +104,7 @@ _SEEK_FAILURE_MESSAGES = {
 }
 _SEEK_LIST_PAGE_CHALLENGE_MARKERS = (
     "help us keep seek secure",
+    "confirm you are human",
     "enable javascript and cookies to continue",
     "verification successful. waiting for www.seek.com.au to respond",
     "__cf_chl",
@@ -239,6 +242,60 @@ def _wait_for_seek_user_verification(list_page, page_tag: str, timeout_ms: int) 
         return False
     logger.info("[SEEK][USER_VERIFICATION_RESOLVED] %s manual verification completed", page_tag)
     return True
+
+
+def _wait_for_seek_bot_challenge_or_manual_verification(
+    list_page,
+    page_tag: str,
+    *,
+    headless: bool,
+    use_persistent_browser: bool,
+    assisted_verification_enabled: bool,
+    playwright_selector_timeout: int,
+) -> bool:
+    try:
+        page_title = list_page.title()
+    except Exception as title_exc:
+        page_title = f"<title unavailable: {title_exc}>"
+
+    try:
+        body_text = str(list_page.inner_text("body") or "")
+    except Exception as body_exc:
+        body_text = f"<body unavailable: {body_exc}>"
+
+    lowered = " ".join(part for part in [str(page_title or ""), body_text] if part.strip()).lower()
+    if not any(marker in lowered for marker in _SEEK_BOT_CHALLENGE_MARKERS):
+        return False
+
+    logger.warning(
+        "[SEEK][BOT_CHALLENGE_DETECTED] %s title=%r headless=%s persistent=%s",
+        page_tag,
+        page_title,
+        headless,
+        use_persistent_browser,
+    )
+    if assisted_verification_enabled and use_persistent_browser and not headless:
+        set_run_progress(
+            "SEEK needs verification. Open the AWS browser session and complete the check."
+        )
+        try:
+            list_page.wait_for_selector(SELECTOR_CARDS, timeout=playwright_selector_timeout)
+        except Exception as exc:
+            logger.warning(
+                "[SEEK][USER_VERIFICATION_TIMEOUT] %s challenge did not resolve in time",
+                page_tag,
+            )
+            raise BotChallengeDetected(
+                "SEEK is showing a bot challenge page and did not reach job cards.",
+                failure_class=SEEK_BOT_CHALLENGE,
+            ) from exc
+        logger.info("[SEEK][BOT_CHALLENGE_RESOLVED] %s continuing scrape after verification", page_tag)
+        return True
+
+    raise BotChallengeDetected(
+        "SEEK is showing a bot challenge page and did not reach job cards.",
+        failure_class=SEEK_BOT_CHALLENGE,
+    )
 
 
 def _handle_seek_list_page_failure(
@@ -874,26 +931,18 @@ def seek_scrape_to_records(
                     stop_target = False
                     try:
                         list_page.goto(page_url, wait_until="domcontentloaded")
-                        # SEEK's bot challenge page ("Just a moment...") can auto-resolve via JS,
-                        # but may take a few seconds before redirecting to the real SEEK page.
-                        # Wait for it to clear first so the card selector timeout counts from
-                        # after the redirect, not from the challenge page load.
-                        try:
-                            if "just a moment" in (list_page.title() or "").lower():
-                                logger.info(
-                                    "%s SEEK bot challenge detected; waiting for auto-resolve",
-                                    page_tag,
-                                )
-                                list_page.wait_for_function(
-                                    "() => !document.title.toLowerCase().includes('just a moment')",
-                                    timeout=15000,
-                                )
-                                logger.info("%s SEEK bot challenge resolved", page_tag)
-                        except Exception:
-                            pass
-                        list_page.wait_for_selector(
-                            SELECTOR_CARDS, timeout=playwright_selector_timeout
+                        bot_challenge_resolved = _wait_for_seek_bot_challenge_or_manual_verification(
+                            list_page,
+                            page_tag,
+                            headless=headless,
+                            use_persistent_browser=use_persistent_browser,
+                            assisted_verification_enabled=assisted_verification_enabled,
+                            playwright_selector_timeout=playwright_selector_timeout,
                         )
+                        if not bot_challenge_resolved:
+                            list_page.wait_for_selector(
+                                SELECTOR_CARDS, timeout=playwright_selector_timeout
+                            )
                     except Exception as exc:
                         page_status = _log_seek_list_page_diagnostics(
                             page_tag,

@@ -540,13 +540,13 @@ Xvfb is active. The service runs Chromium in headed mode via a virtual display a
 
 ```text
 Installed: yes
-Wired into job-hunter.service: YES (AWS browser session wrapper)
+Wired into job-hunter.service: YES (AWS browser session launcher)
 Playwright headless setting: OFF
 Viewport: 1400x900
 Browser access: localhost-only noVNC/VNC
 ```
 
-`deploy-jobhunter` installs and maintains this automatically via `scripts/ec2/job-hunter.service`.
+`deploy-jobhunter` installs and maintains this automatically via `scripts/ec2/install-aws-browser-session.sh`, `scripts/ec2/start-aws-browser-session.sh`, and `scripts/ec2/job-hunter.service`.
 
 Verify during a scrape:
 
@@ -727,7 +727,7 @@ ps auxww | grep -E "Xvfb|xvfb|chromium|chrome|playwright" | grep -v grep
 Expected for AWS non-headless scraping after Xvfb is wired:
 
 ```text
-Xvfb and the AWS browser session wrapper are active for the service
+Xvfb and the AWS browser session launcher are active for the service
 Chromium appears during scrape
 ```
 
@@ -905,7 +905,7 @@ deploy-jobhunter
 5. Installs Playwright Chromium browser binary
 6. Installs Playwright OS system libraries (`libatk`, `libgbm`, etc.)
 7. Installs repo-managed helpers into `/usr/local/bin`
-8. Installs repo-managed systemd service (AWS browser session wrapper + full PATH)
+8. Installs repo-managed AWS browser-session packages, launcher scripts, and systemd service (full PATH)
 9. Runs `db_seed --upgrade`
 10. Restarts `job-hunter.service` and health-checks
 
