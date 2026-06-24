@@ -27,7 +27,9 @@ from job_hunter_agent.source_registry import SOURCE_APSJOBS, SOURCE_LINKEDIN, SO
 logger = logging.getLogger(__name__)
 
 SEEK_SOURCE_TIMEOUT_SECONDS = 90
+LINKEDIN_SOURCE_TIMEOUT_SECONDS = 180
 SEEK_SOURCE_TIMEOUT_MESSAGE = "SEEK did not finish in time and was skipped. Other source results remain usable."
+LINKEDIN_SOURCE_TIMEOUT_MESSAGE = "LinkedIn did not finish in time and was skipped. Other source results remain usable."
 
 
 @dataclass
@@ -220,42 +222,54 @@ def _run_apsjobs_source(context: ScrapeRunContext) -> SourceRunResult:
         )
 
 
-def _timeout_seek_result(context: ScrapeRunContext) -> SourceRunResult:
-    logger.warning("[SEEK][SOURCE_TIMEOUT] %s", SEEK_SOURCE_TIMEOUT_MESSAGE)
-    set_run_progress(SEEK_SOURCE_TIMEOUT_MESSAGE)
+def _timeout_result(context: ScrapeRunContext, source: str, message: str) -> SourceRunResult:
+    logger.warning("[%s][SOURCE_TIMEOUT] %s", source.upper(), message)
+    set_run_progress(message)
     return SourceRunResult(
-        source=SOURCE_SEEK,
-        error=TimeoutError(SEEK_SOURCE_TIMEOUT_MESSAGE),
+        source=source,
+        error=TimeoutError(message),
         _job_history_snapshot=dict(context.job_history),
         _llm_cache_snapshot=dict(context.llm_cache),
     )
 
 
 def _run_seek_and_linkedin_in_parallel(context: ScrapeRunContext) -> list[SourceRunResult]:
-    """Run SEEK and LinkedIn without letting SEEK block the whole run."""
+    """Run SEEK and LinkedIn without letting either source block the whole run."""
     executor = ThreadPoolExecutor(max_workers=2)
     ctx_seek = contextvars.copy_context()
     ctx_li = contextvars.copy_context()
     seek_future = executor.submit(ctx_seek.run, _run_seek_source, context)
     li_future = executor.submit(ctx_li.run, _run_linkedin_source, context)
     futures = {seek_future: SOURCE_SEEK, li_future: SOURCE_LINKEDIN}
+    deadlines = {
+        seek_future: time.monotonic() + SEEK_SOURCE_TIMEOUT_SECONDS,
+        li_future: time.monotonic() + LINKEDIN_SOURCE_TIMEOUT_SECONDS,
+    }
+    timeout_messages = {
+        seek_future: SEEK_SOURCE_TIMEOUT_MESSAGE,
+        li_future: LINKEDIN_SOURCE_TIMEOUT_MESSAGE,
+    }
     pending = set(futures)
     results_by_source: dict[str, SourceRunResult] = {}
-    seek_deadline = time.monotonic() + SEEK_SOURCE_TIMEOUT_SECONDS
 
     try:
         while pending:
-            if seek_future in pending and time.monotonic() >= seek_deadline:
-                seek_future.cancel()
-                pending.remove(seek_future)
-                results_by_source[SOURCE_SEEK] = _timeout_seek_result(context)
-                continue
+            now = time.monotonic()
+            timed_out = [future for future in list(pending) if now >= deadlines[future]]
+            for future in timed_out:
+                source = futures[future]
+                future.cancel()
+                pending.remove(future)
+                results_by_source[source] = _timeout_result(
+                    context, source, timeout_messages[future]
+                )
 
-            timeout = 1.0
-            if seek_future in pending:
-                timeout = max(0.1, min(timeout, seek_deadline - time.monotonic()))
+            if not pending:
+                break
 
-            done, _ = wait(pending, timeout=timeout, return_when=FIRST_COMPLETED)
+            next_deadline = min(deadlines[future] for future in pending)
+            wait_timeout = max(0.1, min(1.0, next_deadline - time.monotonic()))
+            done, _ = wait(pending, timeout=wait_timeout, return_when=FIRST_COMPLETED)
             for future in done:
                 pending.remove(future)
                 source = futures[future]
@@ -268,11 +282,12 @@ def _run_seek_and_linkedin_in_parallel(context: ScrapeRunContext) -> list[Source
         executor.shutdown(wait=False, cancel_futures=True)
 
     if SOURCE_SEEK not in results_by_source:
-        results_by_source[SOURCE_SEEK] = _timeout_seek_result(context)
+        results_by_source[SOURCE_SEEK] = _timeout_result(
+            context, SOURCE_SEEK, SEEK_SOURCE_TIMEOUT_MESSAGE
+        )
     if SOURCE_LINKEDIN not in results_by_source:
-        results_by_source[SOURCE_LINKEDIN] = SourceRunResult(
-            source=SOURCE_LINKEDIN,
-            error=TimeoutError("LinkedIn did not return a result."),
+        results_by_source[SOURCE_LINKEDIN] = _timeout_result(
+            context, SOURCE_LINKEDIN, LINKEDIN_SOURCE_TIMEOUT_MESSAGE
         )
     return [results_by_source[SOURCE_SEEK], results_by_source[SOURCE_LINKEDIN]]
 
@@ -280,8 +295,8 @@ def _run_seek_and_linkedin_in_parallel(context: ScrapeRunContext) -> list[Source
 def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dict], list[dict]]:
     """Run all enabled sources and return merged (kept_records, audit_rows, skill_observations).
 
-    When both SEEK and LinkedIn are enabled they run concurrently. SEEK has a hard
-    source timeout so a stuck SEEK page cannot block completed LinkedIn results.
+    When both SEEK and LinkedIn are enabled they run concurrently. Each source has a hard
+    timeout so a stuck job board cannot block the whole run.
 
     Mutable shared state (job_history, llm_cache) is isolated per source during
     execution and merged back into context after all sources complete.
