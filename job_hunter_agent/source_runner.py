@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import contextvars
 import logging
-from concurrent.futures import ThreadPoolExecutor
+import time
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -24,6 +25,9 @@ from job_hunter_agent.scrapers.seek_runner import (
 from job_hunter_agent.source_registry import SOURCE_APSJOBS, SOURCE_LINKEDIN, SOURCE_SEEK
 
 logger = logging.getLogger(__name__)
+
+SEEK_SOURCE_TIMEOUT_SECONDS = 90
+SEEK_SOURCE_TIMEOUT_MESSAGE = "SEEK did not finish in time and was skipped. Other source results remain usable."
 
 
 @dataclass
@@ -216,13 +220,68 @@ def _run_apsjobs_source(context: ScrapeRunContext) -> SourceRunResult:
         )
 
 
+def _timeout_seek_result(context: ScrapeRunContext) -> SourceRunResult:
+    logger.warning("[SEEK][SOURCE_TIMEOUT] %s", SEEK_SOURCE_TIMEOUT_MESSAGE)
+    set_run_progress(SEEK_SOURCE_TIMEOUT_MESSAGE)
+    return SourceRunResult(
+        source=SOURCE_SEEK,
+        error=TimeoutError(SEEK_SOURCE_TIMEOUT_MESSAGE),
+        _job_history_snapshot=dict(context.job_history),
+        _llm_cache_snapshot=dict(context.llm_cache),
+    )
+
+
+def _run_seek_and_linkedin_in_parallel(context: ScrapeRunContext) -> list[SourceRunResult]:
+    """Run SEEK and LinkedIn without letting SEEK block the whole run."""
+    executor = ThreadPoolExecutor(max_workers=2)
+    ctx_seek = contextvars.copy_context()
+    ctx_li = contextvars.copy_context()
+    seek_future = executor.submit(ctx_seek.run, _run_seek_source, context)
+    li_future = executor.submit(ctx_li.run, _run_linkedin_source, context)
+    futures = {seek_future: SOURCE_SEEK, li_future: SOURCE_LINKEDIN}
+    pending = set(futures)
+    results_by_source: dict[str, SourceRunResult] = {}
+    seek_deadline = time.monotonic() + SEEK_SOURCE_TIMEOUT_SECONDS
+
+    try:
+        while pending:
+            if seek_future in pending and time.monotonic() >= seek_deadline:
+                seek_future.cancel()
+                pending.remove(seek_future)
+                results_by_source[SOURCE_SEEK] = _timeout_seek_result(context)
+                continue
+
+            timeout = 1.0
+            if seek_future in pending:
+                timeout = max(0.1, min(timeout, seek_deadline - time.monotonic()))
+
+            done, _ = wait(pending, timeout=timeout, return_when=FIRST_COMPLETED)
+            for future in done:
+                pending.remove(future)
+                source = futures[future]
+                try:
+                    results_by_source[source] = future.result()
+                except Exception as exc:
+                    logger.exception("[%s] source worker failed", source)
+                    results_by_source[source] = SourceRunResult(source=source, error=exc)
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+
+    if SOURCE_SEEK not in results_by_source:
+        results_by_source[SOURCE_SEEK] = _timeout_seek_result(context)
+    if SOURCE_LINKEDIN not in results_by_source:
+        results_by_source[SOURCE_LINKEDIN] = SourceRunResult(
+            source=SOURCE_LINKEDIN,
+            error=TimeoutError("LinkedIn did not return a result."),
+        )
+    return [results_by_source[SOURCE_SEEK], results_by_source[SOURCE_LINKEDIN]]
+
+
 def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dict], list[dict]]:
     """Run all enabled sources and return merged (kept_records, audit_rows, skill_observations).
 
-    When both SEEK and LinkedIn are enabled they run concurrently via a two-worker
-    thread pool. Results are always merged in deterministic order: SEEK first,
-    LinkedIn second, and APSJobs last if government jobs are enabled, regardless
-    of which source finishes first.
+    When both SEEK and LinkedIn are enabled they run concurrently. SEEK has a hard
+    source timeout so a stuck SEEK page cannot block completed LinkedIn results.
 
     Mutable shared state (job_history, llm_cache) is isolated per source during
     execution and merged back into context after all sources complete.
@@ -248,14 +307,7 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
 
     if seek_enabled and li_enabled:
         set_run_progress("SEEK + LinkedIn running in parallel")
-        ctx_seek = contextvars.copy_context()
-        ctx_li = contextvars.copy_context()
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            seek_future = pool.submit(ctx_seek.run, _run_seek_source, context)
-            li_future = pool.submit(ctx_li.run, _run_linkedin_source, context)
-            seek_result = seek_future.result()
-            li_result = li_future.result()
-        results = [seek_result, li_result]  # deterministic order: SEEK first
+        results = _run_seek_and_linkedin_in_parallel(context)
     elif seek_enabled:
         results = [_run_seek_source(context)]
     elif li_enabled:
