@@ -25,6 +25,15 @@ Use this file to decide where information belongs. Do not create a new markdown 
 | `docs/SHOWCASE_NOTES.md` | Local demo, showcase, and product-positioning notes tied to visible proof. |
 | `docs/aws-ec2-setup.md` | Current AWS EC2 production setup. |
 
+## Operational runbooks
+
+| File/folder | Owner |
+|---|---|
+| `docs/runbooks/README.md` | Runbook index and rules for creating operational troubleshooting procedures. |
+| `docs/runbooks/aws-seek-assisted-browser-session.md` | AWS SEEK assisted browser troubleshooting: DB seed, uv commands, noVNC/Xvfb checks, browser settings, and SEEK pass condition. |
+
+Runbooks are for live incident-style procedures. They should contain exact commands, expected outputs, failure interpretation, and pass criteria. They should not become design diaries.
+
 ## Domain/reference docs
 
 | File | Owner |
@@ -58,6 +67,7 @@ Backlog source of truth is the shared Google Sheet. Backlog workflow rules live 
 ## Rules for new docs
 
 - Prefer updating an existing owner before creating a new doc.
+- Use `docs/runbooks/` for exact live troubleshooting procedures with commands and pass/fail criteria.
 - If a doc is historical, put it under an `archive/` folder or mark it clearly as historical.
 - If a rule tells agents how to act, it usually belongs in `AGENTS.md`, `docs/PROJECT_CONTEXT.md`, or one `.skills/*/SKILL.md`.
 - If a doc repeats another owner, merge or link instead of duplicating.
