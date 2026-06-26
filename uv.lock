@@ -419,6 +419,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "openai" },
     { name = "openpyxl" },
     { name = "pandas" },
@@ -442,6 +443,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.115.0,<1" },
+    { name = "httpx", specifier = ">=0.27.0,<1" },
     { name = "openai", specifier = ">=2.31.0,<3" },
     { name = "openpyxl", specifier = ">=3.1.0,<4" },
     { name = "pandas", specifier = ">=2.0.0,<3" },
