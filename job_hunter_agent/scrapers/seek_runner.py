@@ -319,7 +319,7 @@ def _wait_for_seek_bot_challenge_or_manual_verification(
         headless,
         use_persistent_browser,
     )
-    if assisted_verification_enabled and use_persistent_browser and not headless:
+    if use_persistent_browser and not headless:
         set_run_progress(
             "SEEK needs verification. Open the AWS browser session and complete the check."
         )
@@ -366,7 +366,7 @@ def _handle_seek_list_page_failure(
             headless,
             use_persistent_browser,
         )
-        if assisted_verification_enabled and use_persistent_browser and not headless:
+        if use_persistent_browser and not headless:
             page_recovered = _wait_for_seek_user_verification(
                 list_page, page_tag, playwright_selector_timeout
             )
@@ -401,6 +401,21 @@ def _handle_seek_list_page_failure(
             headless,
             use_persistent_browser,
         )
+        if use_persistent_browser and not headless:
+            set_run_progress("SEEK needs verification. Open the AWS browser session and complete the check.")
+            try:
+                list_page.wait_for_selector(SELECTOR_CARDS, timeout=playwright_selector_timeout)
+            except Exception as wait_exc:
+                logger.warning(
+                    "[SEEK][USER_VERIFICATION_TIMEOUT] %s challenge did not resolve in time",
+                    page_tag,
+                )
+                raise BotChallengeDetected(
+                    _SEEK_FAILURE_MESSAGES[SEEK_BOT_CHALLENGE],
+                    failure_class=SEEK_BOT_CHALLENGE,
+                ) from wait_exc
+            logger.info("[SEEK][BOT_CHALLENGE_RESOLVED] %s continuing scrape after verification", page_tag)
+            return True
         set_run_progress(_SEEK_FAILURE_MESSAGES[SEEK_BOT_CHALLENGE])
         raise BotChallengeDetected(
             _SEEK_FAILURE_MESSAGES[SEEK_BOT_CHALLENGE],

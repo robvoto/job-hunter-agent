@@ -357,6 +357,48 @@ def test_scrape_jobs_direct_stops_before_run_when_profile_incomplete(monkeypatch
     assert called == []
 
 
+def test_scrape_jobs_direct_forces_headed_browser_in_persistent_mode(monkeypatch):
+    monkeypatch.setattr("job_hunter_agent.profile_store.profile_exists", lambda: True)
+    monkeypatch.setattr(source_connector, "get_user_id_for_runtime", lambda: "test-user")
+    monkeypatch.setattr(source_connector, "load_profile", lambda: {"candidate_capabilities": [{}]})
+    monkeypatch.setattr(source_connector, "require_profile_ready_for_review", lambda profile: None)
+    monkeypatch.setattr(
+        source_connector,
+        "build_scrape_run_context",
+        lambda argv: SimpleNamespace(
+            search_settings={"keywords": "Business Analyst", "locations": ["Sydney"]},
+            enabled_sources=["seek"],
+            configured_seek_max_pages=1,
+            configured_date_range=7,
+            dashboard_debug_mode=False,
+            no_llm_mode=False,
+            dashboard_min_score=0,
+            reset_new_to_you=False,
+            headless=True,
+        ),
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.global_settings.get_playwright_headless", lambda: True
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.global_settings.get_playwright_browser_mode", lambda: "persistent"
+    )
+
+    captured = {}
+
+    def fake_run_enabled_sources(context):
+        captured["headless"] = context.headless
+        return [], [], []
+
+    monkeypatch.setattr(source_connector, "run_enabled_sources", fake_run_enabled_sources)
+    monkeypatch.setattr(source_connector, "finalize_scrape_run", lambda *args, **kwargs: "done")
+
+    result = source_connector.scrape_jobs_direct()
+
+    assert result == "done"
+    assert captured["headless"] is False
+
+
 def test_run_status_and_stop_endpoint_report_stopping(monkeypatch):
     monkeypatch.setattr(
         "job_hunter_agent.fastapi_app.read_session_user",

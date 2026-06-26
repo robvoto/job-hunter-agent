@@ -46,7 +46,10 @@ CONSOLE_BANNER_WIDTH = 60
 
 
 def scrape_jobs_direct() -> str:
-    from job_hunter_agent.global_settings import get_playwright_headless
+    from job_hunter_agent.global_settings import (
+        get_playwright_browser_mode,
+        get_playwright_headless,
+    )
     from job_hunter_agent.llm_gate import get_llm_model, reset_session_cost
     from job_hunter_agent.source_learning import reset_llm_truncation_count
 
@@ -100,7 +103,13 @@ def scrape_jobs_direct() -> str:
         "=" * CONSOLE_BANNER_WIDTH,
     )
 
-    context.headless = get_playwright_headless()
+    browser_mode = get_playwright_browser_mode()
+    context.headless = False if browser_mode == "persistent" else get_playwright_headless()
+    logger.info(
+        "Playwright browser mode=%s | headless=%s",
+        browser_mode,
+        context.headless,
+    )
     kept_records, audit_rows, skill_observations = run_enabled_sources(context)
     return finalize_scrape_run(context, kept_records, audit_rows, skill_observations)
 

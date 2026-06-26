@@ -365,6 +365,41 @@ def test_seek_bot_challenge_wait_succeeds_when_cards_appear(monkeypatch):
     )]
 
 
+def test_seek_bot_challenge_wait_succeeds_in_visible_browser_without_assisted_flag(monkeypatch):
+    calls = []
+
+    class _ChallengePage:
+        def title(self):
+            return "Just a moment"
+
+        def inner_text(self, selector):
+            assert selector == "body"
+            return "confirm you are human"
+
+        def wait_for_selector(self, selector, timeout):
+            calls.append((selector, timeout))
+
+    monkeypatch.setattr(
+        "job_hunter_agent.scrapers.seek_runner.set_run_progress", lambda message: None
+    )
+
+    assert (
+        _wait_for_seek_bot_challenge_or_manual_verification(
+            _ChallengePage(),
+            "[SEEK p1/3]",
+            headless=False,
+            use_persistent_browser=True,
+            assisted_verification_enabled=False,
+            playwright_selector_timeout=5000,
+        )
+        is True
+    )
+    assert calls == [(
+        'article[data-automation="normalJob"], article[data-automation="premiumJob"]',
+        5000,
+    )]
+
+
 def test_seek_bot_challenge_timeout_raises_classified_bot_challenge(monkeypatch):
     class _TimeoutPage:
         def title(self):
