@@ -12,20 +12,54 @@
   <script src="/static/theme/theme-switcher.js"></script>
   <script type="module" src="/static/common/account-bar.js"></script>
   <style>
-    /* Local layout exception: browser-session command snippets only. */
-    .browser-session-command {
-      margin: 12px 0 0;
-      padding: 14px 16px;
+    .vnc-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .vnc-status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.88rem;
+      color: var(--text-secondary);
+    }
+    .vnc-status__dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--color-warning, #f59e0b);
+      flex-shrink: 0;
+    }
+    .vnc-status__dot--ok  { background: var(--color-success, #22c55e); }
+    .vnc-status__dot--err { background: var(--color-error,   #ef4444); }
+    .vnc-frame-wrap {
+      position: relative;
+      width: 100%;
+      /* 16:10 aspect ratio — matches a typical 1280×800 VNC display */
+      padding-bottom: 62.5%;
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius-md);
-      background: var(--bg-muted);
-      color: var(--text-primary);
-      font-family: var(--font-mono, monospace);
-      font-size: 0.92rem;
-      line-height: 1.5;
-      overflow-x: auto;
-      white-space: pre-wrap;
-      word-break: break-word;
+      overflow: hidden;
+      background: #000;
+    }
+    .vnc-frame-wrap iframe {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+    .vnc-frame-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      padding: 24px;
+      text-align: center;
     }
   </style>
 </head>
@@ -56,29 +90,72 @@
 
         <section class="panel">
           <div class="panel-header">
-            <h2>How to open the session</h2>
-            <p class="panel-copy">The browser runs on the EC2 instance under a private display. Use a tunnel from your machine to the AWS host, then open the local noVNC page.</p>
+            <h2>Live browser</h2>
+            <p class="panel-copy">
+              The view below is the EC2 browser display — proxied securely through this page.
+              When SEEK shows a verification challenge, complete it here and the scraper will
+              continue automatically.
+            </p>
           </div>
 
-          <div class="subpanel">
-            <h3 class="panel-subheading">SSH tunnel</h3>
-            <pre class="browser-session-command">ssh -L 7900:127.0.0.1:7900 ubuntu@YOUR_EC2_HOST</pre>
-            <div class="field-help">If you use AWS Systems Manager Session Manager instead of SSH, forward local port 7900 to the instance's 127.0.0.1:7900 port.</div>
-          </div>
-
-          <div class="subpanel">
-            <h3 class="panel-subheading">Open noVNC</h3>
-            <pre class="browser-session-command">http://127.0.0.1:7900/vnc.html?autoconnect=1&amp;resize=remote</pre>
-            <div class="field-help">If the tunnel is active, this page shows the browser running on the EC2 display. Use it only for admin access while SEEK is waiting for human verification.</div>
-          </div>
-
-          <div class="subpanel">
-            <h3 class="panel-subheading">When SEEK blocks</h3>
-            <div class="field-help">Keep the browser session open, complete the verification check, then return to the workspace. SEEK will resume once job cards appear.</div>
+          <div class="subpanel vnc-panel">
+            <div class="vnc-status">
+              <span class="vnc-status__dot" id="vnc_status_dot"></span>
+              <span id="vnc_status_text">Connecting…</span>
+            </div>
+            <div class="vnc-frame-wrap">
+              <div class="vnc-frame-placeholder" id="vnc_placeholder">Loading browser session…</div>
+              <iframe
+                id="vnc_frame"
+                title="AWS browser session"
+                src="/aws-novnc/vnc.html?autoconnect=1&resize=remote&path=aws-novnc/websockify"
+                allow="fullscreen"
+                hidden
+              ></iframe>
+            </div>
+            <div class="field-help">
+              The browser view updates in real time. Complete any SEEK challenge directly in the
+              frame above — no SSH tunnel or local setup required.
+            </div>
           </div>
         </section>
       </div>
     </main>
   </div>
+
+  <script>
+    (function () {
+      const frame = document.getElementById('vnc_frame');
+      const placeholder = document.getElementById('vnc_placeholder');
+      const dot = document.getElementById('vnc_status_dot');
+      const statusText = document.getElementById('vnc_status_text');
+
+      function setStatus(state, msg) {
+        dot.className = 'vnc-status__dot' + (state === 'ok' ? ' vnc-status__dot--ok' : state === 'err' ? ' vnc-status__dot--err' : '');
+        statusText.textContent = msg;
+      }
+
+      frame.addEventListener('load', function () {
+        // The iframe loaded — show it and hide the placeholder.
+        // True VNC connection status is tracked inside the noVNC iframe itself;
+        // we just surface a "loaded" signal here.
+        placeholder.hidden = true;
+        frame.hidden = false;
+        setStatus('ok', 'Browser session active');
+      });
+
+      frame.addEventListener('error', function () {
+        setStatus('err', 'Could not load the browser session — is noVNC running on the EC2 instance?');
+      });
+
+      // Timeout: if the iframe hasn't loaded after 10 s, show an error.
+      setTimeout(function () {
+        if (frame.hidden) {
+          setStatus('err', 'Browser session timed out — check that websockify is running on port 7900');
+          placeholder.textContent = 'Browser session unavailable. Ensure Xvfb, x11vnc, and websockify are running on the EC2 instance.';
+        }
+      }, 10000);
+    }());
+  </script>
 </body>
 </html>

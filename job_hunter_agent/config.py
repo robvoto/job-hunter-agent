@@ -41,6 +41,9 @@ LOGOUT_PATH = "/logout"
 
 GLOBAL_SETTINGS_PATH = "/global-settings"
 AWS_BROWSER_SESSION_PATH = "/aws-browser-session"
+AWS_NOVNC_PROXY_PATH = "/aws-novnc"
+
+NOVNC_PORT = int(os.getenv("NOVNC_PORT", "7900"))
 
 ONBOARDING_PATH = "/start"
 

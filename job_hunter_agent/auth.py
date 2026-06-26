@@ -15,13 +15,13 @@ import hmac
 import json
 import logging
 import os
-import secrets
 from dataclasses import dataclass
 from urllib.parse import quote, urlencode, urlsplit
 
 import requests as http_client
 from fastapi import Request
 from fastapi.responses import JSONResponse, RedirectResponse
+from starlette.requests import HTTPConnection
 
 from job_hunter_agent.config import (
     AUTH_ALGO_SHA256,
@@ -175,7 +175,7 @@ def validate_session_cookie_security_for_startup(host: str) -> None:
         )
 
 
-def read_session_user(request: Request) -> dict | None:
+def read_session_user(request: HTTPConnection) -> dict | None:
     config = getattr(request.app.state, "auth_config", None)
     if not isinstance(config, GoogleOAuthConfig) or not config.session_secret:
         return None
@@ -222,11 +222,11 @@ def read_session_user(request: Request) -> dict | None:
     return {"user_id": user_id, "email": email, "role": role, "name": name}
 
 
-def is_authenticated(request: Request) -> bool:
+def is_authenticated(request: HTTPConnection) -> bool:
     return read_session_user(request) is not None
 
 
-def is_admin(request: Request) -> bool:
+def is_admin(request: HTTPConnection) -> bool:
     user = read_session_user(request)
     return user is not None and user.get("role") == "admin"
 
@@ -306,7 +306,7 @@ def auth_required_response(next_path: str, accepts_html: bool) -> RedirectRespon
 # ── Internal helpers ────────────────────────────────────────────────────────
 
 
-def _get_session_cookie_params(request: Request) -> tuple[str, bool]:
+def _get_session_cookie_params(request: HTTPConnection) -> tuple[str, bool]:
     base_name = os.getenv("JOB_HUNTER_SESSION_COOKIE_NAME", SESSION_COOKIE_DEFAULT_NAME)
     if base_name.startswith("__Host-"):
         base_name = base_name[7:]
@@ -316,7 +316,7 @@ def _get_session_cookie_params(request: Request) -> tuple[str, bool]:
     elif secure_mode == "false":
         secure_flag = False
     else:
-        secure_flag = request.url.scheme == "https"
+        secure_flag = request.url.scheme in ("https", "wss")
     if secure_flag:
         return f"__Host-{base_name}", True
     return base_name, False
@@ -351,7 +351,7 @@ def _build_session_cookie_value(user: dict, secret: str) -> str:
     return f"{payload_b64}.{signature}"
 
 
-def _read_session_cookie_value(request: Request) -> str | None:
+def _read_session_cookie_value(request: HTTPConnection) -> str | None:
     name, _ = _get_session_cookie_params(request)
     token = request.cookies.get(name)
     return str(token) if token else None
