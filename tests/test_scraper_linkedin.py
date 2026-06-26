@@ -70,7 +70,7 @@ def test_linkedin_posted_age_parses_visible_relative_text_only():
     )
 
 
-def test_linkedin_backfills_missing_posted_age_from_visible_listing_text(monkeypatch):
+def test_linkedin_backfills_missing_posted_age_from_visible_listing_text(monkeypatch, caplog):
     from job_hunter_agent.scrapers import linkedin as linkedin_module
 
     class _Rows:
@@ -148,6 +148,7 @@ def test_linkedin_backfills_missing_posted_age_from_visible_listing_text(monkeyp
     monkeypatch.setattr(linkedin_module, "print_job_human_summary", lambda *args, **kwargs: None)
     monkeypatch.setattr(linkedin_module, "load_job_type", lambda: {})
     monkeypatch.setattr(linkedin_module, "load_salary", lambda: {})
+    caplog.set_level("INFO")
 
     kept_records, audit_rows, skill_observations = scraper.scrape()
 
@@ -155,3 +156,5 @@ def test_linkedin_backfills_missing_posted_age_from_visible_listing_text(monkeyp
     assert not skill_observations
     assert kept_records[0]["posted_age_days"] == pytest.approx(3 / 24)
     assert posted_display_label(kept_records[0]) == "22 Jun 2026"
+    assert "jobspy fetch start" in caplog.text
+    assert "jobspy fetch done" in caplog.text

@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from job_hunter_agent.run_context import ScrapeRunContext
-from job_hunter_agent.run_control import run_stop_requested, set_run_progress
+from job_hunter_agent.run_control import get_run_progress, run_stop_requested, set_run_progress
 from job_hunter_agent.profile_store import GovPref, KEY_PREFER_SECTOR, normalize_sector_preference_values
 from job_hunter_agent.global_settings import get_seek_assisted_verification_enabled
 from job_hunter_agent.scrapers.apsjobs import APSJobsScraper
@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 SEEK_SOURCE_TIMEOUT_SECONDS = 90
 LINKEDIN_SOURCE_TIMEOUT_SECONDS = 180
+SOURCE_HEARTBEAT_SECONDS = 15
 SEEK_SOURCE_TIMEOUT_MESSAGE = "SEEK did not finish in time and was skipped. Other source results remain usable."
 LINKEDIN_SOURCE_TIMEOUT_MESSAGE = "LinkedIn did not finish in time and was skipped. Other source results remain usable."
 
@@ -133,6 +134,7 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
             _llm_cache_snapshot=llm_cache,
         )
     except Exception as exc:
+        logger.exception("[SEEK] scraping failed")
         print(f"[SEEK] Scraping failed: {type(exc).__name__}: {exc}")
         return SourceRunResult(
             source=SOURCE_SEEK,
@@ -173,6 +175,7 @@ def _run_linkedin_source(context: ScrapeRunContext) -> SourceRunResult:
             _llm_cache_snapshot=llm_cache,
         )
     except Exception as exc:
+        logger.exception("[LinkedIn] scraping failed")
         print(f"[LinkedIn] Scraping failed: {type(exc).__name__}: {exc}")
         return SourceRunResult(
             source=SOURCE_LINKEDIN,
@@ -222,8 +225,16 @@ def _run_apsjobs_source(context: ScrapeRunContext) -> SourceRunResult:
         )
 
 
-def _timeout_result(context: ScrapeRunContext, source: str, message: str) -> SourceRunResult:
-    logger.warning("[%s][SOURCE_TIMEOUT] %s", source.upper(), message)
+def _timeout_result(
+    context: ScrapeRunContext, source: str, message: str, *, elapsed_s: float | None = None
+) -> SourceRunResult:
+    logger.warning(
+        "[%s][SOURCE_TIMEOUT] elapsed_s=%s progress=%r message=%s",
+        source.upper(),
+        int(elapsed_s) if elapsed_s is not None else -1,
+        get_run_progress() or "(none)",
+        message,
+    )
     set_run_progress(message)
     return SourceRunResult(
         source=source,
@@ -238,6 +249,10 @@ def _run_seek_and_linkedin_in_parallel(context: ScrapeRunContext) -> list[Source
     executor = ThreadPoolExecutor(max_workers=2)
     ctx_seek = contextvars.copy_context()
     ctx_li = contextvars.copy_context()
+    started_at: dict[str, float] = {
+        SOURCE_SEEK: time.monotonic(),
+        SOURCE_LINKEDIN: time.monotonic(),
+    }
     seek_future = executor.submit(ctx_seek.run, _run_seek_source, context)
     li_future = executor.submit(ctx_li.run, _run_linkedin_source, context)
     futures = {seek_future: SOURCE_SEEK, li_future: SOURCE_LINKEDIN}
@@ -249,6 +264,10 @@ def _run_seek_and_linkedin_in_parallel(context: ScrapeRunContext) -> list[Source
         seek_future: SEEK_SOURCE_TIMEOUT_MESSAGE,
         li_future: LINKEDIN_SOURCE_TIMEOUT_MESSAGE,
     }
+    next_heartbeat_at = {
+        SOURCE_SEEK: started_at[SOURCE_SEEK] + SOURCE_HEARTBEAT_SECONDS,
+        SOURCE_LINKEDIN: started_at[SOURCE_LINKEDIN] + SOURCE_HEARTBEAT_SECONDS,
+    }
     pending = set(futures)
     results_by_source: dict[str, SourceRunResult] = {}
 
@@ -258,11 +277,26 @@ def _run_seek_and_linkedin_in_parallel(context: ScrapeRunContext) -> list[Source
             timed_out = [future for future in list(pending) if now >= deadlines[future]]
             for future in timed_out:
                 source = futures[future]
+                elapsed_s = now - started_at[source]
                 future.cancel()
                 pending.remove(future)
                 results_by_source[source] = _timeout_result(
-                    context, source, timeout_messages[future]
+                    context, source, timeout_messages[future], elapsed_s=elapsed_s
                 )
+
+            for future in list(pending):
+                source = futures[future]
+                if now < next_heartbeat_at[source]:
+                    continue
+                elapsed_s = now - started_at[source]
+                logger.info(
+                    "[%s][SOURCE_RUNNING] elapsed_s=%d progress=%r",
+                    source.upper(),
+                    int(elapsed_s),
+                    get_run_progress() or "(none)",
+                )
+                while next_heartbeat_at[source] <= now:
+                    next_heartbeat_at[source] += SOURCE_HEARTBEAT_SECONDS
 
             if not pending:
                 break
@@ -274,20 +308,42 @@ def _run_seek_and_linkedin_in_parallel(context: ScrapeRunContext) -> list[Source
                 pending.remove(future)
                 source = futures[future]
                 try:
-                    results_by_source[source] = future.result()
+                    result = future.result()
+                    results_by_source[source] = result
+                    elapsed_s = time.monotonic() - started_at[source]
+                    log = logger.warning if result.error is not None else logger.info
+                    log(
+                        "[%s][SOURCE_COMPLETE] elapsed_s=%d kept=%d audit=%d skills=%d error=%s",
+                        source.upper(),
+                        int(elapsed_s),
+                        len(result.kept_records),
+                        len(result.audit_rows),
+                        len(result.skill_observations),
+                        type(result.error).__name__ if result.error is not None else "none",
+                    )
                 except Exception as exc:
-                    logger.exception("[%s] source worker failed", source)
+                    logger.exception(
+                        "[%s] source worker failed after %ds",
+                        source.upper(),
+                        int(time.monotonic() - started_at[source]),
+                    )
                     results_by_source[source] = SourceRunResult(source=source, error=exc)
     finally:
         executor.shutdown(wait=False, cancel_futures=True)
 
     if SOURCE_SEEK not in results_by_source:
         results_by_source[SOURCE_SEEK] = _timeout_result(
-            context, SOURCE_SEEK, SEEK_SOURCE_TIMEOUT_MESSAGE
+            context,
+            SOURCE_SEEK,
+            SEEK_SOURCE_TIMEOUT_MESSAGE,
+            elapsed_s=time.monotonic() - started_at[SOURCE_SEEK],
         )
     if SOURCE_LINKEDIN not in results_by_source:
         results_by_source[SOURCE_LINKEDIN] = _timeout_result(
-            context, SOURCE_LINKEDIN, LINKEDIN_SOURCE_TIMEOUT_MESSAGE
+            context,
+            SOURCE_LINKEDIN,
+            LINKEDIN_SOURCE_TIMEOUT_MESSAGE,
+            elapsed_s=time.monotonic() - started_at[SOURCE_LINKEDIN],
         )
     return [results_by_source[SOURCE_SEEK], results_by_source[SOURCE_LINKEDIN]]
 

@@ -253,6 +253,8 @@ def _wait_for_seek_bot_challenge_or_manual_verification(
     assisted_verification_enabled: bool,
     playwright_selector_timeout: int,
 ) -> bool:
+    _CF_AUTO_RESOLVE_TIMEOUT_MS = 15000
+
     try:
         page_title = list_page.title()
     except Exception as title_exc:
@@ -266,6 +268,49 @@ def _wait_for_seek_bot_challenge_or_manual_verification(
     lowered = " ".join(part for part in [str(page_title or ""), body_text] if part.strip()).lower()
     if not any(marker in lowered for marker in _SEEK_BOT_CHALLENGE_MARKERS):
         return False
+
+    # Cloudflare's "Just a moment..." challenge runs JS and auto-resolves in a few seconds.
+    # Wait for the title to change before deciding human intervention is required.
+    if "just a moment" in lowered:
+        logger.info(
+            "[SEEK][BOT_CHALLENGE_DETECTED] %s title=%r — Cloudflare JS challenge; waiting up to %dms for auto-resolve",
+            page_tag,
+            page_title,
+            _CF_AUTO_RESOLVE_TIMEOUT_MS,
+        )
+        try:
+            list_page.wait_for_function(
+                "() => !document.title.toLowerCase().includes('just a moment')",
+                timeout=_CF_AUTO_RESOLVE_TIMEOUT_MS,
+            )
+            try:
+                page_title = list_page.title()
+                body_text = str(list_page.inner_text("body") or "")
+            except Exception:
+                pass
+            lowered = " ".join(
+                part for part in [str(page_title or ""), body_text] if part.strip()
+            ).lower()
+            if not any(marker in lowered for marker in _SEEK_BOT_CHALLENGE_MARKERS):
+                logger.info(
+                    "[SEEK][BOT_CHALLENGE_RESOLVED] %s Cloudflare challenge auto-resolved", page_tag
+                )
+                return False
+        except Exception:
+            logger.info(
+                "[SEEK][BOT_CHALLENGE_WAIT] %s Cloudflare auto-resolve timed out; checking for human verification",
+                page_tag,
+            )
+            try:
+                page_title = list_page.title()
+                body_text = str(list_page.inner_text("body") or "")
+            except Exception:
+                pass
+            lowered = " ".join(
+                part for part in [str(page_title or ""), body_text] if part.strip()
+            ).lower()
+            if not any(marker in lowered for marker in _SEEK_BOT_CHALLENGE_MARKERS):
+                return False
 
     logger.warning(
         "[SEEK][BOT_CHALLENGE_DETECTED] %s title=%r headless=%s persistent=%s",

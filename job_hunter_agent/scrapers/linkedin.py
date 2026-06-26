@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from datetime import datetime
 from typing import List
 from urllib.error import URLError
@@ -149,7 +150,24 @@ class LinkedInScraper(BaseJobScraper):
                 target["results_wanted"],
             )
             try:
+                fetch_started_at = time.monotonic()
+                logger.info(
+                    "%s jobspy fetch start | search_term=%r | location=%r | results_wanted=%d | hours_old=%d | easy_apply=%r | sort_newest_first=%s",
+                    target_tag,
+                    target["search_term"] or "(unset)",
+                    target["location"] or "(all)",
+                    target["results_wanted"],
+                    target["hours_old"],
+                    target.get("easy_apply"),
+                    target["sort_newest_first"],
+                )
                 rows = self._fetch_jobspy(target)
+                logger.info(
+                    "%s jobspy fetch done | elapsed_ms=%d | rows=%s",
+                    target_tag,
+                    int((time.monotonic() - fetch_started_at) * 1000),
+                    "none" if rows is None else len(rows),
+                )
             except Exception as exc:
                 logger.warning("%s jobspy call failed: %s: %s", target_tag, type(exc).__name__, exc)
                 continue
