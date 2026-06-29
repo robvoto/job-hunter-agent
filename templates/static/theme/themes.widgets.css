@@ -1147,11 +1147,26 @@
   gap: var(--control-space-xs);
 }
 
+.capability-alias-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--control-space-xs);
+}
+
 .cap-alias-chip {
   max-width: 100%;
   align-items: flex-start;
   font-size: var(--text-role-caption-font-size);
   line-height: 1.2;
+}
+
+.cap-alias-chip--preview {
+  background: color-mix(in srgb, var(--selection-accent) 10%, var(--bg-chip-subtle));
+  color: var(--text-primary);
+}
+
+.cap-alias-chip--more {
+  font-weight: var(--text-role-button-font-weight);
 }
 
 .cap-alias-chip-label {

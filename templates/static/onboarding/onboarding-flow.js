@@ -475,6 +475,21 @@ function renderReviewCapabilities() {
     const titleCaseName = rule.name.toLowerCase().split(' ').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
     const displayName = titleCaseName || onboardingFlowLabels.capability_untitled_label;
     const extractedSkillsLabel = formatReviewCapabilitySkillsLabel(rule.aliases.length);
+    const previewAliases = rule.aliases.slice(0, 2);
+    const aliasPreviewHtml = previewAliases.length ? `
+      <div class="capability-alias-preview" aria-label="${escapeHtml(extractedSkillsLabel)}">
+        ${previewAliases.map((alias) =>
+          `<span class="cap-alias-chip cap-alias-chip--preview" title="${escapeHtml(patternToLabel(alias) || alias)}">
+            <span class="cap-alias-chip-label">${escapeHtml(patternToLabel(alias) || alias)}</span>
+          </span>`
+        ).join('')}
+        ${rule.aliases.length > previewAliases.length ? `
+          <span class="cap-alias-chip cap-alias-chip--preview cap-alias-chip--more" title="${escapeHtml(extractedSkillsLabel)}">
+            <span class="cap-alias-chip-label">+${escapeHtml(String(rule.aliases.length - previewAliases.length))} more</span>
+          </span>
+        ` : ''}
+      </div>
+    ` : '';
     const aliasHtml = (() => {
       if (!rule.aliases.length) return '';
       const aliasChips = rule.aliases.map((alias) =>
@@ -493,6 +508,9 @@ function renderReviewCapabilities() {
       `;
     })();
     const selectedClass = onboardingPage.selectedReviewCapabilityIndexes.has(index) ? ' is-selected' : '';
+    const selectedBadgeHtml = selectedClass ? `
+      <span class="review-capability-selected-badge">${escapeHtml(capabilityLabels.settings_selected_label)}</span>
+    ` : '';
     return `
       <article class="capability-card${selectedClass}" data-review-capability-index="${index}">
         <div class="review-capability-main">
@@ -501,7 +519,9 @@ function renderReviewCapabilities() {
               ${capabilityIconHtml(rule.icon_key, displayName)}
               <strong class="review-capability-title">${escapeHtml(displayName)}</strong>
             </span>
+            ${selectedBadgeHtml}
           </span>
+          ${aliasPreviewHtml}
           ${aliasHtml}
         </div>
         <div class="review-capability-actions" role="group" aria-label="${escapeHtml(formatLabel(onboardingFlowLabels.capability_actions_for_label, { name: displayName }))}">

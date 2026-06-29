@@ -201,15 +201,23 @@ def test_onboarding_capability_cards_use_one_shared_generic_icon():
     onboarding_flow_js = (
         repo_root / "templates" / "static" / "onboarding" / "onboarding-flow.js"
     ).read_text(encoding="utf-8")
+    onboarding_css = (
+        repo_root / "templates" / "static" / "onboarding" / "onboarding-page.css"
+    ).read_text(encoding="utf-8")
     theme_widgets = (repo_root / "templates" / "static" / "theme" / "themes.widgets.css").read_text(
         encoding="utf-8"
     )
 
     assert "genericCapabilityIconHtml" in capability_ui_js
     assert "review-capability-title-row" in onboarding_flow_js
+    assert "capability-alias-preview" in onboarding_flow_js
+    assert "settings_selected_label" in onboarding_flow_js
     assert "const extractedSkillPreview" not in onboarding_flow_js
     assert '<p class="help">${extractedSkillPreview}</p>' not in onboarding_flow_js
+    assert ".capability-shell .capability-alias-preview" in onboarding_css
+    assert ".capability-card.is-selected" in onboarding_css
     assert "capability-card-icon" in theme_widgets
+    assert ".capability-alias-preview" in theme_widgets
 
 
 def test_capability_ui_keeps_all_shared_icon_keys():

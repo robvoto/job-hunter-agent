@@ -66,13 +66,13 @@ def test_settings_page_renders_keyword_label_and_location_field(monkeypatch):
 
     assert "↩ Workspace" in html
 
-    assert 'class="btn-add"' in html
-
     assert "capability-add-button" not in html
 
     assert "capability-editor" in html
 
-    assert ">+<" in html
+    assert 'id="capability_matrix_copy"' in html
+
+    assert 'id="capability_matrix_actions"' in html
 
     assert "window.__JOB_HUNTER_CAPABILITY_UI_LABELS__" in html
 
@@ -93,6 +93,11 @@ def test_settings_capability_editor_preserves_icon_key_state():
     assert "icon_key: genericCapabilityIconKey" in js_text
     assert "genericCapabilityIconKey = capabilityUi.genericCapabilityIconKey;" in js_text
     assert "Missing generic capability icon key." in js_text
+    assert "data-toggle-capability-selection" in js_text
+    assert "data-select-visible-capabilities" in js_text
+    assert "capability-alias-preview" in js_text
+    assert "settings_selected_copy" in js_text
+    assert "settings_remove_selected_label" in js_text
 
 
 def test_settings_utils_review_normaliser_preserves_icon_key():

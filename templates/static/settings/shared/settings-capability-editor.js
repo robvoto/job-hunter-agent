@@ -17,6 +17,17 @@ export const JobHunterCapabilityEditor = (function () {
 
   let capabilityRuleState = [];
   let expandedCapabilityRows = new Set();
+  let selectedCapabilityRows = new Set();
+  let visibleCapabilityRowIndices = [];
+
+  function formatLabel(template, values = {}) {
+    return String(template || '').replace(/\{(\w+)\}/g, (_, key) => {
+      if (Object.prototype.hasOwnProperty.call(values, key)) {
+        return String(values[key]);
+      }
+      return '';
+    });
+  }
 
   function capabilityRulesToText(rules) {
     return (rules || []).filter(rule => (rule.name || '').trim() && (rule.level || '').trim()).map(rule => {
@@ -72,6 +83,110 @@ export const JobHunterCapabilityEditor = (function () {
     }
   }
 
+  function pruneCapabilitySelection() {
+    selectedCapabilityRows = new Set(
+      [...selectedCapabilityRows].filter(index => index >= 0 && index < capabilityRuleState.length)
+    );
+  }
+
+  function shiftCapabilityRowsAfterRemoval(index) {
+    selectedCapabilityRows = new Set(
+      [...selectedCapabilityRows]
+        .filter(value => value !== index)
+        .map(value => value > index ? value - 1 : value)
+    );
+    expandedCapabilityRows = new Set(
+      [...expandedCapabilityRows]
+        .filter(value => value !== index)
+        .map(value => value > index ? value - 1 : value)
+    );
+  }
+
+  function setCapabilitySelected(index, selected) {
+    if (selected) {
+      selectedCapabilityRows.add(index);
+    } else {
+      selectedCapabilityRows.delete(index);
+    }
+  }
+
+  function toggleCapabilitySelection(index) {
+    setCapabilitySelected(index, !selectedCapabilityRows.has(index));
+    renderCapabilityRuleEditor();
+  }
+
+  function selectVisibleCapabilityRows() {
+    visibleCapabilityRowIndices.forEach(index => selectedCapabilityRows.add(index));
+    renderCapabilityRuleEditor();
+  }
+
+  function clearCapabilitySelection() {
+    selectedCapabilityRows.clear();
+    renderCapabilityRuleEditor();
+  }
+
+  function selectedCapabilityRowsSortedDescending() {
+    return [...selectedCapabilityRows].sort((left, right) => right - left);
+  }
+
+  function renderCapabilityToolbar(selectedCount) {
+    const copy = document.getElementById('capability_matrix_copy');
+    if (copy) {
+      copy.textContent = formatLabel(capabilityLabels.settings_selected_copy, { count: selectedCount });
+    }
+    const actions = document.getElementById('capability_matrix_actions');
+    if (!actions) return;
+    actions.innerHTML = `
+      <button class="btn-add" id="add_capability_rule" type="button" aria-label="${escapeHtml(capabilityLabels.add_button_aria_label)}" title="${escapeHtml(capabilityLabels.add_button_aria_label)}">+</button>
+      <button class="btn btn-secondary btn-compact-action" type="button" data-select-visible-capabilities="true"${visibleCapabilityRowIndices.length ? '' : ' disabled'}>${escapeHtml(capabilityLabels.settings_select_shown_label)}</button>
+      <button class="btn btn-secondary btn-compact-action" type="button" data-clear-capability-selection="true"${selectedCount ? '' : ' disabled'}>${escapeHtml(capabilityLabels.settings_clear_selection_label)}</button>
+      <button class="btn btn-secondary btn-compact-action" type="button" data-remove-selected-capabilities="true"${selectedCount ? '' : ' disabled'}>${escapeHtml(capabilityLabels.settings_remove_selected_label)}</button>
+    `;
+  }
+
+  function confirmCapabilityRemoval(count, name) {
+    const baseMessage = count === 1
+      ? `Remove ${name || 'this capability'}?`
+      : `Remove ${name || `${count} selected capabilities`}?`;
+    return window.confirm(`${baseMessage} This cannot be undone.`);
+  }
+
+  function removeCapabilityRule(index) {
+    const rule = capabilityRuleState[index];
+    if (!rule) return false;
+    if (!confirmCapabilityRemoval(1, rule.name)) {
+      return false;
+    }
+    capabilityRuleState.splice(index, 1);
+    shiftCapabilityRowsAfterRemoval(index);
+    settingsField('candidate_capabilities').value = capabilityRulesToText(capabilityRuleState);
+    renderCapabilityRuleEditor();
+    return true;
+  }
+
+  function removeSelectedCapabilityRules() {
+    const selectedIndexes = selectedCapabilityRowsSortedDescending();
+    if (!selectedIndexes.length) return;
+    const selectedNames = selectedIndexes
+      .map(index => capabilityRuleState[index]?.name)
+      .filter(Boolean);
+    const confirmationLabel = selectedNames.length
+      ? selectedNames.slice(0, 3).join(', ')
+      : `${selectedIndexes.length} selected capabilities`;
+    if (!confirmCapabilityRemoval(selectedIndexes.length, confirmationLabel)) {
+      return;
+    }
+    for (const index of selectedIndexes) {
+      const rule = capabilityRuleState[index];
+      if (!rule) continue;
+      capabilityRuleState.splice(index, 1);
+      shiftCapabilityRowsAfterRemoval(index);
+    }
+    selectedCapabilityRows.clear();
+    settingsField('candidate_capabilities').value = capabilityRulesToText(capabilityRuleState);
+    renderCapabilityRuleEditor();
+  }
+
   function removeCapabilityAlias(index, aliasValue) {
     const rule = capabilityRuleState[index];
     if (!rule) return;
@@ -93,10 +208,6 @@ export const JobHunterCapabilityEditor = (function () {
     const container = document.getElementById('capability_matrix_editor');
     if (!container) return;
     applyCapabilityUiLabels();
-    if (!capabilityRuleState.length) {
-      container.innerHTML = `<div class="capability-editor-empty">${escapeHtml(capabilityLabels.settings_empty_text)}</div>`;
-      return;
-    }
     const filterTerm = String(document.getElementById('capability_matrix_filter')?.value || '').trim().toLowerCase();
     const rows = capabilityRuleState
       .map((rule, index) => ({ rule, index }))
@@ -105,11 +216,34 @@ export const JobHunterCapabilityEditor = (function () {
         return item.rule.name.toLowerCase().includes(filterTerm)
           || item.rule.aliases.some(alias => alias.includes(filterTerm));
       });
+    visibleCapabilityRowIndices = rows.map(({ index }) => index);
+    pruneCapabilitySelection();
+    const selectedCount = selectedCapabilityRows.size;
+    renderCapabilityToolbar(selectedCount);
+    if (!capabilityRuleState.length) {
+      container.innerHTML = `<div class="capability-editor-empty">${escapeHtml(capabilityLabels.settings_empty_text)}</div>`;
+      return;
+    }
     const cardsHtml = rows.length
       ? rows.map(({ rule, index }) => {
           const titleCaseName = rule.name.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
           const aliases = Array.isArray(rule.aliases) ? rule.aliases : [];
           const aliasCount = aliases.length;
+          const previewAliases = aliases.slice(0, 2);
+          const aliasPreviewHtml = previewAliases.length ? `
+            <div class="capability-alias-preview" aria-label="${escapeHtml(capabilityLabels.related_skills_label)}">
+              ${previewAliases.map(alias => `
+                <span class="cap-alias-chip cap-alias-chip--preview" title="${escapeHtml(alias)}">
+                  <span class="cap-alias-chip-label">${escapeHtml(alias)}</span>
+                </span>
+              `).join('')}
+              ${aliasCount > previewAliases.length ? `
+                <span class="cap-alias-chip cap-alias-chip--preview cap-alias-chip--more" title="${escapeHtml(formatLabel(capabilityLabels.related_skills_summary, { count: aliasCount }))}">
+                  <span class="cap-alias-chip-label">+${escapeHtml(String(aliasCount - previewAliases.length))} more</span>
+                </span>
+              ` : ''}
+            </div>
+          ` : '';
           const aliasChips = aliases.map(alias => `
             <span class="cap-alias-chip" title="${escapeHtml(alias)}">
               <span class="cap-alias-chip-label">${escapeHtml(alias)}</span>
@@ -127,20 +261,16 @@ export const JobHunterCapabilityEditor = (function () {
               </label>
             `;
           }).join('');
+          const selected = selectedCapabilityRows.has(index);
           return `
-            <article class="capability-card" data-capability-index="${index}">
-              <div class="capability-card-head">
-                <input class="cap-name-input capability-card-name" type="text" data-capability-field="name" aria-label="Capability name"
-                       value="${escapeHtml(titleCaseName)}"
-                       placeholder="e.g. Agile Delivery">
-                <button class="cap-remove-btn capability-remove-btn" type="button" data-remove-capability="${index}"
-                        aria-label="Remove ${escapeHtml(rule.name || 'capability')}"
-                        title="Remove capability">
-                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="cap-remove-icon">
-                    <path d="M9 3.5h6l1 1.5H19v2H5v-2h3l1-1.5Zm-1 5h8l-.6 9.3A2 2 0 0 1 13.4 20H10.6a2 2 0 0 1-1.99-1.7L8 8.5Zm2 2v6m4-6v6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path>
-                  </svg>
-                </button>
-              </div>
+            <article class="capability-card${selected ? ' is-selected' : ''}" data-capability-index="${index}">
+              <div class="capability-card-main">
+                <div class="capability-card-head">
+                  <input class="cap-name-input capability-card-name" type="text" data-capability-field="name" aria-label="Capability name"
+                         value="${escapeHtml(titleCaseName)}"
+                         placeholder="e.g. Agile Delivery">
+                </div>
+                ${aliasPreviewHtml}
                 <div class="cap-strength">
                   <div class="choice-strip capability-strength-strip" role="radiogroup" aria-label="Capability strength">
                     ${strengthChoices}
@@ -156,8 +286,19 @@ export const JobHunterCapabilityEditor = (function () {
                     </details>
                   ` : ''}
                 </div>
-              </article>
-            `;
+              </div>
+              <div class="capability-card-actions" role="group" aria-label="Capability actions">
+                <button class="capability-select-btn${selected ? ' is-selected' : ''}" type="button" data-toggle-capability-selection="${index}" aria-pressed="${selected ? 'true' : 'false'}" aria-label="${selected ? escapeHtml(capabilityLabels.settings_selected_label) : escapeHtml(capabilityLabels.settings_select_label)}" title="${selected ? escapeHtml(capabilityLabels.settings_selected_label) : escapeHtml(capabilityLabels.settings_select_label)}">${escapeHtml(selected ? capabilityLabels.settings_selected_label : capabilityLabels.settings_select_label)}</button>
+                <button class="cap-remove-btn capability-remove-btn" type="button" data-remove-capability="${index}"
+                        aria-label="Remove ${escapeHtml(rule.name || 'capability')}"
+                        title="Remove capability">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="cap-remove-icon">
+                    <path d="M9 3.5h6l1 1.5H19v2H5v-2h3l1-1.5Zm-1 5h8l-.6 9.3A2 2 0 0 1 13.4 20H10.6a2 2 0 0 1-1.99-1.7L8 8.5Zm2 2v6m4-6v6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path>
+                  </svg>
+                </button>
+              </div>
+            </article>
+          `;
         }).join('')
       : `<div class="capability-editor-empty-group">${escapeHtml(capabilityLabels.settings_no_match_text)}</div>`;
 
@@ -175,6 +316,7 @@ export const JobHunterCapabilityEditor = (function () {
     expandedCapabilityRows = new Set(
       [...expandedCapabilityRows].filter(index => index >= 0 && index < capabilityRuleState.length)
     );
+    pruneCapabilitySelection();
     settingsField('candidate_capabilities').value = capabilityRulesToText(capabilityRuleState);
     renderCapabilityRuleEditor();
   }
@@ -184,6 +326,7 @@ export const JobHunterCapabilityEditor = (function () {
       .map(normalizeCapabilityRule)
       .filter(rule => rule.name);
     capabilityRuleState = cleaned;
+    pruneCapabilitySelection();
     settingsField('candidate_capabilities').value = capabilityRulesToText(cleaned);
     return cleaned;
   }
@@ -231,9 +374,31 @@ export const JobHunterCapabilityEditor = (function () {
       }
     }, true);
 
-    document.getElementById('add_capability_rule')?.addEventListener('click', () => {
-      addCapabilityRule();
-      markDirty();
+    document.getElementById('capability_matrix_actions')?.addEventListener('click', (event) => {
+      const addCapability = event.target.closest('#add_capability_rule');
+      if (addCapability) {
+        addCapabilityRule();
+        markDirty();
+        return;
+      }
+
+      const selectVisible = event.target.closest('[data-select-visible-capabilities]');
+      if (selectVisible) {
+        selectVisibleCapabilityRows();
+        return;
+      }
+
+      const clearSelection = event.target.closest('[data-clear-capability-selection]');
+      if (clearSelection) {
+        clearCapabilitySelection();
+        return;
+      }
+
+      const removeSelected = event.target.closest('[data-remove-selected-capabilities]');
+      if (removeSelected) {
+        removeSelectedCapabilityRules();
+        markDirty();
+      }
     });
 
     document.getElementById('capability_matrix_filter')?.addEventListener('input', () => {
@@ -256,6 +421,12 @@ export const JobHunterCapabilityEditor = (function () {
     });
 
     document.getElementById('capability_matrix_editor')?.addEventListener('click', (event) => {
+      const toggleSelection = event.target.closest('[data-toggle-capability-selection]');
+      if (toggleSelection) {
+        toggleCapabilitySelection(Number(toggleSelection.dataset.toggleCapabilitySelection));
+        return;
+      }
+
       const removeAlias = event.target.closest('[data-remove-capability-alias]');
       if (!removeAlias) return;
       const card = removeAlias.closest('[data-capability-index]');
@@ -283,14 +454,9 @@ export const JobHunterCapabilityEditor = (function () {
       const removeCard = event.target.closest('[data-remove-capability]');
       if (!removeCard) return;
       const index = Number(removeCard.dataset.removeCapability);
-      capabilityRuleState.splice(index, 1);
-      expandedCapabilityRows = new Set(
-        [...expandedCapabilityRows]
-          .filter(value => value !== index)
-          .map(value => value > index ? value - 1 : value)
-      );
-      setCapabilityRuleState(capabilityRuleState);
-      markDirty();
+      if (removeCapabilityRule(index)) {
+        markDirty();
+      }
     });
   }
 

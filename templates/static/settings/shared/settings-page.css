@@ -722,11 +722,22 @@
       grid-auto-flow: row;
     }
     .capability-card {
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: start;
       width: 100%;
+      min-width: 0;
+      padding: 14px;
+    }
+    .capability-card.is-selected {
+      border-color: var(--selection-accent);
+      background: color-mix(in srgb, var(--selection-accent) 8%, var(--bg-surface));
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--selection-accent) 16%, transparent), var(--shadow-soft);
+    }
+    .capability-card-main {
+      display: grid;
+      gap: 10px;
       min-width: 0;
     }
     .capability-card-head {
@@ -734,16 +745,47 @@
       align-items: flex-start;
       justify-content: space-between;
       gap: 10px;
-      padding-right: 32px;
+      padding-right: 0;
     }
     .capability-card-name {
       flex: 1 1 auto;
       min-width: 0;
     }
+    .capability-alias-preview {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: -2px;
+    }
+    .capability-card-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+      padding-top: 2px;
+    }
+    .capability-select-btn {
+      min-height: 30px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-toolbar-glass);
+      color: var(--text-muted);
+      cursor: pointer;
+      white-space: nowrap;
+      font-size: var(--text-role-caption-font-size);
+      font-weight: 700;
+    }
+    .capability-select-btn:hover {
+      border-color: color-mix(in srgb, var(--selection-accent) 32%, var(--border-subtle));
+      color: var(--text-primary);
+    }
+    .capability-select-btn.is-selected {
+      border-color: var(--selection-accent);
+      background: color-mix(in srgb, var(--selection-accent) 12%, var(--bg-surface));
+      color: var(--selection-accent);
+    }
     .capability-remove-btn {
-      position: absolute;
-      top: 12px;
-      right: 12px;
       flex: 0 0 auto;
       width: 28px;
       height: 28px;
@@ -820,9 +862,15 @@
       display: flex;
       justify-content: space-between;
       gap: 10px;
-      align-items: center;
+      align-items: flex-start;
       margin-bottom: 12px;
       flex-wrap: wrap;
+    }
+    .capability-toolbar-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
     }
     .capability-toolbar-main {
       display: flex;
@@ -839,6 +887,8 @@
     .capability-toolbar-copy {
       color: var(--text-muted);
       font-size: var(--text-role-body-compact-font-size);
+      font-weight: 600;
+      white-space: nowrap;
     }
     .capability-editor-empty-group {
       padding: 10px 0 2px;
@@ -854,6 +904,18 @@
     @media (max-width: 760px) {
       .capability-grid {
         grid-template-columns: 1fr;
+      }
+
+      .capability-card {
+        grid-template-columns: 1fr;
+      }
+
+      .capability-card-actions {
+        align-items: flex-start;
+      }
+
+      .capability-toolbar-actions {
+        width: 100%;
       }
 
       .capability-filter {

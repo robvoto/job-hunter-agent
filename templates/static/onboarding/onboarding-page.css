@@ -531,6 +531,11 @@ body {
   padding-left: var(--surface-gap-sm);
 }
 
+.capability-shell .capability-alias-preview {
+  margin-top: 8px;
+  padding-left: var(--surface-gap-sm);
+}
+
 .review-capability-topbar {
   display: block;
   width: 100%;
@@ -634,8 +639,9 @@ body {
 
 .capability-card.is-selected {
   border-color: var(--selection-accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--selection-accent) 24%, transparent);
-  background: color-mix(in srgb, var(--selection-accent) 10%, var(--bg-surface));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--selection-accent) 34%, transparent), var(--shadow-soft);
+  background: color-mix(in srgb, var(--selection-accent) 12%, var(--bg-surface));
+  transform: translateY(-1px);
 }
 
 .review-capability-main {

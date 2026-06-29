@@ -1,8 +1,8 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 43,
-  "updated_at": "2026-06-22",
+  "version": 44,
+  "updated_at": "2026-06-28",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
     "remote_label": "Remote",
@@ -58,6 +58,12 @@
     "add_button_aria_label": "Add capability",
     "related_skills_label": "Related skills",
     "related_skills_summary": "Related skills ({count})",
+    "settings_select_label": "Select",
+    "settings_selected_label": "Selected",
+    "settings_select_shown_label": "Select shown",
+    "settings_clear_selection_label": "Clear selection",
+    "settings_remove_selected_label": "Remove selected",
+    "settings_selected_copy": "{count} selected",
     "filter_placeholder": "Filter related skills",
     "remove_related_skill_aria_label": "Remove related skill",
     "settings_empty_text": "No capability rules yet. Run onboarding or add a capability row here.",

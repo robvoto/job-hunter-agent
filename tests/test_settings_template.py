@@ -107,9 +107,10 @@ def test_aws_browser_session_page_renders_admin_instructions(monkeypatch):
     html = client.get("/aws-browser-session").text
 
     assert "AWS browser session" in html
-    assert "Open the secure browser tunnel" in html
-    assert "ssh -L 7900:127.0.0.1:7900 ubuntu@YOUR_EC2_HOST" in html
-    assert "http://127.0.0.1:7900/vnc.html?autoconnect=1&amp;resize=remote" in html
+    assert "Open the secure browser tunnel from here when SEEK asks for human verification." in html
+    assert "no SSH tunnel or local setup required" in html
+    assert "/aws-novnc/vnc.html?autoconnect=1" in html
+    assert "websockify" in html
 
 
 def test_aws_browser_session_scripts_are_committed():
@@ -349,6 +350,8 @@ def test_settings_matrix_section_omits_outer_panel_wrapper(monkeypatch):
     assert "data-settings-hero-copy=" not in html
 
     assert "Decision Weights" in html
+    assert 'id="capability_matrix_copy"' in html
+    assert 'id="capability_matrix_actions"' in html
 
 
 def test_settings_sidebar_has_client_side_section_search():
