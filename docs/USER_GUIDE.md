@@ -267,7 +267,6 @@ For detailed CLI flags, automation setup, and troubleshooting, refer to OPERATIO
 
 - The SQLite DB (path set by `JOB_HUNTER_DB_PATH` — contains profile, history, settings, run data)
 - `data/runtime/llm_cache.json`
-- `TODO.txt`
 
 These are also local-only if used:
  

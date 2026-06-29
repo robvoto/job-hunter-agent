@@ -377,7 +377,7 @@ async function runSearchNow() {
   fillUserSettings(agentPayload);
   await patchProfile(
     { search_settings: profile.search_settings, salary_preferences: profile.salary_preferences },
-    'Search settings saved to profile.json.'
+    'Search settings saved to the runtime profile.'
   );
   waitUi?.show({ title: SEARCH_STARTING_TITLE, copy: SEARCH_STARTING_COPY, subcopy: SEARCH_WAIT_COPY });
   const response = await jobHunterFetch('/api/run', {

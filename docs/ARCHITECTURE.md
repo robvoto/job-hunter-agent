@@ -228,7 +228,7 @@ Rules:
 Primary modules:
 
 * `llm_gate.py`
-* `agent_settings.py`
+* `user_settings.py`
 
 LLM responsibilities:
 
@@ -253,7 +253,8 @@ Primary modules:
 
 * `workspace_renderer.py`
 * `workspace_data.py`
-* `workspace.html`
+* `templates/workspace.html`
+* `templates/results.html`
 
 Workspace responsibilities:
 

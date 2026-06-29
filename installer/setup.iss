@@ -8,7 +8,7 @@
 ;   1. Install Inno Setup 6: https://jrsoftware.org/isdl.php
 ;   2. Open this file in the Inno Setup Compiler and press Build (F9).
 ;      Or from the command line:
-;        "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\setup.iss
+;        "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" installer\setup.iss
 ;   Output: installer\dist\JobHunterAgent-Setup.exe
 ;
 ; Install layout after running this installer:

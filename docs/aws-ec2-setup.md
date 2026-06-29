@@ -2,19 +2,11 @@
 
 This is the single canonical AWS deployment document for Job Hunter.
 
-Do not keep parallel AWS setup documents. This file should live at:
+Do not keep parallel AWS setup documents. This file lives in the repository at
+`docs/aws-ec2-setup.md`.
 
-```text
-E:\Programming\job-hunter-agent\docs\aws-ec2-setup.md
-```
-
-or in WSL as:
-
-```text
-/mnt/e/Programming/job-hunter-agent/docs/aws-ec2-setup.md
-```
-
-The production runtime is on AWS EC2. Local development happens on the PC in VS Code.
+The production runtime is on AWS EC2. Local development happens in the native
+repository checkout.
 
 ---
 
@@ -67,22 +59,17 @@ Do not open SSH to:
 0.0.0.0/0
 ```
 
-Connect from Windows PowerShell:
+Connect from your local shell:
 
-```powershell
-ssh -i "E:\Programming\job-hunter-agent\KeyPair-JobHunter.pem" ubuntu@ec2-32-236-144-98.ap-southeast-2.compute.amazonaws.com
+```bash
+ssh -i "<path-to-KeyPair-JobHunter.pem>" ubuntu@ec2-32-236-144-98.ap-southeast-2.compute.amazonaws.com
 ```
 
-The helper script on the PC may contain the same command:
+If the shell says the identity file is not accessible, check that the key path
+you passed exists before reconnecting.
 
-```powershell
-.\connectAws.ps1
-```
-
-If PowerShell says the identity file is not accessible, check that the key exists at:
-
-```powershell
-Test-Path "E:\Programming\job-hunter-agent\KeyPair-JobHunter.pem"
+```bash
+test -f "<path-to-KeyPair-JobHunter.pem>"
 ```
 
 ### Job Hunter runtime
@@ -162,8 +149,7 @@ KnowMe is currently not installed on this EC2 instance.
 Use local paths only for editing, testing, committing, and pushing code:
 
 ```text
-Windows: E:\Programming\job-hunter-agent
-WSL:     /mnt/e/Programming/job-hunter-agent
+/home/robvoto/projects/job-hunter-agent
 ```
 
 Local development may run:
@@ -252,10 +238,10 @@ Internet/domain -> Nginx 80 -> 127.0.0.1:8765
 
 ## 4. Connect to the real EC2 host
 
-From Windows PowerShell:
+From your local shell:
 
-```powershell
-ssh -i "E:\Programming\job-hunter-agent\KeyPair-JobHunter.pem" ubuntu@ec2-32-236-144-98.ap-southeast-2.compute.amazonaws.com
+```bash
+ssh -i "<path-to-KeyPair-JobHunter.pem>" ubuntu@ec2-32-236-144-98.ap-southeast-2.compute.amazonaws.com
 ```
 
 After login, confirm you are on the EC2 host:

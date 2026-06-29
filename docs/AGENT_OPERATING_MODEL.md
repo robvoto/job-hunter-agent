@@ -16,10 +16,10 @@ Keep always-loaded instructions small and reliable. Agents should load only the 
 
 2. `docs/PROJECT_CONTEXT.md`
    - Job Hunter-specific context.
-   - Owns product goal, runtime truth, Windows/WSL/OpenClaw paths, project-specific source hierarchy, project-specific skill routing, non-negotiables, startup/run notes, and a pointer to backlog workflow.
+   - Owns product goal, runtime truth, repo-root and OpenClaw paths, project-specific source hierarchy, project-specific skill routing, non-negotiables, startup/run notes, and a pointer to backlog workflow.
    - Points to `.skills/backlog-management/SKILL.md` for backlog details instead of duplicating the full workflow.
 
-3. Agent adapter files: `CLAUDE.md`, `GEMINI.md`
+3. Agent adapter files: `CLAUDE.md`
    - Thin adapters for a specific agent environment.
    - Point to `AGENTS.md`, `docs/PROJECT_CONTEXT.md`, and the relevant skill owner.
    - Must not redefine project rules, commands, architecture, backlog workflow, testing workflow, or Definition of Done.
@@ -79,7 +79,7 @@ The description is important because agent systems often discover skills from na
 | `backlog-management` | Google Sheet backlog rows, JH IDs, priorities, duplicates, implementation state, evidence, and human review flags. |
 | `code-change` | Code/test/runtime implementation workflow, validation, and Definition of Done. |
 | `css-design-system` | CSS, spacing, layout, reusable components, and theme tokens. |
-| `dashboard-ui` | Workspace, dashboard, settings UI, and workspace output sync. |
+| `dashboard-ui` | Workspace and settings UI, including workspace output sync. |
 | `history-dedup` | Job history, saved/viewed/applied/hidden state, duplicate identity. |
 | `instruction-maintenance` | AGENTS, adapter files, skills, and instruction docs. |
 | `job-filtering` | Deterministic pass/fail filters, hard blockers, and reject reasons. |
@@ -131,4 +131,4 @@ Local `docs/backlog/backlog_review.xlsx` is archive/export/reference only unless
 - Backlog workflow lives in `.skills/backlog-management/SKILL.md`.
 - Hardcoding/config/schema/default/fallback ownership lives in `.skills/no-hardcoding/SKILL.md`.
 - Skills use discovery frontmatter (`name` and `description`) so agents can route by skill metadata instead of hardcoded trigger lists in `AGENTS.md`.
-- `CLAUDE.md` and root `GEMINI.md` are thin adapters only.
+- `CLAUDE.md` is a thin adapter only.

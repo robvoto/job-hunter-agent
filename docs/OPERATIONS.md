@@ -64,7 +64,7 @@ python -m job_hunter_agent.agent_runner --loop
 
 ---
 
-### Desktop Launcher (Windows)
+### Desktop Launcher
 
 System tray app — starts the FastAPI server locally and opens the browser automatically.
 
@@ -118,13 +118,16 @@ Behaviour:
 
 #### Build the installer (developer task)
 
-Requires [Inno Setup 6](https://jrsoftware.org/isdl.php) (`winget install JRSoftware.InnoSetup`).
+Requires [Inno Setup 6](https://jrsoftware.org/isdl.php).
+
+Build it on Windows by opening `installer/setup.iss` in the Inno Setup Compiler
+and pressing Build (F9), or run:
 
 ```powershell
-# From repo root
 & "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\setup.iss
-# Output: installer\dist\JobHunterAgent-Setup.exe
 ```
+
+Output: `installer\dist\JobHunterAgent-Setup.exe`
 
 Regenerate the tray/shortcut icon from the PNG source (run once after icon changes):
 

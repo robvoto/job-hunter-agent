@@ -110,7 +110,7 @@ For detailed maintenance rules, see `.skills/suggested-tuning/SKILL.md`.
 - `job_hunter_agent/capability_matrix.py`
   Logic for alias expansion and deterministic capability matching.
 
-- `job_hunter_agent/agent_runner.py` / `agent_settings.py`
+- `job_hunter_agent/agent_runner.py` / `job_hunter_agent/user_settings.py`
   Orchestration for daily scheduled runs and notification state.
 
 - `job_hunter_agent/source_connector.py`
@@ -231,7 +231,6 @@ Do not accidentally commit:
 - `data/users/` — all per-user runtime state lives here
 - `data/runtime/` — LLM cost tracking and cache
 - `output/` — server logs and disposable output
-- `TODO.txt`
 - `.venv/`
 
 ## Testing Workflow

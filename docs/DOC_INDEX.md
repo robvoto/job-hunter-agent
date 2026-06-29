@@ -2,20 +2,18 @@
 
 Use this file to decide where information belongs. Do not create a new markdown file unless none of these owners fit.
 
-## Root files
+## Root Files
 
 | File | Owner |
 |---|---|
 | `README.md` | Project overview, quick start, and links to deeper docs. |
 | `AGENTS.md` | Tiny reusable agent loader only. |
-| `CLAUDE.md` | Thin Claude adapter only. |
-| `GEMINI.md` | Thin Gemini adapter only. |
 
-## Core docs
+## Core Docs
 
 | File | Owner |
 |---|---|
-| `docs/PROJECT_CONTEXT.md` | Job Hunter product context, runtime truth, paths, project-specific skill routing, startup/run notes, backlog pointer. |
+| `docs/PROJECT_CONTEXT.md` | Job Hunter product context, runtime truth, repo-root path, project-specific skill routing, startup/run notes, backlog pointer. |
 | `docs/AGENT_OPERATING_MODEL.md` | Agent instruction layering, skill discovery, adapter ownership, tool-vs-skill rules, active/archived skill summary. |
 | `docs/ARCHITECTURE.md` | System design, runtime layers, and module ownership. |
 | `docs/PRINCIPLES.md` | Product and decision philosophy. |
@@ -25,7 +23,7 @@ Use this file to decide where information belongs. Do not create a new markdown 
 | `docs/SHOWCASE_NOTES.md` | Local demo, showcase, and product-positioning notes tied to visible proof. |
 | `docs/aws-ec2-setup.md` | Current AWS EC2 production setup. |
 
-## Operational runbooks
+## Operational Runbooks
 
 | File/folder | Owner |
 |---|---|
@@ -34,7 +32,7 @@ Use this file to decide where information belongs. Do not create a new markdown 
 
 Runbooks are for live incident-style procedures. They should contain exact commands, expected outputs, failure interpretation, and pass criteria. They should not become design diaries.
 
-## Domain/reference docs
+## Domain/Reference Docs
 
 | File | Owner |
 |---|---|
@@ -44,17 +42,12 @@ Runbooks are for live incident-style procedures. They should contain exact comma
 | `docs/UI_COMPONENT_MAP.md` | UI component ownership and reusable UI map. |
 | `docs/ALIAS_LOGIC_RATIONALE.md` | Alias/title matching rationale. Candidate to merge into a future decision log. |
 | `docs/CAPABILITY_AGING_RATIONALE.md` | Capability aging/strength rationale. Candidate to merge into a future decision log. |
+| `docs/OCCUPATION_TAXONOMY_RATIONALE.md` | Occupation taxonomy rationale. Candidate to merge into a future decision log. |
+| `docs/candidate_application_history_sync.md` | Candidate application history sync notes. Candidate to merge into operations/config governance. |
 
-## Backlog docs
+## Backlog
 
-| File/folder | Owner |
-|---|---|
-| `docs/backlog/backlog_extraction_notes.md` | Notes from extracting backlog items. Historical/reference only. |
-| `docs/backlog/backlog_source_audit.md` | Backlog source coverage audit. Historical/reference only. |
-| `docs/backlog/CV_TEXT_RETENTION_DECISION.md` | Specific decision record for CV text retention. |
-| `docs/backlog/archive/` | Historical backlog exports and retired backlog docs. Not active planning truth. |
-
-Backlog source of truth is the shared Google Sheet. Backlog workflow rules live in `.skills/backlog-management/SKILL.md`.
+Backlog source of truth is the shared Google Sheet. Local backlog markdown files are historical references only and are not active planning sources.
 
 ## Skills
 
@@ -64,7 +57,7 @@ Backlog source of truth is the shared Google Sheet. Backlog workflow rules live 
 | `.skills/*/DETAILS.md` | Longer examples/details loaded only when the parent skill points to them. |
 | `docs/archived-skills/` | Retired skills kept for history only. Not active routing. |
 
-## Rules for new docs
+## Rules for New Docs
 
 - Prefer updating an existing owner before creating a new doc.
 - Use `docs/runbooks/` for exact live troubleshooting procedures with commands and pass/fail criteria.

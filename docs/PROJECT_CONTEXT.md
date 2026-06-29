@@ -12,8 +12,7 @@ It is a strict, explainable job-fit system, not a vague recommender.
 
 ## Runtime truth
 
-- Windows project path: `E:\Programming\job-hunter-agent`.
-- WSL project path: `/mnt/e/Programming/job-hunter-agent`.
+- Repo root: `/home/robvoto/projects/job-hunter-agent`.
 - OpenClaw/coding-agent workspace path: `/home/robvoto/.openclaw/workspace/coding-agent`.
 - Runtime state lives in SQLite via `JOB_HUNTER_DB_PATH`.
 - Per-user rendered workspace output lives under `data/users/<user_id>/`.
@@ -41,7 +40,7 @@ Choose the best matching skill. Combine with reusable skills such as `code-chang
 | `.skills/profile-extraction/SKILL.md` | CV/profile extraction and normalization |
 | `.skills/signal-registry/SKILL.md` | Approved learning signal lifecycle |
 | `.skills/preferences/SKILL.md` | Location, contract, government, salary, work mode preferences |
-| `.skills/dashboard-ui/SKILL.md` | Workspace/dashboard/settings UI |
+| `.skills/dashboard-ui/SKILL.md` | Workspace and settings UI |
 | `.skills/onboarding-ui/SKILL.md` | Onboarding wizard, upload, reset/resume flow |
 | `.skills/scraping/SKILL.md` | SEEK/LinkedIn scraping and raw evidence capture |
 | `.skills/ad-learning/SKILL.md` | Extracting learning candidates from job ads |

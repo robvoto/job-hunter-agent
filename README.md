@@ -38,10 +38,10 @@ Search design note:
 ## Architecture Note: Shell & Fragment
 
 The workspace UI uses a decoupled pattern for performance and maintainability:
-- **workspace.html (The Shell)**: The main entry point. It contains the navigation, branding, and JavaScript logic to poll for updates.
-- **results.html (The Fragment)**: A template used by the server to render the actual job results.
+- **templates/workspace.html (the shell)**: The main entry point. It contains the navigation, branding, and JavaScript logic to poll for updates.
+- **templates/results.html (the fragment)**: A template used by the server to render the actual job results.
 
-When you load the workspace, the Shell is served first, and the Fragment is fetched and injected dynamically once the data is ready.
+When you load the workspace, the shell is served first, and the fragment is fetched and injected dynamically once the data is ready.
 
 ## Tech Stack
 
@@ -57,34 +57,36 @@ Logic and core modules reside in the `job_hunter_agent/` package.
 
 ## Important Files
 
-- `data/profile.json`
-  Runtime source of truth for matching.
- 
-- `data/agent_settings.template.json`
-  Starter template for daily-agent scheduling and notification delivery.
+- `job_hunter_agent/profile_store.py`
+  Runtime profile persistence, defaults, and normalization.
 
-- `output/workspace.html`
-  Persistent shortlist workspace from the latest run plus local history.
+- `job_hunter_agent/database.py`
+  SQLite schema and runtime tables.
 
-- `output/audit_records.json`
-- `output/run_stats.json`
-- `output/review_data.json`
-  Debugging and tuning outputs.
+- `templates/workspace.html`
+  Workspace shell.
+
+- `templates/results.html`
+  Workspace results fragment.
+
+- `data/users/<user_id>/workspace_results.html`
+  Per-user rendered workspace output.
+
+- `data/config/global_settings.json`
+  Committed global settings seed.
+
+- `data/knowledge/ui_labels.json`
+  Shared UI labels and copy.
 
 ## Local-Only State
 
 These are intended to stay local and ignored:
 
 - `.venv/`
-- `TODO.txt`
-- `data/profile.json`
-- `data/job_history.json`
-- `data/llm_cache.json` 
-- `data/agent_settings.json`
-- `data/agent_state.json`
-- `data/llm_costs.jsonl`
-- `output/rejection_rules.json`
+- `data/users/`
+- `data/runtime/`
 - `output/`
+- `debug/`
 
 ## Security
 
@@ -103,8 +105,8 @@ Live LLM review stays disabled until user-owned provider-key support is added.
 The first daily agent layer is now local-first:
 
 - `job_hunter_agent.agent_runner` runs the current connector, rebuilds the workspace, and creates a compact digest
-- email delivery uses SMTP settings from local `data/agent_settings.json`
-- Telegram delivery uses a bot token plus chat id from local `data/agent_settings.json`
+- email delivery uses the DB-backed user settings managed by `job_hunter_agent/user_settings.py`
+- Telegram delivery uses the DB-backed user settings managed by `job_hunter_agent/user_settings.py`
 - Telegram messages arrive in the user's private chat with their bot, not from their personal Telegram identity
 - the digest is also written locally to `output/agent_last_summary.txt`
 

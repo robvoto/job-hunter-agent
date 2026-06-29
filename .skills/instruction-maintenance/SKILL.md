@@ -12,7 +12,7 @@ Keep agent instructions useful, small, current, and non-contradictory.
 
 ## Source hierarchy
 - `AGENTS.md`: project-wide rules all agents should read first.
-- Agent-specific files such as `CLAUDE.md` or `GEMINI.md`: thin pointers/adapters only. Do not duplicate core rules there.
+- Agent-specific files such as `CLAUDE.md`: thin pointers/adapters only. Do not duplicate core rules there.
 - `.skills/*/SKILL.md`: compact domain rules loaded only for that work area.
 - `.skills/*/DETAILS.md`: longer reference material split out of a noisy skill.
 - `docs/*`: human/reference documentation, not agent operating rules unless explicitly linked.
@@ -52,7 +52,6 @@ When cleaning instructions, check:
 
 ## Do not
 - Do not rewrite all instructions in one pass.
-- Do not update `GEMINI.md` unless the human explicitly asks.
 - Do not add broad inspirational guidance.
 - Do not turn backlog rows into operating rules.
 - Do not add rules that conflict with the project Definition of Done.
