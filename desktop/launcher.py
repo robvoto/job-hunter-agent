@@ -11,6 +11,9 @@ and displays a system tray icon.
 from __future__ import annotations
 
 import ctypes
+import json
+import io
+import logging
 import os
 import sys
 import threading
@@ -18,6 +21,17 @@ import time
 import urllib.request
 import webbrowser
 from pathlib import Path
+
+# Under pythonw.exe, sys.stdout/sys.stderr are None. Anything that logs a line
+# during startup (uvicorn, dependencies) then raises AttributeError on the None
+# write, silently killing the server thread before it binds its port. Give them
+# a harmless sink so accidental output can't crash the app.
+if sys.stdout is None:
+    sys.stdout = io.TextIOWrapper(io.BytesIO(), encoding="utf-8")
+if sys.stderr is None:
+    sys.stderr = io.TextIOWrapper(io.BytesIO(), encoding="utf-8")
+
+logger = logging.getLogger(__name__)
 
 
 def _set_env_defaults() -> None:
@@ -51,6 +65,19 @@ def _set_env_defaults() -> None:
         (data_dir / subdir).mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    desktop_config_path = data_dir / "config" / "desktop.json"
+    if desktop_config_path.exists():
+        try:
+            desktop_config = json.loads(desktop_config_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            logger.warning("[DESKTOP][WARN] Could not read %s: %s", desktop_config_path, exc)
+        else:
+            workspace_export_dir = str(
+                desktop_config.get("workspace_export_dir") if isinstance(desktop_config, dict) else ""
+            ).strip()
+            if workspace_export_dir:
+                os.environ.setdefault("JOB_HUNTER_WORKSPACE_EXPORT_DIR", workspace_export_dir)
+
     # Seed JSON files that modules read directly from DATA_DIR on first run.
     # The installer handles this for fresh installs; this covers developer runs
     # and any edge case where installer seeding was skipped.
@@ -69,6 +96,10 @@ def _set_env_defaults() -> None:
 # Must run before any job_hunter_agent imports — config.py and paths.py read
 # env vars at module import time.
 _set_env_defaults()
+
+from job_hunter_agent.logging_utils import setup_cli_logging
+
+setup_cli_logging()
 
 import PIL.Image
 import PIL.ImageDraw
@@ -108,7 +139,10 @@ def _playwright_chromium_installed() -> bool:
 
 
 def _msgbox(title: str, text: str) -> None:
-    ctypes.windll.user32.MessageBoxW(0, text, title, 0x40)  # MB_ICONINFORMATION
+    # MB_ICONINFORMATION | MB_TOPMOST | MB_SETFOREGROUND — without these, pythonw has no
+    # taskbar entry and the dialog can pop up behind other windows unnoticed, leaving the
+    # process blocked (and the single-instance mutex held) with nothing visible to the user.
+    ctypes.windll.user32.MessageBoxW(0, text, title, 0x40 | 0x40000 | 0x10000)
 
 
 def _wait_for_server(timeout: float = 30.0) -> bool:
@@ -167,9 +201,63 @@ class _ServerThread(threading.Thread):
             self._server.should_exit = True
 
 
+class _TelegramPollThread(threading.Thread):
+    def __init__(self) -> None:
+        super().__init__(daemon=True, name="telegram-poller")
+        self._stop_event = threading.Event()
+
+    def stop(self) -> None:
+        self._stop_event.set()
+
+    def run(self) -> None:
+        from job_hunter_agent.notifiers.telegram_notifier import sync_telegram_subscribers
+        from job_hunter_agent.user_context import set_user_id
+        from job_hunter_agent.user_settings import (
+            list_user_setting_user_ids,
+            load_user_settings,
+            save_user_settings,
+        )
+
+        while not self._stop_event.is_set():
+            try:
+                user_ids = list_user_setting_user_ids()
+                for user_id in user_ids:
+                    if self._stop_event.is_set():
+                        break
+                    settings = load_user_settings(user_id, create_if_missing=False)
+                    telegram_settings = settings.get("telegram", {})
+                    if not isinstance(telegram_settings, dict):
+                        continue
+                    if not bool(telegram_settings.get("enabled", False)):
+                        continue
+                    bot_token = str(telegram_settings.get("bot_token") or "").strip()
+                    if not bot_token:
+                        continue
+                    set_user_id(user_id)
+                    try:
+                        before_snapshot = json.dumps(settings, sort_keys=True, ensure_ascii=False)
+                        result = sync_telegram_subscribers(telegram_settings, user_id=user_id)
+                        after_snapshot = json.dumps(settings, sort_keys=True, ensure_ascii=False)
+                        if after_snapshot != before_snapshot:
+                            save_user_settings(user_id, settings)
+                        if result.get("commands_processed"):
+                            logger.info(
+                                "[TELEGRAM] processed %s command(s) for %s",
+                                result.get("commands_processed"),
+                                user_id,
+                            )
+                    finally:
+                        set_user_id(None)
+            except Exception as exc:
+                logger.warning("[TELEGRAM][WARN] Telegram poll cycle failed: %s", exc)
+            self._stop_event.wait(10.0)
+
+
 def main() -> None:
     if not _acquire_single_instance():
-        _msgbox(APP_NAME, f"{APP_NAME} is already running.\n\nCheck the system tray.")
+        # Already running elsewhere — just bring the existing instance's page back up
+        # instead of showing a dialog that can get lost behind other windows.
+        webbrowser.open(APP_URL)
         return
 
     if not _playwright_chromium_installed():
@@ -189,10 +277,13 @@ def main() -> None:
             APP_NAME,
             "Server failed to start within 30 seconds.\n\n"
             "Run from a terminal to see the error:\n\n"
-            "    .venv\\Scripts\\python.exe -m job_hunter_agent.fastapi_app",
+            "    python\\python.exe -m job_hunter_agent.fastapi_app",
         )
         server.stop()
         return
+
+    telegram_poller = _TelegramPollThread()
+    telegram_poller.start()
 
     webbrowser.open(APP_URL)
 
@@ -200,7 +291,9 @@ def main() -> None:
         webbrowser.open(APP_URL)
 
     def on_quit(icon: pystray.Icon, _item: pystray.MenuItem) -> None:
+        telegram_poller.stop()
         server.stop()
+        telegram_poller.join(timeout=5.0)
         icon.stop()
 
     menu = pystray.Menu(

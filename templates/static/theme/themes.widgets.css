@@ -859,8 +859,20 @@
   border-radius: var(--control-radius-2xl);
 }
 
-.search-source-panel .toggle-switch-title {
+.search-source-panel .toggle-switch--compact {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.search-source-panel-head {
+  justify-content: space-between;
+}
+
+.search-source-title {
   font-size: var(--text-role-button-font-size);
+  font-weight: var(--text-role-button-font-weight);
   line-height: 1.2;
 }
 

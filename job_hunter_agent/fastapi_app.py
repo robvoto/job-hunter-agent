@@ -20,10 +20,13 @@ CORS:
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 import logging
 import logging.config
 import os
+import re
 import sys
+import threading
 from urllib.parse import parse_qsl, quote, urlsplit
 
 from job_hunter_agent.runtime_helpers import load_repo_dotenv
@@ -55,6 +58,7 @@ _logger = logging.getLogger(__name__)
 
 _CORS_METHODS = "GET, PUT, PATCH, POST, DELETE, OPTIONS"
 _CORS_HEADERS = "Content-Type"
+_TELEGRAM_POLLER: "_TelegramPollThread | None" = None
 
 
 def _origin_from_url(value: str) -> str | None:
@@ -98,6 +102,17 @@ class _LineLoggingStream:
         self._level = level
         self._buffer = ""
 
+    @staticmethod
+    def _level_for_line(line: str, default_level: int) -> int:
+        """Respect embedded severity tags from wrapped stderr/stdout lines."""
+        match = re.match(
+            r"^\d{4}-\d{2}-\d{2}.* - (DEBUG|INFO|WARNING|ERROR|CRITICAL) - ",
+            line.strip(),
+        )
+        if not match:
+            return default_level
+        return getattr(logging, match.group(1), default_level)
+
     def write(self, text: str) -> int:
         if not text:
             return 0
@@ -105,14 +120,16 @@ class _LineLoggingStream:
         while "\n" in self._buffer:
             line, self._buffer = self._buffer.split("\n", 1)
             if line.strip():
-                self._logger.log(self._level, line.rstrip("\r"))
+                level = self._level_for_line(line, self._level)
+                self._logger.log(level, line.rstrip("\r"))
         return len(text)
 
     def flush(self) -> None:
         line = self._buffer.strip("\r")
         self._buffer = ""
         if line.strip():
-            self._logger.log(self._level, line)
+            level = self._level_for_line(line, self._level)
+            self._logger.log(level, line)
 
     def isatty(self) -> bool:
         return False
@@ -237,6 +254,91 @@ def _bootstrap_runtime_knowledge() -> None:
         upgrade_knowledge_from_dir(_REPO_ROOT / "data" / _subdir)
 
 
+class _TelegramPollThread(threading.Thread):
+    def __init__(self) -> None:
+        super().__init__(daemon=True, name="telegram-poller")
+        self._stop_event = threading.Event()
+
+    def stop(self) -> None:
+        self._stop_event.set()
+
+    def run(self) -> None:
+        import json
+
+        from job_hunter_agent.notifiers.telegram_notifier import sync_telegram_subscribers
+        from job_hunter_agent.user_settings import (
+            list_user_setting_user_ids,
+            load_user_settings,
+            save_user_settings,
+        )
+
+        while not self._stop_event.is_set():
+            try:
+                user_ids = list_user_setting_user_ids()
+                for user_id in user_ids:
+                    if self._stop_event.is_set():
+                        break
+                    settings = load_user_settings(user_id, create_if_missing=False)
+                    telegram_settings = settings.get("telegram", {})
+                    if not isinstance(telegram_settings, dict):
+                        continue
+                    if not bool(telegram_settings.get("enabled", False)):
+                        continue
+                    bot_token = str(telegram_settings.get("bot_token") or "").strip()
+                    if not bot_token:
+                        continue
+                    set_user_id(user_id)
+                    try:
+                        before_snapshot = json.dumps(settings, sort_keys=True, ensure_ascii=False)
+                        result = sync_telegram_subscribers(telegram_settings, user_id=user_id)
+                        after_snapshot = json.dumps(settings, sort_keys=True, ensure_ascii=False)
+                        if after_snapshot != before_snapshot:
+                            save_user_settings(user_id, settings)
+                        if result.get("commands_processed"):
+                            _logger.info(
+                                "[TELEGRAM] processed %s command(s) for %s",
+                                result.get("commands_processed"),
+                                user_id,
+                            )
+                    finally:
+                        set_user_id(None)
+            except Exception as exc:
+                _logger.warning("[TELEGRAM][WARN] Telegram poll cycle failed: %s", exc)
+            self._stop_event.wait(10.0)
+
+
+def _start_shared_telegram_poller() -> None:
+    global _TELEGRAM_POLLER
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return
+    if os.environ.get("JOB_HUNTER_DESKTOP_MODE") == "1":
+        return
+    if _TELEGRAM_POLLER and _TELEGRAM_POLLER.is_alive():
+        return
+    _TELEGRAM_POLLER = _TelegramPollThread()
+    _TELEGRAM_POLLER.start()
+    _logger.info("[TELEGRAM] Background Telegram poller started.")
+
+
+def _stop_shared_telegram_poller() -> None:
+    global _TELEGRAM_POLLER
+    if not _TELEGRAM_POLLER:
+        return
+    _TELEGRAM_POLLER.stop()
+    _TELEGRAM_POLLER.join(timeout=5.0)
+    _TELEGRAM_POLLER = None
+    _logger.info("[TELEGRAM] Background Telegram poller stopped.")
+
+
+@asynccontextmanager
+async def _app_lifespan(_app: FastAPI):
+    _start_shared_telegram_poller()
+    try:
+        yield
+    finally:
+        _stop_shared_telegram_poller()
+
+
 def create_app() -> FastAPI:
     _bootstrap_runtime_knowledge()
 
@@ -244,7 +346,7 @@ def create_app() -> FastAPI:
     from job_hunter_agent.routes.responses import json_response
 
     # Leave `/docs` free for the project's markdown-docs JSON API (not OpenAPI Swagger).
-    app = FastAPI(docs_url="/swagger-ui", redoc_url="/swagger-redoc")
+    app = FastAPI(docs_url="/swagger-ui", redoc_url="/swagger-redoc", lifespan=_app_lifespan)
     configure_auth(app)
 
     @app.exception_handler(StarletteHTTPException)

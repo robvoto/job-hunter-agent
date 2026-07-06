@@ -1,30 +1,36 @@
 ; Job Hunter Agent — Windows Installer
 ;
-; Prerequisites:
-;   Python 3.12 or later must be installed and available in PATH.
-;   Download from https://www.python.org/downloads/ — check "Add Python to PATH".
+; Fully self-contained: no Python or uv needs to be pre-installed on the
+; client machine. The installer bundles its own private Python runtime.
 ;
 ; To build this installer:
 ;   1. Install Inno Setup 6: https://jrsoftware.org/isdl.php
-;   2. Open this file in the Inno Setup Compiler and press Build (F9).
+;   2. Prepare the bundled runtime once (and whenever the pinned version in
+;      prepare_python.ps1 changes):
+;        powershell -ExecutionPolicy Bypass -File installer\prepare_python.ps1
+;      This downloads Python's official embeddable distribution into
+;      installer\pyembed\ and bootstraps pip + uv into it. Not committed to
+;      git — regenerate it locally before building.
+;   3. Open this file in the Inno Setup Compiler and press Build (F9).
 ;      Or from the command line:
 ;        "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" installer\setup.iss
 ;   Output: installer\dist\JobHunterAgent-Setup.exe
 ;
 ; Install layout after running this installer:
 ;
-;   %LOCALAPPDATA%\Programs\JobHunterAgent\         (app install root)
-;     job_hunter_agent\                             Python package
-;     desktop\launcher.py                           Tray launcher
+;   %LOCALAPPDATA%\Programs\JobHunterAgent\         (app install root; per-user install)
+;     job_hunter_agent\*.pyc                        Bytecode-only Python package
+;     desktop\launcher.py                           Bootstrap tray launcher
 ;     templates\                                    HTML/CSS/JS assets
 ;     data\knowledge\*.json                         Seeds for upgrade_knowledge_from_dir()
 ;     data\config\global_settings.json              Seed (read by REPO_ROOT path in bootstrap)
 ;     data\defaults\user_settings.json              Seed
 ;     data\signals\*.json                           Seeds
-;     .venv\                                        Python virtual environment (created by setup_env.bat)
-;     installer\setup_env.bat                       Dep-install utility
-;     pyproject.toml
-;     uv.lock
+;     python\                                       Bundled embeddable Python + uv (from prepare_python.ps1);
+;                                                    the [Run] steps below install app deps + Playwright into it
+;     installer\launcher.vbs                        Hidden desktop launcher shim
+;     pyproject.toml                                Project metadata used by uv launch
+;     uv.lock                                       Locked dependency set used by uv launch
 ;
 ;   %APPDATA%\JobHunterAgent\data\                  User data root (JOB_HUNTER_DATA_DIR)
 ;     config\global_settings.json                   Direct-read by global_settings_defaults.py
@@ -46,6 +52,8 @@ AppVersion=1.0
 AppPublisher=Job Hunter Agent
 PrivilegesRequired=lowest
 DefaultDirName={localappdata}\Programs\JobHunterAgent
+UsePreviousAppDir=no
+DisableDirPage=yes
 DefaultGroupName=Job Hunter Agent
 DisableProgramGroupPage=yes
 OutputDir=dist
@@ -71,7 +79,8 @@ Source: "..\desktop\*";         DestDir: "{app}\desktop";          Flags: ignore
 Source: "..\templates\*";       DestDir: "{app}\templates";        Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\pyproject.toml";    DestDir: "{app}";                  Flags: ignoreversion
 Source: "..\uv.lock";           DestDir: "{app}";                  Flags: ignoreversion skipifsourcedoesntexist
-Source: "setup_env.bat";        DestDir: "{app}\installer";        Flags: ignoreversion
+Source: "pyembed\*";            DestDir: "{app}\python";           Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "launcher.vbs";         DestDir: "{app}\installer";        Flags: ignoreversion
 
 ; Knowledge / config seeds in the app dir (used by upgrade_knowledge_from_dir and bootstrap)
 Source: "..\data\config\*";    DestDir: "{app}\data\config";    Flags: ignoreversion recursesubdirs createallsubdirs
@@ -88,50 +97,87 @@ Source: "..\data\signals\*";   DestDir: "{userappdata}\JobHunterAgent\data\signa
 
 ; ── Runtime dirs (empty, created so the app can write on first run) ──
 [Dirs]
+Name: "{userappdata}\JobHunterAgent\data\config"
 Name: "{userappdata}\JobHunterAgent\data\users"
 Name: "{userappdata}\JobHunterAgent\data\runtime"
 Name: "{userappdata}\JobHunterAgent\output"
 
 ; ── Shortcuts ──
 [Icons]
-Name: "{group}\Job Hunter Agent";           Filename: "{app}\.venv\Scripts\pythonw.exe"; Parameters: """{app}\desktop\launcher.py"""; WorkingDir: "{app}"; IconFilename: "{app}\job_hunter_agent.ico"
+Name: "{group}\Job Hunter Agent";           Filename: "{sys}\wscript.exe"; Parameters: """{app}\installer\launcher.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\job_hunter_agent.ico"
 Name: "{group}\Uninstall Job Hunter Agent"; Filename: "{uninstallexe}"
-Name: "{userdesktop}\Job Hunter Agent";     Filename: "{app}\.venv\Scripts\pythonw.exe"; Parameters: """{app}\desktop\launcher.py"""; WorkingDir: "{app}"; IconFilename: "{app}\job_hunter_agent.ico"; Tasks: desktopicon
-Name: "{userstartup}\Job Hunter Agent";     Filename: "{app}\.venv\Scripts\pythonw.exe"; Parameters: """{app}\desktop\launcher.py"""; WorkingDir: "{app}"; IconFilename: "{app}\job_hunter_agent.ico"; Tasks: startupitem
+Name: "{userdesktop}\Job Hunter Agent";     Filename: "{sys}\wscript.exe"; Parameters: """{app}\installer\launcher.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\job_hunter_agent.ico"; Tasks: desktopicon
+Name: "{userstartup}\Job Hunter Agent";     Filename: "{sys}\wscript.exe"; Parameters: """{app}\installer\launcher.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\job_hunter_agent.ico"; Tasks: startupitem
 
-; ── Post-install: set up venv, install deps, install Playwright Chromium ──
+; ── Post-install: install app deps + Playwright into the bundled runtime ──
+; Each step below runs hidden but shows its own StatusMsg on Inno's own wizard
+; page, so progress is visible without popping a separate console window.
 [Run]
-Filename: "{app}\installer\setup_env.bat"; WorkingDir: "{app}"; StatusMsg: "Installing Python dependencies and Playwright Chromium (this takes a few minutes)..."; Flags: runhidden waituntilterminated
-Filename: "{app}\.venv\Scripts\pythonw.exe"; Parameters: """{app}\desktop\launcher.py"""; WorkingDir: "{app}"; Description: "Launch Job Hunter Agent now"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\python\python.exe"; Parameters: "-m uv pip install -r pyproject.toml --python ""{app}\python\python.exe"""; WorkingDir: "{app}"; StatusMsg: "Installing Python dependencies..."; Flags: runhidden waituntilterminated
+Filename: "{app}\python\python.exe"; Parameters: "-m playwright install chromium"; WorkingDir: "{app}"; StatusMsg: "Installing Playwright Chromium browser..."; Flags: runhidden waituntilterminated
+Filename: "{app}\python\python.exe"; Parameters: "-c ""from pathlib import Path; import py_compile; root = Path('job_hunter_agent'); files = list(root.rglob('*.py')); [py_compile.compile(str(p), cfile=str(p.with_suffix('.pyc')), dfile=str(p), doraise=True) for p in files]; [p.unlink() for p in files]"""; WorkingDir: "{app}"; StatusMsg: "Finalizing app files..."; Flags: runhidden waituntilterminated
+Filename: "{sys}\wscript.exe"; Parameters: """{app}\installer\launcher.vbs"""; WorkingDir: "{app}"; Description: "Launch Job Hunter Agent now"; Flags: nowait postinstall skipifsilent
 
 ; ── Uninstall cleanup ──
 [UninstallDelete]
-Type: filesandordirs; Name: "{app}\.venv"
+Type: filesandordirs; Name: "{app}\python"
 Type: filesandordirs; Name: "{userappdata}\JobHunterAgent\data\runtime"
 Type: filesandordirs; Name: "{userappdata}\JobHunterAgent\output"
 
 [Code]
-function IsPythonAvailable(): Boolean;
 var
-  ResultCode: Integer;
+  WorkspaceExportPage: TInputDirWizardPage;
+  WorkspaceExportDir: string;
+
+procedure InitializeWizard();
 begin
-  Result := Exec(ExpandConstant('{sys}\cmd.exe'), '/C python --version',
-    '', SW_HIDE, ewWaitUntilTerminated, ResultCode)
-    and (ResultCode = 0);
+  WorkspaceExportDir := ExpandConstant('{userdocs}\Job Hunter Workspace');
+  WorkspaceExportPage := CreateInputDirPage(
+    wpSelectDir,
+    'Workspace export folder',
+    'Choose where Telegram exports should be written.',
+    'Job Hunter writes the merged and fresh job lists to this folder while the desktop app is open.',
+    False,
+    ''
+  );
+  WorkspaceExportPage.Add('Workspace export folder:');
+  WorkspaceExportPage.Values[0] := WorkspaceExportDir;
 end;
 
-function InitializeSetup(): Boolean;
+function NextButtonClick(CurPageID: Integer): Boolean;
 begin
-  if not IsPythonAvailable() then
+  Result := True;
+  if CurPageID = WorkspaceExportPage.ID then
   begin
-    MsgBox(
-      'Python 3.12 or later is required but was not found in PATH.' + #13#10 + #13#10 +
-      'Download it from https://www.python.org/downloads/ and ensure' + #13#10 +
-      '"Add Python to PATH" is checked during installation, then run this installer again.',
-      mbError, MB_OK
-    );
-    Result := False;
-  end
-  else
-    Result := True;
+    WorkspaceExportDir := Trim(WorkspaceExportPage.Values[0]);
+    if WorkspaceExportDir = '' then
+    begin
+      MsgBox('Please choose an export folder.', mbError, MB_OK);
+      Result := False;
+      exit;
+    end;
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ConfigDir: string;
+  ConfigPath: string;
+  JsonText: string;
+  EscapedDir: string;
+begin
+  if CurStep = ssPostInstall then
+  begin
+    ConfigDir := ExpandConstant('{userappdata}\JobHunterAgent\data\config');
+    ForceDirectories(ConfigDir);
+    ConfigPath := ConfigDir + '\desktop.json';
+    EscapedDir := WorkspaceExportDir;
+    StringChangeEx(EscapedDir, '\', '\\', True);
+    JsonText :=
+      '{' + #13#10 +
+      '  "workspace_export_dir": "' + EscapedDir + '"' + #13#10 +
+      '}' + #13#10;
+    if not SaveStringToFile(ConfigPath, JsonText, False) then
+      MsgBox('Could not save desktop settings to ' + ConfigPath, mbError, MB_OK);
+  end;
 end;

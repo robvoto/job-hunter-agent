@@ -13,13 +13,12 @@ It is a strict, explainable job-fit system, not a vague recommender.
 ## Runtime truth
 
 - Repo root: `/home/robvoto/projects/job-hunter-agent`.
-- OpenClaw/coding-agent workspace path: `/home/robvoto/.openclaw/workspace/coding-agent`.
+- Agent orchestration: LangGraph-based bounded workflow (classify -> cost/risk estimate -> approval gate -> run agent -> log). OpenClaw is retired; do not reference it as the runtime.
 - Runtime state lives in SQLite via `JOB_HUNTER_DB_PATH`.
 - Per-user rendered workspace output lives under `data/users/<user_id>/`.
 - Approved knowledge seeds live in `data/knowledge/*.json`.
 - Global admin settings seed lives in `data/config/global_settings.json`.
 - Runtime signal files live in `data/signals/*.json` and are gitignored.
-- Use `config/projects.json` in the coding-agent workspace to resolve this repo for OpenClaw runtime work.
 - Treat `instruction_file` and `instruction_skills` as project metadata references, not automatically injected runtime instructions.
 
 ## Project reference docs

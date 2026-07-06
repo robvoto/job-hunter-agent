@@ -60,6 +60,7 @@ docs/archived-skills/
 
 # ---- Desktop installer build output ----
 installer/dist/
+installer/pyembed/
 data/*.exe
 
 # ---- Tests must not live inside the package directory ----

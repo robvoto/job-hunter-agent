@@ -424,6 +424,8 @@ def test_settings_alerts_section_uses_shared_settings_shell(monkeypatch):
 
     assert 'id="telegram_connect_panel"' in html
 
+    assert 'id="refresh_telegram_connection"' in html
+
     assert "Alerts &amp; AI" in html
 
     assert "__JOB_HUNTER_SETTINGS_ALERTS_SECTION_TITLE__" not in html

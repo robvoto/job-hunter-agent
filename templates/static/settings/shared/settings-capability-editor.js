@@ -138,7 +138,7 @@ export const JobHunterCapabilityEditor = (function () {
     if (!actions) return;
     actions.innerHTML = `
       <button class="btn-add" id="add_capability_rule" type="button" aria-label="${escapeHtml(capabilityLabels.add_button_aria_label)}" title="${escapeHtml(capabilityLabels.add_button_aria_label)}">+</button>
-      <button class="btn btn-secondary btn-compact-action" type="button" data-select-visible-capabilities="true"${visibleCapabilityRowIndices.length ? '' : ' disabled'}>${escapeHtml(capabilityLabels.settings_select_shown_label)}</button>
+      <button class="btn btn-secondary btn-compact-action" type="button" data-select-visible-capabilities="true"${visibleCapabilityRowIndices.length ? '' : ' disabled'}>Select all</button>
       <button class="btn btn-secondary btn-compact-action" type="button" data-clear-capability-selection="true"${selectedCount ? '' : ' disabled'}>${escapeHtml(capabilityLabels.settings_clear_selection_label)}</button>
       <button class="btn btn-secondary btn-compact-action" type="button" data-remove-selected-capabilities="true"${selectedCount ? '' : ' disabled'}>${escapeHtml(capabilityLabels.settings_remove_selected_label)}</button>
     `;
@@ -288,7 +288,6 @@ export const JobHunterCapabilityEditor = (function () {
                 </div>
               </div>
               <div class="capability-card-actions" role="group" aria-label="Capability actions">
-                <button class="capability-select-btn${selected ? ' is-selected' : ''}" type="button" data-toggle-capability-selection="${index}" aria-pressed="${selected ? 'true' : 'false'}" aria-label="${selected ? escapeHtml(capabilityLabels.settings_selected_label) : escapeHtml(capabilityLabels.settings_select_label)}" title="${selected ? escapeHtml(capabilityLabels.settings_selected_label) : escapeHtml(capabilityLabels.settings_select_label)}">${escapeHtml(selected ? capabilityLabels.settings_selected_label : capabilityLabels.settings_select_label)}</button>
                 <button class="cap-remove-btn capability-remove-btn" type="button" data-remove-capability="${index}"
                         aria-label="Remove ${escapeHtml(rule.name || 'capability')}"
                         title="Remove capability">
@@ -417,6 +416,16 @@ export const JobHunterCapabilityEditor = (function () {
         [key]: key === 'name' ? String(field.value || '').replace(/\s+/g, ' ').trim() : String(field.value || '').trim().toLowerCase(),
       };
       settingsField('candidate_capabilities').value = capabilityRulesToText(capabilityRuleState);
+      markDirty();
+    });
+
+    document.getElementById('capability_matrix_editor')?.addEventListener('click', (event) => {
+      // Skip if clicking delete button or inside a form control
+      if (event.target.closest('.cap-remove-btn, input, label, details')) return;
+      const card = event.target.closest('[data-capability-index]');
+      if (!card) return;
+      const index = Number(card.dataset.capabilityIndex);
+      toggleCapabilitySelection(index);
       markDirty();
     });
 

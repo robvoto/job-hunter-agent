@@ -16,6 +16,7 @@
     "linkedin_hours_old": 24,
     "linkedin_results_per_search": 25,
     "linkedin_easy_apply_only": null,
+    "apsjobs_results_per_search": 25,
     "playwright_viewport_width": 1400,
     "playwright_viewport_height": 900,
     "playwright_selector_timeout": 8000
@@ -35,6 +36,10 @@
         "max": 720
       },
       "linkedin_results_per_search": {
+        "min": 5,
+        "max": 100
+      },
+      "apsjobs_results_per_search": {
         "min": 5,
         "max": 100
       }

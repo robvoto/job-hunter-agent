@@ -2,6 +2,7 @@
 
 import importlib
 import inspect
+import logging
 import sys
 from pathlib import Path
 
@@ -72,6 +73,33 @@ def test_run_debug_wrapper_forwards_debug_flag_to_fastapi_app():
 
     assert 'exec uv run python -m job_hunter_agent.fastapi_app --debug "$@"' in run_debug_script
     assert "UV_CACHE_DIR" in run_debug_script
+
+
+def test_line_logging_stream_respects_embedded_severity(caplog):
+    caplog.set_level(logging.INFO, logger="job_hunter_agent.fastapi_app")
+    stream = _fa._LineLoggingStream(logging.getLogger("job_hunter_agent.fastapi_app"), logging.ERROR)
+
+    stream.write("2026-07-06 16:59:34,060 - INFO - JobSpy:Linkedin - finished scraping\n")
+    stream.flush()
+
+    assert any(
+        record.levelno == logging.INFO and "finished scraping" in record.getMessage()
+        for record in caplog.records
+    )
+
+
+def test_line_logging_stream_keeps_plain_stderr_as_error(caplog):
+    caplog.set_level(logging.ERROR, logger="job_hunter_agent.fastapi_app")
+    stream = _fa._LineLoggingStream(logging.getLogger("job_hunter_agent.fastapi_app"), logging.ERROR)
+
+    stream.write("Traceback (most recent call last):\n")
+    stream.write("ValueError: bad thing happened\n")
+    stream.flush()
+
+    assert any(
+        record.levelno == logging.ERROR and "ValueError: bad thing happened" in record.getMessage()
+        for record in caplog.records
+    )
 
 
 def test_settings_redirects_to_start_until_onboarding_is_complete(monkeypatch):

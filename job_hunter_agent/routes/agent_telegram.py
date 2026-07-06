@@ -4,6 +4,7 @@ from fastapi import APIRouter, Body, Request
 
 from job_hunter_agent import server_helpers as srv
 from job_hunter_agent.auth import read_session_user
+from job_hunter_agent.notifiers.telegram_notifier import sync_telegram_subscribers
 from job_hunter_agent.routes.responses import json_response
 from job_hunter_agent.user_settings import load_user_settings, save_user_settings
 
@@ -101,17 +102,26 @@ def api_telegram_sync(request: Request):  # type: ignore[no-untyped-def]
 
         settings = load_user_settings(user_id, create_if_missing=True)
 
-        result = srv.sync_telegram_subscribers(settings["telegram"])
+        result = sync_telegram_subscribers(settings["telegram"], user_id=user_id)
 
         updated = save_user_settings(user_id, settings)
 
     except Exception as exc:
         return json_response({"error": str(exc)}, 400)
 
+    total_subscribers = int(result.get("total_subscribers", 0) or 0)
+    if total_subscribers > 0:
+        message = "Telegram connected successfully."
+    else:
+        message = (
+            "No Telegram account connected yet. Click Connect with Telegram, "
+            "press Start in the bot chat, then check again."
+        )
+
     return json_response(
         {
             "ok": True,
-            "message": f"Telegram sync complete. {result['total_subscribers']} connected Telegram account(s) found.",
+            "message": message,
             "result": result,
             "settings": srv.SettingsHandler._public_user_settings_payload(updated),
         },

@@ -83,7 +83,7 @@ export const JobHunterAlertsSettings = (function () {
     if (botUsername) botUsername.value = telegram.bot_username || '';
     setToggleChecked('telegram_disable_link_preview', Boolean(telegram.disable_link_preview));
     telegramConnectLink = telegram.bot_username
-      ? `https://t.me/${telegram.bot_username}?start=connect`
+      ? `https://web.telegram.org/k/#@${telegram.bot_username}`
       : '';
     renderTelegramSubscribers(telegram.subscribers || []);
     renderTelegramConnectPanel(settings);
@@ -134,10 +134,9 @@ export const JobHunterAlertsSettings = (function () {
     if (!response.ok) throw new Error(payload.error || 'Could not refresh the connected Telegram account');
     fillUserSettings(payload.settings || {});
     if (payload.result?.bot_username) {
-      telegramConnectLink = `https://t.me/${payload.result.bot_username}?start=connect`;
+      telegramConnectLink = `https://web.telegram.org/k/#@${payload.result.bot_username}`;
     }
     renderTelegramConnectPanel(payload.settings || {});
-    showStatus(payload.message || 'Connected Telegram account refreshed.', 'success');
     return payload;
   }
 
@@ -168,7 +167,6 @@ export const JobHunterAlertsSettings = (function () {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || 'Could not send Telegram test message');
-    showStatus(payload.message || 'Telegram test message sent.', 'success');
     return payload;
   }
 

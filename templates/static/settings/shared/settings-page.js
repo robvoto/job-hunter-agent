@@ -256,6 +256,7 @@ function collectProfile() {
       seek_max_pages: seekMaxPages,
       linkedin_results_per_search: Number(document.getElementById('linkedin_results_per_search').value) || 25,
       [LINKEDIN_EASY_APPLY_ONLY]: linkedinEasyApplyRaw === '' ? null : linkedinEasyApplyRaw === 'true',
+      apsjobs_results_per_search: Number(document.getElementById('apsjobs_results_per_search').value) || 25,
     },
     salary_preferences: {
       minimum_salary_yearly: readCurrencyFieldValue('minimum_salary_yearly', 0),
@@ -287,6 +288,7 @@ function collectProfile() {
     enabled_sources: [
       ...(getToggleChecked('seek_enabled') ? ['seek'] : []),
       ...(getToggleChecked('linkedin_enabled') ? ['linkedin'] : []),
+      ...(getToggleChecked('apsjobs_enabled') ? ['apsjobs'] : []),
     ],
   };
 }
@@ -303,6 +305,7 @@ function fillForm(profile) {
   document.getElementById('classification_ids').value = (profile.search_settings?.classification_ids || []).join('\n');
   setChoiceGroupValue('seek_max_pages', profile.search_settings?.seek_max_pages);
   document.getElementById('linkedin_results_per_search').value = String(profile.search_settings?.linkedin_results_per_search);
+  document.getElementById('apsjobs_results_per_search').value = String(profile.search_settings?.apsjobs_results_per_search);
   const _dateWindowEl = document.getElementById('search_date_window');
   if (_dateWindowEl) {
     const _savedDays = profile.search_settings?.date_range_days;
@@ -316,6 +319,7 @@ function fillForm(profile) {
   const _enabledSources = profile.enabled_sources || ['seek', 'linkedin'];
   setToggleChecked('seek_enabled', _enabledSources.includes('seek'));
   setToggleChecked('linkedin_enabled', _enabledSources.includes('linkedin'));
+  setToggleChecked('apsjobs_enabled', _enabledSources.includes('apsjobs'));
   setEngagementTypeValues(profile.match_preferences?.engagement_type);
   setWorkModePreferenceValues(profile.match_preferences?.work_mode_preference || []);
   setSectorPreferenceValues(profile.match_preferences?.prefer_sector || sectorPreferenceDefault);
@@ -698,13 +702,34 @@ document.getElementById('open_telegram_connect')?.addEventListener('click', asyn
   }
 });
 
+document.getElementById('refresh_telegram_connection')?.addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Checking...';
+  try {
+    const payload = await alertsSettings.syncTelegramSubscribers();
+    const totalSubscribers = Number(payload?.result?.total_subscribers || 0);
+    showStatus(
+      payload?.message || 'Connected Telegram account refreshed.',
+      totalSubscribers > 0 ? 'success' : 'error',
+    );
+  } catch (error) {
+    showStatus(error.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
+});
+
 document.getElementById('send_telegram_test')?.addEventListener('click', async (e) => {
   const btn = e.currentTarget;
   const originalLabel = btn.textContent;
   btn.disabled = true;
   btn.textContent = 'Sending...';
   try {
-    await alertsSettings.sendTelegramTestMessage();
+    const payload = await alertsSettings.sendTelegramTestMessage();
+    showStatus(payload?.message || 'Telegram test message sent.', 'success');
   } catch (error) {
     showStatus(error.message, 'error');
   } finally {

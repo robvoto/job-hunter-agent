@@ -147,20 +147,17 @@
                   <p class="panel-copy">__JOB_HUNTER_SEARCH_SOURCE_SECTION_COPY__</p>
                   <div class="search-source-panels">
                     <section class="search-source-panel">
-                      <div class="settings-form-field">
+                      <div class="field-label-row search-source-panel-head">
                         <div class="field-label-row">
-                          <label for="seek_enabled">SEEK</label>
+                          <label for="seek_enabled" class="search-source-title">SEEK</label>
                           <details class="field-info-drawer">
                             <summary class="field-info" aria-label="Help">i</summary>
                             <div class="field-info-panel">__JOB_HUNTER_SEARCH_SOURCE_SEEK_TOGGLE_HELP__</div>
                           </details>
                         </div>
-                        <label class="toggle-switch" for="seek_enabled">
-                          <span class="toggle-switch-copy">
-                            <span class="toggle-switch-title">__JOB_HUNTER_SEARCH_SOURCE_SEEK_TOGGLE_LABEL__</span>
-                          </span>
+                        <label class="toggle-switch toggle-switch--compact" for="seek_enabled">
                           <span class="toggle-switch-control">
-                            <input id="seek_enabled" type="checkbox" role="switch" checked>
+                            <input id="seek_enabled" type="checkbox" role="switch" aria-label="__JOB_HUNTER_SEARCH_SOURCE_SEEK_TOGGLE_LABEL__" checked>
                             <span class="toggle-switch-ui"></span>
                           </span>
                         </label>
@@ -192,20 +189,17 @@
                     </section>
 
                     <section class="search-source-panel">
-                      <div class="settings-form-field">
+                      <div class="field-label-row search-source-panel-head">
                         <div class="field-label-row">
-                          <label for="linkedin_enabled">LinkedIn</label>
+                          <label for="linkedin_enabled" class="search-source-title">LinkedIn</label>
                           <details class="field-info-drawer">
                             <summary class="field-info" aria-label="Help">i</summary>
                             <div class="field-info-panel">__JOB_HUNTER_SEARCH_SOURCE_LINKEDIN_TOGGLE_HELP__</div>
                           </details>
                         </div>
-                        <label class="toggle-switch" for="linkedin_enabled">
-                          <span class="toggle-switch-copy">
-                            <span class="toggle-switch-title">__JOB_HUNTER_SEARCH_SOURCE_LINKEDIN_TOGGLE_LABEL__</span>
-                          </span>
+                        <label class="toggle-switch toggle-switch--compact" for="linkedin_enabled">
                           <span class="toggle-switch-control">
-                            <input id="linkedin_enabled" type="checkbox" role="switch" checked>
+                            <input id="linkedin_enabled" type="checkbox" role="switch" aria-label="__JOB_HUNTER_SEARCH_SOURCE_LINKEDIN_TOGGLE_LABEL__" checked>
                             <span class="toggle-switch-ui"></span>
                           </span>
                         </label>
@@ -235,6 +229,35 @@
                           <option value="true">Easy Apply only</option>
                           <option value="false">Non-Easy Apply only</option>
                         </select>
+                      </div>
+                    </section>
+
+                    <section class="search-source-panel">
+                      <div class="field-label-row search-source-panel-head">
+                        <div class="field-label-row">
+                          <label for="apsjobs_enabled" class="search-source-title">APS Jobs</label>
+                          <details class="field-info-drawer">
+                            <summary class="field-info" aria-label="Help">i</summary>
+                            <div class="field-info-panel">__JOB_HUNTER_SEARCH_SOURCE_APSJOBS_TOGGLE_HELP__</div>
+                          </details>
+                        </div>
+                        <label class="toggle-switch toggle-switch--compact" for="apsjobs_enabled">
+                          <span class="toggle-switch-control">
+                            <input id="apsjobs_enabled" type="checkbox" role="switch" aria-label="__JOB_HUNTER_SEARCH_SOURCE_APSJOBS_TOGGLE_LABEL__">
+                            <span class="toggle-switch-ui"></span>
+                          </span>
+                        </label>
+                      </div>
+
+                      <div class="settings-form-field">
+                        <div class="field-label-row">
+                          <label for="apsjobs_results_per_search">Results per search</label>
+                          <details class="field-info-drawer">
+                            <summary class="field-info" aria-label="Help">i</summary>
+                            <div class="field-info-panel">Max results per keyword and location pair.</div>
+                          </details>
+                        </div>
+                        <input id="apsjobs_results_per_search" class="source-number-input" type="number" min="5" max="100">
                       </div>
                     </section>
                   </div>

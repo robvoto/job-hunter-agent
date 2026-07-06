@@ -70,14 +70,22 @@ System tray app — starts the FastAPI server locally and opens the browser auto
 
 #### Install (recommended)
 
-Run the installer — no admin rights required, installs per-user:
+Run the installer — it installs per-user under
+`%LOCALAPPDATA%\Programs\JobHunterAgent` and does not require admin rights:
 
 ```
 installer\dist\JobHunterAgent-Setup.exe
 ```
 
-Post-install the setup script creates a `.venv`, installs all dependencies, and installs
-Playwright Chromium automatically (~3 min on first install).
+If this repo lives in WSL, the built installer is accessible from Windows at
+`\\wsl.localhost\Ubuntu\home\robvoto\projects\job-hunter-agent\installer\dist\JobHunterAgent-Setup.exe`
+after a successful build. The `installer` folder itself only contains the
+Inno Setup source until `Build` creates `dist\JobHunterAgent-Setup.exe`.
+
+The installer bundles its own private Python runtime — no system Python or `uv`
+needs to be pre-installed on the client machine. Post-install, the setup script
+installs all dependencies and Playwright Chromium into that bundled runtime
+automatically (~3 min on first install).
 
 After install: **Start Menu → Job Hunter Agent** or double-click the desktop shortcut.
 
@@ -88,7 +96,7 @@ Install layout:
 
 | Location | Contents |
 | -------- | -------- |
-| `%LOCALAPPDATA%\Programs\JobHunterAgent\` | app code, templates, seed data, `.venv` |
+| `%LOCALAPPDATA%\Programs\JobHunterAgent\` | compiled app code (`.pyc`), templates, seed data, bundled Python runtime (`python\`), project metadata, bootstrap launcher |
 | `%APPDATA%\JobHunterAgent\data\` | user DB, knowledge, config, runtime (`JOB_HUNTER_DATA_DIR`) |
 | `%APPDATA%\JobHunterAgent\output\` | logs and artefacts (`JOB_HUNTER_OUTPUT_DIR`) |
 | Start Menu | Launch + Uninstall shortcuts |
@@ -110,24 +118,53 @@ Behaviour:
 - Tray icon shows in the system tray; left-click or double-click to open the app.
 - Right-click → Quit stops the server and exits.
 - A single-instance mutex prevents double-launches.
+- Telegram polling only runs while the desktop launcher is open, so bot commands are unavailable when the app is closed.
 - `JOB_HUNTER_PORT` controls the port (default `8765`).
 - On first launch the server cold-starts in up to 60 s; subsequent starts are faster.
 - If Playwright Chromium is missing a notification appears on launch; SEEK scraping will
   fail until it is installed.
 - If SEEK shows a human-verification page, enable Assisted SEEK verification in global settings and use the visible persistent browser to finish the check manually.
 
+Telegram commands while the app is open:
+
+- `/status`
+- `/summary` or `/latest`
+- `/run`
+- `/export`
+- `/export fresh`
+- `/help`
+
+The desktop installer now asks for the workspace export folder, defaulting to
+`%USERPROFILE%\Documents\Job Hunter Workspace`, and stores it in
+`%APPDATA%\JobHunterAgent\data\config\desktop.json`.
+
 #### Build the installer (developer task)
 
 Requires [Inno Setup 6](https://jrsoftware.org/isdl.php).
 
-Build it on Windows by opening `installer/setup.iss` in the Inno Setup Compiler
-and pressing Build (F9), or run:
+First, prepare the bundled Python runtime (once, and again whenever the
+pinned version in `installer/prepare_python.ps1` changes — it is not
+committed to git):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File installer\prepare_python.ps1
+```
+
+Then build it on Windows by opening `installer/setup.iss` in the Inno Setup
+Compiler and pressing Build (F9), or run:
 
 ```powershell
 & "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\setup.iss
 ```
 
 Output: `installer\dist\JobHunterAgent-Setup.exe`
+
+On WSL-backed workspaces, you can also open the build output folder in Windows
+Explorer with:
+
+```bash
+explorer.exe "$(wslpath -w installer/dist)"
+```
 
 Regenerate the tray/shortcut icon from the PNG source (run once after icon changes):
 
@@ -662,309 +699,9 @@ Expansion must preserve:
 
 # AWS Deployment Operations
 
-## Standard AWS deploy
+AWS production setup, deployment commands, diagnostics, HTTPS/ngrok notes, systemd details, persistent storage, and production health checks are maintained in:
 
-Use the AWS-side deploy helper:
+- `docs/aws-ec2-setup.md`
+- `docs/runbooks/aws-seek-assisted-browser-session.md` for SEEK assisted browser troubleshooting
 
-```bash
-use-ubuntu
-deploy-jobhunter
-```
-
-`deploy-jobhunter` updates the EC2 app from GitHub, installs declared dependencies, loads production environment variables, runs `db_seed --upgrade`, restarts `job-hunter.service`, and prints status/logs.
-
-This is the correct path for production updates. Do not manually install Python packages on AWS as a permanent fix. Missing packages must be added to `pyproject.toml`, locked with `uv.lock`, committed, and deployed through Git.
-
-## AWS status check
-
-Preferred helper:
-
-```bash
-jobhunter-status
-```
-
-Equivalent commands:
-
-```bash
-sudo systemctl status job-hunter --no-pager
-sudo journalctl -u job-hunter -n 80 --no-pager
-curl -I http://127.0.0.1:8765/start
-```
-
-Interpretation:
-
-- `systemctl status` checks service state.
-- `journalctl` shows startup/runtime errors.
-- `curl` proves FastAPI is listening and serving requests.
-
-If `curl` cannot connect, inspect the latest traceback in `journalctl` before making changes.
-
-## Runtime files during deploy
-
-Production uses `JOB_HUNTER_DATA_DIR` for live runtime data. On AWS this is `/var/lib/job-hunter/data`.
-
-The full production storage contract is:
-
-```text
-JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data
-JOB_HUNTER_OUTPUT_DIR=/var/lib/job-hunter/output
-JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/job_hunter.db
-/etc/job-hunter/job-hunter.env -> root-owned runtime config and secrets
-```
-
-`db_seed --upgrade` must ensure required repo-managed runtime files exist there, including:
-
-```text
-config/global_settings.json
-defaults/user_settings.json
-```
-
-Manual copying is only an emergency diagnostic step, not the designed deployment path.
-
-## Version-controlled EC2 helper scripts
-
-EC2 helper scripts are version-controlled under:
-
-```text
-scripts/ec2/
-```
-
-Current helpers:
-
-```text
-scripts/ec2/deploy-jobhunter.sh        # deploy/update from GitHub and health-check
-scripts/ec2/jobhunter-status.sh        # inspect service, logs, local health, public health
-scripts/ec2/install-helpers.sh         # install wrappers into /usr/local/bin
-scripts/ec2/enable-https-jobhunter.sh  # enable HTTPS with certbot/nginx for jobhunter.robvoto.com
-```
-
-Install or refresh helper commands on EC2:
-
-```bash
-cd /home/ubuntu/job-hunter-agent
-sudo bash scripts/ec2/install-helpers.sh
-```
-
-Installed commands:
-
-```text
-/usr/local/bin/deploy-jobhunter
-/usr/local/bin/jobhunter-status
-/usr/local/bin/use-ubuntu
-```
-
-After installing helpers, normal deployment remains:
-
-```bash
-use-ubuntu
-deploy-jobhunter
-```
-
-`deploy-jobhunter` intentionally waits briefly after restart before checking health because `systemctl` can report `active` before Python has finished importing and binding to port `8765`.
-
-## HTTPS enablement
-
-The app is currently healthy over HTTP when this check succeeds:
-
-```bash
-curl -I http://jobhunter.robvoto.com/start
-```
-
-For production, browser access should use HTTPS:
-
-```text
-https://jobhunter.robvoto.com/start
-```
-
-Enable HTTPS on EC2 with:
-
-```bash
-cd /home/ubuntu/job-hunter-agent
-sudo bash scripts/ec2/enable-https-jobhunter.sh
-```
-
-Prerequisites:
-
-- `jobhunter.robvoto.com` DNS points to the EC2 public IP.
-- AWS security group allows inbound `80` and `443`.
-- Nginx routes `jobhunter.robvoto.com` to `127.0.0.1:8765`.
-
-Do not expose FastAPI port `8765` publicly. HTTPS terminates at Nginx; FastAPI remains private on EC2 localhost.
-
----
-
-## Current AWS access and OAuth truth - 2026-06-10
-
-### Access method
-
-Primary AWS access is now **AWS Systems Manager Session Manager**, not direct SSH.
-
-Reason:
-
-- the home/client IP changes frequently
-- SSH allowlisting becomes unreliable
-- SSM avoids opening SSH broadly
-- SSM gives direct access to the EC2 host without changing the security group every time
-
-Normal access flow:
-
-```bash
-use-ubuntu
-cd /home/ubuntu/job-hunter-agent
-```
-
-Session Manager logs in as `ssm-user`. `use-ubuntu` switches to the `ubuntu` app owner.
-
-SSH is now a fallback/emergency path only. Do not make SSH the default operational workflow. Do not open SSH to `0.0.0.0/0`.
-
-### Current Job Hunter production URLs
-
-```text
-Public app:      https://jobhunter.robvoto.com/start
-Internal app:    http://127.0.0.1:8765/start  # only from inside EC2
-Public HTTP:     http://jobhunter.robvoto.com/start redirects/serves through Nginx
-```
-
-FastAPI must remain private on EC2 localhost. Nginx is the public front door and handles HTTPS.
-
-### HTTPS state
-
-Job Hunter HTTPS has been enabled for:
-
-```text
-jobhunter.robvoto.com
-```
-
-Browser access should use:
-
-```text
-https://jobhunter.robvoto.com/start
-```
-
-Do not test Job Hunter by using `knowme.robvoto.com`. KnowMe is a separate subdomain and requires its own app deployment, Nginx route, and certificate.
-
-### KnowMe state
-
-`knowme.robvoto.com` is reserved but is not the Job Hunter route.
-
-If `https://knowme.robvoto.com` shows `NET::ERR_CERT_COMMON_NAME_INVALID`, that does not mean Job Hunter is broken. It means the certificate/subdomain does not match KnowMe yet.
-
-KnowMe needs a separate deployment before it can be considered healthy.
-
-### Google OAuth production redirect
-
-Google login must redirect back to Job Hunter production, not ngrok and not KnowMe.
-
-Required Google OAuth redirect URI:
-
-```text
-https://jobhunter.robvoto.com/api/auth/google/callback
-```
-
-Required Google OAuth JavaScript origin:
-
-```text
-https://jobhunter.robvoto.com
-```
-
-Old ngrok callback URLs such as this are not production-safe:
-
-```text
-https://griminess-magazine-landowner.ngrok-free.dev/api/auth/google/callback
-```
-
-If login sends the browser to an ngrok URL, the Google OAuth client still has the old callback selected or the production environment still has an old base URL.
-
-Check AWS env without exposing secrets:
-
-```bash
-sudo grep -E "JOB_HUNTER_BASE_URL|JOB_HUNTER_CORS_ALLOWED_ORIGINS|GOOGLE" /etc/job-hunter/job-hunter.env | sed 's/CLIENT_SECRET=.*/CLIENT_SECRET=***/'
-```
-
-Expected:
-
-```text
-JOB_HUNTER_BASE_URL=https://jobhunter.robvoto.com
-JOB_HUNTER_CORS_ALLOWED_ORIGINS=https://jobhunter.robvoto.com
-```
-
-After changing `/etc/job-hunter/job-hunter.env`, restart and check:
-
-```bash
-sudo systemctl restart job-hunter
-jobhunter-status
-```
-
-### Latest production health checks
-
-Run from EC2:
-
-```bash
-jobhunter-status
-```
-
-Or manually:
-
-```bash
-curl -I http://127.0.0.1:8765/start
-curl -I https://jobhunter.robvoto.com/start
-```
-
-Expected healthy result is a redirect to login:
-
-```text
-HTTP 302
-location: /login?next=%2Fstart
-```
-
-That means the app is alive and auth is enforcing login correctly.
-
----
-
-## Deployment runtime path fix - 2026-06-10
-
-The live `job-hunter.service` defines these production runtime paths inline in systemd:
-
-```text
-JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data
-JOB_HUNTER_OUTPUT_DIR=/var/lib/job-hunter/output
-JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/job_hunter.db
-```
-
-These values may not appear in `/etc/job-hunter/job-hunter.env`, because that file mainly holds secrets and public URL settings.
-
-`deploy-jobhunter` must therefore apply the same production runtime path defaults before running:
-
-```bash
-python -m job_hunter_agent.db_seed --upgrade
-```
-
-Otherwise the seed step writes required runtime files into the repo `data/` folder instead of the real production data directory.
-
-The symptom was onboarding crashing with:
-
-```text
-RuntimeError: locations_au.json is missing
-```
-
-Root cause:
-
-```text
-locations_au.json existed in the repo, but not in /var/lib/job-hunter/data/knowledge/
-```
-
-Permanent fix:
-
-- `db_seed.py` includes `data/knowledge/locations_au.json` in required runtime file sync.
-- `deploy-jobhunter` exports the production runtime path defaults before seed.
-- `deploy-jobhunter` verifies `/var/lib/job-hunter/data/knowledge/locations_au.json` exists before restarting the service.
-- `install-helpers.sh` strips any UTF-8 BOM from installed helper scripts so Ubuntu executes the shebang correctly.
-
-Do not manually copy `locations_au.json` as the permanent fix. Fix repo seed/deploy logic, then run:
-
-```bash
-cd /home/ubuntu/job-hunter-agent
-git pull --ff-only
-sudo bash scripts/ec2/install-helpers.sh
-deploy-jobhunter
-```
+This `OPERATIONS.md` file is the general day-to-day operations guide. Do not duplicate detailed AWS runbook content here.

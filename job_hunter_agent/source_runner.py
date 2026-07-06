@@ -11,7 +11,6 @@ from typing import Any
 
 from job_hunter_agent.run_context import ScrapeRunContext
 from job_hunter_agent.run_control import get_run_progress, run_stop_requested, set_run_progress
-from job_hunter_agent.profile_store import GovPref, KEY_PREFER_SECTOR, normalize_sector_preference_values
 from job_hunter_agent.global_settings import get_seek_assisted_verification_enabled
 from job_hunter_agent.scrapers.apsjobs import APSJobsScraper
 from job_hunter_agent.scrapers.seek import build_seek_search_targets
@@ -185,14 +184,6 @@ def _run_linkedin_source(context: ScrapeRunContext) -> SourceRunResult:
         )
 
 
-def _government_sector_selected(profile: dict) -> bool:
-    preferences = profile.get("match_preferences", {})
-    selected = normalize_sector_preference_values(
-        preferences.get(KEY_PREFER_SECTOR) if isinstance(preferences, dict) else []
-    )
-    return GovPref.GOVERNMENT in selected
-
-
 def _run_apsjobs_source(context: ScrapeRunContext) -> SourceRunResult:
     job_history: dict[str, Any] = dict(context.job_history)
     llm_cache: dict[str, Any] = dict(context.llm_cache)
@@ -363,13 +354,15 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
 
     seek_enabled = SOURCE_SEEK in context.enabled_sources
     li_enabled = SOURCE_LINKEDIN in context.enabled_sources
-    apsjobs_enabled = _government_sector_selected(context.profile)
+    apsjobs_enabled = SOURCE_APSJOBS in context.enabled_sources
 
     print("[Seek] enabled" if seek_enabled else "[Seek] disabled in enabled_sources; skipping")
     print(
         "[LinkedIn] enabled" if li_enabled else "[LinkedIn] disabled in enabled_sources; skipping"
     )
-    print("[APSJobs] enabled" if apsjobs_enabled else "[APSJobs] disabled; government not selected")
+    print(
+        "[APSJobs] enabled" if apsjobs_enabled else "[APSJobs] disabled in enabled_sources; skipping"
+    )
 
     if run_stop_requested():
         return kept_records, audit_rows, skill_observations

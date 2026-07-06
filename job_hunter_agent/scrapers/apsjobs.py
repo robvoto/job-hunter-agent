@@ -11,7 +11,11 @@ from urllib.parse import urljoin, urlsplit
 from playwright.sync_api import sync_playwright
 
 from job_hunter_agent.fit_scoring import fit_score_and_breakdown_displayed
-from job_hunter_agent.global_settings import DEFAULT_SEARCH_SETTINGS, KEY_DATE_RANGE_DAYS
+from job_hunter_agent.global_settings import (
+    DEFAULT_SEARCH_SETTINGS,
+    KEY_APSJOBS_RESULTS_PER_SEARCH,
+    KEY_DATE_RANGE_DAYS,
+)
 from job_hunter_agent.io_utils import DEBUG_CAPTURE_SOURCE_PAYLOADS, write_source_payload_debug
 from job_hunter_agent.job_review_pipeline import (
     ReviewPipelineContext,
@@ -290,6 +294,32 @@ def _extract_job_payload(page, *, job_url: str, anchor_text: str, run_iso: str) 
     }
 
 
+def build_apsjobs_search_targets(search_settings: dict) -> tuple[str, list[dict]]:
+    """Build APSJobs search targets from search settings.
+
+    Returns the trimmed keywords string and one target per configured location
+    (or a single location-less target when none are configured).
+    """
+    keywords = str(search_settings.get("keywords") or "").strip()
+    locations = [
+        str(location).strip()
+        for location in search_settings.get("locations", [])
+        if str(location).strip()
+    ]
+    results_wanted = int(
+        search_settings.get(
+            KEY_APSJOBS_RESULTS_PER_SEARCH,
+            DEFAULT_SEARCH_SETTINGS[KEY_APSJOBS_RESULTS_PER_SEARCH],
+        )
+        or DEFAULT_SEARCH_SETTINGS[KEY_APSJOBS_RESULTS_PER_SEARCH]
+    )
+    targets = [
+        {"search_term": keywords, "location": location, "results_wanted": results_wanted}
+        for location in locations
+    ] or [{"search_term": keywords, "location": "", "results_wanted": results_wanted}]
+    return keywords, targets
+
+
 class APSJobsScraper(BaseJobScraper):
     source_name = SOURCE_APSJOBS
 
@@ -299,20 +329,10 @@ class APSJobsScraper(BaseJobScraper):
         skill_observations: List[dict] = []
 
         search_settings = get_search_settings(self.profile)
-        keywords = str(search_settings.get("keywords") or "").strip()
-        locations = [
-            str(location).strip()
-            for location in search_settings.get("locations", [])
-            if str(location).strip()
-        ]
+        keywords, targets = build_apsjobs_search_targets(search_settings)
         if not keywords:
             logger.info("[APSJobs] no search keywords configured; skipping")
             return kept_records, audit_rows, skill_observations
-
-        targets = [
-            {"search_term": keywords, "location": location, "results_wanted": 25}
-            for location in locations
-        ] or [{"search_term": keywords, "location": "", "results_wanted": 25}]
 
         review_context = ReviewPipelineContext(
             profile=self.profile,

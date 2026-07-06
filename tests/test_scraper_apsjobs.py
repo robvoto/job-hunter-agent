@@ -131,3 +131,36 @@ def test_extract_job_payload_uses_visible_text_and_shared_key_logic(monkeypatch)
     assert payload["posted_text"] == "posted 3 hours ago"
     assert payload["posted_age_days"] == pytest.approx(3 / 24)
     assert payload["source_metadata"]["platform"] == "apsjobs"
+
+
+def test_build_apsjobs_search_targets_uses_configured_default_when_unset():
+    keywords, targets = apsjobs_module.build_apsjobs_search_targets(
+        {"keywords": "data analyst", "locations": []}
+    )
+
+    assert keywords == "data analyst"
+    assert targets == [
+        {
+            "search_term": "data analyst",
+            "location": "",
+            "results_wanted": apsjobs_module.DEFAULT_SEARCH_SETTINGS[
+                apsjobs_module.KEY_APSJOBS_RESULTS_PER_SEARCH
+            ],
+        }
+    ]
+
+
+def test_build_apsjobs_search_targets_honours_override_per_location():
+    keywords, targets = apsjobs_module.build_apsjobs_search_targets(
+        {
+            "keywords": "policy officer",
+            "locations": ["Canberra", "Sydney"],
+            apsjobs_module.KEY_APSJOBS_RESULTS_PER_SEARCH: 40,
+        }
+    )
+
+    assert keywords == "policy officer"
+    assert targets == [
+        {"search_term": "policy officer", "location": "Canberra", "results_wanted": 40},
+        {"search_term": "policy officer", "location": "Sydney", "results_wanted": 40},
+    ]

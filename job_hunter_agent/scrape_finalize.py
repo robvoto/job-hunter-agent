@@ -19,13 +19,14 @@ from job_hunter_agent.io_utils import (
     write_run_stats,
 )
 from job_hunter_agent.job_identity import deduplicate_across_sources
-from job_hunter_agent.paths import get_workspace_results_path
+from job_hunter_agent.paths import OUTPUT_DIR, get_workspace_results_path
 from job_hunter_agent.posting_utils import parse_timestamp
 from job_hunter_agent.review_insights import build_review_data
 from job_hunter_agent.run_context import ScrapeRunContext
 from job_hunter_agent.run_control import run_stop_requested
 
 NO_FRESH_CARDS_ERROR = "No fresh cards were captured in this run."
+RUN_SUMMARY_PATH = OUTPUT_DIR / "last_run_summary.txt"
 
 
 def _load_workspace_pool() -> list[dict]:
@@ -230,6 +231,7 @@ def _log_run_summary(run_stats: dict, audit_rows: list[dict]) -> None:
 
 
 def _print_run_summary(run_stats: dict) -> None:
+    run_id = str(run_stats.get("last_run_attempt_at") or "").strip()
     pages = run_stats.get("page_count", 0)
     seen = run_stats.get("cards_seen", 0)
     read = run_stats.get("cards_read", run_stats.get("detail_fetches", 0))
@@ -239,12 +241,27 @@ def _print_run_summary(run_stats: dict) -> None:
     llm_cost = float(run_stats.get("llm_total_cost_usd", 0.0) or 0.0)
     llm_truncations = int(run_stats.get("llm_truncation_count", 0) or 0)
     duration = _format_duration(run_stats)
+    source_breakdown = run_stats.get("source_breakdown") or []
 
     bar = "=" * 52
     lines = [f"\n{bar}", "  Run complete", f"  Pages read: {pages}"]
+    if run_id:
+        lines.append(f"  Run ID:     {run_id}")
     lines.append(
         f"  Jobs seen:  {seen}  →  descriptions read: {read}  →  kept: {kept}  |  rejected: {rejected}"
     )
+    if source_breakdown:
+        lines.append("  By platform:")
+        for item in source_breakdown:
+            source_name = str(item.get("source") or "unknown").strip().upper()
+            seen_count = item.get("seen", 0)
+            read_count = item.get("read", 0)
+            pages_count = item.get("pages", 0)
+            kept_count = item.get("kept", 0)
+            rejected_count = item.get("rejected", 0)
+            lines.append(
+                f"    - {source_name}: seen={seen_count} read={read_count} pages={pages_count} kept={kept_count} rejected={rejected_count}"
+            )
     if flagged:
         lines.append(f"  Flagged:    {flagged}  (review suggestions available)")
     lines.append(f"  Total LLM cost: ${llm_cost:.4f}")
@@ -254,12 +271,28 @@ def _print_run_summary(run_stats: dict) -> None:
     flags = _format_issue_flag_summary(run_stats)
     if flags.strip():
         lines.append(f"  Flags:     {flags}")
+    errors = [str(item).strip() for item in run_stats.get("errors", []) if str(item).strip()]
+    if run_stats.get("last_run_error"):
+        errors.append(str(run_stats.get("last_run_error")).strip())
+    if errors:
+        lines.append("  Errors:")
+        for error in errors:
+            lines.append(f"    - {error}")
+    warnings = [str(item).strip() for item in run_stats.get("warnings", []) if str(item).strip()]
+    if warnings:
+        lines.append("  Warnings:")
+        for warning in warnings:
+            lines.append(f"    - {warning}")
     if DEBUG_MODE:
         lines.append(
             f"  (debug) pages_read={pages} cards_seen={seen} cards_read={read} kept={kept} rejected={rejected} flags={flagged} truncations={llm_truncations} cost=${llm_cost:.6f}"
         )
     lines.append(bar)
-    logger.info("\n".join(lines))
+    summary_text = "\n".join(lines)
+    logger.info(summary_text)
+    RUN_SUMMARY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    RUN_SUMMARY_PATH.write_text(summary_text + "\n", encoding="utf-8")
+    print(summary_text)
 
 
 def finalize_scrape_run(
@@ -297,6 +330,9 @@ def finalize_scrape_run(
             "last_run_attempt_at": context.run_iso,
         }
 
+        if not run_was_stopped:
+            run_stats["last_run_error"] = NO_FRESH_CARDS_ERROR
+
         _log_run_summary(run_stats, [])
         _print_run_summary(run_stats)
 
@@ -328,7 +364,6 @@ def finalize_scrape_run(
         if run_was_stopped:
             logger.info("Run stopped before any fresh cards were captured.")
         else:
-            run_stats["last_run_error"] = NO_FRESH_CARDS_ERROR
             logger.error("[RUN][ERROR] %s", NO_FRESH_CARDS_ERROR)
 
         write_review_data(build_review_data(context.previous_audit_rows, [], context.profile))

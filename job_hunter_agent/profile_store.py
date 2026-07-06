@@ -24,6 +24,7 @@ from job_hunter_agent.global_settings import (
     DEFAULT_ONBOARDING_SETTINGS,
     DEFAULT_PREFERENCE_WEIGHTS,
     DEFAULT_SEARCH_SETTINGS,
+    KEY_APSJOBS_RESULTS_PER_SEARCH,
     KEY_CAPABILITY_ALIAS_LIMIT,
     KEY_CAPABILITY_STRENGTH_PRESETS,
     KEY_DATE_RANGE_DAYS,
@@ -849,6 +850,25 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
             KEY_LINKEDIN_RESULTS_PER_SEARCH
         ]
         print(f"[PROFILE_STORE][WARN] Failed to normalise linkedin_results_per_search: {exc}")
+
+    try:
+        merged[KEY_APSJOBS_RESULTS_PER_SEARCH] = max(
+            search_limits[KEY_APSJOBS_RESULTS_PER_SEARCH]["min"],
+            min(
+                int(
+                    merged.get(
+                        KEY_APSJOBS_RESULTS_PER_SEARCH,
+                        DEFAULT_SEARCH_SETTINGS[KEY_APSJOBS_RESULTS_PER_SEARCH],
+                    )
+                ),
+                search_limits[KEY_APSJOBS_RESULTS_PER_SEARCH]["max"],
+            ),
+        )
+    except Exception as exc:
+        merged[KEY_APSJOBS_RESULTS_PER_SEARCH] = DEFAULT_SEARCH_SETTINGS[
+            KEY_APSJOBS_RESULTS_PER_SEARCH
+        ]
+        print(f"[PROFILE_STORE][WARN] Failed to normalise apsjobs_results_per_search: {exc}")
 
     merged[KEY_SORT_NEWEST_FIRST] = bool(merged.get(KEY_SORT_NEWEST_FIRST, True))
     merged["keywords"] = str(merged.get("keywords") or "").strip()

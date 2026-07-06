@@ -392,6 +392,16 @@ def _render_template_with_locations(
         )
 
         html = html.replace(
+            "__JOB_HUNTER_SEARCH_SOURCE_APSJOBS_TOGGLE_LABEL__",
+            search_source_labels["apsjobs_toggle_label"],
+        )
+
+        html = html.replace(
+            "__JOB_HUNTER_SEARCH_SOURCE_APSJOBS_TOGGLE_HELP__",
+            search_source_labels["apsjobs_toggle_help"],
+        )
+
+        html = html.replace(
             "__JOB_HUNTER_SETTINGS_ALERTS_SECTION_TITLE__", settings_alerts_labels["section_title"]
         )
 

@@ -223,6 +223,8 @@ _SEARCH_SOURCE_LABEL_KEYS = (
     "seek_toggle_help",
     "linkedin_toggle_label",
     "linkedin_toggle_help",
+    "apsjobs_toggle_label",
+    "apsjobs_toggle_help",
 )
 
 _SETTINGS_ALERTS_LABEL_KEYS = (

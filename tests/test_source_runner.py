@@ -310,9 +310,8 @@ def test_seek_headless_bot_challenge_without_assisted_mode_does_not_retry(monkey
     assert result.kept_records == []
 
 
-def test_apsjobs_runs_when_government_selected(monkeypatch):
-    context = _make_context([])
-    context.profile = {"match_preferences": {"prefer_sector": ["government"]}}
+def test_apsjobs_runs_when_enabled_in_sources(monkeypatch):
+    context = _make_context([SOURCE_APSJOBS])
     aps_called = []
 
     monkeypatch.setattr(source_runner, "_run_seek_source", lambda ctx: _seek_result())
@@ -326,9 +325,8 @@ def test_apsjobs_runs_when_government_selected(monkeypatch):
     assert aps_called == [True]
 
 
-def test_apsjobs_skips_when_government_not_selected(monkeypatch):
-    context = _make_context([])
-    context.profile = {"match_preferences": {"prefer_sector": ["private"]}}
+def test_apsjobs_skips_when_not_enabled_in_sources(monkeypatch):
+    context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
     aps_called = []
 
     monkeypatch.setattr(source_runner, "_run_seek_source", lambda ctx: _seek_result())

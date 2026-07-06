@@ -201,6 +201,7 @@ def test_finalize_scrape_run_preserves_previous_workspace_when_no_audit_rows(
     context.previous_run_stats = {"run_started_at": "2026-05-15T08:12:40"}
 
     workspace_path = tmp_path / "workspace.html"
+    summary_path = tmp_path / "last_run_summary.txt"
 
     calls: list[tuple[str, object]] = []
 
@@ -208,6 +209,7 @@ def test_finalize_scrape_run_preserves_previous_workspace_when_no_audit_rows(
         conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", ("test_user",))
 
     monkeypatch.setattr(scrape_finalize, "get_workspace_results_path", lambda: workspace_path)
+    monkeypatch.setattr(scrape_finalize, "RUN_SUMMARY_PATH", summary_path)
 
     monkeypatch.setattr(scrape_finalize, "deduplicate_across_sources", lambda records: records)
 
@@ -278,6 +280,10 @@ def test_finalize_scrape_run_preserves_previous_workspace_when_no_audit_rows(
     assert "[RUN][ERROR] No fresh cards were captured in this run." in log_text
 
     assert "previous workspace state was preserved" in log_text
+
+    assert summary_path.exists()
+    summary_text = summary_path.read_text(encoding="utf-8")
+    assert "No fresh cards were captured in this run." in summary_text
 
 
 def test_finalize_scrape_run_marks_empty_first_run_as_error(monkeypatch, tmp_path, capsys, caplog):
@@ -461,13 +467,15 @@ def test_build_run_stats_counts_unique_pages_across_sources():
     assert stats["onet_match_count"] == 1
 
 
-def test_print_run_summary_uses_explicit_pages_and_cost_labels(caplog):
+def test_print_run_summary_uses_explicit_pages_and_cost_labels(caplog, tmp_path, monkeypatch, capsys):
     import logging as _logging
 
     caplog.set_level(_logging.INFO)
+    monkeypatch.setattr(scrape_finalize, "RUN_SUMMARY_PATH", tmp_path / "last_run_summary.txt")
 
     scrape_finalize._print_run_summary(
         {
+            "last_run_attempt_at": "2026-05-16T08:12:40+00:00",
             "page_count": 3,
             "cards_seen": 7,
             "cards_read": 5,
@@ -483,3 +491,54 @@ def test_print_run_summary_uses_explicit_pages_and_cost_labels(caplog):
     assert "Pages read: 3" in log_text
     assert "Total LLM cost: $0.1235" in log_text
     assert "LLM truncations: 4" in log_text
+
+    summary_path = tmp_path / "last_run_summary.txt"
+    assert summary_path.exists()
+    summary_text = summary_path.read_text(encoding="utf-8")
+    assert "Run ID:     2026-05-16T08:12:40+00:00" in summary_text
+    assert "Total LLM cost: $0.1235" in summary_text
+    assert "Jobs seen:  7" in summary_text
+
+    captured = capsys.readouterr()
+    assert "Run complete" in captured.out
+    assert "Total LLM cost: $0.1235" in captured.out
+
+
+def test_print_run_summary_includes_source_breakdown(caplog, tmp_path, monkeypatch, capsys):
+    import logging as _logging
+
+    caplog.set_level(_logging.INFO)
+    monkeypatch.setattr(scrape_finalize, "RUN_SUMMARY_PATH", tmp_path / "last_run_summary.txt")
+
+    scrape_finalize._print_run_summary(
+        {
+            "last_run_attempt_at": "2026-05-16T08:12:40+00:00",
+            "page_count": 2,
+            "cards_seen": 5,
+            "cards_read": 5,
+            "kept_count": 2,
+            "rejected_count": 3,
+            "cards_with_flags_count": 0,
+            "llm_total_cost_usd": 0.0,
+            "llm_truncation_count": 0,
+            "source_breakdown": [
+                {"source": "seek", "seen": 3, "read": 2, "pages": 2, "kept": 1, "rejected": 2},
+                {"source": "linkedin", "seen": 2, "read": 1, "pages": 1, "kept": 1, "rejected": 1},
+            ],
+            "last_run_error": "No fresh cards were captured in this run.",
+            "warnings": ["LinkedIn timed out", "SEEK had a challenge page"],
+        }
+    )
+
+    captured = capsys.readouterr()
+    assert "By platform" in captured.out
+    assert "SEEK" in captured.out
+    assert "LINKEDIN" in captured.out
+    assert "seen=3" in captured.out
+    assert "pages=2" in captured.out
+    assert "read=2" in captured.out
+    assert "kept=1" in captured.out
+    assert "Errors:" in captured.out
+    assert "No fresh cards were captured in this run." in captured.out
+    assert "Warnings:" in captured.out
+    assert "LinkedIn timed out" in captured.out

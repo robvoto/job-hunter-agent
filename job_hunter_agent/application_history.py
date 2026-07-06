@@ -289,7 +289,7 @@ def match_application_history(job_record: dict, rejection_rows: list[dict]) -> d
     if best_score < 2:
         return None
 
-    return dict(best)
+    return best
 
 
 def enrich_records_with_application_history(

@@ -60,3 +60,19 @@ def test_save_user_settings_logs_before_and_after_and_redacts_secrets(
     assert any("[USER_SETTINGS] settings changed" in message for message in messages)
     assert any("workspace.minimum_score: 30 -> 72" in message for message in messages)
     assert any("telegram.bot_token: <redacted> -> <redacted>" in message for message in messages)
+
+
+def test_save_user_settings_preserves_existing_fields_on_partial_update(isolated_db):
+    user_settings.save_user_settings(
+        None,
+        {
+            "workspace": {"minimum_score": 55},
+            "telegram": {"enabled": False},
+        },
+    )
+
+    user_settings.save_user_settings(None, {"telegram": {"enabled": True}})
+
+    saved = user_settings.load_user_settings(None, create_if_missing=False)
+    assert saved["workspace"]["minimum_score"] == 55
+    assert saved["telegram"]["enabled"] is True

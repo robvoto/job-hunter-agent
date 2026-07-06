@@ -225,7 +225,8 @@ def save_user_settings(user_id: str | None, payload: Any) -> dict[str, Any]:
         current = load_user_settings(uid, create_if_missing=False)
     except Exception:
         current = None
-    normalized = normalize_user_settings(payload)
+    merged = deep_merge(copy.deepcopy(current or {}), payload if isinstance(payload, dict) else {})
+    normalized = normalize_user_settings(merged)
     ensure_user_row(uid)
     with db_conn() as conn:
         conn.execute(
@@ -241,6 +242,16 @@ def save_user_settings(user_id: str | None, payload: Any) -> dict[str, Any]:
         after=normalized,
     )
     return normalized
+
+
+def list_user_setting_user_ids() -> list[str]:
+    from job_hunter_agent.database import db_conn
+
+    with db_conn() as conn:
+        rows = conn.execute(
+            "SELECT user_id FROM user_settings ORDER BY updated_at DESC, user_id ASC"
+        ).fetchall()
+    return [str(row["user_id"]).strip() for row in rows if str(row["user_id"]).strip()]
 
 
 def get_workspace_minimum_score(settings: Any | None = None, *, user_id: str | None = None) -> int:
