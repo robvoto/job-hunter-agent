@@ -28,6 +28,7 @@ from job_hunter_agent.history import (
 )
 from job_hunter_agent.io_utils import load_audit_rows
 from job_hunter_agent.job_identity import deduplicate_across_sources, normalize_job_key
+from job_hunter_agent.llm_review_state import has_complete_llm_keep_data
 from job_hunter_agent.match_labels import score_to_match_label
 from job_hunter_agent.paths import REPO_ROOT
 from job_hunter_agent.posting_utils import days_since, parse_timestamp
@@ -156,6 +157,13 @@ def is_workspace_eligible(
     profile: Optional[dict] = None,
     workspace_min_score: Optional[int] = None,
 ) -> bool:
+    if not has_complete_llm_keep_data(record):
+        logger.error(
+            "[WORKSPACE_ELIGIBLE][LLM_INCOMPLETE] job=%s title=%r — excluded from workspace: complete LLM keep data is required",
+            record.get("job_key", "<unknown>"),
+            str(record.get("title") or "").strip(),
+        )
+        return False
 
     ok_title, _ = passes_title_filters(str(record.get("title") or ""))
 

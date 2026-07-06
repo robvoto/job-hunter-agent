@@ -475,35 +475,8 @@ def _fit_summary_candidates_from_coverage(raw_coverage: Any) -> list[str]:
     return [item[3] for item in candidates[:5]]
 
 
-def _fit_summary_candidates_from_fit_highlights(fit_highlights: list[str]) -> list[str]:
-    candidates: list[str] = []
-    seen: set[str] = set()
-
-    for item in fit_highlights:
-        highlight = compact_whitespace(item)
-        if not highlight:
-            continue
-        requirement_match = re.match(
-            r"the ad asks for\s+(.*?),\s+and your profile shows this experience\.?$",
-            highlight,
-            re.IGNORECASE,
-        )
-        candidate = compact_whitespace(requirement_match.group(1)) if requirement_match else highlight
-        normalized = candidate.lower()
-        if normalized in seen:
-            continue
-        seen.add(normalized)
-        candidates.append(candidate)
-        if len(candidates) >= 5:
-            break
-
-    return candidates
-
-
-def _build_fit_summary_text(raw_coverage: Any, fit_highlights: list[str]) -> str:
+def _build_fit_summary_text(raw_coverage: Any) -> str:
     summary_items = _fit_summary_candidates_from_coverage(raw_coverage)
-    if not summary_items:
-        summary_items = _fit_summary_candidates_from_fit_highlights(fit_highlights)
     if not summary_items:
         return ""
 
@@ -1326,7 +1299,7 @@ def render_job_card(
         note_html = f'<div class="job-note">{repost_message}</div>'
     reviewed_signal_matches = reviewed_signal_match_summary(display_record, scoring_profile)
     insight_sections = []
-    fit_summary_text = _build_fit_summary_text(display_record.get(RECORD_REQUIREMENT_COVERAGE_KEY), fit_highlights)
+    fit_summary_text = _build_fit_summary_text(display_record.get(RECORD_REQUIREMENT_COVERAGE_KEY))
     if fit_summary_text or visible_reasons:
         visible_reasons_html = (
             f"<ul>{''.join(f'<li>{safe_html(item)}</li>' for item in visible_reasons)}</ul>"

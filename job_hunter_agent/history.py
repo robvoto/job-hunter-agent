@@ -11,6 +11,7 @@ from job_hunter_agent.global_settings import (
     get_repeated_listing_min_span_days,
     get_repeated_listing_min_times_seen,
 )
+from job_hunter_agent.llm_review_state import has_complete_llm_keep_data
 from job_hunter_agent.posting_utils import parse_timestamp
 from job_hunter_agent.record_schema import (
     RECORD_FIT_LABEL_KEY,
@@ -94,6 +95,9 @@ def can_reuse_kept_job(history_entry: dict, record: dict, profile: Optional[dict
     snapshot = history_entry.get("last_kept_snapshot")
 
     if not isinstance(snapshot, dict):
+        return False
+
+    if not has_complete_llm_keep_data(snapshot):
         return False
 
     if not record.get("job_key"):

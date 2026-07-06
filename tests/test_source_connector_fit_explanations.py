@@ -1784,8 +1784,18 @@ def test_is_workspace_eligible_uses_saved_workspace_minimum_score(monkeypatch):
 
     from job_hunter_agent.workspace_service import is_workspace_eligible
 
-    assert is_workspace_eligible({"title": "Business Analyst", "score": 60}) is True
-    assert is_workspace_eligible({"title": "Business Analyst", "score": 59}) is False
+    valid_record = {
+        "title": "Business Analyst",
+        "score": 60,
+        "llm_decision": "KEEP",
+        "llm_fit_grade": "STRONG",
+        "requirement_coverage": [
+            {"requirement": "Business analysis", "importance": "mandatory", "status": "supported"}
+        ],
+    }
+
+    assert is_workspace_eligible(valid_record) is True
+    assert is_workspace_eligible({**valid_record, "score": 59}) is False
 
 
 def test_score_filter_thresholds_hide_lowest_band_when_no_borderline_roles():
@@ -2078,7 +2088,7 @@ def test_render_job_card_fit_breakdown_starts_with_plain_english_summary_from_re
     assert "SAP certification" not in expected_summary
 
 
-def test_render_job_card_fit_breakdown_falls_back_to_visible_highlights_when_requirement_coverage_missing():
+def test_render_job_card_fit_breakdown_does_not_invent_summary_when_requirement_coverage_missing():
     html = workspace_renderer.render_job_card(
         {
             "job_key": "test-fit-summary-fallback",
@@ -2114,13 +2124,60 @@ def test_render_job_card_fit_breakdown_falls_back_to_visible_highlights_when_req
         debug_mode=False,
     )
 
-    assert "This role looks like a good fit because the ad asks for " in html
-    assert "and the candidate profile shows support for those areas." in html
+    assert "job-fit-summary" not in html
     assert "Base fit" not in html
     assert "The ad asks for Agile methodologies, and your profile shows this experience." in html
-    assert html.index("This role looks like a good fit because the ad asks for ") < html.index(
-        "The ad asks for Agile methodologies, and your profile shows this experience."
+    assert "Why this is a good fit" in html
+
+
+def test_workspace_record_sets_exclude_kept_jobs_without_complete_llm_data(monkeypatch):
+    monkeypatch.setattr(workspace_service, "passes_title_filters", lambda title: (True, "OK"))
+    monkeypatch.setattr(
+        workspace_service, "fit_score_displayed", lambda record, profile=None: int(record["score"])
     )
+
+    records = [
+        {
+            "job_key": "complete-keep",
+            "score": 90,
+            "posted_age_days": 0.1,
+            "times_viewed": 0,
+            "title": "Business Analyst",
+            "llm_decision": "KEEP",
+            "llm_fit_grade": "STRONG",
+            "requirement_coverage": [
+                {
+                    "requirement": "Stakeholder engagement",
+                    "importance": "mandatory",
+                    "status": "supported",
+                }
+            ],
+        },
+        {
+            "job_key": "incomplete-keep",
+            "score": 99,
+            "posted_age_days": 0.2,
+            "times_viewed": 0,
+            "title": "Business Analyst",
+            "llm_decision": "KEEP",
+            "llm_fit_grade": "STRONG",
+            "requirement_coverage": [],
+        },
+    ]
+
+    workspace_records = workspace_service.build_workspace_record_sets(
+        records,
+        job_history={},
+        applied_job_keys=set(),
+        hidden_job_keys=set(),
+        reference_time=datetime(2026, 4, 21),
+        scoring_profile={"match_levels": []},
+        debug_mode=False,
+    )
+
+    assert [record["job_key"] for record in workspace_records["current_records"]] == [
+        "complete-keep"
+    ]
 
 
 def test_posted_filter_options_show_explicit_day_windows():

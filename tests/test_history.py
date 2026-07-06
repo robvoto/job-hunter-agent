@@ -7,6 +7,7 @@ from job_hunter_agent.record_schema import (
     RECORD_DECISION_KEY,
     RECORD_JOB_KEY,
     RECORD_LAST_KEPT_SNAPSHOT_KEY,
+    RECORD_REQUIREMENT_COVERAGE_KEY,
     RECORD_URL_KEY,
 )
 
@@ -19,6 +20,11 @@ def test_history_reuse_with_url_variation():
         RECORD_JOB_KEY: original_key,
         RECORD_URL_KEY: "https://www.seek.com.au/job/12345",
         RECORD_DECISION_KEY: "KEEP",
+        "llm_decision": "KEEP",
+        "llm_fit_grade": "STRONG",
+        RECORD_REQUIREMENT_COVERAGE_KEY: [
+            {"requirement": "Business analysis", "importance": "mandatory", "status": "supported"}
+        ],
         "title": "Software Engineer",
         "company": "Tech Corp",
     }
@@ -36,6 +42,27 @@ def test_history_reuse_with_url_variation():
         "company": "Tech Corp",
     }
     assert can_reuse_kept_job(entry, new_record) is True
+
+
+def test_history_reuse_requires_complete_llm_keep_data():
+    entry = {
+        "times_kept": 1,
+        RECORD_LAST_KEPT_SNAPSHOT_KEY: {
+            "job_key": "seek:12345",
+            "llm_decision": "KEEP",
+            "llm_fit_grade": "STRONG",
+            RECORD_REQUIREMENT_COVERAGE_KEY: [],
+        },
+    }
+
+    record = {
+        RECORD_JOB_KEY: "seek:12345",
+        RECORD_URL_KEY: "https://seek.com.au/job/12345",
+        "title": "Business Analyst",
+        "company": "Acme",
+    }
+
+    assert can_reuse_kept_job(entry, record) is False
 
 
 def test_identity_collision_prevention():
