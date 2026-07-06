@@ -231,8 +231,16 @@ def _log_run_summary(run_stats: dict, audit_rows: list[dict]) -> None:
 
 
 def _print_run_summary(run_stats: dict) -> None:
+    import sys
+    
     run_id = str(run_stats.get("last_run_attempt_at") or "").strip()
+    source_breakdown = run_stats.get("source_breakdown") or []
+    
+    # Calculate pages from source_breakdown if not explicitly set
     pages = run_stats.get("page_count", 0)
+    if pages == 0 and source_breakdown:
+        pages = sum(item.get("pages", 0) for item in source_breakdown)
+    
     seen = run_stats.get("cards_seen", 0)
     read = run_stats.get("cards_read", run_stats.get("detail_fetches", 0))
     kept = run_stats.get("kept_count", 0)
@@ -241,7 +249,6 @@ def _print_run_summary(run_stats: dict) -> None:
     llm_cost = float(run_stats.get("llm_total_cost_usd", 0.0) or 0.0)
     llm_truncations = int(run_stats.get("llm_truncation_count", 0) or 0)
     duration = _format_duration(run_stats)
-    source_breakdown = run_stats.get("source_breakdown") or []
 
     bar = "=" * 52
     lines = [f"\n{bar}", "  Run complete", f"  Pages read: {pages}"]
@@ -292,7 +299,11 @@ def _print_run_summary(run_stats: dict) -> None:
     logger.info(summary_text)
     RUN_SUMMARY_PATH.parent.mkdir(parents=True, exist_ok=True)
     RUN_SUMMARY_PATH.write_text(summary_text + "\n", encoding="utf-8")
-    print(summary_text)
+    
+    # Print to stderr with visual markers so it stands out
+    marker = "\n" + ("★" * 60) + "\n"
+    sys.stderr.write(marker + summary_text + "\n" + ("★" * 60) + "\n")
+    sys.stderr.flush()
 
 
 def finalize_scrape_run(
@@ -409,6 +420,30 @@ def finalize_scrape_run(
 
     if no_fresh_cards:
         run_stats["last_run_error"] = NO_FRESH_CARDS_ERROR
+
+    # Build source_breakdown from audit rows
+    source_metrics = {}
+    for row in audit_rows:
+        source = str(row.get("source") or "unknown").strip().lower()
+        if source not in source_metrics:
+            source_metrics[source] = {
+                "source": source.upper(),
+                "seen": 0,
+                "read": 0,
+                "pages": 0,
+                "kept": 0,
+                "rejected": 0,
+            }
+        source_metrics[source]["seen"] += 1
+        if row.get("detail_fetched"):
+            source_metrics[source]["read"] += 1
+        source_metrics[source]["pages"] += row.get("pages_processed", 1)
+        if row.get("outcome") == "kept":
+            source_metrics[source]["kept"] += 1
+        elif row.get("outcome") in ("rejected", "filtered"):
+            source_metrics[source]["rejected"] += 1
+    
+    run_stats["source_breakdown"] = list(source_metrics.values())
 
     workspace_records = workspace_service.build_workspace_record_sets(
         merged_pool,

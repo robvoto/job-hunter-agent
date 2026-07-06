@@ -26,7 +26,8 @@
     "title_secondary": 4,
     "content_ok": 3,
     "description_capture_incomplete": -8,
-    "viewed_by_user": -3
+    "viewed_by_user": -3,
+    "easy_apply_bonus": 3
   },
   "llm_grade_points": {
     "description": "Base additive points for each LLM grade. These anchor the score in the correct band but are intentionally modest — supporting signals from title, capability support, and preferences move the score within the band defined by llm_grade_bands.",

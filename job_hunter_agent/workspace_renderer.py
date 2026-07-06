@@ -64,6 +64,9 @@ from job_hunter_agent.profile_store import (
     normalize_engagement_type_preferences,
 )
 from job_hunter_agent.record_schema import (
+    APPLY_METHOD_EASY_APPLY,
+    APPLY_METHOD_QUICK_APPLY,
+    RECORD_APPLY_METHOD_KEY,
     RECORD_DUPLICATE_LINKS_KEY,
     RECORD_JOB_REQUIREMENTS_KEY,
     RECORD_LLM_COST_USD_KEY,
@@ -931,6 +934,35 @@ def render_job_card(
     badges.append(
         render_badge(source_label, f"badge-source-{source}", f"Sourced from {source_label}.")
     )
+    apply_method = str(record.get(RECORD_APPLY_METHOD_KEY) or "").strip()
+    if apply_method == APPLY_METHOD_EASY_APPLY:
+        badges.append(
+            render_badge(
+                _workspace_label(
+                    "workspace_card_labels", "apply_method_easy_apply_badge", "Easy Apply"
+                ),
+                "badge-apply-method",
+                _workspace_label(
+                    "workspace_card_labels",
+                    "apply_method_easy_apply_tooltip",
+                    "Apply directly on the job board with one click.",
+                ),
+            )
+        )
+    elif apply_method == APPLY_METHOD_QUICK_APPLY:
+        badges.append(
+            render_badge(
+                _workspace_label(
+                    "workspace_card_labels", "apply_method_quick_apply_badge", "Quick Apply"
+                ),
+                "badge-apply-method",
+                _workspace_label(
+                    "workspace_card_labels",
+                    "apply_method_quick_apply_tooltip",
+                    "Apply directly on the job board without leaving the site.",
+                ),
+            )
+        )
     channel_kind = channel_signal.get("kind", "unknown")
     if channel_kind == "agency_or_recruiter":
         badges.append(
@@ -1744,7 +1776,7 @@ def render_job_card(
     card_dom_id = _workspace_job_card_id(job_key)
 
     return (
-        f'<article id="{safe_html(card_dom_id)}" class="{safe_html(card_classes)}" data-fit-score="{fit_points}" data-posted-age="{posted_age_days if posted_age_days is not None else 9999}" data-salary-sort="{salary_value}" data-salary-fit="{safe_html(salary_fit_state)}" data-work-mode="{safe_html(work_mode.lower())}" data-work-type="{safe_html(display_work_type_label(record).lower())}" data-viewed="{1 if seen_by_you else 0}" data-record-kind="{record_kind}" data-fit-label="{safe_html(fit_label.lower())}" data-title-search="{safe_html((record.get("title") or "").lower())}" data-company-search="{safe_html(company_display.lower())}" data-source="{safe_html(source)}">'
+        f'<article id="{safe_html(card_dom_id)}" class="{safe_html(card_classes)}" data-fit-score="{fit_points}" data-posted-age="{posted_age_days if posted_age_days is not None else 9999}" data-salary-sort="{salary_value}" data-salary-fit="{safe_html(salary_fit_state)}" data-work-mode="{safe_html(work_mode.lower())}" data-work-type="{safe_html(display_work_type_label(record).lower())}" data-viewed="{1 if seen_by_you else 0}" data-record-kind="{record_kind}" data-fit-label="{safe_html(fit_label.lower())}" data-title-search="{safe_html((record.get("title") or "").lower())}" data-company-search="{safe_html(company_display.lower())}" data-source="{safe_html(source)}" data-apply-method="{safe_html(apply_method or "unknown")}">'
         f'<div class="job-badges">{"".join(badges)}</div>'
         '<div class="job-header-row">'
         '<div class="job-header-copy">'

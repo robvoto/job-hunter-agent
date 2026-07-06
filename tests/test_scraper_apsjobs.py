@@ -73,6 +73,78 @@ class _FakePage:
         return f"<html><body>{self._body_text}</body></html>"
 
 
+class _FakeVisibilityElement:
+    def __init__(self, visible: bool):
+        self._visible = visible
+
+    def is_visible(self):
+        return self._visible
+
+
+class _FakeVisibilityLocator:
+    def __init__(self, elements: list[_FakeVisibilityElement]):
+        self._elements = elements
+
+    def count(self):
+        return len(self._elements)
+
+    def nth(self, index: int):
+        return self._elements[index]
+
+
+class _FakeVisibilityPage:
+    def __init__(self, selector_elements: dict[str, list[_FakeVisibilityElement]]):
+        self._selector_elements = selector_elements
+
+    def locator(self, selector: str):
+        return _FakeVisibilityLocator(self._selector_elements.get(selector, []))
+
+
+def test_first_visible_locator_skips_hidden_matches_before_visible_one():
+    page = _FakeVisibilityPage(
+        {
+            "input[type='search']": [
+                _FakeVisibilityElement(False),
+                _FakeVisibilityElement(False),
+                _FakeVisibilityElement(True),
+            ],
+        }
+    )
+
+    result = apsjobs_module._first_visible_locator(page, ("input[type='search']",))
+
+    assert result is not None
+    assert result.is_visible() is True
+
+
+def test_first_visible_locator_falls_through_to_next_selector():
+    page = _FakeVisibilityPage(
+        {
+            "input[type='search']": [_FakeVisibilityElement(False)],
+            "input[name*='keyword' i]": [_FakeVisibilityElement(True)],
+        }
+    )
+
+    result = apsjobs_module._first_visible_locator(
+        page, ("input[type='search']", "input[name*='keyword' i]")
+    )
+
+    assert result is not None
+    assert result.is_visible() is True
+
+
+def test_first_visible_locator_returns_none_when_nothing_visible():
+    page = _FakeVisibilityPage(
+        {
+            "input[type='search']": [_FakeVisibilityElement(False), _FakeVisibilityElement(False)],
+        }
+    )
+
+    result = apsjobs_module._first_visible_locator(page, ("input[type='search']",))
+
+    assert result is None
+
+
 def test_collect_candidate_links_prefers_jobish_anchors():
     page = _FakePage(
         url="https://www.apsjobs.gov.au/s/",

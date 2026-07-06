@@ -9,9 +9,14 @@ from job_hunter_agent.locations import resolve_location
 from job_hunter_agent.posting_utils import posted_display_label
 from job_hunter_agent.salary import load_salary
 from job_hunter_agent.scrapers.base import _build_salary_string
-from job_hunter_agent.scrapers.linkedin import LinkedInScraper
+from job_hunter_agent.scrapers.linkedin import LinkedInScraper, classify_linkedin_apply_method
 from job_hunter_agent.scrapers.location_adapters import to_jobspy
-from job_hunter_agent.record_schema import RECORD_URL_KEY
+from job_hunter_agent.record_schema import (
+    APPLY_METHOD_EASY_APPLY,
+    APPLY_METHOD_EXTERNAL_APPLY,
+    APPLY_METHOD_UNKNOWN,
+    RECORD_URL_KEY,
+)
 
 
 def test_to_jobspy_handles_city_inputs():
@@ -28,6 +33,26 @@ def test_jobspy_salary_string_keeps_non_yearly_amounts():
     rules = load_salary()
     assert _build_salary_string(70, 90, "hourly", "AUD", rules) == "$70\u201390 /hr"
     assert _build_salary_string(130000, 150000, "yearly", "AUD", rules) == "$130k\u2013150k p.a."
+
+
+def test_classify_linkedin_apply_method_detects_external_apply():
+    assert (
+        classify_linkedin_apply_method(
+            "https://employer.example.com/careers/123", "https://linkedin.com/jobs/view/1"
+        )
+        == APPLY_METHOD_EXTERNAL_APPLY
+    )
+
+
+def test_classify_linkedin_apply_method_detects_easy_apply_when_no_apply_url():
+    assert classify_linkedin_apply_method("", "https://linkedin.com/jobs/view/1") == (
+        APPLY_METHOD_EASY_APPLY
+    )
+
+
+def test_classify_linkedin_apply_method_unknown_when_apply_url_matches_canonical():
+    url = "https://linkedin.com/jobs/view/1"
+    assert classify_linkedin_apply_method(url, url) == APPLY_METHOD_UNKNOWN
 
 
 def test_linkedin_closed_listing_signal_detects_no_longer_accepting_applications(monkeypatch):

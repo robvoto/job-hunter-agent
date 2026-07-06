@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import contextvars
+import logging
 import threading
+import time
 from datetime import datetime, timezone
 from unittest.mock import patch
 
@@ -501,3 +503,32 @@ def test_job_history_changes_are_merged_back_to_context(monkeypatch):
 
     assert "seek:new" in context.job_history
     assert "linkedin:new" in context.job_history
+
+
+def test_parallel_runner_keeps_results_after_timeout_warning(monkeypatch, caplog):
+    caplog.set_level(logging.INFO, logger="job_hunter_agent.source_runner")
+
+    def slow_seek(ctx):
+        time.sleep(0.03)
+        return _seek_result(kept_records=[{"job_key": "seek:1"}], audit_rows=[{"job_key": "seek:1"}])
+
+    def slow_linkedin(ctx):
+        time.sleep(0.03)
+        return _li_result(
+            kept_records=[{"job_key": "linkedin:1"}], audit_rows=[{"job_key": "linkedin:1"}]
+        )
+
+    context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
+    monkeypatch.setattr(source_runner, "_run_seek_source", slow_seek)
+    monkeypatch.setattr(source_runner, "_run_linkedin_source", slow_linkedin)
+    monkeypatch.setattr(source_runner, "SEEK_SOURCE_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr(source_runner, "LINKEDIN_SOURCE_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr(source_runner, "SOURCE_HEARTBEAT_SECONDS", 60)
+
+    kept, audit, skills = run_enabled_sources(context)
+
+    assert [record["job_key"] for record in kept] == ["seek:1", "linkedin:1"]
+    assert [row["job_key"] for row in audit] == ["seek:1", "linkedin:1"]
+    assert skills == []
+    assert "[SOURCE_TIMEOUT]" in caplog.text
+    assert "was skipped" not in caplog.text

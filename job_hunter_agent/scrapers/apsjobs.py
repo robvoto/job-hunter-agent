@@ -121,6 +121,29 @@ def _locator_text(page, selectors: tuple[str, ...]) -> str:
     return ""
 
 
+def _first_visible_locator(page, selectors: tuple[str, ...]):
+    """Return the first visible element matching any selector, or None.
+
+    A selector can match multiple elements (e.g. duplicate desktop/mobile
+    copies of the same field); picking `.first` blindly can resolve to a
+    hidden one and hang on `.fill()` until the action times out.
+    """
+    for selector in selectors:
+        try:
+            locator = page.locator(selector)
+            count = locator.count()
+        except Exception:
+            continue
+        for index in range(count):
+            candidate = locator.nth(index)
+            try:
+                if candidate.is_visible():
+                    return candidate
+            except Exception:
+                continue
+    return None
+
+
 def _looks_like_job_link(href: str, text: str) -> bool:
     lowered = f"{href} {text}".lower()
     if not href:
@@ -367,35 +390,30 @@ class APSJobsScraper(BaseJobScraper):
                     try:
                         page.goto(APSJOBS_ROOT_URL, wait_until="domcontentloaded")
                         page.wait_for_timeout(1500)
-                        search_box = None
-                        for selector in APSJOBS_SEARCH_INPUT_SELECTORS:
-                            try:
-                                locator = page.locator(selector)
-                                if locator.count():
-                                    search_box = locator.first
-                                    break
-                            except Exception:
-                                continue
+                        search_box = _first_visible_locator(page, APSJOBS_SEARCH_INPUT_SELECTORS)
                         if search_box is not None:
-                            search_box.fill(target["search_term"])
                             try:
+                                search_box.fill(target["search_term"], timeout=5000)
                                 search_box.press("Enter")
                             except Exception:
-                                pass
-                        location_box = None
-                        for selector in APSJOBS_LOCATION_INPUT_SELECTORS:
-                            try:
-                                locator = page.locator(selector)
-                                if locator.count():
-                                    location_box = locator.first
-                                    break
-                            except Exception:
-                                continue
+                                logger.warning(
+                                    "%s search box found but could not be filled; continuing without a search term",
+                                    target_tag,
+                                )
+                        else:
+                            logger.warning(
+                                "%s no visible search box found; continuing without a search term",
+                                target_tag,
+                            )
+                        location_box = _first_visible_locator(page, APSJOBS_LOCATION_INPUT_SELECTORS)
                         if location_box is not None and target["location"]:
                             try:
-                                location_box.fill(target["location"])
+                                location_box.fill(target["location"], timeout=5000)
                             except Exception:
-                                pass
+                                logger.warning(
+                                    "%s location box found but could not be filled; continuing without a location filter",
+                                    target_tag,
+                                )
                         page.wait_for_timeout(2000)
 
                         candidate_links = _collect_candidate_links(

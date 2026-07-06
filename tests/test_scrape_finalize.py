@@ -500,8 +500,8 @@ def test_print_run_summary_uses_explicit_pages_and_cost_labels(caplog, tmp_path,
     assert "Jobs seen:  7" in summary_text
 
     captured = capsys.readouterr()
-    assert "Run complete" in captured.out
-    assert "Total LLM cost: $0.1235" in captured.out
+    assert "Run complete" in captured.err
+    assert "Total LLM cost: $0.1235" in captured.err
 
 
 def test_print_run_summary_includes_source_breakdown(caplog, tmp_path, monkeypatch, capsys):
@@ -531,14 +531,14 @@ def test_print_run_summary_includes_source_breakdown(caplog, tmp_path, monkeypat
     )
 
     captured = capsys.readouterr()
-    assert "By platform" in captured.out
-    assert "SEEK" in captured.out
-    assert "LINKEDIN" in captured.out
-    assert "seen=3" in captured.out
-    assert "pages=2" in captured.out
-    assert "read=2" in captured.out
-    assert "kept=1" in captured.out
-    assert "Errors:" in captured.out
-    assert "No fresh cards were captured in this run." in captured.out
-    assert "Warnings:" in captured.out
-    assert "LinkedIn timed out" in captured.out
+    assert "By platform" in captured.err
+    assert "SEEK" in captured.err
+    assert "LINKEDIN" in captured.err
+    assert "seen=3" in captured.err
+    assert "pages=2" in captured.err
+    assert "read=2" in captured.err
+    assert "kept=1" in captured.err
+    assert "Errors:" in captured.err
+    assert "No fresh cards were captured in this run." in captured.err
+    assert "Warnings:" in captured.err
+    assert "LinkedIn timed out" in captured.err

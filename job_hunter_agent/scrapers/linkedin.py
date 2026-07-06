@@ -35,6 +35,10 @@ from job_hunter_agent.job_types import load_job_type
 from job_hunter_agent.locations import resolve_location
 from job_hunter_agent.profile_store import get_search_settings
 from job_hunter_agent.record_schema import (
+    APPLY_METHOD_EASY_APPLY,
+    APPLY_METHOD_EXTERNAL_APPLY,
+    APPLY_METHOD_UNKNOWN,
+    RECORD_APPLY_METHOD_KEY,
     RECORD_COMPANY_KEY,
     RECORD_DESCRIPTION_SOURCE_KEY,
     RECORD_DETAILS_TEXT_KEY,
@@ -106,6 +110,23 @@ def _backfill_linkedin_posted_age(record: dict, run_iso: str) -> None:
     posted_age_days = _extract_linkedin_posted_age_days(html, run_date)
     if posted_age_days is not None:
         record[RECORD_POSTED_AGE_DAYS_KEY] = posted_age_days
+
+
+def classify_linkedin_apply_method(apply_url: str, canonical_url: str) -> str:
+    """Classify LinkedIn's apply signal into a normalised apply_method value.
+
+    jobspy's ``easy_apply`` field is not reliably populated for LinkedIn results,
+    so this uses ``apply_url`` (LinkedIn's external ATS link) as the proxy:
+    present and different from the canonical job URL means an external apply;
+    absent means LinkedIn's own UI only exposed Easy Apply.
+    """
+    apply_url = str(apply_url or "").strip()
+    canonical_url = str(canonical_url or "").strip()
+    if apply_url and apply_url != canonical_url:
+        return APPLY_METHOD_EXTERNAL_APPLY
+    if not apply_url:
+        return APPLY_METHOD_EASY_APPLY
+    return APPLY_METHOD_UNKNOWN
 
 
 class LinkedInScraper(BaseJobScraper):
@@ -346,6 +367,9 @@ class LinkedInScraper(BaseJobScraper):
                 current_record.get("source_metadata", {}).get("apply_url") or ""
             ).strip()
             linkedin_url = str(current_record.get(RECORD_URL_KEY) or "").strip()
+            current_record[RECORD_APPLY_METHOD_KEY] = classify_linkedin_apply_method(
+                apply_url, linkedin_url
+            )
             if not is_easy_apply and apply_url and apply_url != linkedin_url:
                 ext_html = fetch_external_html(apply_url)
                 run_date = datetime.fromisoformat(context.run_iso).date()

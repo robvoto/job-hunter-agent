@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 52,
+  "version": 53,
   "updated_at": "2026-06-28",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -391,7 +391,11 @@
     "title_block_prompt_copy": "Block future titles before description review.",
     "title_block_help_summary": "What this does",
     "title_block_manual_help": "Adds to the checked words above. Use commas to add more than one.",
-    "title_block_strong_filter_copy": "This is a strong filter. Matching titles will be hidden before description review."
+    "title_block_strong_filter_copy": "This is a strong filter. Matching titles will be hidden before description review.",
+    "apply_method_easy_apply_badge": "Easy Apply",
+    "apply_method_easy_apply_tooltip": "Apply directly on the job board with one click.",
+    "apply_method_quick_apply_badge": "Quick Apply",
+    "apply_method_quick_apply_tooltip": "Apply directly on the job board without leaving the site."
   },
   "workspace_page_labels_description": "Labels for the main workspace page (results.html).",
   "workspace_page_labels": {

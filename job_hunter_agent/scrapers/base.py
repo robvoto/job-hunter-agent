@@ -8,6 +8,8 @@ from urllib.parse import urlparse
 
 from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.record_schema import (
+    APPLY_METHOD_UNKNOWN,
+    RECORD_APPLY_METHOD_KEY,
     RECORD_COMPANY_KEY,
     RECORD_COMPETITIVE_SIGNALS_KEY,
     RECORD_CONTENT_REASON_KEY,
@@ -301,6 +303,7 @@ def _build_ingestion_record(
         RECORD_TEASER_KEY: teaser,
         RECORD_DETAILS_TEXT_KEY: details_text,
         RECORD_DETAILS_LENGTH_KEY: details_length,
+        RECORD_APPLY_METHOD_KEY: APPLY_METHOD_UNKNOWN,
     }
 
 

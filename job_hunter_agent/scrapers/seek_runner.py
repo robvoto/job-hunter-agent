@@ -749,6 +749,7 @@ async def _fetch_seek_job_detail_async(record: dict, page) -> dict:
     record[rs.RECORD_DESCRIPTION_SOURCE_KEY] = details_payload.get("source") or ""
     record[rs.RECORD_DETAILS_TEXT_KEY] = details_text
     record[rs.RECORD_DETAILS_STATUS_KEY] = details_status
+    record[rs.RECORD_APPLY_METHOD_KEY] = details_payload.get("apply_method") or rs.APPLY_METHOD_UNKNOWN
     record["_raw_source_payload"] = raw_source_payload
     record["_raw_html"] = raw_html
     return record

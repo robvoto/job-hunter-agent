@@ -11,9 +11,13 @@ from urllib.parse import urljoin
 from job_hunter_agent.io_utils import load_parsing_rules
 from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.job_types import load_job_type
+from job_hunter_agent.knowledge_store import get_knowledge
 from job_hunter_agent.locations import resolve_location
 from job_hunter_agent.profile_store import get_search_settings
 from job_hunter_agent.record_schema import (
+    APPLY_METHOD_EXTERNAL_APPLY,
+    APPLY_METHOD_QUICK_APPLY,
+    APPLY_METHOD_UNKNOWN,
     RECORD_CARD_SALARY_KEY,
     RECORD_LOCATION_KEY,
     RECORD_TEASER_KEY,
@@ -41,6 +45,7 @@ SELECTOR_LOCATION = '[data-automation="jobLocation"]'
 SELECTOR_CARD_SALARY = '[data-automation="jobSalary"]'
 SELECTOR_SHORT_DESCRIPTION = '[data-automation="jobShortDescription"]'
 SELECTOR_DETAILS = '[data-automation="jobAdDetails"]'
+SELECTOR_APPLY_BUTTON = '[data-automation="job-detail-apply"]'
 
 SEEK_JOBS_BASE_URL = "https://www.seek.com.au/jobs"
 DETAIL_PAGE_CHALLENGE_MARKERS = (
@@ -83,6 +88,28 @@ def _normalize_posted_text(value: Optional[str]) -> str:
 def _seek_posted_age_rules() -> dict:
     rules = load_parsing_rules().get("seek_posted_age_rules", {})
     return rules if isinstance(rules, dict) else {}
+
+
+def _seek_quick_apply_text_markers() -> List[str]:
+    rules = (get_knowledge("apply_method_indicators") or {}).get(
+        "apply_method_indicators", {}
+    )
+    return [
+        str(marker or "").strip().lower()
+        for marker in rules.get("seek_quick_apply_text_markers", [])
+        if str(marker or "").strip()
+    ]
+
+
+def classify_seek_apply_method(apply_button_text: Optional[str]) -> str:
+    """Classify SEEK's apply-button text into a normalised apply_method value."""
+    text = str(apply_button_text or "").strip().lower()
+    if not text:
+        return APPLY_METHOD_UNKNOWN
+    markers = _seek_quick_apply_text_markers()
+    if any(marker in text for marker in markers):
+        return APPLY_METHOD_QUICK_APPLY
+    return APPLY_METHOD_EXTERNAL_APPLY
 
 
 # ---------------------------------------------------------------------------
@@ -220,6 +247,9 @@ def fetch_job_details_payload(detail_page, full_url: str, attempts: int = 2) -> 
     except Exception:
         return {"text": "", "status": "navigation_error", "retryable": False}
 
+    apply_button_text = _read_visible_text(detail_page, SELECTOR_APPLY_BUTTON)
+    apply_method = classify_seek_apply_method(apply_button_text)
+
     for attempt_index in range(max(attempts, 1)):
         _expand_detail_page(detail_page)
 
@@ -232,6 +262,7 @@ def fetch_job_details_payload(detail_page, full_url: str, attempts: int = 2) -> 
                 "status": "ok",
                 "source": "jobAdDetails",
                 "retryable": False,
+                "apply_method": apply_method,
             }
 
         try:
@@ -243,7 +274,13 @@ def fetch_job_details_payload(detail_page, full_url: str, attempts: int = 2) -> 
 
         body_status = classify_detail_page_text(body_text)
         if body_text and body_status == "ok":
-            return {"text": body_text, "status": "ok", "source": "body", "retryable": False}
+            return {
+                "text": body_text,
+                "status": "ok",
+                "source": "body",
+                "retryable": False,
+                "apply_method": apply_method,
+            }
 
         last_text = body_text or details_text or ""
         last_status = body_status if body_text else details_status
@@ -263,6 +300,7 @@ def fetch_job_details_payload(detail_page, full_url: str, attempts: int = 2) -> 
         "status": last_status,
         "retryable": last_status in {"challenge_page", "blocked_page"},
         "raw_text": last_text[:500],
+        "apply_method": apply_method,
     }
 
 
@@ -329,6 +367,9 @@ async def fetch_job_details_payload_async(page, full_url: str, attempts: int = 2
     except Exception:
         return {"text": "", "status": "navigation_error", "retryable": False}
 
+    apply_button_text = await _read_visible_text_async(page, SELECTOR_APPLY_BUTTON)
+    apply_method = classify_seek_apply_method(apply_button_text)
+
     for attempt_index in range(max(attempts, 1)):
         await _expand_detail_page_async(page)
 
@@ -340,6 +381,7 @@ async def fetch_job_details_payload_async(page, full_url: str, attempts: int = 2
                 "status": "ok",
                 "source": "jobAdDetails",
                 "retryable": False,
+                "apply_method": apply_method,
             }
 
         try:
@@ -350,7 +392,13 @@ async def fetch_job_details_payload_async(page, full_url: str, attempts: int = 2
         body_text = await _read_visible_text_async(page, "body")
         body_status = classify_detail_page_text(body_text)
         if body_text and body_status == "ok":
-            return {"text": body_text, "status": "ok", "source": "body", "retryable": False}
+            return {
+                "text": body_text,
+                "status": "ok",
+                "source": "body",
+                "retryable": False,
+                "apply_method": apply_method,
+            }
 
         last_text = body_text or details_text or ""
         last_status = body_status if body_text else details_status
@@ -370,4 +418,5 @@ async def fetch_job_details_payload_async(page, full_url: str, attempts: int = 2
         "status": last_status,
         "retryable": last_status in {"challenge_page", "blocked_page"},
         "raw_text": last_text[:500],
+        "apply_method": apply_method,
     }

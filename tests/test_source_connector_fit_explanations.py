@@ -25,9 +25,12 @@ from job_hunter_agent.profile_store import (
     KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT,
 )
 from job_hunter_agent.record_schema import (
+    APPLY_METHOD_EASY_APPLY,
+    APPLY_METHOD_QUICK_APPLY,
     CONFIDENCE_HIGH,
     CONFIDENCE_LOW,
     DETAILS_STATUS_OK,
+    RECORD_APPLY_METHOD_KEY,
     RECORD_DETAILS_STATUS_KEY,
     RECORD_FIT_CONFIDENCE_KEY,
     RECORD_FIT_LABEL_KEY,
@@ -774,6 +777,31 @@ def test_fit_score_breakdown_can_use_profile_scoring_rule_overrides():
     assert _breakdown_value(breakdown, "The job title matches one of your target roles") == 20
 
 
+def test_fit_score_breakdown_includes_easy_apply_bonus():
+    breakdown = fit_scoring.fit_score_breakdown(
+        {
+            "title": "Business Analyst",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "title_match_metadata": {
+                "match_family": "primary",
+            },
+            "fit_highlights": [],
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Business analyst duties. " * 40,
+            "competitive_signals": [],
+            RECORD_APPLY_METHOD_KEY: APPLY_METHOD_EASY_APPLY,
+        },
+        _test_profile(),
+    )
+
+    assert _breakdown_value(breakdown, "Easy/Quick Apply available") == 3
+
+
 def test_fit_score_breakdown_keeps_secondary_role_family_clean():
     breakdown = fit_scoring.fit_score_breakdown(
         {
@@ -917,6 +945,82 @@ def test_job_card_uses_score_tone_as_card_accent_class():
     assert 'class="job-card tone-low"' in html
     assert 'class="match-tile tone-low"' in html
     assert ">New To You<" in html
+
+
+def test_job_card_shows_easy_apply_badge():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-easy-apply-badge",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "linkedin",
+            RECORD_APPLY_METHOD_KEY: APPLY_METHOD_EASY_APPLY,
+        },
+        _test_profile(),
+    )
+
+    assert 'class="badge badge-apply-method" title="Apply directly on the job board with one click." aria-label="Apply directly on the job board with one click.">Easy Apply<' in html
+    assert 'data-apply-method="easy_apply"' in html
+
+
+def test_job_card_shows_quick_apply_badge():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-quick-apply-badge",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "seek",
+            RECORD_APPLY_METHOD_KEY: APPLY_METHOD_QUICK_APPLY,
+        },
+        _test_profile(),
+    )
+
+    assert "Quick Apply" in html
+
+
+def test_job_card_omits_apply_method_badge_when_unknown():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-unknown-apply-badge",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "seek",
+        },
+        _test_profile(),
+    )
+
+    assert "badge-apply-method" not in html
+    assert 'data-apply-method="unknown"' in html
 
 
 def test_posting_channel_badge_uses_fallback_review_class(monkeypatch):

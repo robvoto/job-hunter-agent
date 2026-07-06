@@ -28,6 +28,9 @@ from job_hunter_agent.profile_store import (
     load_profile,
 )
 from job_hunter_agent.record_schema import (
+    APPLY_METHOD_EASY_APPLY,
+    APPLY_METHOD_QUICK_APPLY,
+    RECORD_APPLY_METHOD_KEY,
     RECORD_FIT_SCORE_BREAKDOWN_KEY,
     RECORD_FIT_SCORE_KEY,
     RECORD_JOB_REQUIREMENTS_KEY,
@@ -437,6 +440,13 @@ def build_convenience_breakdown(
             {
                 "label": "Already viewed by you",
                 "value": int(scoring_rules["fit_breakdown"]["viewed_by_user"]),
+            }
+        )
+    if record.get(RECORD_APPLY_METHOD_KEY) in (APPLY_METHOD_EASY_APPLY, APPLY_METHOD_QUICK_APPLY):
+        entries.append(
+            {
+                "label": "Easy/Quick Apply available",
+                "value": int(scoring_rules["fit_breakdown"]["easy_apply_bonus"]),
             }
         )
     return entries

@@ -1,0 +1,9 @@
+{
+  "kind": "system_config",
+  "name": "apply_method_indicators",
+  "version": 1,
+  "apply_method_indicators_description": "Text markers used to classify a source's apply control into a normalised apply_method value (easy_apply/quick_apply/external_apply/unknown). Edit this file to expand detection; do not hardcode marker text in Python.",
+  "apply_method_indicators": {
+    "seek_quick_apply_text_markers": ["quick apply"]
+  }
+}

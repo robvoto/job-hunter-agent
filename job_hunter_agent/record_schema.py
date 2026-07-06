@@ -60,6 +60,12 @@ RECORD_POSTING_CHANNEL_EVIDENCE_KEY = "posting_channel_evidence"
 RECORD_JOB_QUALITY_SIGNALS_KEY = "job_quality_signals"
 RECORD_REQUIREMENT_COVERAGE_KEY = "requirement_coverage"
 RECORD_DESCRIPTION_COMPACTION_KEY = "description_compaction"
+RECORD_APPLY_METHOD_KEY = "apply_method"
+
+APPLY_METHOD_EASY_APPLY = "easy_apply"
+APPLY_METHOD_QUICK_APPLY = "quick_apply"
+APPLY_METHOD_EXTERNAL_APPLY = "external_apply"
+APPLY_METHOD_UNKNOWN = "unknown"
 
 RECORD_LAST_KEPT_SNAPSHOT_KEY = "last_kept_snapshot"
 RECORD_TIMES_KEPT_KEY = "times_kept"

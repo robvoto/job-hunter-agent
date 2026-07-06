@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 SEEK_SOURCE_TIMEOUT_SECONDS = 90
 LINKEDIN_SOURCE_TIMEOUT_SECONDS = 180
 SOURCE_HEARTBEAT_SECONDS = 15
-SEEK_SOURCE_TIMEOUT_MESSAGE = "SEEK did not finish in time and was skipped. Other source results remain usable."
-LINKEDIN_SOURCE_TIMEOUT_MESSAGE = "LinkedIn did not finish in time and was skipped. Other source results remain usable."
+SEEK_SOURCE_TIMEOUT_MESSAGE = "SEEK is taking longer than expected; waiting for it to finish."
+LINKEDIN_SOURCE_TIMEOUT_MESSAGE = "LinkedIn is taking longer than expected; waiting for it to finish."
 
 
 @dataclass
@@ -216,9 +216,9 @@ def _run_apsjobs_source(context: ScrapeRunContext) -> SourceRunResult:
         )
 
 
-def _timeout_result(
-    context: ScrapeRunContext, source: str, message: str, *, elapsed_s: float | None = None
-) -> SourceRunResult:
+def _log_source_timeout_warning(
+    source: str, message: str, *, elapsed_s: float | None = None
+) -> None:
     logger.warning(
         "[%s][SOURCE_TIMEOUT] elapsed_s=%s progress=%r message=%s",
         source.upper(),
@@ -227,12 +227,6 @@ def _timeout_result(
         message,
     )
     set_run_progress(message)
-    return SourceRunResult(
-        source=source,
-        error=TimeoutError(message),
-        _job_history_snapshot=dict(context.job_history),
-        _llm_cache_snapshot=dict(context.llm_cache),
-    )
 
 
 def _run_seek_and_linkedin_in_parallel(context: ScrapeRunContext) -> list[SourceRunResult]:
@@ -255,6 +249,7 @@ def _run_seek_and_linkedin_in_parallel(context: ScrapeRunContext) -> list[Source
         seek_future: SEEK_SOURCE_TIMEOUT_MESSAGE,
         li_future: LINKEDIN_SOURCE_TIMEOUT_MESSAGE,
     }
+    timeout_warned: set[Any] = set()
     next_heartbeat_at = {
         SOURCE_SEEK: started_at[SOURCE_SEEK] + SOURCE_HEARTBEAT_SECONDS,
         SOURCE_LINKEDIN: started_at[SOURCE_LINKEDIN] + SOURCE_HEARTBEAT_SECONDS,
@@ -265,15 +260,20 @@ def _run_seek_and_linkedin_in_parallel(context: ScrapeRunContext) -> list[Source
     try:
         while pending:
             now = time.monotonic()
-            timed_out = [future for future in list(pending) if now >= deadlines[future]]
+            timed_out = [
+                future
+                for future in list(pending)
+                if now >= deadlines[future] and future not in timeout_warned
+            ]
             for future in timed_out:
                 source = futures[future]
                 elapsed_s = now - started_at[source]
-                future.cancel()
-                pending.remove(future)
-                results_by_source[source] = _timeout_result(
-                    context, source, timeout_messages[future], elapsed_s=elapsed_s
+                _log_source_timeout_warning(
+                    source,
+                    timeout_messages[future],
+                    elapsed_s=elapsed_s,
                 )
+                timeout_warned.add(future)
 
             for future in list(pending):
                 source = futures[future]
@@ -320,22 +320,12 @@ def _run_seek_and_linkedin_in_parallel(context: ScrapeRunContext) -> list[Source
                     )
                     results_by_source[source] = SourceRunResult(source=source, error=exc)
     finally:
-        executor.shutdown(wait=False, cancel_futures=True)
+        executor.shutdown(wait=True, cancel_futures=False)
 
     if SOURCE_SEEK not in results_by_source:
-        results_by_source[SOURCE_SEEK] = _timeout_result(
-            context,
-            SOURCE_SEEK,
-            SEEK_SOURCE_TIMEOUT_MESSAGE,
-            elapsed_s=time.monotonic() - started_at[SOURCE_SEEK],
-        )
+        raise RuntimeError("SEEK source did not produce a result before parallel runner exit.")
     if SOURCE_LINKEDIN not in results_by_source:
-        results_by_source[SOURCE_LINKEDIN] = _timeout_result(
-            context,
-            SOURCE_LINKEDIN,
-            LINKEDIN_SOURCE_TIMEOUT_MESSAGE,
-            elapsed_s=time.monotonic() - started_at[SOURCE_LINKEDIN],
-        )
+        raise RuntimeError("LinkedIn source did not produce a result before parallel runner exit.")
     return [results_by_source[SOURCE_SEEK], results_by_source[SOURCE_LINKEDIN]]
 
 
