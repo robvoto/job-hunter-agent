@@ -479,20 +479,16 @@ def _build_rule_tuning_suggestions_from_reviews(review_items: list[dict[str, Any
         reason = str(item.get("reason") or "").strip()
         count = int(item.get("count") or 0)
         samples = item.get("samples") or []
-        if reason == "TITLE_NOT_TARGET":
-            uncertain_count = int((item.get("onet_result_counts") or {}).get(RESULT_UNCERTAIN, 0))
-            clear_count = count - uncertain_count
-            if clear_count <= 0:
-                continue
-            if clear_count < title_not_target_min:
+        if reason == "ONET_FAR_OCCUPATION":
+            if count < title_not_target_min:
                 continue
             suggestions.append(
                 {
                     "kind": "rule",
                     "reason": reason,
-                    "count": clear_count,
+                    "count": count,
                     "headline": "Broad capture is producing a lot of non-primary job titles",
-                    "detail": f"{clear_count} role(s) were filtered by title before deeper review.",
+                    "detail": f"{count} role(s) were filtered by title before deeper review.",
                     "target": "Search keywords and title matching",
                     "recommendation": "Keep search broad unless deeper review volume rises. Tighten title rules before tightening search keywords.",
                     "samples": samples,
@@ -573,9 +569,6 @@ def build_title_optimization_suggestions(audit_rows: list[dict]) -> list[dict]:
     grouped: dict[str, dict[str, Any]] = {}
     for row in audit_rows:
         if not isinstance(row, dict) or row.get("decision") != "REJECT":
-            continue
-        title_reason = str(row.get("title_reason") or row.get("reject_reason") or "").strip()
-        if title_reason != "TITLE_NOT_TARGET":
             continue
         onet = row.get("onet_classification") or {}
         if (

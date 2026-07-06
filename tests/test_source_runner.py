@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 from job_hunter_agent import source_runner
 from job_hunter_agent.run_context import ScrapeRunContext
+from job_hunter_agent.source_errors import PartialSourceResultsError
 from job_hunter_agent.source_registry import SOURCE_APSJOBS, SOURCE_LINKEDIN, SOURCE_SEEK
 from job_hunter_agent.source_runner import SourceRunResult, run_enabled_sources
 
@@ -532,3 +533,91 @@ def test_parallel_runner_keeps_results_after_timeout_warning(monkeypatch, caplog
     assert skills == []
     assert "[SOURCE_TIMEOUT]" in caplog.text
     assert "was skipped" not in caplog.text
+
+
+def test_run_enabled_sources_keeps_partial_audit_rows_from_errored_source(monkeypatch):
+    context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
+
+    monkeypatch.setattr(
+        source_runner,
+        "_run_seek_source",
+        lambda ctx: _seek_result(
+            kept_records=[{"job_key": "seek:1"}],
+            audit_rows=[{"job_key": "seek:1", "reject_reason": "ONET_FAR_OCCUPATION"}],
+            error=RuntimeError("seek ended late"),
+        ),
+    )
+    monkeypatch.setattr(
+        source_runner,
+        "_run_linkedin_source",
+        lambda ctx: _li_result(
+            kept_records=[{"job_key": "linkedin:1"}],
+            audit_rows=[{"job_key": "linkedin:1", "reject_reason": "LLM_REJECT"}],
+        ),
+    )
+
+    kept, audit, skills = run_enabled_sources(context)
+
+    assert [record["job_key"] for record in kept] == ["seek:1", "linkedin:1"]
+    assert [row["job_key"] for row in audit] == ["seek:1", "linkedin:1"]
+    assert skills == []
+
+
+def test_run_linkedin_source_preserves_partial_results_on_late_failure(monkeypatch):
+    context = _make_context([SOURCE_LINKEDIN])
+
+    class FakeLinkedInScraper:
+        def __init__(self, **kwargs):
+            pass
+
+        def scrape(self):
+            raise PartialSourceResultsError(
+                SOURCE_LINKEDIN,
+                kept_records=[{"job_key": "linkedin:1"}],
+                audit_rows=[{"job_key": "linkedin:1", "reject_reason": "ONET_FAR_OCCUPATION"}],
+                skill_observations=[{"kind": "note"}],
+                original_error=RuntimeError("late linkedin failure"),
+            )
+
+    monkeypatch.setattr(
+        source_runner,
+        "LinkedInScraper",
+        FakeLinkedInScraper,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        __import__("job_hunter_agent.scrapers.linkedin", fromlist=["LinkedInScraper"]),
+        "LinkedInScraper",
+        FakeLinkedInScraper,
+    )
+
+    result = source_runner._run_linkedin_source(context)
+
+    assert isinstance(result.error, RuntimeError)
+    assert [record["job_key"] for record in result.kept_records] == ["linkedin:1"]
+    assert [row["job_key"] for row in result.audit_rows] == ["linkedin:1"]
+    assert result.skill_observations == [{"kind": "note"}]
+
+
+def test_run_seek_source_preserves_partial_results_on_late_failure(monkeypatch):
+    context = _make_context([SOURCE_SEEK])
+    context.headless = True
+    context.profile = {"search_settings": {"keywords": "Business Analyst", "locations": ["Sydney"]}}
+
+    def fake_seek_scrape_to_records(**kwargs):
+        raise PartialSourceResultsError(
+            SOURCE_SEEK,
+            kept_records=[{"job_key": "seek:1"}],
+            audit_rows=[{"job_key": "seek:1", "reject_reason": "ONET_FAR_OCCUPATION"}],
+            skill_observations=[{"kind": "note"}],
+            original_error=RuntimeError("late seek failure"),
+        )
+
+    monkeypatch.setattr(source_runner, "seek_scrape_to_records", fake_seek_scrape_to_records)
+
+    result = source_runner._run_seek_source(context)
+
+    assert isinstance(result.error, RuntimeError)
+    assert [record["job_key"] for record in result.kept_records] == ["seek:1"]
+    assert [row["job_key"] for row in result.audit_rows] == ["seek:1"]
+    assert result.skill_observations == [{"kind": "note"}]

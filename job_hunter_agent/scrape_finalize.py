@@ -171,7 +171,7 @@ _DETAIL_ERROR_CODES = frozenset(
 )
 
 
-def _log_run_summary(run_stats: dict, audit_rows: list[dict]) -> None:
+def _derive_run_summary_metrics(audit_rows: list[dict]) -> dict[str, int | dict[str, int]]:
     source_counts: dict[str, int] = {}
     title_rejected = onet_far_rejected = card_rejected = detail_fetch_errors = 0
     llm_calls = llm_errors = llm_cache_hits = final_review = 0
@@ -196,6 +196,22 @@ def _log_run_summary(run_stats: dict, audit_rows: list[dict]) -> None:
         if row.get("review_source"):
             final_review += 1
 
+    return {
+        "source_counts": source_counts,
+        "title_rejected": title_rejected,
+        "onet_far_rejected": onet_far_rejected,
+        "card_rejected": card_rejected,
+        "detail_fetch_errors": detail_fetch_errors,
+        "llm_calls": llm_calls,
+        "llm_errors": llm_errors,
+        "llm_cache_hits": llm_cache_hits,
+        "final_review": final_review,
+    }
+
+
+def _log_run_summary(run_stats: dict, audit_rows: list[dict]) -> None:
+    metrics = _derive_run_summary_metrics(audit_rows)
+
     elapsed_seconds = 0
     try:
         started = parse_timestamp(str(run_stats.get("run_started_at") or ""))
@@ -210,19 +226,19 @@ def _log_run_summary(run_stats: dict, audit_rows: list[dict]) -> None:
             "PIPELINE][RUN_SUMMARY",
             {
                 "run_id": str(run_stats.get("last_run_attempt_at") or ""),
-                "source_counts": source_counts,
+                "source_counts": metrics["source_counts"],
                 "cards_seen": run_stats.get("cards_seen", 0),
-                "title_rejected": title_rejected,
-                "onet_far_rejected": onet_far_rejected,
-                "card_rejected": card_rejected,
+                "title_rejected": metrics["title_rejected"],
+                "onet_far_rejected": metrics["onet_far_rejected"],
+                "card_rejected": metrics["card_rejected"],
                 "detail_fetches": run_stats.get("cards_read", run_stats.get("detail_fetches", 0)),
-                "detail_fetch_errors": detail_fetch_errors,
-                "llm_calls": llm_calls,
-                "llm_errors": llm_errors,
-                "llm_cache_hits": llm_cache_hits,
+                "detail_fetch_errors": metrics["detail_fetch_errors"],
+                "llm_calls": metrics["llm_calls"],
+                "llm_errors": metrics["llm_errors"],
+                "llm_cache_hits": metrics["llm_cache_hits"],
                 "llm_truncations": run_stats.get("llm_truncation_count", 0),
                 "final_keep": run_stats.get("kept_count", 0),
-                "final_review": final_review,
+                "final_review": metrics["final_review"],
                 "final_reject": run_stats.get("rejected_count", 0),
                 "elapsed_seconds": elapsed_seconds,
             },
@@ -246,6 +262,7 @@ def _print_run_summary(run_stats: dict) -> None:
     kept = run_stats.get("kept_count", 0)
     rejected = run_stats.get("rejected_count", 0)
     flagged = run_stats.get("cards_with_flags_count", 0)
+    onet_far_rejected = int(run_stats.get("onet_far_rejected", 0) or 0)
     llm_cost = float(run_stats.get("llm_total_cost_usd", 0.0) or 0.0)
     llm_truncations = int(run_stats.get("llm_truncation_count", 0) or 0)
     duration = _format_duration(run_stats)
@@ -257,6 +274,7 @@ def _print_run_summary(run_stats: dict) -> None:
     lines.append(
         f"  Jobs seen:  {seen}  →  descriptions read: {read}  →  kept: {kept}  |  rejected: {rejected}"
     )
+    lines.append(f"  O*NET rejects: {onet_far_rejected}")
     if source_breakdown:
         lines.append("  By platform:")
         for item in source_breakdown:
@@ -415,6 +433,7 @@ def finalize_scrape_run(
 
     run_stats["llm_total_cost_usd"] = round(get_session_cost_usd(), 6)
     run_stats["llm_truncation_count"] = get_llm_truncation_count()
+    run_stats.update(_derive_run_summary_metrics(audit_rows))
 
     run_stats["pool_was_empty_before_run"] = pool_was_empty
 

@@ -30,16 +30,19 @@ They influence `title_reason` and `match_family`, which feed into fit scoring an
 The hard gates in the title filter are:
 1. Empty title → `TITLE_EMPTY`
 2. User-configured `reject_title_rules` → e.g. `TITLE_BAD_KEYWORD`, `TITLE_BAD_ROLE`
-3. No pattern match → `TITLE_NOT_TARGET` (hard reject, no LLM call)
+3. No pattern match (`TITLE_NOT_TARGET`) is **not** itself a hard reject. `job_review_pipeline.py::review_pre_detail_normalized_job()` consults the O*NET occupation-family classifier (`occupation_taxonomy.py::classify_title()`) as a conservative fallback:
+   - O*NET says the occupation family is clearly far (`RESULT_FAR`) → hard reject as `ONET_FAR_OCCUPATION`, no LLM call. `title_reason` stays `TITLE_NOT_TARGET` on this record.
+   - O*NET says near or uncertain (`RESULT_NEAR`/`RESULT_UNCERTAIN`) → treated as a potential match, `title_reason` is overwritten to `TITLE_REASON_POTENTIAL_MATCH`, and the job proceeds to detail fetch/LLM review.
+   - The original O*NET verdict is preserved in `record["onet_classification"]` (never overwritten), so anything reading audit rows to detect "title didn't match but still went to review" must key off `onet_classification.result`, not `title_reason`/`reject_reason` — those get overwritten or never equal `TITLE_NOT_TARGET` once a row reaches final decision. See `review_insights.py::build_title_optimization_suggestions()`.
 
 **`match_family` values and their scoring impact:**
 - `"primary"` — title matched a `target_roles` entry → full title score, `title_reason="OK"`
 - `"secondary"` — title matched an `also_consider_roles` entry → partial title score, `title_reason=TITLE_REASON_POTENTIAL_MATCH`
-- `"none"` — no pattern matched → hard rejected as `TITLE_NOT_TARGET`, never reaches LLM
+- `"none"` — no pattern matched → goes through the O*NET fallback above; only a clearly-far occupation family is hard rejected (`ONET_FAR_OCCUPATION`)
 
 **`title_reason` downstream effects:**
 - `"OK"` → standard description confidence check
-- `TITLE_REASON_POTENTIAL_MATCH` (secondary or none) → stricter description proof required before keeping (`_evaluate_description_confidence` in `filters.py`)
+- `TITLE_REASON_POTENTIAL_MATCH` (secondary, or none-but-O*NET-near/uncertain) → stricter description proof required before keeping (`_evaluate_description_confidence` in `filters.py`)
 
 **`title_role_synonyms` in `parsing_rules.json`:**
 - Only for genuinely interchangeable spellings of the same role (e.g. "devops engineer" / "dev ops engineer")

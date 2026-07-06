@@ -49,6 +49,7 @@ from job_hunter_agent.scrapers.base import (
 )
 from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.source_registry import SOURCE_APSJOBS
+from job_hunter_agent.source_errors import PartialSourceResultsError
 from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order
 from job_hunter_agent.work_mode_extraction import WORK_MODE_UNKNOWN, extract_from_text, log_work_mode_result
 
@@ -374,139 +375,148 @@ class APSJobsScraper(BaseJobScraper):
 
         PLAYWRIGHT_USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
         total_targets = len(targets)
-        with sync_playwright() as playwright:
-            context = playwright.chromium.launch_persistent_context(
-                user_data_dir=str(PLAYWRIGHT_USER_DATA_DIR),
-                headless=True,
-                viewport={"width": 1400, "height": 900},
-            )
-            try:
-                for target_index, target in enumerate(targets, start=1):
-                    if run_stop_requested():
-                        break
-                    target_tag = f"[APSJobs target {target_index}/{total_targets}]"
-                    set_run_progress(f"APSJobs search {target_index}/{total_targets}")
-                    page = context.new_page()
-                    try:
-                        page.goto(APSJOBS_ROOT_URL, wait_until="domcontentloaded")
-                        page.wait_for_timeout(1500)
-                        search_box = _first_visible_locator(page, APSJOBS_SEARCH_INPUT_SELECTORS)
-                        if search_box is not None:
-                            try:
-                                search_box.fill(target["search_term"], timeout=5000)
-                                search_box.press("Enter")
-                            except Exception:
+        try:
+            with sync_playwright() as playwright:
+                context = playwright.chromium.launch_persistent_context(
+                    user_data_dir=str(PLAYWRIGHT_USER_DATA_DIR),
+                    headless=True,
+                    viewport={"width": 1400, "height": 900},
+                )
+                try:
+                    for target_index, target in enumerate(targets, start=1):
+                        if run_stop_requested():
+                            break
+                        target_tag = f"[APSJobs target {target_index}/{total_targets}]"
+                        set_run_progress(f"APSJobs search {target_index}/{total_targets}")
+                        page = context.new_page()
+                        try:
+                            page.goto(APSJOBS_ROOT_URL, wait_until="domcontentloaded")
+                            page.wait_for_timeout(1500)
+                            search_box = _first_visible_locator(page, APSJOBS_SEARCH_INPUT_SELECTORS)
+                            if search_box is not None:
+                                try:
+                                    search_box.fill(target["search_term"], timeout=5000)
+                                    search_box.press("Enter")
+                                except Exception:
+                                    logger.warning(
+                                        "%s search box found but could not be filled; continuing without a search term",
+                                        target_tag,
+                                    )
+                            else:
                                 logger.warning(
-                                    "%s search box found but could not be filled; continuing without a search term",
+                                    "%s no visible search box found; continuing without a search term",
                                     target_tag,
                                 )
-                        else:
-                            logger.warning(
-                                "%s no visible search box found; continuing without a search term",
-                                target_tag,
+                            location_box = _first_visible_locator(page, APSJOBS_LOCATION_INPUT_SELECTORS)
+                            if location_box is not None and target["location"]:
+                                try:
+                                    location_box.fill(target["location"], timeout=5000)
+                                except Exception:
+                                    logger.warning(
+                                        "%s location box found but could not be filled; continuing without a location filter",
+                                        target_tag,
+                                    )
+                            page.wait_for_timeout(2000)
+
+                            candidate_links = _collect_candidate_links(
+                                page, page.url or APSJOBS_ROOT_URL, int(target["results_wanted"])
                             )
-                        location_box = _first_visible_locator(page, APSJOBS_LOCATION_INPUT_SELECTORS)
-                        if location_box is not None and target["location"]:
-                            try:
-                                location_box.fill(target["location"], timeout=5000)
-                            except Exception:
-                                logger.warning(
-                                    "%s location box found but could not be filled; continuing without a location filter",
-                                    target_tag,
-                                )
-                        page.wait_for_timeout(2000)
+                            if not candidate_links:
+                                logger.info("%s no candidate links found", target_tag)
+                                continue
 
-                        candidate_links = _collect_candidate_links(
-                            page, page.url or APSJOBS_ROOT_URL, int(target["results_wanted"])
-                        )
-                        if not candidate_links:
-                            logger.info("%s no candidate links found", target_tag)
-                            continue
+                            logger.info("%s candidate_links=%d", target_tag, len(candidate_links))
+                            for link in candidate_links:
+                                if run_stop_requested():
+                                    break
+                                detail_page = context.new_page()
+                                try:
+                                    detail_page.goto(link["url"], wait_until="domcontentloaded")
+                                    detail_page.wait_for_timeout(1200)
+                                    payload = _extract_job_payload(
+                                        detail_page,
+                                        job_url=detail_page.url or link["url"],
+                                        anchor_text=link["text"],
+                                        run_iso=self.run_iso,
+                                    )
+                                finally:
+                                    detail_page.close()
 
-                        logger.info("%s candidate_links=%d", target_tag, len(candidate_links))
-                        for link in candidate_links:
-                            if run_stop_requested():
-                                break
-                            detail_page = context.new_page()
-                            try:
-                                detail_page.goto(link["url"], wait_until="domcontentloaded")
-                                detail_page.wait_for_timeout(1200)
-                                payload = _extract_job_payload(
-                                    detail_page,
-                                    job_url=detail_page.url or link["url"],
-                                    anchor_text=link["text"],
+                                record = build_initial_flat_record(
                                     run_iso=self.run_iso,
-                                )
-                            finally:
-                                detail_page.close()
-
-                            record = build_initial_flat_record(
-                                run_iso=self.run_iso,
-                                search_location=target["location"],
-                                search_keywords=target["search_term"],
-                                source=self.source_name,
-                                job_key=payload["job_key"],
-                                title=payload["title"],
-                                company=payload["company"],
-                                location=payload["location"],
-                                posted_text=payload["posted_text"],
-                                posted_age_days=payload["posted_age_days"],
-                                work_mode=payload["work_mode"],
-                                work_mode_source=payload["work_mode_source"],
-                                work_mode_evidence=payload["work_mode_evidence"],
-                                work_mode_needs_review=payload["work_mode_needs_review"],
-                                work_type=payload["work_type"],
-                                salary_str=payload["salary"],
-                                url=payload["url"],
-                                teaser=payload["teaser"],
-                                details_text=payload["details_text"],
-                                details_length=len(payload["details_text"]),
-                                source_metadata=payload["source_metadata"],
-                            )
-                            record[RECORD_DESCRIPTION_SOURCE_KEY] = "apsjobs_detail_page"
-                            record[RECORD_DETAILS_TEXT_KEY] = str(record.get(RECORD_DETAILS_TEXT_KEY) or "")
-
-                            pre_outcome, record, _, should_fetch_details = review_pre_detail_normalized_job(
-                                record, review_context
-                            )
-                            if pre_outcome["decision"] != "KEEP" or not should_fetch_details:
-                                continue
-
-                            hooks = ReviewPipelineHooks()
-                            outcome, record, record_skill_observations = review_post_detail_normalized_job(
-                                record, review_context, hooks=hooks
-                            )
-                            if outcome["decision"] != "KEEP":
-                                continue
-
-                            skill_observations.extend(record_skill_observations)
-                            kept_records.append(record)
-                            score, breakdown = fit_score_and_breakdown_displayed(record, self.profile)
-                            logger.info(
-                                "%s KEPT %s @ %s | %s | %s | %s",
-                                target_tag,
-                                record.get(RECORD_TITLE_KEY),
-                                record.get(RECORD_COMPANY_KEY),
-                                record.get(RECORD_POSTED_AGE_DAYS_KEY),
-                                record.get(RECORD_LOCATION_KEY),
-                                record.get(RECORD_SALARY_KEY) or "N/A",
-                            )
-                            print_job_human_summary(record, self.profile, score=score, breakdown=breakdown)
-                            if DEBUG_CAPTURE_SOURCE_PAYLOADS:
-                                write_source_payload_debug(
+                                    search_location=target["location"],
+                                    search_keywords=target["search_term"],
                                     source=self.source_name,
-                                    job_key=str(record.get(RECORD_JOB_KEY) or ""),
-                                    payload={
-                                        "search_term": target["search_term"],
-                                        "location": target["location"],
-                                        "page_url": detail_page.url or link["url"],
-                                        "body_text": payload["details_text"],
-                                    },
+                                    job_key=payload["job_key"],
+                                    title=payload["title"],
+                                    company=payload["company"],
+                                    location=payload["location"],
+                                    posted_text=payload["posted_text"],
+                                    posted_age_days=payload["posted_age_days"],
+                                    work_mode=payload["work_mode"],
+                                    work_mode_source=payload["work_mode_source"],
+                                    work_mode_evidence=payload["work_mode_evidence"],
+                                    work_mode_needs_review=payload["work_mode_needs_review"],
+                                    work_type=payload["work_type"],
+                                    salary_str=payload["salary"],
+                                    url=payload["url"],
+                                    teaser=payload["teaser"],
+                                    details_text=payload["details_text"],
+                                    details_length=len(payload["details_text"]),
+                                    source_metadata=payload["source_metadata"],
                                 )
-                    finally:
-                        page.close()
-            finally:
-                context.close()
+                                record[RECORD_DESCRIPTION_SOURCE_KEY] = "apsjobs_detail_page"
+                                record[RECORD_DETAILS_TEXT_KEY] = str(record.get(RECORD_DETAILS_TEXT_KEY) or "")
+
+                                pre_outcome, record, _, should_fetch_details = review_pre_detail_normalized_job(
+                                    record, review_context
+                                )
+                                if pre_outcome["decision"] != "KEEP" or not should_fetch_details:
+                                    continue
+
+                                hooks = ReviewPipelineHooks()
+                                outcome, record, record_skill_observations = review_post_detail_normalized_job(
+                                    record, review_context, hooks=hooks
+                                )
+                                if outcome["decision"] != "KEEP":
+                                    continue
+
+                                skill_observations.extend(record_skill_observations)
+                                kept_records.append(record)
+                                score, breakdown = fit_score_and_breakdown_displayed(record, self.profile)
+                                logger.info(
+                                    "%s KEPT %s @ %s | %s | %s | %s",
+                                    target_tag,
+                                    record.get(RECORD_TITLE_KEY),
+                                    record.get(RECORD_COMPANY_KEY),
+                                    record.get(RECORD_POSTED_AGE_DAYS_KEY),
+                                    record.get(RECORD_LOCATION_KEY),
+                                    record.get(RECORD_SALARY_KEY) or "N/A",
+                                )
+                                print_job_human_summary(record, self.profile, score=score, breakdown=breakdown)
+                                if DEBUG_CAPTURE_SOURCE_PAYLOADS:
+                                    write_source_payload_debug(
+                                        source=self.source_name,
+                                        job_key=str(record.get(RECORD_JOB_KEY) or ""),
+                                        payload={
+                                            "search_term": target["search_term"],
+                                            "location": target["location"],
+                                            "page_url": detail_page.url or link["url"],
+                                            "body_text": payload["details_text"],
+                                        },
+                                    )
+                        finally:
+                            page.close()
+                finally:
+                    context.close()
+        except Exception as exc:
+            raise PartialSourceResultsError(
+                self.source_name,
+                kept_records=kept_records,
+                audit_rows=audit_rows,
+                skill_observations=skill_observations,
+                original_error=exc,
+            ) from exc
 
         logger.info("[APSJobs] done | kept=%d audit=%d", len(kept_records), len(audit_rows))
         set_run_progress("APSJobs complete")

@@ -49,6 +49,7 @@ from job_hunter_agent.scrapers.seek import (
     fetch_job_details_payload_async,
     stable_job_key,
 )
+from job_hunter_agent.source_errors import PartialSourceResultsError
 from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order
 from job_hunter_agent.utils import parse_seek_posted_age_days, set_page_param
 from job_hunter_agent.work_mode_extraction import (
@@ -926,68 +927,69 @@ def seek_scrape_to_records(
     browser_mode = "persistent" if WORKSPACE_DEBUG_MODE else get_playwright_browser_mode()
     use_persistent_browser = browser_mode == "persistent"
 
-    with sync_playwright() as playwright:
-        n_detail_workers = max(1, seek_parallel_detail_workers)
-        if use_persistent_browser:
-            PLAYWRIGHT_USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
-            context = playwright.chromium.launch_persistent_context(
-                user_data_dir=str(PLAYWRIGHT_USER_DATA_DIR),
-                headless=headless,
-                viewport={"width": playwright_viewport_width, "height": playwright_viewport_height},
-                args=_BROWSER_ARGS,
-            )
-            context.add_init_script(_WEBDRIVER_INIT)
-            list_page = context.new_page()
-        else:
-            browser = playwright.chromium.launch(headless=headless, args=_BROWSER_ARGS)
-            bctx = browser.new_context(
-                viewport={"width": playwright_viewport_width, "height": playwright_viewport_height}
-            )
-            bctx.add_init_script(_WEBDRIVER_INIT)
-            list_page = bctx.new_page()
-            context = browser
-
-        detail_session = _AsyncDetailSession(
-            headless=headless,
-            viewport_width=playwright_viewport_width,
-            viewport_height=playwright_viewport_height,
-            n_workers=n_detail_workers,
-        )
-        try:
-            total_targets = len(search_targets)
-            for target_index, search_target in enumerate(search_targets, start=1):
-                if run_stop_requested():
-                    logger.info("[SEEK] stop requested; ending scrape")
-                    break
-                base_search_url = search_target["url"]
-                search_location = search_target["location"]
-                search_keywords = search_target["keywords"]
-                classification_ids = ",".join(search_target.get("classification_ids", []))
-                current_page_num = 1
-                target_t0 = time.monotonic()
-
-                logger.info(
-                    "[SEEK] target %d/%d | location=%s | keywords=%s | classifications=%s | pages=1..%d",
-                    target_index,
-                    total_targets,
-                    search_location or "(all)",
-                    search_keywords or "(unset)",
-                    classification_ids or "(none)",
-                    configured_seek_max_pages,
+    try:
+        with sync_playwright() as playwright:
+            n_detail_workers = max(1, seek_parallel_detail_workers)
+            if use_persistent_browser:
+                PLAYWRIGHT_USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
+                context = playwright.chromium.launch_persistent_context(
+                    user_data_dir=str(PLAYWRIGHT_USER_DATA_DIR),
+                    headless=headless,
+                    viewport={"width": playwright_viewport_width, "height": playwright_viewport_height},
+                    args=_BROWSER_ARGS,
                 )
+                context.add_init_script(_WEBDRIVER_INIT)
+                list_page = context.new_page()
+            else:
+                browser = playwright.chromium.launch(headless=headless, args=_BROWSER_ARGS)
+                bctx = browser.new_context(
+                    viewport={"width": playwright_viewport_width, "height": playwright_viewport_height}
+                )
+                bctx.add_init_script(_WEBDRIVER_INIT)
+                list_page = bctx.new_page()
+                context = browser
 
-                while current_page_num <= configured_seek_max_pages:
-                    page_tag = f"[SEEK p{current_page_num}/{configured_seek_max_pages}]"
+            detail_session = _AsyncDetailSession(
+                headless=headless,
+                viewport_width=playwright_viewport_width,
+                viewport_height=playwright_viewport_height,
+                n_workers=n_detail_workers,
+            )
+            try:
+                total_targets = len(search_targets)
+                for target_index, search_target in enumerate(search_targets, start=1):
                     if run_stop_requested():
-                        logger.info("%s stop requested; ending scrape", page_tag)
+                        logger.info("[SEEK] stop requested; ending scrape")
                         break
-                    page_url = (
-                        set_page_param(base_search_url, current_page_num)
-                        if current_page_num > 1
-                        else base_search_url
+                    base_search_url = search_target["url"]
+                    search_location = search_target["location"]
+                    search_keywords = search_target["keywords"]
+                    classification_ids = ",".join(search_target.get("classification_ids", []))
+                    current_page_num = 1
+                    target_t0 = time.monotonic()
+
+                    logger.info(
+                        "[SEEK] target %d/%d | location=%s | keywords=%s | classifications=%s | pages=1..%d",
+                        target_index,
+                        total_targets,
+                        search_location or "(all)",
+                        search_keywords or "(unset)",
+                        classification_ids or "(none)",
+                        configured_seek_max_pages,
                     )
 
-                    logger.info("%s url=%s", page_tag, page_url)
+                    while current_page_num <= configured_seek_max_pages:
+                        page_tag = f"[SEEK p{current_page_num}/{configured_seek_max_pages}]"
+                        if run_stop_requested():
+                            logger.info("%s stop requested; ending scrape", page_tag)
+                            break
+                        page_url = (
+                            set_page_param(base_search_url, current_page_num)
+                            if current_page_num > 1
+                            else base_search_url
+                        )
+
+                        logger.info("%s url=%s", page_tag, page_url)
 
                     stop_target = False
                     try:
@@ -1157,9 +1159,19 @@ def seek_scrape_to_records(
                         break
 
                     current_page_num += 1
-            set_run_progress("SEEK complete")
-        finally:
-            detail_session.close()
-            context.close()
+                set_run_progress("SEEK complete")
+            finally:
+                detail_session.close()
+                context.close()
+    except BotChallengeDetected:
+        raise
+    except Exception as exc:
+        raise PartialSourceResultsError(
+            "seek",
+            kept_records=kept_records,
+            audit_rows=audit_rows,
+            skill_observations=skill_observations,
+            original_error=exc,
+        ) from exc
 
     return kept_records, audit_rows, skill_observations

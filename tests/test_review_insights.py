@@ -159,7 +159,14 @@ def test_build_review_data_exposes_title_tuning_rules(monkeypatch):
         audit_rows=[
             {
                 "decision": "REJECT",
-                "reject_reason": "TITLE_NOT_TARGET",
+                "reject_reason": "ONET_FAR_OCCUPATION",
+                "title_reason": "TITLE_NOT_TARGET",
+                "onet_classification": {
+                    "result": "far",
+                    "matched_occupation_code": "1234",
+                    "confidence": 0.9,
+                    "reason": "match",
+                },
                 "url": "https://example.test/job-1",
                 "title": "Unrelated Role",
                 "company": "Example Co",
@@ -180,7 +187,7 @@ def test_build_review_data_exposes_title_tuning_rules(monkeypatch):
 
     assert result["suggested_tuning"]["summary"]["rule_count"] == 2
     assert {item["reason"] for item in result["suggested_tuning"]["rule_suggestions"]} == {
-        "TITLE_NOT_TARGET",
+        "ONET_FAR_OCCUPATION",
         "TITLE_BAD_KEYWORD: contractor",
     }
 
@@ -202,8 +209,8 @@ def test_build_review_data_exposes_uncertain_title_optimisation_suggestions(monk
         audit_rows=[
             {
                 "decision": "REJECT",
-                "reject_reason": "TITLE_NOT_TARGET",
-                "title_reason": "TITLE_NOT_TARGET",
+                "reject_reason": "LLM_REJECT",
+                "title_reason": "TITLE_REASON_POTENTIAL_MATCH",
                 "onet_classification": {
                     "result": "uncertain",
                     "matched_occupation_code": None,
@@ -217,8 +224,8 @@ def test_build_review_data_exposes_uncertain_title_optimisation_suggestions(monk
             },
             {
                 "decision": "REJECT",
-                "reject_reason": "TITLE_NOT_TARGET",
-                "title_reason": "TITLE_NOT_TARGET",
+                "reject_reason": "LLM_REJECT",
+                "title_reason": "TITLE_REASON_POTENTIAL_MATCH",
                 "onet_classification": {
                     "result": "uncertain",
                     "matched_occupation_code": None,
@@ -263,8 +270,8 @@ def test_build_review_data_keeps_clear_title_hard_block_suggestions_when_bucket_
         audit_rows=[
             {
                 "decision": "REJECT",
-                "reject_reason": "TITLE_NOT_TARGET",
-                "title_reason": "TITLE_NOT_TARGET",
+                "reject_reason": "LLM_REJECT",
+                "title_reason": "TITLE_REASON_POTENTIAL_MATCH",
                 "onet_classification": {
                     "result": "uncertain",
                     "matched_occupation_code": None,
@@ -278,10 +285,10 @@ def test_build_review_data_keeps_clear_title_hard_block_suggestions_when_bucket_
             },
             {
                 "decision": "REJECT",
-                "reject_reason": "TITLE_NOT_TARGET",
+                "reject_reason": "ONET_FAR_OCCUPATION",
                 "title_reason": "TITLE_NOT_TARGET",
                 "onet_classification": {
-                    "result": "certain",
+                    "result": "far",
                     "matched_occupation_code": "2345",
                     "confidence": 0.9,
                     "reason": "match",
@@ -301,7 +308,7 @@ def test_build_review_data_keeps_clear_title_hard_block_suggestions_when_bucket_
     assert result["suggested_tuning"]["summary"]["optimization_count"] == 1
     assert result["suggested_tuning"]["summary"]["rule_count"] == 1
     assert optimisation[0]["headline"] == "Repeated uncertain title: AI Core Platform Engineer AWS"
-    assert rules[0]["reason"] == "TITLE_NOT_TARGET"
+    assert rules[0]["reason"] == "ONET_FAR_OCCUPATION"
     assert rules[0]["count"] == 1
 
 

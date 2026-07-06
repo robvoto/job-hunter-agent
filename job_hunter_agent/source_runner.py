@@ -11,6 +11,7 @@ from typing import Any
 
 from job_hunter_agent.run_context import ScrapeRunContext
 from job_hunter_agent.run_control import get_run_progress, run_stop_requested, set_run_progress
+from job_hunter_agent.source_errors import PartialSourceResultsError
 from job_hunter_agent.global_settings import get_seek_assisted_verification_enabled
 from job_hunter_agent.scrapers.apsjobs import APSJobsScraper
 from job_hunter_agent.scrapers.seek import build_seek_search_targets
@@ -132,6 +133,18 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
             _job_history_snapshot=job_history,
             _llm_cache_snapshot=llm_cache,
         )
+    except PartialSourceResultsError as exc:
+        logger.exception("[SEEK] scraping failed after partial results")
+        print(f"[SEEK] Scraping failed: {type(exc.original_error).__name__}: {exc.original_error}")
+        return SourceRunResult(
+            source=SOURCE_SEEK,
+            kept_records=exc.kept_records,
+            audit_rows=exc.audit_rows,
+            skill_observations=exc.skill_observations,
+            error=exc.original_error,
+            _job_history_snapshot=job_history,
+            _llm_cache_snapshot=llm_cache,
+        )
     except Exception as exc:
         logger.exception("[SEEK] scraping failed")
         print(f"[SEEK] Scraping failed: {type(exc).__name__}: {exc}")
@@ -173,6 +186,20 @@ def _run_linkedin_source(context: ScrapeRunContext) -> SourceRunResult:
             _job_history_snapshot=job_history,
             _llm_cache_snapshot=llm_cache,
         )
+    except PartialSourceResultsError as exc:
+        logger.exception("[LinkedIn] scraping failed after partial results")
+        print(
+            f"[LinkedIn] Scraping failed: {type(exc.original_error).__name__}: {exc.original_error}"
+        )
+        return SourceRunResult(
+            source=SOURCE_LINKEDIN,
+            kept_records=exc.kept_records,
+            audit_rows=exc.audit_rows,
+            skill_observations=exc.skill_observations,
+            error=exc.original_error,
+            _job_history_snapshot=job_history,
+            _llm_cache_snapshot=llm_cache,
+        )
     except Exception as exc:
         logger.exception("[LinkedIn] scraping failed")
         print(f"[LinkedIn] Scraping failed: {type(exc).__name__}: {exc}")
@@ -203,6 +230,19 @@ def _run_apsjobs_source(context: ScrapeRunContext) -> SourceRunResult:
             kept_records=kept,
             audit_rows=audit,
             skill_observations=skills,
+            _job_history_snapshot=job_history,
+            _llm_cache_snapshot=llm_cache,
+        )
+    except PartialSourceResultsError as exc:
+        print(
+            f"[APSJobs] Scraping failed: {type(exc.original_error).__name__}: {exc.original_error}"
+        )
+        return SourceRunResult(
+            source=SOURCE_APSJOBS,
+            kept_records=exc.kept_records,
+            audit_rows=exc.audit_rows,
+            skill_observations=exc.skill_observations,
+            error=exc.original_error,
             _job_history_snapshot=job_history,
             _llm_cache_snapshot=llm_cache,
         )
@@ -376,10 +416,8 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
         context.job_history.update(result._job_history_snapshot)
         context.llm_cache.update(result._llm_cache_snapshot)
 
-    # Collect outputs, skipping errored sources (LinkedIn errors already printed).
+    # Collect outputs even from errored sources so partial current-run audit data survives.
     for result in results:
-        if result.error is not None:
-            continue
         kept_records.extend(result.kept_records)
         audit_rows.extend(result.audit_rows)
         skill_observations.extend(result.skill_observations)

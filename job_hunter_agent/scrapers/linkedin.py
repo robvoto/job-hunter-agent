@@ -57,6 +57,7 @@ from job_hunter_agent.salary import load_salary
 from job_hunter_agent.scrapers.base import BaseJobScraper, normalize_jobspy_record
 from job_hunter_agent.scrapers.location_adapters import to_jobspy
 from job_hunter_agent.source_registry import SOURCE_LINKEDIN
+from job_hunter_agent.source_errors import PartialSourceResultsError
 from job_hunter_agent.posting_utils import parse_visible_posted_age_days
 from job_hunter_agent.work_mode_extraction import (
     WORK_MODE_UNKNOWN,
@@ -160,116 +161,125 @@ class LinkedInScraper(BaseJobScraper):
         )
 
         total_targets = len(targets)
-        for target_index, target in enumerate(targets, start=1):
-            target_tag = f"[LinkedIn target {target_index}/{total_targets}]"
-            set_run_progress(f"LinkedIn search {target_index}/{total_targets}")
-            logger.info(
-                "%s search_term=%s | location=%s | results_wanted=%d",
-                target_tag,
-                target["search_term"] or "(unset)",
-                target["location"] or "(all)",
-                target["results_wanted"],
-            )
-            try:
-                fetch_started_at = time.monotonic()
+        try:
+            for target_index, target in enumerate(targets, start=1):
+                target_tag = f"[LinkedIn target {target_index}/{total_targets}]"
+                set_run_progress(f"LinkedIn search {target_index}/{total_targets}")
                 logger.info(
-                    "%s jobspy fetch start | search_term=%r | location=%r | results_wanted=%d | hours_old=%d | easy_apply=%r | sort_newest_first=%s",
+                    "%s search_term=%s | location=%s | results_wanted=%d",
                     target_tag,
                     target["search_term"] or "(unset)",
                     target["location"] or "(all)",
                     target["results_wanted"],
-                    target["hours_old"],
-                    target.get("easy_apply"),
-                    target["sort_newest_first"],
                 )
-                rows = self._fetch_jobspy(target)
-                logger.info(
-                    "%s jobspy fetch done | elapsed_ms=%d | rows=%s",
-                    target_tag,
-                    int((time.monotonic() - fetch_started_at) * 1000),
-                    "none" if rows is None else len(rows),
-                )
-            except Exception as exc:
-                logger.warning("%s jobspy call failed: %s: %s", target_tag, type(exc).__name__, exc)
-                continue
-
-            if rows is None or len(rows) == 0:
-                logger.info("%s no results", target_tag)
-                continue
-
-            if target.get("sort_newest_first"):
                 try:
-                    rows = rows.sort_values(
-                        by="date_posted",
-                        ascending=False,
-                        na_position="last",
-                    )
-                except Exception:
-                    pass
-
-            logger.info("%s rows=%d", target_tag, len(rows))
-
-            for _, row in rows.iterrows():
-                if run_stop_requested():
-                    logger.info("[LinkedIn] stop requested; ending scrape")
-                    break
-                record = normalize_jobspy_record(
-                    row,
-                    source=self.source_name,
-                    search_keywords=target["search_term"],
-                    search_location=target["location"],
-                    run_iso=self.run_iso,
-                    salary_rules=salary_rules,
-                    job_type_rules=job_type_rules,
-                )
-                _backfill_linkedin_posted_age(record, self.run_iso)
-                record[RECORD_DESCRIPTION_SOURCE_KEY] = "linkedin_full_description"
-                record[RECORD_DETAILS_TEXT_KEY] = str(record.get(RECORD_DETAILS_TEXT_KEY) or "")
-                logger.info(
-                    "[PIPELINE][CARD_NORMALIZED] source=LINKEDIN job_key=%s title=%r company=%r url=%r description_chars=%d",
-                    record.get(RECORD_JOB_KEY),
-                    record.get(RECORD_TITLE_KEY),
-                    record.get(RECORD_COMPANY_KEY),
-                    record.get(RECORD_URL_KEY),
-                    len(record[RECORD_DETAILS_TEXT_KEY]),
-                )
-
-                closed_signals = self._detect_closed_job_signals(record)
-                if closed_signals:
-                    record[RECORD_JOB_QUALITY_SIGNALS_KEY] = closed_signals
+                    fetch_started_at = time.monotonic()
                     logger.info(
-                        "%s closed listing detected; will reject before detail review",
+                        "%s jobspy fetch start | search_term=%r | location=%r | results_wanted=%d | hours_old=%d | easy_apply=%r | sort_newest_first=%s",
                         target_tag,
+                        target["search_term"] or "(unset)",
+                        target["location"] or "(all)",
+                        target["results_wanted"],
+                        target["hours_old"],
+                        target.get("easy_apply"),
+                        target["sort_newest_first"],
+                    )
+                    rows = self._fetch_jobspy(target)
+                    logger.info(
+                        "%s jobspy fetch done | elapsed_ms=%d | rows=%s",
+                        target_tag,
+                        int((time.monotonic() - fetch_started_at) * 1000),
+                        "none" if rows is None else len(rows),
+                    )
+                except Exception as exc:
+                    logger.warning("%s jobspy call failed: %s: %s", target_tag, type(exc).__name__, exc)
+                    continue
+
+                if rows is None or len(rows) == 0:
+                    logger.info("%s no results", target_tag)
+                    continue
+
+                if target.get("sort_newest_first"):
+                    try:
+                        rows = rows.sort_values(
+                            by="date_posted",
+                            ascending=False,
+                            na_position="last",
+                        )
+                    except Exception:
+                        pass
+
+                logger.info("%s rows=%d", target_tag, len(rows))
+
+                for _, row in rows.iterrows():
+                    if run_stop_requested():
+                        logger.info("[LinkedIn] stop requested; ending scrape")
+                        break
+                    record = normalize_jobspy_record(
+                        row,
+                        source=self.source_name,
+                        search_keywords=target["search_term"],
+                        search_location=target["location"],
+                        run_iso=self.run_iso,
+                        salary_rules=salary_rules,
+                        job_type_rules=job_type_rules,
+                    )
+                    _backfill_linkedin_posted_age(record, self.run_iso)
+                    record[RECORD_DESCRIPTION_SOURCE_KEY] = "linkedin_full_description"
+                    record[RECORD_DETAILS_TEXT_KEY] = str(record.get(RECORD_DETAILS_TEXT_KEY) or "")
+                    logger.info(
+                        "[PIPELINE][CARD_NORMALIZED] source=LINKEDIN job_key=%s title=%r company=%r url=%r description_chars=%d",
+                        record.get(RECORD_JOB_KEY),
+                        record.get(RECORD_TITLE_KEY),
+                        record.get(RECORD_COMPANY_KEY),
+                        record.get(RECORD_URL_KEY),
+                        len(record[RECORD_DETAILS_TEXT_KEY]),
                     )
 
-                pre_outcome, record, _, should_fetch_details = review_pre_detail_normalized_job(
-                    record, review_context
-                )
-                if pre_outcome["decision"] != "KEEP" or not should_fetch_details:
-                    continue
+                    closed_signals = self._detect_closed_job_signals(record)
+                    if closed_signals:
+                        record[RECORD_JOB_QUALITY_SIGNALS_KEY] = closed_signals
+                        logger.info(
+                            "%s closed listing detected; will reject before detail review",
+                            target_tag,
+                        )
 
-                hooks = self._build_review_hooks()
-                outcome, record, record_skill_observations = review_post_detail_normalized_job(
-                    record, review_context, hooks=hooks
-                )
-                if outcome["decision"] != "KEEP":
-                    continue
-                skill_observations.extend(record_skill_observations)
-                kept_records.append(record)
-                _li_score, _li_breakdown = fit_score_and_breakdown_displayed(record, self.profile)
-                logger.info(
-                    "%s KEPT %s @ %s | %s | %s | %s | %s",
-                    target_tag,
-                    record.get(RECORD_TITLE_KEY),
-                    record.get(RECORD_COMPANY_KEY),
-                    record.get("posted"),
-                    record.get(RECORD_LOCATION_KEY),
-                    record.get("work_type"),
-                    record.get(RECORD_SALARY_KEY) or "N/A",
-                )
-                print_job_human_summary(
-                    record, self.profile, score=_li_score, breakdown=_li_breakdown
-                )
+                    pre_outcome, record, _, should_fetch_details = review_pre_detail_normalized_job(
+                        record, review_context
+                    )
+                    if pre_outcome["decision"] != "KEEP" or not should_fetch_details:
+                        continue
+
+                    hooks = self._build_review_hooks()
+                    outcome, record, record_skill_observations = review_post_detail_normalized_job(
+                        record, review_context, hooks=hooks
+                    )
+                    if outcome["decision"] != "KEEP":
+                        continue
+                    skill_observations.extend(record_skill_observations)
+                    kept_records.append(record)
+                    _li_score, _li_breakdown = fit_score_and_breakdown_displayed(record, self.profile)
+                    logger.info(
+                        "%s KEPT %s @ %s | %s | %s | %s | %s",
+                        target_tag,
+                        record.get(RECORD_TITLE_KEY),
+                        record.get(RECORD_COMPANY_KEY),
+                        record.get("posted"),
+                        record.get(RECORD_LOCATION_KEY),
+                        record.get("work_type"),
+                        record.get(RECORD_SALARY_KEY) or "N/A",
+                    )
+                    print_job_human_summary(
+                        record, self.profile, score=_li_score, breakdown=_li_breakdown
+                    )
+        except Exception as exc:
+            raise PartialSourceResultsError(
+                self.source_name,
+                kept_records=kept_records,
+                audit_rows=audit_rows,
+                skill_observations=skill_observations,
+                original_error=exc,
+            ) from exc
 
         logger.info("[LinkedIn] done | kept=%d audit=%d", len(kept_records), len(audit_rows))
         set_run_progress("LinkedIn complete")

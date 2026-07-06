@@ -467,6 +467,21 @@ def test_build_run_stats_counts_unique_pages_across_sources():
     assert stats["onet_match_count"] == 1
 
 
+def test_derive_run_summary_metrics_counts_onet_far_rejections():
+
+    metrics = scrape_finalize._derive_run_summary_metrics(
+        [
+            {"source": "seek", "reject_reason": "ONET_FAR_OCCUPATION"},
+            {"source": "linkedin", "reject_reason": "TITLE_NOT_TARGET"},
+            {"source": "seek", "reject_reason": "ONET_FAR_OCCUPATION"},
+        ]
+    )
+
+    assert metrics["source_counts"] == {"seek": 2, "linkedin": 1}
+    assert metrics["onet_far_rejected"] == 2
+    assert metrics["title_rejected"] == 1
+
+
 def test_print_run_summary_uses_explicit_pages_and_cost_labels(caplog, tmp_path, monkeypatch, capsys):
     import logging as _logging
 
@@ -481,6 +496,7 @@ def test_print_run_summary_uses_explicit_pages_and_cost_labels(caplog, tmp_path,
             "cards_read": 5,
             "kept_count": 2,
             "rejected_count": 3,
+            "onet_far_rejected": 2,
             "cards_with_flags_count": 1,
             "llm_total_cost_usd": 0.123456,
             "llm_truncation_count": 4,
@@ -489,6 +505,7 @@ def test_print_run_summary_uses_explicit_pages_and_cost_labels(caplog, tmp_path,
 
     log_text = caplog.text
     assert "Pages read: 3" in log_text
+    assert "O*NET rejects: 2" in log_text
     assert "Total LLM cost: $0.1235" in log_text
     assert "LLM truncations: 4" in log_text
 
@@ -496,11 +513,13 @@ def test_print_run_summary_uses_explicit_pages_and_cost_labels(caplog, tmp_path,
     assert summary_path.exists()
     summary_text = summary_path.read_text(encoding="utf-8")
     assert "Run ID:     2026-05-16T08:12:40+00:00" in summary_text
+    assert "O*NET rejects: 2" in summary_text
     assert "Total LLM cost: $0.1235" in summary_text
     assert "Jobs seen:  7" in summary_text
 
     captured = capsys.readouterr()
     assert "Run complete" in captured.err
+    assert "O*NET rejects: 2" in captured.err
     assert "Total LLM cost: $0.1235" in captured.err
 
 
