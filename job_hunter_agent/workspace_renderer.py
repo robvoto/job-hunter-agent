@@ -381,6 +381,7 @@ def visible_fit_reasons(
         seen_reasons.add(normalized)
 
     excluded = {
+        "Base fit",
         "Passed content filters",
     }
     # Work type is only a fit reason when the user has a specific work type preference.
@@ -428,6 +429,88 @@ def visible_fit_reasons(
         return formatted_reasons
 
     return [reason for reason, _ in reason_items]
+
+
+def _fit_summary_candidates_from_coverage(raw_coverage: Any) -> list[str]:
+    if not isinstance(raw_coverage, list):
+        return []
+
+    importance_rank = {
+        "mandatory": 0,
+        "strongly_preferred": 1,
+        "preferred": 2,
+        "nice_to_have": 3,
+    }
+    status_rank = {
+        "supported": 0,
+        "partially_supported": 1,
+    }
+    candidates: list[tuple[int, int, int, str]] = []
+    seen: set[str] = set()
+
+    for index, item in enumerate(raw_coverage):
+        if not isinstance(item, dict):
+            continue
+        status = compact_whitespace(str(item.get("status") or "")).lower()
+        if status not in {"supported", "partially_supported"}:
+            continue
+        requirement = compact_whitespace(str(item.get("requirement") or ""))
+        if not requirement:
+            continue
+        normalized = requirement.lower()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        importance = compact_whitespace(str(item.get("importance") or "preferred")).lower()
+        candidates.append(
+            (
+                importance_rank.get(importance, 99),
+                status_rank.get(status, 99),
+                index,
+                requirement,
+            )
+        )
+
+    candidates.sort()
+    return [item[3] for item in candidates[:5]]
+
+
+def _fit_summary_candidates_from_fit_highlights(fit_highlights: list[str]) -> list[str]:
+    candidates: list[str] = []
+    seen: set[str] = set()
+
+    for item in fit_highlights:
+        highlight = compact_whitespace(item)
+        if not highlight:
+            continue
+        requirement_match = re.match(
+            r"the ad asks for\s+(.*?),\s+and your profile shows this experience\.?$",
+            highlight,
+            re.IGNORECASE,
+        )
+        candidate = compact_whitespace(requirement_match.group(1)) if requirement_match else highlight
+        normalized = candidate.lower()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        candidates.append(candidate)
+        if len(candidates) >= 5:
+            break
+
+    return candidates
+
+
+def _build_fit_summary_text(raw_coverage: Any, fit_highlights: list[str]) -> str:
+    summary_items = _fit_summary_candidates_from_coverage(raw_coverage)
+    if not summary_items:
+        summary_items = _fit_summary_candidates_from_fit_highlights(fit_highlights)
+    if not summary_items:
+        return ""
+
+    return (
+        "This role looks like a good fit because the ad asks for "
+        f"{list_to_phrase(summary_items)}, and the candidate profile shows support for those areas."
+    )
 
 
 def negative_score_reasons(
@@ -869,10 +952,7 @@ def render_job_card(
     block_phrase = safe_html(_block_phrases_list[0]) if _block_phrases_list else ""
     block_phrases_json = safe_html(json.dumps(_block_phrases_list))
     similar_applied_title = safe_html(str((similar_applied_record or {}).get("title") or ""))
-    similar_applied_company = safe_html(
-        normalize_company_name(str((similar_applied_record or {}).get("company") or ""))
-        or str((similar_applied_record or {}).get("company") or "")
-    )
+    similar_applied_company = safe_html(str((similar_applied_record or {}).get("company") or "").strip())
     similar_applied_source = str((similar_applied_record or {}).get("source") or "").lower().strip()
     similar_applied_source_label = safe_html(
         get_source_display_label(similar_applied_source) if similar_applied_source else ""
@@ -1212,26 +1292,52 @@ def render_job_card(
         if role_summary and role_summary != "N/A"
         else ""
     )
-    note_bits: List[str] = []
+    note_html = ""
     if history_warning_signals:
-        note_bits.append(
-            f"Potential red flag: {history_warning_signals[0].removeprefix('Potential red flag: ').strip()}."
+        note_html = (
+            '<div class="job-note">'
+            f'{safe_html(f"Potential red flag: {history_warning_signals[0].removeprefix("Potential red flag: ").strip()}.")}'
+            "</div>"
         )
     elif description_issue:
-        note_bits.append("Description issue: full job description was not captured clearly.")
-    elif is_possible_repost:
-        note_bits.append(
-            "Alert: This looks like a role you already marked as applied at this company."
+        note_html = (
+            '<div class="job-note">'
+            "Description issue: full job description was not captured clearly."
+            "</div>"
         )
-
-    note_html = f'<div class="job-note">{safe_html(" ".join(note_bits))}</div>' if note_bits else ""
+    elif is_possible_repost:
+        repost_label_parts = [
+            similar_applied_company,
+            similar_applied_source_label,
+        ]
+        repost_label = " \u2014 ".join(part for part in repost_label_parts if part)
+        repost_title_html = similar_applied_title
+        similar_applied_job_key_raw = str((similar_applied_record or {}).get("job_key") or "").strip()
+        if similar_applied_title and similar_applied_job_key_raw:
+            repost_title_html = (
+                f'<a href="#{safe_html(_workspace_job_card_id(similar_applied_job_key_raw))}">'
+                f"{similar_applied_title}</a>"
+            )
+        repost_message = (
+            "Possible repost of applied job: "
+            f"{repost_title_html}"
+            f'{f" \u2014 {repost_label}" if repost_label else ""}'
+        )
+        note_html = f'<div class="job-note">{repost_message}</div>'
     reviewed_signal_matches = reviewed_signal_match_summary(display_record, scoring_profile)
     insight_sections = []
-    if visible_reasons:
+    fit_summary_text = _build_fit_summary_text(display_record.get(RECORD_REQUIREMENT_COVERAGE_KEY), fit_highlights)
+    if fit_summary_text or visible_reasons:
+        visible_reasons_html = (
+            f"<ul>{''.join(f'<li>{safe_html(item)}</li>' for item in visible_reasons)}</ul>"
+            if visible_reasons
+            else ""
+        )
         insight_sections.append(
             '<div class="job-insight-group">'
-            "<strong>Why this looks like a good fit</strong>"
-            f"<ul>{''.join(f'<li>{safe_html(item)}</li>' for item in visible_reasons)}</ul>"
+            "<strong>Why this is a good fit</strong>"
+            f'{f"<p class=\"job-fit-summary\">{safe_html(fit_summary_text)}</p>" if fit_summary_text else ""}'
+            f"{visible_reasons_html}"
             "</div>"
         )
     if reviewed_signal_matches["matched"]:

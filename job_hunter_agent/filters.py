@@ -9,7 +9,10 @@ from job_hunter_agent.capability_matrix import canonical_capability_term
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
 from job_hunter_agent.io_utils import load_parsing_rules
 from job_hunter_agent.profile_store import KEY_CANDIDATE_CAPABILITIES, load_profile
-from job_hunter_agent.signal_schema import TITLE_REASON_POTENTIAL_MATCH
+from job_hunter_agent.signal_schema import (
+    TITLE_REASON_NO_CORE_KEYWORD,
+    TITLE_REASON_POTENTIAL_MATCH,
+)
 from job_hunter_agent.title_normalization_rules import normalize_title_text
 
 TITLE_BLOCK_SEGMENT_SPLIT_RE = re.compile(r"\s*\|\s*|\s[-\u2013\u2014/:]\s|[(),\[\]]")
@@ -66,6 +69,20 @@ def _matches_normalized_title(text: str, patterns: list[str]) -> bool:
     return bool(_find_matching_title_pattern(text, patterns))
 
 
+def _extract_core_keywords(patterns: list[str]) -> set[str]:
+    """Return the significant words across role patterns, excluding generic qualifiers.
+
+    Derived entirely from the candidate's own target_roles/also_consider_roles —
+    no separately configured keyword list is introduced.
+    """
+    keywords: set[str] = set()
+    for pattern in patterns:
+        for word in _normalize_title_pattern_text(pattern).split():
+            if word and word not in _TITLE_QUALIFIER_SKIP_WORDS:
+                keywords.add(word)
+    return keywords
+
+
 def analyze_title_filters(title: str, profile: dict[str, Any] | None = None) -> dict[str, Any]:
     result: dict[str, Any] = {
         "ok": False,
@@ -118,6 +135,15 @@ def analyze_title_filters(title: str, profile: dict[str, Any] | None = None) -> 
         )
         if domain_qualifier:
             result["warning_reason"] = f"DOMAIN_QUALIFIER:{domain_qualifier}"
+        return result
+
+    core_keywords = _extract_core_keywords(target_patterns) | _extract_core_keywords(
+        adjacent_patterns
+    )
+    if core_keywords and not any(
+        re.search(rf"\b{re.escape(keyword)}\b", normalized_title) for keyword in core_keywords
+    ):
+        result.update({"ok": False, "reason": TITLE_REASON_NO_CORE_KEYWORD, "match_family": "none"})
         return result
 
     result.update({"ok": False, "reason": "TITLE_NOT_TARGET", "match_family": "none"})

@@ -43,6 +43,7 @@ from job_hunter_agent.record_schema import (
     RECORD_LLM_DECISION_KEY,
     RECORD_LLM_ELAPSED_MS_KEY,
     RECORD_LLM_FIT_GRADE_KEY,
+    RECORD_REQUIREMENT_COVERAGE_KEY,
 )
 from job_hunter_agent.scrapers.seek import build_seek_search_targets
 from job_hunter_agent.signal_schema import (
@@ -1211,7 +1212,11 @@ def test_possible_repost_card_carries_duplicate_apply_warning_details():
     assert 'data-similar-applied-warning="1"' in html
     assert 'data-similar-applied-job-key="seek:repost"' in html
     assert 'data-similar-applied-title="Business Analyst Senior"' in html
-    assert "Alert: This looks like a role you already marked as applied at this company." in html
+    assert "Possible repost of applied job:" in html
+    assert "Business Analyst Senior" in html
+    assert "Acme" in html
+    assert "SEEK" in html
+    assert 'href="#job-card-seek-repost"' in html
 
 
 def test_candidate_application_history_renders_warning_badges_without_changing_score():
@@ -1986,6 +1991,136 @@ def test_render_job_card_hides_debug_fit_sections_in_normal_mode():
     assert "Debug: LLM fit review" not in html
     assert "Debug: score details" not in html
     assert "Debug: scoring notes" not in html
+    assert "Base fit" not in html
+    assert "Strong requirement coverage" not in html
+
+
+def test_render_job_card_fit_breakdown_starts_with_plain_english_summary_from_requirement_coverage():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-fit-summary-coverage",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "decision": "KEEP",
+            "llm_decision": "KEEP",
+            "llm_fit_grade": "STRONG",
+            RECORD_FIT_SCORE_KEY: 72,
+            RECORD_FIT_SCORE_BREAKDOWN_KEY: [
+                {"label": "Base fit", "value": 72, "section": "llm_fit"},
+            ],
+            "requirement_coverage": [
+                {
+                    "requirement": "Agile delivery",
+                    "importance": "mandatory",
+                    "status": "supported",
+                    "capability_name": "Agile methodologies",
+                    "matched_job_text": "agile delivery",
+                    "profile_support": ["agile"],
+                },
+                {
+                    "requirement": "Stakeholder engagement",
+                    "importance": "strongly_preferred",
+                    "status": "partially_supported",
+                    "capability_name": "Primary stakeholder engagement",
+                    "matched_job_text": "stakeholder engagement",
+                    "profile_support": ["stakeholder engagement"],
+                },
+                {
+                    "requirement": "User acceptance testing",
+                    "importance": "preferred",
+                    "status": "supported",
+                    "capability_name": "Acceptance testing",
+                    "matched_job_text": "user acceptance testing",
+                    "profile_support": ["uat"],
+                },
+                {
+                    "requirement": "SAP certification",
+                    "importance": "mandatory",
+                    "status": "mismatch",
+                    "capability_name": "",
+                    "matched_job_text": "SAP certification",
+                    "profile_support": [],
+                },
+            ],
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": (
+                "The role needs agile delivery, stakeholder engagement, and user acceptance testing experience. "
+                * 20
+            ),
+            "fit_source_text": (
+                "The role needs agile delivery, stakeholder engagement, and user acceptance testing experience. "
+                * 20
+            ),
+            "description_source": "linkedin_full_description",
+            "details_status": "ok",
+            "source": "seek",
+        },
+        _capability_profile(),
+        debug_mode=False,
+    )
+
+    expected_summary = (
+        "This role looks like a good fit because the ad asks for Agile delivery, "
+        "Stakeholder engagement, and User acceptance testing, and the candidate profile shows support for those areas."
+    )
+
+    assert "Why this is a good fit" in html
+    assert expected_summary in html
+    assert html.index(expected_summary) < html.index("The ad asks for Agile methodologies, and your profile shows this experience.")
+    assert "The ad asks for Agile methodologies, and your profile shows this experience." in html
+    assert "The ad asks for Acceptance testing, and your profile shows this experience." in html
+    assert "SAP certification" not in expected_summary
+
+
+def test_render_job_card_fit_breakdown_falls_back_to_visible_highlights_when_requirement_coverage_missing():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-fit-summary-fallback",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "decision": "KEEP",
+            "llm_decision": "KEEP",
+            "llm_fit_grade": "STRONG",
+            RECORD_FIT_SCORE_KEY: 68,
+            RECORD_FIT_SCORE_BREAKDOWN_KEY: [
+                {"label": "Base fit", "value": 68, "section": "llm_fit"},
+            ],
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": (
+                "This role focuses on agile delivery and user acceptance testing across delivery teams. "
+                * 20
+            ),
+            "fit_source_text": (
+                "This role focuses on agile delivery and user acceptance testing across delivery teams. "
+                * 20
+            ),
+            "description_source": "linkedin_full_description",
+            "details_status": "ok",
+            "source": "seek",
+        },
+        _capability_profile(),
+        debug_mode=False,
+    )
+
+    assert "This role looks like a good fit because the ad asks for " in html
+    assert "and the candidate profile shows support for those areas." in html
+    assert "Base fit" not in html
+    assert "The ad asks for Agile methodologies, and your profile shows this experience." in html
+    assert html.index("This role looks like a good fit because the ad asks for ") < html.index(
+        "The ad asks for Agile methodologies, and your profile shows this experience."
+    )
 
 
 def test_posted_filter_options_show_explicit_day_windows():
@@ -2618,7 +2753,7 @@ def test_fit_section_heading_uses_human_friendly_language():
         profile,
     )
 
-    assert "Why this looks like a good fit" in html
+    assert "Why this is a good fit" in html
     assert "Things to check before applying" in html
     assert "Why it fits" not in html
     assert "What lowers it" not in html
@@ -2664,3 +2799,51 @@ def test_score_gap_notes_use_friendly_copy():
 
     assert "Why this score is lower" in html
     assert "What we couldn't score" not in html
+
+
+def test_render_job_card_fit_breakdown_starts_with_plain_english_summary_from_requirement_coverage():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-fit-summary-coverage",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "decision": "KEEP",
+            "llm_decision": "KEEP",
+            "llm_fit_grade": "STRONG",
+            RECORD_FIT_SCORE_KEY: 72,
+            RECORD_FIT_SCORE_BREAKDOWN_KEY: [
+                {"label": "Base fit", "value": 72, "section": "llm_fit"},
+            ],
+            RECORD_REQUIREMENT_COVERAGE_KEY: [
+                {"requirement": "Agile delivery", "importance": "mandatory", "status": "supported"},
+                {"requirement": "Stakeholder engagement", "importance": "strongly_preferred", "status": "partially_supported"},
+                {"requirement": "User acceptance testing", "importance": "preferred", "status": "supported"},
+                {"requirement": "SAP certification", "importance": "mandatory", "status": "mismatch"},
+            ],
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Agile delivery, stakeholder engagement, and user acceptance testing. " * 20,
+            "fit_source_text": "Agile delivery, stakeholder engagement, and user acceptance testing. " * 20,
+            "description_source": "linkedin_full_description",
+            RECORD_DETAILS_STATUS_KEY: DETAILS_STATUS_OK,
+            "source": "seek",
+        },
+        _capability_profile(),
+        debug_mode=False,
+    )
+
+    expected_summary = (
+        "This role looks like a good fit because the ad asks for Agile delivery, "
+        "Stakeholder engagement, and User acceptance testing, and the candidate profile shows support for those areas."
+    )
+
+    assert "Why this is a good fit" in html
+    assert expected_summary in html
+    assert html.index(expected_summary) < html.index("The ad asks for Agile methodologies, and your profile shows this experience.")
+    assert "Base fit" not in html
+    assert "SAP certification" not in expected_summary
