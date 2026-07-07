@@ -157,6 +157,7 @@ from job_hunter_agent.record_schema import (
     RECORD_WORK_TYPE_KEY,
 )
 from job_hunter_agent.role_analysis import infer_posting_channel
+from job_hunter_agent.run_control import pause_for_step_through
 from job_hunter_agent.salary_utils import preferred_salary_display
 from job_hunter_agent.score_labels import score_to_tone_class
 from job_hunter_agent.signal_detection import (
@@ -1208,3 +1209,5 @@ def print_job_human_summary(
         lines.append(f"  ✗  REJECTED — {_reason_label(reject_reason)}{time_note}{cost_line}")
 
     logger.info("\n".join(lines))
+
+    pause_for_step_through(f"{title} @ {company} ({source}) — {decision or reject_reason}")

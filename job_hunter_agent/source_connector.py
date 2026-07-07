@@ -23,11 +23,16 @@ from job_hunter_agent.profile_store import (
     load_profile,
     require_profile_ready_for_review,
 )
-from job_hunter_agent.run_control import clear_run_progress, clear_run_stop_request
+from job_hunter_agent.run_control import (
+    clear_run_progress,
+    clear_run_stop_request,
+    enable_step_through,
+)
 from job_hunter_agent.runtime_helpers import (
     CLI_FLAG_DEBUG,
     CLI_FLAG_NO_LLM,
     CLI_FLAG_REBUILD_WORKSPACE,
+    CLI_FLAG_STEP,
     has_cli_flag,
 )
 from job_hunter_agent.user_settings import get_workspace_minimum_score
@@ -43,6 +48,9 @@ from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
 NO_LLM_MODE = has_cli_flag(sys.argv, CLI_FLAG_NO_LLM)
 WORKSPACE_DEBUG_MODE = has_cli_flag(sys.argv, CLI_FLAG_DEBUG)
 CONSOLE_BANNER_WIDTH = 60
+
+if has_cli_flag(sys.argv, CLI_FLAG_STEP):
+    enable_step_through()
 
 
 def scrape_jobs_direct() -> str:
@@ -87,6 +95,7 @@ def scrape_jobs_direct() -> str:
         "%s\n"
         "  Score Floor        : %d\n"
         "  Reset New To You   : %s\n"
+        "  Step-through debug : %s\n"
         "%s",
         "=" * CONSOLE_BANNER_WIDTH,
         "=" * CONSOLE_BANNER_WIDTH,
@@ -100,6 +109,7 @@ def scrape_jobs_direct() -> str:
         llm_model_line,
         context.dashboard_min_score,
         "YES (--reset-new-to-you)" if context.reset_new_to_you else "NO",
+        "ON (--step)" if has_cli_flag(sys.argv, CLI_FLAG_STEP) else "OFF",
         "=" * CONSOLE_BANNER_WIDTH,
     )
 

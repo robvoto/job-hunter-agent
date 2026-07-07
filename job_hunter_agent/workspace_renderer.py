@@ -258,6 +258,66 @@ def _humanize_check_item(text: str) -> str:
     return t
 
 
+def _workspace_job_reference_html(job_key_raw: str, *parts: str) -> str:
+    label_parts = [safe_html(part) for part in parts if compact_whitespace(part)]
+    label_html = " \u2014 ".join(label_parts)
+    if label_html and job_key_raw:
+        return f'<a href="#{safe_html(_workspace_job_card_id(job_key_raw))}">{label_html}</a>'
+    return label_html
+
+
+def _render_attention_needed_before_applying_html(
+    history_warning_signals: list[str],
+    description_issue: bool,
+    is_possible_repost: bool,
+    similar_applied_record: Optional[dict],
+    candidate_history: Optional[dict],
+    missing_profile_support: list[str],
+    salary_fit_state: str,
+) -> str:
+    """Render the single strict attention strip for the highest-priority issue."""
+
+    message_html = ""
+    if history_warning_signals:
+        message_html = (
+            f'Potential red flag: {safe_html(history_warning_signals[0].removeprefix("Potential red flag: ").strip())}.'
+        )
+    elif description_issue:
+        message_html = "Description issue: full job description was not captured clearly."
+    elif is_possible_repost:
+        similar_applied_job_key_raw = str((similar_applied_record or {}).get("job_key") or "").strip()
+        repost_reference_html = _workspace_job_reference_html(
+            similar_applied_job_key_raw,
+            str((similar_applied_record or {}).get("title") or "").strip(),
+            str((similar_applied_record or {}).get("company") or "").strip(),
+            get_source_display_label(
+                str((similar_applied_record or {}).get("source") or "").strip().lower()
+            ),
+        )
+        if repost_reference_html:
+            message_html = "Possible repost of applied job: " + repost_reference_html
+    elif isinstance(candidate_history, dict) and candidate_history:
+        cand_company = str(candidate_history.get("llm_company") or "").strip()
+        cand_role = str(candidate_history.get("llm_role") or "").strip()
+        cand_status = str(candidate_history.get("llm_application_status") or "").strip()
+        cand_confidence = str(candidate_history.get("llm_confidence") or "").strip().lower()
+        if cand_company or cand_role:
+            history_label = "Rejected before" if cand_status == "rejection" and cand_confidence != "low" else "Possible previous application"
+            message_html = f"{history_label}: {_workspace_job_reference_html('', cand_company, cand_role)}"
+    elif missing_profile_support:
+        message_html = f"Critical missing requirement: {safe_html(str(missing_profile_support[0]))}"
+    elif salary_fit_state == "below":
+        message_html = "Salary below target."
+    if not message_html:
+        return ""
+    return (
+        '<div class="job-note">'
+        "<strong>Attention needed before applying:</strong> "
+        f"{message_html}"
+        "</div>"
+    )
+
+
 def _is_capability_entry(label: str) -> bool:
     return any(tag in label for tag in _CAPABILITY_ENTRY_TAGS)
 
@@ -1265,38 +1325,15 @@ def render_job_card(
         if role_summary and role_summary != "N/A"
         else ""
     )
-    note_html = ""
-    if history_warning_signals:
-        note_html = (
-            '<div class="job-note">'
-            f'{safe_html(f"Potential red flag: {history_warning_signals[0].removeprefix("Potential red flag: ").strip()}.")}'
-            "</div>"
-        )
-    elif description_issue:
-        note_html = (
-            '<div class="job-note">'
-            "Description issue: full job description was not captured clearly."
-            "</div>"
-        )
-    elif is_possible_repost:
-        repost_label_parts = [
-            similar_applied_company,
-            similar_applied_source_label,
-        ]
-        repost_label = " \u2014 ".join(part for part in repost_label_parts if part)
-        repost_title_html = similar_applied_title
-        similar_applied_job_key_raw = str((similar_applied_record or {}).get("job_key") or "").strip()
-        if similar_applied_title and similar_applied_job_key_raw:
-            repost_title_html = (
-                f'<a href="#{safe_html(_workspace_job_card_id(similar_applied_job_key_raw))}">'
-                f"{similar_applied_title}</a>"
-            )
-        repost_message = (
-            "Possible repost of applied job: "
-            f"{repost_title_html}"
-            f'{f" \u2014 {repost_label}" if repost_label else ""}'
-        )
-        note_html = f'<div class="job-note">{repost_message}</div>'
+    note_html = _render_attention_needed_before_applying_html(
+        history_warning_signals,
+        description_issue,
+        is_possible_repost,
+        similar_applied_record,
+        _cand_hist,
+        missing_profile_support,
+        salary_fit_state,
+    )
     reviewed_signal_matches = reviewed_signal_match_summary(display_record, scoring_profile)
     insight_sections = []
     fit_summary_text = _build_fit_summary_text(display_record.get(RECORD_REQUIREMENT_COVERAGE_KEY))

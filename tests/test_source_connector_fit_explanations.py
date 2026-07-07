@@ -2,6 +2,7 @@
 
 import json
 from datetime import datetime
+from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -1212,11 +1213,123 @@ def test_possible_repost_card_carries_duplicate_apply_warning_details():
     assert 'data-similar-applied-warning="1"' in html
     assert 'data-similar-applied-job-key="seek:repost"' in html
     assert 'data-similar-applied-title="Business Analyst Senior"' in html
+    assert "Attention needed before applying:" in html
     assert "Possible repost of applied job:" in html
-    assert "Business Analyst Senior" in html
-    assert "Acme" in html
-    assert "SEEK" in html
     assert 'href="#job-card-seek-repost"' in html
+    assert (
+        'Attention needed before applying:</strong> Possible repost of applied job: '
+        '<a href="#job-card-seek-repost">Business Analyst Senior — Acme — SEEK</a>'
+    ) in html
+
+
+def test_attention_strip_prefers_red_flag_over_everything_else():
+    profile = {
+        **_test_profile(),
+        "salary_preferences": {
+            "minimum_salary_yearly": 120000,
+            "minimum_daily_rate": 700,
+        },
+    }
+
+    with patch(
+        "job_hunter_agent.workspace_renderer.assess_history_warning_signals",
+        return_value=["Potential red flag: Suspicious reposting pattern"],
+    ):
+        html = workspace_renderer.render_job_card(
+            {
+                "job_key": "test-alert-red-flag",
+                "title": "Business Analyst",
+                "company": "Acme",
+                "url": "https://example.com/job",
+                "title_reason": "OK",
+                "content_reason": "OK",
+                "llm_fit_grade": "SOLID",
+                "location": "Sydney NSW",
+                "work_type": "Full Time",
+                "work_mode": "Hybrid",
+                "salary": "$100k p.a.",
+                "full_description": "",
+                "fit_highlights": [],
+                "source": "seek",
+                "candidate_application_history": {
+                    "llm_application_status": "rejection",
+                    "llm_confidence": "high",
+                    "llm_needs_review": False,
+                    "llm_company": "Acme",
+                    "llm_role": "Business Analyst",
+                    "run_date": "2025-01-15",
+                    "llm_evidence": "Thanks for applying",
+                },
+            },
+            profile,
+            applied_pool=[
+                {
+                    "job_key": "test-alert-red-flag",
+                    "title": "Business Analyst",
+                    "company": "Acme",
+                    "source": "seek",
+                }
+            ],
+        )
+
+    assert "Attention needed before applying:" in html
+    assert "Potential red flag: Suspicious reposting pattern." in html
+    assert "Description issue:" not in html
+    assert "Possible repost of applied job:" not in html
+    assert "Rejected before:" not in html
+    assert "Salary below target." not in html
+
+
+def test_attention_strip_prefers_description_issue_over_lower_priority_alerts():
+    profile = {
+        **_test_profile(),
+        "salary_preferences": {
+            "minimum_salary_yearly": 120000,
+            "minimum_daily_rate": 700,
+        },
+    }
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-alert-description",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "$100k p.a.",
+            "teaser": "Business analyst role.",
+            "fit_highlights": [],
+            "source": "seek",
+            "candidate_application_history": {
+                "llm_application_status": "rejection",
+                "llm_confidence": "high",
+                "llm_needs_review": False,
+                "llm_company": "Acme",
+                "llm_role": "Business Analyst",
+                "run_date": "2025-01-15",
+                "llm_evidence": "Thanks for applying",
+            },
+        },
+        profile,
+        applied_pool=[
+            {
+                "job_key": "test-alert-description",
+                "title": "Business Analyst",
+                "company": "Acme",
+                "source": "seek",
+            }
+        ],
+    )
+
+    assert "Attention needed before applying:" in html
+    assert "Description issue: full job description was not captured clearly." in html
+    assert "Possible repost of applied job:" not in html
+    assert "Rejected before:" not in html
+    assert "Salary below target." not in html
 
 
 def test_candidate_application_history_renders_warning_badges_without_changing_score():
@@ -1259,13 +1372,49 @@ def test_candidate_application_history_renders_warning_badges_without_changing_s
         plain_html.split('data-fit-score="', 1)[1].split('"', 1)[0]
         == history_html.split('data-fit-score="', 1)[1].split('"', 1)[0]
     )
-    assert "Rejected before" in history_html
+    assert "Attention needed before applying:" in history_html
+    assert "Rejected before: Acme — Business Analyst" in history_html
     assert "Needs review" in history_html
     assert 'title="Company mismatch needs a manual check."' in history_html
     assert "Acme" in history_html
     assert "Role: Business Analyst" in history_html
     assert "Confidence: high" in history_html
     assert "Evidence: We regret to inform you" in history_html
+
+
+def test_attention_strip_shows_salary_below_target_when_it_is_the_last_remaining_issue():
+    profile = {
+        **_test_profile(),
+        "salary_preferences": {
+            "minimum_salary_yearly": 120000,
+            "minimum_daily_rate": 700,
+        },
+    }
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-alert-salary",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "$100k p.a.",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "seek",
+        },
+        profile,
+    )
+
+    assert "Attention needed before applying:" in html
+    assert "Salary below target." in html
+    assert "Description issue:" not in html
+    assert "Possible repost of applied job:" not in html
+    assert "Rejected before:" not in html
 
 
 def test_candidate_application_history_possible_rejection_uses_possible_previous_application_label():
@@ -2700,7 +2849,8 @@ def test_nv1_check_item_in_rendered_card():
     )
 
     assert "NV1 clearance" in html
-    assert "nv1 explicitly required but not shown" not in html.lower()
+    assert "Attention needed before applying:" in html
+    assert "Critical missing requirement: Nv1 explicitly required but not shown" in html
     start = html.index("Things to check before applying")
     end = html.index("</div>", start)
     check_section = html[start:end]
