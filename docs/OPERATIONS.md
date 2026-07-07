@@ -28,6 +28,8 @@ Primary runtime pipeline.
 python -m job_hunter_agent.source_connector
 ```
 
+This command runs from the authenticated account context already present in the app. It does not accept a manual account id or scope. If no signed-in account is available, it stops and asks you to log in first.
+
 Responsibilities:
 
 * scrape jobs
@@ -297,7 +299,7 @@ Rebuildable outputs:
 
 | File                        | Purpose             |
 | --------------------------- | ------------------- |
-| `data/users/<uid>/workspace_results.html` | rendered workspace |
+| Account-scoped workspace output | rendered workspace |
 | DB `run_stats` table        | runtime diagnostics |
 | DB `review_data` table      | review summaries    |
 | DB `audit_records` table    | audit output        |

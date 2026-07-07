@@ -1,5 +1,6 @@
 """Tests for fastapi app."""
 
+import hashlib
 import importlib
 import inspect
 import logging
@@ -198,7 +199,9 @@ def test_admin_knowledge_sync_triggers_roundtrip(monkeypatch):
     assert calls == ["sync"]
 
 
-def test_workspace_page_bootstrap_includes_user_id(monkeypatch):
+def test_workspace_page_bootstrap_includes_account_scope(monkeypatch):
+    legacy_bootstrap_name = "window.__JOB_HUNTER_" + "USER_ID__"
+
     monkeypatch.setattr(_fa, "read_session_user", lambda request: _FAKE_USER)
     monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: True)
     monkeypatch.setattr(_pages.srv, "DEBUG_MODE", True)
@@ -206,8 +209,11 @@ def test_workspace_page_bootstrap_includes_user_id(monkeypatch):
 
     client = TestClient(create_app())
     html = client.get("/").text
+    expected_scope = hashlib.sha256("test-user".encode("utf-8")).hexdigest()[:16]
 
-    assert 'window.__JOB_HUNTER_USER_ID__ = "test-user"' in html
+    assert 'window.__JOB_HUNTER_USER_SCOPE__ = "' in html
+    assert expected_scope in html
+    assert legacy_bootstrap_name not in html
     assert 'id="job_hunter_account_test_trigger"' in html
     assert ">Test</button>" in html
     assert 'id="job_hunter_clean_search_btn"' in html

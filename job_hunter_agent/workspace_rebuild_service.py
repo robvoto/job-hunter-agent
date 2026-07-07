@@ -16,7 +16,7 @@ from job_hunter_agent.io_utils import configure_console_output, load_job_history
 from job_hunter_agent.paths import get_workspace_results_path
 from job_hunter_agent.posting_utils import get_manual_skip_sets, parse_timestamp
 from job_hunter_agent.profile_store import get_search_settings, load_profile
-from job_hunter_agent.user_context import get_user_id_for_runtime, set_user_id
+from job_hunter_agent.user_context import get_user_id_for_runtime
 
 CONSOLE_BANNER_WIDTH = 60
 
@@ -25,13 +25,9 @@ WORKSPACE_DEBUG_MODE = DEBUG_MODE
 
 def rebuild_workspace_results(
     reason: str = "Manual --rebuild-workspace command",
-    user_id: str | None = None,
 ) -> str:
 
     configure_console_output()
-
-    if user_id is not None:
-        set_user_id(user_id)
 
     get_user_id_for_runtime()
 

@@ -291,7 +291,7 @@ def _build_latest_summary_text() -> str:
 def _start_default_search(user_id: str) -> str:
     clean_user_id = str(user_id or "").strip()
     if not clean_user_id:
-        raise ValueError("A user id is required to start a search.")
+        raise ValueError("A signed-in account is required to start a search.")
 
     if not srv._try_mark_run_started():
         return "A search is already running."
@@ -451,7 +451,7 @@ def sync_telegram_subscribers(settings: dict, *, user_id: str | None = None) -> 
                     reply_text = _telegram_export_text(export_result, "merge")
             elif command == "/run":
                 if not user_id:
-                    raise ValueError("Telegram /run requires a user id.")
+                    raise ValueError("Telegram /run requires a signed-in account.")
                 reply_text = _start_default_search(user_id)
         except Exception as exc:
             logger.warning(

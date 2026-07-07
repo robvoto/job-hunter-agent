@@ -5,7 +5,8 @@ All per-user path helpers in paths.py read from this context to resolve the
 correct data directory for the active user.
 
 Non-request code (agent_runner, CLI) must call set_user_id() explicitly before
-performing file operations.
+performing file operations. If no signed-in account is available, callers
+should prompt the user to log in rather than inventing an identifier.
 """
 
 from __future__ import annotations
@@ -28,5 +29,5 @@ def get_user_id_for_runtime() -> str:
     if user_id:
         return user_id
     raise RuntimeError(
-        "No active user id is set. Call set_user_id() before performing file operations.",
+        "No signed-in user is available. Log in to the app and try again.",
     )

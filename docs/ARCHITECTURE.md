@@ -265,7 +265,7 @@ Workspace responsibilities:
 * filtering visibility
 * diagnostics visibility
 
-Workspace sidebar totals are user-scoped and should be read from the same active user bucket that produced the latest run. A zeroed sidebar after a successful scrape usually means the request or run context resolved a different user id, not that the scrape found nothing.
+Workspace sidebar totals are account-scoped and should be read from the same authenticated session bucket that produced the latest run. A zeroed sidebar after a successful scrape usually means the request or run context resolved a different account scope, not that the scrape found nothing.
 
 The workspace is a persistent operational workspace.
 
@@ -312,7 +312,7 @@ It is not intended for normal end-user preferences.
 | DB `user_profile` table       | Runtime candidate truth             |
 | DB `job_history` table        | Persistent job state and dedup      |
 | DB `run_stats`, `audit_records`, `review_data`, `workspace_pool` tables | Scrape run outputs (disposable) |
-| `data/users/<user_id>/workspace_results.html` | Rendered workspace output |
+| Account-scoped workspace output | Rendered workspace output |
 | Knowledge JSON files          | Approved runtime business knowledge |
 | Signal registry pending items | Review-only                         |
 | `data/runtime/` files         | Disposable runtime output (costs, cache) |

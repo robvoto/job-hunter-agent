@@ -449,12 +449,6 @@ if __name__ == "__main__":
         action="store_true",
         help="Rebuild the workspace from the last saved run before starting.",
     )
-    parser.add_argument(
-        "--user-id",
-        dest="user_id",
-        default=None,
-        help="User ID to rebuild for when using --rebuild.",
-    )
     args = parser.parse_args()
 
     _configure_server_logging()
@@ -463,9 +457,7 @@ if __name__ == "__main__":
     from job_hunter_agent import server_helpers as srv
 
     if args.rebuild:
-        if not args.user_id:
-            raise SystemExit("--user-id is required when using --rebuild.")
-        srv._rebuild_workspace_on_startup(args.user_id)
+        srv._rebuild_workspace_on_startup()
 
     print(f"Local server running at http://{HOST}:{PORT}")
     print(f"Debug mode:  {'ON (--debug)' if srv.DEBUG_MODE else 'OFF'}")

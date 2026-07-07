@@ -1,6 +1,7 @@
 """Tests for onboarding."""
 
 import base64
+import hashlib
 import json
 from pathlib import Path
 
@@ -39,6 +40,8 @@ def test_normalize_onboarding_search_preferences_trims_and_normalizes():
 
 
 def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
+    legacy_bootstrap_name = "window.__JOB_HUNTER_" + "USER_ID__"
+
     monkeypatch.setattr(
         _fa,
         "read_session_user",
@@ -49,6 +52,7 @@ def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
 
     client = TestClient(create_app())
     html = client.get("/onboarding").text
+    expected_scope = hashlib.sha256("test-user".encode("utf-8")).hexdigest()[:16]
 
     assert "Preferred roles" in html
     assert "Alternative roles" in html
@@ -79,7 +83,9 @@ def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
     assert "review-capability-filter-shell" in html
     assert "window.__JOB_HUNTER_ONBOARDING_PAGE_LABELS__" in html
     assert "window.__JOB_HUNTER_ONBOARDING_FLOW_LABELS__" in html
-    assert 'window.__JOB_HUNTER_USER_ID__ = "test-user"' in html
+    assert 'window.__JOB_HUNTER_USER_SCOPE__ = "' in html
+    assert expected_scope in html
+    assert legacy_bootstrap_name not in html
     assert "window.__JOB_HUNTER_CAPABILITY_UI_LABELS__" in html
     assert "window.__JOB_HUNTER_SHARED_UI_LABELS__" in html
     assert "/static/onboarding/onboarding-page.css" in html
@@ -161,6 +167,9 @@ def test_onboarding_privacy_copy_links_to_docs(monkeypatch):
 
     client = TestClient(create_app())
     html = client.get("/onboarding").text
+    expected_scope = hashlib.sha256("test-user".encode("utf-8")).hexdigest()[:16]
+    expected_scope = hashlib.sha256("test-user".encode("utf-8")).hexdigest()[:16]
+    expected_scope = hashlib.sha256("test-user".encode("utf-8")).hexdigest()[:16]
 
     assert 'href="/docs"' in html
     assert "fuller retention decision" in html.lower()
@@ -1202,12 +1211,14 @@ def test_rebuild_workspace_on_startup_runs_when_data_exists(monkeypatch, tmp_pat
     monkeypatch.setattr(
         server_helpers,
         "rebuild_workspace_results",
-        lambda reason="", user_id=None: rebuilds.append((reason, user_id)),
+        lambda reason="": rebuilds.append(reason),
     )
 
-    server_helpers._rebuild_workspace_on_startup("test-user")
+    monkeypatch.setattr(server_helpers, "list_user_setting_user_ids", lambda: ["test-user"])
 
-    assert rebuilds == [("server startup rebuild", "test-user")]
+    server_helpers._rebuild_workspace_on_startup()
+
+    assert rebuilds == ["server startup rebuild"]
 
 
 def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch, tmp_path):

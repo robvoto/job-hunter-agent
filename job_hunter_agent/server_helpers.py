@@ -124,6 +124,7 @@ from job_hunter_agent.user_settings import (
     KEY_TELEGRAM,
     KEY_WORKSPACE,
     load_agent_state,
+    list_user_setting_user_ids,
 )
 from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
 
@@ -701,6 +702,13 @@ def _render_template(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="ignore")
 
 
+def _account_scope_token(value: str) -> str:
+    cleaned = str(value or "").strip()
+    if not cleaned:
+        return ""
+    return hashlib.sha256(cleaned.encode("utf-8")).hexdigest()[:16]
+
+
 def build_bootstrap_script(
     *,
     csrf_token: str | None = None,
@@ -710,14 +718,14 @@ def build_bootstrap_script(
     onboarding_copy: dict[str, Any] | None = None,
     global_settings: dict[str, Any] | None = None,
     resume_step: int | None = None,
-    user_id: str | None = None,
+    account_scope: str | None = None,
 ) -> str:
     parts = [
         f"<script>window.__JOB_HUNTER_DEBUG_MODE__ = {'true' if DEBUG_MODE else 'false'};</script>"
     ]
-    if user_id is not None:
+    if account_scope is not None:
         parts.append(
-            f"<script>window.__JOB_HUNTER_USER_ID__ = {json.dumps(user_id, ensure_ascii=True)};</script>"
+            f"<script>window.__JOB_HUNTER_USER_SCOPE__ = {json.dumps(_account_scope_token(account_scope), ensure_ascii=True)};</script>"
         )
     if onboarding_defaults is not None:
         parts.append(
@@ -1186,13 +1194,25 @@ def _run_scrape_job() -> None:
         _set_run_in_progress(False)
 
 
-def _rebuild_workspace_on_startup(user_id: str) -> None:
-    if not get_workspace_results_path().exists() and not load_run_stats():
+def _rebuild_workspace_on_startup() -> None:
+    from job_hunter_agent.user_context import set_user_id
+
+    user_ids = list_user_setting_user_ids()
+    if not user_ids:
         return
-    try:
-        rebuild_workspace_results(reason="server startup rebuild", user_id=user_id)
-    except Exception as exc:
-        print(f"[WORKSPACE][WARN] Could not rebuild on startup: {type(exc).__name__}: {exc}")
+    for user_id in user_ids:
+        set_user_id(user_id)
+        try:
+            if not get_workspace_results_path().exists() and not load_run_stats():
+                continue
+            rebuild_workspace_results(reason="server startup rebuild")
+        except Exception as exc:
+            print(
+                f"[WORKSPACE][WARN] Could not rebuild on startup for {user_id}: "
+                f"{type(exc).__name__}: {exc}"
+            )
+        finally:
+            set_user_id(None)
 
 
 class SettingsHandler:

@@ -45,7 +45,7 @@ def get_active_user_id() -> str:
     if uid:
         return uid
     raise RuntimeError(
-        "No active user id is set. Call set_user_id() before performing file operations."
+        "No signed-in user is available. Log in to the app and try again."
     )
 
 

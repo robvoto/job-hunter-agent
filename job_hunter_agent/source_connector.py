@@ -11,7 +11,6 @@ Notes:
 - the normalized record shape is intended to be reusable for additional sources
 """
 
-import argparse
 import logging
 import sys
 
@@ -42,12 +41,16 @@ logger = logging.getLogger(__name__)
 from job_hunter_agent.run_context import build_scrape_run_context
 from job_hunter_agent.scrape_finalize import finalize_scrape_run
 from job_hunter_agent.source_runner import run_enabled_sources
-from job_hunter_agent.user_context import get_user_id_for_runtime, set_user_id
+from job_hunter_agent.user_context import get_user_id_for_runtime
 from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
 
 NO_LLM_MODE = has_cli_flag(sys.argv, CLI_FLAG_NO_LLM)
 WORKSPACE_DEBUG_MODE = has_cli_flag(sys.argv, CLI_FLAG_DEBUG)
 CONSOLE_BANNER_WIDTH = 60
+LOGIN_REQUIRED_MESSAGE = (
+    "No signed-in user is available. Log in to the app and run the scrape "
+    "from the authenticated session."
+)
 
 if has_cli_flag(sys.argv, CLI_FLAG_STEP):
     enable_step_through()
@@ -137,23 +140,13 @@ if __name__ == "__main__":
     seed_global_settings_from_file()
     for _subdir in ("knowledge", "signals"):
         upgrade_knowledge_from_dir(_REPO_ROOT / "data" / _subdir)
-
-    parser = argparse.ArgumentParser(description="Job Hunter Agent source connector")
-    parser.add_argument(
-        "--user-id",
-        dest="user_id",
-        default=None,
-        help="Explicit user id for CLI runs that need a per-user workspace.",
-    )
-    args, _ = parser.parse_known_args()
-    if not args.user_id:
-        raise RuntimeError("--user-id is required for CLI runs.")
-    set_user_id(str(args.user_id).strip())
     try:
         if has_cli_flag(sys.argv, CLI_FLAG_REBUILD_WORKSPACE):
-            rebuild_workspace_results(user_id=args.user_id)
+            rebuild_workspace_results()
         else:
             scrape_jobs_direct()
     except RuntimeError as exc:
+        if "No signed-in user is available" in str(exc):
+            raise SystemExit(LOGIN_REQUIRED_MESSAGE) from exc
         logger.error("ERROR: %s", exc)
         raise SystemExit(2) from exc

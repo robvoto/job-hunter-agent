@@ -172,12 +172,12 @@ onboardingUpload.configureOnboardingUpload({
   showStatus,
   refreshStepNavigation,
 });
-const ONBOARDING_USER_ID = String(window.__JOB_HUNTER_USER_ID__ || '').trim();
-if (!ONBOARDING_USER_ID) {
-  throw new Error('Missing user id.');
+const ONBOARDING_STORAGE_SCOPE = String(window.__JOB_HUNTER_USER_SCOPE__ || '').trim();
+if (!ONBOARDING_STORAGE_SCOPE) {
+  throw new Error('Missing account scope.');
 }
 function buildScopedStorageKey(baseKey) {
-  return `${baseKey}:${ONBOARDING_USER_ID}`;
+  return `${baseKey}:${ONBOARDING_STORAGE_SCOPE}`;
 }
 export const WIZARD_STATE_KEY = buildScopedStorageKey('jobHunter.onboardingWizard');
 export const ONBOARDING_WELCOME_KEY = buildScopedStorageKey('jobHunter.onboardingWelcome');

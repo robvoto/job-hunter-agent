@@ -45,15 +45,15 @@
     const SEARCH_STOPPING_TITLE = String(SHARED_UI_LABELS.search_stopping_title || '').trim();
     const SEARCH_STOPPING_COPY = String(SHARED_UI_LABELS.search_stopping_copy || '').trim();
     const SEARCH_STOPPING_SUBCOPY = String(SHARED_UI_LABELS.search_stopping_subcopy || '').trim();
-    const ONBOARDING_USER_ID = String(window.__JOB_HUNTER_USER_ID__ || '').trim();
-    if (!ONBOARDING_USER_ID) {
-      throw new Error('Missing user id.');
+    const ONBOARDING_STORAGE_SCOPE = String(window.__JOB_HUNTER_USER_SCOPE__ || '').trim();
+    if (!ONBOARDING_STORAGE_SCOPE) {
+      throw new Error('Missing account scope.');
     }
     if (!SEARCH_WAIT_COPY || !SEARCH_RUNNING_TITLE || !SEARCH_RUNNING_COPY || !SEARCH_STARTING_TITLE || !SEARCH_STARTING_COPY || !SEARCH_REFRESHING_TITLE || !SEARCH_REFRESHING_COPY || !SEARCH_RUNNING_SUBCOPY || !SEARCH_STARTING_SUBCOPY || !SEARCH_STOP_LABEL || !SEARCH_PROGRESS_PREFIX || !SEARCH_ELAPSED_PREFIX || !SEARCH_STOPPING_TITLE || !SEARCH_STOPPING_COPY || !SEARCH_STOPPING_SUBCOPY) {
       throw new Error('Missing shared search UI labels.');
     }
     function scopedOnboardingStorageKey(baseKey) {
-      return `${baseKey}:${ONBOARDING_USER_ID}`;
+      return `${baseKey}:${ONBOARDING_STORAGE_SCOPE}`;
     }
     const ONBOARDING_WELCOME_KEY = scopedOnboardingStorageKey('jobHunter.onboardingWelcome');
     const ONBOARDING_WIZARD_KEY = scopedOnboardingStorageKey('jobHunter.onboardingWizard');

@@ -222,7 +222,7 @@ def _render_template_with_locations(
         onboarding_defaults=onboarding_defaults,
         global_settings=global_settings,
         resume_step=resume_step,
-        user_id=get_user_id_for_runtime(),
+        account_scope=get_user_id_for_runtime(),
     )
 
     html = srv._render_template(template_path)

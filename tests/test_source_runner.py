@@ -459,7 +459,7 @@ def test_stop_before_linkedin_skips_linkedin_in_serial_path(monkeypatch):
 
 
 def test_context_vars_propagated_to_worker_threads(monkeypatch):
-    """ContextVar values (e.g. active user id) must be visible inside worker threads."""
+    """ContextVar values (e.g. active account id) must be visible inside worker threads."""
     _test_var: contextvars.ContextVar[str] = contextvars.ContextVar("_test_var", default="unset")
     _test_var.set("expected_value")
 
