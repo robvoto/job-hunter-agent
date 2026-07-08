@@ -2,7 +2,7 @@
 
 Design contract:
 - LLM grade anchors the band (floor / ceiling).
-- Other signals (title, capability evidence, preferences, freshness) move the score within the band.
+- Other signals (title and capability evidence) help explain the reviewed job.
 - Grade and score cannot contradict: MISMATCH ≤ 7, STRONG ∈ [68, 87], etc.
 - Hard block penalties (-100 each) override the band floor and can push the score to zero.
 
@@ -120,12 +120,14 @@ def test_strong_with_weak_signals_floors_at_strong_minimum():
         {RECORD_APPLY_METHOD_KEY: APPLY_METHOD_EASY_APPLY},
         {RECORD_APPLY_METHOD_KEY: APPLY_METHOD_QUICK_APPLY},
         {"content_reason": "OK"},
+        {"posted_age_days": 0.1},
+        {"posted_age_days": 14},
         {"times_viewed": 4},
         {"applied": False, "times_viewed": 2},
     ],
 )
 def test_noise_signals_do_not_change_fit_score(overrides):
-    """Easy/Quick Apply, viewed status, and content-pass noise must not move the score."""
+    """Easy/Quick Apply, viewed status, content-pass noise, and freshness must not move the score."""
     base_record = {
         "title": "Business Analyst",
         "title_reason": "OK",

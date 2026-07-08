@@ -98,7 +98,6 @@ _SECTION_ORDER = [
     "work_type",
     "work_mode",
     "salary",
-    "freshness",
     "risk",
 ]
 _SECTION_NAMES = {
@@ -110,7 +109,6 @@ _SECTION_NAMES = {
     "work_type": "Work type",
     "work_mode": "Work mode",
     "salary": "Salary / rate",
-    "freshness": "Freshness",
     "risk": "Blockers",
 }
 

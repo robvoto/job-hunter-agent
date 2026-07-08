@@ -10,7 +10,7 @@ Last checked against code: 2026-06-08.
 
 The fit score is a **ranking signal**, not a qualification percentage.
 
-A score of 57 does **not** mean the candidate is 57% qualified. It means the job is ranked at that level by the current scoring rules, grade band, preferences, freshness, and blockers.
+A score of 57 does **not** mean the candidate is 57% qualified. It means the job is ranked at that level by the current scoring rules, grade band, preference signals, and blockers.
 
 The system answers:
 
@@ -96,7 +96,7 @@ flowchart TD
     Q -- Yes --> Q1[Apply hard blocker penalty<br/>force score near zero]
     Q -- No --> R[Store frozen score + explanation]
     Q1 --> R
-    R --> S[Apply display-time ranking only<br/>freshness; viewed state shown separately]
+    R --> S[Render recency and history signals<br/>outside the fit score]
     S --> T[Show ranked job to user<br/>with explanation]
     T --> U{User action}
     U -- Apply / save --> U1[Record positive action]
@@ -118,7 +118,7 @@ flowchart TD
 | Review outcome | Title/content signals and fit source text | `llm_gate.py`, `source_learning.py` deterministic shortcut | `llm_fit_grade`, requirement coverage, rationale fields | LLM call may be avoided only by explicit deterministic reject rules. Deterministic keep candidates still require full LLM requirement coverage before any final KEEP is saved. |
 | Requirement coverage | Extracted job requirements, candidate capabilities | `llm_gate.py`, capability knowledge/profile modules | Supported / partially supported / not shown / mismatch coverage | Coverage drives grade when present. Unsupported capability claims are dropped. |
 | Frozen scoring | Reviewed job record with `llm_fit_grade` | `fit_scoring.py`, `data/knowledge/scoring_rules.json` | Frozen score and score breakdown | Grade band clamps non-hard-block score. Hard blockers apply after clamp. |
-| Display scoring | Frozen score, current age | `fit_scoring.py`, UI consumers | Displayed score and ordering | Freshness can move displayed rank; viewed state is shown separately, not as score evidence. |
+| Display scoring | Frozen score | `fit_scoring.py`, UI consumers | Displayed score and ordering | Recency is handled separately from fit score and should not be treated as fit evidence. |
 | Human review and learning | User keep/skip/apply/reject decisions | Review history, learning modules, backlog if needed | Future profile/rule improvements | Learning must not silently become hidden scoring logic. |
 
 ### Handover points
@@ -127,7 +127,7 @@ The main handover from filtering to scoring is the reviewed job record containin
 
 The main handover from LLM review to scoring is `requirement_coverage`. Coverage is evidence for the grade; the score breakdown displays it for transparency but does not add a second independent capability bonus. A deterministic keep candidate is not complete until this coverage exists and the final reviewed record is saved from the LLM path.
 
-The main handover from frozen scoring to the UI is the stored frozen score plus explanation entries. Display-time freshness is a ranking adjustment only. Viewed state remains part of the UI and history flow, but it is not new evidence that the candidate fits the job.
+The main handover from frozen scoring to the UI is the stored frozen score plus explanation entries. Recency remains part of the UI and history flow, but it is not new evidence that the candidate fits the job.
 
 ### End states
 
@@ -214,7 +214,7 @@ There are two scoring variants:
 | Function | Behaviour |
 |---|---|
 | `fit_score_breakdown_frozen` / `fit_score_frozen` | Stored at scrape/review time. Excludes freshness and viewed status. |
-| `fit_score_and_breakdown_displayed` / `fit_score_displayed` | Display-time score. Starts from frozen score, then adds current freshness only. Falls back to live scoring for old records without a frozen score. |
+| `fit_score_and_breakdown_displayed` / `fit_score_displayed` | Display-time score. Starts from frozen score. Falls back to live scoring for old records without a frozen score. |
 
 ### 6. Hard blockers
 
@@ -444,9 +444,8 @@ Important wording rule:
 1. The grade derivation is coverage-based from `requirement_coverage`. A `KEEP` review is invalid unless `requirement_coverage` is present and non-empty.
 2. Mandatory missing evidence does not automatically reject. It reduces the weighted coverage score but may still allow weak/solid outcomes depending on the rest of the coverage.
 3. Preference signals can move jobs within grade bands and can affect display-time ranking, but they are not capability evidence.
-4. Frozen score and displayed score can differ because freshness is applied dynamically at display time.
-5. Deterministic shortcuts can still produce early rejects without an LLM call. Deterministic keep candidates must still be confirmed by the LLM fit review before they become final KEEP rows. Audit the shortcut trigger via `det_rule`; audit final keeps via `review_source` and `requirement_coverage`.
-6. Some older docs and backlog items may still use broad "heuristic" language. Treat that as technical debt unless it points to an actual remaining hardcoded judgement.
+4. Deterministic shortcuts can still produce early rejects without an LLM call. Deterministic keep candidates must still be confirmed by the LLM fit review before they become final KEEP rows. Audit the shortcut trigger via `det_rule`; audit final keeps via `review_source` and `requirement_coverage`.
+5. Some older docs and backlog items may still use broad "heuristic" language. Treat that as technical debt unless it points to an actual remaining hardcoded judgement.
 
 ---
 

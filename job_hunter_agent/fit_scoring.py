@@ -12,7 +12,6 @@ from job_hunter_agent.description_trust import full_description_confidence
 from job_hunter_agent.filters import analyze_title_filters
 from job_hunter_agent.global_settings import KEY_FIT_HIGHLIGHTS, load_global_settings
 from job_hunter_agent.io_utils import load_ui_labels
-from job_hunter_agent.posting_utils import current_posted_age_days
 from job_hunter_agent.preferences import (
     assess_location_preference,
     salary_fit_adjustment,
@@ -358,14 +357,6 @@ def build_freshness_breakdown(
     return entries
 
 
-def build_convenience_breakdown(
-    record: dict, scoring_rules: dict, weights: dict, posted_age_days: Optional[float]
-) -> List[dict]:
-    entries: List[dict] = []
-    entries.extend(build_freshness_breakdown(scoring_rules, weights, posted_age_days))
-    return entries
-
-
 def build_risk_breakdown(scoring_rules: dict, hard_block_labels: List[str]) -> List[dict]:
     return [
         {
@@ -449,7 +440,6 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
         if isinstance(record.get("title_match_metadata"), dict)
         else {}
     )
-    posted_age_days = current_posted_age_days(record)
     active_profile = profile or load_profile()
     weights = get_preference_weights(active_profile)
     scoring_rules = get_scoring_rules(active_profile)
@@ -470,7 +460,6 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
             active_profile,
         )
         + build_preference_breakdown(record, scoring_rules, weights, active_profile)
-        + build_convenience_breakdown(record, scoring_rules, weights, posted_age_days)
     )
 
     # Apply grade band clamping: enforce floor and ceiling per LLM grade.
@@ -498,10 +487,9 @@ def fit_score(record: dict, profile: Optional[dict] = None) -> int:
 
 
 def fit_score_breakdown_frozen(record: dict, profile: Optional[dict] = None) -> List[dict]:
-    """Frozen breakdown computed once at scrape time — excludes freshness and viewed status.
+    """Frozen breakdown computed once at scrape time.
 
-    Grade band is applied to core + preference only. Freshness is added at
-    display time by fit_score_and_breakdown_displayed.
+    Grade band is applied to core + preference only.
     """
     review_state = llm_review_state(record)
     if review_state["state"] != LLM_REVIEW_STATE_EVALUATED:
@@ -561,7 +549,7 @@ def fit_score_frozen(record: dict, profile: Optional[dict] = None) -> int:
 def fit_score_and_breakdown_displayed(
     record: dict, profile: Optional[dict] = None
 ) -> tuple[int, List[dict]]:
-    """Displayed score and full breakdown: frozen base + current freshness.
+    """Displayed score and full breakdown: frozen base.
 
     Falls back to full live scoring for records that predate score freezing.
     """
@@ -570,18 +558,12 @@ def fit_score_and_breakdown_displayed(
         active_profile = profile or load_profile()
         scoring_rules = get_scoring_rules(active_profile)
         return _clamp_score(sum(e["value"] for e in breakdown), scoring_rules), breakdown
-    active_profile = profile or load_profile()
-    scoring_rules = get_scoring_rules(active_profile)
-    weights = get_preference_weights(active_profile)
-    posted_age_days = current_posted_age_days(record)
-    live_entries: List[dict] = list(
-        build_freshness_breakdown(scoring_rules, weights, posted_age_days)
-    )
     frozen_score = int(record[RECORD_FIT_SCORE_KEY])
     frozen_breakdown = list(record.get(RECORD_FIT_SCORE_BREAKDOWN_KEY) or [])
-    total = _clamp_score(frozen_score + sum(e["value"] for e in live_entries), scoring_rules)
-    return total, frozen_breakdown + live_entries
+    active_profile = profile or load_profile()
+    scoring_rules = get_scoring_rules(active_profile)
+    return _clamp_score(frozen_score, scoring_rules), frozen_breakdown
 
 def fit_score_displayed(record: dict, profile: Optional[dict] = None) -> int:
-    """Displayed score for filtering and sorting: frozen base + current freshness."""
+    """Displayed score for filtering and sorting: frozen base only."""
     return fit_score_and_breakdown_displayed(record, profile)[0]
