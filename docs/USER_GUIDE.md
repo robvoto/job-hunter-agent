@@ -221,6 +221,15 @@ The workspace can filter by:
 - work mode
 - salary state
 
+## Job Card Layout
+
+Each job card in the workspace can expand into up to four separate panels, so fit reasoning, requirement coverage, risk flags, and internal debug detail don't get mixed together:
+
+- **Fit breakdown** — why the score landed where it did: matched capabilities, approved experience found in the ad, and related/duplicate cards.
+- **Risks & flags** — things worth checking before applying: an incomplete description capture, potential red flags from your review history, job quality concerns, and other pre-apply checks.
+- **Requirements** — the extracted requirement list with per-item status (in profile, partial match, not in profile) and a link to add missing capabilities to your profile.
+- **Debug: LLM fit review** (debug mode only) — LLM decision/grade/cost, filter status, and raw score breakdown, for troubleshooting why a card was scored or filtered the way it was. Hidden entirely outside debug mode.
+
 ## Improving Accuracy (Rejection Learning)
 
 If the agent keeps suggesting roles with a specific requirement you don't have (e.g., a specific security clearance or software tool), use the **Not For Me** button on the job card.

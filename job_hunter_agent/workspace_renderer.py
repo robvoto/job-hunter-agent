@@ -1336,6 +1336,8 @@ def render_job_card(
     )
     reviewed_signal_matches = reviewed_signal_match_summary(display_record, scoring_profile)
     insight_sections = []
+    risk_sections = []
+    debug_fit_sections = []
     fit_summary_text = _build_fit_summary_text(display_record.get(RECORD_REQUIREMENT_COVERAGE_KEY))
     if fit_summary_text or visible_reasons:
         visible_reasons_html = (
@@ -1358,7 +1360,7 @@ def render_job_card(
             "</div>"
         )
     if active_debug_mode and reviewed_signal_matches["unresolved"]:
-        insight_sections.append(
+        debug_fit_sections.append(
             '<div class="job-insight-group is-secondary">'
             "<strong>Unclassified details</strong>"
             f"<ul>{''.join(f'<li>{safe_html(item)}</li>' for item in reviewed_signal_matches['unresolved'])}</ul>"
@@ -1408,7 +1410,7 @@ def render_job_card(
         if hard_block_items:
             debug_status_items.append(f"Hard blocker details: {'; '.join(hard_block_items)}")
         if debug_status_items:
-            insight_sections.append(
+            debug_fit_sections.append(
                 '<div class="job-insight-group is-secondary">'
                 f"<strong>{safe_html(_workspace_label('workspace_card_labels', 'debug_status_summary', 'Filter status'))}</strong>"
                 f"<ul>{''.join(f'<li>{safe_html(item)}</li>' for item in debug_status_items)}</ul>"
@@ -1685,14 +1687,14 @@ def render_job_card(
                 capture_facts.append(f"details length: {details_length}")
             if capture_facts:
                 description_issue_items.append("; ".join(capture_facts))
-        insight_sections.append(
+        risk_sections.append(
             '<div class="job-insight-group job-insight-warning">'
             "<strong>Incomplete description</strong>"
             f"<ul>{''.join(f'<li>{safe_html(item)}</li>' for item in description_issue_items)}</ul>"
             "</div>"
         )
     if history_warning_signals:
-        insight_sections.append(
+        risk_sections.append(
             '<div class="job-insight-group job-insight-warning">'
             "<strong>Potential red flags</strong>"
             f"<ul>{''.join(f'<li>{safe_html(item)}</li>' for item in history_warning_signals)}</ul>"
@@ -1702,7 +1704,7 @@ def render_job_card(
         _quality_items = "".join(
             f"<li>{safe_html(s.get('evidence', ''))}</li>" for s in job_quality_signals
         )
-        insight_sections.append(
+        risk_sections.append(
             '<div class="job-insight-group job-insight-warning">'
             "<strong>Job quality concerns</strong>"
             f"<ul>{_quality_items}</ul>"
@@ -1721,7 +1723,7 @@ def render_job_card(
                 continue
             seen_humanized.add(normalized)
             humanized_negative_items.append(humanized)
-        insight_sections.append(
+        risk_sections.append(
             '<div class="job-insight-group job-insight-warning">'
             "<strong>Things to check before applying</strong>"
             f"<ul>{''.join(f'<li>{safe_html(item)}</li>' for item in humanized_negative_items)}</ul>"
@@ -1730,7 +1732,7 @@ def render_job_card(
     if active_debug_mode:
         debug_negative_reasons = negative_score_reasons(score_breakdown)
         if debug_negative_reasons:
-            insight_sections.append(
+            debug_fit_sections.append(
                 '<div class="job-insight-group job-insight-warning">'
                 "<strong>Debug: negative score penalties</strong>"
                 f"<ul>{''.join(f'<li>{safe_html(item)}</li>' for item in debug_negative_reasons)}</ul>"
@@ -1738,7 +1740,7 @@ def render_job_card(
             )
         gap_reasons = score_gap_reasons(display_record, score_breakdown)
         if gap_reasons:
-            insight_sections.append(
+            debug_fit_sections.append(
                 '<div class="job-insight-group is-secondary">'
                 f"<strong>{safe_html(_workspace_label('workspace_card_labels', 'debug_score_notes_summary', 'Why this score is lower'))}</strong>"
                 f"<ul>{''.join(f'<li>{safe_html(item)}</li>' for item in gap_reasons)}</ul>"
@@ -1750,7 +1752,7 @@ def render_job_card(
             for item in score_breakdown
             if int(item["value"]) != 0
         )
-        insight_sections.append(
+        debug_fit_sections.append(
             '<div class="job-insight-group is-secondary">'
             f"<strong>{safe_html(_workspace_label('workspace_card_labels', 'debug_score_breakdown_summary', 'How this score was calculated'))}</strong>"
             f"<ul>{score_breakdown_html}</ul>"
@@ -1765,8 +1767,17 @@ def render_job_card(
         else ""
     )
 
+    risk_html = (
+        '<details class="job-insights job-risk-panel">'
+        f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'risk_panel_summary', 'Risks & flags'))}</summary>"
+        f"{''.join(risk_sections)}"
+        "</details>"
+        if risk_sections
+        else ""
+    )
+
     llm_review_html = ""
-    if active_debug_mode and any(
+    has_llm_review_data = any(
         record.get(key)
         for key in (
             RECORD_LLM_DECISION_KEY,
@@ -1774,34 +1785,38 @@ def render_job_card(
             RECORD_LLM_ELAPSED_MS_KEY,
             RECORD_LLM_COST_USD_KEY,
         )
-    ):
-        llm_decision = str(record.get(RECORD_LLM_DECISION_KEY) or "").strip().upper()
-        final_decision = (
-            "KEPT"
-            if llm_decision == "KEEP"
-            else ("REJECTED" if llm_decision == "REJECT" else llm_decision or "UNKNOWN")
-        )
-        llm_grade = str(record.get(RECORD_LLM_FIT_GRADE_KEY) or "").strip().upper() or "UNKNOWN"
-        debug_reason = str(record.get(RECORD_LLM_DEBUG_REASON_KEY) or "").strip()
-        elapsed_ms = record.get(RECORD_LLM_ELAPSED_MS_KEY)
-        cost_usd = record.get(RECORD_LLM_COST_USD_KEY)
-        summary_items = [
-            f"<li>Final decision: {safe_html(final_decision)}</li>",
-            f"<li>Final score: {safe_html(str(fit_points))}</li>",
-            f"<li>LLM fit grade: {safe_html(llm_grade)}</li>",
-        ]
-        if isinstance(elapsed_ms, (int, float)):
-            summary_items.append(f"<li>Time taken: {safe_html(str(int(elapsed_ms)))} ms</li>")
-        if isinstance(cost_usd, (int, float)):
-            summary_items.append(f"<li>Estimated LLM cost: US${float(cost_usd):.4f}</li>")
-        llm_review_parts = [
-            f'<div class="job-insight-group is-secondary"><ul>{"".join(summary_items)}</ul></div>'
-        ]
-        if debug_reason:
-            llm_review_parts.append(
-                f'<div class="job-insight-group is-secondary"><strong>Debug reason</strong>'
-                f"<p>{safe_html(debug_reason)}</p></div>"
+    )
+    if active_debug_mode and (has_llm_review_data or debug_fit_sections):
+        llm_review_parts = []
+        if has_llm_review_data:
+            llm_decision = str(record.get(RECORD_LLM_DECISION_KEY) or "").strip().upper()
+            final_decision = (
+                "KEPT"
+                if llm_decision == "KEEP"
+                else ("REJECTED" if llm_decision == "REJECT" else llm_decision or "UNKNOWN")
             )
+            llm_grade = str(record.get(RECORD_LLM_FIT_GRADE_KEY) or "").strip().upper() or "UNKNOWN"
+            debug_reason = str(record.get(RECORD_LLM_DEBUG_REASON_KEY) or "").strip()
+            elapsed_ms = record.get(RECORD_LLM_ELAPSED_MS_KEY)
+            cost_usd = record.get(RECORD_LLM_COST_USD_KEY)
+            summary_items = [
+                f"<li>Final decision: {safe_html(final_decision)}</li>",
+                f"<li>Final score: {safe_html(str(fit_points))}</li>",
+                f"<li>LLM fit grade: {safe_html(llm_grade)}</li>",
+            ]
+            if isinstance(elapsed_ms, (int, float)):
+                summary_items.append(f"<li>Time taken: {safe_html(str(int(elapsed_ms)))} ms</li>")
+            if isinstance(cost_usd, (int, float)):
+                summary_items.append(f"<li>Estimated LLM cost: US${float(cost_usd):.4f}</li>")
+            llm_review_parts.append(
+                f'<div class="job-insight-group is-secondary"><ul>{"".join(summary_items)}</ul></div>'
+            )
+            if debug_reason:
+                llm_review_parts.append(
+                    f'<div class="job-insight-group is-secondary"><strong>Debug reason</strong>'
+                    f"<p>{safe_html(debug_reason)}</p></div>"
+                )
+        llm_review_parts.extend(debug_fit_sections)
         llm_review_html = (
             '<details class="job-insights job-llm-review">'
             "<summary>Debug: LLM fit review</summary>"
@@ -1934,8 +1949,9 @@ def render_job_card(
         f'<div class="job-meta">{"".join(meta_items)}</div>'
         f"{note_html}"
         f"{insight_html}"
-        f"{llm_review_html}"
+        f"{risk_html}"
         f"{job_requirements_html}"
+        f"{llm_review_html}"
         f"{profile_gaps_html}"
         f"{candidate_history_html}"
         f"{context_html}"

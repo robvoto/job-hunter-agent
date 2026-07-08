@@ -1628,6 +1628,16 @@ def test_low_confidence_card_shows_single_description_issue_section():
     assert "<strong>Missing evidence</strong>" not in html
     assert "Risks &amp; missing evidence" not in html
 
+    risk_start = html.index('<details class="job-insights job-risk-panel">')
+    risk_end = html.index("</details>", risk_start)
+    risk_panel_html = html[risk_start:risk_end]
+    assert "Risks &amp; flags" in risk_panel_html
+    assert "Incomplete description" in risk_panel_html
+
+    fit_breakdown_start = html.index('<details class="job-insights">')
+    fit_breakdown_end = html.index("</details>", fit_breakdown_start)
+    assert "Incomplete description" not in html[fit_breakdown_start:fit_breakdown_end]
+
 
 def test_deterministic_review_counts_only_capability_highlights():
     from job_hunter_agent.source_learning import deterministic_review_outcome
@@ -2112,6 +2122,42 @@ def test_render_job_card_hides_debug_fit_sections_in_normal_mode():
     assert "Debug: scoring notes" not in html
     assert "Base fit" not in html
     assert "Strong requirement coverage" not in html
+
+
+def test_render_job_card_folds_debug_fit_internals_into_llm_review_panel_without_llm_data():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-debug-fit-internals-no-llm",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "TITLE_NOT_TARGET",
+            "content_reason": "OK",
+            "reject_reason": "TITLE_NOT_TARGET",
+            "decision": "REJECT",
+            RECORD_FIT_SCORE_KEY: 40,
+            RECORD_FIT_SCORE_BREAKDOWN_KEY: [
+                {"label": "Base fit", "value": 40, "section": "llm_fit"},
+            ],
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "seek",
+        },
+        _capability_profile(),
+        debug_mode=True,
+    )
+
+    assert "Debug: LLM fit review" in html
+    debug_start = html.index('<details class="job-insights job-llm-review">')
+    debug_end = html.index("</details>", debug_start)
+    debug_panel_html = html[debug_start:debug_end]
+    assert "Filter status" in debug_panel_html
+    assert "How this score was calculated" in debug_panel_html
+    assert "Final decision" not in debug_panel_html
 
 
 def test_render_job_card_fit_breakdown_starts_with_plain_english_summary_from_requirement_coverage():

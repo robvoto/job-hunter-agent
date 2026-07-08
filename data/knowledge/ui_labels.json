@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 54,
+  "version": 55,
   "updated_at": "2026-06-28",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -368,6 +368,7 @@
     "posting_channel_unknown_tooltip": "Couldn't determine whether this was posted by the employer directly or via a recruiter.",
     "job_requirements_summary": "Requirements",
     "job_requirements_empty_state": "No requirements were extracted for this job.",
+    "risk_panel_summary": "Risks & flags",
     "debug_only_badge": "Debug only",
     "debug_only_tooltip": "This role was filtered out in the normal workspace view, but stays visible in debug mode.",
     "hard_blocked_badge": "Hard blocked",

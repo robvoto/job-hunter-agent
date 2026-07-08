@@ -176,6 +176,10 @@
   border-color: color-mix(in srgb, var(--border-subtle) 84%, transparent);
 }
 
+[data-theme="dark-professional"] .job-insights.job-risk-panel {
+  border-color: color-mix(in srgb, var(--state-warning-border) 55%, transparent);
+}
+
 [data-theme="dark-professional"] .job-action-rec--apply {
   background: color-mix(in srgb, #2a7a3b 15%, var(--bg-surface));
   color: #6fcf97;
@@ -399,6 +403,14 @@
   padding: 12px 0;
 }
 
+.job-risk-panel {
+  border-color: var(--state-warning-border);
+}
+
+.job-risk-panel summary {
+  color: var(--state-warning-text);
+}
+
 .job-insight-group {
   margin-top: 6px;
 }
@@ -537,6 +549,25 @@
   border-color: var(--state-error-border);
   color: var(--state-error-text);
   background: var(--state-error-bg);
+}
+
+.req-add-to-profile {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 3px 8px;
+  border: 1px solid var(--state-info-border);
+  border-radius: var(--control-radius-pill);
+  color: var(--state-info-text);
+  background: var(--state-info-bg);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.req-add-to-profile:hover,
+.req-add-to-profile:focus-visible {
+  text-decoration: underline;
 }
 
 .req-coverage-detail {

@@ -155,6 +155,8 @@ The score is first built from normal score entries. Then the grade band is appli
 - Hard block penalties are excluded from the band clamp.
 - Final score is capped between 0 and 100.
 
+The raw score breakdown behind this table is not shown on job cards outside debug mode. In debug mode it appears in the card's "Debug: LLM fit review" panel — see [Job Card Layout](USER_GUIDE.md#job-card-layout) in the user guide.
+
 ---
 
 ## Current scoring flow
