@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 from job_hunter_agent.description_trust import full_description_confidence
 from job_hunter_agent.filters import analyze_title_filters
 from job_hunter_agent.global_settings import KEY_FIT_HIGHLIGHTS, load_global_settings
-from job_hunter_agent.history import viewed_by_user
 from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent.posting_utils import current_posted_age_days
 from job_hunter_agent.preferences import (
@@ -19,7 +18,6 @@ from job_hunter_agent.preferences import (
     salary_fit_adjustment,
 )
 from job_hunter_agent.profile_store import (
-    KEY_CONVERGENCE,
     KEY_LLM_GRADE_BANDS,
     KEY_LLM_GRADE_POINTS,
     CapabilityLevel,
@@ -28,9 +26,6 @@ from job_hunter_agent.profile_store import (
     load_profile,
 )
 from job_hunter_agent.record_schema import (
-    APPLY_METHOD_EASY_APPLY,
-    APPLY_METHOD_QUICK_APPLY,
-    RECORD_APPLY_METHOD_KEY,
     RECORD_FIT_SCORE_BREAKDOWN_KEY,
     RECORD_FIT_SCORE_KEY,
     RECORD_JOB_REQUIREMENTS_KEY,
@@ -91,48 +86,6 @@ def llm_description_fit_entry(record: dict, profile: Optional[dict] = None) -> d
     label = labels[grade]
     value = int(grade_points[grade])
     return {"label": label, "value": value}
-
-
-def convergence_bonus_entry(record: dict, profile: Optional[dict] = None) -> Optional[dict]:
-    """Award a bonus when multiple strong independent signals simultaneously confirm fit.
-
-    Convergence requires title match, description quality, grade, and LLM-supported capabilities
-    (high-confidence contextual matches). Conditions and bonus values come from scoring_rules.json.
-    """
-    grade = str(record.get("llm_fit_grade") or "").strip().upper()
-    title_reason = str(record.get("title_reason") or "").strip().upper()
-    content_reason = str(record.get("content_reason") or "").strip().upper()
-    fit_confidence = full_description_confidence(record)
-    missing_profile_support = [
-        item for item in (record.get("missing_profile_support") or []) if compact_whitespace(item)
-    ]
-    soft_risks = [
-        item for item in (record.get("soft_risk_reasons") or []) if compact_whitespace(item)
-    ]
-    active_profile = profile or load_profile()
-    scoring_rules = get_scoring_rules(active_profile)
-    convergence_rules = scoring_rules[KEY_CONVERGENCE]
-    positive_count = sum(
-        1
-        for item in (record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or [])
-        if isinstance(item, dict) and str(item.get("status") or "").strip().lower() == "supported"
-    )
-    if (
-        title_reason != convergence_rules["required_title_reason"]
-        or content_reason != convergence_rules["required_content_reason"]
-        or fit_confidence != convergence_rules["required_fit_confidence"]
-    ):
-        return None
-    if missing_profile_support or grade not in set(convergence_rules["eligible_grades"]):
-        return None
-    if positive_count < int(convergence_rules["min_positive_matches"]):
-        return None
-    bonus = int(
-        convergence_rules["bonus_no_soft_risks"]
-        if not soft_risks
-        else convergence_rules["bonus_with_soft_risks"]
-    )
-    return {"label": convergence_rules["label"], "value": bonus}
 
 
 def requirement_coverage_entries(record: dict) -> List[dict]:
@@ -320,15 +273,7 @@ def build_core_fit_breakdown(
     )
     entries.extend(requirement_coverage_entries(record))
     if content_reason == "OK":
-        entries.append(
-            {
-                "label": "Passed content filters",
-                "value": weighted_points(
-                    int(scoring_rules["fit_breakdown"]["content_ok"]), weights["fit"]
-                ),
-                "section": "content",
-            }
-        )
+        pass
     if full_description_confidence(record) == "LOW":
         entries.append(
             {
@@ -341,23 +286,6 @@ def build_core_fit_breakdown(
             }
         )
     capability_support_log(record)
-    convergence_entry = convergence_bonus_entry(record, active_profile)
-    if convergence_entry:
-        entries.append(
-            {
-                "label": convergence_entry["label"],
-                "value": weighted_points(int(convergence_entry["value"]), weights["fit"]),
-                "section": "capability",
-            }
-        )
-    for item in competitive_signal_breakdown(record, active_profile):
-        entries.append(
-            {
-                "label": item["label"],
-                "value": weighted_points(int(item["value"]), weights["fit"]),
-                "section": "other",
-            }
-        )
     return entries
 
 
@@ -435,20 +363,6 @@ def build_convenience_breakdown(
 ) -> List[dict]:
     entries: List[dict] = []
     entries.extend(build_freshness_breakdown(scoring_rules, weights, posted_age_days))
-    if viewed_by_user(record) and not record.get("applied"):
-        entries.append(
-            {
-                "label": "Already viewed by you",
-                "value": int(scoring_rules["fit_breakdown"]["viewed_by_user"]),
-            }
-        )
-    if record.get(RECORD_APPLY_METHOD_KEY) in (APPLY_METHOD_EASY_APPLY, APPLY_METHOD_QUICK_APPLY):
-        entries.append(
-            {
-                "label": "Easy/Quick Apply available",
-                "value": int(scoring_rules["fit_breakdown"]["easy_apply_bonus"]),
-            }
-        )
     return entries
 
 
@@ -586,7 +500,7 @@ def fit_score(record: dict, profile: Optional[dict] = None) -> int:
 def fit_score_breakdown_frozen(record: dict, profile: Optional[dict] = None) -> List[dict]:
     """Frozen breakdown computed once at scrape time — excludes freshness and viewed status.
 
-    Grade band is applied to core + preference only. Freshness and viewed are added at
+    Grade band is applied to core + preference only. Freshness is added at
     display time by fit_score_and_breakdown_displayed.
     """
     review_state = llm_review_state(record)
@@ -647,7 +561,7 @@ def fit_score_frozen(record: dict, profile: Optional[dict] = None) -> int:
 def fit_score_and_breakdown_displayed(
     record: dict, profile: Optional[dict] = None
 ) -> tuple[int, List[dict]]:
-    """Displayed score and full breakdown: frozen base + current freshness + viewed status.
+    """Displayed score and full breakdown: frozen base + current freshness.
 
     Falls back to full live scoring for records that predate score freezing.
     """
@@ -663,19 +577,11 @@ def fit_score_and_breakdown_displayed(
     live_entries: List[dict] = list(
         build_freshness_breakdown(scoring_rules, weights, posted_age_days)
     )
-    if viewed_by_user(record) and not record.get("applied"):
-        live_entries.append(
-            {
-                "label": "Already viewed by you",
-                "value": int(scoring_rules["fit_breakdown"]["viewed_by_user"]),
-            }
-        )
     frozen_score = int(record[RECORD_FIT_SCORE_KEY])
     frozen_breakdown = list(record.get(RECORD_FIT_SCORE_BREAKDOWN_KEY) or [])
     total = _clamp_score(frozen_score + sum(e["value"] for e in live_entries), scoring_rules)
     return total, frozen_breakdown + live_entries
 
-
 def fit_score_displayed(record: dict, profile: Optional[dict] = None) -> int:
-    """Displayed score for filtering and sorting: frozen base + current freshness + viewed status."""
+    """Displayed score for filtering and sorting: frozen base + current freshness."""
     return fit_score_and_breakdown_displayed(record, profile)[0]

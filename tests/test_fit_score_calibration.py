@@ -16,6 +16,11 @@ import pytest
 
 from job_hunter_agent import fit_scoring
 from job_hunter_agent.paths import SCORING_RULES_PATH
+from job_hunter_agent.record_schema import (
+    APPLY_METHOD_EASY_APPLY,
+    APPLY_METHOD_QUICK_APPLY,
+    RECORD_APPLY_METHOD_KEY,
+)
 
 
 def _scoring_rules() -> dict:
@@ -58,37 +63,35 @@ def _breakdown_labels(record: dict, profile: dict | None = None) -> list[str]:
     return [e["label"] for e in fit_scoring.fit_score_breakdown(record, profile or _profile())]
 
 
-# ── Scenario 1: STRONG LLM + clean title + content + capability evidence ─────
+# ── Scenario 1: STRONG LLM + clean title should sit at the STRONG floor ──────
 
 _DESCRIPTION_TEXT = "Business analyst role supporting delivery and stakeholder engagement."
 
 
-def test_strong_with_supporting_evidence_reaches_upper_strong_band():
-    """STRONG + clean title + content OK + description → above the STRONG floor.
+def test_strong_with_title_match_stays_at_strong_floor_without_noise_signals():
+    """STRONG + title match should anchor at the STRONG band floor.
 
-    Without supporting signals, STRONG floors at 68. A clean primary title match and content
-    OK push the score above the floor, confirming that supporting signals matter within the band.
-    full_description is required to avoid the description_capture_incomplete (-8) penalty,
-    which would otherwise mask the title/content advantage.
+    The removed convenience/noise signals must not push the score up or down.
     """
     band = _band("STRONG")
     record = {
         "title": "Business Analyst",
         "title_reason": "OK",
         "title_match_metadata": {"match_family": "primary"},
-        "content_reason": "OK",
+        "content_reason": "NO_MATCH",
         "full_description": _DESCRIPTION_TEXT,
         "llm_fit_grade": "STRONG",
-        "contextual_capability_matches": [],
+        "location": "",
+        "salary": "N/A",
+        "work_type": "",
+        "work_mode": "",
+        "competitive_signals": [],
     }
     score = _score(record)
     assert band["floor"] <= score <= band["ceiling"], (
         f"STRONG + clean signals should be in [{band['floor']}, {band['ceiling']}], got {score}"
     )
-    # Must be above the floor — supporting signals must make a positive difference
-    assert score > band["floor"], (
-        f"STRONG + clean title + content should exceed the floor {band['floor']}, got {score}"
-    )
+    assert score == band["floor"], f"STRONG title match should floor at {band['floor']}, got {score}"
 
 
 # ── Scenario 2: STRONG LLM + weak title + missing preferences ─────────────────
@@ -109,6 +112,87 @@ def test_strong_with_weak_signals_floors_at_strong_minimum():
         f"STRONG + minimal signals should floor at {band['floor']}, got {score}"
     )
     assert score < 88, "STRONG with no supporting evidence must not reach the EXCELLENT band"
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {RECORD_APPLY_METHOD_KEY: APPLY_METHOD_EASY_APPLY},
+        {RECORD_APPLY_METHOD_KEY: APPLY_METHOD_QUICK_APPLY},
+        {"content_reason": "OK"},
+        {"times_viewed": 4},
+        {"applied": False, "times_viewed": 2},
+    ],
+)
+def test_noise_signals_do_not_change_fit_score(overrides):
+    """Easy/Quick Apply, viewed status, and content-pass noise must not move the score."""
+    base_record = {
+        "title": "Business Analyst",
+        "title_reason": "OK",
+        "title_match_metadata": {"match_family": "primary"},
+        "content_reason": "NO_MATCH",
+        "full_description": _DESCRIPTION_TEXT,
+        "llm_fit_grade": "SOLID",
+        "location": "",
+        "salary": "N/A",
+        "work_type": "",
+        "work_mode": "",
+        "competitive_signals": [],
+    }
+    score = _score(base_record)
+    assert score == _band("SOLID")["floor"]
+
+    mutated = {**base_record, **overrides}
+    if "times_viewed" in overrides:
+        mutated["times_viewed"] = overrides["times_viewed"]
+    mutated.setdefault("applied", False)
+    assert _score(mutated) == score
+
+
+def test_requirement_coverage_and_competitive_signals_do_not_affect_fit_score(monkeypatch):
+    monkeypatch.setattr(
+        fit_scoring,
+        "competitive_signal_breakdown",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("competitive signals should not be scored")),
+    )
+
+    base_record = {
+        "title": "Business Analyst",
+        "title_reason": "OK",
+        "title_match_metadata": {"match_family": "primary"},
+        "content_reason": "NO_MATCH",
+        "full_description": "Business analyst role driving agile delivery and stakeholder engagement. " * 20,
+        "llm_fit_grade": "STRONG",
+        "location": "",
+        "salary": "N/A",
+        "work_type": "",
+        "work_mode": "",
+        "competitive_signals": [],
+        "missing_profile_support": [],
+        "soft_risk_reasons": [],
+        "requirement_coverage": [
+            {
+                "requirement": "Agile delivery",
+                "status": "supported",
+                "capability_name": "agile methodologies",
+                "matched_job_text": "agile delivery",
+                "profile_support": [],
+            },
+            {
+                "requirement": "Stakeholder engagement",
+                "status": "supported",
+                "capability_name": "primary stakeholder engagement",
+                "matched_job_text": "stakeholder workshops",
+                "profile_support": [],
+            },
+        ],
+    }
+
+    plain_score = _score(base_record)
+    assert plain_score == _band("STRONG")["floor"]
+
+    scored_record = {**base_record, "content_reason": "OK"}
+    assert _score(scored_record) == plain_score
 
 
 def test_strong_grade_cannot_produce_95_without_evidence():

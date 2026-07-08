@@ -630,7 +630,7 @@ def test_fit_score_requirement_coverage_entries_are_transparency_only():
     assert all(entry["value"] == 0 for entry in coverage_entries)
 
 
-def test_strong_high_confidence_fit_gets_convergence_bonus():
+def test_strong_high_confidence_fit_keeps_requirement_coverage_transparency_only():
     profile = _capability_profile()
     record = {
         "title": "Business Analyst",
@@ -677,48 +677,8 @@ def test_strong_high_confidence_fit_gets_convergence_bonus():
 
     breakdown = fit_scoring.fit_score_breakdown(record, profile)
 
-    assert _breakdown_value(breakdown, "Multiple strong signals align") == 5
-    assert fit_scoring.fit_score(record, profile) >= 70
-
-
-def test_convergence_bonus_entry_can_use_profile_scoring_rule_overrides(monkeypatch):
-    monkeypatch.setattr(fit_scoring, "full_description_confidence", lambda record: "HIGH")
-
-    profile = {
-        **_test_profile(),
-        "scoring_rules": {
-            "convergence": {
-                "eligible_grades": ["SOLID"],
-                "min_positive_matches": 1,
-                "required_title_reason": "TITLE_POTENTIAL_MATCH",
-                "required_content_reason": "DESC_OK",
-                "required_fit_confidence": "HIGH",
-                "bonus_no_soft_risks": 11,
-                "bonus_with_soft_risks": 7,
-                "label": "Aligned",
-            },
-        },
-    }
-    record = {
-        "title_reason": "TITLE_POTENTIAL_MATCH",
-        "content_reason": "DESC_OK",
-        "llm_fit_grade": "SOLID",
-        "missing_profile_support": [],
-        "soft_risk_reasons": [],
-        "requirement_coverage": [
-            {
-                "requirement": "Platform engineering",
-                "status": "supported",
-                "capability_name": "platform engineering",
-                "matched_job_text": "platform work",
-                "profile_support": [],
-            },
-        ],
-    }
-
-    entry = fit_scoring.convergence_bonus_entry(record, profile)
-
-    assert entry == {"label": "Aligned", "value": 11}
+    assert _breakdown_value(breakdown, "Multiple strong signals align") is None
+    assert fit_scoring.fit_score(record, profile) >= 68
 
 
 def test_required_blocker_watchouts_do_not_mark_desirable_mentions_as_missing():
@@ -779,7 +739,7 @@ def test_fit_score_breakdown_can_use_profile_scoring_rule_overrides():
     assert _breakdown_value(breakdown, "The job title matches one of your target roles") == 20
 
 
-def test_fit_score_breakdown_includes_easy_apply_bonus():
+def test_fit_score_breakdown_keeps_easy_apply_as_badge_only():
     breakdown = fit_scoring.fit_score_breakdown(
         {
             "title": "Business Analyst",
@@ -801,7 +761,7 @@ def test_fit_score_breakdown_includes_easy_apply_bonus():
         _test_profile(),
     )
 
-    assert _breakdown_value(breakdown, "Easy/Quick Apply available") == 3
+    assert _breakdown_value(breakdown, "Easy/Quick Apply available") is None
 
 
 def test_fit_score_breakdown_keeps_secondary_role_family_clean():

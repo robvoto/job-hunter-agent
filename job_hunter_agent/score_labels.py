@@ -116,7 +116,7 @@ _SECTION_NAMES = {
 
 
 def format_score_breakdown_console(breakdown: List[dict]) -> List[str]:
-    """Format breakdown as a numbered 10-category block for console output."""
+    """Format breakdown as a numbered block for console output."""
     by_section: dict[str, list[dict]] = {s: [] for s in _SECTION_ORDER}
     for entry in breakdown:
         section = str(entry.get("section") or "")
@@ -124,7 +124,8 @@ def format_score_breakdown_console(breakdown: List[dict]) -> List[str]:
             by_section[section].append(entry)
 
     lines: list[str] = ["  Score breakdown:", "  " + "─" * 70]
-    for i, key in enumerate(_SECTION_ORDER, 1):
+    display_index = 0
+    for key in _SECTION_ORDER:
         cat = _SECTION_NAMES[key]
         entries = by_section[key]
 
@@ -133,31 +134,33 @@ def format_score_breakdown_console(breakdown: List[dict]) -> List[str]:
             total = sum(int(e.get("value") or 0) for e in entries)
             count = len(credited)
             if count == 0:
-                detail = (
-                    entries[0].get("label", "No matches found") if entries else "No matches found"
-                )
-            else:
-                detail = f"{count} match{'es' if count != 1 else ''} found"
-            lines.append(f"  {i:2d}. {cat:<14}  {detail:<40}  {total:+d}")
+                continue
+            display_index += 1
+            detail = f"{count} match{'es' if count != 1 else ''} found"
+            lines.append(f"  {display_index:2d}. {cat:<14}  {detail:<40}  {total:+d}")
         elif key == "risk":
+            display_index += 1
             if not entries:
-                lines.append(f"  {i:2d}. {cat:<14}  —")
+                lines.append(f"  {display_index:2d}. {cat:<14}  —")
             else:
                 for entry in entries:
                     raw = str(entry.get("label") or "")
                     detail = raw[:55] + "…" if len(raw) > 55 else raw
                     lines.append(
-                        f"  {i:2d}. {cat:<14}  {detail:<40}  {int(entry.get('value') or 0):+d}"
+                        f"  {display_index:2d}. {cat:<14}  {detail:<40}  {int(entry.get('value') or 0):+d}"
                     )
         elif key == "salary" and entries and int(entries[0].get("value") or 0) == 0:
-            lines.append(f"  {i:2d}. {cat:<14}  {entries[0].get('label', '—'):<40}   —")
+            display_index += 1
+            lines.append(f"  {display_index:2d}. {cat:<14}  {entries[0].get('label', '—'):<40}   —")
         elif not entries:
-            lines.append(f"  {i:2d}. {cat:<14}  —")
+            display_index += 1
+            lines.append(f"  {display_index:2d}. {cat:<14}  —")
         else:
+            display_index += 1
             total = sum(int(e.get("value") or 0) for e in entries)
             raw = str(entries[0].get("label") or "")
             detail = raw[:55] + "…" if len(raw) > 55 else raw
-            lines.append(f"  {i:2d}. {cat:<14}  {detail:<40}  {total:+d}")
+            lines.append(f"  {display_index:2d}. {cat:<14}  {detail:<40}  {total:+d}")
 
     lines.append("  " + "─" * 70)
     return lines

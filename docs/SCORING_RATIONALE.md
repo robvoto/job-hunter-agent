@@ -96,7 +96,7 @@ flowchart TD
     Q -- Yes --> Q1[Apply hard blocker penalty<br/>force score near zero]
     Q -- No --> R[Store frozen score + explanation]
     Q1 --> R
-    R --> S[Apply display-time ranking only<br/>freshness, viewed status]
+    R --> S[Apply display-time ranking only<br/>freshness; viewed state shown separately]
     S --> T[Show ranked job to user<br/>with explanation]
     T --> U{User action}
     U -- Apply / save --> U1[Record positive action]
@@ -118,7 +118,7 @@ flowchart TD
 | Review outcome | Title/content signals and fit source text | `llm_gate.py`, `source_learning.py` deterministic shortcut | `llm_fit_grade`, requirement coverage, rationale fields | LLM call may be avoided only by explicit deterministic reject rules. Deterministic keep candidates still require full LLM requirement coverage before any final KEEP is saved. |
 | Requirement coverage | Extracted job requirements, candidate capabilities | `llm_gate.py`, capability knowledge/profile modules | Supported / partially supported / not shown / mismatch coverage | Coverage drives grade when present. Unsupported capability claims are dropped. |
 | Frozen scoring | Reviewed job record with `llm_fit_grade` | `fit_scoring.py`, `data/knowledge/scoring_rules.json` | Frozen score and score breakdown | Grade band clamps non-hard-block score. Hard blockers apply after clamp. |
-| Display scoring | Frozen score, current age/viewed state | `fit_scoring.py`, UI consumers | Displayed score and ordering | Freshness/viewed status can move displayed rank, not capability proof. |
+| Display scoring | Frozen score, current age | `fit_scoring.py`, UI consumers | Displayed score and ordering | Freshness can move displayed rank; viewed state is shown separately, not as score evidence. |
 | Human review and learning | User keep/skip/apply/reject decisions | Review history, learning modules, backlog if needed | Future profile/rule improvements | Learning must not silently become hidden scoring logic. |
 
 ### Handover points
@@ -127,7 +127,7 @@ The main handover from filtering to scoring is the reviewed job record containin
 
 The main handover from LLM review to scoring is `requirement_coverage`. Coverage is evidence for the grade; the score breakdown displays it for transparency but does not add a second independent capability bonus. A deterministic keep candidate is not complete until this coverage exists and the final reviewed record is saved from the LLM path.
 
-The main handover from frozen scoring to the UI is the stored frozen score plus explanation entries. Display-time freshness and viewed status are ranking adjustments only, not new evidence that the candidate fits the job.
+The main handover from frozen scoring to the UI is the stored frozen score plus explanation entries. Display-time freshness is a ranking adjustment only. Viewed state remains part of the UI and history flow, but it is not new evidence that the candidate fits the job.
 
 ### End states
 
@@ -175,16 +175,13 @@ Core entries include:
 | Title secondary/potential match | Adds `title_secondary` points, currently 4 before weighting. |
 | LLM / derived grade | Adds base grade points from `llm_grade_points`. |
 | Requirement coverage | Displayed as transparency entries with value 0. |
-| Content passed | Adds `content_ok`, currently 3 before weighting. This means no content blocker was found; it is not proof of capability fit. |
 | Description capture incomplete | Adds a negative entry, currently -8 before weighting. |
-| Convergence | Adds +5 or +3 before weighting only when strong independent signals align. |
-| Competitive signals | Adds or subtracts small specialist-domain adjustments. |
 
 ### 3. Preference entries
 
 Preference entries include location and salary/rate.
 
-They help ranking, but they must not be read as evidence that the candidate meets mandatory job requirements.
+They help ranking and display, but they must not be read as evidence that the candidate meets mandatory job requirements.
 
 ### Location scoring decision
 
@@ -205,8 +202,8 @@ Convenience entries include:
 
 | Signal | Behaviour |
 |---|---|
-| Freshness | Added dynamically from current posted age. Currently +10 within 6 hours, +8 within 1 day. |
-| Already viewed | Added dynamically as -3 if viewed and not applied. |
+| Freshness | Added dynamically from current posted age. It is a recency signal for sorting, not a proof of fit. |
+| Already viewed | Shown as history-aware display state. It should not be used as core fit evidence. |
 
 ### 5. Grade band clamp
 
@@ -217,7 +214,7 @@ There are two scoring variants:
 | Function | Behaviour |
 |---|---|
 | `fit_score_breakdown_frozen` / `fit_score_frozen` | Stored at scrape/review time. Excludes freshness and viewed status. |
-| `fit_score_and_breakdown_displayed` / `fit_score_displayed` | Display-time score. Starts from frozen score, then adds current freshness and viewed status. Falls back to live scoring for old records without a frozen score. |
+| `fit_score_and_breakdown_displayed` / `fit_score_displayed` | Display-time score. Starts from frozen score, then adds current freshness only. Falls back to live scoring for old records without a frozen score. |
 
 ### 6. Hard blockers
 
@@ -243,6 +240,8 @@ Allowed coverage statuses:
 | mismatch | Explicit conflict. |
 
 Coverage entries are shown in the score breakdown for transparency, but they do not add separate score points.
+
+In this cleanup, the fit score is intentionally narrow: title match, LLM grade, requirement-coverage transparency, hard blockers, and grade-band calibration. Convenience or preference signals such as Easy Apply, freshness, viewed status, salary, and location are better handled as badges, filters, or sort signals.
 
 The grade is derived from coverage when coverage exists. The model's raw grade is used only as fallback when coverage is missing.
 
@@ -348,7 +347,6 @@ These signals can help ranking but should not prove mandatory requirement fit:
 - work mode
 - work type / contract preference
 - freshness
-- content passed
 - viewed/not viewed status
 - competitive-domain hints by themselves
 
@@ -446,10 +444,9 @@ Important wording rule:
 1. The grade derivation is coverage-based from `requirement_coverage`. A `KEEP` review is invalid unless `requirement_coverage` is present and non-empty.
 2. Mandatory missing evidence does not automatically reject. It reduces the weighted coverage score but may still allow weak/solid outcomes depending on the rest of the coverage.
 3. Preference signals can move jobs within grade bands and can affect display-time ranking, but they are not capability evidence.
-4. Frozen score and displayed score can differ because freshness and viewed status are applied dynamically at display time.
+4. Frozen score and displayed score can differ because freshness is applied dynamically at display time.
 5. Deterministic shortcuts can still produce early rejects without an LLM call. Deterministic keep candidates must still be confirmed by the LLM fit review before they become final KEEP rows. Audit the shortcut trigger via `det_rule`; audit final keeps via `review_source` and `requirement_coverage`.
-6. Convergence bonus currently requires supported coverage count, clean title/content, high description confidence, and eligible grade. It is useful but still a calibrated rule, not hard proof of fit.
-7. Some older docs and backlog items may still use broad "heuristic" language. Treat that as technical debt unless it points to an actual remaining hardcoded judgement.
+6. Some older docs and backlog items may still use broad "heuristic" language. Treat that as technical debt unless it points to an actual remaining hardcoded judgement.
 
 ---
 
