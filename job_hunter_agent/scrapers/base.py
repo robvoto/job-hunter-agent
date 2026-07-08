@@ -109,6 +109,7 @@ def blank_source_metadata(source: str) -> dict:
 
 def blank_posting_channel_evidence() -> dict:
     return {
+        "kind": "unknown",
         "trusted_metadata": [],
         "weak_text_matches": [],
         "needs_review": False,

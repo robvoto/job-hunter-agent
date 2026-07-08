@@ -102,6 +102,7 @@ def test_normalize_jobspy_record_sets_expected_shape():
     }
     assert RECORD_SOURCE_ATS_REQUISITION_ID_KEY not in record["source_metadata"]
     assert record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY] == {
+        "kind": "unknown",
         "trusted_metadata": [],
         "weak_text_matches": [],
         "needs_review": False,
