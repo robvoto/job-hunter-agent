@@ -135,7 +135,6 @@ def _collect_trusted_posting_channel_metadata(record: dict) -> tuple[list[str], 
         "hirer",
         "hirer_relationship",
         "hirerRelationship",
-        "company_url",
         "company_url_direct",
         "job_url_direct",
     )

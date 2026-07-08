@@ -203,3 +203,99 @@ def test_linkedin_backfills_missing_posted_age_from_visible_listing_text(monkeyp
     assert "STARTING LINKEDIN TARGET 1/1" in caplog.text
     assert "jobspy fetch start" in caplog.text
     assert "jobspy fetch done" in caplog.text
+
+
+def test_linkedin_step_through_pauses_on_rejected_jobs(monkeypatch):
+    from job_hunter_agent import job_review_pipeline
+    from job_hunter_agent.scrapers import linkedin as linkedin_module
+
+    class _Rows:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def sort_values(self, **_kwargs):
+            return self
+
+        def iterrows(self):
+            return enumerate(self._rows)
+
+        def __len__(self):
+            return len(self._rows)
+
+    pause_calls: list[str] = []
+    scraper = LinkedInScraper(
+        profile={},
+        llm_cache={},
+        job_history={},
+        applied_job_keys=set(),
+        hidden_job_keys=set(),
+        run_iso="2026-06-22T09:00:00+10:00",
+    )
+
+    monkeypatch.setattr(linkedin_module, "step_through_enabled", lambda: True)
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "pause_for_step_through",
+        lambda label: pause_calls.append(label),
+    )
+    monkeypatch.setattr(
+        scraper,
+        "_build_search_targets",
+        lambda _settings: [
+            {
+                "search_term": "analyst",
+                "location": "Sydney, Australia",
+                "results_wanted": 1,
+                "hours_old": 168,
+                "sort_newest_first": False,
+                "easy_apply": None,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        scraper,
+        "_fetch_jobspy",
+        lambda _target: _Rows(
+            [
+                {
+                    "id": "li-1",
+                    "title": "Senior Technical Business Analyst",
+                    "company": "Woolworths Group",
+                    "location": "Sydney",
+                    "job_url": "https://www.linkedin.com/jobs/view/4431678147",
+                    "description": "Example description",
+                }
+            ]
+        ),
+    )
+    monkeypatch.setattr(scraper, "_detect_closed_job_signals", lambda _record: [])
+    monkeypatch.setattr(
+        linkedin_module,
+        "review_pre_detail_normalized_job",
+        lambda record, _context: (
+            {"decision": "REJECT", "reject_reason": "TITLE_EMPTY"},
+            record,
+            [],
+            False,
+        ),
+    )
+    monkeypatch.setattr(
+        linkedin_module,
+        "review_post_detail_normalized_job",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("unexpected detail review")),
+    )
+    monkeypatch.setattr(
+        linkedin_module,
+        "fit_score_and_breakdown_displayed",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("unexpected scoring")),
+    )
+    monkeypatch.setattr(linkedin_module, "load_job_type", lambda: {})
+    monkeypatch.setattr(linkedin_module, "load_salary", lambda: {})
+
+    kept_records, audit_rows, skill_observations = scraper.scrape()
+
+    assert kept_records == []
+    assert audit_rows == []
+    assert skill_observations == []
+    assert len(pause_calls) == 1
+    assert "Senior Technical Business Analyst @ Woolworths Group" in pause_calls[0]

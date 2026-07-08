@@ -77,9 +77,23 @@ def list_to_phrase(items: List[str]) -> str:
     return f"{', '.join(cleaned[:-1])}, and {cleaned[-1]}"
 
 
+def _strip_markdown_emphasis(text: str) -> str:
+    """Remove literal Markdown emphasis markers and escape backslashes left over from scraped source text."""
+
+    cleaned = re.sub(r"\*{1,3}([^*\n]+?)\*{1,3}", r"\1", text)
+
+    cleaned = re.sub(r"(?<!\w)_{1,3}([^_\n]+?)_{1,3}(?!\w)", r"\1", cleaned)
+
+    cleaned = re.sub(r"\\([\\`*_{}\[\]()#+\-.!])", r"\1", cleaned)
+
+    return cleaned
+
+
 def summarize_snippet(snippet: str, max_length: int = 180) -> str:
 
     cleaned = compact_whitespace(snippet)
+
+    cleaned = _strip_markdown_emphasis(cleaned)
 
     cleaned = re.sub(r"^([A-Z][a-z]{3,30})(?=[A-Z][a-z])", r"\1 ", cleaned)
 

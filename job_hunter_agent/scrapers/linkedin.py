@@ -51,7 +51,11 @@ from job_hunter_agent.record_schema import (
     RECORD_URL_KEY,
     RECORD_WORK_MODE_KEY,
 )
-from job_hunter_agent.run_control import run_stop_requested, set_run_progress
+from job_hunter_agent.run_control import (
+    run_stop_requested,
+    set_run_progress,
+    step_through_enabled,
+)
 from job_hunter_agent.runtime_helpers import CLI_FLAG_DEBUG, has_cli_flag
 from job_hunter_agent.salary import load_salary
 from job_hunter_agent.scrapers.base import BaseJobScraper, normalize_jobspy_record
@@ -260,31 +264,41 @@ class LinkedInScraper(BaseJobScraper):
                     pre_outcome, record, _, should_fetch_details = review_pre_detail_normalized_job(
                         record, review_context
                     )
-                    if pre_outcome["decision"] != "KEEP" or not should_fetch_details:
-                        continue
+                    outcome = pre_outcome
+                    record_skill_observations: list[dict] = []
+                    _li_score = None
+                    _li_breakdown = None
 
-                    hooks = self._build_review_hooks()
-                    outcome, record, record_skill_observations = review_post_detail_normalized_job(
-                        record, review_context, hooks=hooks
-                    )
+                    if pre_outcome["decision"] == "KEEP" and should_fetch_details:
+                        hooks = self._build_review_hooks()
+                        outcome, record, record_skill_observations = review_post_detail_normalized_job(
+                            record, review_context, hooks=hooks
+                        )
+
+                    if outcome["decision"] == "KEEP":
+                        skill_observations.extend(record_skill_observations)
+                        kept_records.append(record)
+                        _li_score, _li_breakdown = fit_score_and_breakdown_displayed(
+                            record, self.profile
+                        )
+                        logger.info(
+                            "%s KEPT %s @ %s | %s | %s | %s | %s",
+                            target_tag,
+                            record.get(RECORD_TITLE_KEY),
+                            record.get(RECORD_COMPANY_KEY),
+                            record.get("posted"),
+                            record.get(RECORD_LOCATION_KEY),
+                            record.get("work_type"),
+                            record.get(RECORD_SALARY_KEY) or "N/A",
+                        )
+                        print_job_human_summary(
+                            record, self.profile, score=_li_score, breakdown=_li_breakdown
+                        )
+                    elif step_through_enabled() and outcome["decision"] == "REJECT":
+                        print_job_human_summary(record, self.profile)
+
                     if outcome["decision"] != "KEEP":
                         continue
-                    skill_observations.extend(record_skill_observations)
-                    kept_records.append(record)
-                    _li_score, _li_breakdown = fit_score_and_breakdown_displayed(record, self.profile)
-                    logger.info(
-                        "%s KEPT %s @ %s | %s | %s | %s | %s",
-                        target_tag,
-                        record.get(RECORD_TITLE_KEY),
-                        record.get(RECORD_COMPANY_KEY),
-                        record.get("posted"),
-                        record.get(RECORD_LOCATION_KEY),
-                        record.get("work_type"),
-                        record.get(RECORD_SALARY_KEY) or "N/A",
-                    )
-                    print_job_human_summary(
-                        record, self.profile, score=_li_score, breakdown=_li_breakdown
-                    )
         except Exception as exc:
             raise PartialSourceResultsError(
                 self.source_name,
