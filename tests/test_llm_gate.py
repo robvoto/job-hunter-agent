@@ -1,6 +1,7 @@
 """Tests for llm gate."""
 
 import pytest
+from pydantic import ValidationError
 
 from job_hunter_agent import llm_gate
 
@@ -128,6 +129,20 @@ def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
     }
 
 
+def test_normalize_llm_review_payload_rejects_keep_without_requirement_coverage():
+    with pytest.raises(
+        llm_gate.LLMReviewValidationError,
+        match="LLM KEEP review requires non-empty requirement_coverage",
+    ):
+        llm_gate.normalize_llm_review_payload(
+            {
+                "fit_review": {"decision": "KEEP", "grade": "STRONG"},
+                "job_requirements": ["Stakeholder engagement"],
+                "requirement_coverage": [],
+            }
+        )
+
+
 def test_normalize_llm_review_payload_debug_reason_is_capped():
     payload = llm_gate.normalize_llm_review_payload(
         {
@@ -195,6 +210,68 @@ def test_request_learning_payload_uses_single_llm_call(monkeypatch):
 
     assert called["count"] == 1
     assert payload["fit_review"] == {"decision": "KEEP", "grade": "STRONG"}
+
+
+def test_request_learning_payload_retries_once_on_invalid_json(monkeypatch, caplog):
+    called = {"count": 0}
+
+    class _FakeParsed:
+        def model_dump(self):
+            return {
+                "fit_review": {"decision": "KEEP", "grade": "SOLID"},
+                "job_requirements": ["Stakeholder engagement"],
+                "requirement_coverage": [
+                    {
+                        "requirement": "Stakeholder engagement",
+                        "status": "supported",
+                        "capability_name": "Stakeholder Engagement",
+                        "matched_job_text": "work with stakeholders",
+                        "profile_support": ["stakeholder management"],
+                    },
+                ],
+            }
+
+    class _FakeResponse:
+        output_parsed = _FakeParsed()
+        usage = None
+
+    class _FakeResponses:
+        def parse(self, **kwargs):
+            called["count"] += 1
+            if called["count"] == 1:
+                raise ValidationError.from_exception_data(
+                    "_LLMFitReviewPayload",
+                    [
+                        {
+                            "type": "json_invalid",
+                            "loc": (),
+                            "msg": "Invalid JSON",
+                            "input": '{"fit_review":{"decision":"KEEP"',
+                            "ctx": {"error": "EOF while parsing a string"},
+                        }
+                    ],
+                )
+            return _FakeResponse()
+
+    class _FakeClient:
+        responses = _FakeResponses()
+
+    monkeypatch.setattr(llm_gate, "client", _FakeClient())
+    monkeypatch.setattr(llm_gate, "_log_llm_call", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        llm_gate,
+        "load_profile",
+        lambda: {"candidate_capabilities": [{"name": "Stakeholder Engagement"}]},
+    )
+
+    with caplog.at_level("WARNING"):
+        payload = llm_gate._request_learning_payload(
+            "Business analyst role supporting stakeholders.", fit_review=True
+        )
+
+    assert called["count"] == 2
+    assert payload["fit_review"] == {"decision": "KEEP", "grade": "STRONG"}
+    assert "[LLM][RETRY]" in caplog.text
 
 
 def test_strong_grade_requires_requirement_capability_evidence():
@@ -529,3 +606,91 @@ def test_build_learning_guidance_includes_categories():
 def test_build_rejection_suggestions_guidance_includes_key_phrase():
     guidance = llm_gate.build_rejection_suggestions_guidance()
     assert "blocker" in guidance.lower()
+
+
+# ── llm_judge_title ────────────────────────────────────────────────────────────
+
+
+def _fake_title_judgment_client(output_text: str):
+    class _FakeResponse:
+        usage = None
+
+    resp = _FakeResponse()
+    resp.output_text = output_text
+
+    class _FakeResponses:
+        def create(self, **kwargs):
+            return resp
+
+    class _FakeClient:
+        responses = _FakeResponses()
+
+    return _FakeClient()
+
+
+def test_llm_judge_title_returns_none_without_client():
+    result = llm_gate.llm_judge_title("Business Analyst", ["business analyst"], [], llm_client=None)
+    assert result is None
+
+
+def test_llm_judge_title_returns_none_for_empty_title():
+    client = _fake_title_judgment_client('{"verdict":"match","reason":"ok"}')
+    result = llm_gate.llm_judge_title("", ["business analyst"], [], llm_client=client)
+    assert result is None
+
+
+def test_llm_judge_title_returns_none_when_no_target_roles_configured():
+    client = _fake_title_judgment_client('{"verdict":"match","reason":"ok"}')
+    result = llm_gate.llm_judge_title("Business Analyst", [], [], llm_client=client)
+    assert result is None
+
+
+def test_llm_judge_title_parses_no_match_verdict():
+    client = _fake_title_judgment_client(
+        '{"verdict":"no_match","reason":"Enablement/coordination role, not a target role."}'
+    )
+    result = llm_gate.llm_judge_title(
+        "Business Enablement Coordinator", ["senior business analyst"], [], llm_client=client
+    )
+    assert result == {
+        "verdict": "no_match",
+        "reason": "Enablement/coordination role, not a target role.",
+    }
+
+
+def test_llm_judge_title_parses_match_verdict():
+    client = _fake_title_judgment_client('{"verdict":"match","reason":"Direct match."}')
+    result = llm_gate.llm_judge_title(
+        "Senior Business Analyst", ["senior business analyst"], [], llm_client=client
+    )
+    assert result == {"verdict": "match", "reason": "Direct match."}
+
+
+def test_llm_judge_title_returns_none_on_invalid_verdict():
+    client = _fake_title_judgment_client('{"verdict":"maybe","reason":"unsure"}')
+    result = llm_gate.llm_judge_title(
+        "Business Analyst", ["senior business analyst"], [], llm_client=client
+    )
+    assert result is None
+
+
+def test_llm_judge_title_returns_none_on_unparseable_output():
+    client = _fake_title_judgment_client("not json")
+    result = llm_gate.llm_judge_title(
+        "Business Analyst", ["senior business analyst"], [], llm_client=client
+    )
+    assert result is None
+
+
+def test_llm_judge_title_returns_none_on_client_exception():
+    class _RaisingResponses:
+        def create(self, **kwargs):
+            raise RuntimeError("boom")
+
+    class _RaisingClient:
+        responses = _RaisingResponses()
+
+    result = llm_gate.llm_judge_title(
+        "Business Analyst", ["senior business analyst"], [], llm_client=_RaisingClient()
+    )
+    assert result is None

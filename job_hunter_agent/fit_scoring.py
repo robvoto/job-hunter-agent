@@ -625,13 +625,23 @@ def fit_score_breakdown_frozen(record: dict, profile: Optional[dict] = None) -> 
     return non_hard_block + build_risk_breakdown(scoring_rules, hard_block_labels)
 
 
-def fit_score_frozen(record: dict, profile: Optional[dict] = None) -> int:
-    """Frozen score — excludes freshness and viewed status. Stored on the record at scrape time."""
+def fit_score_and_breakdown_frozen(
+    record: dict, profile: Optional[dict] = None
+) -> tuple[int, List[dict]]:
+    """Frozen score + breakdown computed together so callers storing both fields
+
+    (score, breakdown) don't recompute — and re-log — the breakdown twice.
+    """
     active_profile = profile or load_profile()
     scoring_rules = get_scoring_rules(active_profile)
-    return _clamp_score(
-        sum(item["value"] for item in fit_score_breakdown_frozen(record, profile)), scoring_rules
-    )
+    breakdown = fit_score_breakdown_frozen(record, active_profile)
+    return _clamp_score(sum(item["value"] for item in breakdown), scoring_rules), breakdown
+
+
+def fit_score_frozen(record: dict, profile: Optional[dict] = None) -> int:
+    """Frozen score — excludes freshness and viewed status. Stored on the record at scrape time."""
+    score, _ = fit_score_and_breakdown_frozen(record, profile)
+    return score
 
 
 def fit_score_and_breakdown_displayed(

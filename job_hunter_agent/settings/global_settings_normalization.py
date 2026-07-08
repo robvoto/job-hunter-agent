@@ -68,6 +68,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS,
     KEY_LLM_PROMPT_SETTINGS,
     KEY_LLM_PROMPT_TEMPLATES,
+    KEY_LLM_PROMPT_TITLE_JUDGMENT_MAX_OUTPUT_TOKENS,
     KEY_LLM_SETTINGS,
     KEY_MIN_TRUSTED_DESCRIPTION_LENGTH,
     KEY_MODEL_OPTIONS,
@@ -276,6 +277,12 @@ def _normalize_llm_prompt_settings(
         minimum=50,
         maximum=1_500,
     )
+    title_judgment_max_output_tokens = _prompt_int(
+        KEY_LLM_PROMPT_TITLE_JUDGMENT_MAX_OUTPUT_TOKENS,
+        KEY_LLM_PROMPT_TITLE_JUDGMENT_MAX_OUTPUT_TOKENS,
+        minimum=30,
+        maximum=500,
+    )
     profile_extraction_max_output_tokens = _prompt_int(
         KEY_LLM_PROMPT_PROFILE_EXTRACTION_MAX_OUTPUT_TOKENS,
         KEY_LLM_PROMPT_PROFILE_EXTRACTION_MAX_OUTPUT_TOKENS,
@@ -400,6 +407,7 @@ def _normalize_llm_prompt_settings(
         KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_OUTPUT_TOKENS: job_requirements_max_output_tokens,
         KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_OUTPUT_TOKENS: rejection_blocker_max_output_tokens,
         KEY_LLM_PROMPT_CAPABILITY_NAMING_MAX_OUTPUT_TOKENS: capability_naming_max_output_tokens,
+        KEY_LLM_PROMPT_TITLE_JUDGMENT_MAX_OUTPUT_TOKENS: title_judgment_max_output_tokens,
         KEY_LLM_PROMPT_PROFILE_EXTRACTION_MAX_OUTPUT_TOKENS: profile_extraction_max_output_tokens,
         KEY_LLM_PROMPT_JOB_DESCRIPTION_MAX_CHARS: job_description_max_chars,
         KEY_LLM_PROMPT_CV_EVIDENCE_JSON_CHARS: cv_evidence_json_chars,

@@ -26,6 +26,7 @@ from job_hunter_agent.run_control import (
     clear_run_progress,
     clear_run_stop_request,
     enable_step_through,
+    step_through_enabled,
 )
 from job_hunter_agent.runtime_helpers import (
     CLI_FLAG_DEBUG,
@@ -68,6 +69,10 @@ def scrape_jobs_direct() -> str:
     clear_run_stop_request()
     clear_run_progress()
     context = build_scrape_run_context(sys.argv)
+    if step_through_enabled():
+        # Step-through is intentionally single-file so each job can be reviewed
+        # before the next detail fetch starts.
+        context.seek_parallel_detail_workers = 1
     require_profile_ready_for_review(load_profile())
     reset_session_cost()
     reset_llm_truncation_count()
@@ -140,6 +145,10 @@ if __name__ == "__main__":
     seed_global_settings_from_file()
     for _subdir in ("knowledge", "signals"):
         upgrade_knowledge_from_dir(_REPO_ROOT / "data" / _subdir)
+
+    from job_hunter_agent.user_context import set_user_context_from_admin_env
+
+    set_user_context_from_admin_env()
     try:
         if has_cli_flag(sys.argv, CLI_FLAG_REBUILD_WORKSPACE):
             rebuild_workspace_results()

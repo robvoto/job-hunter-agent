@@ -489,6 +489,7 @@ def finalize_scrape_run(
         context.run_started_at,
         audit_rows,
         context.dashboard_debug_mode,
+        workspace_records=workspace_records,
     )
 
     save_llm_cache(context.llm_cache)

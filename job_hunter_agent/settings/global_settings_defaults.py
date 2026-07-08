@@ -56,6 +56,7 @@ KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_OUTPUT_TOKENS = (
     "rejection_blocker_suggestions_max_output_tokens"
 )
 KEY_LLM_PROMPT_CAPABILITY_NAMING_MAX_OUTPUT_TOKENS = "capability_naming_max_output_tokens"
+KEY_LLM_PROMPT_TITLE_JUDGMENT_MAX_OUTPUT_TOKENS = "title_judgment_max_output_tokens"
 KEY_LLM_PROMPT_PROFILE_EXTRACTION_MAX_OUTPUT_TOKENS = "profile_extraction_max_output_tokens"
 KEY_LLM_PROMPT_JOB_DESCRIPTION_MAX_CHARS = "job_description_max_chars"
 KEY_LLM_PROMPT_CV_EVIDENCE_JSON_CHARS = "cv_evidence_json_chars"

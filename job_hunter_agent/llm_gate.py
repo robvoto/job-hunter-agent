@@ -29,7 +29,7 @@ import sys
 from typing import Any, Dict
 
 from openai import APIStatusError, APITimeoutError, OpenAI
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from job_hunter_agent.config import DEBUG_MODE
 from job_hunter_agent.global_settings import (
@@ -54,6 +54,7 @@ from job_hunter_agent.global_settings import (
     get_llm_rejection_blocker_suggestions_max_items,
     get_llm_rejection_blocker_suggestions_max_output_tokens,
     get_llm_rejection_blocker_suggestions_max_words,
+    get_llm_title_judgment_max_output_tokens,
     load_global_settings,
 )
 from job_hunter_agent.hard_blocker_rules import (
@@ -63,6 +64,7 @@ from job_hunter_agent.llm_protocol import (
     LLM_ALLOWED_COVERAGE_IMPORTANCES,
     LLM_ALLOWED_DECISIONS,
     LLM_ALLOWED_GRADES,
+    LLM_ALLOWED_TITLE_JUDGMENT_VERDICTS,
     LLM_FIT_REVIEW_PROMPT_SHAPE,
     LLM_JOB_REQUIREMENTS_PROMPT_SHAPE,
     LLM_LEARNING_ONLY_PROMPT_SHAPE,
@@ -85,6 +87,7 @@ from job_hunter_agent.llm_protocol import (
     LLM_PROMPT_USE_VISIBLE_STRINGS,
     LLM_REJECTION_SUGGESTIONS_JSON_SHAPE,
     LLM_SECTION_LABEL_CLASSIFICATION_SHAPE,
+    LLM_TITLE_JUDGMENT_SHAPE,
 )
 from job_hunter_agent.paths import LLM_COSTS_PATH as _LLM_COSTS_PATH
 from job_hunter_agent.runtime_helpers import is_desktop_runtime
@@ -321,6 +324,17 @@ class LLMCallError(RuntimeError):
         self.model = model
         self.status_code = status_code
         self.is_timeout = is_timeout
+
+
+class LLMReviewValidationError(ValueError):
+    """LLM review payload failed required fit-review invariants."""
+
+
+def _is_retryable_llm_payload_error(exc: Exception) -> bool:
+    if isinstance(exc, ValidationError):
+        return True
+    message = str(exc).lower()
+    return "json_invalid" in message or "invalid json" in message or "eof while parsing" in message
 
 
 def _build_openai_client() -> OpenAI | None:
@@ -902,6 +916,19 @@ def _normalize_llm_review_text(value: Any, *, max_chars: int) -> str:
     return cleaned[:max_chars]
 
 
+def _require_complete_keep_requirement_coverage(
+    fit_review: dict[str, str], requirement_coverage: list[dict[str, Any]]
+) -> None:
+    decision = str(fit_review.get("decision") or "").strip().upper()
+    if decision != "KEEP":
+        return
+    if requirement_coverage:
+        return
+    raise LLMReviewValidationError(
+        "LLM KEEP review requires non-empty requirement_coverage"
+    )
+
+
 def normalize_llm_review_payload(
     value: Any, valid_capability_names: dict[str, str] | None = None
 ) -> dict[str, Any]:
@@ -923,6 +950,9 @@ def normalize_llm_review_payload(
             job_requirements = normalize_llm_job_requirements(value.get("job_requirements"))
             derived_grade = derive_fit_review_grade(requirement_coverage, job_requirements)
             fit_review_normalized = _require_fit_review(fit_review)
+            _require_complete_keep_requirement_coverage(
+                fit_review_normalized, requirement_coverage
+            )
             cited_capabilities = list(
                 dict.fromkeys(
                     str(_item.get("capability_name") or "").strip()
@@ -934,7 +964,7 @@ def normalize_llm_review_payload(
             grade_to_use = (
                 derived_grade
                 if requirement_coverage
-                else (fit_review_normalized.get("grade") or derived_grade)
+                else derived_grade
             )
             # Count by importance × status for structured logging.
             _imp_status: dict[str, int] = {}
@@ -948,7 +978,7 @@ def normalize_llm_review_payload(
                 grade_to_use,
                 derived_grade,
                 fit_review_normalized["grade"],
-                "derived" if requirement_coverage else "model_fallback",
+                "derived",
                 len(requirement_coverage),
                 _imp_status_str or "empty",
                 ", ".join(cited_capabilities) or "(none)",
@@ -1184,62 +1214,77 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
                 "(candidate_capabilities is empty). Complete onboarding or seed the profile first."
             )
 
-    try:
-        model = _log_llm_model_once()
-        session_cost_before = get_session_cost_usd()
-        # job_description_text is already truncated by the caller (source_learning.resolve_llm_review_payload).
-        # Log its length directly; do not re-apply the limit here.
-        logger.info(
-            "[LLM][REQUEST] purpose=%s model=%s input_chars=%d max_output_tokens=%d",
-            "fit_review" if fit_review else "learning_candidates",
-            model,
-            len(job_description_text),
-            get_llm_fit_decision_max_output_tokens()
-            if fit_review
-            else get_llm_learning_candidates_max_output_tokens(),
-        )
-        resp = client.responses.parse(
-            model=model,
-            input=[
-                {
-                    "role": "system",
-                    "content": _build_learning_prompt(job_description_text, fit_review=fit_review),
-                },
-                {
-                    "role": "user",
-                    "content": LLM_PROMPT_JOB_DESCRIPTION_PREFIX + job_description_text,
-                },
-            ],
-            max_output_tokens=(
-                get_llm_fit_decision_max_output_tokens()
-                if fit_review
-                else get_llm_learning_candidates_max_output_tokens()
-            ),
-            text_format=_LLMFitReviewPayload if fit_review else _LLMReviewPayload,
-        )
-        _log_llm_call(
-            resp, "job_review_with_learning" if fit_review else "job_learning_candidates", model
-        )
-    except APITimeoutError as exc:
-        raise LLMCallError(
-            f"APITimeoutError: Request timed out.",
-            purpose="fit_review" if fit_review else "learning_candidates",
-            model=model,
-            is_timeout=True,
-        ) from exc
-    except APIStatusError as exc:
-        raise LLMCallError(
-            f"HTTP {exc.status_code} — {exc.message}",
-            purpose="fit_review" if fit_review else "learning_candidates",
-            model=model,
-            status_code=exc.status_code,
-        ) from exc
-    except Exception as exc:
-        raise LLMCallError(
-            f"{type(exc).__name__}: {exc}",
-            purpose="fit_review" if fit_review else "learning_candidates",
-            model=model,
-        ) from exc
+    model = _log_llm_model_once()
+    purpose = "fit_review" if fit_review else "learning_candidates"
+    max_output_tokens = (
+        get_llm_fit_decision_max_output_tokens()
+        if fit_review
+        else get_llm_learning_candidates_max_output_tokens()
+    )
+    max_attempts = 2 if fit_review else 1
+    resp = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            # job_description_text is already truncated by the caller
+            # (source_learning.resolve_llm_review_payload). Log its length directly.
+            logger.info(
+                "[LLM][REQUEST] purpose=%s model=%s input_chars=%d max_output_tokens=%d attempt=%d/%d",
+                purpose,
+                model,
+                len(job_description_text),
+                max_output_tokens,
+                attempt,
+                max_attempts,
+            )
+            resp = client.responses.parse(
+                model=model,
+                input=[
+                    {
+                        "role": "system",
+                        "content": _build_learning_prompt(job_description_text, fit_review=fit_review),
+                    },
+                    {
+                        "role": "user",
+                        "content": LLM_PROMPT_JOB_DESCRIPTION_PREFIX + job_description_text,
+                    },
+                ],
+                max_output_tokens=max_output_tokens,
+                text_format=_LLMFitReviewPayload if fit_review else _LLMReviewPayload,
+            )
+            _log_llm_call(
+                resp, "job_review_with_learning" if fit_review else "job_learning_candidates", model
+            )
+            break
+        except APITimeoutError as exc:
+            raise LLMCallError(
+                "APITimeoutError: Request timed out.",
+                purpose=purpose,
+                model=model,
+                is_timeout=True,
+            ) from exc
+        except APIStatusError as exc:
+            raise LLMCallError(
+                f"HTTP {exc.status_code} — {exc.message}",
+                purpose=purpose,
+                model=model,
+                status_code=exc.status_code,
+            ) from exc
+        except Exception as exc:
+            if fit_review and attempt < max_attempts and _is_retryable_llm_payload_error(exc):
+                logger.warning(
+                    "[LLM][RETRY] purpose=%s model=%s attempt=%d/%d reason=%s",
+                    purpose,
+                    model,
+                    attempt + 1,
+                    max_attempts,
+                    f"{type(exc).__name__}: {exc}",
+                )
+                continue
+            raise LLMCallError(
+                f"{type(exc).__name__}: {exc}",
+                purpose=purpose,
+                model=model,
+            ) from exc
 
     parsed = getattr(resp, "output_parsed", None)
     if parsed is None:
@@ -1382,6 +1427,89 @@ def llm_classify_section_label(label: str, llm_client: Any = None) -> dict[str, 
         confident,
     )
     return {"bucket": bucket, "confident": confident}
+
+
+def llm_judge_title(
+    title: str,
+    target_roles: list[str] | None,
+    secondary_roles: list[str] | None,
+    llm_client: Any = None,
+) -> dict[str, Any] | None:
+    """Cheap title-only check of a job title against the candidate's target/secondary target roles.
+
+    Runs after O*NET occupation classification returns near/uncertain, before the expensive
+    detail fetch + full fit review. Returns {"verdict": "match"|"no_match"|"uncertain", "reason": str}
+    or None if the LLM is unavailable, the title is empty, or the output is unparseable — callers
+    must treat None the same as "uncertain" and never hard-reject on an LLM failure.
+    """
+    active_client = llm_client or client
+    title = str(title or "").strip()
+    if active_client is None or not title:
+        return None
+
+    target_roles = [str(r).strip() for r in (target_roles or []) if str(r).strip()]
+    secondary_roles = [str(r).strip() for r in (secondary_roles or []) if str(r).strip()]
+    if not target_roles and not secondary_roles:
+        return None
+
+    system_prompt = "\n".join(
+        [
+            "You are a cheap pre-filter checking whether a job title plausibly matches a candidate's target roles, before the full job description is fetched.",
+            f"Target roles: {', '.join(target_roles) or 'none'}",
+            f"Secondary target roles: {', '.join(secondary_roles) or 'none'}",
+            f"Return JSON only, shape: {LLM_TITLE_JUDGMENT_SHAPE}",
+            "verdict=match: the title clearly matches or is a close variant of a target/secondary role.",
+            "verdict=no_match: the title is for a distinctly different role or seniority/function, even if it shares generic words.",
+            "verdict=uncertain: title alone is not enough to tell — a job description could plausibly change the answer.",
+            "Judge on the title alone. Do not guess at duties not implied by the title.",
+        ]
+    )
+
+    max_output_tokens = get_llm_title_judgment_max_output_tokens()
+    try:
+        model = _log_llm_model_once()
+        logger.info(
+            "[LLM][REQUEST] purpose=title_judgment model=%s input_chars=%d max_output_tokens=%d",
+            model,
+            len(title),
+            max_output_tokens,
+        )
+        resp = active_client.responses.create(
+            model=model,
+            input=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f'Job title: "{title}"'},
+            ],
+            max_output_tokens=max_output_tokens,
+        )
+        _log_llm_call(resp, "title_judgment", model)
+    except Exception as exc:
+        logger.error("[LLM][FAIL] purpose=title_judgment error=%s", exc)
+        return None
+
+    raw = str(getattr(resp, "output_text", "") or "").strip()
+    if not raw:
+        return None
+
+    try:
+        parsed = _json_mod.loads(raw)
+    except _json_mod.JSONDecodeError:
+        logger.warning("[LLM][WARN] purpose=title_judgment parse_error=%r", raw[:200])
+        return None
+
+    verdict = str(parsed.get("verdict") or "").strip().lower()
+    reason = str(parsed.get("reason") or "").strip()
+    if verdict not in LLM_ALLOWED_TITLE_JUDGMENT_VERDICTS:
+        logger.warning("[LLM][WARN] purpose=title_judgment invalid_verdict=%r", verdict)
+        return None
+
+    logger.info(
+        "[LLM][RESULT] purpose=title_judgment title=%r verdict=%s reason=%r",
+        title,
+        verdict,
+        reason,
+    )
+    return {"verdict": verdict, "reason": reason}
 
 
 def get_cost_summary() -> dict[str, Any]:

@@ -50,3 +50,6 @@ LLM_REJECTION_SUGGESTIONS_JSON_SHAPE = '{"blockers":[{"term":"term"}]}'
 LLM_SECTION_LABEL_CLASSIFICATION_SHAPE = (
     '{"bucket":"primary|secondary|supplementary","confident":true|false}'
 )
+
+LLM_ALLOWED_TITLE_JUDGMENT_VERDICTS = frozenset({"match", "no_match", "uncertain"})
+LLM_TITLE_JUDGMENT_SHAPE = '{"verdict":"match|no_match|uncertain","reason":"..."}'

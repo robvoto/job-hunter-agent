@@ -35,7 +35,11 @@ from job_hunter_agent.job_review_pipeline import (
     review_pre_detail_normalized_job,
 )
 from job_hunter_agent.paths import PLAYWRIGHT_USER_DATA_DIR
-from job_hunter_agent.run_control import run_stop_requested, set_run_progress
+from job_hunter_agent.run_control import (
+    run_stop_requested,
+    set_run_progress,
+    step_through_enabled,
+)
 from job_hunter_agent.runtime_helpers import CLI_FLAG_DEBUG, has_cli_flag
 from job_hunter_agent.scrapers.base import _build_initial_source_metadata, build_initial_flat_record
 from job_hunter_agent.scrapers.seek import (
@@ -969,7 +973,14 @@ def seek_scrape_to_records(
                     target_t0 = time.monotonic()
 
                     logger.info(
-                        "[SEEK] target %d/%d | location=%s | keywords=%s | classifications=%s | pages=1..%d",
+                        "\n"
+                        "================================================================\n"
+                        "  STARTING SEEK TARGET %d/%d\n"
+                        "  location=%s\n"
+                        "  keywords=%s\n"
+                        "  classifications=%s\n"
+                        "  pages=1..%d\n"
+                        "================================================================",
                         target_index,
                         total_targets,
                         search_location or "(all)",
@@ -991,174 +1002,235 @@ def seek_scrape_to_records(
 
                         logger.info("%s url=%s", page_tag, page_url)
 
-                    stop_target = False
-                    try:
-                        list_page.goto(page_url, wait_until="domcontentloaded")
-                        bot_challenge_resolved = _wait_for_seek_bot_challenge_or_manual_verification(
-                            list_page,
-                            page_tag,
-                            headless=headless,
-                            use_persistent_browser=use_persistent_browser,
-                            assisted_verification_enabled=assisted_verification_enabled,
-                            playwright_selector_timeout=playwright_selector_timeout,
-                        )
-                        if not bot_challenge_resolved:
-                            list_page.wait_for_selector(
-                                SELECTOR_CARDS, timeout=playwright_selector_timeout
-                            )
-                    except Exception as exc:
-                        page_status = _log_seek_list_page_diagnostics(
-                            page_tag,
-                            list_page,
-                            exc,
-                            selector_timeout=playwright_selector_timeout,
-                        )
-                        snapshot = _seek_list_page_diagnostics(list_page)
-                        failure_class = str(snapshot["failure_class"])
+                        stop_target = False
                         try:
-                            screenshot_path = pathlib.Path("output") / "seek_timeout_debug.png"
-                            list_page.screenshot(path=str(screenshot_path), full_page=False)
-                            logger.info("%s screenshot saved to %s", page_tag, screenshot_path)
-                        except Exception as diag_exc:
-                            logger.info("%s diagnostic capture failed: %s", page_tag, diag_exc)
-                        _handle_seek_list_page_failure(
-                            page_tag,
-                            list_page,
-                            exc,
-                            snapshot,
-                            page_status=page_status,
-                            failure_class=failure_class,
-                            headless=headless,
-                            use_persistent_browser=use_persistent_browser,
-                            assisted_verification_enabled=assisted_verification_enabled,
-                            playwright_selector_timeout=playwright_selector_timeout,
-                        )
-                        if failure_class in {SEEK_TIMEOUT_NO_CARDS, SEEK_UNKNOWN_FAILURE}:
-                            stop_target = True
-                    if stop_target:
-                        break
-
-                    job_cards = list_page.query_selector_all(SELECTOR_CARDS)
-                    logger.info("%s cards=%d", page_tag, len(job_cards))
-
-                    if len(job_cards) == 0:
-                        logger.info("%s no cards found; stopping target", page_tag)
-                        break
-
-                    filter_state = extract_seek_filter_panel_state(list_page)
-
-                    # Phase 1: extract all card records from DOM before any page navigation
-                    card_records: list[dict] = []
-                    target_closed = False
-                    for card in job_cards:
-                        if run_stop_requested():
-                            logger.info("%s stop requested; finishing current page", page_tag)
-                            break
-                        try:
-                            record = build_seek_card_record(
-                                card, search_target, run_iso, current_page_num, filter_state
-                            )
-                            record["job_quality_signals"] = detect_broad_engagement_signal(record)
-                            card_records.append(record)
-                        except TargetClosedError:
-                            logger.warning(
-                                "%s browser target closed during card build; stopping page",
+                            list_page.goto(page_url, wait_until="domcontentloaded")
+                            bot_challenge_resolved = _wait_for_seek_bot_challenge_or_manual_verification(
+                                list_page,
                                 page_tag,
+                                headless=headless,
+                                use_persistent_browser=use_persistent_browser,
+                                assisted_verification_enabled=assisted_verification_enabled,
+                                playwright_selector_timeout=playwright_selector_timeout,
                             )
-                            target_closed = True
-                            break
+                            if not bot_challenge_resolved:
+                                list_page.wait_for_selector(
+                                    SELECTOR_CARDS, timeout=playwright_selector_timeout
+                                )
                         except Exception as exc:
-                            logger.warning(
-                                "%s REJECTED (card build) [%s]\n%s",
+                            page_status = _log_seek_list_page_diagnostics(
                                 page_tag,
-                                type(exc).__name__,
-                                traceback.format_exc(),
+                                list_page,
+                                exc,
+                                selector_timeout=playwright_selector_timeout,
                             )
+                            snapshot = _seek_list_page_diagnostics(list_page)
+                            failure_class = str(snapshot["failure_class"])
+                            try:
+                                screenshot_path = pathlib.Path("output") / "seek_timeout_debug.png"
+                                list_page.screenshot(path=str(screenshot_path), full_page=False)
+                                logger.info("%s screenshot saved to %s", page_tag, screenshot_path)
+                            except Exception as diag_exc:
+                                logger.info("%s diagnostic capture failed: %s", page_tag, diag_exc)
+                            _handle_seek_list_page_failure(
+                                page_tag,
+                                list_page,
+                                exc,
+                                snapshot,
+                                page_status=page_status,
+                                failure_class=failure_class,
+                                headless=headless,
+                                use_persistent_browser=use_persistent_browser,
+                                assisted_verification_enabled=assisted_verification_enabled,
+                                playwright_selector_timeout=playwright_selector_timeout,
+                            )
+                            if failure_class in {SEEK_TIMEOUT_NO_CARDS, SEEK_UNKNOWN_FAILURE}:
+                                stop_target = True
+                        if stop_target:
+                            break
 
-                    set_run_progress(
-                        _seek_run_progress(
-                            current_page_num,
-                            configured_seek_max_pages,
-                            elapsed_s=time.monotonic() - target_t0,
+                        job_cards = list_page.query_selector_all(SELECTOR_CARDS)
+                        logger.info("%s cards=%d", page_tag, len(job_cards))
+
+                        if len(job_cards) == 0:
+                            logger.info("%s no cards found; stopping target", page_tag)
+                            break
+
+                        filter_state = extract_seek_filter_panel_state(list_page)
+
+                        # Phase 1: extract all card records from DOM before any page navigation
+                        card_records: list[dict] = []
+                        target_closed = False
+                        for card in job_cards:
+                            if run_stop_requested():
+                                logger.info("%s stop requested; finishing current page", page_tag)
+                                break
+                            try:
+                                record = build_seek_card_record(
+                                    card, search_target, run_iso, current_page_num, filter_state
+                                )
+                                record["job_quality_signals"] = detect_broad_engagement_signal(record)
+                                card_records.append(record)
+                            except TargetClosedError:
+                                logger.warning(
+                                    "%s browser target closed during card build; stopping page",
+                                    page_tag,
+                                )
+                                target_closed = True
+                                break
+                            except Exception as exc:
+                                logger.warning(
+                                    "%s REJECTED (card build) [%s]\n%s",
+                                    page_tag,
+                                    type(exc).__name__,
+                                    traceback.format_exc(),
+                                )
+
+                        set_run_progress(
+                            _seek_run_progress(
+                                current_page_num,
+                                configured_seek_max_pages,
+                                elapsed_s=time.monotonic() - target_t0,
+                            )
                         )
-                    )
 
-                    page_has_fresh_card = any(
-                        r.get(rs.RECORD_POSTED_AGE_DAYS_KEY) is None
-                        or r.get(rs.RECORD_POSTED_AGE_DAYS_KEY) <= configured_date_range
-                        for r in card_records
-                    )
-
-                    # Phase 2: pre-detail checks (fast, no network)
-                    pre_decided: list[tuple[int, tuple]] = []
-                    needs_detail: list[tuple[int, dict]] = []
-                    for i, record in enumerate(card_records):
-                        pre_outcome, record, _, should_fetch_details = (
-                            review_pre_detail_normalized_job(record, review_context)
+                        page_has_fresh_card = any(
+                            r.get(rs.RECORD_POSTED_AGE_DAYS_KEY) is None
+                            or r.get(rs.RECORD_POSTED_AGE_DAYS_KEY) <= configured_date_range
+                            for r in card_records
                         )
-                        if pre_outcome["decision"] != "KEEP" or not should_fetch_details:
-                            pre_decided.append((i, (pre_outcome, record, [], 0.0)))
+
+                        if step_through_enabled():
+                            # TEMPORARY (--step debug aid): fully sequential, card by card —
+                            # fetch, decide, print, and pause for one job before moving to
+                            # the next, so a page's whole batch never runs ahead of the
+                            # operator. Remove this branch along with the rest of --step.
+                            for i, record in enumerate(card_records):
+                                if run_stop_requested():
+                                    break
+                                pre_outcome, record, _, should_fetch_details = (
+                                    review_pre_detail_normalized_job(record, review_context)
+                                )
+                                if pre_outcome["decision"] != "KEEP" or not should_fetch_details:
+                                    outcome, record, record_skill_observations, job_elapsed_s = (
+                                        pre_outcome,
+                                        record,
+                                        [],
+                                        0.0,
+                                    )
+                                else:
+                                    single_result = detail_session.run_batch(
+                                        [(i, record)], review_context
+                                    )
+                                    outcome, record, record_skill_observations, job_elapsed_s = (
+                                        single_result[i]
+                                    )
+
+                                title = str(record.get(rs.RECORD_TITLE_KEY) or "")
+                                company = str(record.get(rs.RECORD_COMPANY_KEY) or "")
+                                _job_decision = outcome.get("decision")
+                                _job_score = None
+                                _job_breakdown = None
+
+                                if _job_decision == "KEEP":
+                                    _job_score, _job_breakdown = fit_score_and_breakdown_displayed(
+                                        record, profile
+                                    )
+                                    skill_observations.extend(record_skill_observations)
+                                    kept_records.append(record)
+                                    logger.info(
+                                        "%s KEPT %s @ %s | %s",
+                                        page_tag,
+                                        title,
+                                        company,
+                                        "SEEN_BEFORE" if record.get("seen_before") else "NEW",
+                                    )
+
+                                if _job_decision in {"KEEP", "REJECT"}:
+                                    print_job_human_summary(
+                                        record,
+                                        profile,
+                                        elapsed_s=job_elapsed_s or None,
+                                        score=_job_score,
+                                        llm_cost=0.0,
+                                        breakdown=_job_breakdown,
+                                    )
+                                    close_job_block(str(record.get(rs.RECORD_JOB_KEY) or ""))
                         else:
-                            needs_detail.append((i, record))
+                            # Phase 2: pre-detail checks (fast, no network)
+                            pre_decided: list[tuple[int, tuple]] = []
+                            needs_detail: list[tuple[int, dict]] = []
+                            for i, record in enumerate(card_records):
+                                pre_outcome, record, _, should_fetch_details = (
+                                    review_pre_detail_normalized_job(record, review_context)
+                                )
+                                if pre_outcome["decision"] != "KEEP" or not should_fetch_details:
+                                    pre_decided.append((i, (pre_outcome, record, [], 0.0)))
+                                else:
+                                    needs_detail.append((i, record))
 
-                    # batch_results: card_index -> (outcome, record, skill_obs, elapsed_s)
-                    batch_results: dict[int, tuple] = {i: res for i, res in pre_decided}
+                            # batch_results: card_index -> (outcome, record, skill_obs, elapsed_s)
+                            batch_results: dict[int, tuple] = {i: res for i, res in pre_decided}
 
-                    # Phase 3: parallel detail fetch + LLM via persistent async browser
-                    if needs_detail and not run_stop_requested() and not target_closed:
-                        batch_results.update(detail_session.run_batch(needs_detail, review_context))
+                            # Phase 3: parallel detail fetch + LLM via persistent async browser
+                            if needs_detail and not run_stop_requested() and not target_closed:
+                                batch_results.update(
+                                    detail_session.run_batch(needs_detail, review_context)
+                                )
 
-                    # Phase 4: process results in original card order
-                    for i in range(len(card_records)):
-                        if i not in batch_results:
-                            continue
-                        outcome, record, record_skill_observations, job_elapsed_s = batch_results[i]
-                        title = str(record.get(rs.RECORD_TITLE_KEY) or "")
-                        company = str(record.get(rs.RECORD_COMPANY_KEY) or "")
-                        _job_decision = outcome.get("decision")
-                        _job_score: int | None = None
-                        _job_breakdown: list | None = None
+                            # Phase 4: process results in original card order
+                            for i in range(len(card_records)):
+                                if i not in batch_results:
+                                    continue
+                                outcome, record, record_skill_observations, job_elapsed_s = (
+                                    batch_results[i]
+                                )
+                                title = str(record.get(rs.RECORD_TITLE_KEY) or "")
+                                company = str(record.get(rs.RECORD_COMPANY_KEY) or "")
+                                _job_decision = outcome.get("decision")
+                                _job_score = None
+                                _job_breakdown = None
 
-                        if _job_decision == "KEEP":
-                            _job_score, _job_breakdown = fit_score_and_breakdown_displayed(
-                                record, profile
-                            )
-                            skill_observations.extend(record_skill_observations)
-                            kept_records.append(record)
+                                if _job_decision == "KEEP":
+                                    _job_score, _job_breakdown = fit_score_and_breakdown_displayed(
+                                        record, profile
+                                    )
+                                    skill_observations.extend(record_skill_observations)
+                                    kept_records.append(record)
+                                    logger.info(
+                                        "%s KEPT %s @ %s | %s",
+                                        page_tag,
+                                        title,
+                                        company,
+                                        "SEEN_BEFORE" if record.get("seen_before") else "NEW",
+                                    )
+
+                                if _job_decision in {"KEEP", "REJECT"}:
+                                    print_job_human_summary(
+                                        record,
+                                        profile,
+                                        elapsed_s=job_elapsed_s or None,
+                                        score=_job_score,
+                                        llm_cost=0.0,
+                                        breakdown=_job_breakdown,
+                                    )
+                                    close_job_block(str(record.get(rs.RECORD_JOB_KEY) or ""))
+
+                        if target_closed:
+                            break
+
+                        if not page_has_fresh_card:
                             logger.info(
-                                "%s KEPT %s @ %s | %s",
+                                "%s all cards were older than %d day(s); stopping target",
                                 page_tag,
-                                title,
-                                company,
-                                "SEEN_BEFORE" if record.get("seen_before") else "NEW",
+                                configured_date_range,
                             )
+                            break
 
-                        if _job_decision in {"KEEP", "REJECT"}:
-                            print_job_human_summary(
-                                record,
-                                profile,
-                                elapsed_s=job_elapsed_s or None,
-                                score=_job_score,
-                                llm_cost=0.0,
-                                breakdown=_job_breakdown,
-                            )
-                            close_job_block(str(record.get(rs.RECORD_JOB_KEY) or ""))
+                        if run_stop_requested():
+                            break
 
-                    if target_closed:
-                        break
-
-                    if not page_has_fresh_card:
-                        logger.info(
-                            "%s all cards were older than %d day(s); stopping target",
-                            page_tag,
-                            configured_date_range,
-                        )
-                        break
-
-                    if run_stop_requested():
-                        break
-
-                    current_page_num += 1
+                        current_page_num += 1
                 set_run_progress("SEEK complete")
             finally:
                 detail_session.close()

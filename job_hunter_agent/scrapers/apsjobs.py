@@ -69,13 +69,11 @@ APSJOBS_LOCATION_INPUT_SELECTORS = (
     "input[name*='location' i]",
 )
 APSJOBS_JOB_LINK_HINTS = (
-    "/job/",
-    "/jobs/",
+    "/job-details",
+    "/jobdetail",
     "jobdetail",
     "job-details",
     "vacanc",
-    "career",
-    "position",
 )
 APSJOBS_TITLE_SELECTORS = (
     "h1",
@@ -146,12 +144,24 @@ def _first_visible_locator(page, selectors: tuple[str, ...]):
 
 
 def _looks_like_job_link(href: str, text: str) -> bool:
+    lowered_href = href.lower()
     lowered = f"{href} {text}".lower()
     if not href:
         return False
+    parsed = urlsplit(href)
+    path = parsed.path.lower()
+    query = parsed.query.lower()
+    if path in {"/s", "/s/"} or path.startswith("/s-"):
+        return False
+    if "sign in" in lowered or "register" in lowered or "privacy" in lowered:
+        return False
+    if "job-details" in path or "jobdetail" in path or "jobdetails" in path:
+        return True
+    if "jobid=" in query or "job_id=" in query:
+        return True
     if any(hint in lowered for hint in APSJOBS_JOB_LINK_HINTS):
         return True
-    return bool(text) and "aps jobs" not in lowered and "home" not in lowered
+    return False
 
 
 def _collect_candidate_links(page, base_url: str, results_wanted: int) -> list[dict[str, str]]:
@@ -388,6 +398,22 @@ class APSJobsScraper(BaseJobScraper):
                             break
                         target_tag = f"[APSJobs target {target_index}/{total_targets}]"
                         set_run_progress(f"APSJobs search {target_index}/{total_targets}")
+                        logger.info(
+                            "\n"
+                            "================================================================\n"
+                            "  STARTING APSJOBS TARGET %d/%d\n"
+                            "  root_url=%s\n"
+                            "  search_term=%s\n"
+                            "  location=%s\n"
+                            "  results_wanted=%d\n"
+                            "================================================================",
+                            target_index,
+                            total_targets,
+                            APSJOBS_ROOT_URL,
+                            target["search_term"] or "(unset)",
+                            target["location"] or "(all)",
+                            target["results_wanted"],
+                        )
                         page = context.new_page()
                         try:
                             page.goto(APSJOBS_ROOT_URL, wait_until="domcontentloaded")
@@ -420,6 +446,11 @@ class APSJobsScraper(BaseJobScraper):
 
                             candidate_links = _collect_candidate_links(
                                 page, page.url or APSJOBS_ROOT_URL, int(target["results_wanted"])
+                            )
+                            logger.info(
+                                "%s candidate collection url=%s",
+                                target_tag,
+                                page.url or APSJOBS_ROOT_URL,
                             )
                             if not candidate_links:
                                 logger.info("%s no candidate links found", target_tag)

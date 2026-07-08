@@ -2,6 +2,38 @@
 
 from __future__ import annotations
 
+import logging
+
+# Console-only: fragments of raw per-stage pipeline trace that duplicate the
+# human-readable per-job summary block. Still written to server.log at INFO
+# for post-run debugging — only the terminal display is suppressed.
+CONSOLE_SUPPRESSED_FRAGMENTS = (
+    "[CAPABILITY_SCORING][BELOW_THRESHOLD]",
+    "PIPELINE][ONET_TITLE_CLASSIFY",
+    "PIPELINE][ONET_DECISION",
+    "PIPELINE][LLM_TITLE_JUDGMENT",
+    "PIPELINE][DETAIL_FETCH_START",
+    "PIPELINE][DETAIL_FETCH_DONE",
+    "PIPELINE][FINAL_DECISION",
+    "WORK_TYPE][INFERENCE",
+    "[REVIEW][PAYLOAD]",
+    "[LLM][MODEL]",
+    "[LLM][REQUEST]",
+    "[CAPABILITY_SUPPORT]",
+)
+
+
+class ConsoleNoiseFilter(logging.Filter):
+    """Console-only filter: hides verbose per-stage pipeline trace.
+
+    These lines are still written to the file log at INFO level for post-run
+    analysis. Only the terminal display is suppressed.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return not any(fragment in msg for fragment in CONSOLE_SUPPRESSED_FRAGMENTS)
+
 
 def format_log_block(title: str, fields: dict[str, object]) -> str:
     if not fields:
@@ -19,7 +51,6 @@ def setup_cli_logging() -> None:
     Mirrors the FastAPI logging config so CLI and server produce identical output.
     No-op when handlers are already configured (e.g. running inside the server).
     """
-    import logging
     import logging.config
 
     from job_hunter_agent.paths import SERVER_LOG_PATH
@@ -63,3 +94,14 @@ def setup_cli_logging() -> None:
             },
         }
     )
+
+    console_handler = next(
+        (
+            h
+            for h in logging.getLogger().handlers
+            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
+        ),
+        None,
+    )
+    if console_handler:
+        console_handler.addFilter(ConsoleNoiseFilter())

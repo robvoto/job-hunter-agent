@@ -10,7 +10,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from job_hunter_agent.run_context import ScrapeRunContext
-from job_hunter_agent.run_control import get_run_progress, run_stop_requested, set_run_progress
+from job_hunter_agent.run_control import (
+    get_run_progress,
+    run_stop_requested,
+    set_run_progress,
+    step_through_enabled,
+)
 from job_hunter_agent.source_errors import PartialSourceResultsError
 from job_hunter_agent.global_settings import get_seek_assisted_verification_enabled
 from job_hunter_agent.scrapers.apsjobs import APSJobsScraper
@@ -372,8 +377,9 @@ def _run_seek_and_linkedin_in_parallel(context: ScrapeRunContext) -> list[Source
 def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dict], list[dict]]:
     """Run all enabled sources and return merged (kept_records, audit_rows, skill_observations).
 
-    When both SEEK and LinkedIn are enabled they run concurrently. Each source has a hard
-    timeout so a stuck job board cannot block the whole run.
+    When both SEEK and LinkedIn are enabled they run concurrently, unless step-through is
+    active, in which case the run stays serial so manual pausing can actually halt progress.
+    Each source has a hard timeout so a stuck job board cannot block the whole run.
 
     Mutable shared state (job_history, llm_cache) is isolated per source during
     execution and merged back into context after all sources complete.
@@ -399,7 +405,14 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
 
     results: list[SourceRunResult] = []
 
-    if seek_enabled and li_enabled:
+    if step_through_enabled():
+        # Step-through is a manual inspection aid, so keep the whole run serial.
+        # Parallel sources would continue advancing while another worker is paused.
+        if seek_enabled:
+            results.append(_run_seek_source(context))
+        if li_enabled and not run_stop_requested():
+            results.append(_run_linkedin_source(context))
+    elif seek_enabled and li_enabled:
         set_run_progress("SEEK + LinkedIn running in parallel")
         results = _run_seek_and_linkedin_in_parallel(context)
     elif seek_enabled:

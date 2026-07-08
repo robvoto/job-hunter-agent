@@ -125,9 +125,9 @@ def test_unknown_work_type_logs_uncertainty(tmp_path, monkeypatch, caplog):
 
     assert reason == "OK"
 
-    assert "WORK_TYPE_UNCLEAR" in caplog.text
+    assert "[UNCERTAINTY] work_type unclear" in caplog.text
 
-    assert "Unable to classify work_type" in caplog.text
+    assert "seek:123" in caplog.text
 
     payloads = [
         json.loads(line)

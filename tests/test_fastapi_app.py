@@ -62,6 +62,26 @@ def test_debug_flag_is_resolved_from_cli_args(monkeypatch):
     importlib.reload(_config)
 
 
+def test_server_step_flag_enables_step_through(monkeypatch):
+    called = []
+
+    monkeypatch.setattr(_fa, "enable_step_through", lambda: called.append(True))
+
+    _fa._apply_startup_flags(step=True)
+
+    assert called == [True]
+
+
+def test_server_step_flag_is_ignored_when_off(monkeypatch):
+    called = []
+
+    monkeypatch.setattr(_fa, "enable_step_through", lambda: called.append(True))
+
+    _fa._apply_startup_flags(step=False)
+
+    assert called == []
+
+
 def test_run_wrapper_forwards_cli_args_to_fastapi_app():
     run_script = Path("run").read_text(encoding="utf-8")
 

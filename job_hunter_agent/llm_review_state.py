@@ -13,7 +13,8 @@ def has_complete_llm_keep_data(record: dict) -> bool:
     """Return True only when a kept job has complete LLM-backed fit data.
 
     Normal workspace matches must have:
-    - llm_decision == KEEP
+    - llm_decision in {KEEP, MAYBE} (both are surfaced to the user as a keep,
+      with `llm_fit_grade` carrying the actual confidence signal)
     - llm_fit_grade present
     - requirement_coverage present and non-empty
     """
@@ -22,7 +23,7 @@ def has_complete_llm_keep_data(record: dict) -> bool:
     requirement_coverage = record.get(RECORD_REQUIREMENT_COVERAGE_KEY)
 
     return (
-        llm_decision == "KEEP"
+        llm_decision in {"KEEP", "MAYBE"}
         and bool(llm_fit_grade)
         and isinstance(requirement_coverage, list)
         and len(requirement_coverage) > 0

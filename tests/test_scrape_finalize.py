@@ -108,10 +108,14 @@ def test_finalize_scrape_run_writes_outputs(monkeypatch, tmp_path, capsys, caplo
         lambda *args: {"run_started_at": "2026-05-16T08:12:40", "cards_seen": 1},
     )
 
+    def _render_html(*args, **kwargs):
+        calls.append(("render_html", (args, kwargs)))
+
+    monkeypatch.setattr(scrape_finalize.workspace_service, "render_html", _render_html)
     monkeypatch.setattr(
         scrape_finalize.workspace_service,
-        "render_html",
-        lambda *args: calls.append(("render_html", args)),
+        "build_workspace_record_sets",
+        lambda *args, **kwargs: {"shortlist_records": [{"job_key": "job:1"}]},
     )
 
     monkeypatch.setattr(
@@ -176,6 +180,9 @@ def test_finalize_scrape_run_writes_outputs(monkeypatch, tmp_path, capsys, caplo
     assert any(name == "write_review_data" for name, _ in calls)
 
     assert any(name == "render_html" for name, _ in calls)
+    render_args, render_kwargs = next(payload for name, payload in calls if name == "render_html")
+    assert render_args[0] == workspace_path
+    assert render_kwargs["workspace_records"] == {"shortlist_records": [{"job_key": "job:1"}]}
 
     capsys.readouterr()
     log_text = caplog.text

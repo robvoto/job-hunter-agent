@@ -422,6 +422,7 @@ def render_html(
     workspace_reference_at: Optional[datetime] = None,
     audit_rows: Optional[list[dict]] = None,
     debug_mode: bool = WORKSPACE_DEBUG_MODE,
+    workspace_records: Optional[dict[str, list[dict]]] = None,
 ) -> None:
 
     reference_time = workspace_reference_at or run_started_at
@@ -439,17 +440,18 @@ def render_html(
 
     kept_records = _enrich_records_with_candidate_application_history(kept_records)
 
-    workspace_records = build_workspace_record_sets(
-        kept_records,
-        job_history,
-        applied_job_keys,
-        hidden_job_keys,
-        reference_time,
-        scoring_profile,
-        workspace_min_score,
-        debug_mode=active_debug_mode,
-        audit_rows=active_audit_rows,
-    )
+    if workspace_records is None:
+        workspace_records = build_workspace_record_sets(
+            kept_records,
+            job_history,
+            applied_job_keys,
+            hidden_job_keys,
+            reference_time,
+            scoring_profile,
+            workspace_min_score,
+            debug_mode=active_debug_mode,
+            audit_rows=active_audit_rows,
+        )
 
     history_clusters = build_history_cluster_index(job_history)
 

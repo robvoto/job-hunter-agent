@@ -181,5 +181,6 @@ def test_linkedin_backfills_missing_posted_age_from_visible_listing_text(monkeyp
     assert not skill_observations
     assert kept_records[0]["posted_age_days"] == pytest.approx(3 / 24)
     assert posted_display_label(kept_records[0]) == "22 Jun 2026"
+    assert "STARTING LINKEDIN TARGET 1/1" in caplog.text
     assert "jobspy fetch start" in caplog.text
     assert "jobspy fetch done" in caplog.text

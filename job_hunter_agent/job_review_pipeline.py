@@ -23,6 +23,7 @@ _REASON_LABELS: dict[str, str] = {
     "TITLE_BAD_KEYWORD": "title contains a blocked keyword",
     "TITLE_REASON_POTENTIAL_MATCH": "title is a potential match",
     "ONET_FAR_OCCUPATION": "occupation too far from your targets",
+    "LLM_TITLE_NOT_TARGET": "title judged a clear mismatch for your target roles",
     "HARD_BLOCK": "matched a hard blocker rule",
     "HARD_BLOCK_REQUIRED_SKILL": "requires a skill you flagged as blocking",
     "DETAILS_CHALLENGE_PAGE": "description page was a bot challenge",
@@ -33,6 +34,7 @@ _REASON_LABELS: dict[str, str] = {
     "CONTENT_REJECT": "description did not pass content filters",
     "LLM_REJECT": "LLM reviewer rejected",
     "LLM_ERROR": "LLM review failed with an error",
+    "LLM_INVALID_REVIEW": "LLM review returned incomplete fit data",
     "LLM_UNAVAILABLE": "LLM review unavailable",
     "REVIEW_FAILED_TIMEOUT": "LLM review timed out — not reviewed, will retry next run",
     "DET_REJECT": "deterministic reviewer rejected",
@@ -83,8 +85,7 @@ from job_hunter_agent.filters import (
 from job_hunter_agent.fit_scoring import (
     build_fit_highlights,
     fit_score_and_breakdown_displayed,
-    fit_score_breakdown_frozen,
-    fit_score_frozen,
+    fit_score_and_breakdown_frozen,
 )
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
 from job_hunter_agent.history import apply_kept_job_reuse, can_reuse_kept_job, finalize_record
@@ -92,9 +93,11 @@ from job_hunter_agent.job_types import infer_work_type_from_description
 from job_hunter_agent.job_quality import detect_external_date_signals, load_dodgy_job_rules
 from job_hunter_agent.llm_gate import (
     LLMCallError,
+    LLMReviewValidationError,
     get_session_cost_usd,
-    llm_extract_job_requirements,
+    llm_judge_title,
 )
+from job_hunter_agent.llm_review_state import has_complete_llm_keep_data
 from job_hunter_agent.logging_utils import format_log_block
 from job_hunter_agent.match_labels import score_to_match_label
 from job_hunter_agent.occupation_taxonomy import (
@@ -137,6 +140,7 @@ from job_hunter_agent.record_schema import (
     RECORD_LLM_DECISION_KEY,
     RECORD_LLM_ELAPSED_MS_KEY,
     RECORD_LLM_FIT_GRADE_KEY,
+    RECORD_LLM_TITLE_JUDGMENT_KEY,
     RECORD_LOCATION_KEY,
     RECORD_MISSING_PROFILE_SUPPORT_KEY,
     RECORD_ONET_CLASSIFICATION_KEY,
@@ -228,7 +232,7 @@ def _pipeline_log(stage: str, record: dict, source_name: str = "", **kwargs: Any
             )
         elif result == "REVIEW":
             label = _REASON_LABELS.get(reason.split(":")[0], reason)
-            logger.info("  title: %s — will read description", label)
+            logger.info("  title: %s — needs title review", label)
         return
 
     # ── Card gate (pre-description) ───────────────────────────────────────────
@@ -418,9 +422,9 @@ def _freeze_fit_score_fields(record: dict, profile: dict) -> None:
     # fields from the snapshot are preserved as-is; the display path reads those directly.
     if not str(record.get("llm_fit_grade") or "").strip():
         return
-    fit_points = fit_score_frozen(record, profile)
+    fit_points, breakdown = fit_score_and_breakdown_frozen(record, profile)
     record[RECORD_FIT_SCORE_KEY] = fit_points
-    record[RECORD_FIT_SCORE_BREAKDOWN_KEY] = fit_score_breakdown_frozen(record, profile)
+    record[RECORD_FIT_SCORE_BREAKDOWN_KEY] = breakdown
     record[RECORD_FIT_LABEL_KEY] = score_to_match_label(fit_points, get_match_levels(profile))
     record[RECORD_FIT_TONE_CLASS_KEY] = score_to_tone_class(fit_points, profile)
 
@@ -611,32 +615,24 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
     llm_elapsed_ms = None
     llm_cost_usd = None
 
-    if deterministic_review is not None:
+    if deterministic_review is not None and deterministic_review["decision"] == "REJECT":
         review = deterministic_review
         source = "rule"
-        if not record[RECORD_JOB_REQUIREMENTS_KEY]:
-            try:
-                _pipeline_log("LLM_CALL_START", record, call="job_requirements")
-                _t0 = time.monotonic()
-                record[RECORD_JOB_REQUIREMENTS_KEY] = llm_extract_job_requirements(
-                    record.get("full_description") or record.get("fit_source_text") or ""
-                )
-                _pipeline_log(
-                    "LLM_CALL_DONE",
-                    record,
-                    call="job_requirements",
-                    elapsed_ms=int((time.monotonic() - _t0) * 1000),
-                )
-            except Exception as llm_exc:
-                _pipeline_log(
-                    "LLM_CALL_DONE",
-                    record,
-                    call="job_requirements",
-                    result="ERROR",
-                    error=type(llm_exc).__name__,
-                )
-                print(f"[LLM][JOB_REQUIREMENTS_ERROR] {type(llm_exc).__name__}: {llm_exc}")
     else:
+        if deterministic_review is not None:
+            logger.info(
+                format_log_block(
+                    "PIPELINE][DET_KEEP_CANDIDATE",
+                    {
+                        "job_key": record.get(RECORD_JOB_KEY, ""),
+                        "title": record.get(RECORD_TITLE_KEY, ""),
+                        "decision": deterministic_review["decision"],
+                        "grade": deterministic_review["grade"],
+                        "det_rule": deterministic_review.get("det_rule", ""),
+                        "next_step": "full_llm_fit_review",
+                    },
+                )
+            )
         _pipeline_log("LLM_CALL_START", record, call="fit_review")
         _t0 = time.monotonic()
         payload = resolve_llm_review_payload(record, llm_cache)
@@ -687,7 +683,7 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
             )
         )
 
-    return {
+    fit_eval = {
         "llm_decision": review["decision"],
         "llm_fit_grade": review["grade"],
         RECORD_LLM_DEBUG_REASON_KEY: debug_reason,
@@ -698,6 +694,9 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         RECORD_LLM_ELAPSED_MS_KEY: llm_elapsed_ms,
         RECORD_LLM_COST_USD_KEY: llm_cost_usd,
     }
+    if fit_eval["decision"] == "KEEP" and not has_complete_llm_keep_data(fit_eval):
+        raise LLMReviewValidationError("Final KEEP review requires complete LLM keep data")
+    return fit_eval
 
 
 def review_pre_detail_normalized_job(
@@ -748,11 +747,12 @@ def review_pre_detail_normalized_job(
     title_reason = str(title_analysis.get("reason") or "")
     record[RECORD_TITLE_REASON_KEY] = title_reason
     record[RECORD_TITLE_MATCH_METADATA_KEY] = title_analysis
+    title_needs_review = (not ok_title) and title_reason == "TITLE_NOT_TARGET"
     _pipeline_log(
         "TITLE_GATE",
         record,
         context.source_name,
-        result="PASS" if ok_title else "REVIEW",
+        result="PASS" if ok_title else ("REVIEW" if title_needs_review else "REJECT"),
         reason=title_reason,
     )
     if not ok_title:
@@ -803,7 +803,51 @@ def review_pre_detail_normalized_job(
                 record[RECORD_REJECT_REASON_KEY] = reject_reason
                 _finalize(record, context)
                 return _build_outcome(record), record, skill_observations, False
-            # near or uncertain: description and LLM decide; treat as potential match
+
+            # near or uncertain: cheap title-only LLM check against target/secondary
+            # target roles before paying for a full detail fetch + fit review.
+            _title_judgment_t0 = time.monotonic()
+            title_judgment = llm_judge_title(
+                title,
+                profile.get("target_roles"),
+                profile.get("also_consider_roles"),
+            )
+            _title_judgment_elapsed_ms = int((time.monotonic() - _title_judgment_t0) * 1000)
+            if title_judgment is not None:
+                record[RECORD_LLM_TITLE_JUDGMENT_KEY] = title_judgment
+            logger.info(
+                format_log_block(
+                    "PIPELINE][LLM_TITLE_JUDGMENT",
+                    {
+                        "source": context.source_name,
+                        "job_key": record.get(RECORD_JOB_KEY, ""),
+                        "title": title,
+                        "target_roles": profile.get("target_roles") or [],
+                        "also_consider_roles": profile.get("also_consider_roles") or [],
+                        "verdict": (title_judgment or {}).get("verdict", "unavailable"),
+                        "llm_reason": (title_judgment or {}).get("reason", ""),
+                        "elapsed_ms": _title_judgment_elapsed_ms,
+                    },
+                )
+            )
+            if title_judgment is not None and title_judgment.get("verdict") == "no_match":
+                reject_reason = "LLM_TITLE_NOT_TARGET"
+                llm_reason = str(title_judgment.get("reason") or "")
+                _pipeline_log(
+                    "TITLE_GATE",
+                    record,
+                    context.source_name,
+                    result="REJECT",
+                    reason=reject_reason,
+                    llm_reason=llm_reason,
+                )
+                reason_note = f" — {llm_reason}" if llm_reason else ""
+                print(f"{source_tag} REJECTED (llm title) [{reject_reason}] {title}{reason_note}")
+                record[RECORD_DECISION_KEY] = "REJECT"
+                record[RECORD_REJECT_REASON_KEY] = reject_reason
+                _finalize(record, context)
+                return _build_outcome(record), record, skill_observations, False
+            # match, uncertain, or LLM unavailable/failed: description and LLM decide; treat as potential match
             record[RECORD_TITLE_REASON_KEY] = TITLE_REASON_POTENTIAL_MATCH
         else:
             # TITLE_EMPTY, TITLE_BAD_KEYWORD, user-configured reject_title_rules — hard gates
@@ -995,6 +1039,36 @@ def review_post_detail_normalized_job(
             "FINAL_DECISION", record, context.source_name, decision="REJECT", reason=_reject_reason
         )
         return _build_outcome(record), record, skill_observations
+    except LLMReviewValidationError as llm_exc:
+        _llm_elapsed_ms = int((time.monotonic() - _llm_t0) * 1000)
+        logger.error(
+            format_log_block(
+                "PIPELINE][LLM_INVALID_REVIEW",
+                {
+                    "source": context.source_name,
+                    "job_key": record.get(RECORD_JOB_KEY, ""),
+                    "title": title,
+                    "company": company,
+                    "purpose": "fit_review",
+                    "error_type": type(llm_exc).__name__,
+                    "error_message": str(llm_exc),
+                    "elapsed_ms": _llm_elapsed_ms,
+                },
+            )
+        )
+        record["_obs_llm_called"] = True
+        record["_obs_llm_error"] = True
+        record[RECORD_DECISION_KEY] = "REJECT"
+        record[RECORD_REJECT_REASON_KEY] = "LLM_INVALID_REVIEW"
+        _finalize(record, context)
+        _pipeline_log(
+            "FINAL_DECISION",
+            record,
+            context.source_name,
+            decision="REJECT",
+            reason="LLM_INVALID_REVIEW",
+        )
+        return _build_outcome(record), record, skill_observations
     except Exception as llm_exc:
         _llm_elapsed_ms = int((time.monotonic() - _llm_t0) * 1000)
         no_provider_key = (
@@ -1126,6 +1200,11 @@ def print_job_human_summary(
     # ── Title gate ────────────────────────────────────────────────────────────
     if title_reason in {"TITLE_EMPTY", "TITLE_BAD_KEYWORD"}:
         lines.append(f"  [✗] Title rejected  ({_reason_label(title_reason)})")
+    elif reject_reason == "LLM_TITLE_NOT_TARGET":
+        llm_judgment = record.get(RECORD_LLM_TITLE_JUDGMENT_KEY) or {}
+        llm_reason = str(llm_judgment.get("reason") or "")
+        note = f"  ({llm_reason})" if llm_reason else ""
+        lines.append(f"  [✗] Title not in target roles  →  LLM judged no match{note}")
     elif title_reason == "TITLE_NOT_TARGET":
         onet = record.get(RECORD_ONET_CLASSIFICATION_KEY) or {}
         onet_result = str(onet.get("result") or "")

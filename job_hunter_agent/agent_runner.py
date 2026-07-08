@@ -466,30 +466,7 @@ def run_agent_loop() -> None:
         time.sleep(sleep_seconds)
 
 
-def _set_admin_user_context() -> None:
-    import os
-
-    admin_email = os.getenv("JOB_HUNTER_ADMIN_EMAIL", "").strip().lower()
-    if admin_email:
-        from job_hunter_agent.auth import user_id_from_email
-        from job_hunter_agent.user_context import set_user_id
-
-        set_user_id(user_id_from_email(admin_email))
-
-
-def main() -> None:
-    from job_hunter_agent.database import init_db
-    from job_hunter_agent.global_settings import seed_global_settings_from_file
-    from job_hunter_agent.knowledge_store import upgrade_knowledge_from_dir
-    from job_hunter_agent.paths import REPO_ROOT as _REPO_ROOT
-
-    init_db()
-    seed_global_settings_from_file()
-    for _subdir in ("knowledge", "signals"):
-        upgrade_knowledge_from_dir(_REPO_ROOT / "data" / _subdir)
-
-    _set_admin_user_context()
-    configure_console_output()
+def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run the local daily job agent.")
     parser.add_argument(
         "--loop",
@@ -506,7 +483,33 @@ def main() -> None:
         action="store_true",
         help="Build the digest without sending email or Telegram notifications.",
     )
-    args = parser.parse_args()
+    parser.add_argument(
+        "--step",
+        action="store_true",
+        help=(
+            "Pause after each job's analysis is printed so the daily scrape can be "
+            "checked job by job before it continues."
+        ),
+    )
+    return parser
+
+
+def main() -> None:
+    from job_hunter_agent.database import init_db
+    from job_hunter_agent.global_settings import seed_global_settings_from_file
+    from job_hunter_agent.knowledge_store import upgrade_knowledge_from_dir
+    from job_hunter_agent.paths import REPO_ROOT as _REPO_ROOT
+
+    init_db()
+    seed_global_settings_from_file()
+    for _subdir in ("knowledge", "signals"):
+        upgrade_knowledge_from_dir(_REPO_ROOT / "data" / _subdir)
+
+    from job_hunter_agent.user_context import set_user_context_from_admin_env
+
+    set_user_context_from_admin_env()
+    configure_console_output()
+    args = _build_arg_parser().parse_args()
 
     if args.loop:
         run_agent_loop()

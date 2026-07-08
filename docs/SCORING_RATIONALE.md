@@ -82,7 +82,7 @@ flowchart TD
     G1 --> Z2
     G -- No / uncertain --> H[Prepare fit review input<br/>structured metadata + fit_source_text]
     H --> I{Safe deterministic review<br/>available?}
-    I -- Yes --> J[Create deterministic review outcome<br/>grade + rationale + review_source]
+    I -- Yes --> J[Create deterministic review outcome<br/>reject or keep candidate hint]
     I -- No --> K[Send to LLM fit review]
     K --> L[Extract requirements<br/>and map to candidate capabilities]
     J --> L
@@ -115,7 +115,7 @@ flowchart TD
 | Source normalisation | Raw scraper fields | `source_connector.py`, scraper modules, source docs | Normalised job record | Missing or low-trust source fields may reduce confidence. |
 | Title and occupation filtering | Job title, profile target roles, target occupation queries | `filters.py`, `occupation_taxonomy.py`, `docs/OCCUPATION_TAXONOMY_RATIONALE.md` | Title reason, O*NET near/far/uncertain signal | Approved hard blockers may stop the job before LLM. Uncertain signals continue. |
 | Description preparation | Full description, structured scraper metadata | `description_compactor.py`, `description_trust.py`, config/rules governance | `fit_source_text`, description trust metadata | Unsafe compaction is skipped explicitly; full description remains preserved. |
-| Review outcome | Title/content signals and fit source text | `llm_gate.py`, `source_learning.py` deterministic shortcut | `llm_fit_grade`, requirement coverage, rationale fields | LLM call may be avoided only by explicit deterministic rules. |
+| Review outcome | Title/content signals and fit source text | `llm_gate.py`, `source_learning.py` deterministic shortcut | `llm_fit_grade`, requirement coverage, rationale fields | LLM call may be avoided only by explicit deterministic reject rules. Deterministic keep candidates still require full LLM requirement coverage before any final KEEP is saved. |
 | Requirement coverage | Extracted job requirements, candidate capabilities | `llm_gate.py`, capability knowledge/profile modules | Supported / partially supported / not shown / mismatch coverage | Coverage drives grade when present. Unsupported capability claims are dropped. |
 | Frozen scoring | Reviewed job record with `llm_fit_grade` | `fit_scoring.py`, `data/knowledge/scoring_rules.json` | Frozen score and score breakdown | Grade band clamps non-hard-block score. Hard blockers apply after clamp. |
 | Display scoring | Frozen score, current age/viewed state | `fit_scoring.py`, UI consumers | Displayed score and ordering | Freshness/viewed status can move displayed rank, not capability proof. |
@@ -125,13 +125,13 @@ flowchart TD
 
 The main handover from filtering to scoring is the reviewed job record containing `llm_fit_grade`. If that grade is missing, scoring must stop rather than inventing a score.
 
-The main handover from LLM review to scoring is `requirement_coverage`. Coverage is evidence for the grade; the score breakdown displays it for transparency but does not add a second independent capability bonus.
+The main handover from LLM review to scoring is `requirement_coverage`. Coverage is evidence for the grade; the score breakdown displays it for transparency but does not add a second independent capability bonus. A deterministic keep candidate is not complete until this coverage exists and the final reviewed record is saved from the LLM path.
 
 The main handover from frozen scoring to the UI is the stored frozen score plus explanation entries. Display-time freshness and viewed status are ranking adjustments only, not new evidence that the candidate fits the job.
 
 ### End states
 
-A job can end as pre-LLM rejected, LLM/deterministic rejected, kept for review, displayed lower due to weak fit or hard blockers, or improved later through user feedback. Only reviewed jobs with a valid grade enter the normal scoring pipeline.
+A job can end as pre-LLM rejected, LLM/deterministic rejected, kept for review, displayed lower due to weak fit or hard blockers, or improved later through user feedback. Only reviewed jobs with a valid grade and non-empty requirement coverage enter the normal scoring pipeline.
 
 ---
 
@@ -393,7 +393,7 @@ Remaining heuristic / calibration areas include:
 |---|---|
 | Grade band values | Configured in `scoring_rules.json`; not empirically proven. |
 | Preference weights | Managed/profile-side weights; affect ranking, not capability proof. |
-| Deterministic shortcut thresholds | Configured under `deterministic_review_thresholds`; should be audited via `review_source` and `det_rule`. |
+| Deterministic shortcut thresholds | Configured under `deterministic_review_thresholds`; audit the shortcut trigger via `det_rule` and the final reviewed keep via `review_source` and `requirement_coverage`. |
 | Convergence bonus | Explicit rule-based bonus; useful but still a calibration rule. |
 | Freshness bonus | Ranking urgency only; not fit evidence. |
 
@@ -443,11 +443,11 @@ Important wording rule:
 
 ## Current known limitations
 
-1. The grade derivation is coverage-based only when `requirement_coverage` exists. If coverage is missing, the model grade can still be used as fallback.
+1. The grade derivation is coverage-based from `requirement_coverage`. A `KEEP` review is invalid unless `requirement_coverage` is present and non-empty.
 2. Mandatory missing evidence does not automatically reject. It reduces the weighted coverage score but may still allow weak/solid outcomes depending on the rest of the coverage.
 3. Preference signals can move jobs within grade bands and can affect display-time ranking, but they are not capability evidence.
 4. Frozen score and displayed score can differ because freshness and viewed status are applied dynamically at display time.
-5. Deterministic shortcuts can produce review grades without an LLM call. These should be audited separately via `review_source` and `det_rule`.
+5. Deterministic shortcuts can still produce early rejects without an LLM call. Deterministic keep candidates must still be confirmed by the LLM fit review before they become final KEEP rows. Audit the shortcut trigger via `det_rule`; audit final keeps via `review_source` and `requirement_coverage`.
 6. Convergence bonus currently requires supported coverage count, clean title/content, high description confidence, and eligible grade. It is useful but still a calibrated rule, not hard proof of fit.
 7. Some older docs and backlog items may still use broad "heuristic" language. Treat that as technical debt unless it points to an actual remaining hardcoded judgement.
 

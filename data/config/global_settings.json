@@ -384,6 +384,7 @@
       "job_requirements_max_output_tokens": 300,
       "rejection_blocker_suggestions_max_output_tokens": 300,
       "capability_naming_max_output_tokens": 500,
+      "title_judgment_max_output_tokens": 80,
       "profile_extraction_max_output_tokens": 2000,
       "job_description_max_chars": 5000,
       "cv_evidence_json_chars": 12000,

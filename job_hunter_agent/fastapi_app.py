@@ -4,7 +4,7 @@ Route handlers live under ``job_hunter_agent.routes``; this module wires the app
 exception handlers, and CORS-style middleware.
 
 Entry point:
-    python -m job_hunter_agent.fastapi_app [--debug] [--rebuild]
+    python -m job_hunter_agent.fastapi_app [--debug] [--rebuild] [--step]
 
 Flags:
     --debug     Enable debug mode: verbose logging, exposes test-only endpoints,
@@ -51,8 +51,10 @@ from job_hunter_agent.config import (
     ONBOARDING_DEBUG_ALIAS_PATH,
     ONBOARDING_PATH,
 )
+from job_hunter_agent.logging_utils import ConsoleNoiseFilter
 from job_hunter_agent.paths import OUTPUT_DIR, SERVER_LOG_PATH
 from job_hunter_agent.user_context import set_user_id
+from job_hunter_agent.run_control import enable_step_through
 
 _logger = logging.getLogger(__name__)
 
@@ -151,21 +153,6 @@ class _AccessLogFilter(logging.Filter):
         return not any(path in msg for path in _SUPPRESSED_ACCESS_PATHS)
 
 
-_CONSOLE_SUPPRESSED_FRAGMENTS = ("[CAPABILITY_SCORING][BELOW_THRESHOLD]",)
-
-
-class _ConsoleNoiseFilter(logging.Filter):
-    """Console-only filter: hides verbose scoring internals.
-
-    These lines are still written to the file log at INFO level for post-run
-    analysis. Only the terminal display is suppressed.
-    """
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        msg = record.getMessage()
-        return not any(fragment in msg for fragment in _CONSOLE_SUPPRESSED_FRAGMENTS)
-
-
 def _configure_server_logging() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -235,7 +222,7 @@ def _configure_server_logging() -> None:
         None,
     )
     if console_handler:
-        console_handler.addFilter(_ConsoleNoiseFilter())
+        console_handler.addFilter(ConsoleNoiseFilter())
 
     app_logger = logging.getLogger("job_hunter_agent.app")
     sys.stdout = _LineLoggingStream(app_logger, logging.INFO)
@@ -252,6 +239,12 @@ def _bootstrap_runtime_knowledge() -> None:
     seed_global_settings_from_file()
     for _subdir in ("knowledge", "signals"):
         upgrade_knowledge_from_dir(_REPO_ROOT / "data" / _subdir)
+
+
+def _apply_startup_flags(*, step: bool) -> None:
+    """Apply entry-point runtime flags before the server starts accepting work."""
+    if step:
+        enable_step_through()
 
 
 class _TelegramPollThread(threading.Thread):
@@ -449,10 +442,19 @@ if __name__ == "__main__":
         action="store_true",
         help="Rebuild the workspace from the last saved run before starting.",
     )
+    parser.add_argument(
+        "--step",
+        action="store_true",
+        help=(
+            "Pause after each job's analysis is printed so it can be checked "
+            "job by job before a scrape continues. Temporary debug aid."
+        ),
+    )
     args = parser.parse_args()
 
     _configure_server_logging()
     _bootstrap_runtime_knowledge()
+    _apply_startup_flags(step=args.step)
 
     from job_hunter_agent import server_helpers as srv
 

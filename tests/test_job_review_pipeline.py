@@ -32,10 +32,12 @@ from job_hunter_agent.record_schema import (
     RECORD_LLM_DECISION_KEY,
     RECORD_LLM_ELAPSED_MS_KEY,
     RECORD_LLM_FIT_GRADE_KEY,
+    RECORD_LLM_TITLE_JUDGMENT_KEY,
     RECORD_LOCATION_KEY,
     RECORD_ONET_CLASSIFICATION_KEY,
     RECORD_POSTED_AGE_DAYS_KEY,
     RECORD_REJECT_REASON_KEY,
+    RECORD_REQUIREMENT_COVERAGE_KEY,
     RECORD_SALARY_KEY,
     RECORD_TITLE_KEY,
     RECORD_TITLE_REASON_KEY,
@@ -77,6 +79,32 @@ def _review_context(source_name: str):
         date_range_days=30,
         source_name=source_name,
     )
+
+
+def _keep_review_payload(
+    requirement: str = "Stakeholder engagement",
+    capability_name: str = "Stakeholder Engagement",
+    matched_job_text: str = "work with stakeholders",
+    profile_support: list[str] | None = None,
+    grade: str = "SOLID",
+    debug_reason: str = "Requirement coverage confirmed by LLM.",
+) -> dict:
+    return {
+        "fit_review": {"decision": "KEEP", "grade": grade},
+        "debug_reason": debug_reason,
+        "job_requirements": [requirement],
+        "requirement_coverage": [
+            {
+                "requirement": requirement,
+                "importance": "mandatory",
+                "status": "supported",
+                "capability_name": capability_name,
+                "matched_job_text": matched_job_text,
+                "profile_support": profile_support or ["stakeholder management"],
+            },
+        ],
+        "llm_cost_usd": 0.0123,
+    }
 
 
 def _base_record(source: str, description_source: str, work_mode_source: str) -> dict:
@@ -164,69 +192,18 @@ def _patch_llm_review_path(monkeypatch, payload):
 
 
 def test_review_outcome_is_source_neutral_for_equivalent_normalized_jobs(monkeypatch):
-    monkeypatch.setattr(
-        job_review_pipeline,
-        "analyze_title_filters",
-        lambda title, profile: {"ok": True, "reason": "OK"},
+    payload = _keep_review_payload(
+        requirement="Delivery governance",
+        capability_name="Delivery Governance",
+        matched_job_text="governance and delivery oversight",
+        grade="SOLID",
+        debug_reason="LLM confirmed equivalent fit for both normalized sources.",
     )
-    monkeypatch.setattr(
-        job_review_pipeline,
-        "passes_quick_card_filters",
-        lambda **kwargs: (True, "OK"),
-    )
-    monkeypatch.setattr(
-        job_review_pipeline,
-        "passes_content_filters",
-        lambda details_text, card_location, title_reason: (True, "OK"),
-    )
-    monkeypatch.setattr(job_review_pipeline, "find_hard_block_matches", lambda text, terms=None: [])
-    monkeypatch.setattr(
-        job_review_pipeline, "passes_preference_filters", lambda record, profile: (True, "OK")
-    )
-    monkeypatch.setattr(
-        job_review_pipeline, "build_fit_highlights", lambda record, details_text, profile: ["fit"]
-    )
-    monkeypatch.setattr(
-        job_review_pipeline,
-        "build_risk_and_missing_profile_support",
-        lambda details_text, title_reason, profile, competitive_signals=None: ([], []),
-    )
-    monkeypatch.setattr(
-        job_review_pipeline,
-        "deterministic_review_outcome",
-        lambda record, profile, fit_highlights, missing_profile_support, soft_risk_reasons: {
-            "decision": "KEEP",
-            "grade": "SOLID",
-        },
-    )
-    monkeypatch.setattr(job_review_pipeline, "llm_extract_job_requirements", lambda text: [])
-    monkeypatch.setattr(
-        job_review_pipeline, "register_pending_learning_signals", lambda signals: None
-    )
-    monkeypatch.setattr(
-        job_review_pipeline, "detect_competitive_signals", lambda details_text, profile: []
-    )
-    monkeypatch.setattr(
-        job_review_pipeline, "reviewed_signal_matches_for_text", lambda details_text: []
-    )
-    monkeypatch.setattr(
-        job_review_pipeline,
-        "evaluate_competitive_signal_alignment",
-        lambda signal, profile: signal,
-    )
-    monkeypatch.setattr(
-        job_review_pipeline, "extract_skill_observations", lambda record, profile: []
-    )
-    monkeypatch.setattr(
-        job_review_pipeline, "build_ad_learning_signals", lambda record, details_text, profile: []
-    )
+    _patch_llm_review_path(monkeypatch, payload)
     monkeypatch.setattr(
         job_review_pipeline,
         "preferred_salary_display",
         lambda *values: next((value for value in values if value and value != "N/A"), "N/A"),
-    )
-    monkeypatch.setattr(
-        job_review_pipeline, "build_role_summary", lambda record, details_text, profile: "summary"
     )
     monkeypatch.setattr(source_learning, "register_signals", lambda items, category="": None)
     monkeypatch.setattr(
@@ -272,6 +249,7 @@ def test_review_outcome_is_source_neutral_for_equivalent_normalized_jobs(monkeyp
     assert {key: seek_outcome[key] for key in outcome_keys} == {
         key: linkedin_outcome[key] for key in outcome_keys
     }
+    assert seek_outcome["review_source"] == "llm"
     assert fit_score(seek_record, _review_profile()) == fit_score(
         linkedin_record, _review_profile()
     )
@@ -493,6 +471,140 @@ def test_title_not_target_stops_before_detail_fetch_when_onet_is_far(monkeypatch
     assert updated_record[RECORD_ONET_CLASSIFICATION_KEY]["result"] == RESULT_FAR
 
 
+def test_llm_title_judgment_hard_rejects_confident_no_match(monkeypatch, capsys):
+    """JH-226: a confident LLM no_match verdict on a near/uncertain O*NET title is a hard reject.
+
+    Regression case for the original false-KEEP: a title like "Business Enablement
+    Coordinator" that O*NET treats as near/uncertain but is clearly not one of the
+    candidate's target roles must be rejected before the expensive detail fetch.
+    """
+    record = _base_record("seek", "seek_detail", "card")
+    record[RECORD_TITLE_KEY] = "Business Enablement Coordinator"
+    context = _review_context("SEEK")
+
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "analyze_title_filters",
+        lambda title, profile: {"ok": False, "reason": "TITLE_NOT_TARGET"},
+    )
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "_onet_classify_title",
+        lambda title, profile: OccupationClassification(
+            result=RESULT_UNCERTAIN, matched_occupation_code=None, confidence=0.0, reason="no_match"
+        ),
+    )
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "llm_judge_title",
+        lambda title, target_roles, secondary_roles: {
+            "verdict": "no_match",
+            "reason": "Enablement/coordination role, not a target analyst or delivery role.",
+        },
+    )
+
+    outcome, updated_record, _, should_fetch = review_pre_detail_normalized_job(record, context)
+
+    assert should_fetch is False, "confident LLM no_match must skip the detail fetch"
+    assert outcome[RECORD_DECISION_KEY] == "REJECT"
+    assert updated_record[RECORD_REJECT_REASON_KEY] == "LLM_TITLE_NOT_TARGET"
+    assert updated_record[RECORD_LLM_TITLE_JUDGMENT_KEY]["verdict"] == "no_match"
+
+    console_output = capsys.readouterr().out
+    assert "REJECTED (llm title)" in console_output
+    assert "LLM_TITLE_NOT_TARGET" in console_output
+
+
+def test_llm_title_judgment_uncertain_falls_through_to_detail_fetch(monkeypatch):
+    record = _base_record("seek", "seek_detail", "card")
+    context = _review_context("SEEK")
+
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "analyze_title_filters",
+        lambda title, profile: {"ok": False, "reason": "TITLE_NOT_TARGET"},
+    )
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "_onet_classify_title",
+        lambda title, profile: OccupationClassification(
+            result=RESULT_UNCERTAIN, matched_occupation_code=None, confidence=0.0, reason="no_match"
+        ),
+    )
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "llm_judge_title",
+        lambda title, target_roles, secondary_roles: {
+            "verdict": "uncertain",
+            "reason": "Title alone does not rule the role in or out.",
+        },
+    )
+
+    outcome, updated_record, _, should_fetch = review_pre_detail_normalized_job(record, context)
+
+    assert should_fetch is True, "uncertain LLM verdict must not block description fetch"
+    assert updated_record[RECORD_TITLE_REASON_KEY] == "TITLE_POTENTIAL_MATCH"
+    assert updated_record[RECORD_LLM_TITLE_JUDGMENT_KEY]["verdict"] == "uncertain"
+
+
+def test_llm_title_judgment_match_falls_through_to_detail_fetch(monkeypatch):
+    record = _base_record("seek", "seek_detail", "card")
+    context = _review_context("SEEK")
+
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "analyze_title_filters",
+        lambda title, profile: {"ok": False, "reason": "TITLE_NOT_TARGET"},
+    )
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "_onet_classify_title",
+        lambda title, profile: OccupationClassification(
+            result=RESULT_UNCERTAIN, matched_occupation_code=None, confidence=0.0, reason="no_match"
+        ),
+    )
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "llm_judge_title",
+        lambda title, target_roles, secondary_roles: {"verdict": "match", "reason": "Close variant."},
+    )
+
+    outcome, updated_record, _, should_fetch = review_pre_detail_normalized_job(record, context)
+
+    assert should_fetch is True
+    assert updated_record[RECORD_TITLE_REASON_KEY] == "TITLE_POTENTIAL_MATCH"
+
+
+def test_llm_title_judgment_unavailable_falls_through_safely(monkeypatch):
+    """LLM unavailable/failed (returns None) must never hard-reject — same safety net as O*NET uncertain."""
+    record = _base_record("seek", "seek_detail", "card")
+    context = _review_context("SEEK")
+
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "analyze_title_filters",
+        lambda title, profile: {"ok": False, "reason": "TITLE_NOT_TARGET"},
+    )
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "_onet_classify_title",
+        lambda title, profile: OccupationClassification(
+            result=RESULT_UNCERTAIN, matched_occupation_code=None, confidence=0.0, reason="no_match"
+        ),
+    )
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "llm_judge_title",
+        lambda title, target_roles, secondary_roles: None,
+    )
+
+    outcome, updated_record, _, should_fetch = review_pre_detail_normalized_job(record, context)
+
+    assert should_fetch is True
+    assert updated_record[RECORD_TITLE_REASON_KEY] == "TITLE_POTENTIAL_MATCH"
+    assert RECORD_LLM_TITLE_JUDGMENT_KEY not in updated_record
+
+
 def test_pipeline_logs_job_centric_block_format(caplog, monkeypatch):
     """Pipeline emits a job-centric block: header at CARD_SEEN, status lines, close at FINAL_DECISION."""
     record = _base_record("seek", "seek_detail", "card")
@@ -523,16 +635,36 @@ def test_pipeline_logs_job_centric_block_format(caplog, monkeypatch):
         (
             m
             for m in messages
-            if "title not in your target roles" in m or "will read description" in m
+            if "title not in your target roles" in m or "needs title review" in m
         ),
         None,
     )
     assert title_note is not None, "expected a title status line"
 
-    # ONET_DECISION with FETCH_DETAILS is the pipeline's structured signal that
-    # description fetch will proceed (replaces the removed "→ fetching description..." line).
+    # ONET_DECISION with FETCH_DETAILS is the structured signal that
+    # description fetch will proceed after the title review path clears.
     onet_line = next((m for m in messages if "ONET_DECISION" in m and "FETCH_DETAILS" in m), None)
     assert onet_line is not None, "expected ONET_DECISION log with FETCH_DETAILS outcome"
+
+
+def test_title_no_core_keyword_overlap_logs_immediate_title_reject(monkeypatch, caplog):
+    record = _base_record("seek", "seek_detail", "card")
+    context = _review_context("SEEK")
+
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "analyze_title_filters",
+        lambda title, profile: {"ok": False, "reason": "TITLE_NO_CORE_KEYWORD_OVERLAP"},
+    )
+
+    with caplog.at_level(logging.INFO, logger="job_hunter_agent.job_review_pipeline"):
+        outcome, updated_record, _, should_fetch = review_pre_detail_normalized_job(record, context)
+
+    assert should_fetch is False
+    assert outcome[RECORD_DECISION_KEY] == "REJECT"
+    assert updated_record[RECORD_REJECT_REASON_KEY] == "TITLE_NO_CORE_KEYWORD_OVERLAP"
+    assert "will read description" not in caplog.text
+    assert "title filtered out" in caplog.text
 
 
 def test_duplicate_job_key_is_skipped_before_detail_fetch(monkeypatch):
@@ -563,58 +695,12 @@ def test_duplicate_job_key_is_skipped_before_detail_fetch(monkeypatch):
 
 
 def test_linkedin_salary_is_preserved_by_post_detail_review(monkeypatch):
+    payload = _keep_review_payload()
+    _patch_llm_review_path(monkeypatch, payload)
     record = _base_record("linkedin", "linkedin_full_description", "description")
     record[RECORD_SALARY_KEY] = "AUD 120k"
     record[RECORD_DETAILS_TEXT_KEY] = "Business analyst role supporting delivery and stakeholders."
     record[RECORD_TITLE_REASON_KEY] = "OK"
-
-    monkeypatch.setattr(
-        job_review_pipeline,
-        "passes_content_filters",
-        lambda details_text, card_location, title_reason: (True, "OK"),
-    )
-    monkeypatch.setattr(job_review_pipeline, "find_hard_block_matches", lambda text, terms=None: [])
-    monkeypatch.setattr(
-        job_review_pipeline, "passes_preference_filters", lambda record, profile: (True, "OK")
-    )
-    monkeypatch.setattr(
-        job_review_pipeline, "build_fit_highlights", lambda record, details_text, profile: ["fit"]
-    )
-    monkeypatch.setattr(
-        job_review_pipeline,
-        "build_risk_and_missing_profile_support",
-        lambda details_text, title_reason, profile, competitive_signals=None: ([], []),
-    )
-    monkeypatch.setattr(
-        job_review_pipeline,
-        "deterministic_review_outcome",
-        lambda record, profile, fit_highlights, missing_profile_support, soft_risk_reasons: {
-            "decision": "KEEP",
-            "grade": "SOLID",
-        },
-    )
-    monkeypatch.setattr(job_review_pipeline, "llm_extract_job_requirements", lambda text: [])
-    monkeypatch.setattr(
-        job_review_pipeline, "register_pending_learning_signals", lambda signals: None
-    )
-    monkeypatch.setattr(
-        job_review_pipeline, "detect_competitive_signals", lambda details_text, profile: []
-    )
-    monkeypatch.setattr(
-        job_review_pipeline, "reviewed_signal_matches_for_text", lambda details_text: []
-    )
-    monkeypatch.setattr(
-        job_review_pipeline, "evaluate_competitive_signal_alignment", lambda signal, profile: signal
-    )
-    monkeypatch.setattr(
-        job_review_pipeline, "extract_skill_observations", lambda record, profile: []
-    )
-    monkeypatch.setattr(
-        job_review_pipeline, "build_ad_learning_signals", lambda record, details_text, profile: []
-    )
-    monkeypatch.setattr(
-        job_review_pipeline, "build_role_summary", lambda record, details_text, profile: "summary"
-    )
 
     outcome, updated_record, _ = review_post_detail_normalized_job(
         record,
@@ -661,6 +747,126 @@ def test_llm_review_fields_persist_on_record(monkeypatch):
     assert outcome[RECORD_DECISION_KEY] == "KEEP"
     assert updated_record[RECORD_LLM_ELAPSED_MS_KEY] is not None
     assert updated_record[RECORD_LLM_COST_USD_KEY] == 0.0123
+    assert updated_record[RECORD_REQUIREMENT_COVERAGE_KEY]
+
+
+def test_deterministic_keep_candidate_requires_full_llm_review(monkeypatch, caplog):
+    payload = _keep_review_payload(
+        requirement="Governance collaboration",
+        capability_name="Governance Collaboration",
+        matched_job_text="collaborate on governance",
+        grade="STRONG",
+        debug_reason="Deterministic keep candidate confirmed by full LLM review.",
+    )
+    _patch_llm_review_path(monkeypatch, payload)
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "deterministic_review_outcome",
+        lambda record, profile, fit_highlights, missing_profile_support, soft_risk_reasons: {
+            "decision": "KEEP",
+            "grade": "STRONG",
+            "det_rule": "strong",
+        },
+    )
+
+    record = _base_record("seek", "seek_detail", "card")
+
+    with caplog.at_level(logging.INFO):
+        outcome, updated_record, _ = review_post_detail_normalized_job(
+            record, _review_context("SEEK")
+        )
+
+    assert outcome["decision"] == "KEEP"
+    assert updated_record["review_source"] == "llm"
+    assert updated_record[RECORD_LLM_DECISION_KEY] == "KEEP"
+    assert updated_record[RECORD_REQUIREMENT_COVERAGE_KEY]
+    assert any("DET_KEEP_CANDIDATE" in record.message for record in caplog.records)
+
+
+def test_invalid_keep_review_without_requirement_coverage_is_rejected(monkeypatch, caplog):
+    payload = {
+        "fit_review": {"decision": "KEEP", "grade": "STRONG"},
+        "debug_reason": "Model returned a grade without requirement coverage.",
+        "job_requirements": ["Governance collaboration"],
+        "requirement_coverage": [],
+        "llm_cost_usd": 0.0123,
+    }
+    _patch_llm_review_path(monkeypatch, payload)
+
+    record = _base_record("seek", "seek_detail", "card")
+
+    with caplog.at_level(logging.ERROR):
+        outcome, updated_record, _ = review_post_detail_normalized_job(
+            record, _review_context("SEEK")
+        )
+
+    assert outcome["decision"] == "REJECT"
+    assert outcome["reject_reason"] == "LLM_INVALID_REVIEW"
+    assert updated_record["decision"] == "REJECT"
+    assert updated_record["reject_reason"] == "LLM_INVALID_REVIEW"
+    assert any("LLM_INVALID_REVIEW" in entry.message for entry in caplog.records)
+
+
+def test_maybe_review_with_complete_coverage_is_not_rejected(monkeypatch, caplog):
+    payload = _keep_review_payload(
+        requirement="Financial markets compliance",
+        capability_name="Regulatory Compliance",
+        matched_job_text="not shown",
+        grade="SOLID",
+        debug_reason="Strong business analysis fit but mandatory compliance experience missing.",
+    )
+    payload["fit_review"]["decision"] = "MAYBE"
+    _patch_llm_review_path(monkeypatch, payload)
+
+    record = _base_record("seek", "seek_detail", "card")
+
+    with caplog.at_level(logging.ERROR):
+        outcome, updated_record, _ = review_post_detail_normalized_job(
+            record, _review_context("SEEK")
+        )
+
+    assert outcome["decision"] == "KEEP"
+    assert updated_record[RECORD_LLM_DECISION_KEY] == "MAYBE"
+    assert updated_record[RECORD_REQUIREMENT_COVERAGE_KEY]
+    assert not any("LLM_INVALID_REVIEW" in entry.message for entry in caplog.records)
+
+
+def test_frozen_fit_score_breakdown_computed_once(caplog, monkeypatch):
+    """Regression test: freezing the fit score must not recompute (and re-log) the
+
+    breakdown a second time — this used to double-log [CAPABILITY_SUPPORT].
+    """
+    payload = {
+        "fit_review": {"decision": "KEEP", "grade": "STRONG"},
+        "debug_reason": "Strong requirement coverage with capability support.",
+        "job_requirements": ["Stakeholder engagement"],
+        "requirement_coverage": [
+            {
+                "requirement": "Stakeholder engagement",
+                "status": "supported",
+                "capability_name": "Stakeholder Engagement",
+                "matched_job_text": "work with stakeholders",
+                "profile_support": ["stakeholder management"],
+            },
+        ],
+        "llm_cost_usd": 0.0123,
+    }
+    _patch_llm_review_path(monkeypatch, payload)
+
+    record = _base_record("seek", "seek_detail", "card")
+    with caplog.at_level(logging.INFO):
+        outcome, updated_record, _ = review_post_detail_normalized_job(
+            record, _review_context("SEEK")
+        )
+
+    assert outcome[RECORD_DECISION_KEY] == "KEEP"
+    capability_support_lines = [
+        r for r in caplog.records if "[CAPABILITY_SUPPORT]" in r.getMessage()
+    ]
+    assert len(capability_support_lines) == 1
+    assert updated_record["fit_score"] == sum(
+        e["value"] for e in updated_record["fit_score_breakdown"]
+    )
 
 
 # ── observability log events ──────────────────────────────────────────────────
@@ -866,20 +1072,11 @@ def _patch_review_post_detail_for_work_type_assertions(monkeypatch, expected_wor
         )
         return True, "OK"
 
-    monkeypatch.setattr(
-        job_review_pipeline,
-        "analyze_title_filters",
-        lambda title, profile: {"ok": True, "reason": "OK"},
-    )
+    _patch_llm_review_path(monkeypatch, _keep_review_payload())
     monkeypatch.setattr(
         job_review_pipeline,
         "passes_quick_card_filters",
         lambda **kwargs: (True, "OK"),
-    )
-    monkeypatch.setattr(
-        job_review_pipeline,
-        "passes_content_filters",
-        lambda details_text, card_location, title_reason: (True, "OK"),
     )
     monkeypatch.setattr(job_review_pipeline, "find_hard_block_matches", lambda text, terms=None: [])
     monkeypatch.setattr(
@@ -888,49 +1085,9 @@ def _patch_review_post_detail_for_work_type_assertions(monkeypatch, expected_wor
         _assert_inferred_work_type,
     )
     monkeypatch.setattr(
-        job_review_pipeline, "build_fit_highlights", lambda record, details_text, profile: ["fit"]
-    )
-    monkeypatch.setattr(
-        job_review_pipeline,
-        "build_risk_and_missing_profile_support",
-        lambda details_text, title_reason, profile, competitive_signals=None: ([], []),
-    )
-    monkeypatch.setattr(
-        job_review_pipeline,
-        "deterministic_review_outcome",
-        lambda record, profile, fit_highlights, missing_profile_support, soft_risk_reasons: {
-            "decision": "KEEP",
-            "grade": "SOLID",
-        },
-    )
-    monkeypatch.setattr(job_review_pipeline, "llm_extract_job_requirements", lambda text: [])
-    monkeypatch.setattr(
-        job_review_pipeline, "register_pending_learning_signals", lambda signals: None
-    )
-    monkeypatch.setattr(
-        job_review_pipeline, "detect_competitive_signals", lambda details_text, profile: []
-    )
-    monkeypatch.setattr(
-        job_review_pipeline, "reviewed_signal_matches_for_text", lambda details_text: []
-    )
-    monkeypatch.setattr(
-        job_review_pipeline,
-        "evaluate_competitive_signal_alignment",
-        lambda signal, profile: signal,
-    )
-    monkeypatch.setattr(
-        job_review_pipeline, "extract_skill_observations", lambda record, profile: []
-    )
-    monkeypatch.setattr(
-        job_review_pipeline, "build_ad_learning_signals", lambda record, details_text, profile: []
-    )
-    monkeypatch.setattr(
         job_review_pipeline,
         "preferred_salary_display",
         lambda *values: next((value for value in values if value and value != "N/A"), "N/A"),
-    )
-    monkeypatch.setattr(
-        job_review_pipeline, "build_role_summary", lambda record, details_text, profile: "summary"
     )
     monkeypatch.setattr(source_learning, "register_signals", lambda items, category="": None)
     monkeypatch.setattr(

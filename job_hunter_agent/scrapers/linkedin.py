@@ -166,8 +166,15 @@ class LinkedInScraper(BaseJobScraper):
                 target_tag = f"[LinkedIn target {target_index}/{total_targets}]"
                 set_run_progress(f"LinkedIn search {target_index}/{total_targets}")
                 logger.info(
-                    "%s search_term=%s | location=%s | results_wanted=%d",
-                    target_tag,
+                    "\n"
+                    "================================================================\n"
+                    "  STARTING LINKEDIN TARGET %d/%d\n"
+                    "  search_term=%s\n"
+                    "  location=%s\n"
+                    "  results_wanted=%d\n"
+                    "================================================================",
+                    target_index,
+                    total_targets,
                     target["search_term"] or "(unset)",
                     target["location"] or "(all)",
                     target["results_wanted"],

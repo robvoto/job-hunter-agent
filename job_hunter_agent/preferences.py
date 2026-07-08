@@ -6,7 +6,6 @@ from typing import Optional, Tuple
 
 from job_hunter_agent.io_utils import load_parsing_rules, load_ui_labels
 from job_hunter_agent.job_types import load_job_type
-from job_hunter_agent.logging_utils import format_log_block
 from job_hunter_agent.paths import UNCERTAINTY_LOG_PATH
 from job_hunter_agent.profile_store import (
     DEFAULT_PROFILE,
@@ -70,9 +69,9 @@ def passes_preference_filters(record: dict, profile: Optional[dict] = None) -> T
         append_uncertainty_log(UNCERTAINTY_LOG_PATH, entry)
 
         logger.warning(
-            "%s\n%s",
-            "[UNCERTAINTY] Unable to classify work_type",
-            format_log_block("UNCERTAINTY", entry),
+            "[UNCERTAINTY] work_type unclear for job_key=%s — letting through (full detail in %s)",
+            entry.get("job_key", "<unknown>"),
+            UNCERTAINTY_LOG_PATH,
         )
 
     if selected_engagement_type_set != VALID_ENGAGEMENT_TYPES:
@@ -112,8 +111,9 @@ def passes_preference_filters(record: dict, profile: Optional[dict] = None) -> T
             append_uncertainty_log(UNCERTAINTY_LOG_PATH, entry)
 
             logger.warning(
-                "[UNCERTAINTY] Unable to classify work_mode\n%s",
-                format_log_block("UNCERTAINTY", entry),
+                "[UNCERTAINTY] work_mode unclear for job_key=%s — letting through (full detail in %s)",
+                entry.get("job_key", "<unknown>"),
+                UNCERTAINTY_LOG_PATH,
             )
 
         elif work_mode not in work_mode_prefs:

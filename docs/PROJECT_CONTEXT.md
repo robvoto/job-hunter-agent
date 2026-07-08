@@ -57,3 +57,5 @@ Choose the best matching skill. Combine with reusable skills such as `code-chang
 ## Backlog
 
 For backlog work, read `.skills/backlog-management/SKILL.md` first. Do not implement rows marked `Implementation State = Done` unless the human explicitly asks to audit, reopen, correct, or revise them.
+
+Backlog items (tasks, stories, bugs) live only in the Google Sheet via `.skills/backlog-management/SKILL.md`. Never track them with the TodoWrite tool — TodoWrite is for in-conversation step tracking only, not backlog state.

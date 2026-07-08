@@ -153,6 +153,37 @@ def test_both_sources_run_concurrently_when_both_enabled(monkeypatch):
     assert overlap_confirmed.is_set(), "SEEK and LinkedIn did not run concurrently"
 
 
+def test_step_through_runs_sources_serially(monkeypatch):
+    context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN, SOURCE_APSJOBS])
+    call_order: list[str] = []
+
+    monkeypatch.setattr(source_runner, "step_through_enabled", lambda: True)
+    monkeypatch.setattr(
+        source_runner,
+        "_run_seek_and_linkedin_in_parallel",
+        lambda ctx: (_ for _ in ()).throw(AssertionError("parallel path should not run")),
+    )
+    monkeypatch.setattr(
+        source_runner,
+        "_run_seek_source",
+        lambda ctx: call_order.append("seek") or _seek_result(),
+    )
+    monkeypatch.setattr(
+        source_runner,
+        "_run_linkedin_source",
+        lambda ctx: call_order.append("linkedin") or _li_result(),
+    )
+    monkeypatch.setattr(
+        source_runner,
+        "_run_apsjobs_source",
+        lambda ctx: call_order.append("apsjobs") or _aps_result(),
+    )
+
+    run_enabled_sources(context)
+
+    assert call_order == ["seek", "linkedin", "apsjobs"]
+
+
 # ---------------------------------------------------------------------------
 # 5. Merge order is always SEEK then LinkedIn, even if LinkedIn finishes first
 # ---------------------------------------------------------------------------

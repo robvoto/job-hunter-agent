@@ -31,3 +31,18 @@ def get_user_id_for_runtime() -> str:
     raise RuntimeError(
         "No signed-in user is available. Log in to the app and try again.",
     )
+
+
+def set_user_context_from_admin_env() -> None:
+    """Log CLI entry points in as the configured admin account, if any.
+
+    Shared by non-request entry points (agent_runner, source_connector CLI)
+    that have no HTTP request to derive a signed-in user from.
+    """
+    import os
+
+    admin_email = os.getenv("JOB_HUNTER_ADMIN_EMAIL", "").strip().lower()
+    if admin_email:
+        from job_hunter_agent.auth import user_id_from_email
+
+        set_user_id(user_id_from_email(admin_email))

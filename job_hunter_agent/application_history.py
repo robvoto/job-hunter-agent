@@ -293,7 +293,7 @@ def match_application_history(job_record: dict, rejection_rows: list[dict]) -> d
 
 
 def enrich_records_with_application_history(
-    records: list[dict], rejection_rows: list[dict]
+    records: list[dict], rejection_rows: list[dict] 
 ) -> list[dict]:
     """Add application_history to matching records. Records are not removed or reordered."""
     normalized_rows = [

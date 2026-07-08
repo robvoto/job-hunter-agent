@@ -164,6 +164,30 @@ def test_collect_candidate_links_prefers_jobish_anchors():
     assert links[1]["url"] == "https://www.apsjobs.gov.au/s/job-details/456"
 
 
+def test_collect_candidate_links_rejects_navigation_pages():
+    page = _FakePage(
+        url="https://www.apsjobs.gov.au/s/",
+        body_text="",
+        title_text="",
+        anchors=[
+            _FakeAnchor("/s", "Home"),
+            _FakeAnchor("/s-registration", "Register"),
+            _FakeAnchor("/s-log-in", "Sign In"),
+            _FakeAnchor("/working-aps/hr-practitioners/recruitment/aps-ai-recruitment", "AI in recruitment"),
+            _FakeAnchor("/s/job-details/123", "Senior Analyst"),
+        ],
+    )
+
+    links = apsjobs_module._collect_candidate_links(page, page.url, 10)
+
+    assert links == [
+        {
+            "url": "https://www.apsjobs.gov.au/s/job-details/123",
+            "text": "Senior Analyst",
+        }
+    ]
+
+
 def test_extract_posted_text_and_age_from_visible_listing_text():
     posted_text = apsjobs_module._extract_posted_text("Senior Analyst\nPosted 3 hours ago")
 

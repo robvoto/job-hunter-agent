@@ -101,6 +101,11 @@ def get_llm_capability_naming_max_output_tokens() -> int:
     return get_llm_prompt_setting_int(KEY_LLM_PROMPT_CAPABILITY_NAMING_MAX_OUTPUT_TOKENS)
 
 
+def get_llm_title_judgment_max_output_tokens() -> int:
+    """Max tokens for the title-only target-role judgment response."""
+    return get_llm_prompt_setting_int(KEY_LLM_PROMPT_TITLE_JUDGMENT_MAX_OUTPUT_TOKENS)
+
+
 def get_llm_profile_extraction_max_output_tokens() -> int:
     """Max tokens for CV/profile extraction."""
     return get_llm_prompt_setting_int(KEY_LLM_PROMPT_PROFILE_EXTRACTION_MAX_OUTPUT_TOKENS)
