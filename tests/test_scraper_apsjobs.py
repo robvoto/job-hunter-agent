@@ -145,6 +145,17 @@ def test_first_visible_locator_returns_none_when_nothing_visible():
     assert result is None
 
 
+def test_normalize_apsjobs_location_filter_maps_supported_locations_to_states():
+    assert apsjobs_module._normalize_apsjobs_location_filter("Sydney") == "NSW"
+    assert apsjobs_module._normalize_apsjobs_location_filter("Canberra ACT") == "ACT"
+    assert apsjobs_module._normalize_apsjobs_location_filter("Melbourne, Victoria") == "VIC"
+
+
+def test_normalize_apsjobs_location_filter_returns_empty_for_unknown_location():
+    assert apsjobs_module._normalize_apsjobs_location_filter("") == ""
+    assert apsjobs_module._normalize_apsjobs_location_filter("Auckland") == ""
+
+
 def test_collect_candidate_links_prefers_jobish_anchors():
     page = _FakePage(
         url="https://www.apsjobs.gov.au/s/",
@@ -184,6 +195,30 @@ def test_collect_candidate_links_rejects_navigation_pages():
         {
             "url": "https://www.apsjobs.gov.au/s/job-details/123",
             "text": "Senior Analyst",
+        }
+    ]
+
+
+def test_collect_candidate_links_keeps_real_job_titles_containing_register():
+    page = _FakePage(
+        url="https://www.apsjobs.gov.au/s/job-search?searchString=business%20analyst&state=NSW",
+        body_text="",
+        title_text="",
+        anchors=[
+            _FakeAnchor("/s/registration", "Register"),
+            _FakeAnchor(
+                "/s/job-details?title=temporary-employment-register&Id=a05OY00000MGFeLYAX",
+                "AFMA 2026/27 Fisheries Observer Temporary Employment Register",
+            ),
+        ],
+    )
+
+    links = apsjobs_module._collect_candidate_links(page, page.url, 10)
+
+    assert links == [
+        {
+            "url": "https://www.apsjobs.gov.au/s/job-details?title=temporary-employment-register&Id=a05OY00000MGFeLYAX",
+            "text": "AFMA 2026/27 Fisheries Observer Temporary Employment Register",
         }
     ]
 
@@ -257,6 +292,22 @@ def test_build_apsjobs_search_targets_honours_override_per_location():
 
     assert keywords == "policy officer"
     assert targets == [
-        {"search_term": "policy officer", "location": "Canberra", "results_wanted": 40},
-        {"search_term": "policy officer", "location": "Sydney", "results_wanted": 40},
+        {"search_term": "policy officer", "location": "ACT", "results_wanted": 40},
+        {"search_term": "policy officer", "location": "NSW", "results_wanted": 40},
+    ]
+
+
+def test_build_apsjobs_search_targets_dedupes_shared_locations_to_distinct_states():
+    keywords, targets = apsjobs_module.build_apsjobs_search_targets(
+        {
+            "keywords": "policy officer",
+            "locations": ["Sydney", "Newcastle", "Canberra"],
+            apsjobs_module.KEY_APSJOBS_RESULTS_PER_SEARCH: 40,
+        }
+    )
+
+    assert keywords == "policy officer"
+    assert targets == [
+        {"search_term": "policy officer", "location": "NSW", "results_wanted": 40},
+        {"search_term": "policy officer", "location": "ACT", "results_wanted": 40},
     ]

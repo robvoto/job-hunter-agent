@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 53,
+  "version": 54,
   "updated_at": "2026-06-28",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -89,6 +89,7 @@
     "add_button_label": "+",
     "add_button_aria_label": "Add item",
     "add_button_title": "+",
+    "location_help": "Choose up to 3 states, territories, or capital cities. Sydney means a city search on SEEK and a city search with a 50-mile radius on LinkedIn. NSW means a state search on SEEK and LinkedIn. APS Jobs maps both Sydney and NSW to NSW.",
     "search_wait_copy": "This search can take a while because Job Hunter checks multiple sources, opens the job details that matter, and scores each match before it appears here.",
     "search_running_title": "Search in progress",
     "search_running_copy": "Job Hunter is checking sources and ranking matches. This process may take several minutes.",
@@ -170,7 +171,6 @@
     "continue_label": "Continue",
     "need_help_label": "Need help?",
     "location_label": "Location",
-    "location_help": "Choose one state or capital city.",
     "sector_preference_label": "Sector preference",
     "sector_preference_help": "Choose if you have a sector preference you want Job Hunter to favour.",
     "work_type_label": "Work type",

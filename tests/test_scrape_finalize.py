@@ -192,6 +192,63 @@ def test_finalize_scrape_run_writes_outputs(monkeypatch, tmp_path, capsys, caplo
     assert "Saved 1 audit rows to" in log_text
 
 
+def test_finalize_scrape_run_builds_source_breakdown_from_decisions(monkeypatch, tmp_path):
+    context = _build_context()
+
+    workspace_path = tmp_path / "workspace.html"
+    captured: dict[str, object] = {}
+
+    with db_conn() as conn:
+        conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", ("test_user",))
+
+    monkeypatch.setattr(scrape_finalize, "get_workspace_results_path", lambda: workspace_path)
+    monkeypatch.setattr(scrape_finalize, "deduplicate_across_sources", lambda records: records)
+    monkeypatch.setattr(
+        scrape_finalize.workspace_service,
+        "build_run_stats",
+        lambda *args: {
+            "run_started_at": "2026-05-16T08:12:40",
+            "cards_seen": 3,
+            "cards_read": 3,
+            "kept_count": 2,
+            "rejected_count": 1,
+            "cards_with_flags_count": 0,
+        },
+    )
+    monkeypatch.setattr(
+        scrape_finalize.workspace_service,
+        "render_html",
+        lambda *args, **kwargs: captured.update({"run_stats": args[5]}),
+    )
+    monkeypatch.setattr(scrape_finalize, "save_llm_cache", lambda payload: None)
+    monkeypatch.setattr(scrape_finalize, "save_job_history", lambda payload: None)
+    monkeypatch.setattr(scrape_finalize, "write_debug_json", lambda payload: None)
+    monkeypatch.setattr(scrape_finalize, "write_run_stats", lambda payload: None)
+    monkeypatch.setattr(scrape_finalize, "write_review_data", lambda payload: None)
+    monkeypatch.setattr(source_learning, "get_llm_truncation_count", lambda: 0)
+
+    scrape_finalize.finalize_scrape_run(
+        context,
+        kept_records=[{"job_key": "seek:1"}, {"job_key": "linkedin:1"}],
+        audit_rows=[
+            {"job_key": "seek:1", "source": "seek", "decision": "KEEP", "pages_processed": 2},
+            {"job_key": "linkedin:1", "source": "linkedin", "decision": "KEEP"},
+            {"job_key": "linkedin:2", "source": "linkedin", "decision": "REJECT"},
+        ],
+        skill_observations=[],
+    )
+
+    run_stats = captured["run_stats"]
+    assert isinstance(run_stats, dict)
+    breakdown = {item["source"]: item for item in run_stats["source_breakdown"]}
+    assert breakdown["SEEK"]["kept"] == 1
+    assert breakdown["SEEK"]["rejected"] == 0
+    assert breakdown["SEEK"]["pages"] == 2
+    assert breakdown["LINKEDIN"]["kept"] == 1
+    assert breakdown["LINKEDIN"]["rejected"] == 1
+    assert breakdown["LINKEDIN"]["pages"] == 2
+
+
 def test_finalize_scrape_run_preserves_previous_workspace_when_no_audit_rows(
     monkeypatch, tmp_path, capsys, caplog
 ):
@@ -229,7 +286,7 @@ def test_finalize_scrape_run_preserves_previous_workspace_when_no_audit_rows(
     monkeypatch.setattr(
         scrape_finalize.workspace_service,
         "render_html",
-        lambda *args: calls.append(("render_html", args)),
+        lambda *args, **kwargs: calls.append(("render_html", (args, kwargs))),
     )
 
     monkeypatch.setattr(
@@ -320,7 +377,7 @@ def test_finalize_scrape_run_marks_empty_first_run_as_error(monkeypatch, tmp_pat
     monkeypatch.setattr(
         scrape_finalize.workspace_service,
         "render_html",
-        lambda *args: calls.append(("render_html", args)),
+        lambda *args, **kwargs: calls.append(("render_html", (args, kwargs))),
     )
 
     monkeypatch.setattr(
@@ -398,7 +455,7 @@ def test_finalize_scrape_run_treats_stop_before_fresh_cards_as_cancellation(
     monkeypatch.setattr(
         scrape_finalize.workspace_service,
         "render_html",
-        lambda *args: calls.append(("render_html", args)),
+        lambda *args, **kwargs: calls.append(("render_html", (args, kwargs))),
     )
     monkeypatch.setattr(
         scrape_finalize, "save_llm_cache", lambda payload: calls.append(("save_llm_cache", payload))

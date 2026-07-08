@@ -23,6 +23,10 @@
   },
   "limits": {
     "search": {
+      "locations_max_selected": {
+        "min": 1,
+        "max": 3
+      },
       "date_range_days": {
         "min": 1,
         "max": 30
@@ -379,7 +383,7 @@
           "limit": 600
         }
       ],
-      "fit_decision_max_output_tokens": 1500,
+      "fit_decision_max_output_tokens": 2000,
       "learning_candidates_max_output_tokens": 500,
       "job_requirements_max_output_tokens": 300,
       "rejection_blocker_suggestions_max_output_tokens": 300,

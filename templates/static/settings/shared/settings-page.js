@@ -150,9 +150,52 @@ function renderLlmModelOptions() {
 function renderLocationOptions() {
   const select = document.getElementById('locations');
   if (!select || !locationUi.renderLocationOptions) return;
-  locationUi.renderLocationOptions(select);
-  const preferred = String(loadedProfile?.search_settings?.locations?.[0] || locationUi.defaultLocation || select.value || '').trim();
-  if (preferred) select.value = preferred;
+  const options = Array.isArray(locationUi.options)
+    ? locationUi.options.filter((option) => ['state', 'territory', 'city'].includes(String(option?.kind || '').trim().toLowerCase()))
+    : [];
+  const savedValues = new Set(
+    (loadedProfile?.search_settings?.locations || [])
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+  );
+  const grouped = new Map();
+  options.forEach((option) => {
+    const group = String(option?.group || 'Locations').trim();
+    if (!grouped.has(group)) grouped.set(group, []);
+    grouped.get(group).push(option);
+  });
+  const markup = [];
+  grouped.forEach((groupOptions, group) => {
+    markup.push(`<optgroup label="${escapeHtml(group)}">`);
+    groupOptions.forEach((option) => {
+      const value = String(option?.value || '').trim();
+      const label = String(option?.label || value).trim();
+      const selected = savedValues.has(value) ? ' selected' : '';
+      markup.push(`<option value="${escapeHtml(value)}"${selected}>${escapeHtml(label)}</option>`);
+    });
+    markup.push('</optgroup>');
+  });
+  select.innerHTML = markup.join('');
+}
+
+function getSelectedValues(select) {
+  if (!select) return [];
+  return Array.from(select.selectedOptions || [])
+    .map((option) => String(option.value || '').trim())
+    .filter(Boolean);
+}
+
+function limitSelectedLocations() {
+  const select = document.getElementById('locations');
+  const maxSelected = Number(loadedGlobalSettings?.limits?.search?.locations_max_selected?.max || 3);
+  if (!select || !Number.isFinite(maxSelected) || maxSelected < 1) return;
+  const selectedValues = getSelectedValues(select);
+  if (selectedValues.length <= maxSelected) return;
+  const allowed = new Set(selectedValues.slice(0, maxSelected));
+  Array.from(select.options).forEach((option) => {
+    const value = String(option?.value || '').trim();
+    option.selected = allowed.has(value);
+  });
 }
 
 function buildSettingsHelpDrawer(bodyHtml, extraClass = '') {
@@ -249,7 +292,7 @@ function collectProfile() {
   return {
     search_settings: {
       keywords: String(settingsField('keywords').value || '').trim(),
-      locations: locationSelect && locationSelect.value.trim() ? [locationSelect.value.trim()] : [],
+      locations: getSelectedValues(locationSelect),
       classification_ids: toLines(document.getElementById('classification_ids').value),
       date_range_days: searchDateWindow === 0 ? 30 : searchDateWindow,
       linkedin_hours_old: hoursMap[searchDateWindow] ?? 72,
@@ -300,7 +343,15 @@ function fillForm(profile) {
   renderLocationOptions();
   const locationSelect = document.getElementById('locations');
   if (locationSelect) {
-    locationSelect.value = String(profile.search_settings?.locations?.[0] || locationUi.defaultLocation || locationSelect.value || '').trim();
+    const selectedValues = new Set(
+      (profile.search_settings?.locations || [])
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+    );
+    Array.from(locationSelect.options).forEach((option) => {
+      option.selected = selectedValues.has(String(option.value || '').trim());
+    });
+    limitSelectedLocations();
   }
   document.getElementById('classification_ids').value = (profile.search_settings?.classification_ids || []).join('\n');
   setChoiceGroupValue('seek_max_pages', profile.search_settings?.seek_max_pages);

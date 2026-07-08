@@ -78,6 +78,8 @@ def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
     assert "Review Draft" in html
     assert "Search Basics" in html
     assert "Check Setup" in html
+    assert "Sydney means a city search on SEEK" in html
+    assert "50-mile radius on LinkedIn" in html
     assert "0 shown" in html
     assert 'id="review_capability_helper"' in html
     assert "review-capability-filter-shell" in html
@@ -194,6 +196,16 @@ def test_onboarding_guidance_links_to_user_guide():
     assert "Plain, detailed content beats pretty formatting." in labels["guidance_note"]
     assert 'href="/docs"' in labels["guidance_note"]
     assert "User Guide" in labels["guidance_note"]
+
+
+def test_shared_location_help_explains_source_specific_scope():
+    labels = server_helpers.load_shared_ui_labels()
+
+    help_text = labels["location_help"]
+    assert "Sydney means a city search on SEEK" in help_text
+    assert "50-mile radius on LinkedIn" in help_text
+    assert "NSW means a state search on SEEK and LinkedIn" in help_text
+    assert "APS Jobs maps both Sydney and NSW to NSW" in help_text
 
 
 def test_onboarding_import_summary_labels_include_cost_copy():
@@ -766,7 +778,7 @@ def test_validate_required_onboarding_inputs_allows_blank_keywords():
     server_helpers._validate_required_onboarding_inputs(
         {
             "keywords": "",
-            "locations": ["Sydney"],
+            "locations": ["Sydney", "Canberra"],
             "engagement_type": ["permanent", "contract"],
         },
         {
@@ -774,6 +786,37 @@ def test_validate_required_onboarding_inputs_allows_blank_keywords():
             "title_extraction_min_months": 6,
         },
     )
+
+
+def test_validate_required_onboarding_inputs_rejects_too_many_locations(monkeypatch):
+    monkeypatch.setattr(
+        server_helpers,
+        "load_global_settings",
+        lambda: {
+            "limits": {
+                "search": {
+                    "locations_max_selected": {"min": 1, "max": 3},
+                }
+            }
+        },
+    )
+
+    try:
+        server_helpers._validate_required_onboarding_inputs(
+            {
+                "keywords": "",
+                "locations": ["Sydney", "Canberra", "Melbourne", "Brisbane"],
+                "engagement_type": ["permanent"],
+            },
+            {
+                "extraction_lookback_years": 12,
+                "title_extraction_min_months": 6,
+            },
+        )
+    except ValueError as exc:
+        assert "no more than 3" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError for too many onboarding locations")
 
 
 def test_validate_required_onboarding_inputs_rejects_bad_boundaries():

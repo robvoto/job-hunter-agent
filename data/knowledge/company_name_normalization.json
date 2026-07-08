@@ -1,8 +1,8 @@
 {
   "kind": "system_config",
   "name": "company_name_normalization",
-  "version": 1,
-  "description": "Managed company name normalization config used to strip safe legal suffixes before matching.",
+  "version": 2,
+  "description": "Managed company name normalization config used to strip safe legal suffixes and matching stopwords before company comparison.",
   "company_name_suffixes": [
     "pty",
     "ltd",
@@ -14,5 +14,27 @@
     "corporation",
     "limited",
     "llc"
+  ],
+  "company_name_match_stopwords": [
+    "the",
+    "a",
+    "an",
+    "and",
+    "or",
+    "of",
+    "for",
+    "in",
+    "at",
+    "with",
+    "to",
+    "s",
+    "co",
+    "company",
+    "group",
+    "holdings",
+    "services",
+    "solutions",
+    "australia",
+    "global"
   ]
 }

@@ -79,7 +79,7 @@ That profile includes:
 - candidate summary
 - fit brief
 - CV/background text
-- one search location, chosen from the canonical AU states and capital cities list
+- up to 3 search locations, chosen from the canonical AU states and capital cities list
 - profile support tiers
 - capability rules
 - title targeting hints

@@ -25,6 +25,7 @@ from job_hunter_agent.global_settings import (
     KEY_CAPABILITY_ALIAS_LIMIT,
     KEY_DATE_RANGE_DAYS,
     KEY_LIMITS,
+    KEY_LOCATIONS_MAX_SELECTED,
     KEY_LINKEDIN_HOURS_OLD,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
     KEY_LLM_SETTINGS,
@@ -194,6 +195,7 @@ _SHARED_UI_LABEL_KEYS = (
     "add_button_label",
     "add_button_aria_label",
     "add_button_title",
+    "location_help",
     "search_wait_copy",
     "search_running_title",
     "search_running_copy",
@@ -307,7 +309,6 @@ _ONBOARDING_PAGE_LABEL_KEYS = (
     "continue_label",
     "need_help_label",
     "location_label",
-    "location_help",
     "sector_preference_label",
     "sector_preference_help",
     "work_type_label",
@@ -1011,14 +1012,18 @@ def _validate_required_onboarding_inputs(
     )
 
     validate_search_keywords(keywords, require_phrase=True)
-    if len(locations) != 1:
-        raise ValueError("Please choose one search location.")
-    location = locations[0]
-    if len(location) < 2 or len(location) > 80:
-        raise ValueError("Location should be between 2 and 80 characters.")
-    if not LOCATION_NAME_RE.match(location):
-        raise ValueError("Location should look like a normal city, state, or region name.")
-    resolve_location(location)
+    search_limits = load_global_settings()[KEY_LIMITS]["search"]
+    max_locations = int(search_limits[KEY_LOCATIONS_MAX_SELECTED]["max"])
+    if not locations:
+        raise ValueError("Please choose at least one search location.")
+    if len(locations) > max_locations:
+        raise ValueError(f"Please choose no more than {max_locations} search locations.")
+    for location in locations:
+        if len(location) < 2 or len(location) > 80:
+            raise ValueError("Location should be between 2 and 80 characters.")
+        if not LOCATION_NAME_RE.match(location):
+            raise ValueError("Location should look like a normal city, state, or region name.")
+        resolve_location(location)
     if not engagement_type or any(value not in VALID_ENGAGEMENT_TYPES for value in engagement_type):
         raise ValueError("Please choose which work types you want to include.")
 

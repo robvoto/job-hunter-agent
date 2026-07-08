@@ -55,7 +55,7 @@ from job_hunter_agent.run_control import run_stop_requested, set_run_progress
 from job_hunter_agent.runtime_helpers import CLI_FLAG_DEBUG, has_cli_flag
 from job_hunter_agent.salary import load_salary
 from job_hunter_agent.scrapers.base import BaseJobScraper, normalize_jobspy_record
-from job_hunter_agent.scrapers.location_adapters import to_jobspy
+from job_hunter_agent.scrapers.location_adapters import to_linkedin_search_scope
 from job_hunter_agent.source_registry import SOURCE_LINKEDIN
 from job_hunter_agent.source_errors import PartialSourceResultsError
 from job_hunter_agent.posting_utils import parse_visible_posted_age_days
@@ -171,21 +171,27 @@ class LinkedInScraper(BaseJobScraper):
                     "  STARTING LINKEDIN TARGET %d/%d\n"
                     "  search_term=%s\n"
                     "  location=%s\n"
+                    "  distance=%s\n"
+                    "  scope=%s\n"
                     "  results_wanted=%d\n"
                     "================================================================",
                     target_index,
                     total_targets,
                     target["search_term"] or "(unset)",
                     target["location"] or "(all)",
+                    target.get("distance") if target.get("distance") is not None else "n/a",
+                    target.get("scope") or "n/a",
                     target["results_wanted"],
                 )
                 try:
                     fetch_started_at = time.monotonic()
                     logger.info(
-                        "%s jobspy fetch start | search_term=%r | location=%r | results_wanted=%d | hours_old=%d | easy_apply=%r | sort_newest_first=%s",
+                        "%s jobspy fetch start | search_term=%r | location=%r | distance=%s | scope=%s | results_wanted=%d | hours_old=%d | easy_apply=%r | sort_newest_first=%s",
                         target_tag,
                         target["search_term"] or "(unset)",
                         target["location"] or "(all)",
+                        target.get("distance") if target.get("distance") is not None else "n/a",
+                        target.get("scope") or "n/a",
                         target["results_wanted"],
                         target["hours_old"],
                         target.get("easy_apply"),
@@ -320,11 +326,13 @@ class LinkedInScraper(BaseJobScraper):
         targets = []
         for raw_loc in locations:
             location = resolve_location(raw_loc)
-            jobspy_location = to_jobspy(location)
+            scope = to_linkedin_search_scope(location)
             targets.append(
                 {
                     "search_term": keywords,
-                    "location": jobspy_location,
+                    "location": scope["location"],
+                    "distance": scope["distance"],
+                    "scope": scope["scope"],
                     "hours_old": hours_old,
                     "results_wanted": results_wanted,
                     "sort_newest_first": sort_newest_first,
@@ -450,6 +458,8 @@ class LinkedInScraper(BaseJobScraper):
             "linkedin_fetch_description": True,
             "verbose": 0,
         }
+        if target.get("distance") is not None:
+            search_params["distance"] = target["distance"]
         if target.get("easy_apply") is not None:
             search_params["easy_apply"] = target["easy_apply"]
         return scrape_jobs(**search_params)

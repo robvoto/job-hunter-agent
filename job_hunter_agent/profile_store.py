@@ -32,6 +32,7 @@ from job_hunter_agent.global_settings import (
     KEY_LINKEDIN_EASY_APPLY_ONLY,
     KEY_LINKEDIN_HOURS_OLD,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
+    KEY_LOCATIONS_MAX_SELECTED,
     KEY_SEARCH_LIMITS,
     KEY_SEEK_MAX_PAGES,
     KEY_SORT_NEWEST_FIRST,
@@ -872,9 +873,22 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
 
     merged[KEY_SORT_NEWEST_FIRST] = bool(merged.get(KEY_SORT_NEWEST_FIRST, True))
     merged["keywords"] = str(merged.get("keywords") or "").strip()
-    merged["locations"] = [
-        str(value).strip() for value in merged.get("locations", []) if str(value).strip()
-    ]
+    raw_locations = merged.get("locations", [])
+    if isinstance(raw_locations, str):
+        raw_locations = [raw_locations]
+    normalized_locations: list[str] = []
+    seen_locations: set[str] = set()
+    max_locations = int(search_limits.get(KEY_LOCATIONS_MAX_SELECTED, {}).get("max", 3) or 3)
+    for value in raw_locations if isinstance(raw_locations, (list, tuple, set)) else []:
+        cleaned = str(value).strip()
+        normalized = cleaned.lower()
+        if not cleaned or normalized in seen_locations:
+            continue
+        seen_locations.add(normalized)
+        normalized_locations.append(cleaned)
+        if len(normalized_locations) >= max_locations:
+            break
+    merged["locations"] = normalized_locations
     easy_apply_only = merged.get(KEY_LINKEDIN_EASY_APPLY_ONLY)
     if easy_apply_only is None or easy_apply_only == "":
         merged[KEY_LINKEDIN_EASY_APPLY_ONLY] = None

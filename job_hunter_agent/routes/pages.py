@@ -250,6 +250,10 @@ def _render_template_with_locations(
         "__JOB_HUNTER_SETTINGS_SECTION_SEARCH_PLACEHOLDER__",
         shared_labels["settings_section_search_placeholder"],
     )
+    html = html.replace(
+        "__JOB_HUNTER_SHARED_UI_LOCATION_HELP__",
+        shared_labels["location_help"],
+    )
     if template_path == SETTINGS_HTML_PATH:
         title_tier_labels = srv.load_onboarding_title_tier_labels()
 

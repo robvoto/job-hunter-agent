@@ -10,7 +10,10 @@ from job_hunter_agent.posting_utils import posted_display_label
 from job_hunter_agent.salary import load_salary
 from job_hunter_agent.scrapers.base import _build_salary_string
 from job_hunter_agent.scrapers.linkedin import LinkedInScraper, classify_linkedin_apply_method
-from job_hunter_agent.scrapers.location_adapters import to_jobspy
+from job_hunter_agent.scrapers.location_adapters import (
+    LINKEDIN_CITY_RADIUS_MILES,
+    to_linkedin_search_scope,
+)
 from job_hunter_agent.record_schema import (
     APPLY_METHOD_EASY_APPLY,
     APPLY_METHOD_EXTERNAL_APPLY,
@@ -19,14 +22,30 @@ from job_hunter_agent.record_schema import (
 )
 
 
-def test_to_jobspy_handles_city_inputs():
-    assert to_jobspy(resolve_location("Sydney")) == "Sydney, Australia"
-    assert to_jobspy(resolve_location("Melbourne")) == "Melbourne, Australia"
+def test_to_linkedin_search_scope_handles_city_inputs():
+    assert to_linkedin_search_scope(resolve_location("Sydney")) == {
+        "location": "Sydney, Australia",
+        "distance": LINKEDIN_CITY_RADIUS_MILES,
+        "scope": "city_radius",
+    }
+    assert to_linkedin_search_scope(resolve_location("Melbourne")) == {
+        "location": "Melbourne, Australia",
+        "distance": LINKEDIN_CITY_RADIUS_MILES,
+        "scope": "city_radius",
+    }
 
 
-def test_to_jobspy_handles_state_inputs():
-    assert to_jobspy(resolve_location("NSW")) == "New South Wales, Australia"
-    assert to_jobspy(resolve_location("Queensland")) == "Queensland, Australia"
+def test_to_linkedin_search_scope_handles_state_inputs():
+    assert to_linkedin_search_scope(resolve_location("NSW")) == {
+        "location": "New South Wales, Australia",
+        "distance": None,
+        "scope": "state",
+    }
+    assert to_linkedin_search_scope(resolve_location("Queensland")) == {
+        "location": "Queensland, Australia",
+        "distance": None,
+        "scope": "state",
+    }
 
 
 def test_jobspy_salary_string_keeps_non_yearly_amounts():

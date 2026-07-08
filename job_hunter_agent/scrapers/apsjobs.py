@@ -56,6 +56,7 @@ from job_hunter_agent.work_mode_extraction import WORK_MODE_UNKNOWN, extract_fro
 logger = logging.getLogger(__name__)
 
 APSJOBS_ROOT_URL = "https://www.apsjobs.gov.au/s/"
+APSJOBS_JOB_SEARCH_URL = urljoin(APSJOBS_ROOT_URL, "job-search")
 APSJOBS_SEARCH_INPUT_SELECTORS = (
     "input[type='search']",
     "input[placeholder*='search' i]",
@@ -68,22 +69,57 @@ APSJOBS_LOCATION_INPUT_SELECTORS = (
     "input[aria-label*='location' i]",
     "input[name*='location' i]",
 )
-APSJOBS_JOB_LINK_HINTS = (
-    "/job-details",
-    "/jobdetail",
-    "jobdetail",
-    "job-details",
-    "vacanc",
+APSJOBS_STATE_SELECTORS = (
+    "select[aria-label='Location']",
+    "select[aria-label='State']",
+)
+APSJOBS_SEARCH_BUTTON_SELECTORS = (
+    "button.header_search__block--button",
+    "button:has-text('SEARCH')",
+    "button:has-text('Search')",
 )
 APSJOBS_TITLE_SELECTORS = (
+    ".job_detail__header h3",
+    ".job_detail__header h2",
     "h1",
     "h2",
+    "h3",
     "[data-testid*='job-title' i]",
     "[class*='job-title' i]",
     "[class*='jobtitle' i]",
 )
+APSJOBS_COMPANY_SELECTORS = (
+    ".job_detail__header .content__label--quiet",
+    ".job_detail__logo img[alt]",
+)
+APSJOBS_DETAIL_LOCATION_SELECTORS = (".job_detail__header .content__location",)
 
 job_type_rules = load_job_type()
+_APSJOBS_STATE_CODES = ("ACT", "NSW", "NT", "QLD", "SA", "TAS", "VIC", "WA")
+_APSJOBS_LOCATION_TO_STATE = {
+    "australian capital territory": "ACT",
+    "canberra": "ACT",
+    "new south wales": "NSW",
+    "nsw": "NSW",
+    "sydney": "NSW",
+    "wollongong": "NSW",
+    "newcastle": "NSW",
+    "northern territory": "NT",
+    "darwin": "NT",
+    "queensland": "QLD",
+    "qld": "QLD",
+    "brisbane": "QLD",
+    "south australia": "SA",
+    "adelaide": "SA",
+    "tasmania": "TAS",
+    "hobart": "TAS",
+    "victoria": "VIC",
+    "vic": "VIC",
+    "melbourne": "VIC",
+    "western australia": "WA",
+    "wa": "WA",
+    "perth": "WA",
+}
 
 
 def _first_non_empty(*values: object) -> str:
@@ -143,25 +179,34 @@ def _first_visible_locator(page, selectors: tuple[str, ...]):
     return None
 
 
+def _normalize_apsjobs_location_filter(location: str) -> str:
+    cleaned = compact_whitespace(location).lower()
+    if not cleaned:
+        return ""
+    for state_code in _APSJOBS_STATE_CODES:
+        if re.search(rf"\b{re.escape(state_code.lower())}\b", cleaned):
+            return state_code
+    for token, state_code in _APSJOBS_LOCATION_TO_STATE.items():
+        if token in cleaned:
+            return state_code
+    return ""
+
+
 def _looks_like_job_link(href: str, text: str) -> bool:
-    lowered_href = href.lower()
-    lowered = f"{href} {text}".lower()
     if not href:
         return False
     parsed = urlsplit(href)
     path = parsed.path.lower()
     query = parsed.query.lower()
-    if path in {"/s", "/s/"} or path.startswith("/s-"):
-        return False
-    if "sign in" in lowered or "register" in lowered or "privacy" in lowered:
-        return False
-    if "job-details" in path or "jobdetail" in path or "jobdetails" in path:
-        return True
-    if "jobid=" in query or "job_id=" in query:
-        return True
-    if any(hint in lowered for hint in APSJOBS_JOB_LINK_HINTS):
-        return True
-    return False
+    _ = text
+    return (
+        "job-details" in path
+        or "jobdetail" in path
+        or "jobdetails" in path
+        or "id=" in query
+        or "jobid=" in query
+        or "job_id=" in query
+    )
 
 
 def _collect_candidate_links(page, base_url: str, results_wanted: int) -> list[dict[str, str]]:
@@ -254,8 +299,17 @@ def _extract_job_payload(page, *, job_url: str, anchor_text: str, run_iso: str) 
         _locator_text(page, APSJOBS_TITLE_SELECTORS),
         anchor_text,
     )
-    company = _extract_labeled_value(lines, ("agency", "organisation", "organization", "department", "employer", "company"))
-    location = _extract_labeled_value(lines, ("location", "locations"))
+    company = _first_non_empty(
+        _locator_text(page, APSJOBS_COMPANY_SELECTORS),
+        _extract_labeled_value(
+            lines,
+            ("agency", "organisation", "organization", "department", "employer", "company"),
+        ),
+    )
+    location = _first_non_empty(
+        _locator_text(page, APSJOBS_DETAIL_LOCATION_SELECTORS),
+        _extract_labeled_value(lines, ("location", "locations")),
+    )
     posted_text = _extract_posted_text(body_text)
     run_date = datetime.fromisoformat(run_iso).date()
     posted_age_days = parse_visible_posted_age_days(posted_text or body_text, run_date)
@@ -331,15 +385,25 @@ def _extract_job_payload(page, *, job_url: str, anchor_text: str, run_iso: str) 
 def build_apsjobs_search_targets(search_settings: dict) -> tuple[str, list[dict]]:
     """Build APSJobs search targets from search settings.
 
-    Returns the trimmed keywords string and one target per configured location
-    (or a single location-less target when none are configured).
+    Returns the trimmed keywords string and one target per configured shared
+    location mapped to an APS state or territory filter. Duplicate mapped
+    states collapse to one target.
     """
     keywords = str(search_settings.get("keywords") or "").strip()
-    locations = [
+    raw_locations = [
         str(location).strip()
         for location in search_settings.get("locations", [])
         if str(location).strip()
     ]
+    locations = dedupe_preserve_order(
+        [
+            mapped
+            for mapped in (
+                _normalize_apsjobs_location_filter(location) for location in raw_locations
+            )
+            if mapped
+        ]
+    )
     results_wanted = int(
         search_settings.get(
             KEY_APSJOBS_RESULTS_PER_SEARCH,
@@ -397,60 +461,93 @@ class APSJobsScraper(BaseJobScraper):
                         if run_stop_requested():
                             break
                         target_tag = f"[APSJobs target {target_index}/{total_targets}]"
+                        target_state = _normalize_apsjobs_location_filter(target["location"])
                         set_run_progress(f"APSJobs search {target_index}/{total_targets}")
                         logger.info(
                             "\n"
                             "================================================================\n"
                             "  STARTING APSJOBS TARGET %d/%d\n"
-                            "  root_url=%s\n"
+                            "  search_url=%s\n"
                             "  search_term=%s\n"
                             "  location=%s\n"
+                            "  state_filter=%s\n"
                             "  results_wanted=%d\n"
                             "================================================================",
                             target_index,
                             total_targets,
-                            APSJOBS_ROOT_URL,
+                            APSJOBS_JOB_SEARCH_URL,
                             target["search_term"] or "(unset)",
                             target["location"] or "(all)",
+                            target_state or "(none)",
                             target["results_wanted"],
                         )
                         page = context.new_page()
                         try:
-                            page.goto(APSJOBS_ROOT_URL, wait_until="domcontentloaded")
-                            page.wait_for_timeout(1500)
+                            page.goto(APSJOBS_JOB_SEARCH_URL, wait_until="domcontentloaded")
+                            page.wait_for_timeout(2500)
                             search_box = _first_visible_locator(page, APSJOBS_SEARCH_INPUT_SELECTORS)
-                            if search_box is not None:
-                                try:
-                                    search_box.fill(target["search_term"], timeout=5000)
-                                    search_box.press("Enter")
-                                except Exception:
-                                    logger.warning(
-                                        "%s search box found but could not be filled; continuing without a search term",
-                                        target_tag,
-                                    )
-                            else:
-                                logger.warning(
-                                    "%s no visible search box found; continuing without a search term",
-                                    target_tag,
+                            if search_box is None:
+                                raise RuntimeError(
+                                    "APSJobs job-search page did not expose a visible keyword search input"
                                 )
-                            location_box = _first_visible_locator(page, APSJOBS_LOCATION_INPUT_SELECTORS)
-                            if location_box is not None and target["location"]:
-                                try:
-                                    location_box.fill(target["location"], timeout=5000)
-                                except Exception:
-                                    logger.warning(
-                                        "%s location box found but could not be filled; continuing without a location filter",
-                                        target_tag,
+                            try:
+                                search_box.fill(target["search_term"], timeout=5000)
+                            except Exception as exc:
+                                raise RuntimeError(
+                                    f"APSJobs keyword search input could not be filled: {type(exc).__name__}: {exc}"
+                                ) from exc
+
+                            if target_state:
+                                state_select = _first_visible_locator(page, APSJOBS_STATE_SELECTORS)
+                                if state_select is None:
+                                    raise RuntimeError(
+                                        "APSJobs job-search page did not expose a visible state selector"
                                     )
-                            page.wait_for_timeout(2000)
+                                try:
+                                    state_select.select_option(label=target_state, timeout=5000)
+                                except Exception as exc:
+                                    raise RuntimeError(
+                                        f"APSJobs state selector could not apply {target_state}: "
+                                        f"{type(exc).__name__}: {exc}"
+                                    ) from exc
+                            elif target["location"]:
+                                logger.info(
+                                    "%s APSJobs has state-only location filtering; no state mapping for %r",
+                                    target_tag,
+                                    target["location"],
+                                )
+
+                            search_button = _first_visible_locator(page, APSJOBS_SEARCH_BUTTON_SELECTORS)
+                            if search_button is None:
+                                raise RuntimeError(
+                                    "APSJobs job-search page did not expose a visible search submit button"
+                                )
+                            try:
+                                search_button.click(timeout=5000)
+                            except Exception as exc:
+                                raise RuntimeError(
+                                    f"APSJobs search submit failed: {type(exc).__name__}: {exc}"
+                                ) from exc
+
+                            page.wait_for_timeout(5000)
+                            logger.info(
+                                "%s applied search_term=%r state_filter=%s final_url=%s",
+                                target_tag,
+                                target["search_term"],
+                                target_state or "(none)",
+                                page.url or APSJOBS_JOB_SEARCH_URL,
+                            )
+                            if page.url:
+                                page.goto(page.url, wait_until="domcontentloaded")
+                                page.wait_for_timeout(3000)
 
                             candidate_links = _collect_candidate_links(
-                                page, page.url or APSJOBS_ROOT_URL, int(target["results_wanted"])
+                                page, page.url or APSJOBS_JOB_SEARCH_URL, int(target["results_wanted"])
                             )
                             logger.info(
                                 "%s candidate collection url=%s",
                                 target_tag,
-                                page.url or APSJOBS_ROOT_URL,
+                                page.url or APSJOBS_JOB_SEARCH_URL,
                             )
                             if not candidate_links:
                                 logger.info("%s no candidate links found", target_tag)
@@ -503,6 +600,8 @@ class APSJobsScraper(BaseJobScraper):
                                     record, review_context
                                 )
                                 if pre_outcome["decision"] != "KEEP" or not should_fetch_details:
+                                    if pre_outcome["decision"] in {"KEEP", "REJECT"}:
+                                        print_job_human_summary(record, self.profile)
                                     continue
 
                                 hooks = ReviewPipelineHooks()
@@ -510,6 +609,8 @@ class APSJobsScraper(BaseJobScraper):
                                     record, review_context, hooks=hooks
                                 )
                                 if outcome["decision"] != "KEEP":
+                                    if outcome["decision"] in {"KEEP", "REJECT"}:
+                                        print_job_human_summary(record, self.profile)
                                     continue
 
                                 skill_observations.extend(record_skill_observations)

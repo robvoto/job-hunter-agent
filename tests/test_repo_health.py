@@ -58,6 +58,17 @@ def test_search_settings_clamp_source_fetch_limits():
     assert normalized[KEY_LINKEDIN_EASY_APPLY_ONLY] is False
 
 
+def test_search_settings_normalize_locations_dedupes_and_caps_to_managed_limit():
+
+    normalized = normalize_search_settings(
+        {
+            "locations": [" Sydney ", "NSW", "Sydney", "Canberra", "Melbourne"],
+        }
+    )
+
+    assert normalized["locations"] == ["Sydney", "NSW", "Canberra"]
+
+
 def test_search_settings_follow_managed_search_limits(monkeypatch):
 
     monkeypatch.setattr(

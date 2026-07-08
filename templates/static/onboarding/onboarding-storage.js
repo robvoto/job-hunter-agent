@@ -13,7 +13,7 @@ function getSearchBasicsState() {
 }
 
 export function buildSearchBasicsProfilePatch() {
-  const location = String(onboardingPage.selectedLocations[0] || onboardingPage.refs.locationSelect?.value || '').trim();
+  const locations = onboardingPage.selectedLocations.slice();
   const searchBasics = getSearchBasicsState();
   const engagementType = onboardingSettingsUtils.getEngagementTypeValues();
   const minimumSalaryYearly = onboardingSettingsUtils.parseCurrencyValue(searchBasics.minimumSalaryYearly);
@@ -23,7 +23,7 @@ export function buildSearchBasicsProfilePatch() {
   return {
     search_settings: {
       keywords: String(searchBasics.keywords || '').trim(),
-      locations: location ? [location] : [],
+      locations,
     },
     match_preferences: {
       engagement_type: engagementType,
@@ -115,7 +115,8 @@ export function restoreWizardState() {
       ? Number(state.reviewCapabilityVisibleCount)
       : onboardingPage.getReviewCapabilityPreviewCount());
     try {
-      onboardingPage.setSelectedLocation((Array.isArray(state.selectedLocations) ? state.selectedLocations[0] : state.selectedLocations) || '', { persist: false });
+      onboardingPage.setSelectedLocations(Array.isArray(state.selectedLocations) ? state.selectedLocations : [state.selectedLocations]);
+      onboardingPage.renderLocationSelect();
     } catch (error) {
       console.warn('Could not restore onboarding location state.', error);
     }
@@ -147,7 +148,7 @@ const { locationSelect, minContractMonths: minContractMonthsEl, workModePreferen
 if (locationSelect) {
   locationSelect.addEventListener('change', () => {
     onboardingPage.hideStatus();
-    onboardingPage.setSelectedLocation(locationSelect.value);
+    onboardingPage.syncSelectedLocationsFromSelect();
     scheduleSearchBasicsPersistence();
   });
 }

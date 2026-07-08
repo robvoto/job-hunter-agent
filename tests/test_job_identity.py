@@ -4,6 +4,7 @@ import json
 
 import job_hunter_agent.job_identity as _ji
 from job_hunter_agent.company_normalization import (
+    company_name_match_tokens,
     company_names_weakly_match,
     normalize_company_name,
 )
@@ -96,6 +97,13 @@ def test_company_name_normalization_strips_only_safe_legal_suffixes():
     assert normalize_company_name("Acme Holdings Australia") == "acme holdings australia"
 
     assert company_names_weakly_match("Acme Pty Ltd", "Acme")
+
+
+def test_company_name_match_tokens_use_managed_stopwords():
+
+    assert company_name_match_tokens("The Acme Group Australia") == {"acme"}
+
+    assert company_name_match_tokens("Acme Solutions Pty Ltd") == {"acme"}
 
 
 def test_potential_duplicate_links_are_visible_without_merging():

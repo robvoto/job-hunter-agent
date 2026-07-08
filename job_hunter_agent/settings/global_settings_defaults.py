@@ -91,6 +91,7 @@ KEY_LINKEDIN_EASY_APPLY_ONLY = "linkedin_easy_apply_only"
 KEY_SOURCE_DOCUMENT_SUFFIXES = "allowed_suffixes"
 
 KEY_DATE_RANGE_DAYS = "date_range_days"
+KEY_LOCATIONS_MAX_SELECTED = "locations_max_selected"
 KEY_SEEK_MAX_PAGES = "seek_max_pages"
 KEY_LINKEDIN_HOURS_OLD = "linkedin_hours_old"
 KEY_LINKEDIN_RESULTS_PER_SEARCH = "linkedin_results_per_search"

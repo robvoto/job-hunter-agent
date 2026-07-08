@@ -10,6 +10,9 @@ from job_hunter_agent.global_settings import (
     get_allowed_source_document_suffixes,
     get_allowed_source_document_suffixes_label,
     get_salary_limits,
+    load_global_settings,
+    KEY_LIMITS,
+    KEY_LOCATIONS_MAX_SELECTED,
 )
 from job_hunter_agent.llm_gate import get_session_cost_usd
 from job_hunter_agent.locations import find_nearest_location, resolve_location
@@ -160,14 +163,26 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
             raise ValueError("Primary job title must not be empty")
         if keyword and (len(keyword) < 2 or len(keyword) > 120):
             raise ValueError("Please keep the primary search title between 2 and 120 characters.")
-        if len(locations) != 1:
-            raise ValueError("Please choose one search location.")
-        location = locations[0]
-        if len(location) < 2 or len(location) > 80:
-            raise ValueError("Location should be between 2 and 80 characters.")
-        if not srv.LOCATION_NAME_RE.fullmatch(location):
-            raise ValueError("Location should look like a normal city, state, or region name.")
-        locations = [resolve_location(location)["name"]]
+        search_limits = load_global_settings()[KEY_LIMITS]["search"]
+        max_locations = int(search_limits[KEY_LOCATIONS_MAX_SELECTED]["max"])
+        if not locations:
+            raise ValueError("Please choose at least one search location.")
+        if len(locations) > max_locations:
+            raise ValueError(f"Please choose no more than {max_locations} search locations.")
+        normalized_locations: list[str] = []
+        seen_locations: set[str] = set()
+        for location in locations:
+            if len(location) < 2 or len(location) > 80:
+                raise ValueError("Location should be between 2 and 80 characters.")
+            if not srv.LOCATION_NAME_RE.fullmatch(location):
+                raise ValueError("Location should look like a normal city, state, or region name.")
+            resolved_name = str(resolve_location(location)["name"]).strip()
+            lowered = resolved_name.lower()
+            if lowered in seen_locations:
+                continue
+            seen_locations.add(lowered)
+            normalized_locations.append(resolved_name)
+        locations = normalized_locations
         if not engagement_type or any(
             value not in VALID_ENGAGEMENT_TYPES for value in engagement_type
         ):

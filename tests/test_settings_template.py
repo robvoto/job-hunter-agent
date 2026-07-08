@@ -237,6 +237,8 @@ def test_settings_search_section_uses_shared_choice_strip_widget(monkeypatch):
     assert 'class="settings-section-head"' in html
 
     assert "Search Settings" in html
+    assert "Sydney means a city search on SEEK" in html
+    assert "50-mile radius on LinkedIn" in html
     assert "CV data and privacy" in html
     assert "The raw CV is not the long-term source of truth" in html
     assert "Job board search" in html
@@ -393,6 +395,10 @@ def test_search_settings_partial_has_privacy_subcards_and_shared_save_bar():
 
     assert "saveActivePage()" in js
     assert 'id="save_search_settings_shortcut"' not in html
+    assert 'id="apsjobs_locations"' not in html
+    assert 'id="locations"' in html
+    assert 'multiple size="8"' in html
+    assert "limitSelectedLocations" in js
 
     assert 'class="panel search-operations-panel"' not in html
     assert 'class="subpanel search-settings-subcard search-operations-panel"' in html

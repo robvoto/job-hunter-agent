@@ -83,8 +83,12 @@ const minContractMonthOptions = window.__JOB_HUNTER_MIN_CONTRACT_MONTH_OPTIONS__
 const minContractMonthValues = new Set(minContractMonthOptions.map((option) => String(option.value).trim()));
 const minContractMonthNoneLabel = String(window.__JOB_HUNTER_MIN_CONTRACT_MONTH_NONE_LABEL__).trim();
 const onboardingPageTitleTierLabels = window.__JOB_HUNTER_TITLE_TIER_LABELS__;
+const onboardingGlobalSettings = window.__JOB_HUNTER_GLOBAL_SETTINGS__;
 if (!onboardingPageTitleTierLabels) {
   throw new Error('Missing title tier labels.');
+}
+if (!onboardingGlobalSettings?.limits?.search?.locations_max_selected) {
+  throw new Error('Missing global search location limits.');
 }
 if (!capabilityLabels || !capabilityLabels.onboarding_title || !capabilityLabels.help_text || !capabilityLabels.filter_placeholder) {
   throw new Error('Missing capability UI labels.');
@@ -204,6 +208,10 @@ export let maxUnlockedStep = 1;
 export let draftBuiltExplicitly = false;
 export let searchBasicsPersistTimer = null;
 export let reviewCapabilityResizeObserver = null;
+export const MAX_ONBOARDING_LOCATIONS = Number(onboardingGlobalSettings.limits.search.locations_max_selected.max);
+if (!Number.isInteger(MAX_ONBOARDING_LOCATIONS) || MAX_ONBOARDING_LOCATIONS < 1) {
+  throw new Error('Invalid global search location limit.');
+}
 
 export function setCurrentStep(value) {
   currentStep = Number(value) || 1;
@@ -238,7 +246,17 @@ export function setReviewCapabilityRules(value) {
 }
 
 export function setSelectedLocations(value) {
-  selectedLocations = Array.isArray(value) ? value : [];
+  const source = Array.isArray(value) ? value : [value];
+  const next = [];
+  const seen = new Set();
+  source.forEach((item) => {
+    const normalized = normalizeLocationValue(item);
+    const key = normalized.toLowerCase();
+    if (!normalized || seen.has(key) || next.length >= MAX_ONBOARDING_LOCATIONS) return;
+    seen.add(key);
+    next.push(normalized);
+  });
+  selectedLocations = next;
 }
 
 export function setSelectedReviewCapabilityIndexes(value) {
@@ -647,36 +665,66 @@ async function tryGeolocationDefault() {
 
 export function renderLocationSelect() {
   if (!locationSelect) return;
-  const current = normalizeLocationValue(selectedLocations[0] || '');
-  if (onboardingLocationUi.renderLocationOptions) {
-    onboardingLocationUi.renderLocationOptions(locationSelect);
-  }
-  locationSelect.value = current;
-  selectedLocations = current ? [current] : [];
+  const options = Array.isArray(onboardingLocationUi.options)
+    ? onboardingLocationUi.options.filter((option) => ['state', 'territory', 'city'].includes(String(option?.kind || '').trim().toLowerCase()))
+    : [];
+  const selectedValues = new Set(selectedLocations);
+  const grouped = new Map();
+  options.forEach((option) => {
+    const group = String(option?.group || 'Locations').trim();
+    if (!grouped.has(group)) grouped.set(group, []);
+    grouped.get(group).push(option);
+  });
+  const markup = [];
+  grouped.forEach((groupOptions, group) => {
+    markup.push(`<optgroup label="${escapeHtml(group)}">`);
+    groupOptions.forEach((option) => {
+      const value = String(option?.value || '').trim();
+      const label = String(option?.label || value).trim();
+      const selected = selectedValues.has(value) ? ' selected' : '';
+      markup.push(`<option value="${escapeHtml(value)}"${selected}>${escapeHtml(label)}</option>`);
+    });
+    markup.push('</optgroup>');
+  });
+  locationSelect.innerHTML = markup.join('');
+  Array.from(locationSelect.options).forEach((option) => {
+    option.selected = selectedValues.has(String(option.value || '').trim());
+  });
 }
 
 export function setSelectedLocation(value, options = {}) {
   const { persist = true } = options;
-  const normalized = normalizeLocationValue(value);
-  selectedLocations = normalized ? [normalized] : [];
+  setSelectedLocations([value]);
   renderLocationSelect();
   if (persist) {
     saveWizardState();
   }
 }
 
-export function onboardingSettingsPayload() {
-  const capabilityStrengthPreset = capabilityStrengthPresetEl?.value.trim() || '';
-  return {
-    capability_strength_preset: capabilityStrengthPreset || 'balanced',
-  };
+export function syncSelectedLocationsFromSelect() {
+  if (!locationSelect) {
+    setSelectedLocations([]);
+    return;
+  }
+  setSelectedLocations(Array.from(locationSelect.selectedOptions || []).map((option) => option.value));
+  renderLocationSelect();
+}
+
+export function selectedLocationLabels() {
+  return selectedLocations
+    .map((value) => onboardingLocationUi.getLocationLabel ? onboardingLocationUi.getLocationLabel(value) : String(value || '').trim())
+    .filter(Boolean);
+}
+
+export function locationSelectionErrorMessage() {
+  return `Please choose between 1 and ${MAX_ONBOARDING_LOCATIONS} search locations.`;
 }
 
 export function searchPreferencesPayload() {
   const engagementType = getOnboardingEngagementTypeValues();
   return {
     keywords: reviewSearchKeywordsEl?.value.trim() || '',
-    locations: selectedLocations.length ? [selectedLocations[0]] : [],
+    locations: selectedLocations.slice(),
     engagement_type: engagementType,
     min_contract_months: (engagementType.includes('contract') || engagementType.includes('full_time_contract')) ? (getResolvedMinContractMonthValue() || null) : null,
     work_mode_preference: getOnboardingWorkModePreferenceValues(),
@@ -686,19 +734,6 @@ export function searchPreferencesPayload() {
   };
 }
 
-export function updateCompensationVisibility() {
-  const engagementType = new Set(getOnboardingEngagementTypeValues());
-  if (salaryYearlyBlock) salaryYearlyBlock.hidden = engagementType.size === 1 && engagementType.has('contract');
-  if (salaryDailyBlock) salaryDailyBlock.hidden = engagementType.size === 1 && engagementType.has('permanent');
-}
-
-export function validateOnboardingSettings(settings) {
-  const preset = String(settings.capability_strength_preset).trim();
-  if (!['recent_focus', 'balanced', 'include_older_experience'].includes(preset)) {
-    throw new Error('Please choose how older experience should be treated.');
-  }
-}
-
 export function validateSearchPreferences(searchPrefs) {
   if (searchPrefs.keywords && (searchPrefs.keywords.length < 2 || searchPrefs.keywords.length > 120)) {
     throw new Error(`Please keep the ${onboardingPageTitleTierLabels.search_keyword_label.toLowerCase()} between 2 and 120 characters.`);
@@ -706,15 +741,16 @@ export function validateSearchPreferences(searchPrefs) {
   if (searchPrefs.keywords && searchPrefs.keywords.trim().split(/\s+/).filter(Boolean).length < 2) {
     throw new Error('Please use at least two words for the search title, or leave it blank.');
   }
-  if (searchPrefs.locations.length !== 1) {
-    throw new Error('Please choose one search location.');
+  if (searchPrefs.locations.length < 1 || searchPrefs.locations.length > MAX_ONBOARDING_LOCATIONS) {
+    throw new Error(locationSelectionErrorMessage());
   }
-  const location = searchPrefs.locations[0];
-  if (location.length < 2 || location.length > 80) {
-    throw new Error('Location should be between 2 and 80 characters.');
-  }
-  if (!/^[A-Za-z\s,'()-]+$/.test(location)) {
-    throw new Error('Location should look like a normal city, state, or region name.');
+  for (const location of searchPrefs.locations) {
+    if (location.length < 2 || location.length > 80) {
+      throw new Error('Location should be between 2 and 80 characters.');
+    }
+    if (!/^[A-Za-z\s,'()-]+$/.test(location)) {
+      throw new Error('Location should look like a normal city, state, or region name.');
+    }
   }
   if (!Array.isArray(searchPrefs.engagement_type) || searchPrefs.engagement_type.length === 0 || searchPrefs.engagement_type.some((value) => !ENGAGEMENT_TYPE_VALUES.has(value))) {
     throw new Error('Please choose what type of work you are open to.');
@@ -821,10 +857,32 @@ export function applyProfileDefaults(profile) {
     updateSearchPreferenceSummaries();
   }
   if (!selectedLocations.length && Array.isArray(searchSettings.locations) && searchSettings.locations.length) {
-    setSelectedLocation(searchSettings.locations[0]);
+    setSelectedLocations(searchSettings.locations);
+    renderLocationSelect();
   }
   refreshStepNavigation();
 }
+
+export function onboardingSettingsPayload() {
+  const capabilityStrengthPreset = capabilityStrengthPresetEl?.value.trim() || '';
+  return {
+    capability_strength_preset: capabilityStrengthPreset || 'balanced',
+  };
+}
+
+export function updateCompensationVisibility() {
+  const engagementType = new Set(getOnboardingEngagementTypeValues());
+  if (salaryYearlyBlock) salaryYearlyBlock.hidden = engagementType.size === 1 && engagementType.has('contract');
+  if (salaryDailyBlock) salaryDailyBlock.hidden = engagementType.size === 1 && engagementType.has('permanent');
+}
+
+export function validateOnboardingSettings(settings) {
+  const preset = String(settings.capability_strength_preset).trim();
+  if (!['recent_focus', 'balanced', 'include_older_experience'].includes(preset)) {
+    throw new Error('Please choose how older experience should be treated.');
+  }
+}
+
 
 export function observeReviewCapabilityLayout() {
   if (reviewCapabilityResizeObserver || !window.ResizeObserver) {

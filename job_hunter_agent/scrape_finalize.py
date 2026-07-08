@@ -457,9 +457,10 @@ def finalize_scrape_run(
         if row.get("detail_fetched"):
             source_metrics[source]["read"] += 1
         source_metrics[source]["pages"] += row.get("pages_processed", 1)
-        if row.get("outcome") == "kept":
+        decision = str(row.get("decision") or "").strip().upper()
+        if decision == "KEEP":
             source_metrics[source]["kept"] += 1
-        elif row.get("outcome") in ("rejected", "filtered"):
+        elif decision in {"REJECT", "FILTERED"}:
             source_metrics[source]["rejected"] += 1
     
     run_stats["source_breakdown"] = list(source_metrics.values())
