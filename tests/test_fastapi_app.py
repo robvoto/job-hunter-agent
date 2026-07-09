@@ -238,6 +238,8 @@ def test_workspace_page_bootstrap_includes_account_scope(monkeypatch):
     assert ">Test</button>" in html
     assert 'id="job_hunter_clean_search_btn"' in html
     assert 'id="job_hunter_reset_user_btn"' in html
+    assert 'account-bar-test-action--danger account-bar-test-action--stacked' in html
+    assert "Warning: clears your profile, CV, review feedback, and history." in html
     assert html.index('id="job_hunter_clean_search_btn"') < html.index(
         'id="job_hunter_reset_user_btn"'
     )

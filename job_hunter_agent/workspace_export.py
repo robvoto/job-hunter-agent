@@ -93,13 +93,26 @@ def _build_badges(record: dict, workspace_state: str) -> list[str]:
     if not isinstance(channel_signal, dict):
         channel_signal = {}
     channel_kind = str(channel_signal.get("kind") or "").strip().lower()
+    channel_source = str(channel_signal.get("source") or "").strip().lower()
+    channel_evidence = [
+        str(item).strip()
+        for item in (
+            channel_signal.get("text_evidence")
+            or channel_signal.get("weak_text_matches")
+            or []
+        )
+        if str(item).strip()
+    ]
     if channel_kind == "agency_or_recruiter":
-        badges.append("Recruiter")
+        if channel_source in {"metadata_first", "company_or_domain_indicator"} and not channel_signal.get("needs_review"):
+            badges.append("Recruiter")
+        else:
+            badges.append("Likely recruiter")
     elif channel_kind == "direct_employer":
         badges.append("Company")
-    elif channel_signal.get("needs_review"):
+    elif channel_signal.get("needs_review") or channel_evidence:
         badges.append("Likely recruiter")
-    elif channel_kind:
+    elif channel_kind or channel_source:
         badges.append("Source unclear")
 
     duplicate_links = record.get("duplicate_links")

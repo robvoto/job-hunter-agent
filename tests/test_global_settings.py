@@ -231,3 +231,25 @@ def test_managed_global_settings_accepts_valid_job_requirements_output_tokens():
         normalized["llm_settings"]["llm_prompt_settings"]["job_requirements_max_output_tokens"]
         == 300
     )
+
+
+def test_managed_global_settings_rejects_invalid_fit_decision_output_tokens():
+    payload = _load_managed_global_settings_payload()
+    payload["llm_settings"]["llm_prompt_settings"]["fit_decision_max_output_tokens"] = 0
+
+    with pytest.raises(
+        ValueError, match=r"fit_decision_max_output_tokens must be between 100 and 4000"
+    ):
+        normalize_global_settings(payload, strict_managed=True)
+
+
+def test_managed_global_settings_accepts_valid_fit_decision_output_tokens():
+    payload = _load_managed_global_settings_payload()
+    payload["llm_settings"]["llm_prompt_settings"]["fit_decision_max_output_tokens"] = 3000
+
+    normalized = normalize_global_settings(payload, strict_managed=True)
+
+    assert (
+        normalized["llm_settings"]["llm_prompt_settings"]["fit_decision_max_output_tokens"]
+        == 3000
+    )

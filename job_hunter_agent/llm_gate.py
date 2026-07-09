@@ -515,7 +515,11 @@ def build_fit_review_guidance(profile: dict[str, Any] | None = None) -> str:
 
 
 def build_requirement_coverage_guidance() -> str:
-    return "\n".join(f"- {line}" for line in REQUIREMENT_COVERAGE_DEFAULT_LINES)
+    parts = [
+        f"Use at most {get_llm_job_requirements_max_items()} requirement_coverage items.",
+    ]
+    parts.extend(f"- {line}" for line in REQUIREMENT_COVERAGE_DEFAULT_LINES)
+    return "\n".join(parts)
 
 
 def build_job_requirements_guidance() -> str:

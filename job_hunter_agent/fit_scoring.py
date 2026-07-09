@@ -12,10 +12,6 @@ from job_hunter_agent.description_trust import full_description_confidence
 from job_hunter_agent.filters import analyze_title_filters
 from job_hunter_agent.global_settings import KEY_FIT_HIGHLIGHTS, load_global_settings
 from job_hunter_agent.io_utils import load_ui_labels
-from job_hunter_agent.preferences import (
-    assess_location_preference,
-    salary_fit_adjustment,
-)
 from job_hunter_agent.profile_store import (
     KEY_LLM_GRADE_BANDS,
     KEY_LLM_GRADE_POINTS,
@@ -129,7 +125,6 @@ def requirement_coverage_entries(record: dict) -> List[dict]:
 def capability_support_log(record: dict) -> None:
     """Log requirement-coverage capability support for debugging.
 
-    Replaces the old contextual_capability_matches transparency log.
     Source of truth is requirement_coverage — the single capability-matching mechanism.
     """
     supported: list[str] = []
@@ -197,17 +192,25 @@ def build_fit_highlights(
         if entry and entry not in highlights:
             highlights.append(entry)
 
-    location_signal = assess_location_preference(record, active_profile)
-    if location_signal and int(location_signal.get("value", 0) or 0) > 0:
-        label = location_signal["label"]
-        if not label:
-            raise ValueError(
-                f"assess_location_preference returned signal with empty label: {location_signal!r}"
-            )
-        highlights.append(label)
-
-    highlights.extend(competitive_fit_highlights(record, active_profile))
+    highlights.extend(
+        item
+        for item in competitive_fit_highlights(record, active_profile)
+        if not _is_location_fit_highlight(item)
+    )
     return dedupe_preserve_order(highlights)[: hl_config["max_highlights"]]
+
+
+def _is_location_fit_highlight(text: str) -> bool:
+    cleaned = compact_whitespace(text).lower()
+    return bool(
+        cleaned
+        and (
+            "location" in cleaned
+            or "onsite" in cleaned
+            or "on-site" in cleaned
+            or "travel" in cleaned
+        )
+    )
 
 
 def competitive_signal_breakdown(record: dict, profile: Optional[dict] = None) -> List[dict]:
@@ -291,33 +294,7 @@ def build_core_fit_breakdown(
 def build_preference_breakdown(
     record: dict, scoring_rules: dict, weights: dict, active_profile: dict
 ) -> List[dict]:
-    entries: List[dict] = []
-    location_item = assess_location_preference(record, active_profile)
-    if location_item:
-        entries.append(
-            {
-                "label": location_item["label"],
-                "value": weighted_points(int(location_item["value"]), weights["location"]),
-                "section": "location",
-            }
-        )
-    else:
-        entries.append({"label": "Location: no preference set", "value": 0, "section": "location"})
-    salary_score = weighted_points(salary_fit_adjustment(record, active_profile), weights["salary"])
-    if salary_score > 0:
-        entries.append({"label": "Salary/rate signal", "value": salary_score, "section": "salary"})
-    elif salary_score < 0:
-        entries.append(
-            {"label": "Salary/rate below target", "value": salary_score, "section": "salary"}
-        )
-    else:
-        no_salary_label = (
-            load_ui_labels()
-            .get("score_gap_labels", {})
-            .get("no_comparable_salary_rate", "No salary info found")
-        )
-        entries.append({"label": no_salary_label, "value": 0, "section": "salary"})
-    return entries
+    return []
 
 
 def build_freshness_breakdown(
@@ -489,7 +466,7 @@ def fit_score(record: dict, profile: Optional[dict] = None) -> int:
 def fit_score_breakdown_frozen(record: dict, profile: Optional[dict] = None) -> List[dict]:
     """Frozen breakdown computed once at scrape time.
 
-    Grade band is applied to core + preference only.
+    Grade band is applied to core fit only.
     """
     review_state = llm_review_state(record)
     if review_state["state"] != LLM_REVIEW_STATE_EVALUATED:

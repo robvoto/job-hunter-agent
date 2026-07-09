@@ -225,10 +225,12 @@ The workspace can filter by:
 
 Each job card in the workspace can expand into up to four separate panels, so fit reasoning, requirement coverage, risk flags, and internal debug detail don't get mixed together:
 
-- **Fit breakdown** — why the score landed where it did: matched capabilities, approved experience found in the ad, and related/duplicate cards.
-- **Risks & flags** — things worth checking before applying: an incomplete description capture, potential red flags from your review history, job quality concerns, and other pre-apply checks.
-- **Requirements** — the extracted requirement list with per-item status (in profile, partial match, not in profile) and a link to add missing capabilities to your profile.
-- **Debug: LLM fit review** (debug mode only) — LLM decision/grade/cost, filter status, and raw score breakdown, for troubleshooting why a card was scored or filtered the way it was. Hidden entirely outside debug mode.
+- **Fit breakdown** — why the score landed where it did: requirement coverage only, shown as a short set of direct bullets. Location, freshness, Easy Apply / Quick Apply, viewed status, salary, and action recommendations are context only, not fit evidence.
+- **Checks before applying** — one merged review panel for incomplete description capture, red flags from review history, salary issues, missing or partial requirements, and other pre-apply checks. The old separate warning banner is gone.
+- **Requirements** — the extracted requirement list with per-item status (in profile, partial match, not in profile). Normal mode hides the matched capability and source-text subtitle, and debug mode shows it.
+- **Debug: LLM fit review** (debug mode only) — LLM decision/grade/cost, filter status, raw score breakdown, matched text, capability mapping, and reviewed-signal evidence for troubleshooting why a card was scored or filtered as it was. Hidden entirely outside debug mode.
+
+The workspace summary counts at the top of a run are operational totals for the scrape, not proof that every listed role is a strong fit.
 
 ## Improving Accuracy (Rejection Learning)
 

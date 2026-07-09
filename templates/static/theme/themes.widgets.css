@@ -1594,6 +1594,30 @@
   color: var(--state-error-text);
 }
 
+.account-bar-test-action--stacked {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  line-height: 1.15;
+}
+
+.account-bar-test-action__label {
+  display: block;
+}
+
+.account-bar-test-action__warning {
+  display: block;
+  color: var(--state-warning-text);
+  font-size: var(--font-size-xs);
+  font-weight: var(--text-role-body-font-weight);
+  white-space: normal;
+}
+
+.account-bar-test-action--danger .account-bar-test-action__warning {
+  color: color-mix(in srgb, var(--state-error-text) 78%, var(--state-warning-text));
+}
+
 .job-hunter-account-bar__user {
   position: relative;
 }

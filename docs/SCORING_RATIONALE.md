@@ -8,7 +8,7 @@ Last checked against code: 2026-06-08.
 
 ## What the score is
 
-The fit score is a **ranking signal**, not a qualification percentage.
+The fit score is a **role-fit ranking signal**, not a qualification percentage.
 
 A score of 57 does **not** mean the candidate is 57% qualified. It means the job is ranked at that level by the current scoring rules, grade band, preference signals, and blockers.
 
@@ -127,7 +127,7 @@ The main handover from filtering to scoring is the reviewed job record containin
 
 The main handover from LLM review to scoring is `requirement_coverage`. Coverage is evidence for the grade; the score breakdown displays it for transparency but does not add a second independent capability bonus. A deterministic keep candidate is not complete until this coverage exists and the final reviewed record is saved from the LLM path.
 
-The main handover from frozen scoring to the UI is the stored frozen score plus explanation entries. Recency remains part of the UI and history flow, but it is not new evidence that the candidate fits the job.
+The main handover from frozen scoring to the UI is the stored frozen score plus explanation entries. The user-facing fit explanation should come from `requirement_coverage` only. Recency remains part of the UI and history flow, but it is not new evidence that the candidate fits the job.
 
 ### End states
 
@@ -157,6 +157,8 @@ The score is first built from normal score entries. Then the grade band is appli
 
 The raw score breakdown behind this table is not shown on job cards outside debug mode. In debug mode it appears in the card's "Debug: LLM fit review" panel — see [Job Card Layout](USER_GUIDE.md#job-card-layout) in the user guide.
 
+The normal-mode "Why this is a good fit" section should come from `requirement_coverage` only, and it should stay short. Debug mode may also show score calculation, matched text, capability mapping, and reviewed-signal evidence.
+
 ---
 
 ## Current scoring flow
@@ -179,33 +181,18 @@ Core entries include:
 | Requirement coverage | Displayed as transparency entries with value 0. |
 | Description capture incomplete | Adds a negative entry, currently -8 before weighting. |
 
-### 3. Preference entries
+### 3. Context entries
 
-Preference entries include location and salary/rate.
-
-They help ranking and display, but they must not be read as evidence that the candidate meets mandatory job requirements.
-
-### Location scoring decision
-
-Current location matching is intentionally conservative. The search location usually comes from the same candidate setting that is sent to SEEK and LinkedIn, so a broad location match often proves only that the source query worked.
-
-Until proper radius, commute, and near-home support exists, location should be treated as a weak preference signal rather than strong fit evidence:
-
-- a clear broad match may keep the job from being penalised
-- unclear, hybrid, or source-normalised locations should stay visible for review
-- location should not inflate the score as if it proves role quality
-- out-of-area hard filtering belongs to explicit exclusion/radius rules, not implicit score bonuses
-
-Future radius support should make the decision explicit: jobs can then be compared against a home/suburb plus distance threshold, with uncertain geocoding preserved for review rather than silently discarded.
-
-### 4. Convenience entries
-
-Convenience entries include:
+Salary, location, freshness, Easy Apply / Quick Apply, viewed status, and action recommendations are still shown in the UI, but they are metadata, filter, sort, or check signals rather than fit evidence.
 
 | Signal | Behaviour |
 |---|---|
-| Freshness | Added dynamically from current posted age. It is a recency signal for sorting, not a proof of fit. |
-| Already viewed | Shown as history-aware display state. It should not be used as core fit evidence. |
+| Salary / rate | Shown as context and used for salary filtering / comparison. |
+| Location | Shown as metadata and search context only. |
+| Freshness | Used for recency and sorting, not proof of fit. |
+| Easy Apply / Quick Apply | Shown as action metadata, not fit evidence. |
+| Already viewed | Shown as history-aware display state. |
+| Checks before applying | Shown as a review panel for missing requirements, red flags, salary issues, and similar pre-apply checks. |
 
 ### 5. Grade band clamp
 
@@ -243,7 +230,15 @@ Allowed coverage statuses:
 
 Coverage entries are shown in the score breakdown for transparency, but they do not add separate score points.
 
-In this cleanup, the fit score is intentionally narrow: title match, LLM grade, requirement-coverage transparency, hard blockers, and grade-band calibration. Convenience or preference signals such as Easy Apply, freshness, viewed status, salary, and location are better handled as badges, filters, or sort signals.
+In this cleanup, the fit score is intentionally narrow: title match, LLM grade, requirement-coverage transparency, hard blockers, and grade-band calibration. The user-facing "Why this is a good fit" panel now uses requirement coverage only. Convenience or preference signals such as Easy Apply, freshness, viewed status, salary, and location are better handled as badges, filters, or sort signals, and approved-experience or subtitle detail stays in debug-mode transparency. Workspace run summaries report collection counts, not fit evidence.
+
+### Location scoring decision
+
+Location is a weak preference signal rather than strong fit evidence in this cleanup.
+
+- It stays visible as metadata and search context.
+- It can still help with filtering, sorting, and badge-style cues.
+- Future radius support should make the decision explicit rather than burying it inside fit scoring.
 
 The grade is derived from coverage when coverage exists. The model's raw grade is used only as fallback when coverage is missing.
 
@@ -430,6 +425,7 @@ Current direction:
 | Whole job sentence matched directly to a capability | Extract requirement first, then map it to a known candidate capability. |
 | Capability mentions adding independent score points | Requirement coverage drives grade; coverage entries are transparency-only in the score breakdown. |
 | Broad "fit" claims based on preferences or logistics | Preferences move ranking only; they do not prove mandatory fit. |
+| Location / approved-experience snippets in the fit summary | Keep them out of the normal fit explanation; show them as badges, filters, or debug-only detail instead. |
 | Hidden hardcoded scoring budget | Band-anchored score controlled by `data/knowledge/scoring_rules.json`. |
 | Hardcoded judgement buried in code | Move values to managed config / global settings where possible. |
 | Signals directly boosting score | Reviewed signals inform future classification/mapping; they do not directly add points. |

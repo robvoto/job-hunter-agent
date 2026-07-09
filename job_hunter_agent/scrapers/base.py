@@ -110,8 +110,10 @@ def blank_source_metadata(source: str) -> dict:
 def blank_posting_channel_evidence() -> dict:
     return {
         "kind": "unknown",
+        "source": "insufficient_evidence",
         "trusted_metadata": [],
         "weak_text_matches": [],
+        "text_evidence": [],
         "needs_review": False,
     }
 

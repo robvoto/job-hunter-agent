@@ -171,17 +171,67 @@ def test_infer_posting_channel_uses_trusted_metadata_before_text():
     assert "job_url_direct" in channel["trusted_metadata"]
 
 
-def test_infer_posting_channel_returns_fallback_text_evidence():
+@pytest.mark.parametrize(
+    "details_text, expected_phrase",
+    [
+        (
+            "One of our Federal Government Clients is seeking a Senior Business Analyst.",
+            "one of our federal government clients",
+        ),
+        ("Our client is seeking a Business Analyst.", "our client"),
+        ("Our clients are looking for experienced Business Analysts.", "our client"),
+        ("We are recruiting for a Federal Government client.", "recruiting for"),
+        ("This role is advertised on behalf of our client.", "on behalf of"),
+        ("About the client: the client is seeking a Product Owner.", "about the client"),
+    ],
+)
+def test_infer_posting_channel_detects_recruiter_copy_without_regex(details_text, expected_phrase):
     channel = role_analysis.infer_posting_channel(
         {"source_metadata": {"platform": "seek", "raw_source_fields": {}}},
-        "Our client is seeking a consultant. Contact our recruitment team for details.",
+        details_text,
+    )
+
+    assert channel["kind"] == "agency_or_recruiter"
+    assert channel["source"] == "text_window_classifier"
+    assert channel["needs_review"] is True
+    assert expected_phrase in " | ".join(channel["weak_text_matches"])
+    assert channel["text_evidence"] == channel["weak_text_matches"]
+
+
+@pytest.mark.parametrize(
+    "details_text",
+    [
+        "Department of Finance is seeking a Senior Business Analyst.",
+        "Fraser Coast Council is seeking a Business Analyst.",
+        "Queensland Health is seeking a Business Analyst.",
+        "Join our team as a Business Analyst.",
+        "We are seeking a Business Analyst.",
+        "We help our clients deliver transformation projects.",
+    ],
+)
+def test_infer_posting_channel_does_not_flag_direct_employer_phrases(details_text):
+    channel = role_analysis.infer_posting_channel(
+        {"source_metadata": {"platform": "seek", "raw_source_fields": {}}},
+        details_text,
     )
 
     assert channel["kind"] == "unknown"
-    assert channel["source"] == "fallback_text_evidence"
-    assert channel["needs_review"] is True
-    assert "our client" in channel["weak_text_matches"]
-    assert "client is seeking" in channel["weak_text_matches"]
+    assert channel["source"] == "metadata_first"
+    assert channel["needs_review"] is False
+
+
+def test_infer_posting_channel_uses_company_indicator_for_known_recruiter():
+    channel = role_analysis.infer_posting_channel(
+        {
+            "company": "IT Alliance Australia",
+            "source_metadata": {"platform": "seek", "raw_source_fields": {}},
+        },
+        "",
+    )
+
+    assert channel["kind"] == "agency_or_recruiter"
+    assert channel["source"] == "company_or_domain_indicator"
+    assert channel["needs_review"] is False
 
 
 def test_score_to_match_label_uses_central_match_band_mapping():
@@ -249,6 +299,7 @@ def test_render_job_card_does_not_create_needs_confirmation_from_raw_job_require
     )
 
     assert "Needs confirmation" not in html
+    assert "job-action-rec" not in html
 
 
 def test_build_ad_learning_signals_registers_pending_capability_signals(monkeypatch):
@@ -424,41 +475,76 @@ def test_render_job_card_does_not_claim_private_sector_by_default():
     assert ">Government<" not in html
 
 
-def test_visible_fit_reasons_backfills_from_positive_score_drivers():
+def test_visible_fit_reasons_use_requirement_coverage_only():
     reasons = workspace_renderer.visible_fit_reasons(
-        ["The ad asks for Delivery teams, and your profile includes this."],
         [
-            {"label": "The job title matches one of your target roles", "value": 14},
-            {"label": "The job ad matches your experience well", "value": 16},
-            # Per-capability entries are excluded from visible reasons (surfaced via fit_highlights)
-            {"label": "stakeholder management [canonical]", "value": 4},
-            {"label": "Posted within the last day", "value": 9},
-            {"label": "Hybrid work available", "value": 1},
-        ],
+            {"requirement": "Business analysis", "status": "supported"},
+            {
+                "requirement": "Stakeholder engagement",
+                "status": "partially_supported",
+                "capability_name": "stakeholder engagement",
+            },
+            {"requirement": "Ignored signal", "status": "mismatch"},
+            {"requirement": "Agile delivery", "status": "supported"},
+        ]
     )
 
     assert reasons == [
-        "The ad asks for Delivery teams, and your profile includes this.",
-        "The job title matches one of your target roles",
-        "The job ad matches your experience well",
-        "Posted within the last day",
+        "Business analysis — shown in profile",
+        "Agile delivery — shown in profile",
+        "Stakeholder engagement — partly shown in profile",
     ]
 
 
-def test_visible_fit_reasons_humanize_title_match_values():
+def test_visible_fit_reasons_ignore_non_requirement_score_breakdown_entries():
     reasons = workspace_renderer.visible_fit_reasons(
-        [],
         [
-            {"label": "Preferred role-family match", "value": 15},
-            {"label": "Description fit is excellent", "value": 78},
-        ],
-        include_values=True,
+            {"requirement": "Agile delivery", "status": "supported"},
+            {"requirement": "Location preference", "status": "supported"},
+        ]
     )
 
     assert reasons == [
-        "The job title matches one of your target roles: +15",
-        "The job ad strongly matches your BA / technical BA experience: +78",
+        "Agile delivery — shown in profile",
+        "Location preference — shown in profile",
     ]
+
+
+def test_fit_summary_uses_requirement_coverage_only_and_limits_to_three_bullets():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-fit-summary-coverage-only",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Business analyst role supporting agile delivery, stakeholder engagement, and data analysis. "
+            * 20,
+            "fit_highlights": ["Location matches primary preference ✓", "The ad asks for X"],
+            "requirement_coverage": [
+                {"requirement": "Business analysis", "status": "supported"},
+                {"requirement": "Stakeholder engagement", "status": "supported"},
+                {"requirement": "Agile delivery", "status": "supported"},
+                {"requirement": "Data analysis", "status": "supported"},
+            ],
+            "source": "seek",
+        },
+        _test_profile(),
+    )
+
+    fit_start = html.index("Why this is a good fit")
+    fit_end = html.index("</details>", fit_start)
+    fit_section = html[fit_start:fit_end]
+
+    assert fit_section.count("<li>") == 3
+    assert "Location matches primary preference" not in fit_section
+    assert "The ad asks for" not in fit_section
 
 
 def test_build_fit_highlights_recomputes_instead_of_reusing_stale_highlights(monkeypatch):
@@ -875,11 +961,12 @@ def test_job_card_shows_reviewed_signal_transparency_groups(monkeypatch):
         _test_profile(),
     )
 
-    assert "<strong>Your approved experience appears in this ad</strong>" in html
-    assert "The ad mentions Stakeholder management, and your profile shows related experience." in html
-    assert "The ad mentions Jira, and your profile shows related experience." in html
-    assert "<strong>Filtered out</strong>" in html
-    assert "The ad mentions Project, and your profile shows related experience." in html
+    assert "Approved experience matches" not in html
+    assert "The ad mentions Stakeholder management, and your profile shows related experience." not in html
+    assert "The ad mentions Jira, and your profile shows related experience." not in html
+    assert "Found, not scored" not in html
+    assert "Filtered out" not in html
+    assert "The ad mentions Project, and your profile shows related experience." not in html
     # Unresolved signals (Banking) only render in debug mode
 
 
@@ -985,12 +1072,17 @@ def test_job_card_omits_apply_method_badge_when_unknown():
     assert 'data-apply-method="unknown"' in html
 
 
-def test_posting_channel_badge_uses_fallback_review_class(monkeypatch):
+def test_posting_channel_badge_uses_token_classifier_review_class():
+    channel = role_analysis.infer_posting_channel(
+        {"company": "Acme", "source_metadata": {"platform": "seek", "raw_source_fields": {}}},
+        "Our client is seeking a business analyst. Contact our recruitment team for details. "
+        * 20,
+    )
     html = workspace_renderer.render_job_card(
         {
             "job_key": "test-posting-channel-badge",
             "title": "Business Analyst",
-            "company": "Preacta Recruitment",
+            "company": "Acme",
             "url": "https://example.com/job",
             "title_reason": "OK",
             "content_reason": "OK",
@@ -1007,14 +1099,7 @@ def test_posting_channel_badge_uses_fallback_review_class(monkeypatch):
                 "Experience across end-to-end BA activities",
             ],
             "source": "seek",
-            "posting_channel_evidence": {
-                "trusted_metadata": [],
-                "weak_text_matches": [
-                    "our client",
-                    "contact (?:our )?(?:consultant|recruiter|recruitment team)",
-                ],
-                "needs_review": True,
-            },
+            "posting_channel_evidence": channel,
         },
         {
             **_test_profile(),
@@ -1027,13 +1112,49 @@ def test_posting_channel_badge_uses_fallback_review_class(monkeypatch):
 
     assert 'badge-warning" title="Recruiter language detected' in html
     assert "Likely recruiter" in html
-    assert "Requirements" in html
+    assert "Source unclear" not in html
+    assert ">Recruiter<" not in html
+    assert "Job requirements checked against your profile" in html
     assert "Strong stakeholder engagement and communication skills" in html
     assert "In profile" in html
     assert "Not in profile" in html
     assert "job-requirement-item--confirmed-have" in html
     assert "job-requirement-item--confirmed-do-not-have" in html
     assert "badge-sector-government" not in html
+
+
+def test_posting_channel_badge_uses_strong_company_indicator():
+    channel = role_analysis.infer_posting_channel(
+        {
+            "company": "IT Alliance Australia",
+            "source_metadata": {"platform": "seek", "raw_source_fields": {}},
+        },
+        "",
+    )
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-posting-channel-company-indicator",
+            "title": "Business Analyst",
+            "company": "IT Alliance Australia",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Business analysis support across delivery teams.",
+            "fit_highlights": [],
+            "source": "seek",
+            "posting_channel_evidence": channel,
+        },
+        _test_profile(),
+    )
+
+    assert "Recruiter" in html
+    assert "Likely recruiter" not in html
+    assert "Source unclear" not in html
 
 
 def test_render_job_card_requirement_coverage_omits_duplicate_matched_text():
@@ -1055,12 +1176,43 @@ def test_render_job_card_requirement_coverage_omits_duplicate_matched_text():
             "source": "seek",
         },
         _capability_profile(),
+        debug_mode=True,
     )
 
     assert "job-requirements-panel" in html
     assert "job-coverage-panel" not in html
-    assert "Requirements" in html
+    assert "Job requirements checked against your profile" in html
+    assert "req-coverage-detail" in html
     assert "business analysis" in html
+    assert f'"{requirement}"' not in html
+
+
+def test_render_job_card_requirement_coverage_hides_evidence_subtitles_in_normal_mode():
+    requirement = "Minimum 5 years experience as Business Analyst in digital environment"
+    html = workspace_renderer.render_job_card(
+        {
+            **_test_profile(),
+            "job_requirements": [],
+            "requirement_coverage": [
+                {
+                    "requirement": requirement,
+                    "importance": "mandatory",
+                    "status": "supported",
+                    "capability_name": "business analysis",
+                    "matched_job_text": requirement,
+                    "profile_support": [],
+                }
+            ],
+            "source": "seek",
+        },
+        _capability_profile(),
+        debug_mode=False,
+    )
+
+    assert "job-requirements-hint" in html
+    assert "small grey line under a requirement row" in html
+    assert "req-coverage-detail" not in html
+    assert "business analysis" not in html
     assert f'"{requirement}"' not in html
 
 
@@ -1173,13 +1325,10 @@ def test_possible_repost_card_carries_duplicate_apply_warning_details():
     assert 'data-similar-applied-warning="1"' in html
     assert 'data-similar-applied-job-key="seek:repost"' in html
     assert 'data-similar-applied-title="Business Analyst Senior"' in html
-    assert "Attention needed before applying:" in html
-    assert "Possible repost of applied job:" in html
-    assert 'href="#job-card-seek-repost"' in html
-    assert (
-        'Attention needed before applying:</strong> Possible repost of applied job: '
-        '<a href="#job-card-seek-repost">Business Analyst Senior — Acme — SEEK</a>'
-    ) in html
+    assert "Checks before applying" in html
+    assert "Possible repost of applied job: Business Analyst Senior — Acme — SEEK" in html
+    assert "job-note" not in html
+    assert "job-action-rec" not in html
 
 
 def test_attention_strip_prefers_red_flag_over_everything_else():
@@ -1230,14 +1379,14 @@ def test_attention_strip_prefers_red_flag_over_everything_else():
                     "source": "seek",
                 }
             ],
-        )
+    )
 
-    assert "Attention needed before applying:" in html
-    assert "Potential red flag: Suspicious reposting pattern." in html
-    assert "Description issue:" not in html
-    assert "Possible repost of applied job:" not in html
-    assert "Rejected before:" not in html
-    assert "Salary below target." not in html
+    assert "Checks before applying" in html
+    assert "Suspicious reposting pattern." in html
+    assert "Description issue: full job description was not captured clearly." in html
+    assert "Possible repost of applied job: Business Analyst — Acme — SEEK" in html
+    assert "Rejected before: Acme — Business Analyst" in html
+    assert "Salary below target." in html
 
 
 def test_attention_strip_prefers_description_issue_over_lower_priority_alerts():
@@ -1285,11 +1434,11 @@ def test_attention_strip_prefers_description_issue_over_lower_priority_alerts():
         ],
     )
 
-    assert "Attention needed before applying:" in html
+    assert "Checks before applying" in html
     assert "Description issue: full job description was not captured clearly." in html
-    assert "Possible repost of applied job:" not in html
-    assert "Rejected before:" not in html
-    assert "Salary below target." not in html
+    assert "Possible repost of applied job: Business Analyst — Acme — SEEK" in html
+    assert "Rejected before: Acme — Business Analyst" in html
+    assert "Salary below target." in html
 
 
 def test_candidate_application_history_renders_warning_badges_without_changing_score():
@@ -1332,7 +1481,7 @@ def test_candidate_application_history_renders_warning_badges_without_changing_s
         plain_html.split('data-fit-score="', 1)[1].split('"', 1)[0]
         == history_html.split('data-fit-score="', 1)[1].split('"', 1)[0]
     )
-    assert "Attention needed before applying:" in history_html
+    assert "Checks before applying" in history_html
     assert "Rejected before: Acme — Business Analyst" in history_html
     assert "Needs review" in history_html
     assert 'title="Company mismatch needs a manual check."' in history_html
@@ -1370,7 +1519,7 @@ def test_attention_strip_shows_salary_below_target_when_it_is_the_last_remaining
         profile,
     )
 
-    assert "Attention needed before applying:" in html
+    assert "Checks before applying" in html
     assert "Salary below target." in html
     assert "Description issue:" not in html
     assert "Possible repost of applied job:" not in html
@@ -1597,9 +1746,9 @@ def test_positive_note_does_not_repeat_first_why_it_fits_bullet():
         profile,
     )
 
-    assert "Strongest fit:" not in html
-    cap_sentence = "The ad asks for Multi-client delivery, and your profile shows this experience."
-    assert html.count(cap_sentence) == 1
+    assert "Why this is a good fit" not in html
+    assert "The ad asks for Multi-client delivery, and your profile shows this experience." not in html
+    assert "Multi-client delivery — shown in profile" not in html
 
 
 def test_low_confidence_card_shows_single_description_issue_section():
@@ -1623,20 +1772,17 @@ def test_low_confidence_card_shows_single_description_issue_section():
         _test_profile(),
     )
 
-    assert "Incomplete description" in html
-    assert html.count("<strong>Incomplete description</strong>") == 1
+    assert "Checks before applying" in html
+    assert html.count("Description issue: full job description was not captured clearly.") == 1
     assert "<strong>Missing evidence</strong>" not in html
     assert "Risks &amp; missing evidence" not in html
 
     risk_start = html.index('<details class="job-insights job-risk-panel">')
     risk_end = html.index("</details>", risk_start)
     risk_panel_html = html[risk_start:risk_end]
-    assert "Risks &amp; flags" in risk_panel_html
-    assert "Incomplete description" in risk_panel_html
-
-    fit_breakdown_start = html.index('<details class="job-insights">')
-    fit_breakdown_end = html.index("</details>", fit_breakdown_start)
-    assert "Incomplete description" not in html[fit_breakdown_start:fit_breakdown_end]
+    assert "Checks before applying" in risk_panel_html
+    assert "Description issue: full job description was not captured clearly." in risk_panel_html
+    assert "Why this is a good fit" not in html
 
 
 def test_deterministic_review_counts_only_capability_highlights():
@@ -1652,7 +1798,7 @@ def test_deterministic_review_counts_only_capability_highlights():
         ],
         [],
         [],
-    ) == {"decision": "KEEP", "grade": "SOLID", "det_rule": "solid"}
+    ) is None
 
     assert deterministic_review_outcome(
         {"title_reason": "OK"},
@@ -1732,6 +1878,31 @@ def test_salary_fit_ignores_yearly_package_and_including_super_amounts():
     from job_hunter_agent.score_labels import salary_fit_label
 
     assert salary_fit_label({"salary": "$130k + super"}, profile) == "listed"
+
+
+def test_render_job_card_formats_bare_contract_salary_with_period_hint():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-salary-period-hint",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Contract",
+            "work_mode": "Hybrid",
+            "salary": "$125",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "seek",
+        },
+        _test_profile(),
+    )
+
+    assert "Salary</strong> $125/hr" in html
+    assert "Salary</strong> $125 p.a." not in html
 
 
 def test_salary_fit_adjustment_can_use_profile_scoring_rule_overrides():
@@ -2237,9 +2408,11 @@ def test_render_job_card_fit_breakdown_starts_with_plain_english_summary_from_re
 
     assert "Why this is a good fit" in html
     assert expected_summary in html
-    assert html.index(expected_summary) < html.index("The ad asks for Agile methodologies, and your profile shows this experience.")
-    assert "The ad asks for Agile methodologies, and your profile shows this experience." in html
-    assert "The ad asks for Acceptance testing, and your profile shows this experience." in html
+    assert html.index(expected_summary) < html.index('<span class="job-requirement-text">Agile delivery')
+    assert '<span class="job-requirement-text">Agile delivery' in html
+    assert '<span class="job-requirement-text">Stakeholder engagement' in html
+    assert '<span class="job-requirement-text">User acceptance testing' in html
+    assert "Agile methodologies" not in html
     assert "SAP certification" not in expected_summary
 
 
@@ -2281,8 +2454,7 @@ def test_render_job_card_fit_breakdown_does_not_invent_summary_when_requirement_
 
     assert "job-fit-summary" not in html
     assert "Base fit" not in html
-    assert "The ad asks for Agile methodologies, and your profile shows this experience." in html
-    assert "Why this is a good fit" in html
+    assert "Why this is a good fit" not in html
 
 
 def test_workspace_record_sets_exclude_kept_jobs_without_complete_llm_data(monkeypatch):
@@ -2423,7 +2595,7 @@ def test_workspace_renders_requirement_coverage_with_status_classes():
     assert "SAP certification" in html
     assert "job-requirements-panel" in html
     assert "job-coverage-panel" not in html
-    assert "Requirements" in html
+    assert "Job requirements checked against your profile" in html
     assert "job-req-importance" in html
     assert "Required" in html  # mandatory label
     assert "Bonus" in html  # nice_to_have label
@@ -2727,8 +2899,9 @@ def test_fit_card_capability_match_uses_sentence_format():
         _capability_profile(),
     )
 
-    assert "and your profile shows this experience" in html
+    assert "and your profile shows this experience" not in html
     assert "Strong capability match:" not in html
+    assert "Why this is a good fit" not in html
 
 
 def test_work_type_not_a_fit_reason_when_all_types_accepted():
@@ -2753,10 +2926,10 @@ def test_work_type_not_a_fit_reason_when_all_types_accepted():
         _all_work_types_profile(),
     )
 
-    # "Why this looks like a good fit" list must not contain work type reasons
+    # The fit summary no longer uses work type reasons at all.
     fit_section = ""
-    if "Why this looks like a good fit" in html:
-        start = html.index("Why this looks like a good fit")
+    if "Why this is a good fit" in html:
+        start = html.index("Why this is a good fit")
         end = html.index("</div>", start)
         fit_section = html[start:end]
     assert "Work type" not in fit_section
@@ -2786,7 +2959,8 @@ def test_work_type_is_fit_reason_when_user_prefers_permanent():
         _permanent_only_profile(),
     )
 
-    assert "This matches your permanent preference." in html
+    assert "This matches your permanent preference." not in html
+    assert "<strong>Work type</strong> Permanent" in html
 
 
 def test_work_type_is_fit_reason_when_user_prefers_contract():
@@ -2811,14 +2985,15 @@ def test_work_type_is_fit_reason_when_user_prefers_contract():
         _contract_only_profile(),
     )
 
-    assert "This matches your contract preference." in html
+    assert "This matches your contract preference." not in html
+    assert "<strong>Work type</strong> Contract" in html
 
 
 def test_nv1_check_item_renders_as_human_readable():
     """NV1 clearance check item must not expose the raw 'nv1 appears required' text."""
     reasons = workspace_renderer._humanize_check_item("nv1 appears required")
     assert "nv1 appears required" not in reasons.lower()
-    assert "NV1 clearance" in reasons
+    assert "Missing mandatory requirement: NV1" in reasons
 
 
 def test_nv1_check_item_in_rendered_card():
@@ -2854,13 +3029,78 @@ def test_nv1_check_item_in_rendered_card():
         profile,
     )
 
-    assert "NV1 clearance" in html
-    assert "Attention needed before applying:" in html
-    assert "Critical missing requirement: Nv1 explicitly required but not shown" in html
-    start = html.index("Things to check before applying")
-    end = html.index("</div>", start)
+    assert "Checks before applying" in html
+    assert "Missing mandatory requirement: NV1" in html
+    assert html.lower().count("missing mandatory requirement: nv1") == 1
+    start = html.index("Checks before applying")
+    end = html.index("</details>", start)
     check_section = html[start:end]
-    assert check_section.lower().count("nv1 clearance") == 1
+    assert "nv1 clearance required" not in check_section.lower()
+
+
+def test_missing_mandatory_requirement_warning_preserves_common_acronyms():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-sap-missing-card",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "On-site",
+            "salary": "N/A",
+            "full_description": "Strong sap experience is required for this role. " * 20,
+            "fit_source_text": "Strong sap experience is required for this role. " * 20,
+            "description_source": "jobAdDetails",
+            RECORD_DETAILS_STATUS_KEY: DETAILS_STATUS_OK,
+            "fit_highlights": [],
+            "source": "seek",
+        },
+        {
+            **_test_profile(),
+            "must_not_require_skills": ["SAP"],
+        },
+    )
+
+    assert "Checks before applying" in html
+    assert "Missing mandatory requirement: SAP" in html
+    assert html.count("Missing mandatory requirement: SAP") == 1
+    assert "Sap explicitly required but not shown" not in html
+
+
+def test_missing_mandatory_requirement_warning_for_banking_uses_clean_copy_once():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-banking-missing-card",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "On-site",
+            "salary": "N/A",
+            "full_description": "Banking is explicitly required for this role. " * 20,
+            "fit_source_text": "Banking is explicitly required for this role. " * 20,
+            "description_source": "jobAdDetails",
+            RECORD_DETAILS_STATUS_KEY: DETAILS_STATUS_OK,
+            "fit_highlights": [],
+            "source": "seek",
+        },
+        {
+            **_test_profile(),
+            "must_not_require_skills": ["banking"],
+        },
+    )
+
+    assert "Checks before applying" in html
+    assert "Missing mandatory requirement: Banking" in html
+    assert html.count("Missing mandatory requirement: Banking") == 1
 
 
 def test_reviewed_signal_matches_render_as_plain_english_sentences(monkeypatch):
@@ -2917,13 +3157,14 @@ def test_reviewed_signal_matches_render_as_plain_english_sentences(monkeypatch):
             "source": "seek",
         },
         profile,
+        debug_mode=True,
     )
 
     assert "The ad mentions Stakeholder management, and your profile shows" in html
-    assert "Primary stakeholder engagement" in html
+    assert "Approved experience matches" in html
     assert "This matches your contract preference." not in html
     assert "<strong>Work type</strong> Permanent" in html
-    approved_start = html.index("<strong>Your approved experience appears in this ad</strong>")
+    approved_start = html.index("<strong>Approved experience matches</strong>")
     approved_end = html.index("</div>", approved_start)
     approved_section = html[approved_start:approved_end]
     assert "contract" not in approved_section.lower()
@@ -2960,6 +3201,10 @@ def test_fit_section_heading_uses_human_friendly_language():
             ),
             "description_source": "jobAdDetails",
             RECORD_DETAILS_STATUS_KEY: DETAILS_STATUS_OK,
+            RECORD_REQUIREMENT_COVERAGE_KEY: [
+                {"requirement": "Agile delivery", "importance": "mandatory", "status": "supported"},
+                {"requirement": "SAP experience", "importance": "mandatory", "status": "mismatch"},
+            ],
             "fit_highlights": [],
             "source": "seek",
         },
@@ -2967,7 +3212,7 @@ def test_fit_section_heading_uses_human_friendly_language():
     )
 
     assert "Why this is a good fit" in html
-    assert "Things to check before applying" in html
+    assert "Checks before applying" in html
     assert "Why it fits" not in html
     assert "What lowers it" not in html
 
@@ -3050,13 +3295,13 @@ def test_render_job_card_fit_breakdown_starts_with_plain_english_summary_from_re
         debug_mode=False,
     )
 
-    expected_summary = (
-        "This role looks like a good fit because the ad asks for Agile delivery, "
-        "Stakeholder engagement, and User acceptance testing, and the candidate profile shows support for those areas."
-    )
-
     assert "Why this is a good fit" in html
-    assert expected_summary in html
-    assert html.index(expected_summary) < html.index("The ad asks for Agile methodologies, and your profile shows this experience.")
+    assert "Agile delivery — shown in profile" in html
+    assert "Stakeholder engagement — partly shown in profile" in html
+    assert "User acceptance testing — shown in profile" in html
+    assert "This role looks like a good fit because" not in html
+    assert '<span class="job-requirement-text">Agile delivery' in html
+    assert '<span class="job-requirement-text">Stakeholder engagement' in html
+    assert '<span class="job-requirement-text">User acceptance testing' in html
+    assert "Agile methodologies" not in html
     assert "Base fit" not in html
-    assert "SAP certification" not in expected_summary

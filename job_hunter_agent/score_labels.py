@@ -94,10 +94,6 @@ _SECTION_ORDER = [
     "llm_fit",
     "content",
     "capability",
-    "location",
-    "work_type",
-    "work_mode",
-    "salary",
     "risk",
 ]
 _SECTION_NAMES = {
@@ -105,10 +101,6 @@ _SECTION_NAMES = {
     "llm_fit": "LLM fit",
     "content": "Content",
     "capability": "Capabilities",
-    "location": "Location",
-    "work_type": "Work type",
-    "work_mode": "Work mode",
-    "salary": "Salary / rate",
     "risk": "Blockers",
 }
 
@@ -147,9 +139,6 @@ def format_score_breakdown_console(breakdown: List[dict]) -> List[str]:
                     lines.append(
                         f"  {display_index:2d}. {cat:<14}  {detail:<40}  {int(entry.get('value') or 0):+d}"
                     )
-        elif key == "salary" and entries and int(entries[0].get("value") or 0) == 0:
-            display_index += 1
-            lines.append(f"  {display_index:2d}. {cat:<14}  {entries[0].get('label', '—'):<40}   —")
         elif not entries:
             display_index += 1
             lines.append(f"  {display_index:2d}. {cat:<14}  —")

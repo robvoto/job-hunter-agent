@@ -120,6 +120,8 @@ def test_strong_with_weak_signals_floors_at_strong_minimum():
         {RECORD_APPLY_METHOD_KEY: APPLY_METHOD_EASY_APPLY},
         {RECORD_APPLY_METHOD_KEY: APPLY_METHOD_QUICK_APPLY},
         {"content_reason": "OK"},
+        {"location": "Canberra ACT"},
+        {"salary": "$250k"},
         {"posted_age_days": 0.1},
         {"posted_age_days": 14},
         {"times_viewed": 4},
@@ -127,7 +129,7 @@ def test_strong_with_weak_signals_floors_at_strong_minimum():
     ],
 )
 def test_noise_signals_do_not_change_fit_score(overrides):
-    """Easy/Quick Apply, viewed status, content-pass noise, and freshness must not move the score."""
+    """Convenience signals like Easy/Quick Apply, location, salary, viewed status, and freshness must not move the score."""
     base_record = {
         "title": "Business Analyst",
         "title_reason": "OK",

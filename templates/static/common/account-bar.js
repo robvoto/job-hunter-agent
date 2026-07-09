@@ -124,6 +124,7 @@ function initAccountBar() {
     bindConfirmedTestAction(resetUserBtn, {
       path: '/api/test/reset-user',
       confirmLines: [
+        resetUserBtn?.dataset.resetUserWarning,
         testLabels.reset_user_confirm_title,
         testLabels.reset_user_confirm_body_1,
         testLabels.reset_user_confirm_body_2,

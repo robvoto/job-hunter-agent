@@ -63,6 +63,11 @@ def reset_llm_truncation_count() -> None:
     _llm_truncation_count = 0
 
 
+def _is_location_fit_highlight(text: str) -> bool:
+    cleaned = compact_whitespace(text).lower()
+    return cleaned.startswith("location matches") or "location matches primary preference" in cleaned
+
+
 def deterministic_review_outcome(
     record: dict,
     profile: dict,
@@ -73,7 +78,9 @@ def deterministic_review_outcome(
 
     title_reason = str(record.get(RECORD_TITLE_REASON_KEY) or "")
 
-    strong_signal_count = len([item for item in fit_highlights if item])
+    strong_signal_count = len(
+        [item for item in fit_highlights if item and not _is_location_fit_highlight(item)]
+    )
 
     high_risks = len(missing_profile_support)
 

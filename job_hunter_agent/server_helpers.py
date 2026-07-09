@@ -192,6 +192,7 @@ _SHARED_UI_LABEL_KEYS = (
     "account_menu_test_actions_label",
     "account_menu_clean_search_label",
     "account_menu_reset_user_label",
+    "account_menu_reset_user_warning_label",
     "add_button_label",
     "add_button_aria_label",
     "add_button_title",

@@ -128,8 +128,12 @@ def _build_top_utility_bar_html(
             f'<button class="account-bar-test-action account-bar-test-action--danger" id="job_hunter_clean_search_btn" type="button" role="menuitem">'
             f"{_html_escape(shared_labels['account_menu_clean_search_label'])}"
             "</button>"
-            f'<button class="account-bar-test-action" id="job_hunter_reset_user_btn" type="button" role="menuitem">'
-            f"{_html_escape(shared_labels['account_menu_reset_user_label'])}"
+            f'<button class="account-bar-test-action account-bar-test-action--danger account-bar-test-action--stacked" '
+            f'id="job_hunter_reset_user_btn" type="button" role="menuitem" '
+            f'data-reset-user-warning="{_html_escape(shared_labels["account_menu_reset_user_warning_label"])}" '
+            f'title="{_html_escape(shared_labels["account_menu_reset_user_warning_label"])}">'
+            f'<span class="account-bar-test-action__label">{_html_escape(shared_labels["account_menu_reset_user_label"])}</span>'
+            f'<span class="account-bar-test-action__warning">{_html_escape(shared_labels["account_menu_reset_user_warning_label"])}</span>'
             "</button>"
             "</div></div>"
         )

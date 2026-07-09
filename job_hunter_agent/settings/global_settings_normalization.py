@@ -251,7 +251,7 @@ def _normalize_llm_prompt_settings(
         KEY_LLM_PROMPT_FIT_DECISION_MAX_OUTPUT_TOKENS,
         KEY_LLM_PROMPT_FIT_DECISION_MAX_OUTPUT_TOKENS,
         minimum=100,  # min needed for a valid fit_review + a few contextual matches
-        maximum=2_000,
+        maximum=4_000,
     )
     learning_candidates_max_output_tokens = _prompt_int(
         KEY_LLM_PROMPT_LEARNING_CANDIDATES_MAX_OUTPUT_TOKENS,

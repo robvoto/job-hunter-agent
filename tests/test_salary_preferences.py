@@ -9,6 +9,7 @@ from job_hunter_agent.preferences import (
     passes_preference_filters,
     salary_fit_adjustment,
 )
+from job_hunter_agent.salary_utils import format_salary_display
 
 
 def _profile():
@@ -71,6 +72,14 @@ def test_salary_fit_adjustment_is_neutral_for_unsupported_periods():
         salary_fit_adjustment({"work_type": "Full time", "salary": "$14,000 per month"}, profile)
         == 0
     )
+
+
+def test_format_salary_display_adds_period_for_bare_contract_rate():
+    assert format_salary_display("$125", work_type="Contract") == "$125/hr"
+
+
+def test_format_salary_display_keeps_explicit_periods():
+    assert format_salary_display("$125 per day", work_type="Contract") == "$125 per day"
 
 
 def test_unknown_work_type_still_passes_quick_card_filter(monkeypatch):

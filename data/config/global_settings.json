@@ -383,7 +383,7 @@
           "limit": 600
         }
       ],
-      "fit_decision_max_output_tokens": 2000,
+      "fit_decision_max_output_tokens": 3000,
       "learning_candidates_max_output_tokens": 500,
       "job_requirements_max_output_tokens": 300,
       "rejection_blocker_suggestions_max_output_tokens": 300,

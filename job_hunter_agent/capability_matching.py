@@ -362,7 +362,7 @@ def build_risk_and_missing_profile_support(
 
     if capability_matches["must_not"]:
         missing.append(
-            f"{list_to_phrase(capability_matches['must_not'][:2]).capitalize()} explicitly required but not shown"
+            f"Missing mandatory requirement: {list_to_phrase(capability_matches['must_not'][:2]).capitalize()}"
         )
 
     if capability_matches["limited_depth"]:

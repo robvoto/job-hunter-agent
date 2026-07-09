@@ -162,7 +162,7 @@ from job_hunter_agent.record_schema import (
 )
 from job_hunter_agent.role_analysis import infer_posting_channel
 from job_hunter_agent.run_control import pause_for_step_through
-from job_hunter_agent.salary_utils import preferred_salary_display
+from job_hunter_agent.salary_utils import format_salary_display, preferred_salary_display
 from job_hunter_agent.score_labels import score_to_tone_class
 from job_hunter_agent.signal_detection import (
     detect_competitive_signals,
@@ -477,8 +477,14 @@ def _apply_source_metadata_to_record(record: dict, details_text: str) -> None:
     channel_signal = infer_posting_channel(record, details_text)
     record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY] = {
         "kind": channel_signal.get("kind", "unknown"),
+        "source": channel_signal.get("source", "insufficient_evidence"),
         "trusted_metadata": list(channel_signal.get("trusted_metadata") or []),
         "weak_text_matches": list(channel_signal.get("weak_text_matches") or []),
+        "text_evidence": list(
+            channel_signal.get("text_evidence")
+            or channel_signal.get("weak_text_matches")
+            or []
+        ),
         "needs_review": bool(channel_signal.get("needs_review")),
     }
 
@@ -1148,7 +1154,7 @@ def review_post_detail_normalized_job(
     print(
         f"{source_tag} KEPT {title} @ {company} | "
         f"{record.get('posted')} | {record.get('location')} | {record.get('work_type')} | "
-        f"{record.get(RECORD_SALARY_KEY) or 'N/A'}"
+        f"{format_salary_display(str(record.get(RECORD_SALARY_KEY) or 'N/A'), work_type=str(record.get(RECORD_WORK_TYPE_KEY) or ''))}"
     )
     _pipeline_log(
         "FINAL_DECISION",

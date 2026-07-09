@@ -582,6 +582,7 @@ def test_build_requirement_coverage_guidance_includes_key_phrases():
     guidance = llm_gate.build_requirement_coverage_guidance()
     assert "requirement_coverage" in guidance
     assert "atomic" in guidance
+    assert "Use at most" in guidance
 
 
 def test_build_job_requirements_guidance_includes_work_types():
