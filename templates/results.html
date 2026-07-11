@@ -3,19 +3,14 @@
   <main class="page">
     <div class="workspace-layout">
       <div class="workspace-main">
-        <section class="section filter-panel ws-hero-panel">
-          <h1 class="ws-hero-title">$LABEL_WS_HERO_TITLE</h1>
-          <div class="scope-tabs" aria-label="Top-level workspace views">
-            <button class="scope-tab is-active" type="button" data-workspace-target="potential">$LABEL_WS_POTENTIAL_JOBS_TAB ($SHORTLIST_COUNT)</button>
-            <button class="scope-tab" type="button" data-workspace-target="applied">$LABEL_WS_APPLIED_JOBS_TAB ($APPLIED_COUNT)</button>
-            <button class="scope-tab" type="button" data-workspace-target="hidden">$LABEL_WS_HIDDEN_JOBS_TAB ($HIDDEN_COUNT)</button>
-          </div>
-        </section>
         <div class="workspace-panel" data-workspace-panel="potential">
           <section class="section filter-panel workspace-controls-panel">
             <div class="section-head workspace-controls-head">
               <h2>$LABEL_WS_MATCH_CONTROLS_HEADING</h2>
-              <button class="btn btn-secondary btn-compact-action" type="button" id="reset_workspace_filters">$LABEL_WS_RESET_ALL_FILTERS_BUTTON</button>
+              <button class="btn btn-secondary btn-compact-action workspace-text-action workspace-text-action--reset" type="button" id="reset_workspace_filters">
+                <span class="workspace-text-action__icon" aria-hidden="true">&#8635;</span>
+                <span>$LABEL_WS_RESET_ALL_FILTERS_BUTTON</span>
+              </button>
             </div>
             <div class="workspace-control-group workspace-control-group--sort">
               <h3 class="workspace-control-group-title">$LABEL_WS_SORT_LABEL</h3>
@@ -79,21 +74,9 @@
           $CURRENT_SECTION_HTML
         </div>
         <div class="workspace-panel" data-workspace-panel="applied" hidden>
-          <section class="section filter-panel">
-            <div class="section-head">
-              <h2>$LABEL_WS_APPLIED_JOBS_HEADING</h2>
-            </div>
-            <p class="section-copy">$LABEL_WS_APPLIED_JOBS_COPY</p>
-          </section>
           $APPLIED_SECTION_HTML
         </div>
         <div class="workspace-panel" data-workspace-panel="hidden" hidden>
-          <section class="section filter-panel">
-            <div class="section-head">
-              <h2>$LABEL_WS_HIDDEN_JOBS_HEADING</h2>
-            </div>
-            <p class="section-copy">$LABEL_WS_HIDDEN_JOBS_COPY</p>
-          </section>
           $HIDDEN_SECTION_HTML
         </div>
       </div>
@@ -133,37 +116,16 @@
               $CRAWLER_CARDS_HTML
             </div>
           </section>
-          <section class="snapshot-section">
-            <h2 class="snapshot-heading">$LABEL_WS_APPLICATIONS_HEADING</h2>
-            <div class="summary-grid">
-              $APPLICATION_CARDS_HTML
-            </div>
-          </section>
         </section>
-        <details class="side-panel">
-          <summary>
-            <span>$LABEL_WS_RUN_EFFICIENCY_SUMMARY</span>
-            <span class="side-toggle-hint">$LABEL_WS_SHOW_HIDE_HINT</span>
-          </summary>
+        $RUN_EFFICIENCY_PANEL_HTML
+        <section class="side-panel side-panel--static">
           <div class="side-panel-body">
-            <p class="side-panel-copy">$LABEL_WS_RUN_EFFICIENCY_INTRO$TARGET_SUMMARIES$LABEL_WS_RUN_EFFICIENCY_SEPARATOR$SNAPSHOT_HELPER$TESTING_MODE_NOTE</p>
-            <div class="job-meta">
-              $TOP_REJECT_REASONS_HTML
+            <div class="side-panel-title-wrap">
+              <strong class="side-panel-title">$LABEL_WS_HOW_MATCH_LEVELS_WORK_SUMMARY</strong>
             </div>
-          </div>
-        </details>
-        <details class="side-panel">
-          <summary>
-            <span>$LABEL_WS_HOW_MATCH_LEVELS_WORK_SUMMARY</span>
-            <span class="side-toggle-hint">$LABEL_WS_SHOW_HIDE_HINT</span>
-          </summary>
-          <div class="side-panel-body">
             <p class="side-panel-copy">$LABEL_WS_HOW_MATCH_LEVELS_WORK_COPY</p>
-            <div class="job-meta">
-              $MATCH_LEVEL_GUIDE_HTML
-            </div>
           </div>
-        </details>
+        </section>
       </aside>
     </div>
   </main>

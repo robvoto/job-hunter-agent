@@ -140,6 +140,8 @@ from job_hunter_agent.record_schema import (
     RECORD_LLM_DECISION_KEY,
     RECORD_LLM_ELAPSED_MS_KEY,
     RECORD_LLM_FIT_GRADE_KEY,
+    RECORD_LLM_INPUT_TOKENS_KEY,
+    RECORD_LLM_OUTPUT_TOKENS_KEY,
     RECORD_LLM_TITLE_JUDGMENT_KEY,
     RECORD_LOCATION_KEY,
     RECORD_MISSING_PROFILE_SUPPORT_KEY,
@@ -221,13 +223,10 @@ def _pipeline_log(stage: str, record: dict, source_name: str = "", **kwargs: Any
     # ── Title gate ────────────────────────────────────────────────────────────
     if stage == "TITLE_GATE":
         if result == "REJECT":
-            elapsed = _elapsed(job_key)
-            cost = _job_cost(job_key)
             logger.info(
-                "  title: %s\n  ✗ REJECTED — title filtered out\n  time: %s  |  LLM: %s\n%s",
+                "  title: %s\n  ✗ REJECTED — title filtered out\n  %s\n%s",
                 _reason_label(reason),
-                elapsed,
-                cost,
+                _job_time_summary(job_key),
                 _SEP_CLOSE,
             )
         elif result == "REVIEW":
@@ -238,20 +237,15 @@ def _pipeline_log(stage: str, record: dict, source_name: str = "", **kwargs: Any
     # ── Card gate (pre-description) ───────────────────────────────────────────
     if stage == "CARD_GATE":
         if result == "REJECT":
-            elapsed = _elapsed(job_key)
-            cost = _job_cost(job_key)
             logger.info(
-                "  ✗ REJECTED before reading — %s\n  time: %s  |  LLM: %s",
+                "  ✗ REJECTED before reading — %s\n  %s",
                 _reason_label(reason),
-                elapsed,
-                cost,
+                _job_time_summary(job_key),
             )
         return
 
     # ── Final outcome — closing separator printed by seek_runner after score output ──
     if stage == "FINAL_DECISION":
-        elapsed = _elapsed(job_key)
-        cost = _job_cost(job_key)
         start_time = _job_start_times.pop(job_key, None)
         _job_start_costs.pop(job_key, None)
         total_job_ms = int((time.monotonic() - start_time) * 1000) if start_time is not None else 0
@@ -261,15 +255,12 @@ def _pipeline_log(stage: str, record: dict, source_name: str = "", **kwargs: Any
             parts = [f"grade {grade}" if grade else "", review_source]
             detail = "  |  ".join(p for p in parts if p)
             logger.info(
-                "  ✓ KEPT%s\n  time: %s  |  LLM: %s",
+                "  ✓ KEPT%s\n  %s",
                 f"  —  {detail}" if detail else "",
-                elapsed,
-                cost,
+                _job_time_summary(job_key),
             )
         elif decision == "REJECT":
-            logger.info(
-                "  ✗ REJECTED — %s\n  time: %s  |  LLM: %s", _reason_label(reason), elapsed, cost
-            )
+            logger.info("  ✗ REJECTED — %s\n  %s", _reason_label(reason), _job_time_summary(job_key))
         logger.info(
             format_log_block(
                 "PIPELINE][FINAL_DECISION",
@@ -321,9 +312,20 @@ def _elapsed(job_key: str) -> str:
 def _job_cost(job_key: str) -> str:
     start_cost = _job_start_costs.get(job_key)
     if start_cost is None:
-        return "$0.0000"
+        return "$0.000000"
     delta = get_session_cost_usd() - start_cost
-    return f"${max(delta, 0.0):.4f}"
+    return f"${max(delta, 0.0):.6f}"
+
+
+def _job_time_summary(job_key: str) -> str:
+    elapsed = _elapsed(job_key)
+    start_cost = _job_start_costs.get(job_key)
+    if start_cost is None:
+        return f"time: {elapsed}"
+    delta = max(get_session_cost_usd() - start_cost, 0.0)
+    if delta <= 0.0:
+        return f"time: {elapsed}"
+    return f"time: {elapsed}  |  LLM: ${delta:.6f}"
 
 
 @dataclass(slots=True)
@@ -621,6 +623,8 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
     debug_reason = ""
     llm_elapsed_ms = None
     llm_cost_usd = None
+    llm_input_tokens = None
+    llm_output_tokens = None
 
     if deterministic_review is not None and deterministic_review["decision"] == "REJECT":
         review = deterministic_review
@@ -656,12 +660,19 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         record[RECORD_JOB_REQUIREMENTS_KEY] = payload.get("job_requirements") or []
         record[RECORD_REQUIREMENT_COVERAGE_KEY] = payload.get("requirement_coverage") or []
         debug_reason = str(payload.get("debug_reason") or "")
-        llm_cost_usd = float(payload.get("llm_cost_usd") or 0.0)
+        llm_cost_raw = payload.get("llm_cost_usd")
+        llm_cost_usd = None if llm_cost_raw in (None, "") else float(llm_cost_raw)
+        llm_input_raw = payload.get(RECORD_LLM_INPUT_TOKENS_KEY)
+        llm_output_raw = payload.get(RECORD_LLM_OUTPUT_TOKENS_KEY)
+        llm_input_tokens = None if llm_input_raw in (None, "") else int(llm_input_raw)
+        llm_output_tokens = None if llm_output_raw in (None, "") else int(llm_output_raw)
         source = str(payload.get("payload_source") or "llm")
         record["_obs_llm_called"] = True
         record["_obs_llm_cache_hit"] = source == "cache"
         record[RECORD_LLM_ELAPSED_MS_KEY] = llm_elapsed_ms
         record[RECORD_LLM_COST_USD_KEY] = llm_cost_usd
+        record[RECORD_LLM_INPUT_TOKENS_KEY] = llm_input_tokens
+        record[RECORD_LLM_OUTPUT_TOKENS_KEY] = llm_output_tokens
         credited_capabilities: list[str] = []
         imp_status_counts: dict[str, int] = {}
         for item in record[RECORD_REQUIREMENT_COVERAGE_KEY]:
@@ -700,6 +711,8 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         RECORD_REQUIREMENT_COVERAGE_KEY: record[RECORD_REQUIREMENT_COVERAGE_KEY],
         RECORD_LLM_ELAPSED_MS_KEY: llm_elapsed_ms,
         RECORD_LLM_COST_USD_KEY: llm_cost_usd,
+        RECORD_LLM_INPUT_TOKENS_KEY: llm_input_tokens,
+        RECORD_LLM_OUTPUT_TOKENS_KEY: llm_output_tokens,
     }
     if fit_eval["decision"] == "KEEP" and not has_complete_llm_keep_data(fit_eval):
         raise LLMReviewValidationError("Final KEEP review requires complete LLM keep data")

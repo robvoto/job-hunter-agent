@@ -6,7 +6,6 @@ from typing import Any, Callable
 from job_hunter_agent.filters import (
     build_title_block_rule,
     normalize_title_block_phrase,
-    suggest_title_block_phrase,
 )
 from job_hunter_agent.io_utils import load_audit_rows as _load_audit_rows
 from job_hunter_agent.job_identity import normalize_job_key
@@ -128,15 +127,18 @@ def _save_block_similar_feedback_impl(
     if not normalized:
         raise ValueError("Missing job key")
 
-    resolved = [p for p in (normalize_title_block_phrase(p) for p in (block_phrases or [])) if p]
+    resolved: list[str] = []
+    seen_phrases: set[str] = set()
+
+    for raw in block_phrases or []:
+        phrase = normalize_title_block_phrase(raw)
+        if not phrase or phrase in seen_phrases:
+            continue
+        seen_phrases.add(phrase)
+        resolved.append(phrase)
 
     if not resolved:
-        fallback = suggest_title_block_phrase(title)
-
-        if not fallback:
-            raise ValueError("Could not suggest a title keyword to block from this title yet")
-
-        resolved = [fallback]
+        raise ValueError("At least one exact title block phrase is required")
 
     res = _save_feedback_rules_generic(
         normalized,

@@ -5,6 +5,7 @@
     const WORKSPACE_CONTEXT = window.__JOB_HUNTER_WORKSPACE__ || {};
     const WORKSPACE_RUN_ID = String(WORKSPACE_CONTEXT.runId || '').trim() || 'workspace';
     const WORKSPACE_FILTERS_KEY = `jobHunter.workspace.filters.${WORKSPACE_RUN_ID}`;
+    const WORKSPACE_PAGINATION_KEY = `jobHunter.workspace.pagination.${WORKSPACE_RUN_ID}`;
     const RESULTS_HELPER_DISMISSED_KEY = 'jobHunter.workspace.resultsHelperDismissed';
     const REJECTION_FIRST_USE_KEY = 'jobHunter.workspace.rejectionFirstUseSeen';
     const sortSelect = document.getElementById('sort_select');
@@ -70,7 +71,7 @@
       return workspaceTabs.find(tab => tab.classList.contains('is-active'))?.dataset.workspaceTarget || 'potential';
     }
 
-    function setActiveWorkspace(workspace, updateHash = true) {
+    function setActiveWorkspace(workspace, updateHash = true, resetPages = true) {
       const allowed = new Set(['potential', 'applied', 'hidden']);
       const nextWorkspace = allowed.has(workspace) ? workspace : 'potential';
 
@@ -93,7 +94,9 @@
         }
       }
 
-      resetPagination();
+      if (resetPages) {
+        resetPagination();
+      }
       applyWorkspaceControls();
     }
 
@@ -140,6 +143,29 @@
       } catch (e) {}
     }
 
+    function saveWorkspacePagination() {
+      try {
+        window.localStorage.setItem(WORKSPACE_PAGINATION_KEY, JSON.stringify(paginationState));
+      } catch (e) {}
+    }
+
+    function loadWorkspacePagination() {
+      try {
+        const saved = window.localStorage.getItem(WORKSPACE_PAGINATION_KEY);
+        if (!saved) return;
+        const parsed = JSON.parse(saved);
+        if (!parsed || typeof parsed !== 'object') {
+          return;
+        }
+        for (const [key, value] of Object.entries(parsed)) {
+          const page = Number(value);
+          if (Number.isFinite(page) && page >= 1) {
+            paginationState[key] = page;
+          }
+        }
+      } catch (e) {}
+    }
+
     function resetWorkspaceFiltersToDefaults() {
       if (sortSelect) sortSelect.value = 'fit';
       if (pageSizeSelect) pageSizeSelect.value = '12';
@@ -153,6 +179,7 @@
       }
       try {
         window.localStorage.removeItem(WORKSPACE_FILTERS_KEY);
+        window.localStorage.removeItem(WORKSPACE_PAGINATION_KEY);
       } catch (e) {}
       resetPagination();
       applyWorkspaceControls();
@@ -166,6 +193,7 @@
       for (const key of Object.keys(paginationState)) {
         paginationState[key] = 1;
       }
+      saveWorkspacePagination();
     }
 
     function applySectionPagination(section) {
@@ -196,17 +224,21 @@
         card.hidden = false;
       });
 
-      const label = section.querySelector('.pagination-label');
-      if (label) {
-        label.textContent = matchingCards.length
-          ? `${matchingCards.length} matches | Page ${currentPage} of ${totalPages}`
-          : '0 matches';
+      const pageLabel = section.querySelector('.pagination-page-label');
+      if (pageLabel) {
+        pageLabel.textContent = `Page ${currentPage} of ${totalPages}`;
+      }
+
+      const matchCountLabel = section.querySelector('.pagination-match-count');
+      if (matchCountLabel) {
+        matchCountLabel.textContent = `${matchingCards.length} matches`;
       }
 
       const prevButton = section.querySelector('[data-page-direction="prev"]');
       const nextButton = section.querySelector('[data-page-direction="next"]');
       if (prevButton) prevButton.disabled = currentPage <= 1 || matchingCards.length === 0;
       if (nextButton) nextButton.disabled = currentPage >= totalPages || matchingCards.length === 0;
+      saveWorkspacePagination();
     }
 
     function applyWorkspaceControls() {
@@ -306,7 +338,6 @@
           badges.insertAdjacentHTML('beforeend', WORKSPACE_CONTEXT.viewedBadgeHtml || '');
         }
       }
-      applyWorkspaceControls();
     }
 
     async function hydrateViewedState() {
@@ -400,13 +431,8 @@
       }
       if (!confirm) return;
 
-      let phrases = [];
-      try { phrases = JSON.parse(button.dataset.blockPhrases || '[]'); } catch(e) {}
-      if (!phrases.length && button.dataset.blockPhrase) phrases = [button.dataset.blockPhrase.trim()].filter(Boolean);
-
       const checksContainer = confirm.querySelector('[data-block-phrase-checks]');
       const manualInput = confirm.querySelector('[data-block-manual-input]');
-      const manualToggle = confirm.querySelector('[data-block-manual-toggle]');
       const manualRow = confirm.querySelector('.block-manual-row');
       const impactEl = confirm.querySelector('[data-block-impact]');
       const confirmButton = confirm.querySelector('[data-confirm-block]');
@@ -420,23 +446,14 @@
       }
 
       if (checksContainer) {
-        checksContainer.innerHTML = phrases.length
-          ? phrases.map(p =>
-              `<label class="block-phrase-check-row"><input class="block-phrase-checkbox" type="checkbox" value="${p}" checked> ${p}</label>`
-            ).join('')
-          : '<span class="block-empty-suggestion">Add a phrase below.</span>';
+        checksContainer.innerHTML = '';
       }
-      if (manualInput) manualInput.value = '';
-      if (manualRow) manualRow.hidden = true;
-      if (manualToggle) manualToggle.hidden = false;
+      if (manualRow) manualRow.hidden = false;
 
       function getSelectedPhrases() {
-        const checked = Array.from(
-          (checksContainer || document.createElement('div')).querySelectorAll('.block-phrase-checkbox:checked')
-        ).map(cb => cb.value.trim()).filter(Boolean);
         const manual = (manualInput ? manualInput.value : '').split(',')
           .map(p => p.trim()).filter(Boolean);
-        return [...new Set([...checked, ...manual])];
+        return [...new Set(manual)];
       }
 
       async function updateImpact() {
@@ -460,19 +477,8 @@
         } catch(e) { impactEl.textContent = ''; }
       }
 
-      if (checksContainer) {
-        checksContainer.querySelectorAll('.block-phrase-checkbox').forEach(cb => {
-          cb.addEventListener('change', updateImpact);
-        });
-      }
       if (manualInput) manualInput.addEventListener('input', updateImpact);
-      if (manualToggle) {
-        manualToggle.onclick = () => {
-          if (manualRow) manualRow.hidden = false;
-          manualToggle.hidden = true;
-          manualInput?.focus();
-        };
-      }
+      manualInput?.focus();
 
       updateImpact();
       if (blockStatus) blockStatus.textContent = '';
@@ -553,6 +559,8 @@
         card.classList.add('is-reviewed');
         status.textContent = options.successMessage || reviewSuccessMessage(action, payload);
         if (payload?.reload_workspace || ['applied', 'unapply', 'hidden', 'unhide'].includes(action)) {
+          saveWorkspaceFilters();
+          saveWorkspacePagination();
           window.location.reload();
           return;
         }
@@ -632,14 +640,10 @@
       if (confirmBlock) {
         const blockCard = confirmBlock.closest('.job-card');
         const blockConfirmEl = blockCard?.querySelector('[data-block-confirm]');
-        const checksContainer = blockConfirmEl?.querySelector('[data-block-phrase-checks]');
         const manualInput = blockConfirmEl?.querySelector('[data-block-manual-input]');
-        const checked = Array.from(
-          (checksContainer || document.createElement('div')).querySelectorAll('.block-phrase-checkbox:checked')
-        ).map(cb => cb.value.trim()).filter(Boolean);
         const manual = (manualInput ? manualInput.value : '').split(',')
           .map(p => p.trim()).filter(Boolean);
-        const blockPhrases = [...new Set([...checked, ...manual])].filter(Boolean);
+        const blockPhrases = [...new Set(manual)].filter(Boolean);
         await saveReviewAction(confirmBlock, {
           action: 'block_similar',
           block_phrases: blockPhrases,
@@ -688,7 +692,8 @@
     }
 
     loadWorkspaceFilters();
-    setActiveWorkspace((window.location.hash || '#potential').replace('#', ''), false);
+    loadWorkspacePagination();
+    setActiveWorkspace((window.location.hash || '#potential').replace('#', ''), false, false);
     showResultsHelperIfNeeded();
     hydrateViewedState();
     // Rejection-learning panel

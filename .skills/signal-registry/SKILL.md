@@ -32,9 +32,8 @@ Use before editing learning candidates, approval flow, or signal registry behavi
 `profile_section_label` is the only category where confident LLM classification bypasses the registry and writes directly to `parsing_rules.json` via `upsert_profile_section_label()`. This is intentional and user-approved. All other categories must go through pending → review → approve.
 
 ## Naming
-- The canonical Python constant for the CV-parsing title blocker list is `KEY_TITLE_PARSE_BLOCKERS` (in `parsing_schema.py`), JSON key `title_parse_blockers` in `parsing_rules.json`
-- This list is static config — it is NOT a signal category and cannot be edited via the registry
 - Role titles are now extracted by the LLM during CV processing, not by heuristic parsing
+- Do not document or reintroduce heuristic CV title blocker lists unless they exist in code and have an approved owner. Stale references should be removed rather than treated as architecture.
 
 ## Owners
 - `signal_registry.py`: pending signal storage and review flow.

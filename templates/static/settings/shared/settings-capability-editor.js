@@ -255,7 +255,7 @@ export const JobHunterCapabilityEditor = (function () {
             const inputId = `capability_level_${index}_${level}`;
             const checked = rule.level === level ? ' checked' : '';
             return `
-              <label class="choice-card choice-card--strength" for="${inputId}">
+              <label class="choice-card choice-card--strength ${escapeHtml(meta.tone || '')}" for="${inputId}">
                 <input id="${inputId}" type="radio" name="capability_level_${index}" value="${escapeHtml(level)}" data-capability-field="level"${checked} aria-label="${escapeHtml(meta.label)}">
                 <span>${escapeHtml(meta.label)}</span>
               </label>

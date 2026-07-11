@@ -337,6 +337,10 @@ _ONBOARDING_PAGE_LABEL_KEYS = (
 )
 
 _ONBOARDING_FLOW_LABEL_KEYS = (
+    "clean_search_confirm_title",
+    "clean_search_confirm_body_1",
+    "clean_search_confirm_body_2",
+    "clean_search_error",
     "refresh_profile_confirm_title",
     "refresh_profile_confirm_body_1",
     "refresh_profile_confirm_body_2",
@@ -596,13 +600,30 @@ def load_search_source_labels() -> dict[str, str]:
     return {key: str(labels[key]).strip() for key in _SEARCH_SOURCE_LABEL_KEYS}
 
 
-def clear_current_user_search_state() -> dict[str, Any]:
+def clear_current_user_search_state(*, preserve_profile: bool = True) -> dict[str, Any]:
     """Clear only the current user's search/result state."""
+    from job_hunter_agent.database import db_conn
+    from job_hunter_agent.paths import get_active_user_id
+
     clear_job_history()
     clear_workspace_pool()
     clear_review_data()
     clear_run_stats()
     clear_audit_rows()
+
+    if preserve_profile:
+        profile = load_profile()
+        review_controls = profile.setdefault("review_controls", {})
+        review_controls["applied_job_keys"] = []
+        review_controls["hidden_job_keys"] = []
+        save_profile(profile)
+
+    user_id = get_active_user_id()
+    with db_conn() as conn:
+        conn.execute(
+            "DELETE FROM candidate_application_history WHERE user_id = ?",
+            (user_id,),
+        )
 
     output_path = get_workspace_results_path()
     try:
@@ -612,7 +633,7 @@ def clear_current_user_search_state() -> dict[str, Any]:
 
     return {
         "ok": True,
-        "message": "Search results cleared. Profile and settings were preserved.",
+        "message": "Search results, applied jobs, and hidden jobs were cleared. Profile and settings were preserved.",
         "redirect_to": "/workspace",
     }
 
@@ -1288,7 +1309,7 @@ class SettingsHandler:
         save_profile(DEFAULT_PROFILE)
         save_source_materials(DEFAULT_SOURCE_MATERIALS)
 
-        clear_current_user_search_state()
+        clear_current_user_search_state(preserve_profile=False)
         clear_user_settings()
         clear_agent_state()
 

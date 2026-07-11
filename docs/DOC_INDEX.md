@@ -1,4 +1,8 @@
-# Documentation Index
+# Documentation Ownership Map
+
+Canonical navigation starts at [docs/INDEX.md](INDEX.md).
+
+This file is the ownership map for deciding where doc changes belong. It is not the primary front door for humans or coding agents.
 
 Use this file to decide where information belongs. Do not create a new markdown file unless none of these owners fit.
 
@@ -8,6 +12,7 @@ Use this file to decide where information belongs. Do not create a new markdown 
 |---|---|
 | `README.md` | Project overview, quick start, and links to deeper docs. |
 | `AGENTS.md` | Tiny reusable agent loader only. |
+| `docs/INDEX.md` | Canonical documentation routing index. |
 
 ## Core Docs
 
@@ -48,6 +53,10 @@ Runbooks are for live incident-style procedures. They should contain exact comma
 ## Backlog
 
 Backlog source of truth is the shared Google Sheet. Local backlog markdown files are historical references only and are not active planning sources.
+
+| File | Owner |
+|---|---|
+| `docs/backlog/README.md` | Stable extraction rules for the historical review CSV / archive workflow. Not an active planning source. |
 
 ## Skills
 

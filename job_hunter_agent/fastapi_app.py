@@ -234,11 +234,28 @@ def _bootstrap_runtime_knowledge() -> None:
     from job_hunter_agent.global_settings import seed_global_settings_from_file
     from job_hunter_agent.knowledge_store import upgrade_knowledge_from_dir
     from job_hunter_agent.paths import REPO_ROOT as _REPO_ROOT
+    from job_hunter_agent.runtime_seed_manifest import (
+        APPROVED_DB_KNOWLEDGE_JSON_REL_PATHS,
+        APPROVED_SIGNAL_JSON_REL_PATHS,
+        resolve_seed_json_paths,
+    )
 
     init_db()
     seed_global_settings_from_file()
-    for _subdir in ("knowledge", "signals"):
-        upgrade_knowledge_from_dir(_REPO_ROOT / "data" / _subdir)
+    upgrade_knowledge_from_dir(
+        _REPO_ROOT / "data" / "knowledge",
+        json_files=resolve_seed_json_paths(
+            _REPO_ROOT / "data" / "knowledge",
+            APPROVED_DB_KNOWLEDGE_JSON_REL_PATHS,
+        ),
+    )
+    upgrade_knowledge_from_dir(
+        _REPO_ROOT / "data" / "signals",
+        json_files=resolve_seed_json_paths(
+            _REPO_ROOT / "data" / "signals",
+            APPROVED_SIGNAL_JSON_REL_PATHS,
+        ),
+    )
 
 
 def _apply_startup_flags(*, step: bool) -> None:

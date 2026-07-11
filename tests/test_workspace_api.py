@@ -1,5 +1,6 @@
 """Tests for workspace api."""
 
+import json
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -74,7 +75,7 @@ def test_api_review_data_returns_saved_suggested_tuning(monkeypatch, isolated_db
     assert payload["suggested_tuning"]["capability_suggestions"][0]["skill"] == "Process mapping"
 
 
-def test_api_clean_search_clears_only_search_state(monkeypatch, isolated_db, tmp_path):
+def test_api_clean_search_clears_search_state_and_review_buckets(monkeypatch, isolated_db, tmp_path):
     monkeypatch.setattr(
         "job_hunter_agent.fastapi_app.read_session_user",
         lambda request: {"user_id": "test_user", "email": "test@example.com", "role": "admin"},
@@ -94,7 +95,10 @@ def test_api_clean_search_clears_only_search_state(monkeypatch, isolated_db, tmp
         conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", ("test_user",))
         conn.execute(
             "INSERT INTO user_profile (user_id, data) VALUES (?, ?)",
-            ("test_user", "{}"),
+            (
+                "test_user",
+                '{"review_controls":{"applied_job_keys":["seek:1"],"hidden_job_keys":["seek:2"]}}',
+            ),
         )
         conn.execute(
             "INSERT INTO user_settings (user_id, data) VALUES (?, ?)",
@@ -131,7 +135,7 @@ def test_api_clean_search_clears_only_search_state(monkeypatch, isolated_db, tmp
     assert response.status_code == 200
     assert response.json() == {
         "ok": True,
-        "message": "Search results cleared. Profile and settings were preserved.",
+        "message": "Search results, applied jobs, and hidden jobs were cleared. Profile and settings were preserved.",
         "redirect_to": "/workspace",
     }
     assert not workspace_path.exists()
@@ -161,6 +165,16 @@ def test_api_clean_search_clears_only_search_state(monkeypatch, isolated_db, tmp
             "SELECT COUNT(*) FROM user_profile WHERE user_id = ?",
             ("test_user",),
         ).fetchone()[0] == 1
+        profile_row = conn.execute(
+            "SELECT data FROM user_profile WHERE user_id = ?",
+            ("test_user",),
+        ).fetchone()
+        assert profile_row is not None
+        profile_data = json.loads(profile_row["data"])
+        assert profile_data["review_controls"] == {
+            "applied_job_keys": [],
+            "hidden_job_keys": [],
+        }
         assert conn.execute(
             "SELECT COUNT(*) FROM user_settings WHERE user_id = ?",
             ("test_user",),
@@ -168,7 +182,7 @@ def test_api_clean_search_clears_only_search_state(monkeypatch, isolated_db, tmp
         assert conn.execute(
             "SELECT COUNT(*) FROM candidate_application_history WHERE user_id = ?",
             ("test_user",),
-        ).fetchone()[0] == 1
+        ).fetchone()[0] == 0
 
 
 def test_api_clean_search_is_debug_only(monkeypatch, isolated_db):

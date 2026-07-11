@@ -338,7 +338,7 @@ def _run_seek_and_linkedin_in_parallel(context: ScrapeRunContext) -> list[Source
                 break
 
             next_deadline = min(deadlines[future] for future in pending)
-            wait_timeout = max(0.1, min(1.0, next_deadline - time.monotonic()))
+            wait_timeout = max(0.0, min(0.1, next_deadline - time.monotonic()))
             done, _ = wait(pending, timeout=wait_timeout, return_when=FIRST_COMPLETED)
             for future in done:
                 pending.remove(future)

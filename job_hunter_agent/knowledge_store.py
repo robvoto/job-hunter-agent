@@ -20,7 +20,7 @@ Upgrade strategy (used by db_seed.py --upgrade):
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 from job_hunter_agent.database import db_conn
 
@@ -126,9 +126,17 @@ def _merge_additive(db_data: dict, file_data: dict) -> dict:
     return merged
 
 
+def _iter_seed_json_files(source_dir: Path, json_files: Iterable[Path] | None = None) -> list[Path]:
+    if json_files is None:
+        return sorted(source_dir.glob("*.json"))
+    return sorted(Path(path) for path in json_files)
+
+
 def upgrade_knowledge_from_dir(
     source_dir: Path,
     db_path: Path | None = None,
+    *,
+    json_files: Iterable[Path] | None = None,
 ) -> list[str]:
     """Upgrade knowledge from source_dir using version-aware merge rules.
 
@@ -141,7 +149,7 @@ def upgrade_knowledge_from_dir(
     Returns list of keys that were updated.
     """
     updated: list[str] = []
-    for json_file in sorted(source_dir.glob("*.json")):
+    for json_file in _iter_seed_json_files(source_dir, json_files):
         key = json_file.stem
         file_data = json.loads(json_file.read_text(encoding="utf-8"))
         if key == "ui_labels":
@@ -184,6 +192,7 @@ def seed_knowledge_from_dir(
     db_path: Path | None = None,
     *,
     overwrite: bool = False,
+    json_files: Iterable[Path] | None = None,
 ) -> list[str]:
     """Seed knowledge table from all *.json files in source_dir.
 
@@ -193,7 +202,7 @@ def seed_knowledge_from_dir(
     Returns list of keys that were written.
     """
     seeded: list[str] = []
-    for json_file in sorted(source_dir.glob("*.json")):
+    for json_file in _iter_seed_json_files(source_dir, json_files):
         key = json_file.stem
         data = json.loads(json_file.read_text(encoding="utf-8"))
         if key == "ui_labels":

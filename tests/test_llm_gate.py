@@ -274,6 +274,61 @@ def test_request_learning_payload_retries_once_on_invalid_json(monkeypatch, capl
     assert "[LLM][RETRY]" in caplog.text
 
 
+def test_request_learning_payload_returns_usage_summary(monkeypatch):
+    class _FakeUsage:
+        input_tokens = 321
+        output_tokens = 45
+
+    class _FakeParsed:
+        def model_dump(self):
+            return {
+                "fit_review": {"decision": "KEEP", "grade": "SOLID"},
+                "job_requirements": ["Stakeholder engagement"],
+                "requirement_coverage": [
+                    {
+                        "requirement": "Stakeholder engagement",
+                        "status": "supported",
+                        "capability_name": "Stakeholder Engagement",
+                        "matched_job_text": "work with stakeholders",
+                        "profile_support": ["stakeholder management"],
+                    },
+                ],
+            }
+
+    class _FakeResponse:
+        output_parsed = _FakeParsed()
+        usage = _FakeUsage()
+
+    class _FakeResponses:
+        def parse(self, **kwargs):
+            return _FakeResponse()
+
+    class _FakeClient:
+        responses = _FakeResponses()
+
+    monkeypatch.setattr(llm_gate, "client", _FakeClient())
+    monkeypatch.setattr(llm_gate, "_log_llm_call", lambda *args, **kwargs: None)
+    monkeypatch.setattr(llm_gate, "_log_llm_model_once", lambda: "test-model")
+    monkeypatch.setattr(
+        llm_gate,
+        "_get_llm_pricing_per_1m",
+        lambda: {"test-model": {"input": 1.0, "output": 2.0}},
+    )
+    monkeypatch.setattr(
+        llm_gate,
+        "load_profile",
+        lambda: {"candidate_capabilities": [{"name": "Stakeholder Engagement"}]},
+    )
+
+    payload = llm_gate._request_learning_payload(
+        "Business analyst role supporting stakeholders.", fit_review=True
+    )
+
+    assert payload["llm_input_tokens"] == 321
+    assert payload["llm_output_tokens"] == 45
+    assert payload["llm_cost_usd"] > 0
+
+
 def test_strong_grade_requires_requirement_capability_evidence():
     payload = llm_gate.normalize_llm_review_payload(
         {
@@ -583,6 +638,7 @@ def test_build_requirement_coverage_guidance_includes_key_phrases():
     assert "requirement_coverage" in guidance
     assert "atomic" in guidance
     assert "Use at most" in guidance
+    assert "Do not mark every row mandatory" in guidance
 
 
 def test_build_job_requirements_guidance_includes_work_types():

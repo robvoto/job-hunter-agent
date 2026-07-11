@@ -248,6 +248,10 @@
       grid-template-columns: minmax(0, 1fr);
       align-items: start;
     }
+    /* Local layout exception: give the Location listbox scrollbar breathing room from the Work type column. */
+    .search-settings-grid .settings-form-grid--search-basics {
+      column-gap: var(--surface-gap-lg);
+    }
     .settings-form-grid--prompt-templates {
       grid-template-columns: minmax(0, 1fr);
     }

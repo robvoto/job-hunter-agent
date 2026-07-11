@@ -21,6 +21,8 @@ from job_hunter_agent.record_schema import (
     RECORD_JOB_REQUIREMENTS_KEY,
     RECORD_LLM_COST_USD_KEY,
     RECORD_LLM_ELAPSED_MS_KEY,
+    RECORD_LLM_INPUT_TOKENS_KEY,
+    RECORD_LLM_OUTPUT_TOKENS_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
 )
 from job_hunter_agent.runtime_helpers import CLI_FLAG_RESET_NEW_TO_YOU
@@ -50,6 +52,8 @@ KEEP_SNAPSHOT_FIELDS = (
     "llm_fit_grade",
     RECORD_LLM_ELAPSED_MS_KEY,
     RECORD_LLM_COST_USD_KEY,
+    RECORD_LLM_INPUT_TOKENS_KEY,
+    RECORD_LLM_OUTPUT_TOKENS_KEY,
     "search_location",
     "search_keywords",
     "fit_source_text",
@@ -169,6 +173,12 @@ def apply_kept_job_reuse(record: dict, history_entry: dict) -> dict:
 
     if not record.get(RECORD_LLM_COST_USD_KEY):
         record[RECORD_LLM_COST_USD_KEY] = snapshot.get(RECORD_LLM_COST_USD_KEY)
+
+    if not record.get(RECORD_LLM_INPUT_TOKENS_KEY):
+        record[RECORD_LLM_INPUT_TOKENS_KEY] = snapshot.get(RECORD_LLM_INPUT_TOKENS_KEY)
+
+    if not record.get(RECORD_LLM_OUTPUT_TOKENS_KEY):
+        record[RECORD_LLM_OUTPUT_TOKENS_KEY] = snapshot.get(RECORD_LLM_OUTPUT_TOKENS_KEY)
 
     if not record.get(RECORD_JOB_REQUIREMENTS_KEY):
         record[RECORD_JOB_REQUIREMENTS_KEY] = snapshot.get(RECORD_JOB_REQUIREMENTS_KEY) or []

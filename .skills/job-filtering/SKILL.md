@@ -14,6 +14,7 @@ Use before editing `filters.py`, reject reasons, title/content filters, or hard 
 - Weak or uncertain signals become score impacts, warnings, or review signals.
 - Do not add hidden false-negative gates.
 - Do not hardcode rejected terms or title dictionaries in Python.
+- Do not use tiny handcrafted title vocabularies, qualifier lists, or punctuation heuristics to make global semantic decisions about role relevance.
 - Use approved knowledge files and profile settings.
 
 ## Boundaries
@@ -34,6 +35,7 @@ The hard gates in the title filter are:
    - O*NET says the occupation family is clearly far (`RESULT_FAR`) → hard reject as `ONET_FAR_OCCUPATION`, no LLM call. `title_reason` stays `TITLE_NOT_TARGET` on this record.
    - O*NET says near or uncertain (`RESULT_NEAR`/`RESULT_UNCERTAIN`) → treated as a potential match, `title_reason` is overwritten to `TITLE_REASON_POTENTIAL_MATCH`, and the job proceeds to detail fetch/LLM review.
    - The original O*NET verdict is preserved in `record["onet_classification"]` (never overwritten), so anything reading audit rows to detect "title didn't match but still went to review" must key off `onet_classification.result`, not `title_reason`/`reject_reason` — those get overwritten or never equal `TITLE_NOT_TARGET` once a row reaches final decision. See `review_insights.py::build_title_optimization_suggestions()`.
+   - Do not insert extra deterministic semantic gates between `TITLE_NOT_TARGET` and this fallback path, such as "core keyword overlap" checks or guessed "domain qualifier" interpretations.
 
 **`match_family` values and their scoring impact:**
 - `"primary"` — title matched a `target_roles` entry → full title score, `title_reason="OK"`
@@ -43,6 +45,10 @@ The hard gates in the title filter are:
 **`title_reason` downstream effects:**
 - `"OK"` → standard description confidence check
 - `TITLE_REASON_POTENTIAL_MATCH` (secondary, or none-but-O*NET-near/uncertain) → stricter description proof required before keeping (`_evaluate_description_confidence` in `filters.py`)
+
+**Hide similar titles:**
+- Do not auto-derive title block phrases from punctuation segments or generic qualifier stripping.
+- If the user wants a title block, require them to explicitly choose or type the exact phrase being blocked.
 
 **`title_role_synonyms` in `parsing_rules.json`:**
 - Only for genuinely interchangeable spellings of the same role (e.g. "devops engineer" / "dev ops engineer")

@@ -17,11 +17,15 @@ from job_hunter_agent.record_schema import (
     RECORD_FIRST_VIEWED_AT_KEY,
     RECORD_JOB_KEY,
     RECORD_JOB_REQUIREMENTS_KEY,
+    RECORD_LLM_COST_USD_KEY,
     RECORD_LAST_KEPT_AT_KEY,
     RECORD_LAST_SEEN_AT_KEY,
     RECORD_LAST_VIEWED_AT_KEY,
     RECORD_LLM_DECISION_KEY,
+    RECORD_LLM_ELAPSED_MS_KEY,
     RECORD_LLM_FIT_GRADE_KEY,
+    RECORD_LLM_INPUT_TOKENS_KEY,
+    RECORD_LLM_OUTPUT_TOKENS_KEY,
     RECORD_LOCATION_KEY,
     RECORD_POSTED_AGE_DAYS_KEY,
     RECORD_POSTED_KEY,
@@ -94,6 +98,10 @@ def build_history_workspace_record(
         RECORD_CONTENT_REASON_KEY: snapshot.get(RECORD_CONTENT_REASON_KEY),
         RECORD_LLM_DECISION_KEY: snapshot.get(RECORD_LLM_DECISION_KEY),
         RECORD_LLM_FIT_GRADE_KEY: snapshot.get(RECORD_LLM_FIT_GRADE_KEY),
+        RECORD_LLM_ELAPSED_MS_KEY: snapshot.get(RECORD_LLM_ELAPSED_MS_KEY),
+        RECORD_LLM_COST_USD_KEY: snapshot.get(RECORD_LLM_COST_USD_KEY),
+        RECORD_LLM_INPUT_TOKENS_KEY: snapshot.get(RECORD_LLM_INPUT_TOKENS_KEY),
+        RECORD_LLM_OUTPUT_TOKENS_KEY: snapshot.get(RECORD_LLM_OUTPUT_TOKENS_KEY),
         RECORD_SEARCH_LOCATION_KEY: snapshot.get(RECORD_SEARCH_LOCATION_KEY) or "N/A",
         RECORD_SEARCH_KEYWORDS_KEY: snapshot.get(RECORD_SEARCH_KEYWORDS_KEY) or "",
         "fit_source_text": snapshot.get("fit_source_text") or "",
@@ -203,6 +211,10 @@ def build_hidden_workspace_record(
         RECORD_CONTENT_REASON_KEY: snapshot.get(RECORD_CONTENT_REASON_KEY),
         RECORD_LLM_DECISION_KEY: snapshot.get(RECORD_LLM_DECISION_KEY),
         RECORD_LLM_FIT_GRADE_KEY: snapshot.get(RECORD_LLM_FIT_GRADE_KEY),
+        RECORD_LLM_ELAPSED_MS_KEY: snapshot.get(RECORD_LLM_ELAPSED_MS_KEY),
+        RECORD_LLM_COST_USD_KEY: snapshot.get(RECORD_LLM_COST_USD_KEY),
+        RECORD_LLM_INPUT_TOKENS_KEY: snapshot.get(RECORD_LLM_INPUT_TOKENS_KEY),
+        RECORD_LLM_OUTPUT_TOKENS_KEY: snapshot.get(RECORD_LLM_OUTPUT_TOKENS_KEY),
         "fit_source_text": snapshot.get("fit_source_text") or "",
         "full_description": snapshot.get("full_description") or "",
         "fit_confidence": snapshot.get("fit_confidence") or "",
@@ -300,6 +312,10 @@ def build_applied_workspace_record(
         "content_reason": snapshot.get("content_reason"),
         "llm_decision": snapshot.get("llm_decision"),
         "llm_fit_grade": snapshot.get("llm_fit_grade"),
+        RECORD_LLM_ELAPSED_MS_KEY: snapshot.get(RECORD_LLM_ELAPSED_MS_KEY),
+        RECORD_LLM_COST_USD_KEY: snapshot.get(RECORD_LLM_COST_USD_KEY),
+        RECORD_LLM_INPUT_TOKENS_KEY: snapshot.get(RECORD_LLM_INPUT_TOKENS_KEY),
+        RECORD_LLM_OUTPUT_TOKENS_KEY: snapshot.get(RECORD_LLM_OUTPUT_TOKENS_KEY),
         "fit_source_text": snapshot.get("fit_source_text") or "",
         "full_description": snapshot.get("full_description") or "",
         "fit_confidence": snapshot.get("fit_confidence") or "",
@@ -632,6 +648,21 @@ def build_run_stats(
         or row.get("reviewed_signal_matches")
     )
 
+    llm_total_cost_usd = round(
+        sum(float(row.get("llm_cost_usd") or 0.0) for row in audit_rows if row.get("llm_cost_usd") not in (None, "")),
+        6,
+    )
+    llm_total_input_tokens = sum(
+        int(row.get("llm_input_tokens") or 0)
+        for row in audit_rows
+        if row.get("llm_input_tokens") not in (None, "")
+    )
+    llm_total_output_tokens = sum(
+        int(row.get("llm_output_tokens") or 0)
+        for row in audit_rows
+        if row.get("llm_output_tokens") not in (None, "")
+    )
+
     return {
         "run_started_at": run_started_at.isoformat(timespec="seconds"),
         "run_finished_at": run_finished_at.isoformat(timespec="seconds"),
@@ -650,6 +681,9 @@ def build_run_stats(
         "cards_with_flags_count": cards_with_flags_count,
         "issue_flag_summary": issue_flag_summary,
         "onet_match_count": onet_match_count,
+        "llm_total_cost_usd": llm_total_cost_usd,
+        "llm_total_input_tokens": llm_total_input_tokens,
+        "llm_total_output_tokens": llm_total_output_tokens,
         "keep_rate": round((kept_count / cards_seen), 4) if cards_seen else 0.0,
         "top_reject_reasons": top_reject_reasons,
         "skip_counts": skip_counts,

@@ -314,14 +314,27 @@ def _print_run_summary(run_stats: dict) -> None:
         )
     lines.append(bar)
     summary_text = "\n".join(lines)
-    logger.info(summary_text)
     RUN_SUMMARY_PATH.parent.mkdir(parents=True, exist_ok=True)
     RUN_SUMMARY_PATH.write_text(summary_text + "\n", encoding="utf-8")
+    logger.info(
+        "[RUN_SUMMARY] run_id=%s pages=%s seen=%s read=%s kept=%s rejected=%s summary_path=%s",
+        run_id or "(none)",
+        pages,
+        seen,
+        read,
+        kept,
+        rejected,
+        RUN_SUMMARY_PATH,
+    )
     
     # Print to stderr with visual markers so it stands out
     marker = "\n" + ("★" * 60) + "\n"
     sys.stderr.write(marker + summary_text + "\n" + ("★" * 60) + "\n")
     sys.stderr.flush()
+
+
+def _audit_row_has_details(row: dict) -> bool:
+    return int(row.get("details_length") or 0) > 0
 
 
 def finalize_scrape_run(
@@ -440,8 +453,8 @@ def finalize_scrape_run(
     if no_fresh_cards:
         run_stats["last_run_error"] = NO_FRESH_CARDS_ERROR
 
-    # Build source_breakdown from audit rows
-    source_metrics = {}
+    # Build source_breakdown from audit rows using the same semantics as build_run_stats().
+    source_metrics: dict[str, dict[str, object]] = {}
     for row in audit_rows:
         source = str(row.get("source") or "unknown").strip().lower()
         if source not in source_metrics:
@@ -449,21 +462,33 @@ def finalize_scrape_run(
                 "source": source.upper(),
                 "seen": 0,
                 "read": 0,
-                "pages": 0,
+                "pages": set(),
                 "kept": 0,
                 "rejected": 0,
             }
         source_metrics[source]["seen"] += 1
-        if row.get("detail_fetched"):
+        if _audit_row_has_details(row):
             source_metrics[source]["read"] += 1
-        source_metrics[source]["pages"] += row.get("pages_processed", 1)
+        page_num = row.get("page")
+        if page_num is not None:
+            page_marker = (
+                str(row.get("search_location") or "Unknown"),
+                int(page_num),
+            )
+            source_metrics[source]["pages"].add(page_marker)
         decision = str(row.get("decision") or "").strip().upper()
         if decision == "KEEP":
             source_metrics[source]["kept"] += 1
         elif decision in {"REJECT", "FILTERED"}:
             source_metrics[source]["rejected"] += 1
-    
-    run_stats["source_breakdown"] = list(source_metrics.values())
+
+    run_stats["source_breakdown"] = [
+        {
+            **metrics,
+            "pages": len(metrics["pages"]),
+        }
+        for metrics in source_metrics.values()
+    ]
 
     workspace_records = workspace_service.build_workspace_record_sets(
         merged_pool,

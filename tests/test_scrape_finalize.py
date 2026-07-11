@@ -231,8 +231,22 @@ def test_finalize_scrape_run_builds_source_breakdown_from_decisions(monkeypatch,
         context,
         kept_records=[{"job_key": "seek:1"}, {"job_key": "linkedin:1"}],
         audit_rows=[
-            {"job_key": "seek:1", "source": "seek", "decision": "KEEP", "pages_processed": 2},
-            {"job_key": "linkedin:1", "source": "linkedin", "decision": "KEEP"},
+            {
+                "job_key": "seek:1",
+                "source": "seek",
+                "decision": "KEEP",
+                "search_location": "Sydney",
+                "page": 1,
+                "details_length": 1200,
+            },
+            {
+                "job_key": "seek:2",
+                "source": "seek",
+                "decision": "REJECT",
+                "search_location": "Sydney",
+                "page": 2,
+            },
+            {"job_key": "linkedin:1", "source": "linkedin", "decision": "KEEP", "details_length": 900},
             {"job_key": "linkedin:2", "source": "linkedin", "decision": "REJECT"},
         ],
         skill_observations=[],
@@ -242,11 +256,13 @@ def test_finalize_scrape_run_builds_source_breakdown_from_decisions(monkeypatch,
     assert isinstance(run_stats, dict)
     breakdown = {item["source"]: item for item in run_stats["source_breakdown"]}
     assert breakdown["SEEK"]["kept"] == 1
-    assert breakdown["SEEK"]["rejected"] == 0
+    assert breakdown["SEEK"]["rejected"] == 1
     assert breakdown["SEEK"]["pages"] == 2
+    assert breakdown["SEEK"]["read"] == 1
     assert breakdown["LINKEDIN"]["kept"] == 1
     assert breakdown["LINKEDIN"]["rejected"] == 1
-    assert breakdown["LINKEDIN"]["pages"] == 2
+    assert breakdown["LINKEDIN"]["pages"] == 0
+    assert breakdown["LINKEDIN"]["read"] == 1
 
 
 def test_finalize_scrape_run_preserves_previous_workspace_when_no_audit_rows(
@@ -529,6 +545,47 @@ def test_build_run_stats_counts_unique_pages_across_sources():
 
     assert stats["page_count"] == 3
     assert stats["onet_match_count"] == 1
+    assert stats["llm_total_cost_usd"] == 0.0
+    assert stats["llm_total_input_tokens"] == 0
+    assert stats["llm_total_output_tokens"] == 0
+
+
+def test_build_run_stats_sums_llm_totals_from_current_audit_rows():
+    run_started_at = datetime(2026, 5, 16, 8, 12, 40, tzinfo=timezone.utc)
+    run_finished_at = datetime(2026, 5, 16, 8, 14, 10, tzinfo=timezone.utc)
+
+    stats = workspace_service.build_run_stats(
+        audit_rows=[
+            {
+                "source": "seek",
+                "search_location": "Sydney",
+                "page": 1,
+                "decision": "KEEP",
+                "llm_cost_usd": 0.001234,
+                "llm_input_tokens": 1200,
+                "llm_output_tokens": 220,
+            },
+            {
+                "source": "linkedin",
+                "search_location": "Sydney",
+                "page": 1,
+                "decision": "REJECT",
+                "llm_cost_usd": 0.002001,
+                "llm_input_tokens": 800,
+                "llm_output_tokens": 125,
+            },
+        ],
+        kept_records=[],
+        run_started_at=run_started_at,
+        run_finished_at=run_finished_at,
+        date_range_days=3,
+        sort_newest_first=True,
+        seek_max_pages=4,
+    )
+
+    assert stats["llm_total_cost_usd"] == 0.003235
+    assert stats["llm_total_input_tokens"] == 2000
+    assert stats["llm_total_output_tokens"] == 345
 
 
 def test_derive_run_summary_metrics_counts_onet_far_rejections():
@@ -568,10 +625,12 @@ def test_print_run_summary_uses_explicit_pages_and_cost_labels(caplog, tmp_path,
     )
 
     log_text = caplog.text
-    assert "Pages read: 3" in log_text
-    assert "O*NET rejects: 2" in log_text
-    assert "Total LLM cost: $0.1235" in log_text
-    assert "LLM truncations: 4" in log_text
+    assert "[RUN_SUMMARY]" in log_text
+    assert "pages=3" in log_text
+    assert "seen=7" in log_text
+    assert "read=5" in log_text
+    assert "kept=2" in log_text
+    assert "rejected=3" in log_text
 
     summary_path = tmp_path / "last_run_summary.txt"
     assert summary_path.exists()
@@ -613,6 +672,9 @@ def test_print_run_summary_includes_source_breakdown(caplog, tmp_path, monkeypat
         }
     )
 
+    assert "[RUN_SUMMARY]" in caplog.text
+    assert "By platform" not in caplog.text
+
     captured = capsys.readouterr()
     assert "By platform" in captured.err
     assert "SEEK" in captured.err
@@ -625,3 +687,30 @@ def test_print_run_summary_includes_source_breakdown(caplog, tmp_path, monkeypat
     assert "No fresh cards were captured in this run." in captured.err
     assert "Warnings:" in captured.err
     assert "LinkedIn timed out" in captured.err
+
+
+def test_print_run_summary_file_and_stderr_use_single_visible_summary_block(
+    caplog, tmp_path, monkeypatch, capsys
+):
+    import logging as _logging
+
+    caplog.set_level(_logging.INFO)
+    monkeypatch.setattr(scrape_finalize, "RUN_SUMMARY_PATH", tmp_path / "last_run_summary.txt")
+
+    scrape_finalize._print_run_summary(
+        {
+            "last_run_attempt_at": "2026-05-16T08:12:40+00:00",
+            "page_count": 1,
+            "cards_seen": 2,
+            "cards_read": 1,
+            "kept_count": 1,
+            "rejected_count": 1,
+            "cards_with_flags_count": 0,
+            "llm_total_cost_usd": 0.0,
+            "llm_truncation_count": 0,
+        }
+    )
+
+    captured = capsys.readouterr()
+    assert captured.err.count("Run complete") == 1
+    assert caplog.text.count("Run complete") == 0

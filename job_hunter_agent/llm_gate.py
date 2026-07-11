@@ -216,6 +216,21 @@ def _log_llm_call(resp: Any, purpose: str, model: str) -> None:
         )
 
 
+def _llm_usage_summary(resp: Any, model: str) -> dict[str, Any]:
+    usage = getattr(resp, "usage", None)
+    if usage is None:
+        return {}
+    tok_in = getattr(usage, "input_tokens", None) or getattr(usage, "prompt_tokens", 0) or 0
+    tok_out = getattr(usage, "output_tokens", None) or getattr(usage, "completion_tokens", 0) or 0
+    prices = _get_llm_pricing_per_1m()[model]
+    cost = _calculate_llm_cost_usd(tok_in, tok_out, prices)
+    return {
+        "llm_input_tokens": int(tok_in),
+        "llm_output_tokens": int(tok_out),
+        "llm_cost_usd": round(cost, 6),
+    }
+
+
 def get_session_cost_usd() -> float:
     return round(_session_cost_usd, 6)
 
@@ -1297,6 +1312,7 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
     payload = normalize_llm_review_payload(
         parsed.model_dump(), valid_capability_names=valid_capability_names
     )
+    payload.update(_llm_usage_summary(resp, model))
     if fit_review:
         if payload.get("fit_review") is None:
             raise ValueError("LLM fit review payload is missing fit_review")

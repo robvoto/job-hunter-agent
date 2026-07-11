@@ -79,7 +79,7 @@ function reviewStrengthChoicesMarkup(selectedValue, groupName) {
     const inputId = `${groupName}_${level}`;
     const checked = level === selectedValue ? ' checked' : '';
     return `
-      <label class="choice-card choice-card--strength" for="${inputId}">
+      <label class="choice-card choice-card--strength ${escapeHtml(meta.tone || '')}" for="${inputId}">
         <input id="${inputId}" type="radio" name="${groupName}" value="${escapeHtml(level)}"${checked} aria-label="${escapeHtml(meta.label)}">
         <span>${escapeHtml(meta.label)}</span>
       </label>

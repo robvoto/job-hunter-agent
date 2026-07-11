@@ -3,6 +3,7 @@
 import pytest
 
 from job_hunter_agent.database import db_conn, init_db
+from job_hunter_agent import occupation_taxonomy
 from job_hunter_agent.occupation_taxonomy import (
     RESULT_FAR,
     RESULT_NEAR,
@@ -366,6 +367,16 @@ def test_cache_is_keyed_by_profile_hash(tmp_db):
     result = classify_title("business analyst", other_profile, db_path=tmp_db, _index={})
     assert result.result == RESULT_NEAR
     assert result.reason == "cached"
+
+
+def test_profile_hash_changes_when_matcher_version_changes(monkeypatch):
+    profile = {"target_occupation_queries": ["business analyst"]}
+
+    original_hash = occupation_taxonomy._compute_profile_hash(profile)
+    monkeypatch.setattr(occupation_taxonomy, "LOOKUP_MATCHER_VERSION", "embedded-phrase-v99")
+    updated_hash = occupation_taxonomy._compute_profile_hash(profile)
+
+    assert updated_hash != original_hash
 
 
 # ── no profile context → uncertain ───────────────────────────────────────────

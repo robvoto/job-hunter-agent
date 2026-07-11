@@ -18,6 +18,7 @@ SETTINGS_ADMIN_PARTIAL_PATH = (
 SETTINGS_PAGE_CSS_PATH = (
     ROOT_DIR / "templates" / "static" / "settings" / "shared" / "settings-page.css"
 )
+THEME_WIDGETS_CSS_PATH = ROOT_DIR / "templates" / "static" / "theme" / "themes.widgets.css"
 SETTINGS_TEMPLATE_PATH = ROOT_DIR / "templates" / "settings.html"
 SETTINGS_SEARCH_PARTIAL_PATH = (
     ROOT_DIR / "templates" / "partials" / "settings" / "standard" / "settings-search.html"
@@ -161,6 +162,27 @@ def test_global_settings_layout_css_prevents_panel_overflow():
     assert ".panel-copy {" in css
     assert "overflow-wrap: anywhere;" in css
     assert ".subpanel .field-help {" in css
+
+
+def test_search_settings_location_listbox_uses_shared_dark_multiselect_styles():
+
+    search_html = SETTINGS_SEARCH_PARTIAL_PATH.read_text(encoding="utf-8")
+    widgets_css = THEME_WIDGETS_CSS_PATH.read_text(encoding="utf-8")
+    settings_css = SETTINGS_PAGE_CSS_PATH.read_text(encoding="utf-8")
+
+    assert 'select id="locations" class="jh-select" multiple size="8"' in search_html
+    assert ".jh-select[multiple] {" in widgets_css
+    assert "background-image: none;" in widgets_css
+    assert "scrollbar-gutter: stable;" in widgets_css
+    assert "color-scheme: dark;" in widgets_css
+    assert "scrollbar-width: thin;" in widgets_css
+    assert (
+        "scrollbar-color: color-mix(in srgb, var(--text-muted) 55%, transparent) transparent;"
+        in widgets_css
+    )
+    assert ".jh-select[multiple]::-webkit-scrollbar {" in widgets_css
+    assert ".search-settings-grid .settings-form-grid--search-basics {" in settings_css
+    assert "column-gap: var(--surface-gap-lg);" in settings_css
 
 
 def test_settings_page_renders_admin_link_only_for_admins(monkeypatch):

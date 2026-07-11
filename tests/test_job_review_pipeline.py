@@ -32,6 +32,8 @@ from job_hunter_agent.record_schema import (
     RECORD_LLM_DECISION_KEY,
     RECORD_LLM_ELAPSED_MS_KEY,
     RECORD_LLM_FIT_GRADE_KEY,
+    RECORD_LLM_INPUT_TOKENS_KEY,
+    RECORD_LLM_OUTPUT_TOKENS_KEY,
     RECORD_LLM_TITLE_JUDGMENT_KEY,
     RECORD_LOCATION_KEY,
     RECORD_ONET_CLASSIFICATION_KEY,
@@ -104,6 +106,8 @@ def _keep_review_payload(
             },
         ],
         "llm_cost_usd": 0.0123,
+        "llm_input_tokens": 1234,
+        "llm_output_tokens": 234,
     }
 
 
@@ -647,14 +651,14 @@ def test_pipeline_logs_job_centric_block_format(caplog, monkeypatch):
     assert onet_line is not None, "expected ONET_DECISION log with FETCH_DETAILS outcome"
 
 
-def test_title_no_core_keyword_overlap_logs_immediate_title_reject(monkeypatch, caplog):
+def test_explicit_title_reject_rule_logs_immediate_title_reject(monkeypatch, caplog):
     record = _base_record("seek", "seek_detail", "card")
     context = _review_context("SEEK")
 
     monkeypatch.setattr(
         job_review_pipeline,
         "analyze_title_filters",
-        lambda title, profile: {"ok": False, "reason": "TITLE_NO_CORE_KEYWORD_OVERLAP"},
+        lambda title, profile: {"ok": False, "reason": "TITLE_BAD_KEYWORD:sap"},
     )
 
     with caplog.at_level(logging.INFO, logger="job_hunter_agent.job_review_pipeline"):
@@ -662,9 +666,49 @@ def test_title_no_core_keyword_overlap_logs_immediate_title_reject(monkeypatch, 
 
     assert should_fetch is False
     assert outcome[RECORD_DECISION_KEY] == "REJECT"
-    assert updated_record[RECORD_REJECT_REASON_KEY] == "TITLE_NO_CORE_KEYWORD_OVERLAP"
+    assert updated_record[RECORD_REJECT_REASON_KEY] == "TITLE_BAD_KEYWORD:sap"
     assert "will read description" not in caplog.text
     assert "title filtered out" in caplog.text
+    assert "LLM:" not in caplog.text
+
+
+def test_job_cost_preserves_micro_cost_precision(monkeypatch):
+    job_key = "seek-job-micro-cost"
+    job_review_pipeline._job_start_costs[job_key] = 1.0
+    monkeypatch.setattr(job_review_pipeline, "get_session_cost_usd", lambda: 1.000049)
+
+    try:
+        assert job_review_pipeline._job_cost(job_key) == "$0.000049"
+    finally:
+        job_review_pipeline._job_start_costs.pop(job_key, None)
+
+
+def test_job_time_summary_omits_llm_when_no_llm_call(monkeypatch):
+    job_key = "seek-job-no-llm"
+    job_review_pipeline._job_start_times[job_key] = 0.0
+    job_review_pipeline._job_start_costs[job_key] = 1.0
+    monkeypatch.setattr(job_review_pipeline, "_elapsed", lambda key: "0.0s")
+    monkeypatch.setattr(job_review_pipeline, "get_session_cost_usd", lambda: 1.0)
+
+    try:
+        assert job_review_pipeline._job_time_summary(job_key) == "time: 0.0s"
+    finally:
+        job_review_pipeline._job_start_times.pop(job_key, None)
+        job_review_pipeline._job_start_costs.pop(job_key, None)
+
+
+def test_job_time_summary_shows_llm_when_cost_incurred(monkeypatch):
+    job_key = "seek-job-with-llm"
+    job_review_pipeline._job_start_times[job_key] = 0.0
+    job_review_pipeline._job_start_costs[job_key] = 1.0
+    monkeypatch.setattr(job_review_pipeline, "_elapsed", lambda key: "3.0s")
+    monkeypatch.setattr(job_review_pipeline, "get_session_cost_usd", lambda: 1.000122)
+
+    try:
+        assert job_review_pipeline._job_time_summary(job_key) == "time: 3.0s  |  LLM: $0.000122"
+    finally:
+        job_review_pipeline._job_start_times.pop(job_key, None)
+        job_review_pipeline._job_start_costs.pop(job_key, None)
 
 
 def test_duplicate_job_key_is_skipped_before_detail_fetch(monkeypatch):
@@ -738,6 +782,8 @@ def test_llm_review_fields_persist_on_record(monkeypatch):
             },
         ],
         "llm_cost_usd": 0.0123,
+        "llm_input_tokens": 1234,
+        "llm_output_tokens": 234,
     }
     _patch_llm_review_path(monkeypatch, payload)
 
@@ -747,6 +793,8 @@ def test_llm_review_fields_persist_on_record(monkeypatch):
     assert outcome[RECORD_DECISION_KEY] == "KEEP"
     assert updated_record[RECORD_LLM_ELAPSED_MS_KEY] is not None
     assert updated_record[RECORD_LLM_COST_USD_KEY] == 0.0123
+    assert updated_record[RECORD_LLM_INPUT_TOKENS_KEY] == 1234
+    assert updated_record[RECORD_LLM_OUTPUT_TOKENS_KEY] == 234
     assert updated_record[RECORD_REQUIREMENT_COVERAGE_KEY]
 
 

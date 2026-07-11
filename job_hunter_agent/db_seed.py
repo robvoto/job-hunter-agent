@@ -35,6 +35,12 @@ from job_hunter_agent.paths import (
     GLOBAL_SETTINGS_PATH,
     REPO_ROOT,
 )
+from job_hunter_agent.runtime_seed_manifest import (
+    APPROVED_DB_KNOWLEDGE_JSON_REL_PATHS,
+    APPROVED_RUNTIME_KNOWLEDGE_JSON_REL_PATHS,
+    APPROVED_SIGNAL_JSON_REL_PATHS,
+    resolve_seed_json_paths,
+)
 
 
 def _copy_required_runtime_file(source: Path, target: Path) -> bool:
@@ -51,20 +57,10 @@ def _copy_required_runtime_file(source: Path, target: Path) -> bool:
     return True
 
 
-def _copy_required_runtime_tree(source_dir: Path, target_dir: Path) -> list[str]:
-    """Copy all repo-managed JSON files from a bundled tree into DATA_DIR.
-
-    The runtime reads file-backed knowledge from JOB_HUNTER_DATA_DIR. A fresh
-    AWS install must therefore receive every repo-managed knowledge JSON file,
-    including nested generated artefacts such as the O*NET taxonomy index.
-    """
-    if not source_dir.exists():
-        raise FileNotFoundError(
-            f"Required bundled seed directory is missing from repo: {source_dir}"
-        )
-
+def _copy_required_runtime_tree(source_dir: Path, target_dir: Path, *, relative_paths: tuple[str, ...]) -> list[str]:
+    """Copy the approved repo-managed JSON seed files into DATA_DIR."""
     updated: list[str] = []
-    for source in sorted(source_dir.rglob("*.json")):
+    for source in resolve_seed_json_paths(source_dir, relative_paths):
         relative_path = source.relative_to(source_dir)
         target = target_dir / relative_path
         if _copy_required_runtime_file(source, target):
@@ -90,6 +86,7 @@ def sync_required_runtime_files() -> list[str]:
         _copy_required_runtime_tree(
             REPO_ROOT / "data" / "knowledge",
             DATA_DIR / "knowledge",
+            relative_paths=APPROVED_RUNTIME_KNOWLEDGE_JSON_REL_PATHS,
         )
     )
     return updated
@@ -99,6 +96,14 @@ def run(overwrite: bool = False, upgrade: bool = False) -> None:
     knowledge_dir = REPO_ROOT / "data" / "knowledge"
     signals_dir = REPO_ROOT / "data" / "signals"
     global_settings_path = REPO_ROOT / "data" / "config" / "global_settings.json"
+    approved_knowledge_json = resolve_seed_json_paths(
+        knowledge_dir,
+        APPROVED_DB_KNOWLEDGE_JSON_REL_PATHS,
+    )
+    approved_signal_json = resolve_seed_json_paths(
+        signals_dir,
+        APPROVED_SIGNAL_JSON_REL_PATHS,
+    )
 
     print("Initialising database...")
     init_db()
@@ -109,11 +114,11 @@ def run(overwrite: bool = False, upgrade: bool = False) -> None:
 
     if upgrade:
         print(f"Upgrading knowledge from {knowledge_dir} ...")
-        updated = upgrade_knowledge_from_dir(knowledge_dir)
+        updated = upgrade_knowledge_from_dir(knowledge_dir, json_files=approved_knowledge_json)
         print(f"  {len(updated)} knowledge entries updated: {updated or '(none - all current)'}")
 
         print(f"Upgrading signals config from {signals_dir} ...")
-        updated = upgrade_knowledge_from_dir(signals_dir)
+        updated = upgrade_knowledge_from_dir(signals_dir, json_files=approved_signal_json)
         print(
             f"  {len(updated)} signal config entries updated: {updated or '(none - all current)'}"
         )
@@ -124,13 +129,21 @@ def run(overwrite: bool = False, upgrade: bool = False) -> None:
         print(f"  {'updated' if written else 'already present'}")
     else:
         print(f"Seeding knowledge from {knowledge_dir} ...")
-        seeded = seed_knowledge_from_dir(knowledge_dir, overwrite=overwrite)
+        seeded = seed_knowledge_from_dir(
+            knowledge_dir,
+            overwrite=overwrite,
+            json_files=approved_knowledge_json,
+        )
         print(
             f"  {len(seeded)} knowledge entries written: {seeded or '(none - all already present)'}"
         )
 
         print(f"Seeding signals config from {signals_dir} ...")
-        seeded = seed_knowledge_from_dir(signals_dir, overwrite=overwrite)
+        seeded = seed_knowledge_from_dir(
+            signals_dir,
+            overwrite=overwrite,
+            json_files=approved_signal_json,
+        )
         print(
             f"  {len(seeded)} signal config entries written: {seeded or '(none - all already present)'}"
         )

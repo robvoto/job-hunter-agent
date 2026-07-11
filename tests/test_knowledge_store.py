@@ -12,6 +12,10 @@ from job_hunter_agent.knowledge_store import (
     set_knowledge,
     upgrade_knowledge_from_dir,
 )
+from job_hunter_agent.runtime_seed_manifest import (
+    APPROVED_DB_KNOWLEDGE_JSON_REL_PATHS,
+    resolve_seed_json_paths,
+)
 from job_hunter_agent.server_helpers import (
     _CAPABILITY_UI_LABEL_KEYS,
     _ONBOARDING_FLOW_LABEL_KEYS,
@@ -118,8 +122,27 @@ def test_repo_knowledge_seeds_successfully(tmp_db):
 
     repo_root = Path(__file__).resolve().parent.parent
     knowledge_dir = repo_root / "data" / "knowledge"
-    seeded = seed_knowledge_from_dir(knowledge_dir, tmp_db)
-    assert len(seeded) == 25, f"Expected 25 knowledge files, got {len(seeded)}: {seeded}"
+    seeded = seed_knowledge_from_dir(
+        knowledge_dir,
+        tmp_db,
+        json_files=resolve_seed_json_paths(knowledge_dir, APPROVED_DB_KNOWLEDGE_JSON_REL_PATHS),
+    )
+    assert len(seeded) == len(APPROVED_DB_KNOWLEDGE_JSON_REL_PATHS), (
+        f"Expected {len(APPROVED_DB_KNOWLEDGE_JSON_REL_PATHS)} knowledge files, got {len(seeded)}: {seeded}"
+    )
+
+
+def test_seed_can_use_explicit_allowlist_to_skip_unapproved_json(tmp_db, knowledge_dir):
+    approved = knowledge_dir / "approved.json"
+    stray = knowledge_dir / "private_example.json"
+    approved.write_text('{"v": 1}', encoding="utf-8")
+    stray.write_text('{"v": 2}', encoding="utf-8")
+
+    seeded = seed_knowledge_from_dir(knowledge_dir, tmp_db, json_files=[approved])
+
+    assert seeded == ["approved"]
+    assert get_knowledge("approved", tmp_db) == {"v": 1}
+    assert get_knowledge("private_example", tmp_db) is None
 
 
 def test_upgrade_seeds_missing_key(tmp_db, knowledge_dir):
@@ -285,7 +308,14 @@ def test_match_level_defaults_loaded_from_db(tmp_db):
     from pathlib import Path
 
     repo_root = Path(__file__).resolve().parent.parent
-    seed_knowledge_from_dir(repo_root / "data" / "knowledge", tmp_db)
+    seed_knowledge_from_dir(
+        repo_root / "data" / "knowledge",
+        tmp_db,
+        json_files=resolve_seed_json_paths(
+            repo_root / "data" / "knowledge",
+            APPROVED_DB_KNOWLEDGE_JSON_REL_PATHS,
+        ),
+    )
     data = get_knowledge("match_level_defaults", tmp_db)
     assert isinstance(data, dict)
     assert "entries" in data
@@ -432,9 +462,11 @@ def test_upgrade_fixes_stale_ui_labels_missing_workspace_labels(isolated_db):
             "salary_min_label": "Salary min",
             "date_range_label": "Date range",
             "last_run_heading": "Last Run",
+            "last_run_llm_cost_label": "LLM cost",
+            "last_run_input_tokens_label": "Input tokens",
+            "last_run_output_tokens_label": "Output tokens",
             "crawler_stats_heading": "Crawler Stats",
-            "crawler_stats_helper": "Cards seen is the number of source cards scanned. Ads reviewed is the smaller set where Job Hunter opened or evaluated more detail.",
-            "applications_heading": "Applications",
+            "crawler_stats_helper": "Cards seen is the number of source cards scanned. Ads reviewed is the smaller set where Job Hunter opened or evaluated more detail. LLM totals reflect the whole last run.",
             "run_efficiency_summary": "Run Efficiency",
             "show_hide_hint": "Show / hide",
             "run_efficiency_intro": "Search targets this run: ",
@@ -505,3 +537,12 @@ def test_build_bootstrap_script_includes_all_ui_label_sections():
         "__JOB_HUNTER_SETTINGS_ALERTS_LABELS__",
     ):
         assert sentinel in html, f"build_bootstrap_script() is missing {sentinel}"
+
+
+def test_onboarding_flow_labels_include_clean_search_confirm_copy():
+    labels = load_onboarding_flow_labels()
+
+    assert labels["clean_search_confirm_title"] == "Clear search results?"
+    assert "current job results" in labels["clean_search_confirm_body_1"]
+    assert "saved preferences" in labels["clean_search_confirm_body_2"]
+    assert labels["clean_search_error"] == "Could not clear search results."

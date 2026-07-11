@@ -9,22 +9,8 @@ from job_hunter_agent.capability_matrix import canonical_capability_term
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
 from job_hunter_agent.io_utils import load_parsing_rules
 from job_hunter_agent.profile_store import KEY_CANDIDATE_CAPABILITIES, load_profile
-from job_hunter_agent.signal_schema import (
-    TITLE_REASON_NO_CORE_KEYWORD,
-    TITLE_REASON_POTENTIAL_MATCH,
-)
+from job_hunter_agent.signal_schema import TITLE_REASON_POTENTIAL_MATCH
 from job_hunter_agent.title_normalization_rules import normalize_title_text
-
-TITLE_BLOCK_SEGMENT_SPLIT_RE = re.compile(r"\s*\|\s*|\s[-\u2013\u2014/:]\s|[(),\[\]]")
-_TITLE_QUALIFIER_SPLIT_RE = re.compile(r"\s*[\|\u2013\u2014:()\[\]]\s*|\s+-\s*|-\s+")
-_TITLE_QUALIFIER_SKIP_WORDS = frozenset({
-    "senior", "junior", "lead", "principal", "associate", "graduate", "entry",
-    "level", "specialist", "consultant", "manager", "director", "head",
-    "contract", "permanent", "casual", "part", "full", "time", "temp",
-    "temporary", "fixed", "term", "month", "months", "year", "years",
-    "remote", "hybrid", "onsite", "office",
-})
-
 
 def _normalize_title_pattern_text(value: str) -> str:
     raw = str(value or "").strip().lower()
@@ -69,20 +55,6 @@ def _matches_normalized_title(text: str, patterns: list[str]) -> bool:
     return bool(_find_matching_title_pattern(text, patterns))
 
 
-def _extract_core_keywords(patterns: list[str]) -> set[str]:
-    """Return the significant words across role patterns, excluding generic qualifiers.
-
-    Derived entirely from the candidate's own target_roles/also_consider_roles —
-    no separately configured keyword list is introduced.
-    """
-    keywords: set[str] = set()
-    for pattern in patterns:
-        for word in _normalize_title_pattern_text(pattern).split():
-            if word and word not in _TITLE_QUALIFIER_SKIP_WORDS:
-                keywords.add(word)
-    return keywords
-
-
 def analyze_title_filters(title: str, profile: dict[str, Any] | None = None) -> dict[str, Any]:
     result: dict[str, Any] = {
         "ok": False,
@@ -114,51 +86,23 @@ def analyze_title_filters(title: str, profile: dict[str, Any] | None = None) -> 
             result["reason"] = reason
             return result
 
-    domain_qualifier = _detect_title_domain_qualifier(normalized_title)
-
     if is_direct_match:
         if _has_numeric_title_level(normalized_title):
             result.update(
                 {"ok": True, "reason": TITLE_REASON_POTENTIAL_MATCH, "match_family": "primary"}
             )
-            if domain_qualifier:
-                result["warning_reason"] = f"DOMAIN_QUALIFIER:{domain_qualifier}"
             return result
         result.update({"ok": True, "reason": "OK", "match_family": "primary"})
-        if domain_qualifier:
-            result["warning_reason"] = f"DOMAIN_QUALIFIER:{domain_qualifier}"
         return result
 
     if is_adjacent_match:
         result.update(
             {"ok": True, "reason": TITLE_REASON_POTENTIAL_MATCH, "match_family": "secondary"}
         )
-        if domain_qualifier:
-            result["warning_reason"] = f"DOMAIN_QUALIFIER:{domain_qualifier}"
-        return result
-
-    core_keywords = _extract_core_keywords(target_patterns) | _extract_core_keywords(
-        adjacent_patterns
-    )
-    if core_keywords and not any(
-        re.search(rf"\b{re.escape(keyword)}\b", normalized_title) for keyword in core_keywords
-    ):
-        result.update({"ok": False, "reason": TITLE_REASON_NO_CORE_KEYWORD, "match_family": "none"})
         return result
 
     result.update({"ok": False, "reason": "TITLE_NOT_TARGET", "match_family": "none"})
     return result
-
-
-def _detect_title_domain_qualifier(title: str) -> str:
-    parts = [p.strip() for p in _TITLE_QUALIFIER_SPLIT_RE.split(title) if p.strip()]
-    if len(parts) < 2:
-        return ""
-    qualifier = parts[-1]
-    tokens = qualifier.lower().split()
-    if not tokens or all(t in _TITLE_QUALIFIER_SKIP_WORDS or t.isdigit() for t in tokens):
-        return ""
-    return qualifier
 
 
 def normalize_title_block_phrase(value: str) -> str:
@@ -169,48 +113,6 @@ def normalize_title_block_phrase(value: str) -> str:
     if not tokens:
         return ""
     return " ".join(tokens[:3])
-
-
-def _phrase_from_segment(segment: str) -> str:
-    cleaned = normalize_title_block_phrase(segment)
-    if not cleaned:
-        return ""
-
-    tokens = [token for token in cleaned.split() if len(token) >= 2 and not token.isdigit()]
-    if not tokens:
-        return ""
-    return " ".join(tokens[:3])
-
-
-def suggest_title_block_phrases(title: str) -> list[str]:
-    """Return ranked non-empty block-phrase candidates from explicit title qualifiers."""
-    raw_title = (title or "").strip()
-    if not raw_title:
-        return []
-    normalized = re.sub(r"\s+", " ", raw_title)
-    segments = [
-        segment.strip()
-        for segment in TITLE_BLOCK_SEGMENT_SPLIT_RE.split(normalized)
-        if segment and segment.strip()
-    ]
-    if len(segments) <= 1:
-        return []
-    ranked_groups: list[list[str]] = [[], []]
-    seen: set[str] = set()
-    for index, seg in enumerate(segments):
-        if index == 0:
-            continue
-        phrase = _phrase_from_segment(seg)
-        if phrase and phrase not in seen:
-            seen.add(phrase)
-            ranked_groups[0].append(phrase)
-    return ranked_groups[0] + ranked_groups[1]
-
-
-def suggest_title_block_phrase(title: str) -> str:
-    """Return the single best block phrase."""
-    candidates = suggest_title_block_phrases(title)
-    return candidates[0] if candidates else ""
 
 
 def build_title_block_rule(phrase: str) -> dict[str, str]:

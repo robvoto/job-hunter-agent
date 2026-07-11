@@ -1,6 +1,9 @@
 """Tests for repo health."""
 
+import ast
 import importlib
+import re
+import subprocess
 from pathlib import Path
 
 from job_hunter_agent import profile_store
@@ -14,6 +17,42 @@ from job_hunter_agent.profile_store import (
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 _MOJIBAKE_MARKERS = ("â€™", "â€œ", "â€�", "â€˜", "â€ž", "â€“", "â€”", "â€¦", "Ã¢", "Ãƒ", "�")
+
+_ACTIVE_MODULES = [
+    "job_hunter_agent.agent_runner",
+    "job_hunter_agent.capability_matching",
+    "job_hunter_agent.config",
+    "job_hunter_agent.cv_pipeline",
+    "job_hunter_agent.description_trust",
+    "job_hunter_agent.fastapi_app",
+    "job_hunter_agent.filters",
+    "job_hunter_agent.fit_scoring",
+    "job_hunter_agent.history",
+    "job_hunter_agent.llm_gate",
+    "job_hunter_agent.preferences",
+    "job_hunter_agent.profile_learning",
+    "job_hunter_agent.profile_store",
+    "job_hunter_agent.review_insights",
+    "job_hunter_agent.salary",
+    "job_hunter_agent.scrape_finalize",
+    "job_hunter_agent.scrapers.base",
+    "job_hunter_agent.scrapers.linkedin",
+    "job_hunter_agent.scrapers.seek",
+    "job_hunter_agent.scrapers.seek_runner",
+    "job_hunter_agent.server_helpers",
+    "job_hunter_agent.signal_registry",
+    "job_hunter_agent.source_connector",
+    "job_hunter_agent.source_documents",
+    "job_hunter_agent.user_settings",
+    "job_hunter_agent.utils",
+    "job_hunter_agent.workspace_rebuild_service",
+    "job_hunter_agent.workspace_refresh_service",
+    "job_hunter_agent.workspace_service",
+    "job_hunter_agent.routes.onboarding_api",
+    "job_hunter_agent.routes.pages",
+    "job_hunter_agent.routes.signals",
+    "job_hunter_agent.routes.workspace_api",
+]
 
 
 def test_no_legacy_directory_remains():
@@ -145,6 +184,88 @@ def test_showcase_notes_are_indexed_and_proof_oriented():
     assert "Keep claims tied to visible behaviour or tests in the repo." in showcase_notes
 
 
+def test_docs_index_routes_to_core_and_integration_docs():
+    docs_index = (ROOT_DIR / "docs" / "INDEX.md").read_text(encoding="utf-8")
+    readme = (ROOT_DIR / "README.md").read_text(encoding="utf-8")
+
+    assert "[README.md](../README.md)" in docs_index
+    assert "[USER_GUIDE.md](USER_GUIDE.md)" in docs_index
+    assert "[OPERATIONS.md](OPERATIONS.md)" in docs_index
+    assert "[ARCHITECTURE.md](ARCHITECTURE.md)" in docs_index
+    assert "[DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)" in docs_index
+    assert "[INTEGRATIONS.md](INTEGRATIONS.md)" in docs_index
+    assert "[SOURCE_REGISTER.md](SOURCE_REGISTER.md)" in docs_index
+    assert "[SCORING_RATIONALE.md](SCORING_RATIONALE.md)" in docs_index
+    assert "[aws-ec2-setup.md](aws-ec2-setup.md)" in docs_index
+    assert "[docs/INDEX.md](docs/INDEX.md)" in readme
+    assert "[docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)" in readme
+
+
+def test_doc_index_points_to_canonical_docs_index():
+    doc_index = (ROOT_DIR / "docs" / "DOC_INDEX.md").read_text(encoding="utf-8")
+
+    assert "Canonical navigation starts at [docs/INDEX.md](INDEX.md)." in doc_index
+    assert "`docs/INDEX.md`" in doc_index
+
+
+def test_integrations_doc_captures_local_override_and_runtime_seed_boundary():
+    integrations = (ROOT_DIR / "docs" / "INTEGRATIONS.md").read_text(encoding="utf-8")
+
+    assert "rob_candidate_application_history_import.local.json" in integrations
+    assert "approved repo-managed JSON seed manifest" in integrations
+    assert "Google Sheet backlog is project-management infrastructure" in integrations
+    assert "user-owned credentials only" in integrations
+
+
+def _onet_algorithm_signature(source_text: str) -> tuple[str, str]:
+    tree = ast.parse(source_text)
+    segments: dict[str, str] = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id == "LOOKUP_MATCHER_VERSION":
+                    segments["LOOKUP_MATCHER_VERSION"] = ast.get_source_segment(source_text, node) or ""
+        elif isinstance(node, ast.FunctionDef) and node.name in {
+            "_compute_profile_hash",
+            "_derive_target_occupation_codes",
+            "_select_embedded_phrase_match",
+            "_classify_embedded_phrase_codes",
+            "classify_title",
+        }:
+            segments[node.name] = ast.get_source_segment(source_text, node) or ""
+
+    version_assignment = segments.pop("LOOKUP_MATCHER_VERSION")
+    normalized_logic = "\n".join(value.strip() for key, value in sorted(segments.items()))
+    return version_assignment.strip(), normalized_logic.strip()
+
+
+def test_onet_matcher_version_changes_when_algorithm_logic_changes():
+    occupation_taxonomy_path = ROOT_DIR / "job_hunter_agent" / "occupation_taxonomy.py"
+    current_text = occupation_taxonomy_path.read_text(encoding="utf-8")
+    head_text = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(ROOT_DIR),
+            "show",
+            f"HEAD:{occupation_taxonomy_path.relative_to(ROOT_DIR).as_posix()}",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    ).stdout
+
+    current_version, current_logic = _onet_algorithm_signature(current_text)
+    head_version, head_logic = _onet_algorithm_signature(head_text)
+
+    if current_logic != head_logic:
+        assert current_version != head_version, (
+            "O*NET classification logic changed but LOOKUP_MATCHER_VERSION did not. "
+            "Bump the matcher/cache version when material classification logic changes."
+        )
+
+
 def test_user_guide_documents_cv_structure_and_search_placement():
     user_guide = (ROOT_DIR / "docs" / "USER_GUIDE.md").read_text(encoding="utf-8")
 
@@ -175,6 +296,22 @@ def test_scoring_rationale_documents_missing_cv_evidence_default():
     assert "the system must not claim the candidate has it" in scoring_rationale
     assert "missing evidence is treated as `not_shown`" in scoring_rationale
     assert "not automatically become a hard rejection" in scoring_rationale
+
+
+def test_scoring_and_operations_docs_cover_fit_evidence_and_run_summary_semantics():
+    scoring_rationale = (ROOT_DIR / "docs" / "SCORING_RATIONALE.md").read_text(
+        encoding="utf-8"
+    )
+    user_guide = (ROOT_DIR / "docs" / "USER_GUIDE.md").read_text(encoding="utf-8")
+    operations = (ROOT_DIR / "docs" / "OPERATIONS.md").read_text(encoding="utf-8")
+
+    assert "requirement coverage only" in scoring_rationale
+    assert "matched source text, capability mapping, and reviewed-signal evidence" in scoring_rationale
+    assert "primary user-facing evidence is requirement coverage" in user_guide
+    assert "location, freshness, Easy Apply / Quick Apply, viewed status, salary, and action recommendations" in user_guide
+    assert "Run summary semantics:" in operations
+    assert "source/platform `read` counts must reconcile with the total `descriptions read`" in operations
+    assert "do not treat every LinkedIn row as a page" in operations
 
 
 def test_architecture_and_user_guide_document_raw_cv_retention_decision():
@@ -215,9 +352,70 @@ def test_workspace_title_block_copy_is_managed_and_explains_impact():
     )
 
     assert card_labels["title_block_button_label"] == "Hide similar titles"
-    assert "before Job Hunter spends time reading the full ad" in card_labels["title_block_button_tooltip"]
-    assert "avoids spending time or AI tokens on repeated noise" in card_labels["title_block_guidance_copy"]
+    assert "exact phrases you choose" in card_labels["title_block_button_tooltip"]
+    assert "Enter the exact phrase you want blocked" in card_labels["title_block_guidance_copy"]
     assert "_workspace_label(\"workspace_card_labels\", \"title_block_guidance_copy\"" in renderer
+
+
+def test_results_panel_styles_use_shared_outer_panel_and_inset_job_cards():
+    workspace_css = (
+        ROOT_DIR / "templates" / "static" / "workspace" / "workspace-page.css"
+    ).read_text(encoding="utf-8")
+    results_css = (
+        ROOT_DIR / "templates" / "static" / "results" / "results-page.css"
+    ).read_text(encoding="utf-8")
+
+    assert ".results-section-body {\n  padding: 16px;\n}" in workspace_css
+    assert ".section--results-panel .job-grid {\n  gap: 16px;\n}" in workspace_css
+    job_card_block = re.search(r"\.job-card \{(?P<body>.*?)\n\}", results_css, re.S)
+    assert job_card_block is not None
+    body = job_card_block.group("body")
+    assert "border: 1px solid var(--border-subtle);" in body
+    assert "border-radius: 14px;" in body
+    assert "border-bottom:" not in body
+
+
+def test_capability_strength_choice_cards_use_shared_semantic_tone_classes():
+    capability_editor_js = (
+        ROOT_DIR / "templates" / "static" / "settings" / "shared" / "settings-capability-editor.js"
+    ).read_text(encoding="utf-8")
+    review_panel_js = (
+        ROOT_DIR / "templates" / "static" / "settings" / "shared" / "settings-review-panel.js"
+    ).read_text(encoding="utf-8")
+    theme_widgets = (
+        ROOT_DIR / "templates" / "static" / "theme" / "themes.widgets.css"
+    ).read_text(encoding="utf-8")
+
+    assert "choice-card choice-card--strength ${escapeHtml(meta.tone || '')}" in capability_editor_js
+    assert "choice-card choice-card--strength ${escapeHtml(meta.tone || '')}" in review_panel_js
+    assert ".choice-strip > .choice-card--strength.strength-strong" in theme_widgets
+    assert ".choice-strip > .choice-card--strength.strength-working" in theme_widgets
+    assert ".choice-strip > .choice-card--strength.strength-basic" in theme_widgets
+
+
+def test_stop_state_copy_stays_intentional_and_non_failure():
+    import json
+
+    labels = json.loads((ROOT_DIR / "data" / "knowledge" / "ui_labels.json").read_text(encoding="utf-8"))
+    shared = labels["shared_ui_labels"]
+
+    assert shared["search_stopping_title"] == "Run stopped by request"
+    assert "stopped on purpose" in shared["search_stopping_copy"]
+    assert "not a failure" in shared["search_stopping_subcopy"]
+
+
+def test_backlog_extraction_notes_preserve_review_csv_rules():
+    backlog_notes = (ROOT_DIR / "docs" / "backlog" / "README.md").read_text(encoding="utf-8")
+
+    assert "backlog_review.csv" in backlog_notes
+    assert "Continue extraction from `JH-188`" in backlog_notes
+    assert "Do not regenerate a new-looking CSV" in backlog_notes
+    assert "general.md" in backlog_notes
+    assert "filtering.md" in backlog_notes
+    assert "learning.md" in backlog_notes
+    assert "ui.md" in backlog_notes
+    assert "product_backlog.md" in backlog_notes
+    assert "excluded" in backlog_notes
 
 
 def test_ui_labels_json_does_not_contain_mojibake_markers():
@@ -302,42 +500,84 @@ def test_no_module_uses_logger_without_defining_it():
 
 
 def test_active_modules_import():
-
-    modules = [
-        "job_hunter_agent.agent_runner",
-        "job_hunter_agent.capability_matching",
-        "job_hunter_agent.config",
-        "job_hunter_agent.cv_pipeline",
-        "job_hunter_agent.description_trust",
-        "job_hunter_agent.fastapi_app",
-        "job_hunter_agent.filters",
-        "job_hunter_agent.fit_scoring",
-        "job_hunter_agent.history",
-        "job_hunter_agent.llm_gate",
-        "job_hunter_agent.preferences",
-        "job_hunter_agent.profile_learning",
-        "job_hunter_agent.profile_store",
-        "job_hunter_agent.review_insights",
-        "job_hunter_agent.salary",
-        "job_hunter_agent.scrape_finalize",
-        "job_hunter_agent.scrapers.base",
-        "job_hunter_agent.scrapers.linkedin",
-        "job_hunter_agent.scrapers.seek",
-        "job_hunter_agent.scrapers.seek_runner",
-        "job_hunter_agent.server_helpers",
-        "job_hunter_agent.signal_registry",
-        "job_hunter_agent.source_connector",
-        "job_hunter_agent.source_documents",
-        "job_hunter_agent.user_settings",
-        "job_hunter_agent.utils",
-        "job_hunter_agent.workspace_rebuild_service",
-        "job_hunter_agent.workspace_refresh_service",
-        "job_hunter_agent.workspace_service",
-        "job_hunter_agent.routes.onboarding_api",
-        "job_hunter_agent.routes.pages",
-        "job_hunter_agent.routes.signals",
-        "job_hunter_agent.routes.workspace_api",
-    ]
-
-    for module in modules:
+    for module in _ACTIVE_MODULES:
         importlib.import_module(module)
+
+
+def _active_module_paths() -> dict[str, Path]:
+    return {
+        module: ROOT_DIR / (module.replace(".", "/") + ".py")
+        for module in _ACTIVE_MODULES
+    }
+
+
+def _resolve_import_base(current_module: str, level: int, module: str | None) -> str:
+    if level == 0:
+        return module or ""
+    parts = current_module.split(".")[:-level]
+    if module:
+        parts.extend(module.split("."))
+    return ".".join(parts)
+
+
+def _build_active_import_graph() -> dict[str, set[str]]:
+    module_paths = _active_module_paths()
+    graph: dict[str, set[str]] = {module: set() for module in module_paths}
+
+    for module, path in module_paths.items():
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name in graph:
+                        graph[module].add(alias.name)
+            elif isinstance(node, ast.ImportFrom):
+                base = _resolve_import_base(module, node.level, node.module)
+                if base in graph:
+                    graph[module].add(base)
+                for alias in node.names:
+                    candidate = f"{base}.{alias.name}" if base else alias.name
+                    if candidate in graph:
+                        graph[module].add(candidate)
+    return graph
+
+
+def _find_import_cycles(graph: dict[str, set[str]]) -> set[tuple[str, ...]]:
+    cycles: set[tuple[str, ...]] = set()
+    visited: set[str] = set()
+    stack: list[str] = []
+
+    def _visit(module: str) -> None:
+        visited.add(module)
+        stack.append(module)
+        for dependency in sorted(graph[module]):
+            if dependency not in visited:
+                _visit(dependency)
+            elif dependency in stack:
+                start = stack.index(dependency)
+                nodes = stack[start:]
+                rotations = [tuple(nodes[i:] + nodes[:i]) for i in range(len(nodes))]
+                cycles.add(min(rotations))
+        stack.pop()
+
+    for module in sorted(graph):
+        if module not in visited:
+            _visit(module)
+    return cycles
+
+
+def test_active_module_import_cycles_are_known_and_allowlisted():
+    graph = _build_active_import_graph()
+    cycles = _find_import_cycles(graph)
+    allowed_cycles = {
+        (
+            "job_hunter_agent.llm_gate",
+            "job_hunter_agent.profile_store",
+        ),
+    }
+
+    assert cycles == allowed_cycles, (
+        "Unexpected active-module import cycles detected.\n"
+        f"Allowed: {sorted(allowed_cycles)}\n"
+        f"Found: {sorted(cycles)}"
+    )

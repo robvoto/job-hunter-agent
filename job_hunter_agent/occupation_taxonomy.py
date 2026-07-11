@@ -40,6 +40,8 @@ RESULT_FAR = "far"
 RESULT_UNCERTAIN = "uncertain"
 LOOKUP_SOURCE_CACHE = "cache"
 LOOKUP_SOURCE_FRESH = "fresh"
+# Cache-version guardrail: bump this when material classification logic changes so
+# stale near/far/uncertain cache rows cannot be silently reused.
 LOOKUP_MATCHER_VERSION = "embedded-phrase-v2"
 
 _RESULT_RESPONSE_LABELS = {

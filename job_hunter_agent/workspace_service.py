@@ -55,12 +55,14 @@ from job_hunter_agent.workspace_renderer import (
     ARCHIVE_LABEL,
     _workspace_ui_labels,
     humanize_reject_reason,
+    load_workspace_page_labels,
     render_match_level_guide_html,
     render_page_size_select_html,
     render_posted_filter_options,
     render_results_fragment,
     render_score_filter_options,
     render_section,
+    render_workspace_tabs_html,
     render_work_type_filter_options,
 )
 
@@ -543,12 +545,26 @@ def render_html(
         f"or better and {view_history_text}."
     )
 
+    ws_page_labels = load_workspace_page_labels()
+
     this_run_cards_html = _render_summary_cards_html(
         [
             (len(shortlist_records), "Matches"),
             (sum(1 for record in shortlist_records if not viewed_by_user(record)), "New to you"),
             (sum(1 for record in shortlist_records if viewed_by_user(record)), "Opened by you"),
             (len(recent_archive_records), ARCHIVE_LABEL),
+            (
+                f"${float(run_stats.get('llm_total_cost_usd', 0.0) or 0.0):.4f}",
+                ws_page_labels["LABEL_WS_LAST_RUN_LLM_COST_LABEL"],
+            ),
+            (
+                f"{int(run_stats.get('llm_total_input_tokens', 0) or 0):,}",
+                ws_page_labels["LABEL_WS_LAST_RUN_INPUT_TOKENS_LABEL"],
+            ),
+            (
+                f"{int(run_stats.get('llm_total_output_tokens', 0) or 0):,}",
+                ws_page_labels["LABEL_WS_LAST_RUN_OUTPUT_TOKENS_LABEL"],
+            ),
         ]
     )
 
@@ -560,15 +576,6 @@ def render_html(
         ]
     )
 
-    application_cards_html = _render_summary_cards_html(
-        [
-            (len(applied_records), "Applied"),
-            (len(hidden_records), "Hidden"),
-        ]
-    )
-
-    ws_page_labels = _workspace_ui_labels().get("workspace_page_labels", {})
-
     workspace_config_labels = {
         "rejectionLoadingSuggestions": ws_page_labels.get("rejection_loading_suggestions")
     }
@@ -577,9 +584,45 @@ def render_html(
         f'<span class="chip" title="{safe_html(str(item.get("reason", "UNKNOWN")))}"><strong>{safe_html(humanize_reject_reason(str(item.get("reason", "UNKNOWN"))))}:</strong> {safe_html(str(item.get("count", 0)))}</span>'
         for item in run_stats.get("top_reject_reasons", [])
     )
+    run_efficiency_panel_html = ""
+    if active_debug_mode:
+        run_efficiency_panel_html = (
+            '<details class="side-panel">'
+            "<summary>"
+            f"<span>{safe_html(ws_page_labels['LABEL_WS_RUN_EFFICIENCY_SUMMARY'])}</span>"
+            f'<span class="side-toggle-hint">{safe_html(ws_page_labels["LABEL_WS_SHOW_HIDE_HINT"])}</span>'
+            "</summary>"
+            '<div class="side-panel-body">'
+            f'<p class="side-panel-copy">{safe_html(ws_page_labels["LABEL_WS_RUN_EFFICIENCY_INTRO"])}'
+            f'{safe_html(" | ".join(target_summaries) or "None")}'
+            f'{safe_html(ws_page_labels["LABEL_WS_RUN_EFFICIENCY_SEPARATOR"])}'
+            f"{safe_html(snapshot_helper)}"
+            f"{safe_html(testing_mode_note)}</p>"
+            f'<div class="job-meta">{top_reject_reasons_html}</div>'
+            "</div>"
+            "</details>"
+        )
 
     scope_saved_option_html = (
         '<option value="saved">Saved Earlier Searches</option>' if active_debug_mode else ""
+    )
+    current_tabs_html = render_workspace_tabs_html(
+        shortlist_count,
+        len(applied_records),
+        len(hidden_records),
+        active_target="potential",
+    )
+    applied_tabs_html = render_workspace_tabs_html(
+        shortlist_count,
+        len(applied_records),
+        len(hidden_records),
+        active_target="applied",
+    )
+    hidden_tabs_html = render_workspace_tabs_html(
+        shortlist_count,
+        len(applied_records),
+        len(hidden_records),
+        active_target="hidden",
     )
 
     html = render_results_fragment(
@@ -599,6 +642,7 @@ def render_html(
                 history_clusters=history_clusters,
                 debug_mode=active_debug_mode,
                 header_tools_html=render_page_size_select_html(),
+                header_nav_html=current_tabs_html,
             ),
             "RECENT_SECTION_HTML": "",
             "ARCHIVE_LABEL": safe_html(ARCHIVE_LABEL),
@@ -609,6 +653,7 @@ def render_html(
                 scoring_profile,
                 history_clusters=history_clusters,
                 debug_mode=active_debug_mode,
+                header_nav_html=applied_tabs_html,
             ),
             "HIDDEN_SECTION_HTML": render_section(
                 "Hidden Jobs",
@@ -617,6 +662,7 @@ def render_html(
                 scoring_profile,
                 history_clusters=history_clusters,
                 debug_mode=active_debug_mode,
+                header_nav_html=hidden_tabs_html,
             ),
             "SEARCH_KEYWORDS_LABEL": safe_html(search_keywords_label),
             "SEARCH_LOCATIONS_LABEL": safe_html(search_locations_label),
@@ -628,12 +674,11 @@ def render_html(
             "SCOPE_SAVED_OPTION_HTML": scope_saved_option_html,
             "THIS_RUN_CARDS_HTML": this_run_cards_html,
             "CRAWLER_CARDS_HTML": crawler_cards_html,
-            "APPLICATION_CARDS_HTML": application_cards_html,
             "TARGET_SUMMARIES": safe_html(" | ".join(target_summaries) or "None"),
             "SNAPSHOT_HELPER": safe_html(snapshot_helper),
             "TESTING_MODE_NOTE": safe_html(testing_mode_note),
             "TOP_REJECT_REASONS_HTML": top_reject_reasons_html,
-            "MATCH_LEVEL_GUIDE_HTML": render_match_level_guide_html(scoring_profile),
+            "RUN_EFFICIENCY_PANEL_HTML": run_efficiency_panel_html,
             "WORKSPACE_RUN_ID_JSON": json.dumps(workspace_run_id),
             "DEFAULT_SCORE_FILTER_MIN_JSON": json.dumps(
                 "all" if active_debug_mode else str(workspace_min_score)

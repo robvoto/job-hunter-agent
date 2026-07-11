@@ -1,10 +1,11 @@
 """Tests for results runtime config."""
 
+import re
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from job_hunter_agent import workspace_renderer, workspace_service
+from job_hunter_agent import workspace_rebuild_service, workspace_renderer, workspace_service
 
 
 def test_results_page_uses_runtime_workspace_config():
@@ -18,6 +19,15 @@ def test_results_page_uses_runtime_workspace_config():
     assert 'href="/settings#section-search"' in results_html
     assert 'class="rejection-panel-actions"' in results_html
     assert 'class="block-admin-tip"' in results_html
+    assert 'id="reset_workspace_filters"' in results_html
+    assert 'class="btn btn-secondary btn-compact-action workspace-text-action workspace-text-action--reset"' in results_html
+    assert 'class="workspace-text-action__icon"' in results_html
+    assert 'class="ws-hero-panel"' not in results_html
+    assert 'class="ws-hero-title"' not in results_html
+    assert "workspace-controls-panel" in results_html
+    assert "$RUN_EFFICIENCY_PANEL_HTML" in results_html
+    assert "$MATCH_LEVEL_GUIDE_HTML" not in results_html
+    assert 'How Match Levels Work' not in results_html
     assert results_html.index('class="rejection-panel-actions"') < results_html.index(
         'class="block-admin-tip"'
     )
@@ -25,10 +35,130 @@ def test_results_page_uses_runtime_workspace_config():
     assert "LinkedIn Settings" not in results_html
     assert "Run Search Now" not in results_html
     assert "Edit Configuration" not in results_html
+    assert "$LABEL_WS_APPLIED_JOBS_HEADING" not in results_html
+    assert "$LABEL_WS_APPLIED_JOBS_COPY" not in results_html
+    assert "$LABEL_WS_HIDDEN_JOBS_HEADING" not in results_html
+    assert "$LABEL_WS_HIDDEN_JOBS_COPY" not in results_html
     assert "$WORKSPACE_RUN_ID_JSON" not in results_js
     assert "$VIEWED_BADGE_HTML_JSON" not in results_js
     assert "search_settings_" not in results_js
     assert "Run Search Now" not in results_js
+    assert "WORKSPACE_PAGINATION_KEY" in results_js
+    assert "loadWorkspacePagination();" in results_js
+    assert "saveWorkspacePagination();" in results_js
+    assert "window.location.reload();" in results_js
+
+
+def test_render_section_uses_results_header_sibling_layout_for_tools_and_pagination():
+    with patch(
+        "job_hunter_agent.workspace_renderer.render_job_card",
+        return_value='<article class="job-card">Card</article>',
+    ):
+        html = workspace_renderer.render_section(
+            "Job Results",
+            [{"job_key": "seek:1"}],
+            "No jobs right now.",
+            header_tools_html=workspace_renderer.render_page_size_select_html(),
+            header_nav_html=workspace_renderer.render_workspace_tabs_html(4, 0, 0),
+        )
+
+    assert 'class="results-header"' in html
+    assert 'class="results-header__left"' in html
+    assert 'class="scope-tabs"' in html
+    assert 'class="section-head-tools"' in html
+    assert 'class="results-section-panel"' in html
+    assert 'class="results-section-body"' in html
+    assert 'class="panel-select-control panel-select-control--page-size"' in html
+    assert 'class="pagination-label pagination-page-label"' in html
+    assert 'class="pagination-match-count"' in html
+    assert 'section-head--with-tools' not in html
+    assert re.search(
+        r'<div class="results-header"><div class="results-header__left">.*?class="section-head-tools".*?class="scope-tabs".*?</div><div class="section-tools">',
+        html,
+    )
+
+
+def test_render_section_keeps_multiple_job_cards_inside_shared_results_panel():
+    with patch(
+        "job_hunter_agent.workspace_renderer.render_job_card",
+        side_effect=[
+            '<article class="job-card" id="card-1">Card 1</article>',
+            '<article class="job-card" id="card-2">Card 2</article>',
+        ],
+    ):
+        html = workspace_renderer.render_section(
+            "Job Results",
+            [{"job_key": "seek:1"}, {"job_key": "seek:2"}],
+            "No jobs right now.",
+            header_tools_html=workspace_renderer.render_page_size_select_html(),
+            header_nav_html=workspace_renderer.render_workspace_tabs_html(2, 0, 0),
+        )
+
+    assert 'class="results-section-panel"' in html
+    assert 'class="results-section-body"' in html
+    assert '<div class="job-grid">' in html
+    assert html.count('class="job-card"') == 2
+    assert html.index('class="results-header"') < html.index('class="results-section-body"')
+
+
+def test_render_section_passes_debug_mode_through_to_job_cards():
+    with patch(
+        "job_hunter_agent.workspace_renderer.render_job_card",
+        return_value='<article class="job-card">Card</article>',
+    ) as render_job_card:
+        workspace_renderer.render_section(
+            "Job Results",
+            [{"job_key": "seek:1"}],
+            "No jobs right now.",
+            debug_mode=True,
+            header_tools_html=workspace_renderer.render_page_size_select_html(),
+            header_nav_html=workspace_renderer.render_workspace_tabs_html(1, 0, 0),
+        )
+
+    assert render_job_card.call_args.kwargs["debug_mode"] is True
+
+
+def test_results_page_javascript_persists_pagination_before_review_reload():
+    root = Path(__file__).resolve().parent.parent
+    results_js = (root / "templates" / "static" / "results" / "results-page.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert "const WORKSPACE_PAGINATION_KEY" in results_js
+    assert "window.localStorage.removeItem(WORKSPACE_PAGINATION_KEY);" in results_js
+    assert "loadWorkspacePagination();" in results_js
+    assert "setActiveWorkspace((window.location.hash || '#potential').replace('#', ''), false, false);" in results_js
+    assert re.search(
+        r"if \(payload\?\.reload_workspace \|\| \['applied', 'unapply', 'hidden', 'unhide'\]\.includes\(action\)\) \{\s+saveWorkspaceFilters\(\);\s+saveWorkspacePagination\(\);\s+window\.location\.reload\(\);",
+        results_js,
+    )
+
+
+def test_results_styles_keep_debug_match_tile_number_visible():
+    root = Path(__file__).resolve().parent.parent
+    results_css = (root / "templates" / "static" / "results" / "results-page.css").read_text(
+        encoding="utf-8"
+    )
+
+    assert ".match-tile-number {" in results_css
+    assert "display: block;" in results_css
+
+
+def test_job_link_click_marks_viewed_without_immediate_resort():
+    root = Path(__file__).resolve().parent.parent
+    results_js = (root / "templates" / "static" / "results" / "results-page.js").read_text(
+        encoding="utf-8"
+    )
+
+    start = results_js.index("function markCardViewed")
+    end = results_js.index("async function hydrateViewedState")
+    mark_viewed_js = results_js[start:end]
+
+    assert "card.dataset.viewed = '1';" in mark_viewed_js
+    assert "badges.insertAdjacentHTML('beforeend', WORKSPACE_CONTEXT.viewedBadgeHtml || '');" in mark_viewed_js
+    assert "applyWorkspaceControls();" not in mark_viewed_js
+    assert "markCardViewed(link);" in results_js
+    assert "sendViewedBeacon(link);" in results_js
 
 
 def test_candidate_application_history_loader_failure_returns_original_records(capsys):
@@ -246,15 +376,17 @@ def test_rendered_workspace_html_content(tmp_path):
             "salary_min_label": "Salary min",
             "date_range_label": "Date range",
             "last_run_heading": "Last Run",
+            "last_run_llm_cost_label": "LLM cost",
+            "last_run_input_tokens_label": "Input tokens",
+            "last_run_output_tokens_label": "Output tokens",
             "crawler_stats_heading": "Crawler Stats",
-            "crawler_stats_helper": "Cards seen is the number of source cards scanned. Ads reviewed is the smaller set where Job Hunter opened or evaluated more detail.",
-            "applications_heading": "Applications",
+            "crawler_stats_helper": "Cards seen is the number of source cards scanned. Ads reviewed is the smaller set where Job Hunter opened or evaluated more detail. LLM totals reflect the whole last run.",
             "run_efficiency_summary": "Run Efficiency",
             "show_hide_hint": "Show / hide",
             "run_efficiency_intro": "Search targets this run: ",
             "run_efficiency_separator": ". ",
-            "how_match_levels_work_summary": "How Match Levels Work",
-            "how_match_levels_work_copy": "Match levels are a guide, not a final verdict. The raw score is kept internally for sorting and test mode, while normal mode uses human-friendly bands so the workspace does not pretend to be more precise than it really is.",
+            "how_match_levels_work_summary": "How scoring works",
+            "how_match_levels_work_copy": "Job Hunter compares each job's requirements with evidence in your profile. Mandatory requirements and stronger evidence carry more weight. Missing, partial, or weak mandatory requirements lower the result, which is then grouped into the match level shown on the card. Location, posted date, viewed status, and Easy or Quick Apply help you review jobs, but they do not prove fit.",
             "rejection_panel_title": "Why isn&#39;t this a fit for you?",
             "rejection_panel_copy": "Choose required terms you do not want the app to accept again.",
             "rejection_how_this_works_summary": "How this works",
@@ -282,9 +414,11 @@ def test_rendered_workspace_html_content(tmp_path):
         history_clusters=None,
         debug_mode=None,
         header_tools_html="",
+        header_nav_html="",
     ):
         if title == "Job Results":
             captured_tools["header_tools_html"] = header_tools_html
+            captured_tools["header_nav_html"] = header_nav_html
         return "<section>Rendered Section</section>"
 
     with (
@@ -346,7 +480,11 @@ def test_rendered_workspace_html_content(tmp_path):
             run_started_at=mock_run_started_at,
             date_range_days=7,
             sort_newest_first=True,
-            run_stats={},
+            run_stats={
+                "llm_total_cost_usd": 0.1234,
+                "llm_total_input_tokens": 1200,
+                "llm_total_output_tokens": 345,
+            },
             job_history={},
             applied_job_keys=set(),
             hidden_job_keys=set(),
@@ -355,13 +493,31 @@ def test_rendered_workspace_html_content(tmp_path):
 
         rendered_html = mock_output_path.read_text(encoding="utf-8")
 
-        assert '<h1 class="ws-hero-title">Jobs Workspace</h1>' in rendered_html
+        assert 'class="ws-hero-title"' not in rendered_html
+        assert 'class="ws-hero-panel"' not in rendered_html
+        assert 'workspace-controls-panel' in rendered_html
+        assert rendered_html.index('workspace-controls-panel') < rendered_html.index(
+            "<section>Rendered Section</section>"
+        )
+        assert "Run Efficiency" not in rendered_html
+        assert "How scoring works" in rendered_html
+        assert "How Match Levels Work" not in rendered_html
+        assert "Mandatory requirements and stronger evidence carry more weight." in rendered_html
+        assert "Easy or Quick Apply help you review jobs, but they do not prove fit." in rendered_html
         assert (
             '<button class="scope-tab is-active" type="button" data-workspace-target="potential">Potential Jobs (0)</button>'
-            in rendered_html
+            in captured_tools["header_nav_html"]
         )
+        assert 'data-workspace-target="potential"' in captured_tools["header_nav_html"]
         assert "Cards seen is the number of source cards scanned." in rendered_html
         assert "Ads reviewed is the smaller set" in rendered_html
+        assert "LLM totals reflect the whole last run." in rendered_html
+        assert "LLM cost" in rendered_html
+        assert "$0.1234" in rendered_html
+        assert "Input tokens" in rendered_html
+        assert ">1,200<" in rendered_html
+        assert "Output tokens" in rendered_html
+        assert ">345<" in rendered_html
         assert (
             '<span class="snapshot-meta-label">Work type</span><span class="snapshot-meta-value">Permanent</span>'
             in rendered_html
@@ -381,6 +537,9 @@ def test_rendered_workspace_html_content(tmp_path):
         assert "Sort and display" not in rendered_html
         assert '<h3 class="workspace-control-group-title">Sort</h3>' in rendered_html
         assert '<h3 class="workspace-control-group-title">Filters</h3>' in rendered_html
+        assert 'id="reset_workspace_filters"' in rendered_html
+        assert ">Reset All Filters<" in rendered_html
+        assert 'class="workspace-text-action__icon"' in rendered_html
         assert 'aria-label="Show"' in rendered_html
         assert 'aria-label="Posted"' in rendered_html
         assert 'aria-label="Type"' in rendered_html
@@ -395,9 +554,99 @@ def test_rendered_workspace_html_content(tmp_path):
         assert "window.__JOB_HUNTER_WORKSPACE__" in rendered_html
         assert "labels" in rendered_html
         assert "rejectionLoadingSuggestions" in rendered_html
-
         assert "$LABEL_WS_HERO_TITLE" not in rendered_html
         assert "$SHORTLIST_COUNT" not in rendered_html
         assert "$CURRENT_SECTION_HTML" not in rendered_html
 
     mock_output_path.unlink()
+
+
+def test_workspace_rebuild_refreshes_llm_totals_from_current_audit_rows(monkeypatch, tmp_path):
+    captured = {}
+    workspace_path = tmp_path / "workspace_results.html"
+
+    monkeypatch.setattr(workspace_rebuild_service, "configure_console_output", lambda: None)
+    monkeypatch.setattr(workspace_rebuild_service, "get_user_id_for_runtime", lambda: "user-1")
+    monkeypatch.setattr(workspace_rebuild_service, "load_profile", lambda: {})
+    monkeypatch.setattr(
+        workspace_rebuild_service,
+        "get_search_settings",
+        lambda profile: {"date_range_days": 7, "sort_newest_first": True},
+    )
+    monkeypatch.setattr(
+        workspace_rebuild_service,
+        "load_run_stats",
+        lambda: {
+            "run_started_at": "2026-07-10T18:28:58+10:00",
+            "run_finished_at": "2026-07-10T18:30:00+10:00",
+            "seek_max_pages": 1,
+            "llm_total_cost_usd": 0.999999,
+            "llm_total_input_tokens": None,
+            "llm_total_output_tokens": None,
+        },
+    )
+    monkeypatch.setattr(workspace_rebuild_service, "get_manual_skip_sets", lambda profile: (set(), set()))
+    monkeypatch.setattr(workspace_rebuild_service, "load_job_history", lambda: {})
+    monkeypatch.setattr(
+        workspace_rebuild_service,
+        "load_audit_rows",
+        lambda: [
+            {
+                "source": "seek",
+                "search_location": "Sydney",
+                "page": 1,
+                "decision": "KEEP",
+                "llm_cost_usd": 0.001234,
+                "llm_input_tokens": 1200,
+                "llm_output_tokens": 220,
+            },
+            {
+                "source": "linkedin",
+                "search_location": "Sydney",
+                "page": 1,
+                "decision": "REJECT",
+                "llm_cost_usd": 0.002001,
+                "llm_input_tokens": 800,
+                "llm_output_tokens": 125,
+            },
+        ],
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "load_last_kept_records",
+        lambda: [{"job_key": "seek:1"}, {"job_key": "linkedin:1"}],
+    )
+    monkeypatch.setattr(
+        workspace_rebuild_service,
+        "write_run_stats",
+        lambda payload: captured.setdefault("written_run_stats", payload),
+    )
+    monkeypatch.setattr(workspace_rebuild_service, "get_workspace_results_path", lambda: workspace_path)
+
+    def fake_render_html(
+        output_path,
+        kept_records,
+        run_started_at,
+        date_range_days,
+        sort_newest_first,
+        run_stats,
+        job_history,
+        applied_job_keys,
+        hidden_job_keys,
+        reference_time,
+    ):
+        captured["render_run_stats"] = run_stats
+
+    monkeypatch.setattr(workspace_service, "render_html", fake_render_html)
+
+    result = workspace_rebuild_service.rebuild_workspace_results(
+        reason="test rebuild refreshes llm totals"
+    )
+
+    assert result == str(workspace_path)
+    assert captured["written_run_stats"]["llm_total_cost_usd"] == 0.003235
+    assert captured["written_run_stats"]["llm_total_input_tokens"] == 2000
+    assert captured["written_run_stats"]["llm_total_output_tokens"] == 345
+    assert captured["render_run_stats"]["llm_total_cost_usd"] == 0.003235
+    assert captured["render_run_stats"]["llm_total_input_tokens"] == 2000
+    assert captured["render_run_stats"]["llm_total_output_tokens"] == 345

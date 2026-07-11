@@ -82,9 +82,8 @@ def test_analyze_title_filters_applies_reject_rules_to_secondary_matches(monkeyp
     assert result["reason"] == "TITLE_BAD_KEYWORD:technical"
 
 
-def test_analyze_title_filters_rejects_titles_with_no_core_keyword_overlap(monkeypatch):
-    """A title sharing no significant word with any target/adjacent role should be
-    rejected outright rather than falling through to the O*NET near/far fallback."""
+def test_analyze_title_filters_unmatched_titles_keep_conservative_fallback(monkeypatch):
+    """A title with no obvious overlap should still follow the conservative O*NET/LLM path."""
     monkeypatch.setattr(
         filters,
         "load_profile",
@@ -98,12 +97,11 @@ def test_analyze_title_filters_rejects_titles_with_no_core_keyword_overlap(monke
     result = filters.analyze_title_filters("TamblaWFM Consultant")
 
     assert result["ok"] is False
-    assert result["reason"] == "TITLE_NO_CORE_KEYWORD_OVERLAP"
+    assert result["reason"] == "TITLE_NOT_TARGET"
 
 
 def test_analyze_title_filters_keeps_onet_fallback_when_core_keyword_overlaps(monkeypatch):
-    """A title that shares a significant word with a target role (but isn't an
-    exact/synonym match) should still fall through to the softer O*NET path."""
+    """A title that shares a word with a target role should still fall through to the softer O*NET path."""
     monkeypatch.setattr(
         filters,
         "load_profile",
@@ -120,9 +118,8 @@ def test_analyze_title_filters_keeps_onet_fallback_when_core_keyword_overlaps(mo
     assert result["reason"] == "TITLE_NOT_TARGET"
 
 
-def test_analyze_title_filters_skips_core_keyword_gate_when_profile_has_no_roles(monkeypatch):
-    """With no target/adjacent roles configured there are no core keywords to derive,
-    so behaviour must fall back to the original TITLE_NOT_TARGET path unchanged."""
+def test_analyze_title_filters_with_no_roles_still_returns_title_not_target(monkeypatch):
+    """With no target/adjacent roles configured the conservative fallback path is unchanged."""
     monkeypatch.setattr(
         filters,
         "load_profile",

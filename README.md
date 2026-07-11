@@ -117,8 +117,10 @@ Recommended beta setup is covered in [docs/OPERATIONS.md](docs/OPERATIONS.md).
 - application code lives in `job_hunter_agent/`
 - tests live in `tests/`
 
+- [docs/INDEX.md](docs/INDEX.md)
 - [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
 - [docs/OPERATIONS.md](docs/OPERATIONS.md)
 - [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)
 - [docs/PRINCIPLES.md](docs/PRINCIPLES.md)

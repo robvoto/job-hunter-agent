@@ -109,6 +109,15 @@ sudo chown root:ubuntu /etc/job-hunter/job-hunter.env
 sudo chmod 640 /etc/job-hunter/job-hunter.env
 ```
 
+### Runtime seed boundary
+
+Fresh AWS builds must seed only the approved repo-managed JSON set.
+
+- DB/bootstrap seeding is run via `python -m job_hunter_agent.db_seed`.
+- The seed flow copies only the explicit approved runtime manifest from `data/knowledge/` plus the required O*NET taxonomy JSON files.
+- Do not replace this with a recursive "copy every JSON file under data/knowledge" step.
+- Local examples, private JSON files, or ad-hoc scratch files under `data/knowledge` must never become production runtime data by accident.
+
 ### Nginx routing
 
 Nginx listens on port 80. Job Hunter remains private on localhost and must not expose port `8765` directly to the internet.

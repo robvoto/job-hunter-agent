@@ -33,12 +33,31 @@ os.environ["OPENAI_API_KEY"] = ""
 from job_hunter_agent.database import init_db  # noqa: E402
 from job_hunter_agent.global_settings import seed_global_settings_from_file  # noqa: E402
 from job_hunter_agent.knowledge_store import seed_knowledge_from_dir  # noqa: E402
+from job_hunter_agent.runtime_seed_manifest import (  # noqa: E402
+    APPROVED_DB_KNOWLEDGE_JSON_REL_PATHS,
+    APPROVED_SIGNAL_JSON_REL_PATHS,
+    resolve_seed_json_paths,
+)
 
 init_db(_test_db_path)
 
-seed_knowledge_from_dir(ROOT_DIR / "data" / "knowledge", _test_db_path)
+seed_knowledge_from_dir(
+    ROOT_DIR / "data" / "knowledge",
+    _test_db_path,
+    json_files=resolve_seed_json_paths(
+        ROOT_DIR / "data" / "knowledge",
+        APPROVED_DB_KNOWLEDGE_JSON_REL_PATHS,
+    ),
+)
 
-seed_knowledge_from_dir(ROOT_DIR / "data" / "signals", _test_db_path)
+seed_knowledge_from_dir(
+    ROOT_DIR / "data" / "signals",
+    _test_db_path,
+    json_files=resolve_seed_json_paths(
+        ROOT_DIR / "data" / "signals",
+        APPROVED_SIGNAL_JSON_REL_PATHS,
+    ),
+)
 
 seed_global_settings_from_file(_test_db_path, overwrite=True)
 
@@ -75,9 +94,23 @@ def isolated_db(tmp_path, monkeypatch):
 
     init_db(db)
 
-    seed_knowledge_from_dir(ROOT_DIR / "data" / "knowledge", db)
+    seed_knowledge_from_dir(
+        ROOT_DIR / "data" / "knowledge",
+        db,
+        json_files=resolve_seed_json_paths(
+            ROOT_DIR / "data" / "knowledge",
+            APPROVED_DB_KNOWLEDGE_JSON_REL_PATHS,
+        ),
+    )
 
-    seed_knowledge_from_dir(ROOT_DIR / "data" / "signals", db)
+    seed_knowledge_from_dir(
+        ROOT_DIR / "data" / "signals",
+        db,
+        json_files=resolve_seed_json_paths(
+            ROOT_DIR / "data" / "signals",
+            APPROVED_SIGNAL_JSON_REL_PATHS,
+        ),
+    )
 
     seed_global_settings_from_file(db, overwrite=True)
 

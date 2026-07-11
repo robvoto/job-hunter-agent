@@ -232,6 +232,8 @@ Each job card in the workspace can expand into up to four separate panels, so fi
 
 The workspace summary counts at the top of a run are operational totals for the scrape, not proof that every listed role is a strong fit.
 
+When Job Hunter explains why a role fits, the primary user-facing evidence is requirement coverage. Convenience or context signals such as location, freshness, Easy Apply / Quick Apply, viewed status, salary, and action recommendations can still appear in the UI, but they are not core fit evidence.
+
 ## Improving Accuracy (Rejection Learning)
 
 If the agent keeps suggesting roles with a specific requirement you don't have (e.g., a specific security clearance or software tool), use the **Not For Me** button on the job card.

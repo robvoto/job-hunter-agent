@@ -232,6 +232,8 @@ Coverage entries are shown in the score breakdown for transparency, but they do 
 
 In this cleanup, the fit score is intentionally narrow: title match, LLM grade, requirement-coverage transparency, hard blockers, and grade-band calibration. The user-facing "Why this is a good fit" panel now uses requirement coverage only. Convenience or preference signals such as Easy Apply, freshness, viewed status, salary, and location are better handled as badges, filters, or sort signals, and approved-experience or subtitle detail stays in debug-mode transparency. Workspace run summaries report collection counts, not fit evidence.
 
+Debug mode may still expose internal score calculation, matched source text, capability mapping, and reviewed-signal evidence for troubleshooting. That extra transparency is for investigation, not a second competing normal-mode fit explanation.
+
 ### Location scoring decision
 
 Location is a weak preference signal rather than strong fit evidence in this cleanup.

@@ -67,6 +67,16 @@ Server logging:
 - `job_hunter_agent/profile_learning.py`
   Text-to-profile extraction helpers.
 
+### Import-cycle health
+
+Repo health now includes a static import-graph check across the active runtime modules.
+
+Current known allowlisted cycle:
+
+- `job_hunter_agent.llm_gate` <-> `job_hunter_agent.profile_store`
+
+Treat any newly detected active-module cycle as technical debt that needs review before it becomes normal architecture.
+
 - `job_hunter_agent/cv_pipeline.py`
   Heuristic and LLM-assisted CV analysis and capability mapping.
 

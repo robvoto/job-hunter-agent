@@ -34,6 +34,15 @@ def compact_whitespace(value: Optional[str]) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
 
 
+def clean_display_text(text: Optional[str]) -> str:
+
+    cleaned = compact_whitespace(text)
+
+    cleaned = _strip_markdown_emphasis(cleaned)
+
+    return re.sub(r"^([A-Z][a-z]{3,30})(?=[A-Z][a-z])", r"\1 ", cleaned)
+
+
 def split_text_snippets(text: str) -> List[str]:
 
     snippets: List[str] = []
@@ -84,18 +93,14 @@ def _strip_markdown_emphasis(text: str) -> str:
 
     cleaned = re.sub(r"(?<!\w)_{1,3}([^_\n]+?)_{1,3}(?!\w)", r"\1", cleaned)
 
-    cleaned = re.sub(r"\\([\\`*_{}\[\]()#+\-.!])", r"\1", cleaned)
+    cleaned = re.sub(r"\\([\\`*_{}\[\]()#+\-.!|=])", r"\1", cleaned)
 
     return cleaned
 
 
 def summarize_snippet(snippet: str, max_length: int = 180) -> str:
 
-    cleaned = compact_whitespace(snippet)
-
-    cleaned = _strip_markdown_emphasis(cleaned)
-
-    cleaned = re.sub(r"^([A-Z][a-z]{3,30})(?=[A-Z][a-z])", r"\1 ", cleaned)
+    cleaned = clean_display_text(snippet)
 
     if len(cleaned) <= max_length:
         return cleaned

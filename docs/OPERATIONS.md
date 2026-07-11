@@ -219,6 +219,15 @@ Server logs:
 - to emit one, call `job_hunter_agent.runtime_helpers.build_uncertainty_entry()` then `append_uncertainty_log()` with `job_hunter_agent.paths.UNCERTAINTY_LOG_PATH`
 - keep `reason_code` stable so the file stays queryable across agents and future runs
 
+Run summary semantics:
+
+- the visible end-of-run summary is an operational diagnostic, not a fit explanation
+- `Jobs seen` means source job cards discovered in the audit rows
+- `descriptions read` means job details/descriptions successfully fetched using the same definition as `cards_read` in run stats
+- source/platform `read` counts must reconcile with the total `descriptions read`
+- source/platform `pages` come only from explicit page markers; do not treat every LinkedIn row as a page
+- `kept` and `rejected` are collection/review outcomes for the run, not proof of strong fit
+
 Session cookie behavior:
 
 - cookie security is transport-aware by default
