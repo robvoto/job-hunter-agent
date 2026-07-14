@@ -141,3 +141,10 @@ def company_names_weakly_match(a: str, b: str) -> bool:
     left = normalize_company_name(a)
     right = normalize_company_name(b)
     return bool(left and right and left == right)
+
+
+def normalize_match_text(value: str) -> str:
+    """Normalize weak matching text for job titles, company names, and similar labels."""
+    cleaned = re.sub(r"[^\w\s]", " ", str(value or "").lower())
+    cleaned = re.sub(r"\b(pty|ltd|limited|inc|co|corp|group|australia|au)\b", "", cleaned)
+    return re.sub(r"\s+", " ", cleaned).strip()

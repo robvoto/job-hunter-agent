@@ -23,6 +23,7 @@ import requests
 from job_hunter_agent.company_normalization import (
     company_name_match_tokens,
     normalize_company_name,
+    normalize_match_text,
 )
 from job_hunter_agent.global_settings import (
     get_candidate_application_history_required_headers,
@@ -285,15 +286,6 @@ def normalize_job_rejection_row(row: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _normalize_name(value: str) -> str:
-    """Lower-case, strip punctuation and common noise words for loose comparison."""
-    value = value.lower()
-    value = re.sub(r"[^\w\s]", " ", value)
-    # Strip common legal / org suffixes that differ between job ads and emails.
-    value = re.sub(r"\b(pty|ltd|limited|inc|co|corp|group|australia|au)\b", "", value)
-    return compact_whitespace(value)
-
-
 def _company_match_score(job_company: str, rejection_company: str) -> float:
     """Return 0.0–1.0 how well two company names agree."""
     a = normalize_company_name(job_company)
@@ -317,8 +309,8 @@ def _company_match_score(job_company: str, rejection_company: str) -> float:
 
 def _role_match_score(job_title: str, rejection_role: str) -> float:
     """Return 0.0–1.0 how well two role strings agree."""
-    a = _normalize_name(job_title)
-    b = _normalize_name(rejection_role)
+    a = normalize_match_text(job_title)
+    b = normalize_match_text(rejection_role)
     if not a or not b:
         return 0.0
     if a == b:

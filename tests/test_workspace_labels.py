@@ -1,5 +1,7 @@
 """Tests for workspace labels."""
 
+import pytest
+
 from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent import workspace_renderer
 
@@ -40,3 +42,18 @@ def test_workspace_archive_and_alert_labels_come_from_ui_labels():
     assert settings_alerts_labels["telegram_disable_link_preview_help"] == (
         "When on, Telegram sends workspace links without a preview card."
     )
+
+
+def test_workspace_label_raises_when_label_is_missing(monkeypatch):
+    monkeypatch.setattr(
+        workspace_renderer,
+        "_workspace_ui_labels",
+        lambda: {"workspace_card_labels": {}},
+    )
+
+    with pytest.raises(ValueError, match=r"missing workspace_card_labels\.job_requirements_summary"):
+        workspace_renderer._workspace_label(
+            "workspace_card_labels",
+            "job_requirements_summary",
+            "Requirements",
+        )

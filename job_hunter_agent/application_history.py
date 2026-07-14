@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 from typing import Optional
 
+from job_hunter_agent.company_normalization import company_name_token_overlap_match
 from job_hunter_agent.record_schema import RECORD_APPLICATION_HISTORY_KEY
 
 _NOISE_TOKENS = frozenset(
@@ -277,7 +278,7 @@ def match_application_history(job_record: dict, rejection_rows: list[dict]) -> d
         derived_company = str(row.get("derived_company") or "").strip()
         derived_role = str(row.get("derived_role") or "").strip()
 
-        company_match = _weakly_matches(job_company, derived_company)
+        company_match = company_name_token_overlap_match(job_company, derived_company)
         title_match = _weakly_matches(job_title, derived_role)
 
         score = (2 if company_match else 0) + (1 if title_match else 0)

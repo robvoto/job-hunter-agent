@@ -115,6 +115,33 @@ def test_approved_hard_blocker_rules_does_not_reject_desirable_only_text(tmp_pat
     assert reason == "OK"
 
 
+def test_unknown_capability_level_is_warned_and_not_treated_as_basic(monkeypatch):
+    warnings = []
+    monkeypatch.setattr(
+        filters,
+        "record_system_warning",
+        lambda **kwargs: warnings.append(kwargs) or kwargs,
+    )
+    ok, reason = filters._evaluate_capability_profile(
+        "We need scrum delivery experience for this role.",
+        {
+            "candidate_capabilities": [
+                {
+                    "name": "Agile delivery",
+                    "level": "",
+                    "aliases": ["scrum"],
+                }
+            ]
+        },
+    )
+
+    assert ok is True
+    assert reason.startswith("DESC_CAPABILITY_LEVEL_UNREVIEWED:")
+    assert warnings
+    assert warnings[0]["category"] == "profile_capability_level"
+    assert warnings[0]["context"]["reason"] == "missing"
+
+
 def test_pending_hard_blocker_pattern_does_not_affect_filtering(isolated_db, tmp_path, monkeypatch):
     rules_path = _hard_blocker_rules_path(tmp_path)
     signal_registry.save_registry(

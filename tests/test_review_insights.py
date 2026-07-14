@@ -413,3 +413,41 @@ def test_apply_capability_tuning_decisions_preserves_existing_icon_key():
             "icon_key": "operations_process",
         }
     ]
+
+
+def test_build_review_data_does_not_fall_back_to_raw_signal_label(monkeypatch):
+    monkeypatch.setattr(
+        "job_hunter_agent.review_insights.get_review_settings",
+        lambda: {
+            KEY_REVIEW_MAX_EXAMPLES_PER_SKILL: 2,
+            KEY_REVIEW_MAX_SAMPLES_PER_REJECTION: 2,
+            KEY_REVIEW_CAPABILITY_SUGGESTION_MIN_COUNT: 1,
+            KEY_REVIEW_CAPABILITY_WORKING_MIN_COUNT: 3,
+            KEY_REVIEW_TITLE_NOT_TARGET_MIN_COUNT: 2,
+            KEY_REVIEW_RULE_SUGGESTION_MIN_COUNT: 1,
+        },
+    )
+
+    result = build_review_data(
+        audit_rows=[
+            {
+                "decision": "KEEP",
+                "url": "https://example.test/job-1",
+                "title": "Business Analyst",
+                "company": "Example Co",
+                "search_location": "Sydney",
+                "competitive_signals": [
+                    {
+                        "label": "Internal taxonomy label",
+                        "fit_label": "",
+                        "adjustment": 2,
+                        "alignment": "strong",
+                    }
+                ],
+            }
+        ],
+        skill_observations=[],
+        profile={KEY_CANDIDATE_CAPABILITIES: []},
+    )
+
+    assert result["skill_observations"] == []

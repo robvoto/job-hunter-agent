@@ -9,6 +9,10 @@ from job_hunter_agent.capability_matrix import canonical_capability_term
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
 from job_hunter_agent.io_utils import load_parsing_rules
 from job_hunter_agent.profile_store import KEY_CANDIDATE_CAPABILITIES, load_profile
+from job_hunter_agent.system_warnings import (
+    make_system_warning_fingerprint,
+    record_system_warning,
+)
 from job_hunter_agent.signal_schema import TITLE_REASON_POTENTIAL_MATCH
 from job_hunter_agent.title_normalization_rules import normalize_title_text
 
@@ -147,18 +151,35 @@ def _normalize_reason_token(value: str) -> str:
 _KNOWN_CAPABILITY_LEVELS = {"strong", "working", "basic", "low"}
 
 
-def _normalize_level(value: str) -> str:
+def _normalize_level(value: str) -> str | None:
     level = (value or "").strip().lower()
     if not level:
-        return "basic"
+        return None
     aliases = load_parsing_rules().get("level_aliases", {})
     resolved = aliases.get(level, level)
     if resolved not in _KNOWN_CAPABILITY_LEVELS:
-        raise ValueError(
-            f"Unrecognized capability level {value!r}; add an alias for it in "
-            "parsing_rules.json level_aliases"
-        )
+        return None
     return resolved
+
+
+def _record_capability_level_warning(name: str, raw_level: str, reason: str) -> None:
+    normalized_name = _normalize_reason_token(name)
+    fingerprint = make_system_warning_fingerprint("filters", normalized_name, raw_level, reason)
+    record_system_warning(
+        severity="warning",
+        category="profile_capability_level",
+        source="filters",
+        message=(
+            f"Capability rule {name!r} has {reason.replace('_', ' ')} level {raw_level!r}; "
+            "it will not be treated as basic."
+        ),
+        fingerprint=fingerprint,
+        context={
+            "capability_name": name,
+            "raw_level": raw_level,
+            "reason": reason,
+        },
+    )
 
 
 def _count_alias_hits(text: str, aliases: list[str]) -> tuple[int, int]:
@@ -195,9 +216,20 @@ def _evaluate_capability_profile(description_lower: str, profile: dict) -> Tuple
 
     for rule in capability_rules:
         name = str(rule.get("name") or "").strip()
-        level = _normalize_level(str(rule.get("level") or "basic"))
+        raw_level = str(rule.get("level") or "").strip()
+        level = _normalize_level(raw_level)
         canonical = canonical_capability_term(rule)
         if not name or not canonical:
+            continue
+
+        if level is None:
+            if warning_reason == "OK":
+                warning_reason = f"DESC_CAPABILITY_LEVEL_UNREVIEWED:{_normalize_reason_token(name)}"
+            _record_capability_level_warning(
+                name,
+                raw_level or "<missing>",
+                "missing" if not raw_level else "unrecognized",
+            )
             continue
 
         _, distinct_hits = _count_alias_hits(description_lower, [canonical])

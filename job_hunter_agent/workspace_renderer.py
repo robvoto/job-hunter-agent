@@ -307,7 +307,7 @@ def _workspace_label(group: str, key: str, default: str) -> str:
         value = payload.get(key)
         if value is not None and str(value).strip():
             return str(value)
-    return default
+    raise ValueError(f"ui_labels.json is missing {group}.{key}")
 
 
 def _workspace_job_card_id(job_key: str) -> str:
@@ -651,14 +651,7 @@ def render_work_type_filter_options() -> str:
 
 
 def render_page_size_options() -> str:
-    jobs_per_page_label = (
-        str(
-            _workspace_ui_labels().get("workspace_page_labels", {}).get("jobs_per_page_label")
-            or "Jobs per page"
-        )
-        .strip()
-        .lower()
-    )
+    jobs_per_page_label = load_workspace_page_labels()["LABEL_WS_JOBS_PER_PAGE_LABEL"].lower()
     options = []
     for size in (12, 24, 48, 96):
         selected = " selected" if size == 12 else ""

@@ -1101,10 +1101,8 @@ def seek_scrape_to_records(
                         )
 
                         if step_through_enabled():
-                            # TEMPORARY (--step debug aid): fully sequential, card by card —
-                            # fetch, decide, print, and pause for one job before moving to
-                            # the next, so a page's whole batch never runs ahead of the
-                            # operator. Remove this branch along with the rest of --step.
+                            # Step-through mode runs card-by-card so the operator can review
+                            # each job before the batch advances.
                             for i, record in enumerate(card_records):
                                 if run_stop_requested():
                                     break

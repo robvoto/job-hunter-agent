@@ -25,6 +25,7 @@ from job_hunter_agent.profile_store import (
     KEY_NAME,
     VALID_CAPABILITY_ICON_KEYS,
 )
+from job_hunter_agent.signal_schema import SIGNAL_FIT_LABEL_KEY
 from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
     RECORD_SEARCH_LOCATION_KEY,
@@ -231,7 +232,7 @@ def _collect_positive_skill_labels(row: dict[str, Any]) -> list[str]:
             continue
         if int(signal.get("adjustment", 0) or 0) <= 0:
             continue
-        add(signal.get("fit_label") or signal.get("label"))
+        add(signal.get(SIGNAL_FIT_LABEL_KEY))
 
     for highlight in row.get("fit_highlights") or []:
         add(_skill_label_from_highlight(highlight))
