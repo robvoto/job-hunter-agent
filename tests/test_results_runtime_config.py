@@ -380,7 +380,9 @@ def test_rendered_workspace_html_content(tmp_path):
             "last_run_input_tokens_label": "Input tokens",
             "last_run_output_tokens_label": "Output tokens",
             "crawler_stats_heading": "Crawler Stats",
-            "crawler_stats_helper": "Cards seen is the number of source cards scanned. Ads reviewed is the smaller set where Job Hunter opened or evaluated more detail. LLM totals reflect the whole last run.",
+            "crawler_stats_helper": "Cards seen counts source cards scanned. Ads reviewed counts cards opened or evaluated in detail. LLM totals reflect the last run.",
+            "crawler_stats_cards_seen_label": "Cards seen",
+            "crawler_stats_ads_reviewed_label": "Ads reviewed",
             "run_efficiency_summary": "Run Efficiency",
             "show_hide_hint": "Show / hide",
             "run_efficiency_intro": "Search targets this run: ",
@@ -509,9 +511,9 @@ def test_rendered_workspace_html_content(tmp_path):
             in captured_tools["header_nav_html"]
         )
         assert 'data-workspace-target="potential"' in captured_tools["header_nav_html"]
-        assert "Cards seen is the number of source cards scanned." in rendered_html
-        assert "Ads reviewed is the smaller set" in rendered_html
-        assert "LLM totals reflect the whole last run." in rendered_html
+        assert "Cards seen counts source cards scanned." in rendered_html
+        assert "Ads reviewed counts cards opened or evaluated in detail." in rendered_html
+        assert "LLM totals reflect the last run." in rendered_html
         assert "LLM cost" in rendered_html
         assert "$0.1234" in rendered_html
         assert "Input tokens" in rendered_html

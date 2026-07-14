@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 65,
+  "version": 66,
   "updated_at": "2026-07-14",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -452,7 +452,9 @@
     "last_run_input_tokens_label": "Input tokens",
     "last_run_output_tokens_label": "Output tokens",
     "crawler_stats_heading": "Crawler Stats",
-    "crawler_stats_helper": "Cards seen is the number of source cards scanned. Ads reviewed is the smaller set where Job Hunter opened or evaluated more detail. LLM totals reflect the whole last run.",
+    "crawler_stats_helper": "Cards seen counts source cards scanned. Ads reviewed counts cards opened or evaluated in detail. LLM totals reflect the last run.",
+    "crawler_stats_cards_seen_label": "Cards seen",
+    "crawler_stats_ads_reviewed_label": "Ads reviewed",
     "applications_heading": "Applications",
     "run_efficiency_summary": "Run Efficiency",
     "show_hide_hint": "Show / hide",

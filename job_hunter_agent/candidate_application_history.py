@@ -1,13 +1,7 @@
-"""
-Maintain the local candidate application history store.
-The runtime workspace reads from the local JSON file only.
-Google Sheet access exists only as an explicit import utility.
+"""Candidate application history storage and import helpers.
 
-Use `python -m job_hunter_agent.candidate_application_history import-from-sheet`
-to refresh the local store from the configured Job_Rejections sheet.
-
-Company/role extraction is delegated to the LLM via extract_job_rejection_with_llm.
-Sheet data is fetched via Google Sheets CSV export URL (no OAuth, no Google API client).
+Purpose: keep the local rejection-history store in sync with the reviewed sheet
+and normalise company/role matching for workspace use.
 """
 
 import argparse

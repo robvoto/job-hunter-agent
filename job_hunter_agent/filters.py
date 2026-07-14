@@ -1,6 +1,8 @@
-"""Helpers for filters."""
+"""Deterministic filter helpers.
 
-# filters.py
+Purpose: apply the early title and capability filters without guessing around
+bad rule data.
+"""
 
 import re
 from typing import Any, Tuple

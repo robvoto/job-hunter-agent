@@ -1,10 +1,7 @@
-"""
-Workspace HTML rendering functions.
+"""Workspace HTML rendering helpers.
 
-This module follows an "App Shell + Fragment" architecture. It processes
-'results.html' as a template fragment to produce the data-heavy content (job
-cards, filters, stats), which is then injected into the 'workspace.html' shell
-by the frontend. No scraping or pipeline logic belongs here.
+Purpose: render the results fragment, job cards, filters, and supporting labels
+that are injected into the workspace shell.
 """
 
 import json
@@ -256,6 +253,8 @@ _WORKSPACE_PAGE_LABEL_KEYS = (
     "last_run_output_tokens_label",
     "crawler_stats_heading",
     "crawler_stats_helper",
+    "crawler_stats_cards_seen_label",
+    "crawler_stats_ads_reviewed_label",
     "run_efficiency_summary",
     "show_hide_hint",
     "run_efficiency_intro",

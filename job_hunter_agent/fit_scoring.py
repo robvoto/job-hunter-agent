@@ -1,4 +1,7 @@
-"""Helpers for fit scoring."""
+"""Fit scoring helpers.
+
+Purpose: score covered requirements and render explainable fit breakdowns.
+"""
 
 import json
 import logging

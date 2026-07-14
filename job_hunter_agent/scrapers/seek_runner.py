@@ -1,4 +1,7 @@
-"""Scraper helpers for seek runner."""
+"""SEEK scraper runner helpers.
+
+Purpose: orchestrate the SEEK Playwright flow, detail review, and record finalization.
+"""
 
 from __future__ import annotations
 

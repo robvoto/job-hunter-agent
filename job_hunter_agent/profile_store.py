@@ -1,13 +1,7 @@
 """Profile persistence and defaults.
 
-This module defines the runtime profile structure used by matching and review flows.
-It provides logic for creating a safe default profile, loading/saving the SQLite-backed
-runtime profile, and normalising user-specific settings, preferences, and scoring rules.
-
-Key functionalities include:
-- Persistence management for the user profile (runtime source of truth).
-- Normalisation of search settings, salary preferences, and capability rules.
-- Profile-support tier classification and weight management for fit scoring.
+Purpose: load, save, and normalise the SQLite-backed runtime profile used by
+matching, review, and scoring flows.
 """
 
 from __future__ import annotations

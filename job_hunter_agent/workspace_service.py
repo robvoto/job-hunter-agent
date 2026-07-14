@@ -1,4 +1,7 @@
-"""Helpers for workspace service."""
+"""Workspace service helpers.
+
+Purpose: assemble the counts, stats, and fragments shown on the workspace page.
+"""
 
 from __future__ import annotations
 
@@ -581,8 +584,11 @@ def render_html(
 
     crawler_cards_html = _render_summary_cards_html(
         [
-            (run_stats.get("cards_seen", 0), "Cards seen"),
-            (run_stats.get("detail_fetches", 0), "Ads reviewed"),
+            (run_stats.get("cards_seen", 0), ws_page_labels["LABEL_WS_CRAWLER_STATS_CARDS_SEEN_LABEL"]),
+            (
+                run_stats.get("detail_fetches", 0),
+                ws_page_labels["LABEL_WS_CRAWLER_STATS_ADS_REVIEWED_LABEL"],
+            ),
             (f"{round(float(run_stats.get('keep_rate', 0.0)) * 100, 1)}%", "Keep rate"),
         ]
     )

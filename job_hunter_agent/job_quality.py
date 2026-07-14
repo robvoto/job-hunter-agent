@@ -1,14 +1,7 @@
-"""Job quality signal detection - evidence collection only.
+"""Job quality signal detection.
 
-This module focuses on detecting signals related to job quality, such as
-CV-farming patterns, job closure indicators, and date mismatches. It uses
-managed knowledge files to identify suspicious job postings and provides
-functions to fetch external HTML for deeper analysis. The module collects
-evidence for review signals but does not make final decisions on job rejection.
-
-CV-farming language is learned through managed knowledge in `data/cv_farming_rules.json`
-and approved through the signal registry. Closed-job and date-mismatch checks stay
-in `data/dodgy_job_rules.json`.
+Purpose: collect evidence for repost, closure, date-mismatch, and CV-farming
+signals without making the final rejection decision.
 """
 
 from __future__ import annotations

@@ -1,21 +1,7 @@
 """LLM fit-decision gateway.
 
-This module provides a gateway for interacting with Large Language Models (LLMs)
-to perform various job-hunting related tasks. It handles the construction of
-LLM prompts, caching of LLM responses, and normalization of LLM outputs.
-
-Key functionalities include:
-- Building compact candidate context for LLM prompts.
-- Requesting constrained decisions and graded description-fit tiers from LLMs.
-- Maintaining prompt structure and cache keys aligned with the current profile state.
-- Extracting job requirements and suggesting rejection blockers.
-- Naming capability clusters and classifying CV section labels.
-
-It ensures that deterministic filters are applied before LLM processing and
-prioritizes AI fit briefs over raw background text to optimize cost and reduce noise.
-Error handling is implemented to catch and report exceptions during LLM interactions,
-preventing silent failures and aiding in debugging.
-
+Purpose: build constrained prompts, normalize LLM outputs, and keep requirement
+coverage structured so deterministic checks stay in control.
 """
 
 from __future__ import annotations

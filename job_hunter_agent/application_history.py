@@ -1,8 +1,7 @@
 """Application rejection history enrichment.
 
-Pure functions — no Google API calls. Reads rows from the Job_Rejections Google
-Sheet tab and attaches application_history metadata to matching workspace records.
-Scoring, filters, and hard-rejection logic are not touched.
+Purpose: map Job_Rejections sheet rows onto workspace records without touching
+scoring, filters, or hard-rejection logic.
 """
 
 from __future__ import annotations
