@@ -13,7 +13,6 @@
       --muted: #64748b;
       --border: #dbe4f0;
       --shadow: 0 18px 60px rgba(15, 23, 42, 0.10);
-      --accent: #2f5cff;
     }
     html, body {
       margin: 0;
@@ -90,20 +89,19 @@
       diagram.textContent = source;
 
       mermaid.initialize({
-        startOnLoad: false,
-        securityLevel: "loose",
-        theme: "base",
-        flowchart: {
-          useMaxWidth: true,
-          curve: "basis",
-          nodeSpacing: 30,
-          rankSpacing: 50
+        "startOnLoad": false,
+        "securityLevel": "loose",
+        "theme": "base",
+        "flowchart": {
+                "useMaxWidth": true,
+                "curve": "basis",
+                "nodeSpacing": 30,
+                "rankSpacing": 50
         },
-        themeVariables: {
-          fontFamily: 'Inter, "Segoe UI", Arial, sans-serif'
+        "themeVariables": {
+                "fontFamily": "Inter, \"Segoe UI\", Arial, sans-serif"
         }
-      });
-
+});
       mermaid.run({ nodes: [diagram] });
     });
   </script>
@@ -123,75 +121,74 @@
     <div class="help">This view is meant to sit next to the Mermaid source and render it directly in your browser.</div>
   </div>
 
-  <textarea id="diagram-source">
-flowchart TD
+  <textarea id="diagram-source">flowchart TD
     %% Job Hunter scoring process overview.
     %% Render with Mermaid in GitHub, VS Code Mermaid preview, or the local app at /static/diagrams/scoring_process_flow.
 
-    A((Start: Job found)) --> B[Capture job posting]
+    A((Start: Job found)) --&gt; B[Capture job posting]
 
-    B --> C[Prepare the job record&lt;br/&gt;title, company, location, salary, work mode, description]
-    C -. Business note .-> Cn[Store structured fields in the database&lt;br/&gt;and keep the raw description separate]
+    B --&gt; C[Prepare the job record&lt;br/&gt;title, company, location, salary, work mode, description]
+    C -. Business note .-&gt; Cn[Store structured fields in the database&lt;br/&gt;and keep the raw description separate]
 
-    C --> D{Enough information&lt;br/&gt;to assess?}
-    D -- No --> D1[Mark as incomplete / low confidence&lt;br/&gt;do not guess missing details]
-    D1 --> Z1((End: Needs review or skipped))
+    C --&gt; D{Enough information&lt;br/&gt;to assess?}
+    D -- No --&gt; D1[Mark as incomplete / low confidence&lt;br/&gt;do not guess missing details]
+    D1 --&gt; Z1((End: Needs review or skipped))
 
-    D -- Yes --> E[Run rule-based checks before AI]
-    E -. Business note .-> En[any error quick checks run first&lt;br/&gt;to save time and AI cost]
+    D -- Yes --&gt; E[Run rule-based checks before AI]
+    E -. Business note .-&gt; En[Quick checks run first&lt;br/&gt;to save time and AI cost]
 
-    E --> F{Blocked by a clear rule?}
-    F -- Yes --> F1[Reject before AI&lt;br/&gt;record the reason]
-    F1 --> Z2((End: Rejected))
+    E --&gt; F{Blocked by a clear rule?}
+    F -- Yes --&gt; F1[Reject before AI&lt;br/&gt;record the reason]
+    F1 --&gt; Z2((End: Rejected))
 
-    F -- No --> G{Outside the target job family?}
-    G -. Business note .-> Gn[Compare the role to the target job family&lt;br/&gt;using O*NET guidance]
-    G -- Yes --> G1[Reject before AI&lt;br/&gt;title or taxonomy reason]
-    G1 --> Z2
+    F -- No --&gt; G{Outside the target job family?}
+    G -. Business note .-&gt; Gn[Compare the role to the target job family&lt;br/&gt;using O*NET guidance]
+    G -- Yes --&gt; G1[Reject before AI&lt;br/&gt;title or taxonomy reason]
+    G1 --&gt; Z2
 
-    G -- No / uncertain --> H[Prepare the review packet&lt;br/&gt;structured record + trimmed description]
-    H -. Business note .-> Hn[Keep the full description&lt;br/&gt;but present a compact version for review]
+    G -- No / uncertain --&gt; H[Prepare the review packet&lt;br/&gt;structured record + trimmed description]
+    H -. Business note .-&gt; Hn[Keep the full description&lt;br/&gt;but present a compact version for review]
 
-    H --> I{Can this be scored&lt;br/&gt;with rules alone?}
-    I -- Yes --> J[Create a rule-based assessment&lt;br/&gt;grade + rationale + source]
-    I -- No --> K[Send to AI review]
+    H --&gt; I{Can this be scored&lt;br/&gt;with rules alone?}
+    I -- Yes --&gt; J[Create a rule-based assessment&lt;br/&gt;grade + rationale + source]
+    I -- No --&gt; K[Send to AI review]
 
-    K --> L[Extract requirements&lt;br/&gt;and match them to candidate strengths]
-    J --> L
-    L -. Business note .-> Ln[Map job requirements&lt;br/&gt;to known candidate capabilities]
+    K --&gt; L[Extract requirements&lt;br/&gt;and match them to candidate strengths]
+    J --&gt; L
+    L -. Business note .-&gt; Ln[Map job requirements&lt;br/&gt;to known candidate capabilities]
 
-    L --> M{Enough evidence&lt;br/&gt;to score?}
-    M -- No --> M1[Use fallback grade&lt;br/&gt;mark coverage as missing]
-    M -- Yes --> N[Derive the grade from coverage]
+    L --&gt; M{Enough evidence&lt;br/&gt;to score?}
+    M -- No --&gt; M1[Use fallback grade&lt;br/&gt;mark coverage as missing]
+    M -- Yes --&gt; N[Derive the grade from coverage]
 
-    M1 --> O[Build the frozen score summary]
-    N --> O
+    M1 --&gt; O[Build the frozen score summary]
+    N --&gt; O
 
-    O --> P[Apply the grade band limit&lt;br/&gt;keep score within the chosen band]
-    P -. Business note .-> Pn[The frozen score is not a percentage&lt;br/&gt;of qualification]
+    O --&gt; P[Apply the grade band limit&lt;br/&gt;keep score within the chosen band]
+    P -. Business note .-&gt; Pn[The frozen score is not a percentage&lt;br/&gt;of qualification]
 
-    P --> Q{Any hard blockers&lt;br/&gt;after review?}
-    Q -- Yes --> Q1[Apply the blocker penalty&lt;br/&gt;push score near zero]
-    Q -- No --> R[Store the final score + explanation]
+    P --&gt; Q{Any hard blockers&lt;br/&gt;after review?}
+    Q -- Yes --&gt; Q1[Apply the blocker penalty&lt;br/&gt;push score near zero]
+    Q -- No --&gt; R[Store the final score + explanation]
 
-    Q1 --> R
+    Q1 --&gt; R
 
-    R --> S[Adjust display ranking only&lt;br/&gt;freshness, viewed status]
-    S -. Business note .-> Sn[Display ranking can change;&lt;br/&gt;the frozen score does not]
+    R --&gt; S[Adjust display ranking only&lt;br/&gt;freshness, viewed status]
+    S -. Business note .-&gt; Sn[Display ranking can change;&lt;br/&gt;the frozen score does not]
 
-    S --> T[Show the ranked job to the user]
+    S --&gt; T[Show the ranked job to the user]
 
-    T --> U{User action}
-    U -- Apply / save --> U1[Record a positive signal]
-    U -- Skip / not for me --> U2[Record a rejection signal]
-    U -- Needs correction --> U3[Update profile, rules, or backlog]
+    T --&gt; U{User action}
+    U -- Apply / save --&gt; U1[Record a positive signal]
+    U -- Skip / not for me --&gt; U2[Record a rejection signal]
+    U -- Needs correction --&gt; U3[Update profile, rules, or backlog]
 
-    U1 --> V[Learning signal]
-    U2 --> V
-    U3 --> V
-    V -. Business note .-> Vn[Feedback improves future runs&lt;br/&gt;without silently changing scoring]
+    U1 --&gt; V[Learning signal]
+    U2 --&gt; V
+    U3 --&gt; V
+    V -. Business note .-&gt; Vn[Feedback improves future runs&lt;br/&gt;without silently changing scoring]
 
-    V --> W((End: Improves future runs))
+    V --&gt; W((End: Improves future runs))
 
     classDef decision fill:#fff3cd,stroke:#b58900,stroke-width:1px;
     classDef endstate fill:#f8d7da,stroke:#842029,stroke-width:1px;
@@ -200,6 +197,6 @@ flowchart TD
     class D,F,G,I,M,Q,U decision;
     class Z1,Z2,W endstate;
     class Cn,En,Gn,Hn,Ln,Pn,Sn,Vn note;
-  </textarea>
+</textarea>
 </body>
 </html>
