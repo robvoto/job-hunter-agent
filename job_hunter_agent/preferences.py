@@ -346,6 +346,26 @@ def display_work_type_label(record: dict) -> str:
     return ""
 
 
+def display_contract_duration_label(record: dict) -> str:
+    raw_work_type = compact_whitespace(record.get("work_type") or "")
+
+    if not raw_work_type:
+        return ""
+
+    _, is_contract = _parse_work_type_flags(raw_work_type)
+
+    if not is_contract:
+        return ""
+
+    contract_months = extract_contract_months(build_scoring_source_text(record))
+
+    if contract_months is None or contract_months <= 0:
+        return ""
+
+    unit = "month" if contract_months == 1 else "months"
+    return f"{contract_months} {unit}"
+
+
 def _salary_period_hint(salary_text: str) -> str:
 
     lowered = salary_text.lower()

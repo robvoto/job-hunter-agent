@@ -3342,6 +3342,56 @@ def test_work_type_is_fit_reason_when_user_prefers_contract():
     assert "<strong>Work type</strong> Contract" in html
 
 
+def test_contract_duration_meta_renders_for_contract_jobs():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-contract-duration-card",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Contract/Temp",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Initial 12 month contract supporting delivery teams.",
+            "fit_highlights": [],
+            "source": "seek",
+        },
+        _contract_only_profile(),
+    )
+
+    assert "<strong>Work type</strong> Contract" in html
+    assert "<strong>Contract term</strong> 12 months" in html
+
+
+def test_contract_duration_meta_stays_hidden_for_non_contract_jobs():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-non-contract-duration-card",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Permanent role on a 12 month transformation program.",
+            "fit_highlights": [],
+            "source": "seek",
+        },
+        _permanent_only_profile(),
+    )
+
+    assert "<strong>Work type</strong> Permanent" in html
+    assert "<strong>Contract term</strong>" not in html
+
+
 def test_nv1_check_item_renders_as_human_readable():
     """NV1 clearance check item must not expose the raw 'nv1 appears required' text."""
     reasons = workspace_renderer._humanize_check_item("nv1 appears required")

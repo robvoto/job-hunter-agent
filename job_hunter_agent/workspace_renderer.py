@@ -46,7 +46,10 @@ from job_hunter_agent.posting_utils import (
     format_timestamp_label,
     posted_display_label,
 )
-from job_hunter_agent.preferences import display_work_type_label
+from job_hunter_agent.preferences import (
+    display_contract_duration_label,
+    display_work_type_label,
+)
 from job_hunter_agent.profile_gaps import (
     STATUS_CONFIRMED_DO_NOT_HAVE,
     STATUS_CONFIRMED_HAVE,
@@ -462,6 +465,7 @@ _WORKSPACE_PAGE_LABEL_KEYS = (
     "sector_option_public",
     "sector_option_private",
     "match_level_label",
+    "potential_jobs_empty_state",
     "results_helper_copy",
     "results_helper_dismiss_button",
     "applied_jobs_heading",
@@ -1434,6 +1438,7 @@ def render_job_card(
 
     _posted_raw = posted_display_label(record)
     posted_display = "" if not _posted_raw or _posted_raw == "N/A" else _posted_raw
+    contract_duration_display = display_contract_duration_label(display_record)
     meta_items = []
     if posted_display:
         meta_items.append(
@@ -1445,6 +1450,11 @@ def render_job_card(
         (
             _workspace_label("workspace_meta_labels", "work_type", "Work type"),
             display_work_type_label(display_record),
+            False,
+        ),
+        (
+            _workspace_label("workspace_meta_labels", "contract_duration", "Contract term"),
+            contract_duration_display,
             False,
         ),
         (

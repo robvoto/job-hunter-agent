@@ -36,6 +36,9 @@ def test_workspace_archive_and_alert_labels_come_from_ui_labels():
 
     assert workspace_page_labels["archive_label"] == "Previously Saved Searches"
     assert workspace_page_labels["archive_context_prefix"] == "Previously Saved Searches"
+    assert workspace_page_labels["potential_jobs_empty_state"].startswith(
+        "No shortlist matches right now."
+    )
     assert workspace_renderer.ARCHIVE_LABEL == "Previously Saved Searches"
     assert workspace_renderer.ARCHIVE_CONTEXT_PREFIX == "Previously Saved Searches"
     assert settings_alerts_labels["telegram_disable_link_preview_label"] == "Hide link preview"
