@@ -163,6 +163,25 @@ def test_normalize_llm_review_payload_rejects_keep_without_requirement_coverage(
         )
 
 
+def test_normalize_llm_review_payload_falls_back_to_model_grade_without_coverage():
+
+    # REJECT decisions can legitimately have no requirement_coverage (the KEEP-only
+    # guard in _require_complete_keep_requirement_coverage doesn't apply here).
+    # derive_fit_review_grade([]) always returns "POOR", so without a fallback the
+    # model's own grade would be silently discarded and replaced with "POOR".
+
+    payload = llm_gate.normalize_llm_review_payload(
+        {
+            "decision": "REJECT",
+            "grade": "MISMATCH",
+            "job_requirements": [],
+            "requirement_coverage": [],
+        }
+    )
+
+    assert payload["fit_review"] == {"decision": "REJECT", "grade": "MISMATCH"}
+
+
 def test_normalize_llm_review_payload_debug_reason_is_capped():
     payload = llm_gate.normalize_llm_review_payload(
         {
@@ -642,7 +661,13 @@ def test_normalize_coverage_supports_eligibility_items():
     assert result[0]["capability_name"] == ""
 
 
-def test_normalize_coverage_converts_invalid_eligibility_match_to_not_shown():
+def test_normalize_coverage_converts_invalid_eligibility_match_to_not_shown(monkeypatch):
+    warnings = []
+    monkeypatch.setattr(
+        llm_gate,
+        "record_system_warning",
+        lambda **kwargs: warnings.append(kwargs) or kwargs,
+    )
     items = [
         {
             "requirement": "Hold PV security clearance",
@@ -664,6 +689,21 @@ def test_normalize_coverage_converts_invalid_eligibility_match_to_not_shown():
     assert result[0]["profile_name"] == ""
     assert result[0]["eligibility_name"] == ""
     assert result[0]["capability_name"] == ""
+    assert warnings
+    assert warnings[0]["severity"] == "warning"
+    assert warnings[0]["category"] == "llm_requirement_coverage"
+    assert warnings[0]["source"] == "llm_gate"
+    assert warnings[0]["context"]["reason"] == "invalid_eligibility_match"
+    assert warnings[0]["context"]["requirement_type_before"] == "eligibility"
+    assert warnings[0]["context"]["status_before"] == "supported"
+    assert warnings[0]["context"]["status_after"] == "not_shown"
+    assert warnings[0]["fingerprint"] == llm_gate.make_system_warning_fingerprint(
+        "Hold PV security clearance",
+        "eligibility",
+        "supported",
+        "government environments",
+        "Must hold PV security clearance",
+    )
 
 
 def test_normalize_coverage_defaults_invalid_importance_to_preferred():
@@ -684,7 +724,13 @@ def test_normalize_coverage_defaults_invalid_importance_to_preferred():
     assert result[0]["importance"] == "preferred"
 
 
-def test_normalize_coverage_converts_invalid_capability_match_to_not_shown():
+def test_normalize_coverage_converts_invalid_capability_match_to_not_shown(monkeypatch):
+    warnings = []
+    monkeypatch.setattr(
+        llm_gate,
+        "record_system_warning",
+        lambda **kwargs: warnings.append(kwargs) or kwargs,
+    )
     items = [
         {
             "requirement": "SAP experience",
@@ -706,9 +752,30 @@ def test_normalize_coverage_converts_invalid_capability_match_to_not_shown():
     assert result[0]["profile_name"] == ""
     assert result[0]["capability_name"] == ""
     assert result[0]["eligibility_name"] == ""
+    assert warnings
+    assert warnings[0]["severity"] == "warning"
+    assert warnings[0]["category"] == "llm_requirement_coverage"
+    assert warnings[0]["source"] == "llm_gate"
+    assert warnings[0]["context"]["reason"] == "invalid_capability_match"
+    assert warnings[0]["context"]["requirement_type_before"] == "capability"
+    assert warnings[0]["context"]["status_before"] == "supported"
+    assert warnings[0]["context"]["status_after"] == "not_shown"
+    assert warnings[0]["fingerprint"] == llm_gate.make_system_warning_fingerprint(
+        "SAP experience",
+        "capability",
+        "supported",
+        "finance transformation",
+        "SAP experience",
+    )
 
 
-def test_normalize_coverage_marks_invalid_requirement_type_for_review():
+def test_normalize_coverage_marks_invalid_requirement_type_for_review(monkeypatch):
+    warnings = []
+    monkeypatch.setattr(
+        llm_gate,
+        "record_system_warning",
+        lambda **kwargs: warnings.append(kwargs) or kwargs,
+    )
     items = [
         {
             "requirement": "PV clearance",
@@ -731,6 +798,21 @@ def test_normalize_coverage_marks_invalid_requirement_type_for_review():
     assert result[0]["profile_name"] == ""
     assert result[0]["eligibility_name"] == ""
     assert result[0]["capability_name"] == ""
+    assert warnings
+    assert warnings[0]["severity"] == "warning"
+    assert warnings[0]["category"] == "llm_requirement_coverage"
+    assert warnings[0]["source"] == "llm_gate"
+    assert warnings[0]["context"]["reason"] == "invalid_requirement_type"
+    assert warnings[0]["context"]["requirement_type_before"] == "credential"
+    assert warnings[0]["context"]["status_before"] == "supported"
+    assert warnings[0]["context"]["status_after"] == "invalid"
+    assert warnings[0]["fingerprint"] == llm_gate.make_system_warning_fingerprint(
+        "PV clearance",
+        "credential",
+        "supported",
+        "PV clearance",
+        "Must hold PV clearance",
+    )
 
 
 # ── managed prompt line loading ───────────────────────────────────────────────

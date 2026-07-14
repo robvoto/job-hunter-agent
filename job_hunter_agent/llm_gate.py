@@ -95,6 +95,10 @@ from job_hunter_agent.llm_protocol import (
 )
 from job_hunter_agent.paths import LLM_COSTS_PATH as _LLM_COSTS_PATH
 from job_hunter_agent.runtime_helpers import is_desktop_runtime
+from job_hunter_agent.system_warnings import (
+    make_system_warning_fingerprint,
+    record_system_warning,
+)
 
 # Import at module level to allow monkeypatching in tests
 from job_hunter_agent.profile_store import (
@@ -787,6 +791,54 @@ def _build_valid_eligibility_lookup(
     return lookup
 
 
+def _record_requirement_coverage_warning(
+    *,
+    requirement: str,
+    importance: str,
+    requirement_type_before: str,
+    requirement_type_after: str,
+    status_before: str,
+    status_after: str,
+    proposed_profile_name: str,
+    proposed_capability_name: str,
+    proposed_eligibility_name: str,
+    matched_job_text: str,
+    reason: str,
+) -> None:
+    message = (
+        f"Rejected LLM requirement coverage mapping for {requirement!r}: "
+        f"{requirement_type_before!r}/{status_before!r} -> "
+        f"{requirement_type_after!r}/{status_after!r} ({reason})."
+    )
+    fingerprint = make_system_warning_fingerprint(
+        requirement,
+        requirement_type_before,
+        status_before,
+        proposed_profile_name,
+        matched_job_text,
+    )
+    record_system_warning(
+        severity="warning",
+        category="llm_requirement_coverage",
+        source="llm_gate",
+        message=message,
+        fingerprint=fingerprint,
+        context={
+            "requirement": requirement,
+            "importance": importance,
+            "requirement_type_before": requirement_type_before,
+            "requirement_type_after": requirement_type_after,
+            "status_before": status_before,
+            "status_after": status_after,
+            "proposed_profile_name": proposed_profile_name,
+            "proposed_capability_name": proposed_capability_name,
+            "proposed_eligibility_name": proposed_eligibility_name,
+            "matched_job_text": matched_job_text,
+            "reason": reason,
+        },
+    )
+
+
 def _normalize_capability_name(
     value: Any, valid_capability_names: dict[str, str] | None = None
 ) -> str:
@@ -835,6 +887,8 @@ def normalize_llm_requirement_coverage(
         raw_requirement_type = compact_whitespace(
             item.get("requirement_type") or item.get("type")
         ).lower()
+        requirement_type_before = raw_requirement_type or "capability"
+        status_before = status
         if raw_requirement_type:
             requirement_type = raw_requirement_type
             requirement_type_is_valid = requirement_type in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES
@@ -872,9 +926,6 @@ def normalize_llm_requirement_coverage(
                 importance,
             )
             status = LLM_INVALID_COVERAGE_STATUS
-            profile_name = ""
-            capability_name = ""
-            eligibility_name = ""
         matched_job_text = compact_whitespace(
             item.get("matched_job_text") or item.get("matched_text")
         )
@@ -894,6 +945,19 @@ def normalize_llm_requirement_coverage(
         if not requirement or status not in _ALLOWED_REQUIREMENT_COVERAGE_STATUSES:
             continue
         if requirement_type == LLM_INVALID_COVERAGE_REQUIREMENT_TYPE:
+            _record_requirement_coverage_warning(
+                requirement=requirement,
+                importance=importance,
+                requirement_type_before=requirement_type_before,
+                requirement_type_after=requirement_type,
+                status_before=status_before,
+                status_after=status,
+                proposed_profile_name=profile_name,
+                proposed_capability_name=capability_name,
+                proposed_eligibility_name=eligibility_name,
+                matched_job_text=matched_job_text,
+                reason="invalid_requirement_type",
+            )
             profile_name = ""
             capability_name = ""
             eligibility_name = ""
@@ -903,6 +967,19 @@ def normalize_llm_requirement_coverage(
                 requirement,
                 status,
                 importance,
+            )
+            _record_requirement_coverage_warning(
+                requirement=requirement,
+                importance=importance,
+                requirement_type_before=requirement_type_before,
+                requirement_type_after=requirement_type,
+                status_before=status_before,
+                status_after="not_shown",
+                proposed_profile_name=profile_name,
+                proposed_capability_name=capability_name,
+                proposed_eligibility_name=eligibility_name,
+                matched_job_text=matched_job_text,
+                reason="invalid_eligibility_match",
             )
             status = "not_shown"
             profile_name = ""
@@ -914,6 +991,19 @@ def normalize_llm_requirement_coverage(
                 requirement,
                 status,
                 importance,
+            )
+            _record_requirement_coverage_warning(
+                requirement=requirement,
+                importance=importance,
+                requirement_type_before=requirement_type_before,
+                requirement_type_after=requirement_type,
+                status_before=status_before,
+                status_after="not_shown",
+                proposed_profile_name=profile_name,
+                proposed_capability_name=capability_name,
+                proposed_eligibility_name=eligibility_name,
+                matched_job_text=matched_job_text,
+                reason="invalid_capability_match",
             )
             status = "not_shown"
             profile_name = ""
@@ -1094,10 +1184,10 @@ def normalize_llm_review_payload(
                     and _item.get("status") in {"supported", "partially_supported"}
                 )
             )
+            # Coverage is the source of truth for grade when it exists; the model's raw
+            # grade is only a fallback when there's no coverage to derive a grade from.
             grade_to_use = (
-                derived_grade
-                if requirement_coverage
-                else derived_grade
+                derived_grade if requirement_coverage else fit_review_normalized["grade"]
             )
             # Count by importance × status for structured logging.
             _imp_status: dict[str, int] = {}
