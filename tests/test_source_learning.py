@@ -7,6 +7,7 @@ from job_hunter_agent.record_schema import (
     RECORD_JOB_KEY,
     RECORD_TITLE_KEY,
 )
+from job_hunter_agent.signal_schema import TITLE_REASON_POTENTIAL_MATCH
 
 
 def _build_record(
@@ -228,3 +229,15 @@ def test_resolve_llm_review_payload_counts_truncations(monkeypatch):
     source_learning.resolve_llm_review_payload(record, llm_cache)
 
     assert source_learning.get_llm_truncation_count() == 1
+
+
+def test_deterministic_review_does_not_reject_potential_title_before_llm():
+    result = source_learning.deterministic_review_outcome(
+        {"title_reason": TITLE_REASON_POTENTIAL_MATCH},
+        {},
+        ["Strong capability match: Delivery teams"],
+        ["Missing explicit digital-health evidence"],
+        ["Domain fit needs review", "Qualification fit needs review"],
+    )
+
+    assert result is None

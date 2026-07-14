@@ -112,19 +112,8 @@ def deterministic_review_outcome(
 
         return {"decision": decision, "grade": grade, "det_rule": rule}
 
-    if (
-        high_risks >= limits["min_high_risks_for_mismatch"]
-        and strong_signal_count <= limits["max_strong_signals_for_mismatch"]
-    ):
-        return _log("mismatch", "REJECT", "MISMATCH")
-
-    if (
-        title_reason == TITLE_REASON_POTENTIAL_MATCH
-        and high_risks >= limits["min_high_risks_for_poor"]
-        and strong_signal_count <= limits["max_strong_signals_for_poor"]
-    ):
-        return _log("poor_potential", "REJECT", "POOR")
-
+    # This shortcut is keep-candidate only. Weak or ambiguous roles must proceed
+    # to full LLM review instead of being hard-rejected by heuristic scoring.
     if (
         title_reason == "OK"
         and strong_signal_count >= limits["min_strong_signals_for_strong_keep"]

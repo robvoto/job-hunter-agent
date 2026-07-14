@@ -174,10 +174,6 @@ def get_deterministic_review_thresholds(scoring_rules: dict) -> dict:
         return int(thresholds[key])
 
     return {
-        "min_high_risks_for_mismatch": _req("min_high_risks_for_mismatch"),
-        "max_strong_signals_for_mismatch": _req("max_strong_signals_for_mismatch"),
-        "min_high_risks_for_poor": _req("min_high_risks_for_poor"),
-        "max_strong_signals_for_poor": _req("max_strong_signals_for_poor"),
         "min_strong_signals_for_strong_keep": _req("min_strong_signals_for_strong_keep"),
         "min_strong_signals_for_solid_keep": _req("min_strong_signals_for_solid_keep"),
         "max_medium_risks_for_solid_keep": _req("max_medium_risks_for_solid_keep"),
