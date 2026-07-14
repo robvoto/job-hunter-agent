@@ -653,7 +653,7 @@ def render_html(
             "CURRENT_SECTION_HTML": render_section(
                 "Job Results",
                 shortlist_records,
-                "No shortlist matches are available right now.",
+                ws_page_labels["LABEL_WS_POTENTIAL_JOBS_EMPTY_STATE"],
                 scoring_profile,
                 applied_pool=applied_records,
                 history_clusters=history_clusters,
