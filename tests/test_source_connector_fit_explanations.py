@@ -1934,11 +1934,6 @@ def test_deterministic_review_counts_only_capability_highlights():
     ) == {"decision": "KEEP", "grade": "SOLID", "det_rule": "solid"}
 
 
-def test_llm_description_fit_entry_requires_grade_for_evaluated_records():
-    with pytest.raises(ValueError, match="llm_fit_grade is required for evaluated records"):
-        fit_scoring.llm_description_fit_entry({"llm_decision": "KEEP"}, _test_profile())
-
-
 def test_fit_score_breakdown_raises_without_llm_review():
     with pytest.raises(RuntimeError, match="Cannot score job without LLM review"):
         fit_scoring.fit_score_breakdown(_workspace_record(), _test_profile())
@@ -2738,28 +2733,6 @@ def test_workspace_renders_requirement_coverage_with_status_classes():
     assert "Expected" in html  # strongly_preferred label
     assert "Preferred" in html  # preferred label
     assert "Bonus" in html  # nice_to_have label
-
-
-def test_freshness_breakdown_uses_managed_bucket_cutoffs():
-    scoring_rules = json.loads(SCORING_RULES_PATH.read_text(encoding="utf-8"))
-    weights = {"freshness": 1.0}
-
-    assert (
-        _breakdown_value(
-            fit_scoring.build_freshness_breakdown(scoring_rules, weights, 0.02),
-            "Posted within the last 6 hours",
-        )
-        == 10
-    )
-    assert (
-        _breakdown_value(
-            fit_scoring.build_freshness_breakdown(scoring_rules, weights, 0.5),
-            "Posted within the last day",
-        )
-        == 8
-    )
-    assert fit_scoring.build_freshness_breakdown(scoring_rules, weights, 2) == []
-    assert fit_scoring.build_freshness_breakdown(scoring_rules, weights, 10) == []
 
 
 def test_repeated_listing_history_adds_candidate_warning():

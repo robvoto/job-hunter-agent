@@ -356,7 +356,14 @@ def _extract_job_payload(page, *, job_url: str, anchor_text: str, run_iso: str) 
 
     normalized_job_key = normalize_job_key(job_url, source=SOURCE_APSJOBS)
     if not normalized_job_key:
-        key_basis = compact_whitespace(urlsplit(job_url).path or anchor_text or "listing").lower()
+        parsed_job_url = urlsplit(job_url)
+        # Include the query string, not just the path: APSJobs listing paths
+        # are constant ('/s/job-details') and the query carries the unique id.
+        key_basis = compact_whitespace(
+            "-".join(part for part in (parsed_job_url.path, parsed_job_url.query) if part)
+            or anchor_text
+            or "listing"
+        ).lower()
         normalized_job_key = (
             f"{SOURCE_APSJOBS}:"
             f"{re.sub(r'[^a-z0-9_-]+', '-', key_basis).strip('-') or 'listing'}"

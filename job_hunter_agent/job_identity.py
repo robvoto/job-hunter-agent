@@ -83,6 +83,14 @@ def normalize_job_key(value: str, source: Optional[str] = None) -> str:
 
     id_match = re.search(r"/job(?:s)?/(?:view/)?(\d+)", raw)
 
+    # 2b. Salesforce-style listing URLs (e.g. APSJobs): the id lives in a
+    # 'job-details/<id>' path segment or an 'id=' / 'jobid=' / 'job_id='
+    # query parameter, not a numeric '/job/<id>' path segment.
+    if not id_match:
+        id_match = re.search(r"/job-?details?/([a-z0-9]+)", raw) or re.search(
+            r"[?&](?:job_?id|id)=([a-z0-9]+)", raw
+        )
+
     id_part = ""
 
     source_part = str(source or "").strip().lower()

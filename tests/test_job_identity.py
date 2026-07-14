@@ -13,11 +13,49 @@ from job_hunter_agent.job_identity import (
     are_jobs_confirmed_duplicates,
     deduplicate_across_sources,
     find_confirmed_duplicate,
+    normalize_job_key,
 )
 from job_hunter_agent.record_schema import (
     RECORD_DUPLICATE_LINKS_KEY,
     RECORD_POTENTIAL_DUPLICATE_LINKS_KEY,
 )
+
+
+def test_normalize_job_key_extracts_apsjobs_path_based_id():
+
+    assert (
+        normalize_job_key("https://www.apsjobs.gov.au/s/job-details/123", source="apsjobs")
+        == "apsjobs:123"
+    )
+
+
+def test_normalize_job_key_extracts_apsjobs_query_param_id_without_collision():
+
+    # Real APSJobs listing URLs carry the unique id in an 'Id=' query param
+    # while the path segment ('/s/job-details') is identical for every job.
+    # Two different listings must not normalize to the same job_key.
+
+    first = normalize_job_key(
+        "https://www.apsjobs.gov.au/s/job-details?title=temporary-employment-register&Id=a05OY00000MGFeLYAX",
+        source="apsjobs",
+    )
+    second = normalize_job_key(
+        "https://www.apsjobs.gov.au/s/job-details?title=another-role&Id=a05OY00000ZZZZZZZZ",
+        source="apsjobs",
+    )
+
+    assert first == "apsjobs:a05oy00000mgfelyax"
+    assert second == "apsjobs:a05oy00000zzzzzzzz"
+    assert first != second
+
+
+def test_normalize_job_key_seek_and_linkedin_unaffected():
+
+    assert normalize_job_key("https://www.seek.com.au/job/12345", source="seek") == "seek:12345"
+    assert (
+        normalize_job_key("https://www.linkedin.com/jobs/view/98765", source="linkedin")
+        == "linkedin:98765"
+    )
 
 
 def test_are_jobs_confirmed_duplicates_requires_same_job_key_or_url():
