@@ -86,6 +86,12 @@ Openable render:
 docs/diagrams/scoring_process_flow.html
 ```
 
+Regenerate standalone diagram HTML after Mermaid layout/config changes:
+
+```text
+./.venv/bin/python scripts/regenerate_diagram_html.py
+```
+
 Inline renderable copy:
 
 ```mermaid
@@ -268,7 +274,7 @@ Current importance weights used by `derive_fit_review_grade`:
 Current derivation rules:
 
 - `supported` contributes full weight.
-- `partially_supported` contributes half weight.
+- `partially_supported` contributes configured partial weight (`requirement_status_weights.partially_supported`, currently `0.5`).
 - `not_shown` contributes zero but still counts against the maximum possible score.
 - `mismatch` contributes zero and caps the grade at WEAK if there is any coverage.
 - Missing coverage items from `job_requirements` are treated as uncovered preferred-weight items.
@@ -324,12 +330,10 @@ Current outcomes:
 
 | Rule | Outcome |
 |---|---|
-| Too many high risks and too few strong signals | REJECT / MISMATCH |
-| Potential title plus high risk and weak signals | REJECT / POOR |
 | OK title plus enough strong signals and no high risks | KEEP / STRONG |
 | OK title plus enough strong signals, no high risks, and limited medium risks | KEEP / SOLID |
 
-These rule-based outcomes still produce `llm_fit_grade` and can therefore be scored by the same scoring pipeline.
+Anything that is not a confident deterministic KEEP candidate continues to full LLM requirement review. Deterministic weakness is not a final reject reason in this shortcut.
 
 ---
 

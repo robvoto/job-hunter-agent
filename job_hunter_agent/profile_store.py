@@ -160,6 +160,7 @@ KEY_SECONDARY_PATTERNS = "also_consider_roles"
 KEY_TARGET_OCCUPATION_QUERIES = "target_occupation_queries"
 KEY_CAPABILITY_LEVEL_WEIGHTS = "capability_level_weights"
 KEY_REQUIREMENT_IMPORTANCE_WEIGHTS = "requirement_importance_weights"
+KEY_REQUIREMENT_STATUS_WEIGHTS = "requirement_status_weights"
 KEY_CAPABILITY_EVIDENCE = "capability_candidate_profile"
 MATCHING_RULE_PROFILE_KEYS = frozenset(
     {
@@ -255,6 +256,7 @@ def _load_default_scoring_rules() -> dict[str, Any]:
         KEY_REQUIREMENT_IMPORTANCE_WEIGHTS: dict(
             payload.get(KEY_REQUIREMENT_IMPORTANCE_WEIGHTS) or {}
         ),
+        KEY_REQUIREMENT_STATUS_WEIGHTS: dict(payload.get(KEY_REQUIREMENT_STATUS_WEIGHTS) or {}),
         KEY_CAPABILITY_EVIDENCE: dict(payload.get("capability_evidence") or {}),
         KEY_CONVERGENCE: dict(payload.get(KEY_CONVERGENCE) or {}),
         KEY_COMPETITIVE_SIGNAL_ALIGNMENT: dict(payload.get(KEY_COMPETITIVE_SIGNAL_ALIGNMENT) or {}),

@@ -22,6 +22,7 @@ from job_hunter_agent.profile_store import (
     KEY_CANDIDATE_ELIGIBILITY,
     KEY_CAPABILITY_LEVEL_WEIGHTS,
     KEY_REQUIREMENT_IMPORTANCE_WEIGHTS,
+    KEY_REQUIREMENT_STATUS_WEIGHTS,
     CapabilityLevel,
     get_scoring_rules,
     load_profile,
@@ -68,6 +69,16 @@ def _capability_level_credits(scoring_rules: dict) -> dict[str, float]:
     if not isinstance(credits, dict) or not credits:
         raise ValueError("capability_level_weights are required in scoring_rules")
     return credits
+
+
+def _requirement_status_weights(scoring_rules: dict) -> dict[str, float]:
+    weights = scoring_rules.get(KEY_REQUIREMENT_STATUS_WEIGHTS)
+    if not isinstance(weights, dict) or not weights:
+        raise ValueError("requirement_status_weights are required in scoring_rules")
+    for key in ("supported", "partially_supported"):
+        if key not in weights:
+            raise ValueError(f"{KEY_REQUIREMENT_STATUS_WEIGHTS} must define {key!r}")
+    return weights
 
 
 def _normalise_lookup_text(value: str) -> str:
@@ -167,6 +178,7 @@ def requirement_fit_audit_rows(record: dict, profile: Optional[dict] = None) -> 
     scoring_rules = get_scoring_rules(active_profile)
     importance_weights = _requirement_importance_weights(scoring_rules)
     capability_credits = _capability_level_credits(scoring_rules)
+    status_weights = _requirement_status_weights(scoring_rules)
     capability_levels = _candidate_capability_level_lookup(active_profile, capability_credits)
     eligibility_levels = _candidate_eligibility_lookup(active_profile)
     coverage = record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or []
@@ -191,16 +203,17 @@ def requirement_fit_audit_rows(record: dict, profile: Optional[dict] = None) -> 
         credit_fraction = 0.0
 
         if status in {"supported", "partially_supported"}:
+            status_credit = float(status_weights[status])
             if requirement_type == "eligibility":
                 eligibility_key = _normalise_lookup_text(profile_name)
                 if eligibility_key in eligibility_levels and eligibility_levels[eligibility_key]:
                     candidate_level = "confirmed"
-                    credit_fraction = 1.0
+                    credit_fraction = status_credit
             elif requirement_type in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES:
                 capability_key = _normalise_lookup_text(profile_name)
                 candidate_level = capability_levels.get(capability_key, "")
                 if candidate_level:
-                    credit_fraction = capability_credits[candidate_level]
+                    credit_fraction = capability_credits[candidate_level] * status_credit
 
         raw_support = item.get("profile_support") or []
         if isinstance(raw_support, str):
@@ -244,6 +257,7 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
 
     importance_weights = _requirement_importance_weights(scoring_rules)
     capability_credits = _capability_level_credits(scoring_rules)
+    status_weights = _requirement_status_weights(scoring_rules)
     capability_levels = _candidate_capability_level_lookup(profile, capability_credits)
     eligibility_levels = _candidate_eligibility_lookup(profile)
     total_weight = 0.0
@@ -254,6 +268,7 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
         "basic": 0,
         "low": 0,
         "eligibility": 0,
+        "partial": 0,
         "not_shown": 0,
         "mismatch": 0,
         "unknown": 0,
@@ -328,8 +343,10 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
                 if importance == "mandatory":
                     mandatory_gaps.append(requirement)
                 continue
-            earned_weight += weight
+            earned_weight += weight * float(status_weights[status])
             counts["eligibility"] += 1
+            if status == "partially_supported":
+                counts["partial"] += 1
             continue
 
         capability_key = _normalise_lookup_text(profile_name)
@@ -346,10 +363,12 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
                 mandatory_gaps.append(requirement)
             continue
 
-        credit = capability_credits[level]
+        credit = capability_credits[level] * float(status_weights[status])
         earned_weight += weight * credit
         bucket = "low" if level in {"low", "limited_depth"} else level
         counts[bucket] += 1
+        if status == "partially_supported":
+            counts["partial"] += 1
         if importance == "mandatory" and level in {"basic", "low", "limited_depth"}:
             weak_mandatory.append(requirement)
 
@@ -361,6 +380,7 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
         f"basic {counts['basic']}",
         f"low {counts['low']}",
         f"eligibility {counts['eligibility']}",
+        f"partial {counts['partial']}",
         f"not shown {counts['not_shown']}",
         f"mismatch {counts['mismatch']}",
     ]

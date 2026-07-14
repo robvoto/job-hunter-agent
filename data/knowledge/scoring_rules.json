@@ -1,13 +1,14 @@
 {
   "kind": "system_config",
   "name": "scoring_rules",
-  "version": 10,
-  "updated_at": "2026-07-14",
+  "version": 11,
+  "updated_at": "2026-07-15",
   "description": "Central scoring configuration. Controls how different factors contribute to job fit scoring. Must remain transparent and not contain hidden rejection logic.",
   "calibration_notes": {
-    "design": "Narrow requirement-fit scoring. The LLM extracts per-requirement coverage (status, importance, mapped capability/eligibility) from the job description; the score is the weighted percentage of requirement_importance_weights satisfied by candidate capability_level_weights credit, adjusted by requirement_fit_entries. There is no LLM-grade base score or grade band clamping — the requirement fit percentage IS the score before hard-block penalties.",
+    "design": "Narrow requirement-fit scoring. The LLM extracts per-requirement coverage (status, importance, mapped capability/eligibility) from the job description; the score is the weighted percentage of requirement_importance_weights satisfied by candidate capability_level_weights and requirement_status_weights credit, adjusted by requirement_fit_entries. There is no LLM-grade base score or grade band clamping — the requirement fit percentage IS the score before hard-block penalties.",
     "requirement_importance_weights": "Per-requirement weight by importance (mandatory, strongly_preferred, preferred, nice_to_have) used to compute the weighted percentage of requirements satisfied.",
     "capability_level_weights": "Credit multiplier applied to a requirement's weight based on the candidate's matched capability level (strong, working, basic, low, limited_depth) for that requirement.",
+    "requirement_status_weights": "Credit multiplier applied to a requirement's weight based on whether support is direct (`supported`) or partial (`partially_supported`).",
     "hard_blockers": "Applied on top of the requirement-fit percentage. A single hard blocker subtracts 100, forcing the score to near-zero regardless of requirement fit."
   },
   "fit_breakdown": {
@@ -28,6 +29,11 @@
     "basic": 0.35,
     "low": 0.15,
     "limited_depth": 0.15
+  },
+  "requirement_status_weights": {
+    "description": "Credit multiplier applied to a requirement's weight based on whether support is direct or partial.",
+    "supported": 1.0,
+    "partially_supported": 0.5
   },
   "convergence": {
     "description": "Bonuses for strong multi-signal agreement between title, content, and evidence.",
@@ -119,20 +125,12 @@
     "freshness": 1.0
   },
   "deterministic_review_thresholds": {
-    "description": "Controls the pre-LLM deterministic shortcut in source_learning.deterministic_review_outcome. REJECT rules may still finalize without an LLM call. KEEP results are candidate-only: when a job clears a KEEP shortcut, the pipeline must still run the full LLM fit review and requirement_coverage before any final KEEP is saved. To calibrate, filter audit_records.json on det_rule and inspect the final review_source and requirement_coverage fields.",
+    "description": "Controls the pre-LLM deterministic KEEP-candidate shortcut in source_learning.deterministic_review_outcome. This shortcut must not reject ambiguous jobs; anything that is not a confident KEEP candidate continues to the full LLM fit review and requirement_coverage before any final KEEP is saved. To calibrate, filter audit_records.json on det_rule and inspect the final review_source and requirement_coverage fields.",
     "field_descriptions": {
-      "min_high_risks_for_mismatch": "Minimum missing-evidence count required to trigger a REJECT/MISMATCH when strong fit signals are absent. Raise to make the MISMATCH shortcut stricter (fewer auto-rejects).",
-      "max_strong_signals_for_mismatch": "Upper bound on strong fit signals for the MISMATCH rejection to fire. Lower to prevent accidental rejection of jobs that have any positive signal.",
-      "min_high_risks_for_poor": "Minimum missing-evidence count to auto-reject a POTENTIAL_MATCH title as POOR. Raise to keep more ambiguous titles in for LLM review.",
-      "max_strong_signals_for_poor": "Upper bound on strong fit signals for the POOR rejection to fire. If set too low, weak-title roles with some evidence bypass the shortcut and go to LLM.",
       "min_strong_signals_for_strong_keep": "Minimum strong fit signals to mark a KEEP candidate that still requires full LLM requirement review before final KEEP. Lower to route more confident jobs through the LLM review path.",
       "min_strong_signals_for_solid_keep": "Minimum strong fit signals to mark a KEEP candidate for the SOLID path. Must be below min_strong_signals_for_strong_keep.",
       "max_medium_risks_for_solid_keep": "Maximum soft-risk count allowed for the SOLID KEEP candidate shortcut to fire. Raise to route more borderline jobs into full LLM review."
     },
-    "min_high_risks_for_mismatch": 2,
-    "max_strong_signals_for_mismatch": 1,
-    "min_high_risks_for_poor": 1,
-    "max_strong_signals_for_poor": 1,
     "min_strong_signals_for_strong_keep": 4,
     "min_strong_signals_for_solid_keep": 3,
     "max_medium_risks_for_solid_keep": 1

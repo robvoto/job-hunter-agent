@@ -45,7 +45,7 @@ def test_requirement_fit_audit_exposes_exact_evidence_mapping_and_credit():
             "requirement": "5–7 years in digital health",
             "importance": "mandatory",
             "requirement_type": "capability",
-            "status": "supported",
+            "status": "partially_supported",
             "profile_name": "stakeholder engagement",
             "capability_name": "stakeholder engagement",
             "matched_job_text": "5–7 years' experience in digital health",
@@ -60,16 +60,31 @@ def test_requirement_fit_audit_exposes_exact_evidence_mapping_and_credit():
             "requirement": "5–7 years in digital health",
             "importance": "mandatory",
             "requirement_type": "capability",
-            "status": "supported",
+            "status": "partially_supported",
             "profile_name": "stakeholder engagement",
             "candidate_level": "strong",
             "matched_job_text": "5–7 years' experience in digital health",
             "profile_support": ["Facilitated stakeholders on a health infrastructure program."],
             "requirement_weight": 3.0,
-            "credit_fraction": 1.0,
-            "weighted_credit": 3.0,
+            "credit_fraction": 0.5,
+            "weighted_credit": 1.5,
         }
     ]
+
+
+def test_requirement_fit_partially_supported_uses_partial_status_credit():
+    record = _record([
+        {
+            "requirement": "Stakeholder engagement",
+            "importance": "mandatory",
+            "status": "partially_supported",
+            "capability_name": "stakeholder engagement",
+        }
+    ])
+
+    assert fit_scoring.fit_score(record, _profile()) == 50
+    label = fit_scoring.fit_score_breakdown(record, _profile())[0]["label"]
+    assert "partial 1" in label
 
 
 def test_requirement_fit_uses_capability_level_not_llm_grade_or_title():
