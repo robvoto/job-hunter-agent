@@ -164,9 +164,8 @@ KEY_MATCH_PREFS = "match_preferences"
 KEY_PRIMARY_PATTERNS = "target_roles"
 KEY_SECONDARY_PATTERNS = "also_consider_roles"
 KEY_TARGET_OCCUPATION_QUERIES = "target_occupation_queries"
-KEY_LLM_GRADE_POINTS = "llm_grade_points"
-KEY_LLM_GRADE_BANDS = "llm_grade_bands"
 KEY_CAPABILITY_LEVEL_WEIGHTS = "capability_level_weights"
+KEY_REQUIREMENT_IMPORTANCE_WEIGHTS = "requirement_importance_weights"
 KEY_CAPABILITY_EVIDENCE = "capability_candidate_profile"
 MATCHING_RULE_PROFILE_KEYS = frozenset(
     {
@@ -258,16 +257,16 @@ def _load_default_scoring_rules() -> dict[str, Any]:
         raise ValueError("scoring_rules must be managed knowledge")
     return {
         "fit_breakdown": dict(payload.get("fit_breakdown") or {}),
-        KEY_LLM_GRADE_POINTS: dict(payload.get(KEY_LLM_GRADE_POINTS) or {}),
-        KEY_LLM_GRADE_BANDS: dict(payload.get(KEY_LLM_GRADE_BANDS) or {}),
         KEY_CAPABILITY_LEVEL_WEIGHTS: dict(payload.get(KEY_CAPABILITY_LEVEL_WEIGHTS) or {}),
+        KEY_REQUIREMENT_IMPORTANCE_WEIGHTS: dict(
+            payload.get(KEY_REQUIREMENT_IMPORTANCE_WEIGHTS) or {}
+        ),
         KEY_CAPABILITY_EVIDENCE: dict(payload.get("capability_evidence") or {}),
         KEY_CONVERGENCE: dict(payload.get(KEY_CONVERGENCE) or {}),
         KEY_COMPETITIVE_SIGNAL_ALIGNMENT: dict(payload.get(KEY_COMPETITIVE_SIGNAL_ALIGNMENT) or {}),
         "deterministic_review_thresholds": dict(
             payload.get("deterministic_review_thresholds") or {}
         ),
-        "freshness": dict(payload.get("freshness") or {}),
         "work_mode": dict(payload.get("work_mode") or {}),
         "salary": dict(payload.get("salary") or {}),
         "location": dict(payload.get("location") or {}),
@@ -1227,10 +1226,6 @@ def get_candidate_profile_tier_weights(profile: dict[str, Any]) -> dict[str, flo
 
 def get_search_settings(profile: dict[str, Any]) -> dict[str, Any]:
     return normalize_search_settings(profile.get("search_settings", {}))
-
-
-def get_preference_weights(profile: dict[str, Any]) -> dict[str, float]:
-    return normalize_preference_weights(profile.get("preference_weights", {}))
 
 
 def get_scoring_rules(profile: dict[str, Any]) -> dict[str, Any]:

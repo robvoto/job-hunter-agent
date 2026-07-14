@@ -1,69 +1,33 @@
 {
   "kind": "system_config",
   "name": "scoring_rules",
-  "version": 9,
-  "updated_at": "2026-06-19",
+  "version": 10,
+  "updated_at": "2026-07-14",
   "description": "Central scoring configuration. Controls how different factors contribute to job fit scoring. Must remain transparent and not contain hidden rejection logic.",
   "calibration_notes": {
-    "design": "Band-anchored scoring. The LLM grade defines the band (floor/ceiling); other signals adjust the score within that band. Grade and score cannot contradict — a MISMATCH grade always produces a low score; a STRONG grade always produces a good score.",
-    "llm_grade_base_points": "Base additive contribution from the LLM grade before other signals are added. These are intentionally modest — the band floor and ceiling constrain the final score, not the base alone.",
-    "llm_grade_bands": "Each grade has a floor (minimum attainable) and ceiling (maximum attainable) for the non-hard-block score. After summing all core/preference/convenience entries the result is clamped to the band. Hard block penalties are applied after band clamping and can push the score to zero regardless of grade.",
-    "other_signals": "Title match, preferences, freshness, and competitive signals move the score within the grade band. Capability support is captured in the grade via requirement_coverage — it is shown for transparency but does not add separate points. A STRONG grade with a clean title and preference signals reaches the upper end of the band; the same grade with no supporting signals floors at the grade minimum.",
-    "hard_blockers": "Applied after band clamping. A single hard blocker subtracts 100, overriding the grade band and forcing the score to near-zero.",
-    "band_boundaries": {
-      "EXCELLENT": "88-100 — reserved for exceptional alignment across all signals",
-      "STRONG": "68-87 — strong fit confirmed by LLM; other signals calibrate within this range",
-      "SOLID": "48-67 — decent fit; moderate evidence",
-      "WEAK": "28-47 — limited alignment",
-      "POOR": "8-27 — poor alignment",
-      "MISMATCH": "0-7 — explicit mismatch; capped near-zero regardless of other signals"
-    }
+    "design": "Narrow requirement-fit scoring. The LLM extracts per-requirement coverage (status, importance, mapped capability/eligibility) from the job description; the score is the weighted percentage of requirement_importance_weights satisfied by candidate capability_level_weights credit, adjusted by requirement_fit_entries. There is no LLM-grade base score or grade band clamping — the requirement fit percentage IS the score before hard-block penalties.",
+    "requirement_importance_weights": "Per-requirement weight by importance (mandatory, strongly_preferred, preferred, nice_to_have) used to compute the weighted percentage of requirements satisfied.",
+    "capability_level_weights": "Credit multiplier applied to a requirement's weight based on the candidate's matched capability level (strong, working, basic, low, limited_depth) for that requirement.",
+    "hard_blockers": "Applied on top of the requirement-fit percentage. A single hard blocker subtracts 100, forcing the score to near-zero regardless of requirement fit."
   },
   "fit_breakdown": {
-    "description": "Core score components for title fit, content fit, review status, and hard-block penalties. Internal scoring logic.",
-    "hard_block_penalty": -100,
-    "title_direct": 15,
-    "title_secondary": 4,
-    "content_ok": 3,
-    "description_capture_incomplete": -8,
-    "viewed_by_user": -3,
-    "easy_apply_bonus": 3
+    "description": "Hard-block penalty applied on top of the requirement-fit percentage. Internal scoring logic.",
+    "hard_block_penalty": -100
   },
-  "llm_grade_points": {
-    "description": "Base additive points for each LLM grade. These anchor the score in the correct band but are intentionally modest — supporting signals from title, capability support, and preferences move the score within the band defined by llm_grade_bands.",
-    "EXCELLENT": 78,
-    "STRONG": 52,
-    "SOLID": 32,
-    "WEAK": 18,
-    "POOR": 6,
-    "MISMATCH": 0
+  "requirement_importance_weights": {
+    "description": "Per-requirement weight by importance used to compute the weighted percentage of requirements satisfied.",
+    "mandatory": 3.0,
+    "strongly_preferred": 2.0,
+    "preferred": 1.0,
+    "nice_to_have": 0.25
   },
-  "llm_grade_bands": {
-    "description": "Floor and ceiling for the non-hard-block score per LLM grade. The score is clamped to this range before hard block penalties are applied. A band adjustment entry is added to the breakdown when clamping occurs.",
-    "EXCELLENT": {
-      "floor": 88,
-      "ceiling": 100
-    },
-    "STRONG": {
-      "floor": 68,
-      "ceiling": 87
-    },
-    "SOLID": {
-      "floor": 48,
-      "ceiling": 67
-    },
-    "WEAK": {
-      "floor": 28,
-      "ceiling": 47
-    },
-    "POOR": {
-      "floor": 8,
-      "ceiling": 27
-    },
-    "MISMATCH": {
-      "floor": 0,
-      "ceiling": 7
-    }
+  "capability_level_weights": {
+    "description": "Credit multiplier applied to a requirement's weight based on the candidate's matched capability level for that requirement.",
+    "strong": 1.0,
+    "working": 0.70,
+    "basic": 0.35,
+    "low": 0.15,
+    "limited_depth": 0.15
   },
   "convergence": {
     "description": "Bonuses for strong multi-signal agreement between title, content, and evidence.",
@@ -102,25 +66,6 @@
       "1": 6,
       "2": 8,
       "3": 10
-    }
-  },
-  "freshness": {
-    "description": "Bonuses for newer jobs. Used by the score engine, not the search filters. Only jobs posted within the last day receive a bonus.",
-    "last_6_hours": 10,
-    "last_day": 8,
-    "bucket_order": [
-      "last_6_hours",
-      "last_day"
-    ],
-    "buckets": {
-      "last_6_hours": {
-        "max_days": 0.25,
-        "label": "Posted within the last 6 hours"
-      },
-      "last_day": {
-        "max_days": 1,
-        "label": "Posted within the last day"
-      }
     }
   },
   "work_mode": {

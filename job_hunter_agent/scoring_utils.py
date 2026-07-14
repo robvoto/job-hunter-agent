@@ -1,6 +1,5 @@
 """Helpers for scoring utils."""
 
-import math
 import re
 from datetime import datetime
 from typing import List, Optional
@@ -13,16 +12,6 @@ from job_hunter_agent.profile_store import (
 )
 from job_hunter_agent.role_analysis import text_contains_term
 from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order
-
-
-def weighted_points(value: int, weight: float) -> int:
-
-    scaled = float(value) * float(weight)
-
-    if scaled >= 0:
-        return int(math.floor(scaled + 0.5))
-
-    return -int(math.floor(abs(scaled) + 0.5))
 
 
 def build_scoring_source_text(record: dict) -> str:

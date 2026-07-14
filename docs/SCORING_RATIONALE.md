@@ -54,7 +54,7 @@ not_shown = 0
 mismatch = 0
 ```
 
-If the LLM marks a requirement as covered but the mapped capability or eligibility fact cannot be resolved in the candidate profile, the score does not get inflated. A structured uncertainty event is appended to `output/uncertainty.jsonl` with reason code `requirement_capability_mapping_uncertain`.
+If the LLM marks a requirement as covered but the mapped capability or eligibility fact cannot be resolved in the candidate profile, the score does not get inflated. The code writes a structured uncertainty event to `output/uncertainty.jsonl` and records a reviewable warning in the `system_warnings` table.
 
 The main scoring consumer is:
 
@@ -137,7 +137,7 @@ flowchart TD
 | Title and occupation filtering | Job title, profile target roles, target occupation queries | `filters.py`, `occupation_taxonomy.py`, `docs/OCCUPATION_TAXONOMY_RATIONALE.md` | Title reason, O*NET near/far/uncertain signal | Approved hard blockers may stop the job before LLM. Uncertain signals continue. |
 | Description preparation | Full description, structured scraper metadata | `description_compactor.py`, `description_trust.py`, config/rules governance | `fit_source_text`, description trust metadata | Unsafe compaction is skipped explicitly; full description remains preserved. |
 | Review outcome | Title/content signals and fit source text | `llm_gate.py`, `source_learning.py` deterministic shortcut | `llm_fit_grade`, requirement coverage, rationale fields | LLM call may be avoided only by explicit deterministic reject rules. Deterministic keep candidates still require full LLM requirement coverage before any final KEEP is saved. |
-| Requirement coverage | Extracted job requirements, candidate capabilities | `llm_gate.py`, capability knowledge/profile modules | Supported / partially supported / not shown / mismatch coverage | Coverage is the source of truth for Requirement Fit %. Unsupported capability mappings are logged to `output/uncertainty.jsonl`. |
+| Requirement coverage | Extracted job requirements, candidate capabilities | `llm_gate.py`, capability knowledge/profile modules | Supported / partially supported / not shown / mismatch coverage | Coverage is the source of truth for Requirement Fit %. Unsupported mappings are logged and also recorded as admin warnings. |
 | Frozen scoring | Reviewed job record with requirement coverage | `fit_scoring.py` | Frozen Requirement Fit % and score breakdown | No title, salary, location, freshness, easy apply, viewed status, LLM grade points, or grade-band clamp. Hard blockers remain visible and can force score to zero. |
 | Display scoring | Frozen Requirement Fit % | `fit_scoring.py`, UI consumers | Displayed score and ordering | Recency is handled separately from fit score and should not be treated as fit evidence. |
 | Human review and learning | User keep/skip/apply/reject decisions | Review history, learning modules, backlog if needed | Future profile/rule improvements | Learning must not silently become hidden scoring logic. |
@@ -166,7 +166,7 @@ Requirement Fit % is calculated directly from requirement coverage.
 | Mapped candidate capability | Resolves which candidate capability covers the requirement. |
 | Candidate capability level | Determines coverage credit: strong, working, basic, low, or zero. |
 | `not_shown` / `mismatch` | Adds zero coverage and is counted separately. |
-| Unknown mapped capability | Adds zero coverage and writes `requirement_capability_mapping_uncertain` to `output/uncertainty.jsonl`. |
+| Unknown mapped capability | Adds zero coverage and writes `requirement_capability_mapping_uncertain` to `output/uncertainty.jsonl` plus a system warning. |
 
 The raw score breakdown behind this table is not shown on job cards outside debug mode. In debug mode it appears in the card's "Debug: LLM fit review" panel — see [Job Card Layout](USER_GUIDE.md#job-card-layout) in the user guide.
 
@@ -193,7 +193,7 @@ The main score includes only requirement coverage:
 | Candidate eligibility fact | True eligibility support counts as covered; false or missing facts do not. |
 | Mandatory gaps | Shown as warnings with zero additional score effect. |
 | Mandatory weak coverage | Shown as warnings with zero additional score effect. |
-| Unknown mapped capability or eligibility fact | Logged to `output/uncertainty.jsonl` for later review. |
+| Unknown mapped capability or eligibility fact | Logged to `output/uncertainty.jsonl` and the admin warning store. |
 
 ### 3. Context entries
 
@@ -242,7 +242,7 @@ Allowed coverage statuses:
 
 Coverage entries are shown in the score breakdown for transparency, but they do not add separate score points.
 
-In this cleanup, the fit score is intentionally narrow: title match, LLM grade, requirement-coverage transparency, hard blockers, and grade-band calibration. The user-facing "Why this is a good fit" panel now uses requirement coverage only. Convenience or preference signals such as Easy Apply, freshness, viewed status, salary, and location are better handled as badges, filters, or sort signals, and approved-experience or subtitle detail stays in debug-mode transparency. Workspace run summaries report collection counts, not fit evidence.
+The fit score is intentionally narrow: requirement-coverage transparency and hard blockers only. The user-facing "Why this is a good fit" panel uses requirement coverage only. Convenience or preference signals such as Easy Apply, freshness, viewed status, salary, and location are badges, filters, or sort signals. Workspace run summaries report collection counts, not fit evidence.
 
 Debug mode may still expose internal score calculation, matched source text, capability mapping, and reviewed-signal evidence for troubleshooting. That extra transparency is for investigation, not a second competing normal-mode fit explanation.
 
@@ -385,69 +385,32 @@ Signals can later be promoted into normalised profile rules or capability mappin
 
 The model is an **auditable ranking model with configured rules and LLM-derived requirement coverage**.
 
-Do not describe the current design as simply "heuristic scoring" without qualification. That wording is too broad and makes it sound like the system is mainly a pile of hardcoded guesses. The current direction is more specific:
+Do not describe the current design as "heuristic scoring" as a shorthand for the whole system. The model is:
 
-- use the LLM to extract job requirements and requirement coverage
-- derive the grade from structured coverage where available
-- keep scoring values in managed config, not hidden code constants
-- show requirement coverage as transparent evidence
-- keep logistics/preferences separate from capability proof
-- keep remaining rule-based shortcuts explicit, logged, and configurable
+- LLM requirement extraction
+- structured coverage mapping to capability or eligibility facts
+- managed scoring values
+- explicit, logged shortcut rules
 
-There are still heuristic elements, but they are now treated as **controlled calibration rules**, not as the core source of truth.
-
-Remaining heuristic / calibration areas include:
+Remaining calibration areas include:
 
 | Area | Current status |
 |---|---|
-| Grade band values | Configured in `scoring_rules.json`; not empirically proven. |
+| Requirement importance weights | Configured in `scoring_rules.json` (`requirement_importance_weights`); not empirically proven. |
+| Capability level credits | Configured in `scoring_rules.json` (`capability_level_weights`); not empirically proven. |
 | Preference weights | Managed/profile-side weights; affect ranking, not capability proof. |
 | Deterministic shortcut thresholds | Configured under `deterministic_review_thresholds`; audit the shortcut trigger via `det_rule` and the final reviewed keep via `review_source` and `requirement_coverage`. |
 | Convergence bonus | Explicit rule-based bonus; useful but still a calibration rule. |
-| Freshness bonus | Ranking urgency only; not fit evidence. |
 
-The model is grounded in:
-
-- person-job fit theory: job requirements should be compared to candidate attributes
-- multi-criteria decision analysis: heterogeneous signals can be combined when weights are explicit and auditable
-- competency-based hiring: capability and evidence alignment are central
-- recruiter screening behaviour: title and role alignment matter early
-- practical job search workflow: freshness and logistics affect action priority, not capability fit
-
-The specific point values are calibration choices, not empirically proven constants.
-
-They should be calibrated over time against real outcomes such as:
-
-- reviewed jobs
-- jobs skipped manually
-- applications submitted
-- recruiter responses
-- interviews
-- false positives
-- false rejections
+The point values are calibration choices, not fixed constants.
 
 ---
 
-## Recent removals / direction of travel
+## Design summary
 
-Recent scoring and matching work has been moving away from hidden hardcoded judgement and toward explicit, reviewable mechanisms.
+The intended architecture is:
 
-Current direction:
-
-| Old / risky pattern | Replacement direction |
-|---|---|
-| Whole job sentence matched directly to a capability | Extract requirement first, then map it to a known candidate capability. |
-| Capability mentions adding independent score points | Requirement coverage drives grade; coverage entries are transparency-only in the score breakdown. |
-| Broad "fit" claims based on preferences or logistics | Preferences move ranking only; they do not prove mandatory fit. |
-| Location / approved-experience snippets in the fit summary | Keep them out of the normal fit explanation; show them as badges, filters, or debug-only detail instead. |
-| Hidden hardcoded scoring budget | Main score is direct Requirement Fit %, not a band-anchored budget. |
-| Hardcoded judgement buried in code | Move values to managed config / global settings where possible. |
-| Signals directly boosting score | Reviewed signals inform future classification/mapping; they do not directly add points. |
-| Scoring every scraped record regardless of review state | Scoring is blocked unless `llm_fit_grade` exists. |
-
-Important wording rule:
-
-> The system may still contain calibrated rules, but the intended architecture is not "heuristics decide fit." The intended architecture is "LLM extracts requirements, structured coverage maps to candidate capabilities, Requirement Fit % is calculated from capability levels, and remaining heuristics are explicit and auditable."
+> LLM extracts requirements, structured coverage maps to candidate capabilities or eligibility facts, Requirement Fit % is calculated from coverage, and explicit shortcuts remain auditable.
 
 ---
 
@@ -457,7 +420,7 @@ Important wording rule:
 2. Mandatory missing evidence does not automatically reject. It contributes zero coverage and is shown as a warning.
 3. Preference signals no longer affect the main fit score. They can still exist as metadata, filters, badges, or separate ranking logic.
 4. Deterministic shortcuts can still produce early rejects without an LLM call. Deterministic keep candidates must still be confirmed by the LLM fit review before they become final KEEP rows. Audit the shortcut trigger via `det_rule`; audit final keeps via `review_source` and `requirement_coverage`.
-5. Some older docs and backlog items may still use broad "heuristic" or "grade band" language. Treat that as technical debt unless it points to an actual remaining hardcoded judgement.
+5. Older docs or backlog items may still use broad "heuristic" language. Treat that as technical debt unless it refers to an actual rule.
 
 ---
 

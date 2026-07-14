@@ -2,15 +2,13 @@
 
 import json
 import logging
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from job_hunter_agent.capability_matching import (
     find_profile_capability_matches,
 )
 
 logger = logging.getLogger(__name__)
-from job_hunter_agent.description_trust import full_description_confidence
-from job_hunter_agent.filters import analyze_title_filters
 from job_hunter_agent.global_settings import KEY_FIT_HIGHLIGHTS, load_global_settings
 from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent.paths import UNCERTAINTY_LOG_PATH
@@ -18,11 +16,10 @@ from job_hunter_agent.llm_protocol import (
     LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES,
 )
 from job_hunter_agent.profile_store import (
-    KEY_LLM_GRADE_BANDS,
-    KEY_LLM_GRADE_POINTS,
     KEY_CANDIDATE_ELIGIBILITY,
+    KEY_CAPABILITY_LEVEL_WEIGHTS,
+    KEY_REQUIREMENT_IMPORTANCE_WEIGHTS,
     CapabilityLevel,
-    get_preference_weights,
     get_scoring_rules,
     load_profile,
 )
@@ -42,13 +39,10 @@ from job_hunter_agent.system_warnings import (
     make_system_warning_fingerprint,
     record_system_warning,
 )
-from job_hunter_agent.scoring_utils import weighted_points
 from job_hunter_agent.signal_detection import (
     competitive_fit_highlights,
-    competitive_signal_assessments,
     hard_block_reasons,
 )
-from job_hunter_agent.signal_schema import SIGNAL_LABEL_KEY, TITLE_REASON_POTENTIAL_MATCH
 from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order
 
 LLM_REVIEW_STATE_EVALUATED = "evaluated"
@@ -56,35 +50,34 @@ LLM_REVIEW_STATE_INVALID = "invalid"
 LLM_REVIEW_INCOMPLETE_LABEL = "LLM review incomplete"
 
 
-REQUIREMENT_IMPORTANCE_WEIGHTS = {
-    "mandatory": 3.0,
-    "strongly_preferred": 2.0,
-    "preferred": 1.0,
-    "nice_to_have": 0.25,
-}
-
-CAPABILITY_LEVEL_CREDITS = {
-    "strong": 1.0,
-    "working": 0.70,
-    "basic": 0.35,
-    "low": 0.15,
-    "limited_depth": 0.15,
-}
-
 REQUIREMENT_MAPPING_UNCERTAIN_REASON = "requirement_capability_mapping_uncertain"
+
+
+def _requirement_importance_weights(scoring_rules: dict) -> dict[str, float]:
+    weights = scoring_rules.get(KEY_REQUIREMENT_IMPORTANCE_WEIGHTS)
+    if not isinstance(weights, dict) or not weights:
+        raise ValueError("requirement_importance_weights are required in scoring_rules")
+    return weights
+
+
+def _capability_level_credits(scoring_rules: dict) -> dict[str, float]:
+    credits = scoring_rules.get(KEY_CAPABILITY_LEVEL_WEIGHTS)
+    if not isinstance(credits, dict) or not credits:
+        raise ValueError("capability_level_weights are required in scoring_rules")
+    return credits
 
 
 def _normalise_lookup_text(value: str) -> str:
     return compact_whitespace(str(value or "")).strip().lower().replace("_", " ")
 
 
-def _candidate_capability_level_lookup(profile: dict) -> dict[str, str]:
+def _candidate_capability_level_lookup(profile: dict, capability_credits: dict) -> dict[str, str]:
     lookup: dict[str, str] = {}
     for rule in profile.get("candidate_capabilities", []) or []:
         if not isinstance(rule, dict):
             continue
         level = str(rule.get("level") or "").strip().lower()
-        if level not in CAPABILITY_LEVEL_CREDITS:
+        if level not in capability_credits:
             continue
         names = [rule.get("name"), friendly_capability_label(str(rule.get("name") or ""))]
         aliases = rule.get("aliases") or []
@@ -164,7 +157,7 @@ def _append_requirement_mapping_uncertainty(record: dict, item: dict, detail: st
     )
 
 
-def _requirement_fit_entries(record: dict, profile: dict) -> List[dict]:
+def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -> List[dict]:
     coverage = record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or []
     if not isinstance(coverage, list) or not coverage:
         if record.get("review_source") == "llm" and record.get(RECORD_JOB_REQUIREMENTS_KEY):
@@ -177,7 +170,9 @@ def _requirement_fit_entries(record: dict, profile: dict) -> List[dict]:
             ]
         return [{"label": "Requirement Fit: no requirements to score", "value": 0, "section": "requirement_fit"}]
 
-    capability_levels = _candidate_capability_level_lookup(profile)
+    importance_weights = _requirement_importance_weights(scoring_rules)
+    capability_credits = _capability_level_credits(scoring_rules)
+    capability_levels = _candidate_capability_level_lookup(profile, capability_credits)
     eligibility_levels = _candidate_eligibility_lookup(profile)
     total_weight = 0.0
     earned_weight = 0.0
@@ -202,7 +197,7 @@ def _requirement_fit_entries(record: dict, profile: dict) -> List[dict]:
         if not requirement:
             continue
         importance = str(item.get("importance") or "preferred").strip().lower()
-        weight = REQUIREMENT_IMPORTANCE_WEIGHTS.get(importance, REQUIREMENT_IMPORTANCE_WEIGHTS["preferred"])
+        weight = importance_weights.get(importance, importance_weights["preferred"])
         total_weight += weight
         status = str(item.get("status") or "").strip().lower()
         requirement_type = str(item.get("requirement_type") or "capability").strip().lower()
@@ -279,7 +274,7 @@ def _requirement_fit_entries(record: dict, profile: dict) -> List[dict]:
                 mandatory_gaps.append(requirement)
             continue
 
-        credit = CAPABILITY_LEVEL_CREDITS[level]
+        credit = capability_credits[level]
         earned_weight += weight * credit
         bucket = "low" if level in {"low", "limited_depth"} else level
         counts[bucket] += 1
@@ -350,95 +345,6 @@ def llm_review_state(record: dict) -> dict:
     }
 
 
-def llm_description_fit_entry(record: dict, profile: Optional[dict] = None) -> dict:
-    grade = str(record.get("llm_fit_grade") or "").strip().upper()
-    active_profile = profile or load_profile()
-    scoring_rules = get_scoring_rules(active_profile)
-    if not grade:
-        raise ValueError("llm_fit_grade is required for evaluated records")
-    grade_points = scoring_rules[KEY_LLM_GRADE_POINTS]
-    if grade not in grade_points:
-        raise ValueError(f"Unsupported llm_fit_grade: {grade}")
-    labels = load_ui_labels()["grade_labels"]
-    if grade not in labels:
-        raise ValueError(f"Missing grade label for llm_fit_grade: {grade}")
-    label = labels[grade]
-    value = int(grade_points[grade])
-    return {"label": label, "value": value}
-
-
-def requirement_coverage_entries(record: dict) -> List[dict]:
-    entries: List[dict] = []
-    coverage = record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or []
-    if not isinstance(coverage, list) or not coverage:
-        if record.get("review_source") == "llm" and record.get(RECORD_JOB_REQUIREMENTS_KEY):
-            entries.append(
-                {"label": "Requirement coverage not returned", "value": 0, "section": "llm_fit"}
-            )
-        return entries
-
-    for item in coverage:
-        if not isinstance(item, dict):
-            continue
-        requirement = str(item.get("requirement") or "").strip()
-        importance = str(item.get("importance") or "preferred").strip().lower()
-        status = str(item.get("status") or "").strip().lower().replace("_", " ")
-        profile_name = str(
-            item.get("profile_name") or item.get("capability_name") or item.get("eligibility_name") or ""
-        ).strip()
-        requirement_type = str(item.get("requirement_type") or "capability").strip().lower()
-        matched_job_text = str(item.get("matched_job_text") or "").strip()
-        profile_support = [
-            compact_whitespace(text)
-            for text in (item.get("profile_support") or [])
-            if compact_whitespace(text)
-        ]
-        if not requirement:
-            continue
-        label = f"[{importance}] Requirement {status}: {requirement}"
-        details: list[str] = []
-        if profile_name:
-            details.append(f"{requirement_type}: {profile_name}")
-        if matched_job_text:
-            details.append(f"job text: {matched_job_text}")
-        if profile_support:
-            details.append(f"profile support: {', '.join(profile_support[:2])}")
-        if details:
-            label = f"{label} | " + " | ".join(details)
-        entries.append({"label": label, "value": 0, "section": "llm_fit"})
-    return entries
-
-
-def capability_support_log(record: dict) -> None:
-    """Log requirement-coverage capability support for debugging.
-
-    Source of truth is requirement_coverage — the single capability-matching mechanism.
-    """
-    supported: list[str] = []
-    low_confidence: list[str] = []
-    for item in record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or []:
-        if not isinstance(item, dict):
-            continue
-        cap_name = str(
-            item.get("profile_name") or item.get("capability_name") or item.get("eligibility_name") or ""
-        ).strip()
-        status = str(item.get("status") or "").strip().lower()
-        if not cap_name:
-            continue
-        label = friendly_capability_label(cap_name)
-        if status == "supported":
-            supported.append(label)
-        elif status == "partially_supported":
-            low_confidence.append(label)
-
-    logger.info(
-        "[CAPABILITY_SUPPORT] job=%s supported=%s low_confidence=%s",
-        record.get("job_key", "<unknown>"),
-        ", ".join(dedupe_preserve_order(supported)) or "(none)",
-        ", ".join(dedupe_preserve_order(low_confidence)) or "(none)",
-    )
-
-
 def build_fit_highlights(
     record: dict, details_text: str, profile: Optional[dict] = None
 ) -> List[str]:
@@ -502,127 +408,6 @@ def _is_location_fit_highlight(text: str) -> bool:
     )
 
 
-def competitive_signal_breakdown(record: dict, profile: Optional[dict] = None) -> List[dict]:
-    hl_labels = load_ui_labels()["fit_highlight_labels"]
-    entries: List[dict] = []
-    for signal in competitive_signal_assessments(record, profile):
-        adjustment = int(signal.get("adjustment", 0) or 0)
-        if adjustment == 0:
-            continue
-        prefix = (
-            hl_labels["competitive_signal_aligns"]
-            if adjustment > 0
-            else hl_labels["competitive_signal_elsewhere"]
-        )
-        entries.append({"label": f"{prefix}: {signal[SIGNAL_LABEL_KEY]}", "value": adjustment})
-    entries.sort(
-        key=lambda item: (abs(int(item.get("value", 0))), item.get("label", "")), reverse=True
-    )
-    return entries[:2]
-
-
-def build_core_fit_breakdown(
-    record: dict,
-    scoring_rules: dict,
-    weights: dict,
-    title_family: str,
-    title_reason: str,
-    content_reason: str,
-    active_profile: dict,
-) -> List[dict]:
-    title_match_labels = load_ui_labels().get("title_match_labels", {})
-    entries: List[dict] = []
-    if title_family == "primary" or (not title_family and title_reason == "OK"):
-        entries.append(
-            {
-                "label": title_match_labels["primary_match"],
-                "value": weighted_points(
-                    int(scoring_rules["fit_breakdown"]["title_direct"]), weights["fit"]
-                ),
-                "section": "title",
-            }
-        )
-    elif title_family == "secondary" or (
-        not title_family and title_reason == TITLE_REASON_POTENTIAL_MATCH
-    ):
-        entries.append(
-            {
-                "label": title_match_labels["secondary_match"],
-                "value": weighted_points(
-                    int(scoring_rules["fit_breakdown"]["title_secondary"]), weights["fit"]
-                ),
-                "section": "title",
-            }
-        )
-    llm_entry = llm_description_fit_entry(record, active_profile)
-    entries.append(
-        {
-            "label": llm_entry["label"],
-            "value": weighted_points(int(llm_entry["value"]), weights["fit"]),
-            "section": "llm_fit",
-        }
-    )
-    entries.extend(requirement_coverage_entries(record))
-    if content_reason == "OK":
-        pass
-    if full_description_confidence(record) == "LOW":
-        entries.append(
-            {
-                "label": "Description capture incomplete",
-                "value": weighted_points(
-                    int(scoring_rules["fit_breakdown"]["description_capture_incomplete"]),
-                    weights["fit"],
-                ),
-                "section": "content",
-            }
-        )
-    capability_support_log(record)
-    return entries
-
-
-def build_preference_breakdown(
-    record: dict, scoring_rules: dict, weights: dict, active_profile: dict
-) -> List[dict]:
-    return []
-
-
-def build_freshness_breakdown(
-    scoring_rules: dict, weights: dict, posted_age_days: Optional[float]
-) -> List[dict]:
-    entries: List[dict] = []
-    if posted_age_days is None:
-        return entries
-
-    freshness_rules = scoring_rules["freshness"]
-    buckets = freshness_rules["buckets"]
-    bucket_order = freshness_rules["bucket_order"]
-    if (
-        not isinstance(buckets, dict)
-        or not buckets
-        or not isinstance(bucket_order, list)
-        or not bucket_order
-    ):
-        raise ValueError("freshness buckets are required in scoring_rules")
-
-    for bucket_key in bucket_order:
-        lookup_key = bucket_key.lower()
-        bucket = buckets.get(lookup_key)
-        if not isinstance(bucket, dict):
-            raise ValueError(f"Invalid freshness bucket: {bucket_key}")
-        if posted_age_days <= float(bucket["max_days"]):
-            entries.append(
-                {
-                    "label": str(bucket["label"]),
-                    "value": weighted_points(
-                        int(freshness_rules[lookup_key]), weights["freshness"]
-                    ),
-                    "section": "freshness",
-                }
-            )
-            break
-    return entries
-
-
 def build_risk_breakdown(scoring_rules: dict, hard_block_labels: List[str]) -> List[dict]:
     return [
         {
@@ -634,58 +419,8 @@ def build_risk_breakdown(scoring_rules: dict, hard_block_labels: List[str]) -> L
     ]
 
 
-def _score_bounds(scoring_rules: dict) -> tuple[int, int]:
-    bands = scoring_rules.get(KEY_LLM_GRADE_BANDS, {})
-    if not isinstance(bands, dict) or not bands:
-        raise ValueError("llm_grade_bands are required in scoring_rules")
-
-    floors: list[int] = []
-    ceilings: list[int] = []
-    for grade, band in bands.items():
-        if not isinstance(band, dict) or "floor" not in band or "ceiling" not in band:
-            continue
-        try:
-            floor = int(band["floor"])
-            ceiling = int(band["ceiling"])
-        except Exception as exc:
-            raise ValueError(f"Invalid grade band bounds for {grade}") from exc
-        if floor < 0 or ceiling < floor:
-            raise ValueError(
-                f"Invalid grade band range for {grade}: floor={floor}, ceiling={ceiling}"
-            )
-        floors.append(floor)
-        ceilings.append(ceiling)
-
-    if not floors or not ceilings:
-        raise ValueError("llm_grade_bands must define grade entries with floor and ceiling values")
-
-    return min(floors), max(ceilings)
-
-
-def _clamp_score(score: int, scoring_rules: dict | None = None) -> int:
+def _clamp_score(score: int) -> int:
     return max(min(int(score), 100), 0)
-
-
-def _grade_band_adjustment(grade: str, raw: int, bands: dict) -> Optional[dict]:
-    """Return a transparent breakdown entry when band clamping applies, or None.
-
-    Ceiling cap: score exceeds the grade's maximum — entry value is negative.
-    Floor lift:  score falls below the grade's minimum — entry value is positive.
-    Hard block entries are excluded from `raw` so they cannot trigger the floor.
-    """
-    band = bands.get(grade)
-    if not isinstance(band, dict):
-        return None
-    try:
-        floor = int(band["floor"])
-        ceiling = int(band["ceiling"])
-    except Exception as exc:
-        raise ValueError(f"Invalid grade band bounds for {grade}") from exc
-    if raw > ceiling:
-        return {"label": f"Grade band ceiling ({grade} ≤ {ceiling})", "value": ceiling - raw}
-    if raw < floor:
-        return {"label": f"Grade band floor ({grade} ≥ {floor})", "value": floor - raw}
-    return None
 
 
 def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[dict]:
@@ -699,8 +434,8 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
             "  Re-run the pipeline to generate a review before scoring."
         )
     active_profile = profile or load_profile()
-    entries = _requirement_fit_entries(record, active_profile)
     scoring_rules = get_scoring_rules(active_profile)
+    entries = _requirement_fit_entries(record, active_profile, scoring_rules)
     hard_block_labels = hard_block_reasons(record, active_profile)
     return entries + build_risk_breakdown(scoring_rules, hard_block_labels)
 
