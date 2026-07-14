@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from datetime import datetime
 from pathlib import Path
@@ -14,10 +15,13 @@ from job_hunter_agent.io_utils import load_job_history, load_run_stats
 from job_hunter_agent.posting_utils import get_manual_skip_sets, parse_timestamp
 from job_hunter_agent.profile_store import load_profile
 from job_hunter_agent.source_registry import get_source_display_label
+from job_hunter_agent.system_warnings import make_system_warning_fingerprint, record_system_warning
 from job_hunter_agent.text_processing import dedupe_preserve_order
 from job_hunter_agent.user_settings import get_workspace_minimum_score
 from job_hunter_agent.workspace_renderer import ARCHIVE_LABEL, _workspace_label
 from job_hunter_agent import workspace_service
+
+logger = logging.getLogger(__name__)
 
 EXPORT_JSON_FILENAME = "job-hunter-jobs.json"
 EXPORT_MD_FILENAME = "job-hunter-jobs.md"
@@ -260,7 +264,16 @@ def _load_existing_jobs(json_path: Path) -> list[dict[str, Any]]:
         return []
     try:
         payload = json.loads(json_path.read_text(encoding="utf-8"))
-    except Exception:
+    except Exception as exc:
+        logger.warning("Existing workspace export at %s is unreadable: %s", json_path, exc)
+        record_system_warning(
+            severity="warning",
+            category="workspace_export_corruption",
+            source="_load_existing_jobs",
+            message=f"Existing workspace export at {json_path} could not be parsed: {exc}",
+            fingerprint=make_system_warning_fingerprint("workspace_export_corruption", str(json_path)),
+            context={"path": str(json_path), "error": str(exc)},
+        )
         return []
     jobs = payload.get("jobs") if isinstance(payload, dict) else None
     return [job for job in jobs if isinstance(job, dict)] if isinstance(jobs, list) else []

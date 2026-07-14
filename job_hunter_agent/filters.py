@@ -144,12 +144,21 @@ def _normalize_reason_token(value: str) -> str:
     return cleaned.strip("_") or "unknown"
 
 
+_KNOWN_CAPABILITY_LEVELS = {"strong", "working", "basic", "low"}
+
+
 def _normalize_level(value: str) -> str:
     level = (value or "").strip().lower()
+    if not level:
+        return "basic"
     aliases = load_parsing_rules().get("level_aliases", {})
-    if not aliases:
-        return level or "basic"
-    return aliases.get(level, level or "basic")
+    resolved = aliases.get(level, level)
+    if resolved not in _KNOWN_CAPABILITY_LEVELS:
+        raise ValueError(
+            f"Unrecognized capability level {value!r}; add an alias for it in "
+            "parsing_rules.json level_aliases"
+        )
+    return resolved
 
 
 def _count_alias_hits(text: str, aliases: list[str]) -> tuple[int, int]:

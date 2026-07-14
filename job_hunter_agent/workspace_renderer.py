@@ -197,7 +197,9 @@ def _capability_level_lookup(active_profile: Optional[dict]) -> dict[str, str]:
         raw_level = str(rule.get("level") or "").strip().lower()
         if not raw_level:
             continue
-        level_label = str(labels.get(raw_level) or raw_level.replace("_", " ").title()).strip()
+        if raw_level not in labels:
+            raise ValueError(f"ui_labels.json level_labels is missing a value for {raw_level!r}")
+        level_label = str(labels[raw_level]).strip()
         for value in [rule.get("name"), *((rule.get("aliases") or []) if isinstance(rule.get("aliases"), list) else [])]:
             normalized = _normalize_capability_token(str(value or ""))
             if normalized:
@@ -615,7 +617,10 @@ def render_score_filter_options(
 def posted_filter_option_label(threshold: int) -> str:
     rules = load_ui_labels()
     labels = rules.get("posted_threshold_labels", {})
-    return labels.get(str(threshold), f"Last {threshold} days")
+    key = str(threshold)
+    if key not in labels:
+        raise ValueError(f"ui_labels.json posted_threshold_labels is missing a value for {key!r}")
+    return labels[key]
 
 
 def render_posted_filter_options(records: List[dict], now: Optional[datetime] = None) -> str:

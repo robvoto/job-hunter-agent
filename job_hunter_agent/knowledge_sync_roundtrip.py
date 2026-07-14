@@ -8,11 +8,8 @@ import shlex
 import subprocess
 from pathlib import Path
 
-DEFAULT_AWS_HOST = os.environ.get(
-    "JOB_HUNTER_SYNC_AWS_HOST",
-    "ec2-32-236-144-98.ap-southeast-2.compute.amazonaws.com",
-)
-DEFAULT_SSH_KEY = os.environ.get("JOB_HUNTER_SYNC_SSH_KEY", "/tmp/KeyPair-JobHunter.pem")
+DEFAULT_AWS_HOST = os.environ.get("JOB_HUNTER_SYNC_AWS_HOST")
+DEFAULT_SSH_KEY = os.environ.get("JOB_HUNTER_SYNC_SSH_KEY")
 DEFAULT_LOCAL_DB = os.environ.get("JOB_HUNTER_SYNC_LOCAL_DB")
 DEFAULT_REMOTE_DB = os.environ.get("JOB_HUNTER_SYNC_REMOTE_DB")
 DEFAULT_REMOTE_USER = os.environ.get("JOB_HUNTER_SYNC_REMOTE_USER", "ubuntu")
@@ -88,8 +85,8 @@ def _resolve_remote_db_path(
 
 def sync_knowledge_roundtrip(
     *,
-    host: str = DEFAULT_AWS_HOST,
-    key: str = DEFAULT_SSH_KEY,
+    host: str | None = DEFAULT_AWS_HOST,
+    key: str | None = DEFAULT_SSH_KEY,
     local_db: str | None = None,
     remote_db: str | None = None,
     remote_user: str = DEFAULT_REMOTE_USER,
@@ -97,6 +94,15 @@ def sync_knowledge_roundtrip(
     remote_app_dir: str = DEFAULT_REMOTE_APP_DIR,
 ) -> Path:
     """Push the local DB to AWS, merge there, then pull the merged DB back."""
+    if not host:
+        raise ValueError(
+            "AWS host is required. Pass --host or set JOB_HUNTER_SYNC_AWS_HOST."
+        )
+    if not key:
+        raise ValueError(
+            "SSH key path is required. Pass --key or set JOB_HUNTER_SYNC_SSH_KEY."
+        )
+
     local_db_path = _resolve_local_db(local_db)
     if not local_db_path.exists():
         raise FileNotFoundError(f"Local database does not exist: {local_db_path}")
@@ -155,8 +161,16 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Push a local Job Hunter DB to AWS, merge knowledge there, and pull the merged DB back."
     )
-    parser.add_argument("--host", default=DEFAULT_AWS_HOST, help="AWS host or public DNS name.")
-    parser.add_argument("--key", default=DEFAULT_SSH_KEY, help="SSH private key path.")
+    parser.add_argument(
+        "--host",
+        default=DEFAULT_AWS_HOST,
+        help="AWS host or public DNS name. Defaults to JOB_HUNTER_SYNC_AWS_HOST.",
+    )
+    parser.add_argument(
+        "--key",
+        default=DEFAULT_SSH_KEY,
+        help="SSH private key path. Defaults to JOB_HUNTER_SYNC_SSH_KEY.",
+    )
     parser.add_argument(
         "--local-db",
         default=DEFAULT_LOCAL_DB,

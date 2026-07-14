@@ -17,9 +17,6 @@ def friendly_capability_label(name: str) -> str:
     return normalized[:1].upper() + normalized[1:] if normalized else ""
 
 
-# HARCODED
-
-
 def role_text_bundle(record: dict, details_text: str) -> str:
 
     return "\n".join(

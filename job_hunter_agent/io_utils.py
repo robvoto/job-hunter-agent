@@ -21,6 +21,7 @@ from job_hunter_agent.paths import (
     DEBUG_SOURCE_PAYLOADS_DIR,
     LLM_CACHE_PATH,
 )
+from job_hunter_agent.system_warnings import make_system_warning_fingerprint, record_system_warning
 
 DEBUG_CAPTURE_SOURCE_PAYLOADS = DEBUG_MODE
 logger = logging.getLogger(__name__)
@@ -114,6 +115,14 @@ def load_json_dict(path: Path) -> Dict[str, dict]:
         )
     except Exception as exc:
         logger.warning("[IO_UTILS][WARN] Failed to load JSON dictionary from %s: %s", path, exc)
+        record_system_warning(
+            severity="warning",
+            category="json_parse_failure",
+            source="load_json_dict",
+            message=f"Failed to parse JSON dictionary at {path}: {exc}",
+            fingerprint=make_system_warning_fingerprint("json_parse_failure", str(path)),
+            context={"path": str(path), "error": str(exc)},
+        )
     return {}
 
 
@@ -140,6 +149,14 @@ def load_json_list(path: Path) -> List[dict]:
         )
     except Exception as exc:
         logger.warning("[IO_UTILS][WARN] Failed to load JSON list from %s: %s", path, exc)
+        record_system_warning(
+            severity="warning",
+            category="json_parse_failure",
+            source="load_json_list",
+            message=f"Failed to parse JSON list at {path}: {exc}",
+            fingerprint=make_system_warning_fingerprint("json_parse_failure", str(path)),
+            context={"path": str(path), "error": str(exc)},
+        )
     return []
 
 

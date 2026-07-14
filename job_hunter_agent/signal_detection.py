@@ -165,9 +165,9 @@ def detect_competitive_signals(details_text: str, profile: Optional[dict] = None
             max_aliases_in_snippet = max(max_aliases_in_snippet, alias_hits_in_snippet)
             if alias_hits_in_snippet > 0:
                 snippet_hits += 1
-        min_snippet_hits = int(raw_cluster.get(CLUSTER_MIN_SNIPPET_HITS_KEY, 2) or 2)
+        min_snippet_hits = int(raw_cluster.get(CLUSTER_MIN_SNIPPET_HITS_KEY, 2))
         dense_snippet_alias_hits = int(
-            raw_cluster.get(CLUSTER_DENSE_SNIPPET_ALIAS_HITS_KEY, 4) or 4
+            raw_cluster.get(CLUSTER_DENSE_SNIPPET_ALIAS_HITS_KEY, 4)
         )
         if snippet_hits < min_snippet_hits and max_aliases_in_snippet >= dense_snippet_alias_hits:
             snippet_hits = min_snippet_hits
@@ -257,7 +257,7 @@ def evaluate_competitive_signal_alignment(signal: dict, profile: dict) -> dict:
         tiered_evidence_score,
     )
 
-    dominance_level = int(signal.get(SIGNAL_DOMINANCE_LEVEL_KEY, 1) or 1)
+    dominance_level = int(signal.get(SIGNAL_DOMINANCE_LEVEL_KEY, 1))
     positive_bonus = int(
         signal.get(CLUSTER_POSITIVE_BONUS_KEY)
         or alignment_rules[ALIGNMENT_POSITIVE_BONUS_BY_DOMINANCE_KEY][str(dominance_level)]
@@ -327,7 +327,7 @@ def competitive_signal_assessments(record: dict, profile: Optional[dict] = None)
                     SIGNAL_ALIASES_KEY: _normalized_aliases(
                         list(item.get(SIGNAL_ALIASES_KEY) or [])
                     ),
-                    SIGNAL_DOMINANCE_LEVEL_KEY: int(item.get(SIGNAL_DOMINANCE_LEVEL_KEY, 1) or 1),
+                    SIGNAL_DOMINANCE_LEVEL_KEY: int(item.get(SIGNAL_DOMINANCE_LEVEL_KEY, 1)),
                     SIGNAL_ALIGNMENT_KEY: _dedupe_key(
                         item.get(SIGNAL_ALIGNMENT_KEY) or ALIGNMENT_PARTIAL
                     ),
@@ -478,7 +478,7 @@ def _extract_capability_learning_signals(text: str, profile: dict) -> List[str]:
 
     tokens = [t for t in re.findall(r"[a-z]{3,}", text.lower()) if t not in sw and t not in junk]
     # Basic n-gram extraction (discovery only)
-    max_discovery_terms = int(config.get(PARSING_MAX_DISCOVERY_TERMS_KEY, 10) or 10)
+    max_discovery_terms = int(config.get(PARSING_MAX_DISCOVERY_TERMS_KEY, 10))
     return list(set(t for t in tokens if len(t) >= config.get(PARSING_MIN_TERM_LENGTH_KEY, 3)))[
         :max_discovery_terms
     ]

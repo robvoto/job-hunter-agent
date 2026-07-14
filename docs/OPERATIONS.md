@@ -215,7 +215,8 @@ Server logs:
 - each line gets a timestamp
 - the terminal still shows the same server output
 - browser `console.log` is separate from server logs and only matters for JS running in the page
-- structured uncertainty events are appended to `output/uncertainty.jsonl` and also logged in the main server log
+- debug/audit uncertainty events are appended to `output/uncertainty.jsonl`
+- reviewable runtime warnings are stored in SQLite `system_warnings` and shown in the admin settings page
 - to emit one, call `job_hunter_agent.runtime_helpers.build_uncertainty_entry()` then `append_uncertainty_log()` with `job_hunter_agent.paths.UNCERTAINTY_LOG_PATH`
 - keep `reason_code` stable so the file stays queryable across agents and future runs
 

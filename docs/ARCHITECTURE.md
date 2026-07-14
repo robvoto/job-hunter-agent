@@ -53,6 +53,10 @@ Standard format: `source:platform_id` (e.g., `seek:7945621` or `linkedin:3984551
 
 State-changing UI actions use `POST` plus CSRF protection. `GET /logout` is not supported.
 
+## Operational warnings
+
+Runtime warnings that need admin review are stored in SQLite `system_warnings` and surfaced in the admin settings page. Debug/audit-only uncertainty events still write to `output/uncertainty.jsonl`.
+
 ---
 
 # Core File Map
@@ -63,7 +67,7 @@ State-changing UI actions use `POST` plus CSRF protection. `GET /logout` is not 
 | Fit review and scoring | `job_hunter_agent/llm_gate.py`, `job_hunter_agent/source_learning.py`, `job_hunter_agent/fit_scoring.py`, `job_hunter_agent/capability_matching.py` | Builds LLM prompts, normalizes review payloads, and turns support evidence into explainable scores. |
 | Workspace UI | `job_hunter_agent/workspace_renderer.py`, `job_hunter_agent/workspace_service.py`, `templates/results.html` | Renders the shortlist, tabs, cards, filters, and workspace panel state. |
 | Settings and shared labels | `job_hunter_agent/server_helpers.py`, `job_hunter_agent/routes/pages.py`, `data/knowledge/ui_labels.json` | Loads centrally managed copy for settings, onboarding, and workspace labels. |
-| Runtime I/O and cache files | `job_hunter_agent/io_utils.py`, `job_hunter_agent/run_context.py`, `job_hunter_agent/scrape_finalize.py` | Loads/saves run state, cache files, and final workspace outputs. |
+| Runtime I/O and cache files | `job_hunter_agent/io_utils.py`, `job_hunter_agent/run_context.py`, `job_hunter_agent/scrape_finalize.py`, `job_hunter_agent/system_warnings.py` | Loads/saves run state, cache files, workspace outputs, and reviewable warnings. |
 
 ---
 

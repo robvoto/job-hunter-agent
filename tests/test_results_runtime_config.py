@@ -161,20 +161,20 @@ def test_job_link_click_marks_viewed_without_immediate_resort():
     assert "sendViewedBeacon(link);" in results_js
 
 
-def test_candidate_application_history_loader_failure_returns_original_records(capsys):
+def test_candidate_application_history_loader_failure_returns_original_records(caplog):
     records = [{"job_key": "seek:1"}, {"job_key": "seek:2"}]
 
     with patch(
         "job_hunter_agent.candidate_application_history.load_candidate_job_rejection_history",
         side_effect=RuntimeError("boom"),
     ):
-        result = workspace_service._enrich_records_with_candidate_application_history(records)
+        with caplog.at_level("WARNING", logger="job_hunter_agent.workspace_service"):
+            result = workspace_service._enrich_records_with_candidate_application_history(records)
 
     assert result is records
     assert result == [{"job_key": "seek:1"}, {"job_key": "seek:2"}]
 
-    output = capsys.readouterr().out
-    assert "[candidate_application_history] unavailable: boom" in output
+    assert "[candidate_application_history] unavailable: boom" in caplog.text
 
 
 def test_candidate_application_history_sync_runs_before_enrichment_when_enabled():

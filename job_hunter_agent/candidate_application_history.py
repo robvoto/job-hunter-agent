@@ -20,6 +20,10 @@ from datetime import datetime, timezone
 
 import requests
 
+from job_hunter_agent.company_normalization import (
+    company_name_match_tokens,
+    normalize_company_name,
+)
 from job_hunter_agent.global_settings import (
     get_candidate_application_history_required_headers,
     get_candidate_application_history_spreadsheet_id,
@@ -292,8 +296,8 @@ def _normalize_name(value: str) -> str:
 
 def _company_match_score(job_company: str, rejection_company: str) -> float:
     """Return 0.0–1.0 how well two company names agree."""
-    a = _normalize_name(job_company)
-    b = _normalize_name(rejection_company)
+    a = normalize_company_name(job_company)
+    b = normalize_company_name(rejection_company)
     if not a or not b:
         return 0.0
     if a == b:
@@ -303,8 +307,8 @@ def _company_match_score(job_company: str, rejection_company: str) -> float:
     if shorter and shorter in longer:
         return 0.8
     # Word overlap ratio.
-    words_a = set(a.split())
-    words_b = set(b.split())
+    words_a = company_name_match_tokens(job_company)
+    words_b = company_name_match_tokens(rejection_company)
     if not words_a or not words_b:
         return 0.0
     overlap = len(words_a & words_b)
@@ -353,11 +357,11 @@ def match_job_application_history(job_record: dict, rejection_rows: list[dict]) 
         # If company doesn't match at all, try a direct name scan of subject/content.
         # Subject is stronger evidence than body text, so scores differ.
         if company_score < 0.5:
-            needle = _normalize_name(job_company)
+            needle = normalize_company_name(job_company)
             if needle:
-                if needle in _normalize_name(row.get("subject", "")):
+                if needle in normalize_company_name(row.get("subject", "")):
                     company_score = 0.8
-                elif needle in _normalize_name(row.get("content", "")):
+                elif needle in normalize_company_name(row.get("content", "")):
                     company_score = 0.75
 
         if company_score < 0.5:

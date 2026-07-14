@@ -48,7 +48,8 @@ Server logging:
 - debug-mode runtime logging writes server output to `output/server.log`; see `docs/OPERATIONS.md` for the command
 - logs are timestamped and still mirrored to the terminal
 - `/api/debug/browser-log` is for browser-side JS logs only
-- structured uncertainty events go to `output/uncertainty.jsonl` and the main server log
+- debug/audit uncertainty events go to `output/uncertainty.jsonl`
+- reviewable runtime warnings go to SQLite `system_warnings`
 - use `job_hunter_agent.runtime_helpers.build_uncertainty_entry()` and `append_uncertainty_log()` for reusable uncertainty records
 - keep the event shape stable: `ts`, `reason_code`, `stage`, `field`, `raw_value`, `normalized_value`, `detail`, `source`, `job_key`, `severity`
 
