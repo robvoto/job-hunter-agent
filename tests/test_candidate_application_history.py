@@ -11,6 +11,7 @@ from job_hunter_agent.candidate_application_history import (
     load_candidate_application_history,
     load_candidate_job_rejection_history,
     main,
+    match_job_application_history,
     save_candidate_application_history,
 )
 
@@ -59,6 +60,59 @@ def test_enrich_preserves_order_does_not_mutate_inputs_and_only_adds_matching_hi
     assert _CANDIDATE_APPLICATION_HISTORY_KEY in result[1]
     assert _CANDIDATE_APPLICATION_HISTORY_KEY not in records[0]
     assert _CANDIDATE_APPLICATION_HISTORY_KEY not in records[1]
+
+
+def test_match_job_application_history_marks_exact_company_suffix_match():
+    match = match_job_application_history(
+        {"company": "Acme", "title": "Business Analyst"},
+        [
+            {
+                "llm_company": "Acme Pty Ltd",
+                "llm_role": "Business Analyst",
+                "llm_application_status": "rejection",
+            }
+        ],
+    )
+
+    assert match is not None
+    assert match["_match_confidence"] == "high"
+    assert match["_company_match_reason"] == "Normalized company name match"
+
+
+def test_match_job_application_history_uses_subject_company_match_when_company_field_differs():
+    match = match_job_application_history(
+        {"company": "Police Bank", "title": "Technical Business Analyst"},
+        [
+            {
+                "llm_company": "Another Company",
+                "llm_role": "Technical Business Analyst",
+                "subject": "Your application with Police Bank",
+                "content": "",
+                "llm_application_status": "rejection",
+            }
+        ],
+    )
+
+    assert match is not None
+    assert match["_match_confidence"] == "medium"
+    assert match["_company_match_reason"] == "Company name found in rejection email subject"
+
+
+def test_match_job_application_history_rejects_lookalike_company_false_positive():
+    match = match_job_application_history(
+        {"company": "Police Health", "title": "Technical Business Analyst"},
+        [
+            {
+                "llm_company": "Police Bank",
+                "llm_role": "Technical Business Analyst",
+                "subject": "",
+                "content": "",
+                "llm_application_status": "rejection",
+            }
+        ],
+    )
+
+    assert match is None
 
 
 def test_load_candidate_history_reads_local_store_and_does_not_touch_sheet(tmp_path):

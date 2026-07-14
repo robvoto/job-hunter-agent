@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from difflib import SequenceMatcher
 import re
 from functools import lru_cache
 from typing import Any
@@ -141,6 +142,43 @@ def company_names_weakly_match(a: str, b: str) -> bool:
     left = normalize_company_name(a)
     right = normalize_company_name(b)
     return bool(left and right and left == right)
+
+
+def company_name_match_details(a: str, b: str) -> dict[str, Any]:
+    left = normalize_company_name(a)
+    right = normalize_company_name(b)
+    left_tokens = company_name_match_tokens(a)
+    right_tokens = company_name_match_tokens(b)
+
+    if not left or not right:
+        return {"score": 0.0, "kind": "no_match", "confidence": "none"}
+
+    if left == right:
+        return {"score": 1.0, "kind": "exact", "confidence": "high"}
+
+    shorter, longer = (left, right) if len(left) <= len(right) else (right, left)
+    if shorter and shorter in longer:
+        return {"score": 0.85, "kind": "contains", "confidence": "medium"}
+
+    if left_tokens and right_tokens:
+        overlap = len(left_tokens & right_tokens)
+        overlap_ratio = overlap / max(len(left_tokens), len(right_tokens))
+        if overlap >= 2 and overlap_ratio >= 0.67:
+            return {
+                "score": round(overlap_ratio, 3),
+                "kind": "token_overlap",
+                "confidence": "medium",
+            }
+
+    similarity = SequenceMatcher(None, left, right).ratio()
+    if similarity >= 0.9:
+        return {
+            "score": round(similarity, 3),
+            "kind": "string_similarity",
+            "confidence": "medium",
+        }
+
+    return {"score": 0.0, "kind": "no_match", "confidence": "none"}
 
 
 def normalize_match_text(value: str) -> str:

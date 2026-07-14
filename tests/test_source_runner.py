@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 from job_hunter_agent import source_runner
+from job_hunter_agent.logging_utils import get_log_source_scope
 from job_hunter_agent.run_context import ScrapeRunContext
 from job_hunter_agent.source_errors import PartialSourceResultsError
 from job_hunter_agent.source_registry import SOURCE_APSJOBS, SOURCE_LINKEDIN, SOURCE_SEEK
@@ -560,6 +561,27 @@ def test_parallel_runner_logs_source_start_and_complete_blocks(monkeypatch, capl
     assert "[LINKEDIN][SOURCE_START]" in caplog.text
     assert "[SEEK][SOURCE_COMPLETE]" in caplog.text
     assert "[LINKEDIN][SOURCE_COMPLETE]" in caplog.text
+
+
+def test_run_enabled_sources_binds_source_scope_per_runner(monkeypatch):
+    context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
+    captured_scopes: list[str] = []
+
+    def _seek_with_scope(ctx):
+        captured_scopes.append(get_log_source_scope())
+        return _seek_result()
+
+    def _linkedin_with_scope(ctx):
+        captured_scopes.append(get_log_source_scope())
+        return _li_result()
+
+    monkeypatch.setattr(source_runner, "step_through_enabled", lambda: True)
+    monkeypatch.setattr(source_runner, "_run_seek_source", _seek_with_scope)
+    monkeypatch.setattr(source_runner, "_run_linkedin_source", _linkedin_with_scope)
+
+    run_enabled_sources(context)
+
+    assert captured_scopes == ["SEEK", "LINKEDIN"]
 
 
 def test_parallel_runner_keeps_results_after_timeout_warning(monkeypatch, caplog):

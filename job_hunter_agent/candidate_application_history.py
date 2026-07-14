@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 import requests
 
 from job_hunter_agent.company_normalization import (
-    company_name_match_tokens,
+    company_name_match_details,
     normalize_company_name,
     normalize_match_text,
 )
@@ -286,23 +286,7 @@ def normalize_job_rejection_row(row: dict) -> dict:
 
 def _company_match_score(job_company: str, rejection_company: str) -> float:
     """Return 0.0–1.0 how well two company names agree."""
-    a = normalize_company_name(job_company)
-    b = normalize_company_name(rejection_company)
-    if not a or not b:
-        return 0.0
-    if a == b:
-        return 1.0
-    # Partial containment — shorter name appears inside longer.
-    shorter, longer = (a, b) if len(a) <= len(b) else (b, a)
-    if shorter and shorter in longer:
-        return 0.8
-    # Word overlap ratio.
-    words_a = company_name_match_tokens(job_company)
-    words_b = company_name_match_tokens(rejection_company)
-    if not words_a or not words_b:
-        return 0.0
-    overlap = len(words_a & words_b)
-    return overlap / max(len(words_a), len(words_b))
+    return float(company_name_match_details(job_company, rejection_company).get("score", 0.0) or 0.0)
 
 
 def _role_match_score(job_title: str, rejection_role: str) -> float:
@@ -336,13 +320,18 @@ def match_job_application_history(job_record: dict, rejection_rows: list[dict]) 
 
     best_row = None
     best_score = 0.0
+    best_company_reason = ""
+    best_match_confidence = ""
 
     for row in rejection_rows:
         # Use LLM-extracted fields when available; fall back to raw_company.
         candidate_company = row.get("llm_company") or row.get("raw_company") or ""
         candidate_role = row.get("llm_role") or ""
 
-        company_score = _company_match_score(job_company, candidate_company)
+        company_match = company_name_match_details(job_company, candidate_company)
+        company_score = float(company_match.get("score", 0.0) or 0.0)
+        company_reason = str(company_match.get("kind") or "no_match").strip()
+        match_confidence = str(company_match.get("confidence") or "none").strip()
 
         # If company doesn't match at all, try a direct name scan of subject/content.
         # Subject is stronger evidence than body text, so scores differ.
@@ -351,8 +340,12 @@ def match_job_application_history(job_record: dict, rejection_rows: list[dict]) 
             if needle:
                 if needle in normalize_company_name(row.get("subject", "")):
                     company_score = 0.8
+                    company_reason = "subject_text"
+                    match_confidence = "medium"
                 elif needle in normalize_company_name(row.get("content", "")):
                     company_score = 0.75
+                    company_reason = "content_text"
+                    match_confidence = "low"
 
         if company_score < 0.5:
             continue
@@ -365,11 +358,26 @@ def match_job_application_history(job_record: dict, rejection_rows: list[dict]) 
         if combined > best_score:
             best_score = combined
             best_row = row
+            best_company_reason = company_reason
+            best_match_confidence = match_confidence
 
     if best_row is None or best_score < 0.5:
         return None
 
-    return {**best_row, "_match_score": round(best_score, 3)}
+    reason_labels = {
+        "exact": "Normalized company name match",
+        "contains": "Company name containment match",
+        "token_overlap": "Company token-overlap match",
+        "string_similarity": "Company name similarity match",
+        "subject_text": "Company name found in rejection email subject",
+        "content_text": "Company name found in rejection email content",
+    }
+    return {
+        **best_row,
+        "_match_score": round(best_score, 3),
+        "_match_confidence": best_match_confidence or "none",
+        "_company_match_reason": reason_labels.get(best_company_reason, best_company_reason or "Unknown"),
+    }
 
 
 # ---------------------------------------------------------------------------

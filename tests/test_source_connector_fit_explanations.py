@@ -1869,6 +1869,8 @@ def test_candidate_application_history_renders_expanded_details_section():
                 "llm_company": "MUFG Pension & Market Services",
                 "llm_role": "Technical Analyst",
                 "run_date": "2026-05-07",
+                "_match_confidence": "medium",
+                "_company_match_reason": "Company token-overlap match",
                 "llm_evidence": "Thank you for your recent application for the Technical Analyst role within MUFG Pension & Market Services. "
                 "We appreciate your interest in the position and have completed our review. "
                 "This is a longer note so the workspace should trim it instead of showing the full text twice.",
@@ -1882,6 +1884,8 @@ def test_candidate_application_history_renders_expanded_details_section():
     assert "MUFG Pension &amp; Market Services — 7 May 2026" in html
     assert "Role: Technical Analyst" in html
     assert "Confidence: high" in html
+    assert "Company match confidence: medium" in html
+    assert "Company match reason: Company token-overlap match" in html
     assert "Evidence: Thank you for your recent application" in html
     assert "Review reason: Company mismatch needs a manual check." in html
 

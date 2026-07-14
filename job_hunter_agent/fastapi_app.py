@@ -51,7 +51,7 @@ from job_hunter_agent.config import (
     ONBOARDING_DEBUG_ALIAS_PATH,
     ONBOARDING_PATH,
 )
-from job_hunter_agent.logging_utils import ConsoleNoiseFilter
+from job_hunter_agent.logging_utils import ConsoleNoiseFilter, install_log_handler_filters
 from job_hunter_agent.paths import OUTPUT_DIR, SERVER_LOG_PATH
 from job_hunter_agent.user_context import set_user_id
 from job_hunter_agent.run_control import enable_step_through
@@ -161,11 +161,11 @@ def _configure_server_logging() -> None:
         "disable_existing_loggers": False,
         "formatters": {
             "standard": {
-                "format": "%(asctime)s %(levelname)s %(name)s: %(message)s",
+                "format": "%(asctime)s %(levelname)s %(name)s: %(source_scope_prefix)s%(message)s",
                 "datefmt": "%Y-%m-%d %H:%M:%S",
             },
             "console": {
-                "format": "%(asctime)s  %(message)s",
+                "format": "%(asctime)s  %(source_scope_prefix)s%(message)s",
                 "datefmt": "%H:%M:%S",
             },
         },
@@ -207,6 +207,7 @@ def _configure_server_logging() -> None:
         },
     }
     logging.config.dictConfig(logging_config)
+    install_log_handler_filters()
 
     access_filter = _AccessLogFilter()
     logging.getLogger("uvicorn.access").addFilter(access_filter)

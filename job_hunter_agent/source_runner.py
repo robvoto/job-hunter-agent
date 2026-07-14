@@ -35,6 +35,7 @@ from job_hunter_agent.system_warnings import (
     record_system_warning,
 )
 from job_hunter_agent.logging_utils import format_log_block
+from job_hunter_agent.logging_utils import reset_log_source_scope, set_log_source_scope
 
 logger = logging.getLogger(__name__)
 
@@ -544,6 +545,18 @@ def _get_source_runner(source: str) -> Callable[[ScrapeRunContext], SourceRunRes
     return runner
 
 
+def _run_source_with_scope(
+    source: str,
+    runner: Callable[[ScrapeRunContext], SourceRunResult],
+    context: ScrapeRunContext,
+) -> SourceRunResult:
+    token = set_log_source_scope(source)
+    try:
+        return runner(context)
+    finally:
+        reset_log_source_scope(token)
+
+
 def _run_sources_in_parallel(
     context: ScrapeRunContext, source_order: Sequence[str]
 ) -> list[SourceRunResult]:
@@ -557,7 +570,7 @@ def _run_sources_in_parallel(
         _log_source_start(source, execution_mode="parallel")
         runner = _get_source_runner(source)
         worker_context = contextvars.copy_context()
-        futures[executor.submit(worker_context.run, runner, context)] = source
+        futures[executor.submit(worker_context.run, _run_source_with_scope, source, runner, context)] = source
 
     deadlines = {
         future: started_at[source] + _source_timeout_seconds(source)
@@ -671,7 +684,7 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
         for source in enabled_source_order:
             if run_stop_requested():
                 break
-            results.append(_get_source_runner(source)(context))
+            results.append(_run_source_with_scope(source, _get_source_runner(source), context))
     elif len(enabled_source_order) > 1:
         parallel_labels = list_to_phrase(
             [get_source_display_label(source) for source in enabled_source_order]
@@ -680,7 +693,7 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
         results = _run_sources_in_parallel(context, enabled_source_order)
     elif enabled_source_order:
         source = enabled_source_order[0]
-        results = [_get_source_runner(source)(context)]
+        results = [_run_source_with_scope(source, _get_source_runner(source), context)]
 
     # Merge mutable state back into context in deterministic order.
     for result in results:

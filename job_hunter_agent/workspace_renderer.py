@@ -1420,6 +1420,8 @@ def render_job_card(
             "run_date": str(_cand_hist.get("run_date") or "").strip(),
             "confidence": _ch_confidence,
             "evidence": str(_cand_hist.get("llm_evidence") or "").strip(),
+            "match_confidence": str(_cand_hist.get("_match_confidence") or "").strip().lower(),
+            "match_reason": str(_cand_hist.get("_company_match_reason") or "").strip(),
         }
     score_percent = max(min(int(fit_points), 100), 0)
     score_html = (
@@ -1827,6 +1829,8 @@ def render_job_card(
         _ch_run_date = _cand_hist_details["run_date"]
         _ch_confidence = _cand_hist_details["confidence"]
         _ch_evidence_raw = _cand_hist_details["evidence"]
+        _ch_match_confidence = _cand_hist_details["match_confidence"]
+        _ch_match_reason = _cand_hist_details["match_reason"]
         # Skip the details block when there's nothing actionable to show — low
         # confidence with no evidence or role means the LLM failed at import and
         # the only data is the raw company name from the sheet, which the badge
@@ -1853,6 +1857,10 @@ def render_job_card(
                 _ch_items.append(f"Evidence: {_ch_evidence_raw}")
             if _ch_confidence:
                 _ch_items.append(f"Confidence: {_ch_confidence}")
+            if _ch_match_confidence:
+                _ch_items.append(f"Company match confidence: {_ch_match_confidence}")
+            if _ch_match_reason:
+                _ch_items.append(f"Company match reason: {_ch_match_reason}")
             if _cand_hist_review_reason:
                 _ch_items.append(f"Review reason: {_cand_hist_review_reason}")
             candidate_history_html = (
