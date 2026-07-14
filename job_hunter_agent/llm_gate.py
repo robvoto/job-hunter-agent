@@ -1024,7 +1024,10 @@ def derive_fit_review_grade(
     """Derive grade from importance-weighted requirement coverage.
 
     Importance weights: mandatory=3, strongly_preferred=2, preferred=1, nice_to_have=0.25.
-    Any mismatch caps at WEAK. mandatory+not_shown lowers the ratio but does not auto-reject.
+    Any mismatch caps at WEAK. mandatory+not_shown lowers the ratio but does not auto-reject,
+    except an unresolved mandatory eligibility fact (e.g. clearance, work rights), which also
+    caps at WEAK — eligibility is a boolean gate, not a gradeable capability, so an unknown
+    mandatory eligibility fact must not be diluted away by unrelated supported requirements.
     Items without an importance field default to 'preferred' (weight 1.0).
     """
     total_items = max(len(requirement_coverage), len(job_requirements or []))
@@ -1034,12 +1037,14 @@ def derive_fit_review_grade(
     supported_count = 0
     partial_count = 0
     mismatch_count = 0
+    mandatory_eligibility_unresolved = False
     support_score = 0.0
     max_score = 0.0
 
     for item in requirement_coverage:
         status = str(item.get("status") or "").strip().lower()
         importance = str(item.get("importance") or "preferred").strip().lower()
+        requirement_type = str(item.get("requirement_type") or "capability").strip().lower()
         weight = _IMPORTANCE_WEIGHTS.get(importance, _IMPORTANCE_WEIGHTS["preferred"])
 
         if status == "supported":
@@ -1050,6 +1055,8 @@ def derive_fit_review_grade(
             support_score += weight * 0.5
         elif status == "mismatch":
             mismatch_count += 1
+        elif status == "not_shown" and importance == "mandatory" and requirement_type == "eligibility":
+            mandatory_eligibility_unresolved = True
         # not_shown: 0 contribution, weight still counted in max_score
 
         max_score += weight
@@ -1067,6 +1074,9 @@ def derive_fit_review_grade(
         # Any mismatch caps at WEAK regardless of importance or support ratio.
         return "WEAK"
 
+    if mandatory_eligibility_unresolved:
+        return "WEAK"
+
     support_ratio = support_score / max_score if max_score > 0 else 0
 
     if supported_count == total_items and partial_count == 0:
@@ -1079,6 +1089,20 @@ def derive_fit_review_grade(
         return "SOLID"
 
     return "WEAK"
+
+
+def has_eligibility_mismatch(requirement_coverage: list[dict[str, Any]]) -> bool:
+    """Return True when any eligibility requirement is an explicit mismatch.
+
+    Eligibility facts (clearance, work rights, etc.) are boolean gating facts, not
+    gradeable capabilities: a mismatch means the candidate is not eligible, so this
+    must force a hard reject regardless of the LLM's own decision or overall grade.
+    """
+    return any(
+        str(item.get("requirement_type") or "").strip().lower() == "eligibility"
+        and str(item.get("status") or "").strip().lower() == "mismatch"
+        for item in requirement_coverage
+    )
 
 
 def _clean_job_requirement_text(value: Any) -> str:
@@ -1192,8 +1216,20 @@ def normalize_llm_review_payload(
                 _imp_status_str or "empty",
                 ", ".join(cited_capabilities) or "(none)",
             )
+            decision_to_use = fit_review_normalized["decision"]
+            if has_eligibility_mismatch(requirement_coverage) and decision_to_use != "REJECT":
+                logger.warning(
+                    "[LLM][ELIGIBILITY_GATE] purpose=fit_review model_decision=%s overridden_to=REJECT"
+                    " reason=eligibility_mismatch",
+                    decision_to_use,
+                )
+                decision_to_use = "REJECT"
             return {
-                "fit_review": {**fit_review_normalized, "grade": grade_to_use},
+                "fit_review": {
+                    **fit_review_normalized,
+                    "decision": decision_to_use,
+                    "grade": grade_to_use,
+                },
                 "debug_reason": _normalize_llm_review_text(
                     value.get("debug_reason"), max_chars=300
                 ),

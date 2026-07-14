@@ -603,6 +603,102 @@ def test_mandatory_mismatch_caps_at_weak():
     assert llm_gate.derive_fit_review_grade(coverage) == "WEAK"
 
 
+# ── eligibility vs capability separation ──────────────────────────────────────
+
+
+def _cov_elig(req: str, status: str, importance: str = "mandatory") -> dict:
+    return {
+        "requirement": req,
+        "importance": importance,
+        "requirement_type": "eligibility",
+        "status": status,
+        "profile_name": req,
+        "matched_job_text": "",
+        "profile_support": [],
+    }
+
+
+def test_mandatory_eligibility_not_shown_caps_at_weak_despite_high_capability_support():
+    # 9 mandatory capabilities fully supported + 1 mandatory eligibility fact never
+    # surfaced. Support ratio alone would read 0.9 (STRONG territory), but an unresolved
+    # mandatory eligibility fact must not be diluted away by unrelated capability support.
+    coverage = [
+        _cov_imp(f"cap{i}", "supported", "mandatory", f"cap{i}") for i in range(9)
+    ] + [_cov_elig("security clearance", "not_shown")]
+    assert llm_gate.derive_fit_review_grade(coverage) == "WEAK"
+
+
+def test_mandatory_capability_not_shown_still_only_dilutes_ratio():
+    # Same shape, but the unresolved mandatory item is a capability, not eligibility —
+    # existing dilution behaviour (not an auto-cap) must be unchanged.
+    coverage = [
+        _cov_imp(f"cap{i}", "supported", "mandatory", f"cap{i}") for i in range(9)
+    ] + [_cov_imp("some other tool", "not_shown", "mandatory")]
+    grade = llm_gate.derive_fit_review_grade(coverage)
+    assert grade != "WEAK"
+
+
+def test_has_eligibility_mismatch_true_for_eligibility_mismatch():
+    coverage = [_cov_elig("work rights", "mismatch")]
+    assert llm_gate.has_eligibility_mismatch(coverage) is True
+
+
+def test_has_eligibility_mismatch_false_for_capability_mismatch():
+    # A capability mismatch is not an eligibility mismatch — the two must stay separate.
+    coverage = [_cov_imp("some skill", "mismatch", "mandatory")]
+    assert llm_gate.has_eligibility_mismatch(coverage) is False
+
+
+def test_has_eligibility_mismatch_false_for_eligibility_not_shown():
+    coverage = [_cov_elig("work rights", "not_shown")]
+    assert llm_gate.has_eligibility_mismatch(coverage) is False
+
+
+def test_normalize_llm_review_payload_overrides_keep_to_reject_on_eligibility_mismatch():
+    # The LLM itself said KEEP/EXCELLENT, but an eligibility fact is an explicit
+    # mismatch (e.g. no security clearance). The deterministic gate must override the
+    # model's own decision — eligibility is a hard boolean gate, not a scoring input.
+    payload = llm_gate.normalize_llm_review_payload(
+        {
+            "decision": "KEEP",
+            "grade": "EXCELLENT",
+            "requirement_coverage": [
+                {
+                    "requirement": "Security clearance",
+                    "status": "mismatch",
+                    "importance": "mandatory",
+                    "requirement_type": "eligibility",
+                    "profile_name": "security clearance",
+                },
+            ],
+        },
+        valid_eligibility_names={"security clearance": "Security Clearance"},
+    )
+    assert payload["fit_review"]["decision"] == "REJECT"
+
+
+def test_normalize_llm_review_payload_does_not_override_on_capability_mismatch():
+    # A capability mismatch alone must not trigger the eligibility gate override —
+    # the model's own decision still governs capability-only mismatches.
+    payload = llm_gate.normalize_llm_review_payload(
+        {
+            "decision": "KEEP",
+            "grade": "STRONG",
+            "requirement_coverage": [
+                {
+                    "requirement": "Some tool",
+                    "status": "mismatch",
+                    "importance": "mandatory",
+                    "requirement_type": "capability",
+                    "capability_name": "some tool",
+                },
+            ],
+        },
+        valid_capability_names={"some tool": "Some Tool"},
+    )
+    assert payload["fit_review"]["decision"] == "KEEP"
+
+
 def test_importance_defaults_to_preferred_when_missing():
     # Items without importance should behave exactly as preferred (weight 1.0).
     coverage_with = [_cov_imp(f"r{i}", "supported", "preferred", f"cap{i}") for i in range(3)]
