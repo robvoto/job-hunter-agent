@@ -10,6 +10,7 @@ from datetime import date
 from typing import Any, Callable, Optional
 
 from job_hunter_agent.config import DEBUG_MODE
+from job_hunter_agent import occupation_taxonomy
 
 logger = logging.getLogger(__name__)
 
@@ -109,12 +110,16 @@ from job_hunter_agent.llm_review_state import has_complete_llm_keep_data
 from job_hunter_agent.logging_utils import format_log_block
 from job_hunter_agent.match_labels import score_to_match_label
 from job_hunter_agent.occupation_taxonomy import (
+    OccupationClassification,
     RESULT_FAR,
+    RESULT_UNCERTAIN,
     format_onet_response,
 )
 from job_hunter_agent.occupation_taxonomy import (
     classify_title as _onet_classify_title,
 )
+from job_hunter_agent.onet_taxonomy_import import normalize_title as normalize_occupation_title
+from job_hunter_agent.paths import UNCERTAINTY_LOG_PATH
 from job_hunter_agent.preferences import passes_preference_filters
 from job_hunter_agent.profile_store import get_match_levels
 from job_hunter_agent.record_schema import (
@@ -194,6 +199,7 @@ from job_hunter_agent.text_processing import (
     compact_whitespace,
     dedupe_preserve_order,
 )
+from job_hunter_agent.runtime_helpers import append_uncertainty_log, build_uncertainty_entry
 from job_hunter_agent.utils import extract_salary
 
 HookFn = Callable[[dict, "ReviewPipelineContext"], None]
@@ -204,6 +210,38 @@ _SEP_OPEN = "═" * 72
 _SEP_CLOSE = "─" * 72
 _job_start_times: dict[str, float] = {}
 _job_start_costs: dict[str, float] = {}
+
+
+def _log_title_classification_uncertainty(
+    record: dict[str, Any],
+    profile: dict[str, Any],
+    onet: OccupationClassification,
+) -> None:
+    title = str(record.get(RECORD_TITLE_KEY) or "").strip()
+    target_queries = occupation_taxonomy._profile_target_occupation_queries(profile)
+    target_codes = sorted(
+        occupation_taxonomy._derive_target_occupation_codes(
+            target_queries,
+            occupation_taxonomy._load_index(),
+        )
+    )
+    entry = build_uncertainty_entry(
+        reason_code="TITLE_UNCLEAR",
+        stage="title_classification",
+        field="title",
+        raw_value=title or "<empty>",
+        normalized_value=normalize_occupation_title(title),
+        detail="O*NET title classification was uncertain — letting the job continue to detail review.",
+        source="review_pre_detail_normalized_job",
+        job_key=str(record.get(RECORD_JOB_KEY) or ""),
+    )
+    entry["title"] = title
+    entry["target_occupation_queries"] = target_queries
+    entry["target_occupation_codes"] = target_codes
+    entry["onet_result"] = onet.result
+    entry["onet_reason"] = onet.reason
+    entry["onet_lookup_source"] = onet.lookup_source
+    append_uncertainty_log(UNCERTAINTY_LOG_PATH, entry)
 
 
 def close_job_block(job_key: str) -> None:
@@ -837,6 +875,8 @@ def review_pre_detail_normalized_job(
                     },
                 )
             )
+            if onet.result == RESULT_UNCERTAIN:
+                _log_title_classification_uncertainty(record, profile, onet)
             if onet.result == RESULT_FAR:
                 reject_reason = "ONET_FAR_OCCUPATION"
                 _pipeline_log(

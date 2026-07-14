@@ -3,7 +3,12 @@
 import json
 import logging
 
-from job_hunter_agent import job_review_pipeline, source_learning, workspace_renderer
+from job_hunter_agent import (
+    job_review_pipeline,
+    occupation_taxonomy,
+    source_learning,
+    workspace_renderer,
+)
 from job_hunter_agent.database import init_db
 from job_hunter_agent.fit_scoring import fit_score, fit_score_breakdown
 from job_hunter_agent.job_review_pipeline import (
@@ -599,11 +604,60 @@ def test_title_not_target_continues_to_description_when_onet_uncertain(monkeypat
         ),
     )
 
-    outcome, updated_record, _, should_fetch = review_pre_detail_normalized_job(record, context)
+    _, updated_record, _, should_fetch = review_pre_detail_normalized_job(record, context)
 
     assert should_fetch is True, "uncertain O*NET result must not block description fetch"
     assert updated_record[RECORD_TITLE_REASON_KEY] == "TITLE_POTENTIAL_MATCH"
     assert updated_record[RECORD_ONET_CLASSIFICATION_KEY]["result"] == RESULT_UNCERTAIN
+
+
+def test_title_not_target_logs_uncertainty_when_onet_is_uncertain(monkeypatch, tmp_path):
+    record = _base_record("seek", "seek_detail", "card")
+    context = _review_context("SEEK")
+    context.profile["target_occupation_queries"] = ["Business Analyst"]
+    uncertainty_log = tmp_path / "uncertainty.jsonl"
+
+    monkeypatch.setattr(job_review_pipeline, "UNCERTAINTY_LOG_PATH", uncertainty_log)
+    monkeypatch.setattr(
+        occupation_taxonomy,
+        "_load_index",
+        lambda: {
+            "business analyst": [
+                {
+                    "occupation_code": "13-1111.00",
+                    "occupation_title": "Management Analysts",
+                    "source": "occupation_title",
+                }
+            ]
+        },
+    )
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "analyze_title_filters",
+        lambda title, profile: {"ok": False, "reason": "TITLE_NOT_TARGET"},
+    )
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "_onet_classify_title",
+        lambda title, profile: OccupationClassification(
+            result=RESULT_UNCERTAIN, matched_occupation_code=None, confidence=0.0, reason="no_match"
+        ),
+    )
+    monkeypatch.setattr(job_review_pipeline, "llm_judge_title", lambda *args: None)
+
+    outcome, updated_record, _, should_fetch = review_pre_detail_normalized_job(record, context)
+
+    assert should_fetch is True
+    assert updated_record[RECORD_TITLE_REASON_KEY] == "TITLE_POTENTIAL_MATCH"
+    rows = [json.loads(line) for line in uncertainty_log.read_text(encoding="utf-8").splitlines()]
+    assert len(rows) == 1
+    assert rows[0]["reason_code"] == "TITLE_UNCLEAR"
+    assert rows[0]["stage"] == "title_classification"
+    assert rows[0]["job_key"] == "seek-job-1"
+    assert rows[0]["raw_value"] == "Business Analyst"
+    assert rows[0]["target_occupation_queries"] == ["Business Analyst"]
+    assert rows[0]["target_occupation_codes"] == ["13-1111.00"]
+    assert rows[0]["onet_result"] == RESULT_UNCERTAIN
 
 
 def test_title_not_target_stops_before_detail_fetch_when_onet_is_far(monkeypatch, tmp_path):
