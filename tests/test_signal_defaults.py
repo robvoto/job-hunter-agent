@@ -117,3 +117,43 @@ def test_competitive_signal_alignment_uses_profile_scoring_rules():
     )
 
     assert aligned[SIGNAL_ADJUSTMENT_KEY] == 9
+
+
+def test_competitive_signal_alignment_preserves_explicit_zero_bonus():
+    profile = {
+        "scoring_rules": {
+            KEY_COMPETITIVE_SIGNAL_ALIGNMENT: {
+                "strong_threshold": 0.5,
+                "partial_threshold": 0.2,
+                "recency_fallback_min_capability_best": 0.1,
+                "recency_fallback_multiplier": 1.0,
+                "overlap_bonus_per_extra_alias": 0.05,
+                "overlap_bonus_max_extra_aliases": 2,
+                "max_capability_best": 1.05,
+                "positive_bonus_by_dominance": {"1": 9, "2": 8, "3": 7},
+                "partial_penalty_by_dominance": {"1": 4, "2": 5, "3": 6},
+                "weak_penalty_by_dominance": {"1": 3, "2": 4, "3": 5},
+            }
+        },
+        "candidate_capabilities": [
+            {
+                "name": "Platform engineering",
+                "level": "strong",
+                "aliases": ["platform engineering"],
+            }
+        ],
+        KEY_EVIDENCE_TIERS: {},
+        "star_evidence_text": "",
+        "llm_profile_brief": "",
+    }
+
+    aligned = signal_detection.evaluate_competitive_signal_alignment(
+        {
+            SIGNAL_NAME_KEY: "Platform engineering",
+            "dominance_level": 1,
+            "positive_bonus": 0,
+        },
+        profile,
+    )
+
+    assert aligned[SIGNAL_ADJUSTMENT_KEY] == 0

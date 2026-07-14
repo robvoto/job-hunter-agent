@@ -119,6 +119,15 @@ def _resolved_signal_text(source: dict[str, Any], key: str, defaults: dict[str, 
     return compact_whitespace(defaults.get(key) or "")
 
 
+def _resolved_signal_int(source: dict[str, Any], key: str, fallback: Any) -> int:
+    raw = source.get(key)
+    if raw is None:
+        return int(fallback)
+    if isinstance(raw, str) and not raw.strip():
+        return int(fallback)
+    return int(raw)
+
+
 def _capability_rule_strength(rule: dict) -> float:
     level = compact_whitespace(rule.get(KEY_LEVEL) or "").lower()
     rules = load_parsing_rules()
@@ -258,17 +267,20 @@ def evaluate_competitive_signal_alignment(signal: dict, profile: dict) -> dict:
     )
 
     dominance_level = int(signal.get(SIGNAL_DOMINANCE_LEVEL_KEY, 1))
-    positive_bonus = int(
-        signal.get(CLUSTER_POSITIVE_BONUS_KEY)
-        or alignment_rules[ALIGNMENT_POSITIVE_BONUS_BY_DOMINANCE_KEY][str(dominance_level)]
+    positive_bonus = _resolved_signal_int(
+        signal,
+        CLUSTER_POSITIVE_BONUS_KEY,
+        alignment_rules[ALIGNMENT_POSITIVE_BONUS_BY_DOMINANCE_KEY][str(dominance_level)],
     )
-    partial_penalty = int(
-        signal.get(CLUSTER_PARTIAL_PENALTY_KEY)
-        or alignment_rules[ALIGNMENT_PARTIAL_PENALTY_BY_DOMINANCE_KEY][str(dominance_level)]
+    partial_penalty = _resolved_signal_int(
+        signal,
+        CLUSTER_PARTIAL_PENALTY_KEY,
+        alignment_rules[ALIGNMENT_PARTIAL_PENALTY_BY_DOMINANCE_KEY][str(dominance_level)],
     )
-    weak_penalty = int(
-        signal.get(CLUSTER_WEAK_PENALTY_KEY)
-        or alignment_rules[ALIGNMENT_WEAK_PENALTY_BY_DOMINANCE_KEY][str(dominance_level)]
+    weak_penalty = _resolved_signal_int(
+        signal,
+        CLUSTER_WEAK_PENALTY_KEY,
+        alignment_rules[ALIGNMENT_WEAK_PENALTY_BY_DOMINANCE_KEY][str(dominance_level)],
     )
     if dominant_alignment_score >= float(alignment_rules[ALIGNMENT_STRONG_THRESHOLD_KEY]):
         adjustment = positive_bonus
