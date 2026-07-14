@@ -308,7 +308,7 @@ def test_seek_headless_bot_challenge_retries_aws_browser_session(monkeypatch):
     assert result.kept_records == [{"job_key": "seek:1"}]
 
 
-def test_seek_headless_timeout_no_cards_does_not_retry_aws_browser_session(monkeypatch):
+def test_seek_headless_timeout_no_cards_retries_aws_browser_session(monkeypatch):
     context = _make_context([SOURCE_SEEK])
     context.headless = True
     context.profile = {"search_settings": {"keywords": "Business Analyst", "locations": ["Sydney"]}}
@@ -324,10 +324,34 @@ def test_seek_headless_timeout_no_cards_does_not_retry_aws_browser_session(monke
         return ([{"job_key": "seek:1"}], [], [])
 
     monkeypatch.setattr(source_runner, "seek_scrape_to_records", fake_seek_scrape_to_records)
+    monkeypatch.setattr(source_runner, "get_seek_assisted_verification_enabled", lambda: True)
 
     result = source_runner._run_seek_source(context)
 
-    assert calls == [True]
+    assert calls == [True, False]
+    assert result.error is None
+    assert result.kept_records == [{"job_key": "seek:1"}]
+
+
+def test_seek_visible_timeout_no_cards_returns_error_result(monkeypatch):
+    context = _make_context([SOURCE_SEEK])
+    context.headless = True
+    context.profile = {"search_settings": {"keywords": "Business Analyst", "locations": ["Sydney"]}}
+    calls: list[bool] = []
+
+    def fake_seek_scrape_to_records(*, headless, **kwargs):
+        calls.append(headless)
+        raise source_runner.BotChallengeDetected(
+            f"timeout-no-cards (headless={headless})",
+            failure_class=source_runner.SEEK_TIMEOUT_NO_CARDS,
+        )
+
+    monkeypatch.setattr(source_runner, "seek_scrape_to_records", fake_seek_scrape_to_records)
+    monkeypatch.setattr(source_runner, "get_seek_assisted_verification_enabled", lambda: True)
+
+    result = source_runner._run_seek_source(context)
+
+    assert calls == [True, False]
     assert result.error is not None
     assert result.kept_records == []
 

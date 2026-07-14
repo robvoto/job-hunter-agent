@@ -25,6 +25,7 @@ from job_hunter_agent.scrapers.seek_runner import (
     SEEK_ASSISTED_BROWSER_SESSION_ENABLED,
     SEEK_BOT_CHALLENGE,
     SEEK_HUMAN_VERIFICATION,
+    SEEK_TIMEOUT_NO_CARDS,
     seek_scrape_to_records,
 )
 from job_hunter_agent.source_registry import SOURCE_APSJOBS, SOURCE_LINKEDIN, SOURCE_SEEK
@@ -101,7 +102,11 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
             kept, audit, skills = seek_scrape_to_records(**_seek_kwargs, headless=headless)
         except BotChallengeDetected as exc:
             failure_class = getattr(exc, "failure_class", "SEEK_UNKNOWN_FAILURE")
-            if failure_class not in {SEEK_HUMAN_VERIFICATION, SEEK_BOT_CHALLENGE} or not headless:
+            if failure_class not in {
+                SEEK_HUMAN_VERIFICATION,
+                SEEK_BOT_CHALLENGE,
+                SEEK_TIMEOUT_NO_CARDS,
+            } or not headless:
                 set_run_progress(str(exc))
                 _record_source_warning(
                     source=SOURCE_SEEK,
@@ -161,7 +166,11 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
                 kept, audit, skills = seek_scrape_to_records(**_seek_kwargs, headless=False)
             except BotChallengeDetected as retry_exc:
                 retry_failure_class = getattr(retry_exc, "failure_class", "SEEK_UNKNOWN_FAILURE")
-                if retry_failure_class not in {SEEK_HUMAN_VERIFICATION, SEEK_BOT_CHALLENGE}:
+                if retry_failure_class not in {
+                    SEEK_HUMAN_VERIFICATION,
+                    SEEK_BOT_CHALLENGE,
+                    SEEK_TIMEOUT_NO_CARDS,
+                }:
                     set_run_progress(str(retry_exc))
                     raise
                 logger.warning(
