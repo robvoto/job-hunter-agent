@@ -1055,7 +1055,12 @@ def test_normalize_full_profile_preserves_candidate_capabilities():
             "icon_key": "finance_commercial",
         },
     ]
-    normalized = profile_store.normalize_full_profile({"candidate_capabilities": caps})
+    normalized = profile_store.normalize_full_profile(
+        {
+            "candidate_capabilities": caps,
+            "candidate_eligibility": [{"name": "PV clearance", "value": True}],
+        }
+    )
     result_names = [r["name"] for r in normalized["candidate_capabilities"]]
     assert "financial reporting" in result_names
     assert "accounts payable & receivable" in result_names
@@ -1063,6 +1068,8 @@ def test_normalize_full_profile_preserves_candidate_capabilities():
     assert all(
         rule["icon_key"] == "finance_commercial" for rule in normalized["candidate_capabilities"]
     )
+    assert normalized["candidate_eligibility"][0]["name"] == "PV clearance"
+    assert normalized["candidate_eligibility"][0]["value"] is True
 
 
 def test_user_settings_schedule_payload_is_sanitized_and_exposed():

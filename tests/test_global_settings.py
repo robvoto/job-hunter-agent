@@ -5,7 +5,7 @@ import json
 import pytest
 
 from job_hunter_agent import global_settings
-from job_hunter_agent.database import init_db
+from job_hunter_agent.database import db_conn, init_db
 from job_hunter_agent.global_settings import KEY_LINKEDIN_EASY_APPLY_ONLY
 from job_hunter_agent.paths import GLOBAL_SETTINGS_PATH
 from job_hunter_agent.settings.global_settings_normalization import normalize_global_settings
@@ -181,6 +181,26 @@ def test_save_global_settings_preserves_unedited_top_level_sections(isolated_db)
 
     assert saved["playwright_settings"]["headless"] is False
     assert saved["candidate_application_history"] == before_history
+
+
+def test_repeated_global_settings_saves_update_single_document_row(isolated_db):
+    global_settings.load_global_settings.cache_clear()
+
+    global_settings.save_global_settings(
+        {"playwright_settings": {"headless": False}}
+    )
+    global_settings.save_global_settings(
+        {"playwright_settings": {"headless": True}}
+    )
+
+    with db_conn(isolated_db) as conn:
+        rows = conn.execute(
+            "SELECT key, value FROM global_settings ORDER BY key"
+        ).fetchall()
+
+    assert len(rows) == 1
+    assert rows[0]["key"] == "global_settings"
+    assert json.loads(rows[0]["value"])["playwright_settings"]["headless"] is True
 
 
 def test_load_global_settings_requires_seeded_table(tmp_path, monkeypatch):

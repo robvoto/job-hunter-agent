@@ -7,12 +7,16 @@ LLM_ALLOWED_COVERAGE_IMPORTANCES = frozenset(
     {"mandatory", "strongly_preferred", "preferred", "nice_to_have"}
 )
 
+LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES = frozenset({"capability", "eligibility"})
+LLM_INVALID_COVERAGE_REQUIREMENT_TYPE = "invalid"
+LLM_INVALID_COVERAGE_STATUS = "invalid"
+
 LLM_FIT_REVIEW_PROMPT_SHAPE = (
     '{"fit_review":{"decision":"KEEP|REJECT|MAYBE","grade":"EXCELLENT|STRONG|SOLID|WEAK|POOR|MISMATCH"},'
     '"job_requirements":["..."],'
     '"requirement_coverage":[{"requirement":"...","importance":"mandatory|strongly_preferred|preferred|nice_to_have",'
-    '"status":"supported|partially_supported|not_shown|mismatch",'
-    '"capability_name":"...","matched_job_text":"...","profile_support":["..."]}],'
+    '"requirement_type":"capability|eligibility","status":"supported|partially_supported|not_shown|mismatch",'
+    '"profile_name":"...","matched_job_text":"...","profile_support":["..."]}],'
     '"debug_reason":"..."}'
 )
 LLM_PROMPT_DEBUG_REASON_INTRO = (
@@ -30,6 +34,7 @@ LLM_JOB_REQUIREMENTS_PROMPT_SHAPE = '{"job_requirements":["..."]}'
 
 LLM_PROMPT_CANDIDATE_FIT_BRIEF_HEADER = "AI fit brief:"
 LLM_PROMPT_CAPABILITY_LEVELS_HEADER = "Capability matrix:"
+LLM_PROMPT_ELIGIBILITY_HEADER = "Eligibility matrix:"
 LLM_PROMPT_MATCH_PREFERENCES_HEADER = "Match preferences:"
 LLM_PROMPT_DEFAULT_FIT_REVIEW_GUIDANCE_HEADER = "Fit review guidance:"
 LLM_PROMPT_CAPABILITY_NAMING_INTRO = "You are reviewing and labelling candidate professional capability clusters extracted from a CV."

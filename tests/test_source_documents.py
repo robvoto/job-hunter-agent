@@ -29,10 +29,15 @@ def test_build_llm_profile_brief_ignores_malformed_capability_rules():
             None,
             "bad",
             {"name": "", "level": "working"},
-        ]
+        ],
+        eligibility_rules=[
+            {"name": "PV clearance", "value": True, "evidence": ["Baseline Security Clearance"]}
+        ],
     )
 
     assert "process mapping (strong)" in brief
+    assert "Eligibility profile:" in brief
+    assert "PV clearance (true)" in brief
 
 
 def test_build_llm_profile_brief_handles_non_list_input():

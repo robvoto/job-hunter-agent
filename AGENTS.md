@@ -35,6 +35,7 @@ Project-specific skills live in `docs/PROJECT_CONTEXT.md`.
 
 - Keep changes small and scoped.
 - Do not add hidden fallbacks, dead paths, compatibility shims, or broad exception swallowing unless explicitly approved.
+- Do not silently drop, default, or reclassify required data into invisibility; if a match cannot be proven, keep the item visible with an explicit unresolved status or fail loudly if the pipeline requires a hard stop.
 - Do not hardcode business behaviour when config, schema, profile, or knowledge should own it.
 - Surface missing or invalid required data clearly.
 - Prefer small, single-purpose modules over monoliths.

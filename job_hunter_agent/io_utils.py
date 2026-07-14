@@ -187,6 +187,26 @@ def save_llm_cache(cache: Dict[str, Any]) -> None:
     save_json(LLM_CACHE_PATH, cache)
 
 
+def prune_llm_cache_for_current_profile(cache: Dict[str, Any]) -> tuple[Dict[str, Any], int]:
+    """Keep only LLM cache entries for the active profile fingerprint."""
+
+    from job_hunter_agent.llm_gate import _profile_fingerprint
+
+    fingerprint = _profile_fingerprint()
+    prefix = f"{fingerprint}:"
+    pruned: Dict[str, Any] = {}
+    removed = 0
+
+    for key, value in cache.items():
+        key_text = str(key)
+        if key_text.startswith(prefix):
+            pruned[key_text] = value
+        else:
+            removed += 1
+
+    return pruned, removed
+
+
 def load_cv_extraction_cache() -> Dict[str, Any]:
     raw = load_json_dict(CV_EXTRACTION_CACHE_PATH)
     return {str(k): v for k, v in raw.items()}

@@ -66,6 +66,14 @@ _LLM_FIXTURE = {
         "work_mode_preference": None,
         "home_location": "",
     },
+    "eligibility": [
+        {
+            "name": "PV clearance",
+            "value": True,
+            "evidence": ["Baseline Security Clearance"],
+            "needs_review": False,
+        }
+    ],
 }
 
 
@@ -89,6 +97,8 @@ def test_build_learning_patch_returns_titles_capabilities_and_queries_without_pa
     assert patch_result["target_roles"] == ["delivery lead", "project coordinator"]
     assert patch_result["also_consider_roles"] == []
     assert patch_result["target_occupation_queries"] == ["Delivery Lead", "Project Coordinator"]
+    assert patch_result["candidate_eligibility"][0]["name"] == "PV clearance"
+    assert patch_result["candidate_eligibility"][0]["value"] is True
 
 
 @pytest.mark.parametrize(

@@ -879,11 +879,8 @@ def test_maybe_review_with_complete_coverage_is_not_rejected(monkeypatch, caplog
     assert not any("LLM_INVALID_REVIEW" in entry.message for entry in caplog.records)
 
 
-def test_frozen_fit_score_breakdown_computed_once(caplog, monkeypatch):
-    """Regression test: freezing the fit score must not recompute (and re-log) the
-
-    breakdown a second time — this used to double-log [CAPABILITY_SUPPORT].
-    """
+def test_frozen_requirement_fit_score_breakdown_is_stored_once(caplog, monkeypatch):
+    """Frozen Requirement Fit % score and breakdown are stored together."""
     payload = {
         "fit_review": {"decision": "KEEP", "grade": "STRONG"},
         "debug_reason": "Strong requirement coverage with capability support.",
@@ -908,13 +905,10 @@ def test_frozen_fit_score_breakdown_computed_once(caplog, monkeypatch):
         )
 
     assert outcome[RECORD_DECISION_KEY] == "KEEP"
-    capability_support_lines = [
-        r for r in caplog.records if "[CAPABILITY_SUPPORT]" in r.getMessage()
-    ]
-    assert len(capability_support_lines) == 1
     assert updated_record["fit_score"] == sum(
         e["value"] for e in updated_record["fit_score_breakdown"]
     )
+    assert updated_record["fit_score_breakdown"][0]["section"] == "requirement_fit"
 
 
 # ── observability log events ──────────────────────────────────────────────────

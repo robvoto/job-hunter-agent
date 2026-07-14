@@ -11,6 +11,7 @@ from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
 from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent.profile_store import (
     KEY_CANDIDATE_CAPABILITIES,
+    KEY_CANDIDATE_ELIGIBILITY,
     KEY_MUST_NOT_REQUIRED_SKILLS,
     KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT,
     KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT,
@@ -283,6 +284,35 @@ def find_profile_capability_matches(details_text: str, profile: dict) -> Dict[st
     }
 
 
+def find_profile_eligibility_matches(details_text: str, profile: dict) -> Dict[str, List[str]]:
+    lowered = compact_whitespace(details_text).lower()
+    matched_have: List[str] = []
+    matched_not_have: List[str] = []
+
+    for item in profile.get(KEY_CANDIDATE_ELIGIBILITY, []):
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        if not name:
+            continue
+        terms = [name]
+        evidence = item.get("evidence") or []
+        if isinstance(evidence, list):
+            terms.extend(str(term) for term in evidence if str(term).strip())
+        if not any(text_contains_term(lowered, term) for term in terms if str(term).strip()):
+            continue
+        label = name
+        if bool(item.get("value", True)):
+            matched_have.append(label)
+        else:
+            matched_not_have.append(label)
+
+    return {
+        "have": dedupe_preserve_order(matched_have),
+        "do_not_have": dedupe_preserve_order(matched_not_have),
+    }
+
+
 def description_watchout_reasons(details_text: str, profile: dict) -> List[str]:
     lowered = compact_whitespace(details_text).lower()
     if not lowered:
@@ -356,6 +386,7 @@ def build_risk_and_missing_profile_support(
     risks: List[str] = []
     missing: List[str] = []
     capability_matches = find_profile_capability_matches(details_text, profile)
+    eligibility_matches = find_profile_eligibility_matches(details_text, profile)
 
     if title_reason == TITLE_REASON_POTENTIAL_MATCH:
         risks.append("Secondary role-family match rather than direct target role")
@@ -363,6 +394,11 @@ def build_risk_and_missing_profile_support(
     if capability_matches["must_not"]:
         missing.append(
             f"Missing mandatory requirement: {list_to_phrase(capability_matches['must_not'][:2]).capitalize()}"
+        )
+
+    if eligibility_matches["do_not_have"]:
+        missing.append(
+            f"Missing mandatory requirement: {list_to_phrase(eligibility_matches['do_not_have'][:2]).capitalize()}"
         )
 
     if capability_matches["limited_depth"]:

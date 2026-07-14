@@ -81,6 +81,8 @@ def test_settings_page_renders_keyword_label_and_location_field(monkeypatch):
     assert "window.__JOB_HUNTER_SETTINGS_ALERTS_LABELS__" in html
 
     assert "Alerts &amp; AI" in html
+    assert "Hide link preview" in html
+    assert "preview card" in html
 
 
 def test_settings_capability_editor_preserves_icon_key_state():
@@ -108,3 +110,31 @@ def test_settings_utils_review_normaliser_preserves_icon_key():
 
     assert "const icon_key = normalizeReviewText(rule?.icon_key || '').toLowerCase();" in js_text
     assert "return { name, level, aliases, icon_key };" in js_text
+
+
+def test_admin_settings_script_exposes_system_warnings_controls():
+    repo_root = Path(__file__).resolve().parents[1]
+    js_text = (
+        repo_root / "templates" / "static" / "settings" / "global" / "settings-admin.js"
+    ).read_text(encoding="utf-8")
+
+    assert "initSystemWarningsControls" in js_text
+    assert "/api/admin/system-warnings" in js_text
+
+
+def test_global_settings_page_renders_system_warnings_panel(monkeypatch):
+    monkeypatch.setattr(
+        _fa,
+        "read_session_user",
+        lambda request: {"user_id": "test-user", "email": "test@example.com", "role": "admin"},
+    )
+    monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: True)
+    monkeypatch.setattr(_pages, "is_admin", lambda request: True)
+    monkeypatch.setattr(_pages, "read_session_user", lambda request: {"user_id": "test-user", "email": "test@example.com", "role": "admin"})
+
+    client = TestClient(create_app())
+    html = client.get("/global-settings").text
+
+    assert 'id="system_warnings_panel"' in html
+    assert 'id="system_warnings_list"' in html
+    assert 'id="system_warnings_refresh_button"' in html

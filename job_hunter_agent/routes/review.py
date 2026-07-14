@@ -10,12 +10,14 @@ from fastapi import APIRouter, Body, Query
 from job_hunter_agent import server_helpers as srv
 from job_hunter_agent.io_utils import load_job_history
 from job_hunter_agent.job_identity import normalize_job_key
+from job_hunter_agent.llm_protocol import LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES
 from job_hunter_agent.profile_gaps import (
     STATUS_CONFIRMED_DO_NOT_HAVE,
     STATUS_CONFIRMED_HAVE,
     classify_requirement_status,
 )
 from job_hunter_agent.profile_store import CAPABILITY_ICON_GENERIC
+from job_hunter_agent.profile_store import KEY_CANDIDATE_ELIGIBILITY
 from job_hunter_agent.record_schema import (
     RECORD_LAST_KEPT_SNAPSHOT_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
@@ -270,26 +272,43 @@ def _profile_gap_requirement_coverage(job_key: str) -> list[dict]:
     return [item for item in coverage if isinstance(item, dict)]
 
 
-def _profile_gap_confirmable_capability(job_key: str, capability_name: str) -> str:
-    target_name = _profile_gap_name_key(capability_name)
+def _profile_gap_confirmable_item(job_key: str, value: str) -> dict:
+    target_name = _profile_gap_name_key(value)
     if not target_name:
-        return ""
+        return {}
     for item in _profile_gap_requirement_coverage(job_key):
         if str(item.get("status") or "").strip().lower() not in _PROFILE_GAP_CONFIRMABLE_STATUSES:
             continue
-        coverage_name = str(item.get("capability_name") or "").strip()
+        raw_requirement_type = str(item.get("requirement_type") or "").strip().lower()
+        if raw_requirement_type and raw_requirement_type not in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES:
+            continue
+        coverage_name = str(
+            item.get("profile_name") or item.get("capability_name") or item.get("eligibility_name") or ""
+        ).strip()
         if _profile_gap_name_key(coverage_name) != target_name:
             continue
-        return coverage_name
-    return ""
+        return dict(item)
+    return {}
+
+
+def _profile_gap_eligibility_index(profile: dict) -> dict[str, int]:
+    lookup: dict[str, int] = {}
+    for idx, item in enumerate(profile.get(KEY_CANDIDATE_ELIGIBILITY, []) or []):
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        normalized = _profile_gap_name_key(name)
+        if normalized:
+            lookup[normalized] = idx
+    return lookup
 
 
 @router.post("/api/profile-gap")
 def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
     """Record a user response to a 'Needs confirmation' gap on a job card.
 
-    confirm_have        → add the canonical capability_name as a candidate_capabilities entry
-    confirm_do_not_have → add the canonical capability_name to must_not_require_skills
+    confirm_have        → add the canonical profile item to the matching profile bucket
+    confirm_do_not_have → add the canonical profile item to the matching profile bucket
     decide_later        → no-op; gap reappears on next page load
     """
     try:
@@ -307,47 +326,93 @@ def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
         if not capability_name:
             raise ValueError("capability_name is required")
 
-        canonical_capability_name = _profile_gap_confirmable_capability(job_key, capability_name)
-        if not canonical_capability_name:
+        canonical_item = _profile_gap_confirmable_item(job_key, capability_name)
+        if not canonical_item:
             raise ValueError(
                 "capability_name is not a confirmable requirement coverage item for this job"
             )
+        canonical_item_name = str(
+            canonical_item.get("profile_name")
+            or canonical_item.get("capability_name")
+            or canonical_item.get("eligibility_name")
+            or ""
+        ).strip()
+        requirement_type = str(canonical_item.get("requirement_type") or "capability").strip().lower()
 
         profile = srv.load_profile()
         current_status = classify_requirement_status(
-            canonical_capability_name,
+            canonical_item_name,
             profile.get("candidate_capabilities") or [],
             profile.get("must_not_require_skills") or [],
+            profile.get(KEY_CANDIDATE_ELIGIBILITY) or [],
+            requirement_type=requirement_type,
         )
 
         if action == "confirm_have":
-            if current_status == STATUS_CONFIRMED_DO_NOT_HAVE:
-                raise ValueError("capability_name is already saved as must_not_require_skills")
             if current_status == STATUS_CONFIRMED_HAVE:
                 return json_response({"ok": True})
-            rules = list(profile.get("candidate_capabilities") or [])
-            rules.append(
-                {
-                    "name": canonical_capability_name,
-                    "level": "working",
-                    "fit": "supporting",
-                    "aliases": [],
-                    "icon_key": CAPABILITY_ICON_GENERIC,
+            if requirement_type == "eligibility":
+                eligibility = list(profile.get(KEY_CANDIDATE_ELIGIBILITY) or [])
+                lookup = _profile_gap_eligibility_index(profile)
+                normalized_name = _profile_gap_name_key(canonical_item_name)
+                item_value = {
+                    "name": canonical_item_name,
+                    "value": True,
+                    "evidence": [str(canonical_item.get("matched_job_text") or "").strip()]
+                    if str(canonical_item.get("matched_job_text") or "").strip()
+                    else [],
+                    "needs_review": False,
                 }
-            )
-            profile["candidate_capabilities"] = rules
+                if normalized_name in lookup:
+                    eligibility[lookup[normalized_name]] = item_value
+                else:
+                    eligibility.append(item_value)
+                profile[KEY_CANDIDATE_ELIGIBILITY] = eligibility
+            else:
+                if current_status == STATUS_CONFIRMED_DO_NOT_HAVE:
+                    raise ValueError("capability_name is already saved as must_not_require_skills")
+                rules = list(profile.get("candidate_capabilities") or [])
+                rules.append(
+                    {
+                        "name": canonical_item_name,
+                        "level": "working",
+                        "fit": "supporting",
+                        "aliases": [],
+                        "icon_key": CAPABILITY_ICON_GENERIC,
+                    }
+                )
+                profile["candidate_capabilities"] = rules
             srv.save_profile(profile)
 
         elif action == "confirm_do_not_have":
-            if current_status == STATUS_CONFIRMED_HAVE:
-                raise ValueError("capability_name is already saved as a candidate capability")
             if current_status == STATUS_CONFIRMED_DO_NOT_HAVE:
                 return json_response({"ok": True})
-            skills = list(profile.get("must_not_require_skills") or [])
-            if canonical_capability_name not in skills:
-                skills.append(canonical_capability_name)
-                profile["must_not_require_skills"] = skills
+            if requirement_type == "eligibility":
+                eligibility = list(profile.get(KEY_CANDIDATE_ELIGIBILITY) or [])
+                lookup = _profile_gap_eligibility_index(profile)
+                normalized_name = _profile_gap_name_key(canonical_item_name)
+                item_value = {
+                    "name": canonical_item_name,
+                    "value": False,
+                    "evidence": [str(canonical_item.get("matched_job_text") or "").strip()]
+                    if str(canonical_item.get("matched_job_text") or "").strip()
+                    else [],
+                    "needs_review": False,
+                }
+                if normalized_name in lookup:
+                    eligibility[lookup[normalized_name]] = item_value
+                else:
+                    eligibility.append(item_value)
+                profile[KEY_CANDIDATE_ELIGIBILITY] = eligibility
                 srv.save_profile(profile)
+            else:
+                if current_status == STATUS_CONFIRMED_HAVE:
+                    raise ValueError("capability_name is already saved as a candidate capability")
+                skills = list(profile.get("must_not_require_skills") or [])
+                if canonical_item_name not in skills:
+                    skills.append(canonical_item_name)
+                    profile["must_not_require_skills"] = skills
+                    srv.save_profile(profile)
 
     except Exception as exc:
         return json_response({"error": str(exc)}, 400)

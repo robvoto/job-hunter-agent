@@ -580,6 +580,179 @@ export const JobHunterAdminSettings = (function () {
     });
   }
 
+  function systemWarningSeverityClass(severity) {
+    const level = String(severity || '').trim().toLowerCase();
+    if (level === 'critical') return 'system-warning-pill--critical';
+    if (level === 'error') return 'system-warning-pill--error';
+    if (level === 'warning') return 'system-warning-pill--warning';
+    return 'system-warning-pill--info';
+  }
+
+  function systemWarningLabel(value) {
+    return String(value || '').replace(/_/g, ' ').trim() || 'unknown';
+  }
+
+  function systemWarningContextHtml(context) {
+    if (!context || (typeof context === 'object' && Object.keys(context).length === 0)) {
+      return '';
+    }
+    const contextText = typeof context === 'string' ? context : JSON.stringify(context, null, 2);
+    return `
+      <details class="system-warning-context">
+        <summary>Context</summary>
+        <pre>${escapeHtml(contextText)}</pre>
+      </details>
+    `;
+  }
+
+  function renderSystemWarningCard(warning) {
+    const severity = systemWarningLabel(warning?.severity);
+    const category = systemWarningLabel(warning?.category);
+    const status = systemWarningLabel(warning?.status);
+    const source = String(warning?.source || '').trim() || 'unknown';
+    const message = String(warning?.message || '').trim() || 'No message';
+    const jobKey = String(warning?.job_key || '').trim();
+    const runId = String(warning?.run_id || '').trim();
+    const lastSeen = String(warning?.last_seen_at || '').trim();
+    const count = Number(warning?.count || 0);
+    const context = warning?.context;
+
+    return `
+      <article class="system-warning-card" data-warning-id="${escapeHtml(String(warning?.id || ''))}">
+        <div class="system-warning-card__head">
+          <div class="system-warning-card__copy">
+            <h3 class="system-warning-card__title">${escapeHtml(message)}</h3>
+            <div class="system-warning-card__message">
+              ${escapeHtml(category)} · ${escapeHtml(source)}
+            </div>
+            <div class="system-warning-card__meta">
+              <span><strong>Status:</strong> ${escapeHtml(status)}</span>
+              <span><strong>Count:</strong> ${Number.isFinite(count) ? count : 0}</span>
+              ${jobKey ? `<span><strong>Job:</strong> ${escapeHtml(jobKey)}</span>` : ''}
+              ${runId ? `<span><strong>Run:</strong> ${escapeHtml(runId)}</span>` : ''}
+              ${lastSeen ? `<span><strong>Last seen:</strong> ${escapeHtml(lastSeen)}</span>` : ''}
+            </div>
+          </div>
+          <div class="system-warning-pill-row">
+            <span class="system-warning-pill ${systemWarningSeverityClass(warning?.severity)}">${escapeHtml(severity)}</span>
+            <span class="system-warning-pill system-warning-pill--info">${escapeHtml(status)}</span>
+          </div>
+        </div>
+        ${systemWarningContextHtml(context)}
+        <div class="system-warning-actions">
+          <button type="button" class="btn btn-secondary" data-system-warning-action="review" data-warning-id="${escapeHtml(String(warning?.id || ''))}">Review</button>
+          <button type="button" class="btn btn-secondary" data-system-warning-action="dismiss" data-warning-id="${escapeHtml(String(warning?.id || ''))}">Dismiss</button>
+        </div>
+      </article>
+    `;
+  }
+
+  async function fetchSystemWarnings() {
+    const response = await window.jobHunterFetch('/api/admin/system-warnings');
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || 'Could not load system warnings.');
+    }
+    return Array.isArray(payload.warnings) ? payload.warnings : [];
+  }
+
+  async function updateSystemWarningStatus(warningId, status) {
+    const response = await window.jobHunterFetch(`/api/admin/system-warnings/${encodeURIComponent(warningId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || 'Could not update system warning.');
+    }
+    return payload.warning;
+  }
+
+  function initSystemWarningsControls(showStatus) {
+    const panel = document.getElementById('system_warnings_panel');
+    const list = document.getElementById('system_warnings_list');
+    const empty = document.getElementById('system_warnings_empty');
+    const status = document.getElementById('system_warnings_status');
+    const refreshButton = document.getElementById('system_warnings_refresh_button');
+    if (!panel || !list || !empty || !status || typeof window.jobHunterFetch !== 'function') {
+      return;
+    }
+    if (panel.dataset.bound === 'true') {
+      return;
+    }
+    panel.dataset.bound = 'true';
+
+    const setStatus = (message, kind) => {
+      status.textContent = String(message || '');
+      status.className = kind ? `field-help sync-status sync-status--${kind}` : 'field-help';
+      if (typeof showStatus === 'function') {
+        showStatus(message, kind);
+      }
+    };
+
+    const renderWarnings = (warnings) => {
+      if (!warnings.length) {
+        list.innerHTML = '';
+        empty.hidden = false;
+        return;
+      }
+      empty.hidden = true;
+      list.innerHTML = warnings.map(renderSystemWarningCard).join('');
+    };
+
+    const refresh = async ({ silent = false } = {}) => {
+      if (!silent) {
+        setStatus('Loading unresolved warnings...', 'loading');
+      }
+      try {
+        const warnings = await fetchSystemWarnings();
+        renderWarnings(warnings);
+        setStatus(
+          warnings.length
+            ? `${warnings.length} unresolved warning${warnings.length === 1 ? '' : 's'}.`
+            : 'No unresolved system warnings.',
+          'success',
+        );
+      } catch (error) {
+        list.innerHTML = '';
+        empty.hidden = false;
+        setStatus(error.message || 'Could not load system warnings.', 'error');
+      }
+    };
+
+    list.addEventListener('click', async (event) => {
+      const button = event.target.closest('[data-system-warning-action]');
+      if (!button) return;
+      const warningId = button.dataset.warningId;
+      const action = button.dataset.systemWarningAction;
+      if (!warningId || !action) return;
+      const originalLabel = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Saving...';
+      setStatus('Updating system warning...', 'loading');
+      try {
+        const statusValue = action === 'review' ? 'reviewed' : 'dismissed';
+        await updateSystemWarningStatus(warningId, statusValue);
+        await refresh({ silent: true });
+        setStatus('System warning updated.', 'success');
+      } catch (error) {
+        setStatus(error.message || 'Could not update system warning.', 'error');
+      } finally {
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+    });
+
+    if (refreshButton) {
+      refreshButton.addEventListener('click', () => {
+        refresh();
+      });
+    }
+
+    refresh();
+  }
+
   return {
     fillGlobalForm,
     collectGlobalSettings,
@@ -587,6 +760,7 @@ export const JobHunterAdminSettings = (function () {
     applyGlobalSettingsHelp,
     initKnowledgeSyncControls,
     initRejectionHistorySyncControls,
+    initSystemWarningsControls,
   };
 }());
 

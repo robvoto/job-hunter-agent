@@ -18,6 +18,7 @@ from job_hunter_agent.profile_store import (
     CAPABILITY_ICON_GENERIC,
     KEY_ALIASES,
     KEY_CANDIDATE_CAPABILITIES,
+    KEY_CANDIDATE_ELIGIBILITY,
     KEY_ICON_KEY,
     KEY_LEVEL,
     KEY_MUST_NOT_REQUIRED_SKILLS,
@@ -52,6 +53,16 @@ def _collect_known_terms(profile: dict[str, Any]) -> set[str]:
             normalized_alias = _normalize_term(str(alias))
             if normalized_alias:
                 known_terms.add(normalized_alias)
+    for item in profile.get(KEY_CANDIDATE_ELIGIBILITY, []):
+        if not isinstance(item, dict):
+            continue
+        normalized_name = _normalize_term(str(item.get("name") or ""))
+        if normalized_name:
+            known_terms.add(normalized_name)
+        for evidence in item.get("evidence") or []:
+            normalized_evidence = _normalize_term(str(evidence))
+            if normalized_evidence:
+                known_terms.add(normalized_evidence)
     return known_terms
 
 

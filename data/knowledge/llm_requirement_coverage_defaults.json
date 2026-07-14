@@ -9,9 +9,11 @@
     "Do not put a whole sentence as a single item; split compound sentences into their atomic parts.",
     "For each atomic requirement: assign the weakest accurate importance. Use mandatory only when the ad explicitly says required, must, essential, or similar hard-block language. Use strongly_preferred for clearly expected but non-blocking items, preferred for desirable items, and nice_to_have for optional or bonus items. Do not mark every row mandatory.",
     "Store the original job-ad sentence in matched_job_text for traceability — do not match the whole sentence directly to a capability.",
-    "Link supported and partially_supported items to the exact profile capability name.",
-    "Leave capability_name empty only for not_shown or mismatch items.",
-    "Keep each requirement_coverage item compact: short phrases only for requirement, matched_job_text, capability_name, and profile_support.",
+    "Classify each supported or partially_supported requirement as either capability or eligibility.",
+    "Link capability requirements to the exact profile capability name and eligibility requirements to the exact profile eligibility fact.",
+    "Use profile_name for the matched profile fact and keep capability_name / eligibility_name aligned with the requirement_type.",
+    "Leave profile_name empty only for not_shown or mismatch items.",
+    "Keep each requirement_coverage item compact: short phrases only for requirement, matched_job_text, profile_name, and profile_support.",
     "Prefer the most important atomic requirements when the ad is long."
   ]
 }

@@ -17,6 +17,12 @@ This guide describes which integrations exist, which ones are packaged product b
 - Scraping path: LinkedIn ingestion currently uses `python-jobspy` through `job_hunter_agent.scrapers.linkedin`.
 - Boundary: LinkedIn failures must stay isolated so the rest of the run can complete with preserved partial results.
 
+### APSJobs
+
+- Owner flow: `job_hunter_agent.source_runner` dispatches APSJobs like the other enabled sources.
+- Scraping path: APSJobs uses the Playwright scraper in `job_hunter_agent.scrapers.apsjobs`.
+- Boundary: APSJobs keeps its own isolated state and participates in the same concurrent source-runner lane when enabled.
+
 ### Future source adapter contract
 
 - New sources plug into the same source-runner boundary instead of inventing parallel orchestration.

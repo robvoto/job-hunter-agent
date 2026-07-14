@@ -604,7 +604,7 @@ def render_html(
         )
 
     scope_saved_option_html = (
-        '<option value="saved">Saved Earlier Searches</option>' if active_debug_mode else ""
+        f'<option value="saved">{safe_html(ARCHIVE_LABEL)}</option>' if active_debug_mode else ""
     )
     current_tabs_html = render_workspace_tabs_html(
         shortlist_count,

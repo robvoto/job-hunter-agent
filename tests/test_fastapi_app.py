@@ -219,6 +219,70 @@ def test_admin_knowledge_sync_triggers_roundtrip(monkeypatch):
     assert calls == ["sync"]
 
 
+def test_admin_system_warnings_api_requires_admin(monkeypatch):
+    monkeypatch.setattr(_fa, "read_session_user", lambda request: _CANDIDATE_USER)
+    monkeypatch.setattr(_fa, "verify_csrf_token", lambda request, token: True)
+    monkeypatch.setattr(_profile_materials, "is_admin", lambda request: False)
+
+    client = TestClient(create_app())
+
+    response = client.get("/api/admin/system-warnings")
+    assert response.status_code == 401
+    assert response.json() == {"ok": False, "error": "Authentication required"}
+
+    response = client.patch("/api/admin/system-warnings/1", json={"status": "reviewed"})
+    assert response.status_code == 401
+    assert response.json() == {"ok": False, "error": "Authentication required"}
+
+
+def test_admin_system_warnings_api_lists_and_updates(monkeypatch):
+    monkeypatch.setattr(_fa, "read_session_user", lambda request: _FAKE_USER)
+    monkeypatch.setattr(_fa, "verify_csrf_token", lambda request, token: True)
+    monkeypatch.setattr(_profile_materials, "is_admin", lambda request: True)
+    monkeypatch.setattr(
+        _profile_materials,
+        "list_system_warnings",
+        lambda: [
+            {
+                "id": 1,
+                "severity": "warning",
+                "category": "source_failure",
+                "source": "seek",
+                "message": "SEEK failed.",
+                "fingerprint": "fp",
+                "status": "unresolved",
+                "job_key": "seek:1",
+                "run_id": "run-1",
+                "context": {"error_type": "RuntimeError"},
+                "first_seen_at": "2026-07-14T00:00:00+00:00",
+                "last_seen_at": "2026-07-14T00:00:00+00:00",
+                "count": 2,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        _profile_materials,
+        "update_system_warning_status",
+        lambda warning_id, status: {
+            "id": warning_id,
+            "status": status,
+            "fingerprint": "fp",
+        },
+    )
+
+    client = TestClient(create_app())
+
+    response = client.get("/api/admin/system-warnings")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["warnings"][0]["id"] == 1
+    assert payload["warnings"][0]["context"] == {"error_type": "RuntimeError"}
+
+    response = client.patch("/api/admin/system-warnings/1", json={"status": "reviewed"})
+    assert response.status_code == 200
+    assert response.json()["warning"]["status"] == "reviewed"
+
+
 def test_workspace_page_bootstrap_includes_account_scope(monkeypatch):
     legacy_bootstrap_name = "window.__JOB_HUNTER_" + "USER_ID__"
 

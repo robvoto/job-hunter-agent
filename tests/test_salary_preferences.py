@@ -114,6 +114,12 @@ def test_unknown_work_type_logs_uncertainty(tmp_path, monkeypatch, caplog):
     log_path = tmp_path / "uncertainty.jsonl"
 
     monkeypatch.setattr(preferences, "UNCERTAINTY_LOG_PATH", log_path)
+    warnings = []
+    monkeypatch.setattr(
+        preferences,
+        "record_system_warning",
+        lambda **kwargs: warnings.append(kwargs) or kwargs,
+    )
 
     monkeypatch.setattr(
         preferences,
@@ -155,6 +161,8 @@ def test_unknown_work_type_logs_uncertainty(tmp_path, monkeypatch, caplog):
     assert work_type_entry["job_key"] == "seek:123"
 
     assert work_type_entry["normalized_value"] == "unknown"
+    assert warnings
+    assert warnings[0]["category"] == "preference_uncertainty"
 
 
 def test_display_work_type_label_normalizes_full_time_contract_to_ftc():

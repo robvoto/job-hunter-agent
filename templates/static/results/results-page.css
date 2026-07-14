@@ -409,9 +409,7 @@
 }
 
 .job-summary-expand summary {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  display: block;
   list-style: none;
   cursor: pointer;
 }
@@ -425,39 +423,59 @@
 }
 
 .job-summary-text {
-  flex: 1 1 auto;
-  min-width: 0;
+  display: inline;
 }
 
 .job-summary-toggle {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  min-width: 1rem;
-}
-
-.job-summary-toggle::before {
-  content: "+";
+  align-items: baseline;
+  gap: 6px;
+  margin-left: 8px;
+  vertical-align: baseline;
+  white-space: nowrap;
   color: var(--accent);
-  font-size: 1.1rem;
+  font-size: 0.94rem;
   font-weight: 700;
-  line-height: 1;
 }
 
-.job-summary-expand[open] .job-summary-toggle::before {
-  content: "−";
+.job-summary-toggle-icon::before {
+  content: "▾";
+  font-size: 1rem;
+  line-height: 1;
+  transition: transform 0.18s ease;
+}
+
+.job-summary-expand[open] .job-summary-toggle-icon::before {
+  content: "▴";
+}
+
+.job-summary-toggle-label--open {
+  display: none;
+}
+
+.job-summary-expand[open] .job-summary-toggle-label--closed {
+  display: none;
+}
+
+.job-summary-expand[open] .job-summary-toggle-label--open {
+  display: inline;
 }
 
 .job-summary-expanded {
-  padding-top: 8px;
+  padding-top: 10px;
+}
+
+.job-full-description-body {
+  display: grid;
+  gap: 12px;
 }
 
 .job-full-description {
   margin: 0;
   color: var(--text-primary);
   line-height: 1.6;
-  white-space: pre-wrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .job-note {
@@ -568,6 +586,11 @@
   color: var(--text-primary);
 }
 
+.job-requirement-item--invalid {
+  background: color-mix(in srgb, var(--state-warning-bg) 40%, transparent);
+  color: var(--text-primary);
+}
+
 .job-requirement-text {
   grid-column: 1;
   min-width: 0;
@@ -627,6 +650,12 @@
   border-color: var(--border-subtle);
   color: var(--text-muted);
   background: transparent;
+}
+
+.job-requirement-item--invalid .job-requirement-status {
+  border-color: var(--state-warning-border);
+  color: var(--state-warning-text);
+  background: var(--state-warning-bg);
 }
 
 /* mandatory + not_shown: same red urgency as mismatch — user needs to review this gap */

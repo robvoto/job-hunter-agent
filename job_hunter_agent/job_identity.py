@@ -28,6 +28,7 @@ from job_hunter_agent.record_schema import (
     RECORD_DUPLICATE_LINKS_KEY,
     RECORD_JOB_KEY,
     RECORD_LOCATION_KEY,
+    RECORD_RUN_STARTED_AT_KEY,
     RECORD_POTENTIAL_DUPLICATE_LINKS_KEY,
     RECORD_SOURCE_ATS_REQUISITION_ID_KEY,
     RECORD_SOURCE_KEY,
@@ -38,6 +39,10 @@ from job_hunter_agent.record_schema import (
     RECORD_URL_KEY,
 )
 from job_hunter_agent.runtime_helpers import append_uncertainty_log, build_uncertainty_entry
+from job_hunter_agent.system_warnings import (
+    make_system_warning_fingerprint,
+    record_system_warning,
+)
 from job_hunter_agent.source_registry import get_domain_to_source_map
 from job_hunter_agent.title_normalization_rules import normalize_title_text
 
@@ -342,6 +347,12 @@ def _record_label(record: dict) -> str:
 def _log_potential_duplicate(a: dict, b: dict, matched_on: list[str]) -> None:
     """Log when two jobs match on title+company but cannot be confirmed as the same posting."""
 
+    detail = (
+        f"Two jobs matched on {', '.join(matched_on)} but could not be confirmed as the same posting. "
+        f"A: {_record_label(a)}. B: {_record_label(b)}. "
+        "Review whether these are the same role or distinct postings."
+    )
+
     append_uncertainty_log(
         UNCERTAINTY_LOG_PATH,
         build_uncertainty_entry(
@@ -350,15 +361,34 @@ def _log_potential_duplicate(a: dict, b: dict, matched_on: list[str]) -> None:
             field="job_identity",
             raw_value=f"{_normalized_job_key(a)} | {_normalized_job_key(b)}",
             normalized_value=", ".join(matched_on),
-            detail=(
-                f"Two jobs matched on {', '.join(matched_on)} but could not be confirmed as the same posting. "
-                f"A: {_record_label(a)}. B: {_record_label(b)}. "
-                "Review whether these are the same role or distinct postings."
-            ),
+            detail=detail,
             source="annotate_potential_duplicate_links",
             job_key=_normalized_job_key(a),
             severity="info",
         ),
+    )
+    record_system_warning(
+        severity="info",
+        category="job_identity_uncertainty",
+        source="annotate_potential_duplicate_links",
+        message=detail,
+        fingerprint=make_system_warning_fingerprint(
+            "job_identity",
+            "potential_duplicate_detected",
+            _normalized_job_key(a),
+            _normalized_job_key(b),
+            ",".join(matched_on),
+            detail,
+        ),
+        job_key=_normalized_job_key(a),
+        run_id=str(a.get(RECORD_RUN_STARTED_AT_KEY) or b.get(RECORD_RUN_STARTED_AT_KEY) or ""),
+        context={
+            "reason_code": "POTENTIAL_DUPLICATE_DETECTED",
+            "matched_on": matched_on,
+            "related_job_key": _normalized_job_key(b),
+            "related_title": str(b.get(RECORD_TITLE_KEY) or "").strip(),
+            "related_company": str(b.get(RECORD_COMPANY_KEY) or "").strip(),
+        },
     )
 
 
@@ -371,6 +401,11 @@ def _log_dedup_company_missing(a: dict, b: dict, normalized_title: str) -> None:
 
     missing_side = "B" if not company_b else "A"
 
+    detail = (
+        f"Title normalized to '{normalized_title}' matched between two jobs but company is missing on side {missing_side} — "
+        f"cannot confirm or deny duplicate. A: {_record_label(a)}. B: {_record_label(b)}."
+    )
+
     append_uncertainty_log(
         UNCERTAINTY_LOG_PATH,
         build_uncertainty_entry(
@@ -379,16 +414,36 @@ def _log_dedup_company_missing(a: dict, b: dict, normalized_title: str) -> None:
             field="company",
             raw_value=f"A: '{company_a}' | B: '{company_b}'",
             normalized_value=normalized_title,
-            detail=(
-                f"Title normalized to '{normalized_title}' matched between two jobs "
-                f"but company is missing on side {missing_side} — "
-                f"cannot confirm or deny duplicate. "
-                f"A: {_record_label(a)}. B: {_record_label(b)}."
-            ),
+            detail=detail,
             source="_potential_duplicate_match",
             job_key=_normalized_job_key(a),
             severity="warning",
         ),
+    )
+    record_system_warning(
+        severity="warning",
+        category="job_identity_uncertainty",
+        source="_potential_duplicate_match",
+        message=detail,
+        fingerprint=make_system_warning_fingerprint(
+            "job_identity",
+            "dedup_company_missing",
+            _normalized_job_key(a),
+            _normalized_job_key(b),
+            normalized_title,
+            company_a,
+            company_b,
+            detail,
+        ),
+        job_key=_normalized_job_key(a),
+        run_id=str(a.get(RECORD_RUN_STARTED_AT_KEY) or b.get(RECORD_RUN_STARTED_AT_KEY) or ""),
+        context={
+            "reason_code": "DEDUP_COMPANY_MISSING",
+            "normalized_title": normalized_title,
+            "company_a": company_a,
+            "company_b": company_b,
+            "missing_side": missing_side,
+        },
     )
 
 

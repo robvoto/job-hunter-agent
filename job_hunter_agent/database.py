@@ -59,7 +59,8 @@ CREATE TABLE IF NOT EXISTS signals (
 CREATE INDEX IF NOT EXISTS idx_signals_status   ON signals(status);
 CREATE INDEX IF NOT EXISTS idx_signals_category ON signals(category);
 
--- Global (admin) settings: one row per setting key
+-- Keyed JSON settings documents.
+-- Application-wide settings are stored as one document under "global_settings".
 CREATE TABLE IF NOT EXISTS global_settings (
     key         TEXT PRIMARY KEY,
     value       TEXT NOT NULL,
@@ -186,6 +187,35 @@ CREATE INDEX IF NOT EXISTS idx_occupation_title_cache_result
     ON occupation_title_cache(result);
 """
 
+_SYSTEM_WARNINGS_SCHEMA = """
+-- Central runtime warnings store for admin review.
+CREATE TABLE IF NOT EXISTS system_warnings (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    severity      TEXT NOT NULL,
+    category      TEXT NOT NULL,
+    source        TEXT NOT NULL,
+    message       TEXT NOT NULL,
+    fingerprint   TEXT NOT NULL UNIQUE,
+    status        TEXT NOT NULL DEFAULT 'unresolved' CHECK (status IN ('unresolved', 'reviewed', 'dismissed')),
+    job_key       TEXT,
+    run_id        TEXT,
+    context_json  TEXT NOT NULL DEFAULT '{}',
+    first_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+    last_seen_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    count         INTEGER NOT NULL DEFAULT 1 CHECK (count >= 1)
+);
+CREATE INDEX IF NOT EXISTS idx_system_warnings_status
+    ON system_warnings(status, last_seen_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_system_warnings_category
+    ON system_warnings(category);
+"""
+
+
+def ensure_system_warnings_schema(conn: sqlite3.Connection) -> None:
+    """Create the system warnings table/indexes if they do not already exist."""
+
+    conn.executescript(_SYSTEM_WARNINGS_SCHEMA)
+
 
 def _apply_migrations(conn: sqlite3.Connection) -> None:
     """One-time schema migrations applied in order on every startup (idempotent)."""
@@ -212,6 +242,7 @@ def init_db(db_path: Path | None = None) -> None:
     with db_conn(path) as conn:
         _apply_migrations(conn)
         conn.executescript(_SCHEMA)
+        ensure_system_warnings_schema(conn)
 
 
 EXPECTED_TABLES = {
@@ -229,6 +260,7 @@ EXPECTED_TABLES = {
     "profile_documents",
     "candidate_application_history",
     "agent_state",
+    "system_warnings",
     "occupation_title_cache",
 }
 

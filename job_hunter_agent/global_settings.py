@@ -15,7 +15,7 @@ from job_hunter_agent.runtime_helpers import log_settings_change
 
 logger = logging.getLogger(__name__)
 
-_DB_KEY = "global_settings"
+_GLOBAL_SETTINGS_DOCUMENT_KEY = "global_settings"
 # Rob-only local integration override. The file lives under data/runtime,
 # which is ignored by git and must not be shipped in desktop builds.
 _LOCAL_CANDIDATE_APPLICATION_HISTORY_OVERRIDE_PATH = (
@@ -38,7 +38,7 @@ def _db_load(db_path: Path | None = None) -> dict[str, Any] | None:
     from job_hunter_agent.database import db_conn
 
     with db_conn(db_path) as conn:
-        row = conn.execute("SELECT value FROM global_settings WHERE key = ?", (_DB_KEY,)).fetchone()
+        row = conn.execute("SELECT value FROM global_settings WHERE key = ?", (_GLOBAL_SETTINGS_DOCUMENT_KEY,)).fetchone()
     return json.loads(row["value"]) if row else None
 
 
@@ -54,7 +54,7 @@ def _db_save(settings: dict[str, Any], db_path: Path | None = None) -> None:
                 value      = excluded.value,
                 updated_at = excluded.updated_at
             """,
-            (_DB_KEY, json.dumps(settings, ensure_ascii=False)),
+            (_GLOBAL_SETTINGS_DOCUMENT_KEY, json.dumps(settings, ensure_ascii=False)),
         )
 
 

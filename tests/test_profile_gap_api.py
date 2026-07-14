@@ -262,6 +262,97 @@ def test_profile_gap_confirm_do_not_have_is_idempotent(client, monkeypatch):
     assert saved_profiles == [], "no save when term already in must_not_require_skills"
 
 
+def test_profile_gap_confirm_have_adds_candidate_eligibility(client, monkeypatch):
+    job_key = "job-eligibility"
+    monkeypatch.setattr(
+        "job_hunter_agent.routes.review.load_job_history",
+        lambda: _job_history_with_requirement_coverage(
+            job_key,
+            [
+                {
+                    "requirement": "Hold PV security clearance",
+                    "status": "not_shown",
+                    "requirement_type": "eligibility",
+                    "profile_name": "PV clearance",
+                    "matched_job_text": "Must hold a PV clearance",
+                }
+            ],
+        ),
+    )
+    existing_profile = {
+        "candidate_capabilities": [],
+        "candidate_eligibility": [],
+        "must_not_require_skills": [],
+    }
+    saved_profiles = []
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+    )
+
+    resp = client.post(
+        "/api/profile-gap",
+        json={
+            "job_key": job_key,
+            "capability_name": "PV clearance",
+            "action": "confirm_have",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
+    saved = saved_profiles[0]
+    assert saved["candidate_capabilities"] == []
+    assert saved["candidate_eligibility"][0]["name"] == "PV clearance"
+    assert saved["candidate_eligibility"][0]["value"] is True
+
+
+def test_profile_gap_confirm_do_not_have_adds_candidate_eligibility_false(client, monkeypatch):
+    job_key = "job-eligibility"
+    monkeypatch.setattr(
+        "job_hunter_agent.routes.review.load_job_history",
+        lambda: _job_history_with_requirement_coverage(
+            job_key,
+            [
+                {
+                    "requirement": "Hold PV security clearance",
+                    "status": "not_shown",
+                    "requirement_type": "eligibility",
+                    "profile_name": "PV clearance",
+                    "matched_job_text": "Must hold a PV clearance",
+                }
+            ],
+        ),
+    )
+    existing_profile = {
+        "candidate_capabilities": [],
+        "candidate_eligibility": [],
+        "must_not_require_skills": [],
+    }
+    saved_profiles = []
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+    )
+
+    resp = client.post(
+        "/api/profile-gap",
+        json={
+            "job_key": job_key,
+            "capability_name": "PV clearance",
+            "action": "confirm_do_not_have",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
+    saved = saved_profiles[0]
+    assert saved["candidate_eligibility"][0]["name"] == "PV clearance"
+    assert saved["candidate_eligibility"][0]["value"] is False
+
+
 def test_profile_gap_missing_capability_name_returns_400(client):
     resp = client.post(
         "/api/profile-gap",

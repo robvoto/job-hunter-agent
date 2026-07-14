@@ -35,6 +35,7 @@ from job_hunter_agent.profile_store import (
     DEFAULT_ONBOARDING_SETTINGS,
     DEFAULT_PROFILE,
     KEY_CANDIDATE_CAPABILITIES,
+    KEY_CANDIDATE_ELIGIBILITY,
     KEY_CV_MAX_PAGES,
     KEY_EVIDENCE_TIERS,
     KEY_MUST_NOT_REQUIRED_SKILLS,
@@ -64,6 +65,7 @@ ONBOARDING_RESET_FIELDS = (
     "star_evidence_text",
     "dominant_signal_clusters",
     KEY_MUST_NOT_REQUIRED_SKILLS,
+    KEY_CANDIDATE_ELIGIBILITY,
     KEY_TARGET_OCCUPATION_QUERIES,
 )
 
@@ -415,7 +417,10 @@ def run_onboarding(
     )
     patch.update(learning_patch)
 
-    brief = build_llm_profile_brief(capability_rules=patch.get(KEY_CANDIDATE_CAPABILITIES) or [])
+    brief = build_llm_profile_brief(
+        capability_rules=patch.get(KEY_CANDIDATE_CAPABILITIES) or [],
+        eligibility_rules=patch.get(KEY_CANDIDATE_ELIGIBILITY) or [],
+    )
     if brief:
         patch["llm_profile_brief"] = brief
 
@@ -486,6 +491,7 @@ def run_onboarding(
 
 def build_llm_profile_brief(
     capability_rules: Any,
+    eligibility_rules: Any = None,
 ) -> str:
     lines: list[str] = []
 
@@ -502,5 +508,19 @@ def build_llm_profile_brief(
 
     if preferred_rules:
         lines.append("Capability profile: " + "; ".join(preferred_rules[:20]))
+
+    eligibility_lines = []
+    eligibility = eligibility_rules if isinstance(eligibility_rules, list) else []
+    for rule in eligibility:
+        if not isinstance(rule, dict):
+            continue
+        name = str(rule.get("name") or "").strip()
+        if not name:
+            continue
+        value = "true" if bool(rule.get("value", True)) else "false"
+        eligibility_lines.append(f"{name} ({value})")
+
+    if eligibility_lines:
+        lines.append("Eligibility profile: " + "; ".join(eligibility_lines[:20]))
 
     return "\n".join(lines).strip()[:3000]

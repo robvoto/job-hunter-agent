@@ -84,3 +84,19 @@ def test_export_workspace_jobs_merges_existing_export(tmp_path, monkeypatch):
 
     assert fresh["job_count"] == 1
     assert fresh_payload["jobs"][0]["title"] == "Senior Business Analyst - refreshed"
+
+
+def test_workspace_export_uses_agency_recruiter_badge():
+    badges = workspace_export._build_badges(
+        {
+            "source": "seek",
+            "posting_channel_evidence": {
+                "kind": "agency_or_recruiter",
+                "source": "metadata_first",
+            },
+        },
+        "current",
+    )
+
+    assert "Agency recruiter" in badges
+    assert "Recruiter" not in badges

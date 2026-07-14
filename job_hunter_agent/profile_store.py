@@ -155,6 +155,7 @@ KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT = "primary_candidate_profile_context"
 KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT = "secondary_candidate_profile_context"
 KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT = "supplementary_candidate_profile_context"
 KEY_CANDIDATE_CAPABILITIES = "candidate_capabilities"
+KEY_CANDIDATE_ELIGIBILITY = "candidate_eligibility"
 KEY_SIGNAL_CLUSTERS = "dominant_signal_clusters"
 KEY_MUST_NOT_REQUIRED_SKILLS = "must_not_require_skills"
 KEY_ONBOARDING_SETTINGS = "onboarding_settings"
@@ -318,6 +319,7 @@ DEFAULT_PROFILE = {
         **DEFAULT_EVIDENCE_TIER_WEIGHTS,
     },
     KEY_CANDIDATE_CAPABILITIES: [],
+    KEY_CANDIDATE_ELIGIBILITY: [],
     "dominant_signal_clusters": [],
     "target_roles": [],
     "also_consider_roles": [],
@@ -623,6 +625,62 @@ def normalize_capability_rules(
     return cleaned
 
 
+def _normalize_eligibility_value(value: Any, *, default: bool = True) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value in (None, ""):
+        return default
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"true", "yes", "y", "1", "have", "has", "held", "present"}:
+            return True
+        if lowered in {"false", "no", "n", "0", "absent", "missing", "none", "not"}:
+            return False
+    return bool(value)
+
+
+def normalize_eligibility_rules(rules: list[dict[str, Any]] | list[str] | None) -> list[dict[str, Any]]:
+    """Normalise explicit eligibility facts while preserving original fact casing."""
+    cleaned: list[dict[str, Any]] = []
+    seen_names: set[str] = set()
+
+    for rule in rules or []:
+        if isinstance(rule, str):
+            name = str(rule or "").strip()
+            value = True
+            evidence: list[str] = []
+            needs_review = False
+        elif isinstance(rule, dict):
+            name = str(rule.get("name") or rule.get("label") or "").strip()
+            value = _normalize_eligibility_value(
+                rule.get("value") if "value" in rule else rule.get("has"),
+                default=True,
+            )
+            raw_evidence = rule.get("evidence") or rule.get("sources") or []
+            if isinstance(raw_evidence, str):
+                raw_evidence = [raw_evidence]
+            evidence = normalize_multiline_string_list(raw_evidence)
+            needs_review = bool(rule.get("needs_review"))
+        else:
+            continue
+
+        name_norm = re.sub(r"\s+", " ", name).strip().casefold()
+        if not name_norm or name_norm in seen_names:
+            continue
+        seen_names.add(name_norm)
+
+        cleaned.append(
+            {
+                "name": name,
+                "value": value,
+                "evidence": evidence,
+                "needs_review": needs_review,
+            }
+        )
+
+    return cleaned
+
+
 def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(profile, dict):
         raise TypeError("profile must be a dict")
@@ -664,6 +722,9 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
     merged[KEY_CANDIDATE_CAPABILITIES] = normalize_capability_rules(
         merged.get(KEY_CANDIDATE_CAPABILITIES, []),
         merged.get("onboarding_settings", {}),
+    )
+    merged[KEY_CANDIDATE_ELIGIBILITY] = normalize_eligibility_rules(
+        merged.get(KEY_CANDIDATE_ELIGIBILITY, [])
     )
     primary_titles, secondary_titles = normalize_title_pattern_lists(
         merged.get(KEY_PRIMARY_PATTERNS, []),

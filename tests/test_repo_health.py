@@ -418,6 +418,15 @@ def test_backlog_extraction_notes_preserve_review_csv_rules():
     assert "excluded" in backlog_notes
 
 
+def test_architecture_doc_has_core_file_map():
+    architecture = (ROOT_DIR / "docs" / "ARCHITECTURE.md").read_text(encoding="utf-8")
+
+    assert "Core File Map" in architecture
+    assert "workspace_renderer.py" in architecture
+    assert "profile_store.py" in architecture
+    assert "llm_gate.py" in architecture
+
+
 def test_ui_labels_json_does_not_contain_mojibake_markers():
     import json
 

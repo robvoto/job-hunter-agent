@@ -22,6 +22,10 @@ from job_hunter_agent.profile_store import (
     normalize_work_mode_preferences,
 )
 from job_hunter_agent.runtime_helpers import append_uncertainty_log, build_uncertainty_entry
+from job_hunter_agent.system_warnings import (
+    make_system_warning_fingerprint,
+    record_system_warning,
+)
 from job_hunter_agent.salary_utils import salary_includes_super_or_package, salary_max_value
 from job_hunter_agent.scoring_utils import build_scoring_source_text, extract_contract_months
 from job_hunter_agent.text_processing import compact_whitespace
@@ -67,6 +71,20 @@ def passes_preference_filters(record: dict, profile: Optional[dict] = None) -> T
         )
 
         append_uncertainty_log(UNCERTAINTY_LOG_PATH, entry)
+        record_system_warning(
+            severity="warning",
+            category="preference_uncertainty",
+            source="passes_preference_filters",
+            message=str(entry.get("detail") or "Preference could not be resolved."),
+            fingerprint=make_system_warning_fingerprint(
+                "preference_filter",
+                "WORK_TYPE_UNCLEAR",
+                str(record.get("job_key") or ""),
+                str(record.get("work_type") or ""),
+            ),
+            job_key=str(record.get("job_key") or ""),
+            context=entry,
+        )
 
         logger.warning(
             "[UNCERTAINTY] work_type unclear for job_key=%s — letting through (full detail in %s)",
@@ -109,6 +127,20 @@ def passes_preference_filters(record: dict, profile: Optional[dict] = None) -> T
             )
 
             append_uncertainty_log(UNCERTAINTY_LOG_PATH, entry)
+            record_system_warning(
+                severity="warning",
+                category="preference_uncertainty",
+                source="passes_preference_filters",
+                message=str(entry.get("detail") or "Preference could not be resolved."),
+                fingerprint=make_system_warning_fingerprint(
+                    "preference_filter",
+                    "WORK_MODE_UNCLEAR",
+                    str(record.get("job_key") or ""),
+                    str(record.get("work_mode") or ""),
+                ),
+                job_key=str(record.get("job_key") or ""),
+                context=entry,
+            )
 
             logger.warning(
                 "[UNCERTAINTY] work_mode unclear for job_key=%s — letting through (full detail in %s)",

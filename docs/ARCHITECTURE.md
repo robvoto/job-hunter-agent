@@ -40,7 +40,7 @@ Standard format: `source:platform_id` (e.g., `seek:7945621` or `linkedin:3984551
 
 | Layer             | Responsibility                                   |
 | ----------------- | ------------------------------------------------ |
-| Scraping          | Collect raw jobs from SEEK and LinkedIn          |
+| Scraping          | Collect raw jobs from SEEK, LinkedIn, APSJobs, and future enabled sources |
 | Parsing           | Normalize job structure and extract signals      |
 | Candidate Profile | Store runtime candidate profile support and preferences |
 | Filtering         | Deterministic rejection and fit gating           |
@@ -55,6 +55,18 @@ State-changing UI actions use `POST` plus CSRF protection. `GET /logout` is not 
 
 ---
 
+# Core File Map
+
+| Area | Primary files | Notes |
+| --- | --- | --- |
+| Candidate profile runtime | `job_hunter_agent/profile_store.py`, `job_hunter_agent/profile_learning.py`, `job_hunter_agent/cv_pipeline.py` | Owns the saved profile, eligibility facts, capability support, and onboarding extraction flow. |
+| Fit review and scoring | `job_hunter_agent/llm_gate.py`, `job_hunter_agent/source_learning.py`, `job_hunter_agent/fit_scoring.py`, `job_hunter_agent/capability_matching.py` | Builds LLM prompts, normalizes review payloads, and turns support evidence into explainable scores. |
+| Workspace UI | `job_hunter_agent/workspace_renderer.py`, `job_hunter_agent/workspace_service.py`, `templates/results.html` | Renders the shortlist, tabs, cards, filters, and workspace panel state. |
+| Settings and shared labels | `job_hunter_agent/server_helpers.py`, `job_hunter_agent/routes/pages.py`, `data/knowledge/ui_labels.json` | Loads centrally managed copy for settings, onboarding, and workspace labels. |
+| Runtime I/O and cache files | `job_hunter_agent/io_utils.py`, `job_hunter_agent/run_context.py`, `job_hunter_agent/scrape_finalize.py` | Loads/saves run state, cache files, and final workspace outputs. |
+
+---
+
 # Core Runtime Components
 
 ## Scraping
@@ -65,7 +77,7 @@ Primary modules:
 * `scrapers/seek.py` — SEEK low-level page helpers, selectors, URL building, detail payload fetch
 * `scrapers/linkedin.py` — LinkedIn via python-jobspy
 * `scrapers/apsjobs.py` — APSJobs Playwright scraper for government-seeking profiles
-* `source_runner.py` — routes enabled sources; when both SEEK and LinkedIn are enabled they run concurrently via `ThreadPoolExecutor(max_workers=2)` with isolated mutable state per source; APSJobs is routed separately and only runs when the profile selects government jobs; SEEK can pause a visible persistent browser for manual verification when the assisted flag is enabled
+* `source_runner.py` — routes enabled sources; enabled sources run concurrently via `ThreadPoolExecutor` with isolated mutable state per source when more than one source is active; step-through keeps the run serial for manual inspection; SEEK can pause a visible persistent browser for manual verification when the assisted flag is enabled
 * `source_connector.py` — orchestration entry point
 
 Responsibilities:
@@ -92,7 +104,7 @@ Storage: SQLite `user_profile` table (per user). Accessed via `profile_store.loa
 Responsibilities:
 
 * maintain runtime candidate profile support
-* preserve extracted capabilities
+* preserve extracted capabilities and explicit eligibility facts
 * maintain preference weights
 * preserve learning state
 * provide scoring context
@@ -162,6 +174,7 @@ Scoring inputs include:
 
 * title alignment
 * capability support
+* eligibility facts
 * profile support tiers
 * description quality
 * competitive fit

@@ -76,6 +76,7 @@ def test_default_profile_does_not_include_legacy_guidance_key():
     legacy_key = "".join(["llm", "_capability_naming_guidance"])
     assert legacy_key not in profile_store.DEFAULT_PROFILE
     assert "cv_text" not in profile_store.DEFAULT_PROFILE
+    assert "candidate_eligibility" in profile_store.DEFAULT_PROFILE
 
 
 def test_normalize_capability_rules_preserves_needs_review_when_aliases_exist():
@@ -92,6 +93,21 @@ def test_normalize_capability_rules_preserves_needs_review_when_aliases_exist():
 
     assert rules[0]["aliases"] == ["scrum"]
     assert rules[0]["needs_review"] is True
+
+
+def test_normalize_eligibility_rules_preserves_positive_and_negative_facts():
+    rules = profile_store.normalize_eligibility_rules(
+        [
+            {"name": "PV clearance", "value": True, "evidence": ["Baseline Security Clearance"]},
+            {"name": "AHPRA registration", "value": False, "evidence": []},
+        ]
+    )
+
+    assert rules[0]["name"] == "PV clearance"
+    assert rules[0]["value"] is True
+    assert rules[0]["evidence"] == ["Baseline Security Clearance"]
+    assert rules[1]["name"] == "AHPRA registration"
+    assert rules[1]["value"] is False
 
 
 def test_capability_level_tokens_and_display_labels_are_standardized():

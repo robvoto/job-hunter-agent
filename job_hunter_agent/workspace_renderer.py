@@ -118,6 +118,56 @@ TITLE_BLOCK_GUIDANCE_COPY = (
     "If a title clearly does not match what you want, enter the exact phrase you want blocked from future titles. "
     "This helps remove repeated noise from future results without guessing which title fragments are safe to exclude."
 )
+
+
+def _chunk_full_description_text(description: str) -> list[str]:
+    """Split a long description into readable display chunks without dropping content."""
+
+    cleaned = clean_display_text(unescape(description))
+    if not cleaned:
+        return []
+
+    normalized = re.sub(r"\s+(?=(?:\d+\.\s+|[-•–—]\s+))", "\n", cleaned)
+    chunks: list[str] = []
+
+    for block in (part.strip() for part in normalized.split("\n") if part.strip()):
+        sentences = [
+            compact_whitespace(part)
+            for part in re.split(r"(?<=[.!?])\s+(?=[A-Z0-9])", block)
+            if compact_whitespace(part)
+        ]
+        if len(sentences) <= 1:
+            chunks.append(block)
+            continue
+
+        current = ""
+        for sentence in sentences:
+            if not current:
+                current = sentence
+                continue
+            if len(current) + len(sentence) + 1 <= 260:
+                current = f"{current} {sentence}"
+            else:
+                chunks.append(current)
+                current = sentence
+        if current:
+            chunks.append(current)
+
+    return chunks or [cleaned]
+
+
+def _render_full_description_html(description: str) -> str:
+    chunks = _chunk_full_description_text(description)
+    if not chunks:
+        return ""
+
+    return (
+        '<div class="job-full-description-body">'
+        + "".join(
+            f'<p class="job-full-description">{safe_html(chunk)}</p>' for chunk in chunks
+        )
+        + "</div>"
+    )
 TITLE_BLOCK_PROMPT_COPY = "Enter the exact title phrase to block before description review."
 TITLE_BLOCK_HELP_SUMMARY = "Learn more"
 TITLE_BLOCK_MANUAL_HELP = "Use exact phrases from the title. Use commas to add more than one."
@@ -224,9 +274,9 @@ _WORKSPACE_PAGE_LABEL_KEYS = (
     "rejection_admin_tip_prefix",
     "rejection_admin_tip_link_text",
 )
-ARCHIVE_LABEL = "Saved Earlier Searches"
+ARCHIVE_LABEL = "Previously Saved Searches"
 ARCHIVE_BADGE_TOOLTIP = "This role was saved from an earlier search and kept on your workspace."
-ARCHIVE_CONTEXT_PREFIX = "Saved Earlier Searches"
+ARCHIVE_CONTEXT_PREFIX = "Previously Saved Searches"
 
 
 @lru_cache(maxsize=1)
@@ -381,6 +431,9 @@ def _build_checks_before_applying_items(
             status = compact_whitespace(str(row.get("status") or "")).lower()
             importance = compact_whitespace(str(row.get("importance") or "")).lower()
             label = friendly_capability_label(requirement) or requirement
+            if status == "invalid":
+                add(f"Needs review: {label}")
+                continue
             if importance == "mandatory" and status in {"mismatch", "not_shown"}:
                 add(_humanize_missing_requirement_warning(requirement))
             elif status == "partially_supported":
@@ -956,9 +1009,17 @@ def render_job_card(
         if channel_source in {"metadata_first", "company_or_domain_indicator"} and not channel_signal.get("needs_review"):
             badges.append(
                 render_badge(
-                    "Recruiter",
+                    _workspace_label(
+                        "workspace_card_labels",
+                        "posting_channel_agency_recruiter_badge",
+                        "Agency recruiter",
+                    ),
                     "badge-source-neutral",
-                    "Posted via a recruitment agency or third-party recruiter.",
+                    _workspace_label(
+                        "workspace_card_labels",
+                        "posting_channel_agency_recruiter_tooltip",
+                        "Posted via a recruitment agency or third-party recruiter.",
+                    ),
                 )
             )
         else:
@@ -1204,9 +1265,13 @@ def render_job_card(
             '<details class="job-summary-expand">'
             '<summary class="job-summary">'
             f'<span class="job-summary-text">{safe_html(role_summary)}</span>'
-            '<span class="job-summary-toggle" aria-hidden="true"></span>'
+            '<span class="job-summary-toggle" aria-hidden="true">'
+            '<span class="job-summary-toggle-icon"></span>'
+            '<span class="job-summary-toggle-label job-summary-toggle-label--closed">Show more</span>'
+            '<span class="job-summary-toggle-label job-summary-toggle-label--open">Show less</span>'
+            '</span>'
             "</summary>"
-            f'<div class="job-summary-expanded"><p class="job-full-description">{safe_html(display_trusted_desc)}</p></div>'
+            f'<div class="job-summary-expanded">{_render_full_description_html(display_trusted_desc)}</div>'
             "</details>"
         )
     reviewed_signal_matches = reviewed_signal_match_summary(display_record, scoring_profile)
@@ -1237,6 +1302,7 @@ def render_job_card(
         "partially_supported": "Partial match",
         "not_shown": "",
         "mismatch": "Not in profile",
+        "invalid": "Needs review",
     }
     profile_status_labels = {
         STATUS_CONFIRMED_HAVE: "In profile",
@@ -1268,7 +1334,9 @@ def render_job_card(
             row = merged_requirement_rows[key]
             row["coverage_status"] = str(item.get("status") or "not_shown").strip().lower()
             row["importance"] = str(item.get("importance") or "preferred").strip().lower()
+            row["profile_name"] = compact_whitespace(str(item.get("profile_name") or ""))
             row["capability_name"] = compact_whitespace(str(item.get("capability_name") or ""))
+            row["eligibility_name"] = compact_whitespace(str(item.get("eligibility_name") or ""))
             row["matched_job_text"] = compact_whitespace(str(item.get("matched_job_text") or ""))
     else:
         # Fallback: no coverage — show job_requirements with profile-match status
@@ -1294,9 +1362,18 @@ def render_job_card(
             profile_status = str(row.get("profile_status") or "").strip()
             coverage_status = str(row.get("coverage_status") or "").strip().lower()
             importance = str(row.get("importance") or "").strip().lower()
-            cap_name = compact_whitespace(str(row.get("capability_name") or ""))
+            profile_name = compact_whitespace(
+                str(
+                    row.get("profile_name")
+                    or row.get("capability_name")
+                    or row.get("eligibility_name")
+                    or ""
+                )
+            )
             matched_text = compact_whitespace(str(row.get("matched_job_text") or ""))
-            level_label = capability_level_lookup.get(_normalize_capability_token(cap_name), "")
+            level_label = capability_level_lookup.get(
+                _normalize_capability_token(profile_name), ""
+            )
 
             if coverage_status == "supported":
                 css_modifier = "supported"
@@ -1304,6 +1381,8 @@ def render_job_card(
                 css_modifier = "partially-supported"
             elif coverage_status == "mismatch":
                 css_modifier = "mismatch"
+            elif coverage_status == "invalid":
+                css_modifier = "invalid"
             elif coverage_status == "not_shown" and importance == "mandatory":
                 css_modifier = "mandatory-not-shown"
             elif coverage_status == "not_shown":
@@ -1329,11 +1408,11 @@ def render_job_card(
                 )
 
             detail_parts = []
-            if cap_name:
-                capability_detail = cap_name
+            if profile_name:
+                profile_detail = profile_name
                 if level_label:
-                    capability_detail = f"{capability_detail} ({level_label})"
-                detail_parts.append(capability_detail)
+                    profile_detail = f"{profile_detail} ({level_label})"
+                detail_parts.append(profile_detail)
             if matched_text and compact_whitespace(matched_text).lower() != req_text.lower():
                 detail_parts.append(f'"{matched_text}"')
             if detail_parts:

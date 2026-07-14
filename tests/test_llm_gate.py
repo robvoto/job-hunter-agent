@@ -46,7 +46,20 @@ def test_build_job_requirements_prompt_includes_work_type_guidance():
     assert "Unknown when the work type is unclear" in prompt
 
 
-def test_fit_review_prompt_excludes_learning_guidance():
+def test_fit_review_prompt_excludes_learning_guidance(monkeypatch):
+    monkeypatch.setattr(
+        llm_gate,
+        "load_profile",
+        lambda: {
+            "candidate_capabilities": [{"name": "stakeholder engagement", "level": "strong"}],
+            "candidate_eligibility": [{"name": "PV clearance", "value": True, "evidence": []}],
+            "match_preferences": {},
+            "salary_preferences": {},
+            "llm_profile_brief": "",
+            "candidate_profile_tiers": {},
+            "onboarding_settings": {},
+        },
+    )
     prompt = llm_gate._build_learning_prompt("Job description", fit_review=True)
 
     assert "Learning categories available:" not in prompt
@@ -57,6 +70,7 @@ def test_fit_review_prompt_excludes_learning_guidance():
     assert "Do not invent new categories" not in prompt
     assert "requirement_coverage" in prompt
     assert "fit_review.grade" in prompt
+    assert "Eligibility matrix:" in prompt
 
 
 def test_learning_only_prompt_retains_learning_guidance():
@@ -111,16 +125,22 @@ def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
             {
                 "requirement": "Stakeholder engagement",
                 "importance": "preferred",
+                "requirement_type": "capability",
                 "status": "supported",
+                "profile_name": "Stakeholder Engagement",
                 "capability_name": "Stakeholder Engagement",
+                "eligibility_name": "",
                 "matched_job_text": "work with stakeholders",
                 "profile_support": ["stakeholder management"],
             },
             {
                 "requirement": "Process mapping",
                 "importance": "preferred",
+                "requirement_type": "capability",
                 "status": "partially_supported",
+                "profile_name": "Process Mapping",
                 "capability_name": "Process Mapping",
+                "eligibility_name": "",
                 "matched_job_text": "map the current process",
                 "profile_support": ["process mapping"],
             },
@@ -600,6 +620,52 @@ def test_normalize_coverage_includes_importance_field():
     assert result[1]["importance"] == "nice_to_have"
 
 
+def test_normalize_coverage_supports_eligibility_items():
+    items = [
+        {
+            "requirement": "PV clearance",
+            "importance": "mandatory",
+            "requirement_type": "eligibility",
+            "status": "supported",
+            "profile_name": "PV clearance",
+            "matched_job_text": "Must hold PV clearance",
+            "profile_support": ["PV clearance"],
+        }
+    ]
+    result = llm_gate.normalize_llm_requirement_coverage(
+        items,
+        valid_eligibility_names={"pv clearance": "PV clearance"},
+    )
+    assert result[0]["requirement_type"] == "eligibility"
+    assert result[0]["profile_name"] == "PV clearance"
+    assert result[0]["eligibility_name"] == "PV clearance"
+    assert result[0]["capability_name"] == ""
+
+
+def test_normalize_coverage_converts_invalid_eligibility_match_to_not_shown():
+    items = [
+        {
+            "requirement": "Hold PV security clearance",
+            "importance": "mandatory",
+            "requirement_type": "eligibility",
+            "status": "supported",
+            "profile_name": "government environments",
+            "matched_job_text": "Must hold PV security clearance",
+            "profile_support": ["government environments"],
+        }
+    ]
+    result = llm_gate.normalize_llm_requirement_coverage(
+        items,
+        valid_eligibility_names={"pv clearance": "PV clearance"},
+    )
+    assert result[0]["requirement_type"] == "eligibility"
+    assert result[0]["status"] == "not_shown"
+    assert result[0]["requirement"] == "Hold PV security clearance"
+    assert result[0]["profile_name"] == ""
+    assert result[0]["eligibility_name"] == ""
+    assert result[0]["capability_name"] == ""
+
+
 def test_normalize_coverage_defaults_invalid_importance_to_preferred():
     items = [
         {
@@ -616,6 +682,55 @@ def test_normalize_coverage_defaults_invalid_importance_to_preferred():
         valid_capability_names={"python": "Python"},
     )
     assert result[0]["importance"] == "preferred"
+
+
+def test_normalize_coverage_converts_invalid_capability_match_to_not_shown():
+    items = [
+        {
+            "requirement": "SAP experience",
+            "importance": "mandatory",
+            "requirement_type": "capability",
+            "status": "supported",
+            "profile_name": "finance transformation",
+            "matched_job_text": "SAP experience",
+            "profile_support": ["finance transformation"],
+        }
+    ]
+    result = llm_gate.normalize_llm_requirement_coverage(
+        items,
+        valid_capability_names={"python": "Python"},
+    )
+    assert result[0]["requirement_type"] == "capability"
+    assert result[0]["status"] == "not_shown"
+    assert result[0]["requirement"] == "SAP experience"
+    assert result[0]["profile_name"] == ""
+    assert result[0]["capability_name"] == ""
+    assert result[0]["eligibility_name"] == ""
+
+
+def test_normalize_coverage_marks_invalid_requirement_type_for_review():
+    items = [
+        {
+            "requirement": "PV clearance",
+            "importance": "mandatory",
+            "requirement_type": "credential",
+            "status": "supported",
+            "profile_name": "PV clearance",
+            "matched_job_text": "Must hold PV clearance",
+            "profile_support": ["PV clearance"],
+        }
+    ]
+    result = llm_gate.normalize_llm_requirement_coverage(
+        items,
+        valid_capability_names={"pv clearance": "PV clearance"},
+        valid_eligibility_names={"pv clearance": "PV clearance"},
+    )
+    assert result[0]["requirement_type"] == "invalid"
+    assert result[0]["status"] == "invalid"
+    assert result[0]["requirement"] == "PV clearance"
+    assert result[0]["profile_name"] == ""
+    assert result[0]["eligibility_name"] == ""
+    assert result[0]["capability_name"] == ""
 
 
 # ── managed prompt line loading ───────────────────────────────────────────────
@@ -638,6 +753,7 @@ def test_build_requirement_coverage_guidance_includes_key_phrases():
     assert "requirement_coverage" in guidance
     assert "atomic" in guidance
     assert "Use at most" in guidance
+    assert "capability or eligibility" in guidance
     assert "Do not mark every row mandatory" in guidance
 
 

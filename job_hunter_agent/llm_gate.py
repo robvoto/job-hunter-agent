@@ -62,9 +62,12 @@ from job_hunter_agent.hard_blocker_rules import (
 )
 from job_hunter_agent.llm_protocol import (
     LLM_ALLOWED_COVERAGE_IMPORTANCES,
+    LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES,
     LLM_ALLOWED_DECISIONS,
     LLM_ALLOWED_GRADES,
     LLM_ALLOWED_TITLE_JUDGMENT_VERDICTS,
+    LLM_INVALID_COVERAGE_REQUIREMENT_TYPE,
+    LLM_INVALID_COVERAGE_STATUS,
     LLM_FIT_REVIEW_PROMPT_SHAPE,
     LLM_JOB_REQUIREMENTS_PROMPT_SHAPE,
     LLM_LEARNING_ONLY_PROMPT_SHAPE,
@@ -75,6 +78,7 @@ from job_hunter_agent.llm_protocol import (
     LLM_PROMPT_DEBUG_REASON_INTRO,
     LLM_PROMPT_DEFAULT_CAPABILITY_NAMING_GUIDANCE_HEADER,
     LLM_PROMPT_DEFAULT_FIT_REVIEW_GUIDANCE_HEADER,
+    LLM_PROMPT_ELIGIBILITY_HEADER,
     LLM_PROMPT_DO_NOT_INVENT,
     LLM_PROMPT_DO_NOT_SAVE,
     LLM_PROMPT_FIT_REVIEW_ONLY_INTRO,
@@ -95,6 +99,7 @@ from job_hunter_agent.runtime_helpers import is_desktop_runtime
 # Import at module level to allow monkeypatching in tests
 from job_hunter_agent.profile_store import (
     KEY_CANDIDATE_CAPABILITIES,
+    KEY_CANDIDATE_ELIGIBILITY,
     get_candidate_profile_tier_weights,
     get_candidate_profile_tiers,
     load_profile,
@@ -300,8 +305,9 @@ class _LLMReviewDecision(BaseModel):
 class _LLMRequirementCoverageItem(BaseModel):
     requirement: str
     importance: str = "preferred"
+    requirement_type: str = "capability"
     status: str
-    capability_name: str = ""
+    profile_name: str = ""
     matched_job_text: str = ""
     profile_support: list[str] = Field(default_factory=list)
 
@@ -405,6 +411,7 @@ def llm_is_enabled() -> bool:
 def build_profile_prompt_context() -> str:
     from job_hunter_agent.profile_store import (
         KEY_CANDIDATE_CAPABILITIES,
+        KEY_CANDIDATE_ELIGIBILITY,
         KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT,
         KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT,
         KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT,
@@ -419,6 +426,7 @@ def build_profile_prompt_context() -> str:
     prompt_templates = prompt_settings[KEY_LLM_PROMPT_TEMPLATES]
     prompt_evidence_tiers = prompt_settings[KEY_LLM_PROMPT_EVIDENCE_TIERS]
     capability_rules = profile.get(KEY_CANDIDATE_CAPABILITIES, [])
+    eligibility_rules = profile.get(KEY_CANDIDATE_ELIGIBILITY, [])
     salary_preferences = profile.get("salary_preferences", {})
     match_preferences = (
         profile.get("match_preferences", {})
@@ -453,6 +461,28 @@ def build_profile_prompt_context() -> str:
                 if aliases:
                     label += f" ({aliases})"
                 parts.append(label)
+
+    if isinstance(eligibility_rules, list) and eligibility_rules:
+        parts.append(LLM_PROMPT_ELIGIBILITY_HEADER)
+        for rule in eligibility_rules[: get_llm_capability_rules_max_items()]:
+            if not isinstance(rule, dict):
+                continue
+            name = str(rule.get("name") or "").strip()
+            if not name:
+                continue
+            value = "true" if bool(rule.get("value", True)) else "false"
+            evidence = rule.get("evidence") or []
+            evidence_text = ""
+            if isinstance(evidence, list):
+                evidence_text = ", ".join(
+                    str(item).strip()
+                    for item in evidence[: get_llm_capability_rule_aliases_max_items()]
+                    if str(item).strip()
+                )
+            label = f"- {name}: {value}"
+            if evidence_text:
+                label += f" ({evidence_text})"
+            parts.append(label)
 
     minimum_salary_yearly = int(salary_preferences.get("minimum_salary_yearly", 0) or 0)
     minimum_daily_rate = int(salary_preferences.get("minimum_daily_rate", 0) or 0)
@@ -532,6 +562,8 @@ def build_fit_review_guidance(profile: dict[str, Any] | None = None) -> str:
 def build_requirement_coverage_guidance() -> str:
     parts = [
         f"Use at most {get_llm_job_requirements_max_items()} requirement_coverage items.",
+        "Classify each requirement as capability or eligibility.",
+        "Use capability_name for capability requirements and profile_name for eligibility requirements.",
     ]
     parts.extend(f"- {line}" for line in REQUIREMENT_COVERAGE_DEFAULT_LINES)
     return "\n".join(parts)
@@ -714,7 +746,7 @@ def normalize_llm_learning_candidates(
 
 
 _ALLOWED_REQUIREMENT_COVERAGE_STATUSES = frozenset(
-    {"supported", "partially_supported", "not_shown", "mismatch"}
+    {"supported", "partially_supported", "not_shown", "mismatch", LLM_INVALID_COVERAGE_STATUS}
 )
 
 # Importance weights used by derive_fit_review_grade.
@@ -741,6 +773,20 @@ def _build_valid_capability_lookup(
     return lookup
 
 
+def _build_valid_eligibility_lookup(
+    valid_eligibility_names: dict[str, str] | None,
+) -> dict[str, str] | None:
+    if valid_eligibility_names is None:
+        return None
+    lookup: dict[str, str] = {}
+    for key, value in valid_eligibility_names.items():
+        normalized_key = compact_whitespace(key).lower()
+        canonical_value = compact_whitespace(value)
+        if normalized_key and canonical_value:
+            lookup[normalized_key] = canonical_value
+    return lookup
+
+
 def _normalize_capability_name(
     value: Any, valid_capability_names: dict[str, str] | None = None
 ) -> str:
@@ -756,6 +802,7 @@ def _normalize_capability_name(
 def normalize_llm_requirement_coverage(
     value: Any,
     valid_capability_names: dict[str, str] | None = None,
+    valid_eligibility_names: dict[str, str] | None = None,
     max_items: int | None = None,
 ) -> list[dict[str, Any]]:
     if max_items is None:
@@ -770,7 +817,8 @@ def normalize_llm_requirement_coverage(
     if not isinstance(value, list):
         return []
 
-    valid_lookup = _build_valid_capability_lookup(valid_capability_names)
+    valid_capability_lookup = _build_valid_capability_lookup(valid_capability_names)
+    valid_eligibility_lookup = _build_valid_eligibility_lookup(valid_eligibility_names)
     results: list[dict[str, Any]] = []
     seen: set[str] = set()
     for item in value:
@@ -784,7 +832,49 @@ def normalize_llm_requirement_coverage(
             raw_importance if raw_importance in LLM_ALLOWED_COVERAGE_IMPORTANCES else "preferred"
         )
         status = compact_whitespace(item.get("status")).lower()
-        capability_name = _normalize_capability_name(item.get("capability_name"), valid_lookup)
+        raw_requirement_type = compact_whitespace(
+            item.get("requirement_type") or item.get("type")
+        ).lower()
+        if raw_requirement_type:
+            requirement_type = raw_requirement_type
+            requirement_type_is_valid = requirement_type in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES
+            if not requirement_type_is_valid:
+                requirement_type = LLM_INVALID_COVERAGE_REQUIREMENT_TYPE
+        else:
+            requirement_type = "capability"
+            requirement_type_is_valid = True
+        profile_name_raw = item.get("profile_name")
+        if not profile_name_raw:
+            profile_name_raw = item.get("capability_name") or item.get("eligibility_name")
+        profile_name = compact_whitespace(profile_name_raw)
+        capability_name = ""
+        eligibility_name = ""
+        if requirement_type_is_valid and requirement_type == "eligibility":
+            eligibility_name = (
+                valid_eligibility_lookup.get(profile_name.lower(), "")
+                if valid_eligibility_lookup is not None
+                else profile_name.lower()
+            )
+            profile_name = eligibility_name or profile_name
+        elif requirement_type_is_valid:
+            capability_name = (
+                valid_capability_lookup.get(profile_name.lower(), "")
+                if valid_capability_lookup is not None
+                else profile_name.lower()
+            )
+            profile_name = capability_name or profile_name
+        else:
+            logger.warning(
+                "[LLM][WARN] purpose=fit_review invalid_requirement_type requirement=%r requirement_type=%r status=%s importance=%s",
+                requirement,
+                raw_requirement_type,
+                status,
+                importance,
+            )
+            status = LLM_INVALID_COVERAGE_STATUS
+            profile_name = ""
+            capability_name = ""
+            eligibility_name = ""
         matched_job_text = compact_whitespace(
             item.get("matched_job_text") or item.get("matched_text")
         )
@@ -803,14 +893,32 @@ def normalize_llm_requirement_coverage(
                 profile_support.append(cleaned)
         if not requirement or status not in _ALLOWED_REQUIREMENT_COVERAGE_STATUSES:
             continue
-        if status in {"supported", "partially_supported"} and not capability_name:
+        if requirement_type == LLM_INVALID_COVERAGE_REQUIREMENT_TYPE:
+            profile_name = ""
+            capability_name = ""
+            eligibility_name = ""
+        if requirement_type == "eligibility" and status in {"supported", "partially_supported"} and not eligibility_name:
+            logger.warning(
+                "[LLM][WARN] purpose=fit_review requirement_coverage_missing_eligibility requirement=%r status=%s importance=%s",
+                requirement,
+                status,
+                importance,
+            )
+            status = "not_shown"
+            profile_name = ""
+            capability_name = ""
+            eligibility_name = ""
+        if requirement_type != "eligibility" and status in {"supported", "partially_supported"} and not capability_name:
             logger.warning(
                 "[LLM][WARN] purpose=fit_review requirement_coverage_missing_capability requirement=%r status=%s importance=%s",
                 requirement,
                 status,
                 importance,
             )
-            continue
+            status = "not_shown"
+            profile_name = ""
+            capability_name = ""
+            eligibility_name = ""
         key = requirement.lower()
         if key in seen:
             continue
@@ -819,8 +927,11 @@ def normalize_llm_requirement_coverage(
             {
                 "requirement": requirement,
                 "importance": importance,
+                "requirement_type": requirement_type,
                 "status": status,
+                "profile_name": profile_name,
                 "capability_name": capability_name,
+                "eligibility_name": eligibility_name,
                 "matched_job_text": matched_job_text,
                 "profile_support": profile_support,
             }
@@ -949,7 +1060,9 @@ def _require_complete_keep_requirement_coverage(
 
 
 def normalize_llm_review_payload(
-    value: Any, valid_capability_names: dict[str, str] | None = None
+    value: Any,
+    valid_capability_names: dict[str, str] | None = None,
+    valid_eligibility_names: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     if isinstance(value, dict):
         fit_review = value.get("fit_review")
@@ -965,6 +1078,7 @@ def normalize_llm_review_payload(
             requirement_coverage = normalize_llm_requirement_coverage(
                 value.get("requirement_coverage"),
                 valid_capability_names=valid_capability_names,
+                valid_eligibility_names=valid_eligibility_names,
             )
             job_requirements = normalize_llm_job_requirements(value.get("job_requirements"))
             derived_grade = derive_fit_review_grade(requirement_coverage, job_requirements)
@@ -1220,11 +1334,17 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
         raise RuntimeError("LLM review requested but no provider key is configured")
 
     valid_capability_names: dict[str, str] | None = None
+    valid_eligibility_names: dict[str, str] | None = None
     if fit_review:
         profile = load_profile()
         valid_capability_names = {
             str(r.get("name") or "").strip().lower(): str(r.get("name") or "").strip()
             for r in profile.get(KEY_CANDIDATE_CAPABILITIES, [])
+            if isinstance(r, dict) and str(r.get("name") or "").strip()
+        }
+        valid_eligibility_names = {
+            str(r.get("name") or "").strip().lower(): str(r.get("name") or "").strip()
+            for r in profile.get(KEY_CANDIDATE_ELIGIBILITY, [])
             if isinstance(r, dict) and str(r.get("name") or "").strip()
         }
         if not valid_capability_names:
@@ -1310,7 +1430,9 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
         raise ValueError("LLM review payload is missing parsed output")
 
     payload = normalize_llm_review_payload(
-        parsed.model_dump(), valid_capability_names=valid_capability_names
+        parsed.model_dump(),
+        valid_capability_names=valid_capability_names,
+        valid_eligibility_names=valid_eligibility_names,
     )
     payload.update(_llm_usage_summary(resp, model))
     if fit_review:

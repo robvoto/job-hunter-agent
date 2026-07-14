@@ -2,37 +2,59 @@
 
 Private reference doc. Not committed to the repo.
 
-Last checked against code: 2026-06-08.
+Last checked against code: 2026-07-11.
 
 ---
 
 ## What the score is
 
-The fit score is a **role-fit ranking signal**, not a qualification percentage.
+The fit score is now **Requirement Fit %**.
 
-A score of 57 does **not** mean the candidate is 57% qualified. It means the job is ranked at that level by the current scoring rules, grade band, preference signals, and blockers.
+It answers one question only:
 
-The system answers:
+> How well does the candidate profile cover the job's stated requirements?
 
-> Which jobs should be reviewed first, which are stretches, and which should be pushed down or rejected?
+A score of 57 means the candidate covered about 57% of the weighted job requirements based on requirement importance and the typed requirement coverage returned by review.
 
-It does **not** answer:
-
-> Is the candidate objectively qualified for this job?
+It does **not** include title bonus, salary, location, freshness, easy/quick apply, viewed status, LLM grade points, or grade-band clamping.
 
 ---
 
 ## Current implemented model
 
-The current model is **band-anchored scoring**.
+The current model is **requirement-coverage scoring**.
 
-The review grade defines the allowed score band. Other signals move the job inside that band. Hard blockers are applied after the band clamp and can force the score near zero.
-
-The scoring rules are loaded from:
+The LLM still extracts job requirements and maps each requirement to either a candidate capability or an explicit eligibility fact. `fit_scoring.py` then calculates:
 
 ```text
-data/knowledge/scoring_rules.json
+Requirement Fit % =
+weighted capability credit and eligibility support
+/
+sum(requirement importance weight)
+× 100
 ```
+
+Requirement importance weights:
+
+```text
+mandatory = 3.0
+strongly_preferred = 2.0
+preferred = 1.0
+nice_to_have = 0.25
+```
+
+Candidate capability credits:
+
+```text
+strong = 1.00
+working = 0.70
+basic = 0.35
+low / limited_depth = 0.15
+not_shown = 0
+mismatch = 0
+```
+
+If the LLM marks a requirement as covered but the mapped capability or eligibility fact cannot be resolved in the candidate profile, the score does not get inflated. A structured uncertainty event is appended to `output/uncertainty.jsonl` with reason code `requirement_capability_mapping_uncertain`.
 
 The main scoring consumer is:
 
@@ -40,7 +62,7 @@ The main scoring consumer is:
 job_hunter_agent/fit_scoring.py
 ```
 
-The requirement-coverage grade derivation is in:
+The LLM requirement extraction and coverage normalisation remain in:
 
 ```text
 job_hunter_agent/llm_gate.py
@@ -87,15 +109,14 @@ flowchart TD
     K --> L[Extract requirements<br/>and map to candidate capabilities]
     J --> L
     L --> M{Requirement coverage usable?}
-    M -- No --> M1[Use model grade fallback<br/>flag coverage missing]
-    M -- Yes --> N[Derive grade from coverage]
+    M -- No --> M1[Score 0<br/>flag coverage missing]
+    M -- Yes --> N[Calculate Requirement Fit %<br/>from importance × capability level]
     M1 --> O[Build frozen score breakdown]
     N --> O
-    O --> P[Apply grade band clamp<br/>score stays inside grade band]
-    P --> Q{Hard blockers after review?}
-    Q -- Yes --> Q1[Apply hard blocker penalty<br/>force score near zero]
-    Q -- No --> R[Store frozen score + explanation]
-    Q1 --> R
+    O --> P{Hard blockers after review?}
+    P -- Yes --> P1[Apply hard blocker penalty<br/>force score to zero]
+    P -- No --> R[Store frozen Requirement Fit % + explanation]
+    P1 --> R
     R --> S[Render recency and history signals<br/>outside the fit score]
     S --> T[Show ranked job to user<br/>with explanation]
     T --> U{User action}
@@ -116,18 +137,18 @@ flowchart TD
 | Title and occupation filtering | Job title, profile target roles, target occupation queries | `filters.py`, `occupation_taxonomy.py`, `docs/OCCUPATION_TAXONOMY_RATIONALE.md` | Title reason, O*NET near/far/uncertain signal | Approved hard blockers may stop the job before LLM. Uncertain signals continue. |
 | Description preparation | Full description, structured scraper metadata | `description_compactor.py`, `description_trust.py`, config/rules governance | `fit_source_text`, description trust metadata | Unsafe compaction is skipped explicitly; full description remains preserved. |
 | Review outcome | Title/content signals and fit source text | `llm_gate.py`, `source_learning.py` deterministic shortcut | `llm_fit_grade`, requirement coverage, rationale fields | LLM call may be avoided only by explicit deterministic reject rules. Deterministic keep candidates still require full LLM requirement coverage before any final KEEP is saved. |
-| Requirement coverage | Extracted job requirements, candidate capabilities | `llm_gate.py`, capability knowledge/profile modules | Supported / partially supported / not shown / mismatch coverage | Coverage drives grade when present. Unsupported capability claims are dropped. |
-| Frozen scoring | Reviewed job record with `llm_fit_grade` | `fit_scoring.py`, `data/knowledge/scoring_rules.json` | Frozen score and score breakdown | Grade band clamps non-hard-block score. Hard blockers apply after clamp. |
-| Display scoring | Frozen score | `fit_scoring.py`, UI consumers | Displayed score and ordering | Recency is handled separately from fit score and should not be treated as fit evidence. |
+| Requirement coverage | Extracted job requirements, candidate capabilities | `llm_gate.py`, capability knowledge/profile modules | Supported / partially supported / not shown / mismatch coverage | Coverage is the source of truth for Requirement Fit %. Unsupported capability mappings are logged to `output/uncertainty.jsonl`. |
+| Frozen scoring | Reviewed job record with requirement coverage | `fit_scoring.py` | Frozen Requirement Fit % and score breakdown | No title, salary, location, freshness, easy apply, viewed status, LLM grade points, or grade-band clamp. Hard blockers remain visible and can force score to zero. |
+| Display scoring | Frozen Requirement Fit % | `fit_scoring.py`, UI consumers | Displayed score and ordering | Recency is handled separately from fit score and should not be treated as fit evidence. |
 | Human review and learning | User keep/skip/apply/reject decisions | Review history, learning modules, backlog if needed | Future profile/rule improvements | Learning must not silently become hidden scoring logic. |
 
 ### Handover points
 
-The main handover from filtering to scoring is the reviewed job record containing `llm_fit_grade`. If that grade is missing, scoring must stop rather than inventing a score.
+The main handover from filtering to scoring is the reviewed job record containing LLM requirement coverage. If the reviewed record is missing its LLM review state, scoring must stop rather than inventing a score.
 
-The main handover from LLM review to scoring is `requirement_coverage`. Coverage is evidence for the grade; the score breakdown displays it for transparency but does not add a second independent capability bonus. A deterministic keep candidate is not complete until this coverage exists and the final reviewed record is saved from the LLM path.
+The main handover from LLM review to scoring is `requirement_coverage`. Coverage now directly drives Requirement Fit %. A deterministic keep candidate is not complete until this coverage exists and the final reviewed record is saved from the LLM path.
 
-The main handover from frozen scoring to the UI is the stored frozen score plus explanation entries. The user-facing fit explanation should come from `requirement_coverage` only. Recency remains part of the UI and history flow, but it is not new evidence that the candidate fits the job.
+The main handover from frozen scoring to the UI is the stored frozen Requirement Fit % plus explanation entries. The user-facing fit explanation should come from `requirement_coverage` only. Recency remains part of the UI and history flow, but it is not new evidence that the candidate fits the job.
 
 ### End states
 
@@ -137,23 +158,15 @@ A job can end as pre-LLM rejected, LLM/deterministic rejected, kept for review, 
 
 ## Grade bands
 
-The grade controls the non-hard-block score range.
+Requirement Fit % is calculated directly from requirement coverage.
 
-| Grade | Base points | Band | Meaning |
-|---|---:|---:|---|
-| EXCELLENT | 78 | 88-100 | Exceptional alignment |
-| STRONG | 52 | 68-87 | Strong fit |
-| SOLID | 32 | 48-67 | Decent fit |
-| WEAK | 18 | 28-47 | Limited alignment |
-| POOR | 6 | 8-27 | Poor alignment |
-| MISMATCH | 0 | 0-7 | Clear mismatch |
-
-The score is first built from normal score entries. Then the grade band is applied:
-
-- If the raw non-hard-block score is below the grade floor, a positive **Grade band floor** entry is added.
-- If the raw non-hard-block score is above the grade ceiling, a negative **Grade band ceiling** entry is added.
-- Hard block penalties are excluded from the band clamp.
-- Final score is capped between 0 and 100.
+| Input | Behaviour |
+|---|---|
+| Requirement importance | Determines how much the requirement matters in the denominator. |
+| Mapped candidate capability | Resolves which candidate capability covers the requirement. |
+| Candidate capability level | Determines coverage credit: strong, working, basic, low, or zero. |
+| `not_shown` / `mismatch` | Adds zero coverage and is counted separately. |
+| Unknown mapped capability | Adds zero coverage and writes `requirement_capability_mapping_uncertain` to `output/uncertainty.jsonl`. |
 
 The raw score breakdown behind this table is not shown on job cards outside debug mode. In debug mode it appears in the card's "Debug: LLM fit review" panel — see [Job Card Layout](USER_GUIDE.md#job-card-layout) in the user guide.
 
@@ -165,21 +178,22 @@ The normal-mode "Why this is a good fit" section should come from `requirement_c
 
 ### 1. Review state gate
 
-A job cannot be scored unless `llm_fit_grade` is present.
+A job cannot be scored unless the LLM review state is complete.
 
 If the job has not been reviewed, scoring raises an error instead of inventing a score.
 
-### 2. Core fit entries
+### 2. Requirement Fit % entries
 
-Core entries include:
+The main score includes only requirement coverage:
 
 | Signal | Current behaviour |
 |---|---|
-| Title direct match | Adds `title_direct` points, currently 15 before weighting. |
-| Title secondary/potential match | Adds `title_secondary` points, currently 4 before weighting. |
-| LLM / derived grade | Adds base grade points from `llm_grade_points`. |
-| Requirement coverage | Displayed as transparency entries with value 0. |
-| Description capture incomplete | Adds a negative entry, currently -8 before weighting. |
+| Requirement coverage | Directly calculates Requirement Fit %. |
+| Candidate capability level | Strong / working / basic / low determines coverage credit. |
+| Candidate eligibility fact | True eligibility support counts as covered; false or missing facts do not. |
+| Mandatory gaps | Shown as warnings with zero additional score effect. |
+| Mandatory weak coverage | Shown as warnings with zero additional score effect. |
+| Unknown mapped capability or eligibility fact | Logged to `output/uncertainty.jsonl` for later review. |
 
 ### 3. Context entries
 
@@ -194,24 +208,22 @@ Salary, location, freshness, Easy Apply / Quick Apply, viewed status, and action
 | Already viewed | Shown as history-aware display state. |
 | Checks before applying | Shown as a review panel for missing requirements, red flags, salary issues, and similar pre-apply checks. |
 
-### 5. Grade band clamp
-
-The non-hard-block entries are summed and clamped to the current grade band.
+### 5. Frozen/display score
 
 There are two scoring variants:
 
 | Function | Behaviour |
 |---|---|
-| `fit_score_breakdown_frozen` / `fit_score_frozen` | Stored at scrape/review time. Excludes freshness and viewed status. |
-| `fit_score_and_breakdown_displayed` / `fit_score_displayed` | Display-time score. Starts from frozen score. Falls back to live scoring for old records without a frozen score. |
+| `fit_score_breakdown_frozen` / `fit_score_frozen` | Stored at scrape/review time as Requirement Fit %. |
+| `fit_score_and_breakdown_displayed` / `fit_score_displayed` | Display-time score. Starts from frozen Requirement Fit %. Falls back to live scoring for old records without a frozen score. |
 
 ### 6. Hard blockers
 
-Hard blockers are applied after the band clamp.
+Hard blockers are applied after Requirement Fit % is calculated.
 
 Each hard blocker currently adds a `hard_block_penalty` of -100.
 
-This means a job can have a good grade but still be forced near zero if it has a hard blocker.
+This means a job can have good requirement coverage but still be forced to zero if it has a hard blocker.
 
 ---
 
@@ -223,8 +235,8 @@ Allowed coverage statuses:
 
 | Status | Meaning |
 |---|---|
-| supported | Requirement directly supported by a known profile capability. Must include `capability_name`. |
-| partially_supported | Partial or indirect support. Must include `capability_name`. |
+| supported | Requirement directly supported by a known profile capability or eligibility fact. Must include the matching profile fact name. |
+| partially_supported | Partial or indirect support. Must include the matching profile fact name. |
 | not_shown | No candidate evidence found. |
 | mismatch | Explicit conflict. |
 
@@ -428,24 +440,24 @@ Current direction:
 | Capability mentions adding independent score points | Requirement coverage drives grade; coverage entries are transparency-only in the score breakdown. |
 | Broad "fit" claims based on preferences or logistics | Preferences move ranking only; they do not prove mandatory fit. |
 | Location / approved-experience snippets in the fit summary | Keep them out of the normal fit explanation; show them as badges, filters, or debug-only detail instead. |
-| Hidden hardcoded scoring budget | Band-anchored score controlled by `data/knowledge/scoring_rules.json`. |
+| Hidden hardcoded scoring budget | Main score is direct Requirement Fit %, not a band-anchored budget. |
 | Hardcoded judgement buried in code | Move values to managed config / global settings where possible. |
 | Signals directly boosting score | Reviewed signals inform future classification/mapping; they do not directly add points. |
 | Scoring every scraped record regardless of review state | Scoring is blocked unless `llm_fit_grade` exists. |
 
 Important wording rule:
 
-> The system may still contain calibrated rules, but the intended architecture is not "heuristics decide fit." The intended architecture is "LLM extracts requirements, structured coverage derives the grade, configured scoring ranks the reviewed job, and remaining heuristics are explicit and auditable."
+> The system may still contain calibrated rules, but the intended architecture is not "heuristics decide fit." The intended architecture is "LLM extracts requirements, structured coverage maps to candidate capabilities, Requirement Fit % is calculated from capability levels, and remaining heuristics are explicit and auditable."
 
 ---
 
 ## Current known limitations
 
-1. The grade derivation is coverage-based from `requirement_coverage`. A `KEEP` review is invalid unless `requirement_coverage` is present and non-empty.
-2. Mandatory missing evidence does not automatically reject. It reduces the weighted coverage score but may still allow weak/solid outcomes depending on the rest of the coverage.
-3. Preference signals can move jobs within grade bands and can affect display-time ranking, but they are not capability evidence.
+1. A `KEEP` review is invalid unless `requirement_coverage` is present and non-empty.
+2. Mandatory missing evidence does not automatically reject. It contributes zero coverage and is shown as a warning.
+3. Preference signals no longer affect the main fit score. They can still exist as metadata, filters, badges, or separate ranking logic.
 4. Deterministic shortcuts can still produce early rejects without an LLM call. Deterministic keep candidates must still be confirmed by the LLM fit review before they become final KEEP rows. Audit the shortcut trigger via `det_rule`; audit final keeps via `review_source` and `requirement_coverage`.
-5. Some older docs and backlog items may still use broad "heuristic" language. Treat that as technical debt unless it points to an actual remaining hardcoded judgement.
+5. Some older docs and backlog items may still use broad "heuristic" or "grade band" language. Treat that as technical debt unless it points to an actual remaining hardcoded judgement.
 
 ---
 
@@ -464,8 +476,8 @@ Safe changes:
 
 Unsafe changes without explicit approval:
 
-- changing grade bands
-- changing coverage thresholds
+- changing requirement importance weights
+- changing capability level credits
 - adding new scoring categories
 - making mandatory gaps auto-reject
 - changing deterministic shortcut thresholds

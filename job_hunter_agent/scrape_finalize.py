@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 from job_hunter_agent.io_utils import (
     save_job_history,
     save_llm_cache,
+    prune_llm_cache_for_current_profile,
     write_debug_json,
     write_review_data,
     write_run_stats,
@@ -24,6 +25,10 @@ from job_hunter_agent.posting_utils import parse_timestamp
 from job_hunter_agent.review_insights import build_review_data
 from job_hunter_agent.run_context import ScrapeRunContext
 from job_hunter_agent.run_control import run_stop_requested
+from job_hunter_agent.system_warnings import (
+    make_system_warning_fingerprint,
+    record_system_warning,
+)
 
 NO_FRESH_CARDS_ERROR = "No fresh cards were captured in this run."
 RUN_SUMMARY_PATH = OUTPUT_DIR / "last_run_summary.txt"
@@ -333,6 +338,25 @@ def _print_run_summary(run_stats: dict) -> None:
     sys.stderr.flush()
 
 
+def _record_run_stats_warnings(run_stats: dict) -> None:
+    warnings = [str(item).strip() for item in run_stats.get("warnings", []) if str(item).strip()]
+    if not warnings:
+        return
+    run_id = str(run_stats.get("last_run_attempt_at") or "").strip()
+    for warning in warnings:
+        record_system_warning(
+            severity="warning",
+            category="run_stats_warning",
+            source="run_stats",
+            message=warning,
+            fingerprint=make_system_warning_fingerprint("run_stats_warning", warning),
+            run_id=run_id,
+            context={
+                "warning": warning,
+            },
+        )
+
+
 def _audit_row_has_details(row: dict) -> bool:
     return int(row.get("details_length") or 0) > 0
 
@@ -399,6 +423,15 @@ def finalize_scrape_run(
             context.dashboard_debug_mode,
         )
 
+        context.llm_cache, pruned_llm_cache_count = prune_llm_cache_for_current_profile(
+            context.llm_cache
+        )
+        if pruned_llm_cache_count:
+            logger.info(
+                "[LLM][CACHE] pruned %d stale cache entries for the active profile fingerprint",
+                pruned_llm_cache_count,
+            )
+
         save_llm_cache(context.llm_cache)
 
         save_job_history(context.job_history)
@@ -410,6 +443,7 @@ def finalize_scrape_run(
 
         write_review_data(build_review_data(context.previous_audit_rows, [], context.profile))
 
+        _record_run_stats_warnings(run_stats)
         write_run_stats(run_stats)
 
         workspace_path = get_workspace_results_path()
@@ -518,12 +552,22 @@ def finalize_scrape_run(
         workspace_records=workspace_records,
     )
 
+    context.llm_cache, pruned_llm_cache_count = prune_llm_cache_for_current_profile(
+        context.llm_cache
+    )
+    if pruned_llm_cache_count:
+        logger.info(
+            "[LLM][CACHE] pruned %d stale cache entries for the active profile fingerprint",
+            pruned_llm_cache_count,
+        )
+
     save_llm_cache(context.llm_cache)
 
     save_job_history(context.job_history)
 
     write_debug_json(audit_rows)
 
+    _record_run_stats_warnings(run_stats)
     write_run_stats(run_stats)
 
     write_review_data(build_review_data(audit_rows, skill_observations, context.profile))

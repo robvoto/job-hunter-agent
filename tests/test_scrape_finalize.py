@@ -36,7 +36,7 @@ def _build_context() -> ScrapeRunContext:
         run_iso=run_started_at.isoformat(timespec="seconds"),
         previous_audit_rows=[],
         previous_run_stats={},
-        llm_cache={"cache-key": {"value": 1}},
+        llm_cache={source_learning.build_llm_cache_key("cache-key"): {"value": 1}},
         job_history={"job:1": {"times_kept": 1}},
         enabled_sources=["seek"],
         no_llm_mode=False,

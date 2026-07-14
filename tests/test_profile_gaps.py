@@ -100,6 +100,33 @@ def test_classify_case_insensitive():
     assert status == STATUS_CONFIRMED_HAVE
 
 
+def test_classify_eligibility_requirement_uses_candidate_eligibility():
+    status = classify_requirement_status(
+        "PV clearance",
+        [],
+        [],
+        [{"name": "PV clearance", "value": True}],
+        requirement_type="eligibility",
+    )
+    assert status == STATUS_CONFIRMED_HAVE
+
+
+def test_classify_eligibility_requirement_false_returns_do_not_have():
+    status = classify_requirement_status(
+        "PV clearance",
+        [],
+        [],
+        [{"name": "PV clearance", "value": False}],
+        requirement_type="eligibility",
+    )
+    assert status == STATUS_CONFIRMED_DO_NOT_HAVE
+
+
+def test_classify_invalid_requirement_type_returns_unknown():
+    status = classify_requirement_status("PV clearance", _CAPABILITY_RULES, _MUST_NOT_REQUIRE, requirement_type="credential")
+    assert status == STATUS_UNKNOWN
+
+
 # compute_profile_gaps
 
 

@@ -72,6 +72,7 @@ from job_hunter_agent.profile_store import (
     KEY_BRIEF,
     KEY_BRIEF_MODE,
     KEY_CANDIDATE_CAPABILITIES,
+    KEY_CANDIDATE_ELIGIBILITY,
     KEY_CV_MAX_PAGES,
     KEY_ENGAGEMENT_TYPE,
     KEY_KEYWORDS,
@@ -1273,6 +1274,10 @@ class SettingsHandler:
                 capability_rules=normalized.get(
                     KEY_CANDIDATE_CAPABILITIES,
                     current.get(KEY_CANDIDATE_CAPABILITIES, []),
+                ),
+                eligibility_rules=normalized.get(
+                    KEY_CANDIDATE_ELIGIBILITY,
+                    current.get(KEY_CANDIDATE_ELIGIBILITY, []),
                 ),
             )
             normalized[KEY_BRIEF] = auto_brief

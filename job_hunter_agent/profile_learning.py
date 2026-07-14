@@ -33,6 +33,7 @@ from job_hunter_agent.profile_store import (
     DEFAULT_ONBOARDING_SETTINGS,
     KEY_ALIASES,
     KEY_CANDIDATE_CAPABILITIES,
+    KEY_CANDIDATE_ELIGIBILITY,
     KEY_ICON_KEY,
     KEY_LEVEL,
     KEY_LOOKBACK_YEARS,
@@ -126,6 +127,15 @@ class _CapabilityExtraction(BaseModel):
     needs_review: bool = False
 
 
+class _EligibilityExtraction(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    value: bool = True
+    evidence: list[str] = Field(default_factory=list)
+    needs_review: bool = False
+
+
 class _MatchPreferenceExtraction(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -138,6 +148,7 @@ class _CvExtractionResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     capabilities: list[_CapabilityExtraction] = Field(default_factory=list)
+    eligibility: list[_EligibilityExtraction] = Field(default_factory=list)
     match_preferences: _MatchPreferenceExtraction = Field(
         default_factory=_MatchPreferenceExtraction
     )
@@ -330,6 +341,9 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         "- role_titles: list the job titles explicitly shown in the CV. One entry per role, no duplicates.\n"
         "- target_occupation_queries: generate 3 to 8 machine-facing occupation query strings that match the candidate's occupation family.\n"
         "  Use standard job titles a job-search system could match against.\n"
+        "- eligibility: extract explicit true/false facts the candidate formally holds or is legally allowed to claim. "
+        "Examples include clearances, citizenship, work rights, licences, registrations, and certifications. "
+        "Only include facts that are directly supported by the CV text.\n"
         "- Do not invent employers, titles, capabilities, or preferences that are not grounded in the evidence.\n"
         "- Return only schema-valid output.\n\n"
         f"CV text:\n{source_text}"
@@ -358,6 +372,7 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         "[ONBOARDING][LLM_CALL_DONE] purpose=cv_extraction "
         f"cache_key={cache_key} "
         f"capabilities={len(result.get(KEY_CAPABILITIES, []) or [])} "
+        f"eligibility={len(result.get('eligibility', []) or [])} "
         f"role_titles={len(result.get('role_titles', []) or [])} "
         f"target_queries={len(result.get(KEY_TARGET_OCCUPATION_QUERIES, []) or [])}"
     )
@@ -409,6 +424,52 @@ def _validate_capabilities(raw: list[Any]) -> list[dict[str, Any]]:
     _cap_log(f"[CAP_VALIDATE] kept {len(capped)}: {kept_names}")
     if rejected:
         _cap_log(f"[CAP_VALIDATE] rejected {len(rejected)}: {rejected}")
+    return capped
+
+
+def _validate_eligibility(raw: list[Any]) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    rejected: list[str] = []
+    _cap_log(f"[ELIGIBILITY_VALIDATE] LLM returned {len(raw or [])} raw eligibility candidate(s)")
+    for item in raw or []:
+        if not isinstance(item, dict):
+            rejected.append("<non-dict>")
+            continue
+        name = compact_whitespace(str(item.get("name") or item.get("label") or "")).strip()
+        if not name:
+            rejected.append("<empty name>")
+            continue
+        raw_value = item.get("value", True)
+        if isinstance(raw_value, str):
+            lowered_value = raw_value.strip().lower()
+            if lowered_value in {"false", "no", "n", "0", "absent", "missing", "none"}:
+                value = False
+            elif lowered_value in {"true", "yes", "y", "1", "have", "has", "held", "present"}:
+                value = True
+            else:
+                value = bool(raw_value)
+        else:
+            value = bool(raw_value)
+        evidence_raw = item.get("evidence") or []
+        if isinstance(evidence_raw, str):
+            evidence_raw = [evidence_raw]
+        evidence = [compact_whitespace(str(text)) for text in evidence_raw if compact_whitespace(str(text))]
+        result.append(
+            {
+                "name": name,
+                "value": value,
+                "evidence": evidence[:6],
+                "needs_review": bool(item.get("needs_review")),
+            }
+        )
+    capped = result[:20]
+    overflow = result[20:]
+    if overflow:
+        rejected.extend(f"{r['name']} [eligibility-20 overflow]" for r in overflow)
+    kept_names = [r["name"] for r in capped]
+    _cap_log(f"[ELIGIBILITY_VALIDATE] kept {len(capped)}: {kept_names}")
+    if rejected:
+        _cap_log(f"[ELIGIBILITY_VALIDATE] rejected {len(rejected)}: {rejected}")
     return capped
 
 
@@ -532,14 +593,17 @@ def build_learning_patch(
     patch: dict[str, Any] = {}
 
     raw_caps = extracted.get(KEY_CAPABILITIES, [])
+    raw_eligibility = extracted.get("eligibility", [])
     _cap_log(
         f"[BUILD_LEARNING_PATCH] LLM extraction returned {len(raw_caps)} capability candidate(s) before validation"
     )
     capabilities = _validate_capabilities(raw_caps)
+    eligibility = _validate_eligibility(raw_eligibility)
     approved_capabilities, review_signals = _split_learning_capabilities(
         capabilities, source_sections=source_sections
     )
     _cap_log(f"[BUILD_LEARNING_PATCH] {len(approved_capabilities)} capability group(s) written")
+    _cap_log(f"[BUILD_LEARNING_PATCH] {len(eligibility)} eligibility fact(s) written")
     _cap_log(f"[BUILD_LEARNING_PATCH] {len(review_signals)} capability signal(s) need review")
 
     raw_titles = extracted.get("role_titles") or []
@@ -576,6 +640,7 @@ def build_learning_patch(
     )
 
     patch[KEY_CANDIDATE_CAPABILITIES] = approved_capabilities
+    patch[KEY_CANDIDATE_ELIGIBILITY] = eligibility
     if review_signals and not is_desktop_runtime():
         register_signals(review_signals)
 

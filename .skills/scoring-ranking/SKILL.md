@@ -71,7 +71,8 @@ There are two separate LLM calls with different schemas. Do not conflate them.
 
 **Consequence for `requirement_coverage` in scoring:**
 - `fit_scoring.py` is a consumer only - it reads stored LLM output from the record, never calls the LLM
-- `requirement_coverage` entries with `supported`/`partially_supported` status that lack a `capability_name` are skipped (logged at WARNING)
+- `requirement_coverage` entries are typed. Use `requirement_type="capability"` for skill coverage and `requirement_type="eligibility"` for explicit facts like clearances or work rights.
+- `requirement_coverage` entries with `supported`/`partially_supported` status that lack the matching profile fact name are skipped (logged at WARNING)
 - Convergence bonus uses `requirement_coverage` supported count — `min_positive_matches` from `scoring_rules.convergence`
 - The learning pipeline handles signal routing via `build_ad_learning_signals` and the learning-only LLM call - do not route from `fit_scoring.py`
 

@@ -103,14 +103,15 @@ def test_linkedin_only_runs_when_linkedin_enabled(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# 3. Both run when both sources are enabled
+# 3. All enabled sources run when enabled
 # ---------------------------------------------------------------------------
 
 
-def test_both_sources_run_when_both_enabled(monkeypatch):
-    context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
+def test_all_enabled_sources_run_when_enabled(monkeypatch):
+    context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN, SOURCE_APSJOBS])
     seek_called = []
     li_called = []
+    aps_called = []
 
     monkeypatch.setattr(
         source_runner, "_run_seek_source", lambda ctx: seek_called.append(True) or _seek_result()
@@ -118,26 +119,30 @@ def test_both_sources_run_when_both_enabled(monkeypatch):
     monkeypatch.setattr(
         source_runner, "_run_linkedin_source", lambda ctx: li_called.append(True) or _li_result()
     )
+    monkeypatch.setattr(
+        source_runner, "_run_apsjobs_source", lambda ctx: aps_called.append(True) or _aps_result()
+    )
 
     run_enabled_sources(context)
 
     assert seek_called == [True]
     assert li_called == [True]
+    assert aps_called == [True]
 
 
 # ---------------------------------------------------------------------------
-# 4. Both sources are submitted concurrently when both enabled
+# 4. All enabled sources are submitted concurrently when multiple enabled
 # ---------------------------------------------------------------------------
 
 
-def test_both_sources_run_concurrently_when_both_enabled(monkeypatch):
-    """Verify both workers start before either blocks by using a barrier."""
-    context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
-    barrier = threading.Barrier(2, timeout=5)
+def test_all_enabled_sources_run_concurrently_when_multiple_enabled(monkeypatch):
+    """Verify all workers start before any one blocks by using a barrier."""
+    context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN, SOURCE_APSJOBS])
+    barrier = threading.Barrier(3, timeout=5)
     overlap_confirmed = threading.Event()
 
     def _fake_seek(ctx):
-        barrier.wait()  # blocks until LinkedIn thread also reaches this point
+        barrier.wait()  # blocks until the other source threads also reach this point
         overlap_confirmed.set()
         return _seek_result()
 
@@ -145,12 +150,17 @@ def test_both_sources_run_concurrently_when_both_enabled(monkeypatch):
         barrier.wait()
         return _li_result()
 
+    def _fake_apsjobs(ctx):
+        barrier.wait()
+        return _aps_result()
+
     monkeypatch.setattr(source_runner, "_run_seek_source", _fake_seek)
     monkeypatch.setattr(source_runner, "_run_linkedin_source", _fake_linkedin)
+    monkeypatch.setattr(source_runner, "_run_apsjobs_source", _fake_apsjobs)
 
     run_enabled_sources(context)
 
-    assert overlap_confirmed.is_set(), "SEEK and LinkedIn did not run concurrently"
+    assert overlap_confirmed.is_set(), "enabled sources did not run concurrently"
 
 
 def test_step_through_runs_sources_serially(monkeypatch):
@@ -158,11 +168,6 @@ def test_step_through_runs_sources_serially(monkeypatch):
     call_order: list[str] = []
 
     monkeypatch.setattr(source_runner, "step_through_enabled", lambda: True)
-    monkeypatch.setattr(
-        source_runner,
-        "_run_seek_and_linkedin_in_parallel",
-        lambda ctx: (_ for _ in ()).throw(AssertionError("parallel path should not run")),
-    )
     monkeypatch.setattr(
         source_runner,
         "_run_seek_source",
@@ -185,31 +190,36 @@ def test_step_through_runs_sources_serially(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# 5. Merge order is always SEEK then LinkedIn, even if LinkedIn finishes first
+# 5. Merge order follows enabled-source order, even if completion order differs
 # ---------------------------------------------------------------------------
 
 
-def test_merge_order_is_seek_then_linkedin_regardless_of_completion(monkeypatch):
-    context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
+def test_merge_order_follows_enabled_sources_regardless_of_completion(monkeypatch):
+    context = _make_context([SOURCE_APSJOBS, SOURCE_LINKEDIN, SOURCE_SEEK])
 
-    # LinkedIn returns a record immediately; SEEK returns after a brief delay.
-    def _slow_seek(ctx):
+    # SEEK returns immediately; APSJobs returns after a brief delay.
+    def _slow_apsjobs(ctx):
         import time
 
         time.sleep(0.05)
-        return _seek_result(kept_records=[{"job_key": "seek:1", "title": "Seek job"}])
+        return _aps_result(kept_records=[{"job_key": "apsjobs:1", "title": "APSJobs job"}])
 
     def _fast_linkedin(ctx):
         return _li_result(kept_records=[{"job_key": "linkedin:1", "title": "LinkedIn job"}])
 
-    monkeypatch.setattr(source_runner, "_run_seek_source", _slow_seek)
+    def _fast_seek(ctx):
+        return _seek_result(kept_records=[{"job_key": "seek:1", "title": "Seek job"}])
+
+    monkeypatch.setattr(source_runner, "_run_seek_source", _fast_seek)
     monkeypatch.setattr(source_runner, "_run_linkedin_source", _fast_linkedin)
+    monkeypatch.setattr(source_runner, "_run_apsjobs_source", _slow_apsjobs)
 
     kept, _, _ = run_enabled_sources(context)
 
-    assert len(kept) == 2
-    assert kept[0]["job_key"] == "seek:1", "SEEK records must come first"
-    assert kept[1]["job_key"] == "linkedin:1", "LinkedIn records must come second"
+    assert len(kept) == 3
+    assert kept[0]["job_key"] == "apsjobs:1", "APSJobs records must follow enabled-source order"
+    assert kept[1]["job_key"] == "linkedin:1", "LinkedIn records must follow enabled-source order"
+    assert kept[2]["job_key"] == "seek:1", "SEEK records must follow enabled-source order"
 
 
 # ---------------------------------------------------------------------------
@@ -539,6 +549,12 @@ def test_job_history_changes_are_merged_back_to_context(monkeypatch):
 
 def test_parallel_runner_keeps_results_after_timeout_warning(monkeypatch, caplog):
     caplog.set_level(logging.INFO, logger="job_hunter_agent.source_runner")
+    warnings = []
+    monkeypatch.setattr(
+        source_runner,
+        "record_system_warning",
+        lambda **kwargs: warnings.append(kwargs) or kwargs,
+    )
 
     def slow_seek(ctx):
         time.sleep(0.03)
@@ -564,6 +580,29 @@ def test_parallel_runner_keeps_results_after_timeout_warning(monkeypatch, caplog
     assert skills == []
     assert "[SOURCE_TIMEOUT]" in caplog.text
     assert "was skipped" not in caplog.text
+    assert warnings
+    assert warnings[0]["category"] == "source_timeout"
+
+
+def test_run_seek_source_records_warning_on_failure(monkeypatch):
+    warnings = []
+    monkeypatch.setattr(
+        source_runner,
+        "record_system_warning",
+        lambda **kwargs: warnings.append(kwargs) or kwargs,
+    )
+    monkeypatch.setattr(source_runner, "build_seek_search_targets", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        source_runner,
+        "seek_scrape_to_records",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("seek failed")),
+    )
+
+    result = source_runner._run_seek_source(_make_context([SOURCE_SEEK]))
+
+    assert result.error is not None
+    assert warnings
+    assert warnings[0]["category"] == "source_failure"
 
 
 def test_run_enabled_sources_keeps_partial_audit_rows_from_errored_source(monkeypatch):

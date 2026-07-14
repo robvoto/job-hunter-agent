@@ -1,5 +1,6 @@
 """Helpers for fit scoring."""
 
+import json
 import logging
 from typing import Dict, List, Optional
 
@@ -12,9 +13,14 @@ from job_hunter_agent.description_trust import full_description_confidence
 from job_hunter_agent.filters import analyze_title_filters
 from job_hunter_agent.global_settings import KEY_FIT_HIGHLIGHTS, load_global_settings
 from job_hunter_agent.io_utils import load_ui_labels
+from job_hunter_agent.paths import UNCERTAINTY_LOG_PATH
+from job_hunter_agent.llm_protocol import (
+    LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES,
+)
 from job_hunter_agent.profile_store import (
     KEY_LLM_GRADE_BANDS,
     KEY_LLM_GRADE_POINTS,
+    KEY_CANDIDATE_ELIGIBILITY,
     CapabilityLevel,
     get_preference_weights,
     get_scoring_rules,
@@ -24,11 +30,17 @@ from job_hunter_agent.record_schema import (
     RECORD_FIT_SCORE_BREAKDOWN_KEY,
     RECORD_FIT_SCORE_KEY,
     RECORD_JOB_REQUIREMENTS_KEY,
+    RECORD_RUN_STARTED_AT_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
 )
 from job_hunter_agent.role_analysis import (
     friendly_capability_label,
     role_text_bundle,
+)
+from job_hunter_agent.runtime_helpers import append_uncertainty_log, build_uncertainty_entry
+from job_hunter_agent.system_warnings import (
+    make_system_warning_fingerprint,
+    record_system_warning,
 )
 from job_hunter_agent.scoring_utils import weighted_points
 from job_hunter_agent.signal_detection import (
@@ -42,6 +54,278 @@ from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve
 LLM_REVIEW_STATE_EVALUATED = "evaluated"
 LLM_REVIEW_STATE_INVALID = "invalid"
 LLM_REVIEW_INCOMPLETE_LABEL = "LLM review incomplete"
+
+
+REQUIREMENT_IMPORTANCE_WEIGHTS = {
+    "mandatory": 3.0,
+    "strongly_preferred": 2.0,
+    "preferred": 1.0,
+    "nice_to_have": 0.25,
+}
+
+CAPABILITY_LEVEL_CREDITS = {
+    "strong": 1.0,
+    "working": 0.70,
+    "basic": 0.35,
+    "low": 0.15,
+    "limited_depth": 0.15,
+}
+
+REQUIREMENT_MAPPING_UNCERTAIN_REASON = "requirement_capability_mapping_uncertain"
+
+
+def _normalise_lookup_text(value: str) -> str:
+    return compact_whitespace(str(value or "")).strip().lower().replace("_", " ")
+
+
+def _candidate_capability_level_lookup(profile: dict) -> dict[str, str]:
+    lookup: dict[str, str] = {}
+    for rule in profile.get("candidate_capabilities", []) or []:
+        if not isinstance(rule, dict):
+            continue
+        level = str(rule.get("level") or "").strip().lower()
+        if level not in CAPABILITY_LEVEL_CREDITS:
+            continue
+        names = [rule.get("name"), friendly_capability_label(str(rule.get("name") or ""))]
+        aliases = rule.get("aliases") or []
+        if isinstance(aliases, str):
+            names.append(aliases)
+        else:
+            names.extend(aliases)
+        for name in names:
+            key = _normalise_lookup_text(str(name or ""))
+            if key:
+                lookup[key] = level
+    return lookup
+
+
+def _candidate_eligibility_lookup(profile: dict) -> dict[str, bool]:
+    lookup: dict[str, bool] = {}
+    for item in profile.get(KEY_CANDIDATE_ELIGIBILITY, []) or []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        key = _normalise_lookup_text(name)
+        if not key:
+            continue
+        lookup[key] = bool(item.get("value", True))
+    return lookup
+
+
+def _append_requirement_mapping_uncertainty(record: dict, item: dict, detail: str) -> None:
+    raw_value = {
+        "requirement": item.get("requirement"),
+        "proposed_capability": item.get("capability_name"),
+        "proposed_eligibility": item.get("eligibility_name"),
+        "requirement_type": item.get("requirement_type"),
+        "status": item.get("status"),
+        "matched_job_text": item.get("matched_job_text"),
+    }
+    entry = build_uncertainty_entry(
+        reason_code=REQUIREMENT_MAPPING_UNCERTAIN_REASON,
+        stage="fit_scoring",
+        field="requirement_coverage.capability_name",
+        raw_value=json.dumps(raw_value, ensure_ascii=False),
+        normalized_value="",
+        detail=detail,
+        source=str(record.get("source") or record.get("platform") or ""),
+        job_key=str(record.get("job_key") or ""),
+        severity="warning",
+    )
+    append_uncertainty_log(UNCERTAINTY_LOG_PATH, entry)
+    fingerprint = make_system_warning_fingerprint(
+        "fit_scoring",
+        REQUIREMENT_MAPPING_UNCERTAIN_REASON,
+        record.get("source") or record.get("platform") or "",
+        record.get("job_key") or "",
+        record.get(RECORD_RUN_STARTED_AT_KEY) or "",
+        item.get("requirement") or "",
+        item.get("status") or "",
+        item.get("requirement_type") or "",
+        item.get("capability_name") or item.get("eligibility_name") or "",
+        detail,
+    )
+    record_system_warning(
+        severity="warning",
+        category="requirement_coverage_uncertainty",
+        source=str(record.get("source") or record.get("platform") or "fit_scoring"),
+        message=str(detail),
+        fingerprint=fingerprint,
+        job_key=str(record.get("job_key") or ""),
+        run_id=str(record.get(RECORD_RUN_STARTED_AT_KEY) or ""),
+        context={
+            "reason_code": REQUIREMENT_MAPPING_UNCERTAIN_REASON,
+            "field": "requirement_coverage.capability_name",
+            "raw_value": raw_value,
+            "normalized_value": "",
+            "detail": detail,
+            "stage": "fit_scoring",
+        },
+    )
+
+
+def _requirement_fit_entries(record: dict, profile: dict) -> List[dict]:
+    coverage = record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or []
+    if not isinstance(coverage, list) or not coverage:
+        if record.get("review_source") == "llm" and record.get(RECORD_JOB_REQUIREMENTS_KEY):
+            return [
+                {
+                    "label": "Requirement Fit: requirement coverage not returned",
+                    "value": 0,
+                    "section": "requirement_fit",
+                }
+            ]
+        return [{"label": "Requirement Fit: no requirements to score", "value": 0, "section": "requirement_fit"}]
+
+    capability_levels = _candidate_capability_level_lookup(profile)
+    eligibility_levels = _candidate_eligibility_lookup(profile)
+    total_weight = 0.0
+    earned_weight = 0.0
+    counts = {
+        "strong": 0,
+        "working": 0,
+        "basic": 0,
+        "low": 0,
+        "eligibility": 0,
+        "not_shown": 0,
+        "mismatch": 0,
+        "unknown": 0,
+    }
+    mandatory_gaps: list[str] = []
+    weak_mandatory: list[str] = []
+    uncertain_count = 0
+
+    for item in coverage:
+        if not isinstance(item, dict):
+            continue
+        requirement = compact_whitespace(str(item.get("requirement") or ""))
+        if not requirement:
+            continue
+        importance = str(item.get("importance") or "preferred").strip().lower()
+        weight = REQUIREMENT_IMPORTANCE_WEIGHTS.get(importance, REQUIREMENT_IMPORTANCE_WEIGHTS["preferred"])
+        total_weight += weight
+        status = str(item.get("status") or "").strip().lower()
+        requirement_type = str(item.get("requirement_type") or "capability").strip().lower()
+        profile_name = str(
+            item.get("profile_name") or item.get("capability_name") or item.get("eligibility_name") or ""
+        ).strip()
+
+        if status in {"not_shown", "not shown"}:
+            counts["not_shown"] += 1
+            if importance == "mandatory":
+                mandatory_gaps.append(requirement)
+            continue
+        if status == "mismatch":
+            counts["mismatch"] += 1
+            if importance == "mandatory":
+                mandatory_gaps.append(requirement)
+            continue
+        if status not in {"supported", "partially_supported"}:
+            counts["unknown"] += 1
+            uncertain_count += 1
+            _append_requirement_mapping_uncertainty(
+                record,
+                item,
+                "Requirement was not marked as supported or partially_supported, so scoring treated it as not covered and needs review.",
+            )
+            if importance == "mandatory":
+                mandatory_gaps.append(requirement)
+            continue
+        if requirement_type not in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES:
+            counts["unknown"] += 1
+            uncertain_count += 1
+            _append_requirement_mapping_uncertainty(
+                record,
+                item,
+                "Requirement was marked with an invalid requirement type and needs review before scoring can treat it as covered.",
+            )
+            if importance == "mandatory":
+                mandatory_gaps.append(requirement)
+            continue
+
+        if requirement_type == "eligibility":
+            eligibility_key = _normalise_lookup_text(profile_name)
+            if not profile_name or eligibility_key not in eligibility_levels:
+                counts["unknown"] += 1
+                uncertain_count += 1
+                _append_requirement_mapping_uncertainty(
+                    record,
+                    item,
+                    "Requirement was marked as covered but the mapped candidate eligibility fact is missing or cannot be resolved.",
+                )
+                if importance == "mandatory":
+                    mandatory_gaps.append(requirement)
+                continue
+            if not eligibility_levels.get(eligibility_key, False):
+                counts["mismatch"] += 1
+                if importance == "mandatory":
+                    mandatory_gaps.append(requirement)
+                continue
+            earned_weight += weight
+            counts["eligibility"] += 1
+            continue
+
+        capability_key = _normalise_lookup_text(profile_name)
+        level = capability_levels.get(capability_key)
+        if not profile_name or not level:
+            counts["unknown"] += 1
+            uncertain_count += 1
+            _append_requirement_mapping_uncertainty(
+                record,
+                item,
+                "Requirement was marked as covered but the mapped candidate capability is missing or cannot be resolved.",
+            )
+            if importance == "mandatory":
+                mandatory_gaps.append(requirement)
+            continue
+
+        credit = CAPABILITY_LEVEL_CREDITS[level]
+        earned_weight += weight * credit
+        bucket = "low" if level in {"low", "limited_depth"} else level
+        counts[bucket] += 1
+        if importance == "mandatory" and level in {"basic", "low", "limited_depth"}:
+            weak_mandatory.append(requirement)
+
+    percent = round((earned_weight / total_weight) * 100) if total_weight > 0 else 0
+    label_parts = [
+        f"Requirement Fit: {percent}%",
+        f"strong {counts['strong']}",
+        f"working {counts['working']}",
+        f"basic {counts['basic']}",
+        f"low {counts['low']}",
+        f"eligibility {counts['eligibility']}",
+        f"not shown {counts['not_shown']}",
+        f"mismatch {counts['mismatch']}",
+    ]
+    if counts["unknown"]:
+        label_parts.append(f"needs review {counts['unknown']}")
+
+    entries = [{"label": " | ".join(label_parts), "value": int(percent), "section": "requirement_fit"}]
+    for requirement in mandatory_gaps[:3]:
+        entries.append(
+            {
+                "label": f"Mandatory gap: {requirement}",
+                "value": 0,
+                "section": "requirement_fit_warning",
+            }
+        )
+    for requirement in weak_mandatory[:3]:
+        entries.append(
+            {
+                "label": f"Mandatory weak coverage: {requirement}",
+                "value": 0,
+                "section": "requirement_fit_warning",
+            }
+        )
+    if uncertain_count:
+        entries.append(
+            {
+                "label": f"Requirement mapping needs review: {uncertain_count}",
+                "value": 0,
+                "section": "requirement_fit_warning",
+            }
+        )
+    return entries
 
 
 def llm_review_state(record: dict) -> dict:
@@ -99,7 +383,10 @@ def requirement_coverage_entries(record: dict) -> List[dict]:
         requirement = str(item.get("requirement") or "").strip()
         importance = str(item.get("importance") or "preferred").strip().lower()
         status = str(item.get("status") or "").strip().lower().replace("_", " ")
-        capability_name = str(item.get("capability_name") or "").strip()
+        profile_name = str(
+            item.get("profile_name") or item.get("capability_name") or item.get("eligibility_name") or ""
+        ).strip()
+        requirement_type = str(item.get("requirement_type") or "capability").strip().lower()
         matched_job_text = str(item.get("matched_job_text") or "").strip()
         profile_support = [
             compact_whitespace(text)
@@ -110,8 +397,8 @@ def requirement_coverage_entries(record: dict) -> List[dict]:
             continue
         label = f"[{importance}] Requirement {status}: {requirement}"
         details: list[str] = []
-        if capability_name:
-            details.append(f"capability: {friendly_capability_label(capability_name)}")
+        if profile_name:
+            details.append(f"{requirement_type}: {profile_name}")
         if matched_job_text:
             details.append(f"job text: {matched_job_text}")
         if profile_support:
@@ -132,7 +419,9 @@ def capability_support_log(record: dict) -> None:
     for item in record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or []:
         if not isinstance(item, dict):
             continue
-        cap_name = str(item.get("capability_name") or "").strip()
+        cap_name = str(
+            item.get("profile_name") or item.get("capability_name") or item.get("eligibility_name") or ""
+        ).strip()
         status = str(item.get("status") or "").strip().lower()
         if not cap_name:
             continue
@@ -373,9 +662,8 @@ def _score_bounds(scoring_rules: dict) -> tuple[int, int]:
     return min(floors), max(ceilings)
 
 
-def _clamp_score(score: int, scoring_rules: dict) -> int:
-    minimum_score, maximum_score = _score_bounds(scoring_rules)
-    return max(min(score, maximum_score), minimum_score)
+def _clamp_score(score: int, scoring_rules: dict | None = None) -> int:
+    return max(min(int(score), 100), 0)
 
 
 def _grade_band_adjustment(grade: str, raw: int, bands: dict) -> Optional[dict]:
@@ -410,45 +698,11 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
             f"  job: {job_key} ({title})\n"
             "  Re-run the pipeline to generate a review before scoring."
         )
-    title_reason = str(record.get("title_reason") or "")
-    content_reason = str(record.get("content_reason") or "")
-    title_metadata = (
-        record.get("title_match_metadata")
-        if isinstance(record.get("title_match_metadata"), dict)
-        else {}
-    )
     active_profile = profile or load_profile()
-    weights = get_preference_weights(active_profile)
+    entries = _requirement_fit_entries(record, active_profile)
     scoring_rules = get_scoring_rules(active_profile)
     hard_block_labels = hard_block_reasons(record, active_profile)
-    if not title_metadata and str(record.get("title") or "").strip():
-        title_metadata = analyze_title_filters(str(record.get("title") or ""), active_profile)
-    title_family = str(title_metadata.get("match_family") or "").strip().lower()
-
-    # Build non-hard-block entries first so the band clamp does not interact with hard block penalties.
-    non_hard_block = (
-        build_core_fit_breakdown(
-            record,
-            scoring_rules,
-            weights,
-            title_family,
-            title_reason,
-            content_reason,
-            active_profile,
-        )
-        + build_preference_breakdown(record, scoring_rules, weights, active_profile)
-    )
-
-    # Apply grade band clamping: enforce floor and ceiling per LLM grade.
-    # Hard block penalties are applied after this step and can override the floor.
-    grade = str(record.get("llm_fit_grade") or "").strip().upper()
-    grade_bands = scoring_rules.get(KEY_LLM_GRADE_BANDS, {})
-    raw_non_hard_block = sum(e["value"] for e in non_hard_block)
-    band_entry = _grade_band_adjustment(grade, raw_non_hard_block, grade_bands)
-    if band_entry is not None:
-        non_hard_block = non_hard_block + [band_entry]
-
-    return non_hard_block + build_risk_breakdown(scoring_rules, hard_block_labels)
+    return entries + build_risk_breakdown(scoring_rules, hard_block_labels)
 
 
 def has_hard_blockers(record: dict, profile: Optional[dict] = None) -> bool:
@@ -458,50 +712,12 @@ def has_hard_blockers(record: dict, profile: Optional[dict] = None) -> bool:
 
 def fit_score(record: dict, profile: Optional[dict] = None) -> int:
     score = sum(item["value"] for item in fit_score_breakdown(record, profile))
-    active_profile = profile or load_profile()
-    scoring_rules = get_scoring_rules(active_profile)
-    return _clamp_score(score, scoring_rules)
+    return _clamp_score(score)
 
 
 def fit_score_breakdown_frozen(record: dict, profile: Optional[dict] = None) -> List[dict]:
-    """Frozen breakdown computed once at scrape time.
-
-    Grade band is applied to core fit only.
-    """
-    review_state = llm_review_state(record)
-    if review_state["state"] != LLM_REVIEW_STATE_EVALUATED:
-        job_key = str(record.get("job_key") or "<unknown>")
-        title = str(record.get("title") or "").strip() or "<untitled>"
-        raise RuntimeError(
-            f"[FIT_SCORE] Cannot score job without LLM review — {review_state['detail']}\n"
-            f"  job: {job_key} ({title})\n"
-            "  Re-run the pipeline to generate a review before scoring."
-        )
-    title_reason = str(record.get("title_reason") or "")
-    content_reason = str(record.get("content_reason") or "")
-    title_metadata = (
-        record.get("title_match_metadata")
-        if isinstance(record.get("title_match_metadata"), dict)
-        else {}
-    )
-    active_profile = profile or load_profile()
-    weights = get_preference_weights(active_profile)
-    scoring_rules = get_scoring_rules(active_profile)
-    hard_block_labels = hard_block_reasons(record, active_profile)
-    if not title_metadata and str(record.get("title") or "").strip():
-        title_metadata = analyze_title_filters(str(record.get("title") or ""), active_profile)
-    title_family = str(title_metadata.get("match_family") or "").strip().lower()
-
-    non_hard_block = build_core_fit_breakdown(
-        record, scoring_rules, weights, title_family, title_reason, content_reason, active_profile
-    ) + build_preference_breakdown(record, scoring_rules, weights, active_profile)
-    grade = str(record.get("llm_fit_grade") or "").strip().upper()
-    grade_bands = scoring_rules.get(KEY_LLM_GRADE_BANDS, {})
-    raw_non_hard_block = sum(e["value"] for e in non_hard_block)
-    band_entry = _grade_band_adjustment(grade, raw_non_hard_block, grade_bands)
-    if band_entry is not None:
-        non_hard_block = non_hard_block + [band_entry]
-    return non_hard_block + build_risk_breakdown(scoring_rules, hard_block_labels)
+    """Frozen Requirement Fit % breakdown computed once at scrape time."""
+    return fit_score_breakdown(record, profile)
 
 
 def fit_score_and_breakdown_frozen(
@@ -512,9 +728,8 @@ def fit_score_and_breakdown_frozen(
     (score, breakdown) don't recompute — and re-log — the breakdown twice.
     """
     active_profile = profile or load_profile()
-    scoring_rules = get_scoring_rules(active_profile)
     breakdown = fit_score_breakdown_frozen(record, active_profile)
-    return _clamp_score(sum(item["value"] for item in breakdown), scoring_rules), breakdown
+    return _clamp_score(sum(item["value"] for item in breakdown)), breakdown
 
 
 def fit_score_frozen(record: dict, profile: Optional[dict] = None) -> int:
@@ -532,14 +747,10 @@ def fit_score_and_breakdown_displayed(
     """
     if RECORD_FIT_SCORE_KEY not in record:
         breakdown = fit_score_breakdown(record, profile)
-        active_profile = profile or load_profile()
-        scoring_rules = get_scoring_rules(active_profile)
-        return _clamp_score(sum(e["value"] for e in breakdown), scoring_rules), breakdown
+        return _clamp_score(sum(e["value"] for e in breakdown)), breakdown
     frozen_score = int(record[RECORD_FIT_SCORE_KEY])
     frozen_breakdown = list(record.get(RECORD_FIT_SCORE_BREAKDOWN_KEY) or [])
-    active_profile = profile or load_profile()
-    scoring_rules = get_scoring_rules(active_profile)
-    return _clamp_score(frozen_score, scoring_rules), frozen_breakdown
+    return _clamp_score(frozen_score), frozen_breakdown
 
 def fit_score_displayed(record: dict, profile: Optional[dict] = None) -> int:
     """Displayed score for filtering and sorting: frozen base only."""

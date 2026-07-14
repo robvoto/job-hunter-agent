@@ -7,7 +7,7 @@ import logging
 import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable, Sequence
 
 from job_hunter_agent.run_context import ScrapeRunContext
 from job_hunter_agent.run_control import (
@@ -28,15 +28,23 @@ from job_hunter_agent.scrapers.seek_runner import (
     seek_scrape_to_records,
 )
 from job_hunter_agent.source_registry import SOURCE_APSJOBS, SOURCE_LINKEDIN, SOURCE_SEEK
+from job_hunter_agent.source_registry import get_source_display_label
+from job_hunter_agent.text_processing import list_to_phrase
+from job_hunter_agent.system_warnings import (
+    make_system_warning_fingerprint,
+    record_system_warning,
+)
 
 logger = logging.getLogger(__name__)
 
 SEEK_SOURCE_TIMEOUT_SECONDS = 90
 LINKEDIN_SOURCE_TIMEOUT_SECONDS = 180
+APSJOBS_SOURCE_TIMEOUT_SECONDS = 120
+DEFAULT_SOURCE_TIMEOUT_SECONDS = 120
 SOURCE_HEARTBEAT_SECONDS = 15
 SEEK_SOURCE_TIMEOUT_MESSAGE = "SEEK is taking longer than expected; waiting for it to finish."
 LINKEDIN_SOURCE_TIMEOUT_MESSAGE = "LinkedIn is taking longer than expected; waiting for it to finish."
-
+APSJOBS_SOURCE_TIMEOUT_MESSAGE = "APSJobs is taking longer than expected; waiting for it to finish."
 
 @dataclass
 class SourceRunResult:
@@ -53,7 +61,7 @@ class SourceRunResult:
 def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
     """Run SEEK with isolated mutable state.
 
-    Takes shallow copies of job_history and llm_cache so SEEK and LinkedIn
+    Takes shallow copies of job_history and llm_cache so enabled source workers
     cannot corrupt each other's in-flight state when running concurrently.
     The mutated copies are returned for deterministic merge.
     """
@@ -93,6 +101,24 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
             failure_class = getattr(exc, "failure_class", "SEEK_UNKNOWN_FAILURE")
             if failure_class not in {SEEK_HUMAN_VERIFICATION, SEEK_BOT_CHALLENGE} or not headless:
                 set_run_progress(str(exc))
+                _record_source_warning(
+                    source=SOURCE_SEEK,
+                    severity="warning",
+                    category="source_failure",
+                    message=str(exc),
+                    run_id=context.run_iso,
+                    context={
+                        "failure_class": failure_class,
+                        "headless": headless,
+                        "assisted_verification_enabled": assisted_verification_enabled,
+                    },
+                    fingerprint_parts=(
+                        "source_failure",
+                        SOURCE_SEEK,
+                        failure_class,
+                        str(exc),
+                    ),
+                )
                 raise
             if not assisted_verification_enabled:
                 logger.warning(
@@ -100,6 +126,24 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
                     failure_class,
                 )
                 set_run_progress(str(exc))
+                _record_source_warning(
+                    source=SOURCE_SEEK,
+                    severity="warning",
+                    category="source_failure",
+                    message=str(exc),
+                    run_id=context.run_iso,
+                    context={
+                        "failure_class": failure_class,
+                        "headless": headless,
+                        "assisted_verification_enabled": assisted_verification_enabled,
+                    },
+                    fingerprint_parts=(
+                        "source_failure",
+                        SOURCE_SEEK,
+                        failure_class,
+                        str(exc),
+                    ),
+                )
                 return SourceRunResult(
                     source=SOURCE_SEEK,
                     error=exc,
@@ -124,6 +168,24 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
                     retry_exc,
                 )
                 set_run_progress(str(retry_exc))
+                _record_source_warning(
+                    source=SOURCE_SEEK,
+                    severity="warning",
+                    category="source_failure",
+                    message=str(retry_exc),
+                    run_id=context.run_iso,
+                    context={
+                        "failure_class": retry_failure_class,
+                        "headless": False,
+                        "assisted_verification_enabled": assisted_verification_enabled,
+                    },
+                    fingerprint_parts=(
+                        "source_failure",
+                        SOURCE_SEEK,
+                        retry_failure_class,
+                        str(retry_exc),
+                    ),
+                )
                 return SourceRunResult(
                     source=SOURCE_SEEK,
                     error=retry_exc,
@@ -141,6 +203,25 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
     except PartialSourceResultsError as exc:
         logger.exception("[SEEK] scraping failed after partial results")
         print(f"[SEEK] Scraping failed: {type(exc.original_error).__name__}: {exc.original_error}")
+        _record_source_warning(
+            source=SOURCE_SEEK,
+            severity="warning",
+            category="source_failure",
+            message=str(exc.original_error),
+            run_id=context.run_iso,
+            context={
+                "error_type": type(exc.original_error).__name__,
+                "partial_results": True,
+                "kept_records": len(exc.kept_records),
+                "audit_rows": len(exc.audit_rows),
+            },
+            fingerprint_parts=(
+                "source_failure",
+                SOURCE_SEEK,
+                type(exc.original_error).__name__,
+                str(exc.original_error),
+            ),
+        )
         return SourceRunResult(
             source=SOURCE_SEEK,
             kept_records=exc.kept_records,
@@ -153,6 +234,18 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
     except Exception as exc:
         logger.exception("[SEEK] scraping failed")
         print(f"[SEEK] Scraping failed: {type(exc).__name__}: {exc}")
+        _record_source_warning(
+            source=SOURCE_SEEK,
+            severity="error",
+            category="source_failure",
+            message=str(exc),
+            run_id=context.run_iso,
+            context={
+                "error_type": type(exc).__name__,
+                "headless": headless,
+            },
+            fingerprint_parts=("source_failure", SOURCE_SEEK, type(exc).__name__, str(exc)),
+        )
         return SourceRunResult(
             source=SOURCE_SEEK,
             error=exc,
@@ -196,6 +289,25 @@ def _run_linkedin_source(context: ScrapeRunContext) -> SourceRunResult:
         print(
             f"[LinkedIn] Scraping failed: {type(exc.original_error).__name__}: {exc.original_error}"
         )
+        _record_source_warning(
+            source=SOURCE_LINKEDIN,
+            severity="warning",
+            category="source_failure",
+            message=str(exc.original_error),
+            run_id=context.run_iso,
+            context={
+                "error_type": type(exc.original_error).__name__,
+                "partial_results": True,
+                "kept_records": len(exc.kept_records),
+                "audit_rows": len(exc.audit_rows),
+            },
+            fingerprint_parts=(
+                "source_failure",
+                SOURCE_LINKEDIN,
+                type(exc.original_error).__name__,
+                str(exc.original_error),
+            ),
+        )
         return SourceRunResult(
             source=SOURCE_LINKEDIN,
             kept_records=exc.kept_records,
@@ -208,6 +320,17 @@ def _run_linkedin_source(context: ScrapeRunContext) -> SourceRunResult:
     except Exception as exc:
         logger.exception("[LinkedIn] scraping failed")
         print(f"[LinkedIn] Scraping failed: {type(exc).__name__}: {exc}")
+        _record_source_warning(
+            source=SOURCE_LINKEDIN,
+            severity="error",
+            category="source_failure",
+            message=str(exc),
+            run_id=context.run_iso,
+            context={
+                "error_type": type(exc).__name__,
+            },
+            fingerprint_parts=("source_failure", SOURCE_LINKEDIN, type(exc).__name__, str(exc)),
+        )
         return SourceRunResult(
             source=SOURCE_LINKEDIN,
             error=exc,
@@ -242,6 +365,25 @@ def _run_apsjobs_source(context: ScrapeRunContext) -> SourceRunResult:
         print(
             f"[APSJobs] Scraping failed: {type(exc.original_error).__name__}: {exc.original_error}"
         )
+        _record_source_warning(
+            source=SOURCE_APSJOBS,
+            severity="warning",
+            category="source_failure",
+            message=str(exc.original_error),
+            run_id=context.run_iso,
+            context={
+                "error_type": type(exc.original_error).__name__,
+                "partial_results": True,
+                "kept_records": len(exc.kept_records),
+                "audit_rows": len(exc.audit_rows),
+            },
+            fingerprint_parts=(
+                "source_failure",
+                SOURCE_APSJOBS,
+                type(exc.original_error).__name__,
+                str(exc.original_error),
+            ),
+        )
         return SourceRunResult(
             source=SOURCE_APSJOBS,
             kept_records=exc.kept_records,
@@ -253,12 +395,30 @@ def _run_apsjobs_source(context: ScrapeRunContext) -> SourceRunResult:
         )
     except Exception as exc:
         print(f"[APSJobs] Scraping failed: {type(exc).__name__}: {exc}")
+        _record_source_warning(
+            source=SOURCE_APSJOBS,
+            severity="error",
+            category="source_failure",
+            message=str(exc),
+            run_id=context.run_iso,
+            context={
+                "error_type": type(exc).__name__,
+            },
+            fingerprint_parts=("source_failure", SOURCE_APSJOBS, type(exc).__name__, str(exc)),
+        )
         return SourceRunResult(
             source=SOURCE_APSJOBS,
             error=exc,
             _job_history_snapshot=job_history,
             _llm_cache_snapshot=llm_cache,
         )
+
+
+SOURCE_RUNNER_NAMES: dict[str, str] = {
+    SOURCE_SEEK: "_run_seek_source",
+    SOURCE_LINKEDIN: "_run_linkedin_source",
+    SOURCE_APSJOBS: "_run_apsjobs_source",
+}
 
 
 def _log_source_timeout_warning(
@@ -272,32 +432,109 @@ def _log_source_timeout_warning(
         message,
     )
     set_run_progress(message)
+    record_system_warning(
+        severity="warning",
+        category="source_timeout",
+        source=source,
+        message=message,
+        fingerprint=make_system_warning_fingerprint(
+            "source_timeout",
+            source,
+            message,
+        ),
+        context={
+            "elapsed_s": int(elapsed_s) if elapsed_s is not None else None,
+            "progress": get_run_progress() or "",
+        },
+    )
 
 
-def _run_seek_and_linkedin_in_parallel(context: ScrapeRunContext) -> list[SourceRunResult]:
-    """Run SEEK and LinkedIn without letting either source block the whole run."""
-    executor = ThreadPoolExecutor(max_workers=2)
-    ctx_seek = contextvars.copy_context()
-    ctx_li = contextvars.copy_context()
-    started_at: dict[str, float] = {
-        SOURCE_SEEK: time.monotonic(),
-        SOURCE_LINKEDIN: time.monotonic(),
-    }
-    seek_future = executor.submit(ctx_seek.run, _run_seek_source, context)
-    li_future = executor.submit(ctx_li.run, _run_linkedin_source, context)
-    futures = {seek_future: SOURCE_SEEK, li_future: SOURCE_LINKEDIN}
+def _record_source_warning(
+    *,
+    source: str,
+    severity: str,
+    category: str,
+    message: str,
+    run_id: str,
+    context: dict[str, Any],
+    fingerprint_parts: tuple[Any, ...],
+) -> None:
+    record_system_warning(
+        severity=severity,
+        category=category,
+        source=source,
+        message=message,
+        fingerprint=make_system_warning_fingerprint(*fingerprint_parts),
+        run_id=run_id,
+        context=context,
+    )
+
+
+def _source_timeout_seconds(source: str) -> int:
+    if source == SOURCE_SEEK:
+        return int(SEEK_SOURCE_TIMEOUT_SECONDS)
+    if source == SOURCE_LINKEDIN:
+        return int(LINKEDIN_SOURCE_TIMEOUT_SECONDS)
+    if source == SOURCE_APSJOBS:
+        return int(APSJOBS_SOURCE_TIMEOUT_SECONDS)
+    return int(DEFAULT_SOURCE_TIMEOUT_SECONDS)
+
+
+def _source_timeout_message(source: str) -> str:
+    if source == SOURCE_SEEK:
+        return SEEK_SOURCE_TIMEOUT_MESSAGE
+    if source == SOURCE_LINKEDIN:
+        return LINKEDIN_SOURCE_TIMEOUT_MESSAGE
+    if source == SOURCE_APSJOBS:
+        return APSJOBS_SOURCE_TIMEOUT_MESSAGE
+    return f"{get_source_display_label(source)} is taking longer than expected; waiting for it to finish."
+
+
+def _enabled_source_order(context: ScrapeRunContext) -> list[str]:
+    enabled_sources: list[str] = []
+    for source in context.enabled_sources:
+        source_key = str(source or "").strip().lower()
+        if not source_key:
+            continue
+        if source_key not in SOURCE_RUNNER_NAMES:
+            raise RuntimeError(f"No source runner registered for enabled source {source_key!r}")
+        if source_key not in enabled_sources:
+            enabled_sources.append(source_key)
+    return enabled_sources
+
+
+def _get_source_runner(source: str) -> Callable[[ScrapeRunContext], SourceRunResult]:
+    runner_name = SOURCE_RUNNER_NAMES.get(source)
+    if not runner_name:
+        raise RuntimeError(f"No source runner registered for source {source!r}")
+    runner = globals().get(runner_name)
+    if not callable(runner):
+        raise RuntimeError(f"Source runner {runner_name!r} is not available")
+    return runner
+
+
+def _run_sources_in_parallel(
+    context: ScrapeRunContext, source_order: Sequence[str]
+) -> list[SourceRunResult]:
+    if not source_order:
+        return []
+
+    executor = ThreadPoolExecutor(max_workers=len(source_order))
+    started_at: dict[str, float] = {source: time.monotonic() for source in source_order}
+    futures = {}
+    for source in source_order:
+        runner = _get_source_runner(source)
+        worker_context = contextvars.copy_context()
+        futures[executor.submit(worker_context.run, runner, context)] = source
+
     deadlines = {
-        seek_future: time.monotonic() + SEEK_SOURCE_TIMEOUT_SECONDS,
-        li_future: time.monotonic() + LINKEDIN_SOURCE_TIMEOUT_SECONDS,
+        future: started_at[source] + _source_timeout_seconds(source)
+        for future, source in futures.items()
     }
-    timeout_messages = {
-        seek_future: SEEK_SOURCE_TIMEOUT_MESSAGE,
-        li_future: LINKEDIN_SOURCE_TIMEOUT_MESSAGE,
-    }
+    timeout_messages = {future: _source_timeout_message(source) for future, source in futures.items()}
     timeout_warned: set[Any] = set()
     next_heartbeat_at = {
-        SOURCE_SEEK: started_at[SOURCE_SEEK] + SOURCE_HEARTBEAT_SECONDS,
-        SOURCE_LINKEDIN: started_at[SOURCE_LINKEDIN] + SOURCE_HEARTBEAT_SECONDS,
+        source: started_at[source] + SOURCE_HEARTBEAT_SECONDS for source in source_order
     }
     pending = set(futures)
     results_by_source: dict[str, SourceRunResult] = {}
@@ -367,17 +604,19 @@ def _run_seek_and_linkedin_in_parallel(context: ScrapeRunContext) -> list[Source
     finally:
         executor.shutdown(wait=True, cancel_futures=False)
 
-    if SOURCE_SEEK not in results_by_source:
-        raise RuntimeError("SEEK source did not produce a result before parallel runner exit.")
-    if SOURCE_LINKEDIN not in results_by_source:
-        raise RuntimeError("LinkedIn source did not produce a result before parallel runner exit.")
-    return [results_by_source[SOURCE_SEEK], results_by_source[SOURCE_LINKEDIN]]
+    missing_sources = [source for source in source_order if source not in results_by_source]
+    if missing_sources:
+        raise RuntimeError(
+            "Source runner did not produce results before parallel runner exit: "
+            + ", ".join(missing_sources)
+        )
+    return [results_by_source[source] for source in source_order]
 
 
 def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dict], list[dict]]:
     """Run all enabled sources and return merged (kept_records, audit_rows, skill_observations).
 
-    When both SEEK and LinkedIn are enabled they run concurrently, unless step-through is
+    When more than one source is enabled they run concurrently, unless step-through is
     active, in which case the run stays serial so manual pausing can actually halt progress.
     Each source has a hard timeout so a stuck job board cannot block the whole run.
 
@@ -388,17 +627,15 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
     audit_rows: list[dict] = []
     skill_observations: list[dict] = []
 
-    seek_enabled = SOURCE_SEEK in context.enabled_sources
-    li_enabled = SOURCE_LINKEDIN in context.enabled_sources
-    apsjobs_enabled = SOURCE_APSJOBS in context.enabled_sources
+    enabled_source_order = _enabled_source_order(context)
 
-    print("[Seek] enabled" if seek_enabled else "[Seek] disabled in enabled_sources; skipping")
-    print(
-        "[LinkedIn] enabled" if li_enabled else "[LinkedIn] disabled in enabled_sources; skipping"
-    )
-    print(
-        "[APSJobs] enabled" if apsjobs_enabled else "[APSJobs] disabled in enabled_sources; skipping"
-    )
+    for source in SOURCE_RUNNER_NAMES:
+        label = get_source_display_label(source)
+        print(
+            f"[{label}] enabled"
+            if source in enabled_source_order
+            else f"[{label}] disabled in enabled_sources; skipping"
+        )
 
     if run_stop_requested():
         return kept_records, audit_rows, skill_observations
@@ -408,21 +645,19 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
     if step_through_enabled():
         # Step-through is a manual inspection aid, so keep the whole run serial.
         # Parallel sources would continue advancing while another worker is paused.
-        if seek_enabled:
-            results.append(_run_seek_source(context))
-        if li_enabled and not run_stop_requested():
-            results.append(_run_linkedin_source(context))
-    elif seek_enabled and li_enabled:
-        set_run_progress("SEEK + LinkedIn running in parallel")
-        results = _run_seek_and_linkedin_in_parallel(context)
-    elif seek_enabled:
-        results = [_run_seek_source(context)]
-    elif li_enabled:
-        if not run_stop_requested():
-            results = [_run_linkedin_source(context)]
-
-    if apsjobs_enabled and not run_stop_requested():
-        results.append(_run_apsjobs_source(context))
+        for source in enabled_source_order:
+            if run_stop_requested():
+                break
+            results.append(_get_source_runner(source)(context))
+    elif len(enabled_source_order) > 1:
+        parallel_labels = list_to_phrase(
+            [get_source_display_label(source) for source in enabled_source_order]
+        )
+        set_run_progress(f"{parallel_labels} running in parallel")
+        results = _run_sources_in_parallel(context, enabled_source_order)
+    elif enabled_source_order:
+        source = enabled_source_order[0]
+        results = [_get_source_runner(source)(context)]
 
     # Merge mutable state back into context in deterministic order.
     for result in results:

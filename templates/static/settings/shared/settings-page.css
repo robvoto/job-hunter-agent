@@ -392,6 +392,144 @@
       margin-top: 0;
       max-width: 68ch;
     }
+    .system-warnings-panel {
+      gap: 12px;
+    }
+    .system-warnings-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 2px;
+    }
+    .system-warnings-list {
+      display: grid;
+      gap: 12px;
+      min-width: 0;
+    }
+    .system-warning-card {
+      display: grid;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid color-mix(in srgb, var(--border-subtle) 88%, transparent);
+      background: color-mix(in srgb, var(--accent-secondary) 4%, var(--bg-surface));
+      box-shadow: var(--shadow-soft);
+      min-width: 0;
+    }
+    .system-warning-card__head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .system-warning-card__copy {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+      flex: 1 1 440px;
+    }
+    .system-warning-card__title {
+      margin: 0;
+      font-size: var(--text-role-panel-title-font-size);
+      font-weight: var(--text-role-panel-title-font-weight);
+      line-height: 1.25;
+      color: var(--text-primary);
+      overflow-wrap: anywhere;
+    }
+    .system-warning-card__message {
+      margin: 0;
+      color: var(--text-muted);
+      font-size: var(--text-role-body-compact-font-size);
+      line-height: var(--text-role-body-compact-line-height);
+      overflow-wrap: anywhere;
+    }
+    .system-warning-card__meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      color: var(--text-muted);
+      font-size: var(--text-role-body-compact-font-size);
+      line-height: 1.4;
+    }
+    .system-warning-card__meta strong {
+      color: var(--text-primary);
+      font-weight: var(--text-role-button-font-weight);
+    }
+    .system-warning-pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+      align-items: flex-start;
+    }
+    .system-warning-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      font-size: var(--text-role-status-font-size);
+      font-weight: var(--text-role-status-font-weight);
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+    .system-warning-pill--critical {
+      background: color-mix(in srgb, var(--state-error-text) 16%, var(--bg-surface));
+      border-color: color-mix(in srgb, var(--state-error-text) 28%, transparent);
+      color: var(--state-error-text);
+    }
+    .system-warning-pill--error {
+      background: color-mix(in srgb, var(--state-error-text) 12%, var(--bg-surface));
+      border-color: color-mix(in srgb, var(--state-error-text) 22%, transparent);
+      color: var(--state-error-text);
+    }
+    .system-warning-pill--warning {
+      background: color-mix(in srgb, var(--selection-accent) 12%, var(--bg-surface));
+      border-color: color-mix(in srgb, var(--selection-accent) 24%, transparent);
+      color: var(--selection-accent);
+    }
+    .system-warning-pill--info {
+      background: color-mix(in srgb, var(--accent-secondary) 8%, var(--bg-surface));
+      border-color: color-mix(in srgb, var(--accent-secondary) 18%, transparent);
+      color: var(--accent-secondary);
+    }
+    .system-warning-context {
+      margin: 0;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid color-mix(in srgb, var(--border-subtle) 88%, transparent);
+      background: color-mix(in srgb, var(--bg-muted) 70%, transparent);
+    }
+    .system-warning-context summary {
+      cursor: pointer;
+      color: var(--text-primary);
+      font-weight: var(--text-role-button-font-weight);
+      list-style: none;
+    }
+    .system-warning-context summary::-webkit-details-marker {
+      display: none;
+    }
+    .system-warning-context pre {
+      margin: 10px 0 0;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      color: var(--text-muted);
+      font: inherit;
+      line-height: 1.45;
+    }
+    .system-warning-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .system-warning-actions button {
+      padding: 8px 14px;
+      min-height: 38px;
+      font-size: var(--text-role-button-font-size);
+    }
     /* Admin panel fields are direct children. upgradeSettingsHelpBlocks() removes .field-help and
        wraps each label in .field-label-row, so live DOM is: .field-label-row → input → .field-label-row.
        Target both pre- and post-upgrade patterns for robustness. */

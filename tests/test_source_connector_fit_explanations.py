@@ -243,30 +243,17 @@ def test_score_to_match_label_uses_central_match_band_mapping():
     assert score_to_match_label(40) == "Stretch"
 
 
-def test_strong_llm_grade_lands_in_strong_score_band():
-    """STRONG grade with minimal supporting signals must land within the STRONG band (68-87).
-    It should NOT automatically produce 95 regardless of title/content/capability evidence.
-    """
-    scoring_rules = json.loads(SCORING_RULES_PATH.read_text(encoding="utf-8"))
-    strong_band = scoring_rules["llm_grade_bands"]["STRONG"]
-    profile = {
-        **_test_profile(),
-        "scoring_rules": scoring_rules,
-    }
+def test_llm_grade_does_not_create_requirement_fit_score():
+    profile = {**_test_profile(), "scoring_rules": {"fit_breakdown": {"hard_block_penalty": -100}}}
     record = {
         "title": "Accounts Payable Officer",
         "title_reason": "TITLE_NOT_TARGET",
         "content_reason": "NO_MATCH",
         "llm_fit_grade": "STRONG",
+        "requirement_coverage": [],
     }
 
-    score = fit_scoring.fit_score(record, profile)
-
-    assert strong_band["floor"] <= score <= strong_band["ceiling"], (
-        f"STRONG + minimal signals should land in the STRONG band "
-        f"[{strong_band['floor']}, {strong_band['ceiling']}], got {score}"
-    )
-
+    assert fit_scoring.fit_score(record, profile) == 0
 
 def test_score_labels_and_tones_can_use_profile_match_levels():
     profile = {
@@ -538,6 +525,10 @@ def test_render_job_card_includes_expandable_full_description_when_trusted_text_
 
     assert 'class="job-summary-expand"' in html
     assert 'class="job-summary-toggle"' in html
+    assert "Show more" in html
+    assert "Show less" in html
+    assert 'class="job-full-description-body"' in html
+    assert html.count('class="job-full-description"') >= 2
     assert "process mapping, UAT coordination" in html
 
 
@@ -725,22 +716,18 @@ def test_fit_score_evidence_ignores_display_only_fit_highlights():
     assert not any("[llm_confirmed]" in item["label"] for item in breakdown)
 
 
-def test_fit_score_requirement_coverage_entries_are_transparency_only():
-    # requirement_coverage entries appear as transparency entries (evidence/explanation only, no points).
+def test_fit_score_requirement_coverage_directly_drives_requirement_fit_score():
     breakdown = fit_scoring.fit_score_breakdown(
         {
             "title": "Lead Business Analyst",
             "title_reason": "OK",
             "content_reason": "OK",
             "llm_fit_grade": "SOLID",
-            "location": "Sydney NSW",
-            "work_type": "Full Time",
-            "work_mode": "Hybrid",
-            "salary": "N/A",
             "competitive_signals": [],
             "requirement_coverage": [
                 {
                     "requirement": "Agile delivery",
+                    "importance": "mandatory",
                     "status": "supported",
                     "capability_name": "agile methodologies",
                     "matched_job_text": "agile delivery ceremonies",
@@ -748,7 +735,8 @@ def test_fit_score_requirement_coverage_entries_are_transparency_only():
                 },
                 {
                     "requirement": "Acceptance testing",
-                    "status": "partially_supported",
+                    "importance": "preferred",
+                    "status": "supported",
                     "capability_name": "acceptance testing",
                     "matched_job_text": "acceptance criteria",
                     "profile_support": ["Acceptance Testing"],
@@ -758,14 +746,9 @@ def test_fit_score_requirement_coverage_entries_are_transparency_only():
         _capability_profile(),
     )
 
-    coverage_entries = [
-        item
-        for item in breakdown
-        if "Requirement" in item["label"] and "section" in item and item["section"] == "llm_fit"
-    ]
-    assert len(coverage_entries) == 2
-    assert all(entry["value"] == 0 for entry in coverage_entries)
-
+    assert breakdown[0]["section"] == "requirement_fit"
+    assert breakdown[0]["value"] == 100
+    assert breakdown[0]["label"].startswith("Requirement Fit: 100%")
 
 def test_strong_high_confidence_fit_keeps_requirement_coverage_transparency_only():
     profile = _capability_profile()
@@ -843,14 +826,10 @@ def test_required_blocker_watchouts_do_not_mark_desirable_mentions_as_missing():
     assert missing == []
 
 
-def test_fit_score_breakdown_can_use_profile_scoring_rule_overrides():
+def test_fit_score_breakdown_ignores_profile_title_scoring_rule_overrides():
     profile = {
-        **_test_profile(),
-        "scoring_rules": {
-            "fit_breakdown": {
-                "title_direct": 20,
-            },
-        },
+        **_capability_profile(),
+        "scoring_rules": {"fit_breakdown": {"title_direct": 20, "hard_block_penalty": -100}},
     }
 
     breakdown = fit_scoring.fit_score_breakdown(
@@ -859,22 +838,16 @@ def test_fit_score_breakdown_can_use_profile_scoring_rule_overrides():
             "title_reason": "OK",
             "content_reason": "OK",
             "llm_fit_grade": "SOLID",
-            "title_match_metadata": {
-                "match_family": "primary",
-            },
-            "fit_highlights": [],
-            "location": "Sydney NSW",
-            "work_type": "Full Time",
-            "work_mode": "Hybrid",
-            "salary": "N/A",
-            "full_description": "Business analyst duties. " * 40,
-            "competitive_signals": [],
+            "title_match_metadata": {"match_family": "primary"},
+            "requirement_coverage": [
+                {"requirement": "Agile delivery", "importance": "mandatory", "status": "supported", "capability_name": "agile methodologies"}
+            ],
         },
         profile,
     )
 
-    assert _breakdown_value(breakdown, "The job title matches one of your target roles") == 20
-
+    assert _breakdown_value(breakdown, "The job title matches one of your target roles") is None
+    assert breakdown[0]["value"] == 100
 
 def test_fit_score_breakdown_keeps_easy_apply_as_badge_only():
     breakdown = fit_scoring.fit_score_breakdown(
@@ -901,30 +874,24 @@ def test_fit_score_breakdown_keeps_easy_apply_as_badge_only():
     assert _breakdown_value(breakdown, "Easy/Quick Apply available") is None
 
 
-def test_fit_score_breakdown_keeps_secondary_role_family_clean():
+def test_fit_score_breakdown_keeps_secondary_role_family_out_of_score():
     breakdown = fit_scoring.fit_score_breakdown(
         {
             "title": "Lead Project Coordinator",
             "title_reason": "TITLE_POTENTIAL_MATCH",
             "content_reason": "OK",
             "llm_fit_grade": "SOLID",
-            "title_match_metadata": {
-                "match_family": "secondary",
-            },
-            "fit_highlights": [],
-            "location": "Sydney NSW",
-            "work_type": "Full Time",
-            "work_mode": "Hybrid",
-            "salary": "N/A",
-            "full_description": "Project coordinator duties. " * 40,
-            "competitive_signals": [],
+            "title_match_metadata": {"match_family": "secondary"},
+            "requirement_coverage": [
+                {"requirement": "Agile delivery", "importance": "mandatory", "status": "supported", "capability_name": "agile methodologies"}
+            ],
         },
-        _test_profile(),
+        _capability_profile(),
     )
 
-    assert _breakdown_value(breakdown, "The job title matches one of your alternative roles") == 4
+    assert _breakdown_value(breakdown, "The job title matches one of your alternative roles") is None
     assert _breakdown_value(breakdown, "Preferred seniority adjustment") is None
-
+    assert breakdown[0]["value"] == 100
 
 def test_job_card_shows_negative_score_factors_without_debug_mode():
     html = workspace_renderer.render_job_card(
@@ -1232,7 +1199,7 @@ def test_posting_channel_badge_uses_strong_company_indicator():
         _test_profile(),
     )
 
-    assert "Recruiter" in html
+    assert "Agency recruiter" in html
     assert "Likely recruiter" not in html
     assert "Source unclear" not in html
 
@@ -1294,6 +1261,35 @@ def test_render_job_card_requirement_coverage_hides_evidence_subtitles_in_normal
     assert "req-coverage-detail" not in html
     assert "business analysis" not in html
     assert f'"{requirement}"' not in html
+
+
+def test_render_job_card_requirement_coverage_shows_eligibility_details_in_debug_mode():
+    html = workspace_renderer.render_job_card(
+        {
+            **_test_profile(),
+            "job_requirements": [],
+            "requirement_coverage": [
+                {
+                    "requirement": "Hold PV security clearance",
+                    "importance": "mandatory",
+                    "requirement_type": "eligibility",
+                    "status": "supported",
+                    "profile_name": "PV clearance",
+                    "eligibility_name": "PV clearance",
+                    "capability_name": "",
+                    "matched_job_text": "Must hold a PV clearance",
+                    "profile_support": [],
+                }
+            ],
+            "source": "seek",
+        },
+        _capability_profile(),
+        debug_mode=True,
+    )
+
+    assert "job-requirements-panel" in html
+    assert "req-coverage-detail" in html
+    assert "PV clearance" in html
 
 
 def test_render_job_card_shows_empty_requirements_state_when_none_are_extracted():
@@ -2699,6 +2695,15 @@ def test_workspace_renders_requirement_coverage_with_status_classes():
                     "matched_job_text": "",
                     "profile_support": [],
                 },
+                {
+                    "requirement": "PV clearance",
+                    "importance": "mandatory",
+                    "status": "invalid",
+                    "requirement_type": "credential",
+                    "capability_name": "",
+                    "matched_job_text": "Must hold PV clearance",
+                    "profile_support": [],
+                },
             ],
             "location": "Sydney NSW",
             "work_type": "Full Time",
@@ -2716,8 +2721,10 @@ def test_workspace_renders_requirement_coverage_with_status_classes():
     assert "job-requirement-item--partially-supported" in html
     assert "job-requirement-item--mismatch" in html
     assert "job-requirement-item--not-shown" in html  # nice_to_have not_shown → grey
+    assert "job-requirement-item--invalid" in html
     assert "Stakeholder engagement" in html
     assert "SAP certification" in html
+    assert "Needs review" in html
     assert "job-requirements-panel" in html
     assert "job-coverage-panel" not in html
     assert "Job Requirements" in html
@@ -2828,28 +2835,25 @@ def test_posted_display_shows_today_against_current_render_date():
     assert label == "22 Apr 2026"
 
 
-def test_hard_blocked_job_still_shows_other_fit_evidence():
+def test_hard_blocked_job_still_shows_requirement_fit_evidence():
     record = {
         "title": "Business Analyst",
         "title_reason": "OK",
         "title_match_metadata": {"match_family": "primary"},
         "content_reason": "OK",
         "llm_fit_grade": "SOLID",
-        "location": "Sydney NSW",
-        "work_type": "Full Time",
-        "work_mode": "Hybrid",
-        "salary": "N/A",
         "competitive_signals": [],
         "hard_block_reasons": ["requires SAP experience"],
+        "requirement_coverage": [
+            {"requirement": "Agile delivery", "importance": "mandatory", "status": "supported", "capability_name": "agile methodologies"}
+        ],
     }
 
-    breakdown = fit_scoring.fit_score_breakdown(record, _test_profile())
+    breakdown = fit_scoring.fit_score_breakdown(record, _capability_profile())
     labels = [item["label"] for item in breakdown]
 
     assert any("Hard blocker" in label for label in labels)
-    assert "The job title matches one of your target roles" in labels
-    assert any("fit" in label.lower() or "match" in label.lower() for label in labels)
-
+    assert labels[0].startswith("Requirement Fit: 100%")
 
 def test_score_equivalent_where_no_hard_blockers():
     record = {

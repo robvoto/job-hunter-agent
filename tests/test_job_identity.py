@@ -154,6 +154,12 @@ def test_potential_duplicate_detected_is_logged(tmp_path, monkeypatch):
     log_file = tmp_path / "uncertainty.jsonl"
 
     monkeypatch.setattr(_ji, "UNCERTAINTY_LOG_PATH", log_file)
+    warnings = []
+    monkeypatch.setattr(
+        _ji,
+        "record_system_warning",
+        lambda **kwargs: warnings.append(kwargs) or kwargs,
+    )
 
     records = [
         {
@@ -179,6 +185,8 @@ def test_potential_duplicate_detected_is_logged(tmp_path, monkeypatch):
     entries = [json.loads(line) for line in log_file.read_text().splitlines() if line.strip()]
 
     assert any(e.get("reason_code") == "POTENTIAL_DUPLICATE_DETECTED" for e in entries)
+    assert warnings
+    assert warnings[0]["category"] == "job_identity_uncertainty"
 
 
 def test_dedup_company_missing_is_logged(tmp_path, monkeypatch):
@@ -186,6 +194,12 @@ def test_dedup_company_missing_is_logged(tmp_path, monkeypatch):
     log_file = tmp_path / "uncertainty.jsonl"
 
     monkeypatch.setattr(_ji, "UNCERTAINTY_LOG_PATH", log_file)
+    warnings = []
+    monkeypatch.setattr(
+        _ji,
+        "record_system_warning",
+        lambda **kwargs: warnings.append(kwargs) or kwargs,
+    )
 
     records = [
         {"job_key": "seek:1", "company": "Acme", "title": "Business Analyst", "source": "seek"},
@@ -199,3 +213,5 @@ def test_dedup_company_missing_is_logged(tmp_path, monkeypatch):
     entries = [json.loads(line) for line in log_file.read_text().splitlines() if line.strip()]
 
     assert any(e.get("reason_code") == "DEDUP_COMPANY_MISSING" for e in entries)
+    assert warnings
+    assert warnings[0]["category"] == "job_identity_uncertainty"

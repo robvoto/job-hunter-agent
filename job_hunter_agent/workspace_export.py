@@ -16,7 +16,7 @@ from job_hunter_agent.profile_store import load_profile
 from job_hunter_agent.source_registry import get_source_display_label
 from job_hunter_agent.text_processing import dedupe_preserve_order
 from job_hunter_agent.user_settings import get_workspace_minimum_score
-from job_hunter_agent.workspace_renderer import ARCHIVE_LABEL
+from job_hunter_agent.workspace_renderer import ARCHIVE_LABEL, _workspace_label
 from job_hunter_agent import workspace_service
 
 EXPORT_JSON_FILENAME = "job-hunter-jobs.json"
@@ -105,7 +105,13 @@ def _build_badges(record: dict, workspace_state: str) -> list[str]:
     ]
     if channel_kind == "agency_or_recruiter":
         if channel_source in {"metadata_first", "company_or_domain_indicator"} and not channel_signal.get("needs_review"):
-            badges.append("Recruiter")
+            badges.append(
+                _workspace_label(
+                    "workspace_card_labels",
+                    "posting_channel_agency_recruiter_badge",
+                    "Agency recruiter",
+                )
+            )
         else:
             badges.append("Likely recruiter")
     elif channel_kind == "direct_employer":

@@ -9,6 +9,10 @@ from job_hunter_agent.auth import auth_required_response, is_admin
 from job_hunter_agent.config import GLOBAL_SETTINGS_PATH
 from job_hunter_agent.global_settings import save_global_settings
 from job_hunter_agent.knowledge_sync_roundtrip import sync_knowledge_roundtrip
+from job_hunter_agent.system_warnings import (
+    list_system_warnings,
+    update_system_warning_status,
+)
 from job_hunter_agent.routes.responses import json_response
 
 router = APIRouter()
@@ -133,5 +137,34 @@ async def api_admin_rejection_history_sync(
         return json_response(
             {"ok": True, "message": f"Synced rejection history: {added} new, {total} total."}
         )
+    except Exception as exc:
+        return json_response({"error": str(exc)}, 400)
+
+
+@router.get("/api/admin/system-warnings")
+def api_admin_system_warnings_get(request: Request):  # type: ignore[no-untyped-def]
+    if not is_admin(request):
+        return auth_required_response("/api/admin/system-warnings", False)
+    try:
+        warnings = list_system_warnings()
+        return json_response({"warnings": warnings})
+    except Exception as exc:
+        return json_response({"error": str(exc)}, 400)
+
+
+@router.patch("/api/admin/system-warnings/{warning_id}")
+def api_admin_system_warnings_patch(
+    request: Request,
+    warning_id: int,
+    body: dict = Body(...),
+):  # type: ignore[no-untyped-def]
+    if not is_admin(request):
+        return auth_required_response("/api/admin/system-warnings", False)
+    try:
+        status = str(body.get("status") or "").strip().lower()
+        updated = update_system_warning_status(warning_id, status)
+        return json_response({"ok": True, "warning": updated})
+    except LookupError as exc:
+        return json_response({"error": str(exc)}, 404)
     except Exception as exc:
         return json_response({"error": str(exc)}, 400)
