@@ -21,7 +21,9 @@ from job_hunter_agent.company_normalization import normalize_company_name
 from job_hunter_agent.config import DEBUG_MODE
 from job_hunter_agent.description_trust import (
     full_description_confidence,
+    get_min_trusted_description_length,
     get_trusted_full_description,
+    get_trusted_sources,
 )
 from job_hunter_agent.filters import normalize_title_block_phrase
 from job_hunter_agent.fit_scoring import (
@@ -92,6 +94,7 @@ from job_hunter_agent.role_analysis import friendly_capability_label
 from job_hunter_agent.text_processing import (
     build_role_summary,
     clean_display_text,
+    clean_display_text_preserving_blocks,
     compact_whitespace,
     dedupe_preserve_order,
     list_to_phrase,
@@ -153,18 +156,171 @@ def _chunk_full_description_text(description: str) -> list[str]:
     return chunks or [cleaned]
 
 
-def _render_full_description_html(description: str) -> str:
-    chunks = _chunk_full_description_text(description)
-    if not chunks:
+_DESCRIPTION_BULLET_RE = re.compile(r"^(?:[-*•]\s+|\d+[\.\)]\s+)(.+)$")
+_DESCRIPTION_HEADING_JOINERS = frozenset(
+    {"a", "an", "and", "at", "de", "for", "in", "of", "on", "or", "the", "to", "with"}
+)
+
+
+def _get_trusted_display_description(record: dict) -> str:
+    """Return trusted description text while preserving source line structure for display."""
+
+    full_description = clean_display_text_preserving_blocks(record.get("full_description") or "")
+    if full_description:
+        return full_description
+
+    source = str(record.get("description_source") or "").strip().lower()
+    fallback_text = clean_display_text_preserving_blocks(record.get("fit_source_text") or "")
+    if len(compact_whitespace(fallback_text)) < get_min_trusted_description_length():
         return ""
+    if source in get_trusted_sources():
+        return fallback_text
+    return ""
+
+
+def _looks_like_description_heading(line: str) -> bool:
+    cleaned = compact_whitespace(line)
+    if not cleaned:
+        return False
+    if _DESCRIPTION_BULLET_RE.match(cleaned):
+        return False
+    if ":" in cleaned and not cleaned.endswith(":"):
+        return False
+
+    candidate = cleaned.rstrip(":").strip()
+    if not candidate:
+        return False
+    if len(candidate) > 90:
+        return False
+    if cleaned.endswith((".", ";", ",")):
+        return False
+
+    words = [part for part in re.split(r"\s+", candidate) if part]
+    if not words or len(words) > 9:
+        return False
+
+    if candidate.isupper() and any(ch.isalpha() for ch in candidate):
+        return True
+    if cleaned.endswith("?"):
+        candidate = candidate.rstrip("?").strip()
+        words = [part for part in re.split(r"\s+", candidate) if part]
+        if not words:
+            return False
+
+    for index, word in enumerate(words):
+        token = word.strip(".,:;!?()[]{}\"'")
+        if not token:
+            continue
+        if any(ch.isdigit() for ch in token) and len(words) == 1:
+            continue
+        if token.isupper():
+            continue
+        if token[:1].isupper():
+            continue
+        lower = token.lower()
+        if lower in _DESCRIPTION_HEADING_JOINERS:
+            if index == 0:
+                return False
+            continue
+        return False
+    return True
+
+
+def _render_structured_description_html(description: str) -> str:
+    lines = clean_display_text_preserving_blocks(unescape(description)).split("\n")
+    blocks: list[tuple[str, Any]] = []
+    paragraph_lines: list[str] = []
+    list_items: list[str] = []
+    found_structure = False
+
+    def flush_paragraph() -> None:
+        if not paragraph_lines:
+            return
+        paragraph = compact_whitespace(" ".join(paragraph_lines))
+        if paragraph:
+            blocks.append(("paragraph", paragraph))
+        paragraph_lines.clear()
+
+    def flush_list() -> None:
+        if not list_items:
+            return
+        blocks.append(("list", list_items.copy()))
+        list_items.clear()
+
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line:
+            flush_paragraph()
+            flush_list()
+            continue
+
+        if " - " in line:
+            prefix, remainder = [part.strip() for part in line.split(" - ", 1)]
+            if _looks_like_description_heading(prefix) and compact_whitespace(remainder):
+                flush_paragraph()
+                flush_list()
+                blocks.append(("heading", prefix.rstrip(":").strip()))
+                paragraph_lines.append(remainder)
+                found_structure = True
+                continue
+
+        bullet_match = _DESCRIPTION_BULLET_RE.match(line)
+        if bullet_match:
+            flush_paragraph()
+            bullet_text = compact_whitespace(bullet_match.group(1))
+            if bullet_text:
+                list_items.append(bullet_text)
+                found_structure = True
+            continue
+
+        if _looks_like_description_heading(line):
+            flush_paragraph()
+            flush_list()
+            blocks.append(("heading", line.rstrip(":").strip()))
+            found_structure = True
+            continue
+
+        flush_list()
+        paragraph_lines.append(line)
+
+    flush_paragraph()
+    flush_list()
+
+    if not blocks:
+        return ""
+
+    if not found_structure and len(blocks) == 1 and blocks[0][0] == "paragraph":
+        chunks = _chunk_full_description_text(str(blocks[0][1]))
+        blocks = [("paragraph", chunk) for chunk in chunks]
+
+    rendered_blocks: list[str] = []
+    for kind, payload in blocks:
+        if kind == "heading":
+            rendered_blocks.append(
+                f'<h4 class="job-full-description-heading">{safe_html(str(payload))}</h4>'
+            )
+        elif kind == "list":
+            items = "".join(
+                f'<li class="job-full-description-list-item">{safe_html(item)}</li>'
+                for item in payload
+                if compact_whitespace(item)
+            )
+            if items:
+                rendered_blocks.append(f'<ul class="job-full-description-list">{items}</ul>')
+        else:
+            rendered_blocks.append(f'<p class="job-full-description">{safe_html(str(payload))}</p>')
 
     return (
         '<div class="job-full-description-body">'
-        + "".join(
-            f'<p class="job-full-description">{safe_html(chunk)}</p>' for chunk in chunks
-        )
+        '<div class="job-full-description-reading">'
+        + "".join(rendered_blocks)
+        + "</div>"
         + "</div>"
     )
+
+
+def _render_full_description_html(description: str) -> str:
+    return _render_structured_description_html(description)
 TITLE_BLOCK_PROMPT_COPY = "Enter the exact title phrase to block before description review."
 TITLE_BLOCK_HELP_SUMMARY = "Learn more"
 TITLE_BLOCK_MANUAL_HELP = "Use exact phrases from the title. Use commas to add more than one."
@@ -792,6 +948,7 @@ def render_job_card(
         stored_snapshot = synthesize_role_snapshot(record)
     fit_confidence_level = full_description_confidence(record)
     trusted_desc = get_trusted_full_description(record)
+    trusted_display_desc = _get_trusted_display_description(record)
 
     if fit_confidence_level == "HIGH" and trusted_desc:
         display_record["fit_source_text"] = trusted_desc
@@ -1256,7 +1413,7 @@ def render_job_card(
         if role_summary and role_summary != "N/A"
         else ""
     )
-    display_trusted_desc = clean_display_text(unescape(trusted_desc))
+    display_trusted_desc = trusted_display_desc
     if display_trusted_desc and compact_whitespace(display_trusted_desc) != compact_whitespace(role_summary):
         summary_html = (
             '<details class="job-summary-expand">'
@@ -1316,6 +1473,17 @@ def render_job_card(
     def _requirement_key(value: str) -> str:
         return compact_whitespace(value).lower()
 
+    def _requirement_sort_key(row: dict[str, Any]) -> tuple[int, str]:
+        importance = compact_whitespace(str(row.get("importance") or "")).lower()
+        requirement = compact_whitespace(str(row.get("requirement") or "")).lower()
+        if importance == "mandatory":
+            bucket = 0
+        elif importance in {"strongly_preferred", "preferred"}:
+            bucket = 1
+        else:
+            bucket = 2
+        return (bucket, requirement)
+
     if has_coverage:
         # Coverage path: one row per coverage entry, no job_requirements duplication
         for item in raw_coverage:
@@ -1349,7 +1517,11 @@ def render_job_card(
 
     if requirement_statuses or isinstance(raw_coverage, list):
         requirement_items_html = ""
-        for key in merged_requirement_order:
+        sorted_requirement_keys = sorted(
+            merged_requirement_order,
+            key=lambda key: _requirement_sort_key(merged_requirement_rows.get(key) or {}),
+        )
+        for key in sorted_requirement_keys:
             row = merged_requirement_rows.get(key)
             if not isinstance(row, dict):
                 continue
@@ -1645,6 +1817,7 @@ def render_job_card(
         " is-description-issue" if description_issue else ""
     )
     card_dom_id = _workspace_job_card_id(job_key)
+    title_block_panel_id = f"{card_dom_id}-title-block"
 
     return (
         f'<article id="{safe_html(card_dom_id)}" class="{safe_html(card_classes)}" data-fit-score="{fit_points}" data-posted-age="{posted_age_days if posted_age_days is not None else 9999}" data-salary-sort="{salary_value}" data-salary-fit="{safe_html(salary_fit_state)}" data-work-mode="{safe_html(work_mode.lower())}" data-work-type="{safe_html(display_work_type_label(record).lower())}" data-viewed="{1 if seen_by_you else 0}" data-record-kind="{record_kind}" data-fit-label="{safe_html(fit_label.lower())}" data-title-search="{safe_html((record.get("title") or "").lower())}" data-company-search="{safe_html(company_display.lower())}" data-source="{safe_html(source)}" data-apply-method="{safe_html(apply_method or "unknown")}">'
@@ -1654,9 +1827,8 @@ def render_job_card(
         '<div class="job-title-row">'
         f'<a class="job-link" href="{url}" target="_blank" rel="noopener noreferrer" data-job-key="{job_key}" data-job-url="{url}" data-job-title="{title}">{title}</a>'
         + (
-            f'<button class="title-block-btn chip-button" type="button" data-review-action="block_similar" {button_data_attrs} title="{safe_html(_workspace_label("workspace_card_labels", "title_block_button_tooltip", "Hide future roles whose titles contain exact phrases you choose before Job Hunter spends time reading the full ad."))}">{safe_html(_workspace_label("workspace_card_labels", "title_block_button_label", "Hide similar titles"))}</button>'
-            '<div class="block-confirm" data-block-confirm hidden>'
-            f'<div class="feature-guide-note">{safe_html(_workspace_label("workspace_card_labels", "title_block_guidance_copy", TITLE_BLOCK_GUIDANCE_COPY))}</div>'
+            f'<button class="title-block-btn chip-button" type="button" data-review-action="block_similar" {button_data_attrs} aria-expanded="false" aria-controls="{safe_html(title_block_panel_id)}" title="{safe_html(_workspace_label("workspace_card_labels", "title_block_button_tooltip", "Hide future roles whose titles contain exact phrases you choose before Job Hunter spends time reading the full ad."))}">{safe_html(_workspace_label("workspace_card_labels", "title_block_button_label", "Hide similar titles"))}</button>'
+            f'<div id="{safe_html(title_block_panel_id)}" class="block-confirm" data-block-confirm hidden>'
             f'<p class="block-confirm-copy">{safe_html(_workspace_label("workspace_card_labels", "title_block_prompt_copy", TITLE_BLOCK_PROMPT_COPY))}</p>'
             '<details class="block-confirm-help">'
             f'<summary>{safe_html(_workspace_label("workspace_card_labels", "title_block_help_summary", TITLE_BLOCK_HELP_SUMMARY))}</summary>'

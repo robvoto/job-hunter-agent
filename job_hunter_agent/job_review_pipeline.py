@@ -478,15 +478,10 @@ def _apply_detail_payload_to_record(
 def _apply_source_metadata_to_record(record: dict, details_text: str) -> None:
     channel_signal = infer_posting_channel(record, details_text)
     record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY] = {
-        "kind": channel_signal.get("kind", "unknown"),
-        "source": channel_signal.get("source", "insufficient_evidence"),
+        "kind": str(channel_signal.get("kind") or "unknown"),
+        "source": str(channel_signal.get("source") or ""),
         "trusted_metadata": list(channel_signal.get("trusted_metadata") or []),
         "weak_text_matches": list(channel_signal.get("weak_text_matches") or []),
-        "text_evidence": list(
-            channel_signal.get("text_evidence")
-            or channel_signal.get("weak_text_matches")
-            or []
-        ),
         "needs_review": bool(channel_signal.get("needs_review")),
     }
 

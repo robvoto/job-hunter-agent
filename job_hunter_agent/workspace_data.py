@@ -27,6 +27,7 @@ from job_hunter_agent.record_schema import (
     RECORD_LLM_INPUT_TOKENS_KEY,
     RECORD_LLM_OUTPUT_TOKENS_KEY,
     RECORD_LOCATION_KEY,
+    RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
     RECORD_POSTED_AGE_DAYS_KEY,
     RECORD_POSTED_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
@@ -56,6 +57,16 @@ def _record_source(entry: dict, job_key: str) -> str:
         return source
 
     return str(job_key).split(":", 1)[0].strip().lower() if ":" in str(job_key) else "unknown"
+
+
+def _posting_channel_evidence(entry: dict, snapshot: dict) -> dict:
+    value = snapshot.get(RECORD_POSTING_CHANNEL_EVIDENCE_KEY)
+    if isinstance(value, dict):
+        return dict(value)
+    value = entry.get(RECORD_POSTING_CHANNEL_EVIDENCE_KEY)
+    if isinstance(value, dict):
+        return dict(value)
+    return {}
 
 
 def build_history_workspace_record(
@@ -117,6 +128,7 @@ def build_history_workspace_record(
         "missing_profile_support": snapshot.get("missing_profile_support") or [],
         "competitive_signals": snapshot.get("competitive_signals") or [],
         "hard_block_reasons": snapshot.get("hard_block_reasons") or [],
+        RECORD_POSTING_CHANNEL_EVIDENCE_KEY: _posting_channel_evidence(entry, snapshot),
         RECORD_SEEN_BEFORE_KEY: True,
         RECORD_TIMES_VIEWED_KEY: int(entry.get(RECORD_TIMES_VIEWED_KEY, 0) or 0),
         RECORD_TIMES_KEPT_KEY: int(entry.get(RECORD_TIMES_KEPT_KEY, 0) or 0),
@@ -227,6 +239,7 @@ def build_hidden_workspace_record(
         "missing_profile_support": snapshot.get("missing_profile_support") or [],
         "competitive_signals": snapshot.get("competitive_signals") or [],
         "hard_block_reasons": snapshot.get("hard_block_reasons") or [],
+        RECORD_POSTING_CHANNEL_EVIDENCE_KEY: _posting_channel_evidence(entry, snapshot),
         RECORD_SEARCH_LOCATION_KEY: snapshot.get(RECORD_SEARCH_LOCATION_KEY) or "N/A",
         RECORD_SEARCH_KEYWORDS_KEY: snapshot.get(RECORD_SEARCH_KEYWORDS_KEY) or "",
         "times_viewed": int(entry.get("times_viewed", 0) or 0),
@@ -328,6 +341,7 @@ def build_applied_workspace_record(
         "missing_profile_support": snapshot.get("missing_profile_support") or [],
         "competitive_signals": snapshot.get("competitive_signals") or [],
         "hard_block_reasons": snapshot.get("hard_block_reasons") or [],
+        RECORD_POSTING_CHANNEL_EVIDENCE_KEY: _posting_channel_evidence(entry, snapshot),
         "search_location": snapshot.get("search_location") or "N/A",
         "search_keywords": snapshot.get("search_keywords") or "",
         "times_viewed": int(entry.get("times_viewed", 0) or 0),

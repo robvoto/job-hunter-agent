@@ -386,7 +386,15 @@
 
     function hideBlockConfirm(card) {
       const confirm = card?.querySelector('[data-block-confirm]');
-      if (confirm) confirm.hidden = true;
+      if (confirm) {
+        confirm.hidden = true;
+      }
+      const trigger = card?.querySelector('.title-block-btn');
+      if (trigger) {
+        trigger.hidden = false;
+        trigger.classList.remove('is-active');
+        trigger.setAttribute('aria-expanded', 'false');
+      }
       const blockStatus = card?.querySelector('.block-status');
       if (blockStatus) blockStatus.textContent = '';
     }
@@ -424,7 +432,10 @@
       const confirm = card.querySelector('[data-block-confirm]');
       const blockStatus = card.querySelector('.block-status');
       for (const panel of Array.from(document.querySelectorAll('[data-block-confirm]'))) {
-        if (panel !== confirm) panel.hidden = true;
+        if (panel === confirm) {
+          continue;
+        }
+        hideBlockConfirm(panel.closest('.job-card'));
       }
       for (const s of Array.from(document.querySelectorAll('.block-status'))) {
         if (s !== blockStatus) s.textContent = '';
@@ -477,7 +488,12 @@
         } catch(e) { impactEl.textContent = ''; }
       }
 
-      if (manualInput) manualInput.addEventListener('input', updateImpact);
+      if (manualInput) {
+        manualInput.oninput = updateImpact;
+      }
+      button.hidden = true;
+      button.classList.add('is-active');
+      button.setAttribute('aria-expanded', 'true');
       manualInput?.focus();
 
       updateImpact();

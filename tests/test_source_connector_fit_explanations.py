@@ -171,6 +171,34 @@ def test_infer_posting_channel_uses_trusted_metadata_before_text():
     assert "job_url_direct" in channel["trusted_metadata"]
 
 
+def test_infer_posting_channel_treats_linkedin_company_profile_with_hiring_company_as_direct_employer():
+    channel = role_analysis.infer_posting_channel(
+        {
+            "company": "Aspen Medical",
+            "source_metadata": {
+                "platform": "linkedin",
+                "apply_url": "https://www.linkedin.com/jobs/view/4439784341",
+                "apply_domain": "www.linkedin.com",
+                "company_profile_url": "https://au.linkedin.com/company/aspen-medical-pty-ltd",
+                "company_profile_name": "Aspen Medical",
+                "poster_company": "Aspen Medical",
+                "hiring_company": "Aspen Medical",
+                "ats_source": "www.linkedin.com",
+                "raw_source_fields": {
+                    "job_url_direct": None,
+                    "company_url_direct": None,
+                },
+            },
+        },
+        "",
+    )
+
+    assert channel["kind"] == "direct_employer"
+    assert channel["source"] == "metadata_first"
+    assert channel["needs_review"] is False
+    assert "company profile link = https://au.linkedin.com/company/aspen-medical-pty-ltd" in channel["trusted_metadata"]
+
+
 @pytest.mark.parametrize(
     "details_text, expected_phrase",
     [
@@ -528,6 +556,7 @@ def test_render_job_card_includes_expandable_full_description_when_trusted_text_
     assert "Show more" in html
     assert "Show less" in html
     assert 'class="job-full-description-body"' in html
+    assert 'class="job-full-description-reading"' in html
     assert html.count('class="job-full-description"') >= 2
     assert "process mapping, UAT coordination" in html
 
@@ -561,6 +590,107 @@ def test_render_job_card_full_description_cleans_markdown_escape_artifacts():
 
     assert "org_code\\=WXWPMT" not in html
     assert "org_code=WXWPMT" in html
+
+
+def test_render_job_card_full_description_preserves_source_paragraphs():
+    full_description = (
+        "About the Role\n"
+        "\n"
+        "First paragraph with stakeholder engagement and delivery planning.\n"
+        "\n"
+        "Second paragraph covering workshops and operating rhythm."
+    )
+    html = workspace_renderer._render_full_description_html(full_description)
+
+    assert 'class="job-full-description-reading"' in html
+    assert "<h4 class=\"job-full-description-heading\">About the Role</h4>" in html
+    assert (
+        '<p class="job-full-description">First paragraph with stakeholder engagement and delivery planning.</p>'
+        in html
+    )
+    assert (
+        '<p class="job-full-description">Second paragraph covering workshops and operating rhythm.</p>'
+        in html
+    )
+
+
+def test_render_job_card_full_description_renders_headings_and_lists_semantically():
+    full_description = (
+        "Key Responsibilities\n"
+        "- Lead workshops\n"
+        "- Write requirements\n"
+        "\n"
+        "Why Fujitsu?\n"
+        "Inclusive culture and growth pathways.\n"
+        "\n"
+        "For Security Cleared Roles - PLEASE NOTE citizenship is required."
+    )
+    html = workspace_renderer._render_full_description_html(full_description)
+
+    assert "<h4 class=\"job-full-description-heading\">Key Responsibilities</h4>" in html
+    assert "<h4 class=\"job-full-description-heading\">Why Fujitsu?</h4>" in html
+    assert "<h4 class=\"job-full-description-heading\">For Security Cleared Roles</h4>" in html
+    assert '<ul class="job-full-description-list">' in html
+    assert '<li class="job-full-description-list-item">Lead workshops</li>' in html
+    assert '<li class="job-full-description-list-item">Write requirements</li>' in html
+    assert "Inclusive culture and growth pathways." in html
+    assert "PLEASE NOTE citizenship is required." in html
+
+
+def test_render_job_card_full_description_escapes_html_without_losing_text():
+    full_description = (
+        "Skills and Experience\n"
+        "- Own <script>alert('x')</script> safely\n"
+        "- Use analytics & reporting\n"
+        "\n"
+        "Plain text follows."
+    )
+    html = workspace_renderer._render_full_description_html(full_description)
+
+    assert "<script>" not in html
+    assert "&lt;script&gt;alert(&#x27;x&#x27;)&lt;/script&gt;" in html
+    assert "analytics &amp; reporting" in html
+    assert "Plain text follows." in html
+
+
+def test_render_job_card_full_description_plain_text_falls_back_to_chunked_paragraphs():
+    full_description = (
+        "Senior business analysis role leading discovery workshops, process mapping, "
+        "UAT coordination, stakeholder communication, and reporting across a complex "
+        "delivery program. "
+        * 8
+    )
+    html = workspace_renderer._render_full_description_html(full_description)
+
+    assert html.count('class="job-full-description"') >= 2
+    assert 'class="job-full-description-list"' not in html
+    assert 'class="job-full-description-heading"' not in html
+
+
+def test_render_job_card_full_description_preserves_all_meaningful_content():
+    full_description = (
+        "About the Role\n"
+        "Lead discovery.\n"
+        "\n"
+        "Key Responsibilities\n"
+        "- Facilitate workshops\n"
+        "- Document requirements\n"
+        "\n"
+        "For Security Cleared Roles\n"
+        "Australian citizenship required."
+    )
+    html = workspace_renderer._render_full_description_html(full_description)
+
+    for expected in [
+        "About the Role",
+        "Lead discovery.",
+        "Key Responsibilities",
+        "Facilitate workshops",
+        "Document requirements",
+        "For Security Cleared Roles",
+        "Australian citizenship required.",
+    ]:
+        assert expected in html
 
 
 def test_render_job_card_omits_expandable_full_description_when_no_trusted_text_exists():
@@ -2733,6 +2863,72 @@ def test_workspace_renders_requirement_coverage_with_status_classes():
     assert "Expected" in html  # strongly_preferred label
     assert "Preferred" in html  # preferred label
     assert "Bonus" in html  # nice_to_have label
+
+
+def test_workspace_requirement_list_sorts_mandatory_then_preferred_then_other_alphabetically():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "seek:req-order-test",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "decision": "KEEP",
+            "llm_decision": "KEEP",
+            "llm_fit_grade": "SOLID",
+            RECORD_FIT_SCORE_KEY: 65,
+            RECORD_FIT_SCORE_BREAKDOWN_KEY: [
+                {"label": "Base fit", "value": 65, "section": "llm_fit"}
+            ],
+            "requirement_coverage": [
+                {
+                    "requirement": "Stakeholder engagement",
+                    "importance": "mandatory",
+                    "status": "supported",
+                },
+                {
+                    "requirement": "Reporting",
+                    "importance": "preferred",
+                    "status": "supported",
+                },
+                {
+                    "requirement": "Agile delivery",
+                    "importance": "strongly_preferred",
+                    "status": "supported",
+                },
+                {
+                    "requirement": "Financial reporting",
+                    "importance": "nice_to_have",
+                    "status": "not_shown",
+                },
+                {
+                    "requirement": "SAP certification",
+                    "importance": "mandatory",
+                    "status": "mismatch",
+                },
+                {
+                    "requirement": "PV clearance",
+                    "importance": "mandatory",
+                    "status": "invalid",
+                },
+            ],
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "seek",
+        },
+        _capability_profile(),
+    )
+
+    assert html.index("PV clearance") < html.index("SAP certification")
+    assert html.index("SAP certification") < html.index("Stakeholder engagement")
+    assert html.index("Stakeholder engagement") < html.index("Agile delivery")
+    assert html.index("Agile delivery") < html.index("Reporting")
+    assert html.index("Reporting") < html.index("Financial reporting")
 
 
 def test_repeated_listing_history_adds_candidate_warning():

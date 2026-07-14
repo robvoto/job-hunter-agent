@@ -3,7 +3,7 @@
 import json
 import logging
 
-from job_hunter_agent import job_review_pipeline, source_learning
+from job_hunter_agent import job_review_pipeline, source_learning, workspace_renderer
 from job_hunter_agent.database import init_db
 from job_hunter_agent.fit_scoring import fit_score, fit_score_breakdown
 from job_hunter_agent.job_review_pipeline import (
@@ -38,6 +38,7 @@ from job_hunter_agent.record_schema import (
     RECORD_LOCATION_KEY,
     RECORD_ONET_CLASSIFICATION_KEY,
     RECORD_POSTED_AGE_DAYS_KEY,
+    RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
     RECORD_REJECT_REASON_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
     RECORD_SALARY_KEY,
@@ -138,6 +139,20 @@ def _base_record(source: str, description_source: str, work_mode_source: str) ->
     }
 
 
+def _render_ready_record(source: str = "seek") -> dict:
+    record = _base_record(source, "jobAdDetails", "card")
+    record.update(
+        {
+            RECORD_TITLE_REASON_KEY: "OK",
+            RECORD_CONTENT_REASON_KEY: "OK",
+            RECORD_LLM_FIT_GRADE_KEY: "SOLID",
+            "full_description": "Business analyst role supporting delivery and stakeholders. " * 20,
+            "fit_highlights": [],
+        }
+    )
+    return record
+
+
 def _patch_llm_review_path(monkeypatch, payload):
     monkeypatch.setattr(
         job_review_pipeline,
@@ -193,6 +208,178 @@ def _patch_llm_review_path(monkeypatch, payload):
     monkeypatch.setattr(
         job_review_pipeline, "build_role_summary", lambda record, details_text, profile: "summary"
     )
+
+
+def test_apply_source_metadata_to_record_preserves_direct_employer_kind():
+    record = _base_record("linkedin", "jobAdDetails", "card")
+    record["source_metadata"] = {
+        "platform": "linkedin",
+        "apply_url": "https://jobs.lever.co/acme/123",
+        "apply_domain": "jobs.lever.co",
+        "company_profile_url": "https://acme.com.au",
+        "company_profile_name": "Acme",
+        "poster_company": "Acme",
+        "hiring_company": "Acme",
+        "ats_source": "jobs.lever.co",
+        "raw_source_fields": {
+            "job_url_direct": "https://jobs.lever.co/acme/123",
+            "company_url_direct": "https://acme.com.au",
+        },
+    }
+
+    job_review_pipeline._apply_source_metadata_to_record(record, "")
+
+    channel = record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY]
+    assert channel["kind"] == "direct_employer"
+    assert channel["source"] == "metadata_first"
+    assert channel["needs_review"] is False
+    assert "job_url_direct" in channel["trusted_metadata"]
+    assert "company_url_direct" in channel["trusted_metadata"]
+    assert "apply domain = jobs.lever.co" in channel["trusted_metadata"]
+    assert "company profile link = https://acme.com.au" in channel["trusted_metadata"]
+    assert channel["weak_text_matches"] == []
+
+
+def test_apply_source_metadata_to_record_preserves_agency_recruiter_kind():
+    record = _base_record("seek", "jobAdDetails", "card")
+    record["source_metadata"] = {
+        "platform": "seek",
+        "apply_url": "",
+        "apply_domain": "",
+        "company_profile_url": "",
+        "company_profile_name": "Recruiter Co",
+        "poster_company": "Recruiter Co",
+        "hiring_company": "",
+        "ats_source": "",
+        "raw_source_fields": {
+            "seekPostingSourceCode": "agency",
+        },
+    }
+
+    job_review_pipeline._apply_source_metadata_to_record(record, "")
+
+    channel = record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY]
+    assert channel["kind"] == "agency_or_recruiter"
+    assert channel["source"] == "metadata_first"
+    assert channel["needs_review"] is False
+    assert "seekPostingSourceCode" in channel["trusted_metadata"]
+    assert "company name = Recruiter Co" in channel["weak_text_matches"]
+
+
+def test_apply_source_metadata_to_record_stores_review_signal_shape(monkeypatch):
+    record = _base_record("seek", "jobAdDetails", "card")
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "infer_posting_channel",
+        lambda record, details_text: {
+            "kind": "unknown",
+            "source": "",
+            "trusted_metadata": [],
+            "weak_text_matches": ["our client"],
+            "needs_review": True,
+        },
+    )
+
+    job_review_pipeline._apply_source_metadata_to_record(record, "Our client is seeking a BA.")
+
+    assert record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY] == {
+        "kind": "unknown",
+        "source": "",
+        "trusted_metadata": [],
+        "weak_text_matches": ["our client"],
+        "needs_review": True,
+    }
+
+
+def test_apply_source_metadata_to_record_stores_unknown_without_review_when_no_evidence(monkeypatch):
+    record = _base_record("seek", "jobAdDetails", "card")
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "infer_posting_channel",
+        lambda record, details_text: {
+            "kind": "unknown",
+            "source": "",
+            "trusted_metadata": [],
+            "weak_text_matches": [],
+            "needs_review": False,
+        },
+    )
+
+    job_review_pipeline._apply_source_metadata_to_record(record, "")
+
+    assert record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY] == {
+        "kind": "unknown",
+        "source": "",
+        "trusted_metadata": [],
+        "weak_text_matches": [],
+        "needs_review": False,
+    }
+
+
+def test_apply_source_metadata_to_record_then_render_job_card_shows_company_badge():
+    record = _render_ready_record("linkedin")
+    record["company"] = "Aspen Medical"
+    record["source_metadata"] = {
+        "platform": "linkedin",
+        "apply_url": "https://www.linkedin.com/jobs/view/4439784341",
+        "apply_domain": "www.linkedin.com",
+        "company_profile_url": "https://au.linkedin.com/company/aspen-medical-pty-ltd",
+        "company_profile_name": "Aspen Medical",
+        "poster_company": "Aspen Medical",
+        "hiring_company": "Aspen Medical",
+        "ats_source": "www.linkedin.com",
+        "raw_source_fields": {
+            "job_url_direct": None,
+            "company_url_direct": None,
+        },
+    }
+
+    job_review_pipeline._apply_source_metadata_to_record(record, record[RECORD_DETAILS_TEXT_KEY])
+    html = workspace_renderer.render_job_card(record, _review_profile())
+
+    assert "Company" in html
+    assert "Source unclear" not in html
+
+
+def test_apply_source_metadata_to_record_then_render_job_card_shows_recruiter_badge():
+    record = _render_ready_record("seek")
+    record["company"] = "Recruiter Co"
+    record["source_metadata"] = {
+        "platform": "seek",
+        "apply_url": "",
+        "apply_domain": "",
+        "company_profile_url": "",
+        "company_profile_name": "Recruiter Co",
+        "poster_company": "Recruiter Co",
+        "hiring_company": "",
+        "ats_source": "",
+        "raw_source_fields": {
+            "seekPostingSourceCode": "agency",
+        },
+    }
+
+    job_review_pipeline._apply_source_metadata_to_record(record, record[RECORD_DETAILS_TEXT_KEY])
+    html = workspace_renderer.render_job_card(record, _review_profile())
+
+    assert "Agency recruiter" in html
+    assert "Source unclear" not in html
+
+
+def test_apply_source_metadata_to_record_then_render_job_card_shows_likely_recruiter_for_text_evidence():
+    record = _render_ready_record("seek")
+    details_text = (
+        "Our client is seeking a business analyst. Contact our recruitment team for details. "
+        * 5
+    )
+
+    job_review_pipeline._apply_source_metadata_to_record(record, details_text)
+    html = workspace_renderer.render_job_card(
+        {**record, "full_description": details_text},
+        _review_profile(),
+    )
+
+    assert "Likely recruiter" in html
+    assert "Source unclear" not in html
 
 
 def test_review_outcome_is_source_neutral_for_equivalent_normalized_jobs(monkeypatch):

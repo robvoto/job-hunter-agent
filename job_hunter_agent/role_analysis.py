@@ -359,6 +359,38 @@ def _collect_trusted_posting_channel_metadata(record: dict) -> tuple[list[str], 
     return trusted_metadata, trusted_recruiter, trusted_employer
 
 
+def _is_linkedin_company_profile_url(value: str) -> bool:
+    cleaned = compact_whitespace(value).lower()
+    if not cleaned:
+        return False
+    parsed = urlparse(cleaned)
+    host = (parsed.netloc or "").removeprefix("www.")
+    path = parsed.path or ""
+    return host.endswith("linkedin.com") and "/company/" in path
+
+
+def _has_trusted_linkedin_employer_metadata(record: dict) -> bool:
+    metadata = _source_metadata(record)
+    if compact_whitespace(metadata.get("platform") or "").lower() != "linkedin":
+        return False
+
+    profile_url = compact_whitespace(metadata.get("company_profile_url") or "")
+    if not _is_linkedin_company_profile_url(profile_url):
+        return False
+
+    record_company = compact_whitespace(record.get("company") or "").lower()
+    hiring_company = compact_whitespace(metadata.get("hiring_company") or "").lower()
+    if not record_company or hiring_company != record_company:
+        return False
+
+    for field in ("company_profile_name", "poster_company"):
+        value = compact_whitespace(metadata.get(field) or "").lower()
+        if value and value != record_company:
+            return False
+
+    return True
+
+
 def infer_posting_channel(record: dict, details_text: str) -> dict[str, Any]:
     metadata_context = _source_metadata(record)
     trusted_metadata, trusted_recruiter, trusted_employer = (
@@ -381,6 +413,16 @@ def infer_posting_channel(record: dict, details_text: str) -> dict[str, Any]:
         }
 
     if trusted_employer:
+        return {
+            "kind": "direct_employer",
+            "source": "metadata_first",
+            "trusted_metadata": trusted_metadata,
+            "weak_text_matches": weak_text_matches,
+            "text_evidence": weak_text_matches,
+            "needs_review": False,
+        }
+
+    if _has_trusted_linkedin_employer_metadata(record) and not company_needs_review:
         return {
             "kind": "direct_employer",
             "source": "metadata_first",

@@ -15,6 +15,13 @@ _SNAPSHOT = {
     "url": "https://example.test/job-1",
     "llm_decision": "KEEP",
     "llm_fit_grade": "STRONG",
+    "posting_channel_evidence": {
+        "kind": "direct_employer",
+        "source": "metadata_first",
+        "trusted_metadata": ["company profile link = https://example.test/company/acme"],
+        "weak_text_matches": [],
+        "needs_review": False,
+    },
     "requirement_coverage": [
         {"capability_name": "Stakeholder engagement", "status": "supported", "importance": "required"}
     ],
@@ -34,6 +41,7 @@ def test_build_history_workspace_record_carries_requirement_coverage():
 
     assert record is not None
     assert record["requirement_coverage"] == _SNAPSHOT["requirement_coverage"]
+    assert record["posting_channel_evidence"] == _SNAPSHOT["posting_channel_evidence"]
     assert has_complete_llm_keep_data(record)
 
 
@@ -48,6 +56,7 @@ def test_build_hidden_workspace_record_carries_requirement_coverage():
     )
 
     assert record["requirement_coverage"] == _SNAPSHOT["requirement_coverage"]
+    assert record["posting_channel_evidence"] == _SNAPSHOT["posting_channel_evidence"]
     assert has_complete_llm_keep_data(record)
 
 
@@ -62,4 +71,5 @@ def test_build_applied_workspace_record_carries_requirement_coverage():
     )
 
     assert record["requirement_coverage"] == _SNAPSHOT["requirement_coverage"]
+    assert record["posting_channel_evidence"] == _SNAPSHOT["posting_channel_evidence"]
     assert has_complete_llm_keep_data(record)

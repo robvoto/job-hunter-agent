@@ -49,7 +49,7 @@ def _db_save(settings: dict[str, Any], db_path: Path | None = None) -> None:
         conn.execute(
             """
             INSERT INTO global_settings (key, value, updated_at)
-            VALUES (?, ?, datetime('now'))
+            VALUES ( ?, ?, datetime('now'))
             ON CONFLICT(key) DO UPDATE SET
                 value      = excluded.value,
                 updated_at = excluded.updated_at

@@ -43,6 +43,27 @@ def clean_display_text(text: Optional[str]) -> str:
     return re.sub(r"^([A-Z][a-z]{3,30})(?=[A-Z][a-z])", r"\1 ", cleaned)
 
 
+def clean_display_text_preserving_blocks(text: Optional[str]) -> str:
+
+    raw = str(text or "").replace("\r\n", "\n").replace("\r", "\n").replace("\xa0", " ")
+    lines: List[str] = []
+    blank_run = 0
+
+    for raw_line in raw.split("\n"):
+        cleaned = re.sub(r"[ \t\f\v]+", " ", raw_line).strip()
+        cleaned = _strip_markdown_emphasis(cleaned)
+        cleaned = re.sub(r"^([A-Z][a-z]{3,30})(?=[A-Z][a-z])", r"\1 ", cleaned)
+        if cleaned:
+            lines.append(cleaned)
+            blank_run = 0
+            continue
+        if blank_run == 0:
+            lines.append("")
+        blank_run += 1
+
+    return "\n".join(lines).strip()
+
+
 def split_text_snippets(text: str) -> List[str]:
 
     snippets: List[str] = []

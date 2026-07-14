@@ -23,7 +23,9 @@ from job_hunter_agent.record_schema import (
     RECORD_LLM_ELAPSED_MS_KEY,
     RECORD_LLM_INPUT_TOKENS_KEY,
     RECORD_LLM_OUTPUT_TOKENS_KEY,
+    RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
+    RECORD_SOURCE_METADATA_KEY,
 )
 from job_hunter_agent.runtime_helpers import CLI_FLAG_RESET_NEW_TO_YOU
 from job_hunter_agent.signal_detection import hard_block_reasons
@@ -74,6 +76,8 @@ KEEP_SNAPSHOT_FIELDS = (
     "competitive_signals",
     "hard_block_reasons",
     "reviewed_signal_matches",
+    RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
+    RECORD_SOURCE_METADATA_KEY,
 )
 
 
@@ -199,6 +203,14 @@ def apply_kept_job_reuse(record: dict, history_entry: dict) -> dict:
         record[RECORD_REQUIREMENT_COVERAGE_KEY] = (
             snapshot.get(RECORD_REQUIREMENT_COVERAGE_KEY) or []
         )
+
+    if not record.get(RECORD_POSTING_CHANNEL_EVIDENCE_KEY):
+        record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY] = (
+            snapshot.get(RECORD_POSTING_CHANNEL_EVIDENCE_KEY) or {}
+        )
+
+    if not record.get(RECORD_SOURCE_METADATA_KEY):
+        record[RECORD_SOURCE_METADATA_KEY] = snapshot.get(RECORD_SOURCE_METADATA_KEY) or {}
 
     if not record.get("reviewed_signal_matches"):
         record["reviewed_signal_matches"] = snapshot.get("reviewed_signal_matches") or []

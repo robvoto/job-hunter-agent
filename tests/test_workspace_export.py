@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+import job_hunter_agent.job_review_pipeline as job_review_pipeline
 import job_hunter_agent.workspace_export as workspace_export
 
 
@@ -100,3 +101,52 @@ def test_workspace_export_uses_agency_recruiter_badge():
 
     assert "Agency recruiter" in badges
     assert "Recruiter" not in badges
+
+
+def test_workspace_export_badges_use_preserved_posting_channel_classification():
+    direct_record = {
+        "company": "Acme",
+        "source": "linkedin",
+        "source_metadata": {
+            "platform": "linkedin",
+            "apply_url": "https://jobs.lever.co/acme/123",
+            "apply_domain": "jobs.lever.co",
+            "company_profile_url": "https://acme.com.au",
+            "company_profile_name": "Acme",
+            "poster_company": "Acme",
+            "hiring_company": "Acme",
+            "ats_source": "jobs.lever.co",
+            "raw_source_fields": {
+                "job_url_direct": "https://jobs.lever.co/acme/123",
+                "company_url_direct": "https://acme.com.au",
+            },
+        },
+    }
+    recruiter_record = {
+        "company": "Recruiter Co",
+        "source": "seek",
+        "source_metadata": {
+            "platform": "seek",
+            "apply_url": "",
+            "apply_domain": "",
+            "company_profile_url": "",
+            "company_profile_name": "Recruiter Co",
+            "poster_company": "Recruiter Co",
+            "hiring_company": "",
+            "ats_source": "",
+            "raw_source_fields": {
+                "seekPostingSourceCode": "agency",
+            },
+        },
+    }
+
+    job_review_pipeline._apply_source_metadata_to_record(direct_record, "")
+    job_review_pipeline._apply_source_metadata_to_record(recruiter_record, "")
+
+    direct_badges = workspace_export._build_badges(direct_record, "current")
+    recruiter_badges = workspace_export._build_badges(recruiter_record, "current")
+
+    assert "Company" in direct_badges
+    assert "Source unclear" not in direct_badges
+    assert "Agency recruiter" in recruiter_badges
+    assert "Source unclear" not in recruiter_badges
