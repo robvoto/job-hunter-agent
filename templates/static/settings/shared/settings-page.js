@@ -86,6 +86,7 @@ if (isAdminPage && bootstrapGlobalSettings) {
   loadedGlobalSettings = bootstrapGlobalSettings;
   adminSettings.fillGlobalForm(bootstrapGlobalSettings);
   adminSettings.loadGlobalSettingsHelp?.();
+  adminSettings.initRuntimeMaintenanceControls?.(showStatus);
   adminSettings.initKnowledgeSyncControls?.(showStatus);
   adminSettings.initRejectionHistorySyncControls?.(showStatus);
   adminSettings.initSystemWarningsControls?.(showStatus);

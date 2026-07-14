@@ -6,7 +6,9 @@ import copy
 from typing import Any
 
 from job_hunter_agent.settings.global_settings_defaults import (
+    CACHE_SETTING_LIMITS,
     CAPABILITY_STRENGTH_PRESETS,
+    DEFAULT_CACHE_SETTINGS,
     DEFAULT_COUNTRY_SUFFIX,
     DEFAULT_DESCRIPTION_COMPACTION_SETTINGS,
     DEFAULT_DESCRIPTION_TRUST_SETTINGS,
@@ -25,12 +27,17 @@ from job_hunter_agent.settings.global_settings_defaults import (
     DEFAULT_SOURCE_DOCUMENT_SETTINGS,
     HISTORY_SETTING_LIMITS,
     KEY_ARCHIVE_STALE_AFTER_DAYS,
+    KEY_CACHE_SETTINGS,
     KEY_CANDIDATE_APPLICATION_HISTORY,
+    KEY_CANDIDATE_APPLICATION_HISTORY_CACHE_MAX_AGE_DAYS,
+    KEY_CANDIDATE_APPLICATION_HISTORY_CACHE_MAX_ENTRIES,
     KEY_CAPABILITY_STRENGTH_PRESETS,
     KEY_COMPACTION_ENABLED,
     KEY_COMPACTION_MIN_CHARS,
     KEY_COMPACTION_MIN_RETENTION,
     KEY_CV_CHARS_PER_PAGE,
+    KEY_CV_EXTRACTION_CACHE_MAX_AGE_DAYS,
+    KEY_CV_EXTRACTION_CACHE_MAX_ENTRIES,
     KEY_DATE_RANGE_DAYS,
     KEY_DEFAULT_COUNTRY_SUFFIX,
     KEY_DESCRIPTION_COMPACTION_SETTINGS,
@@ -39,6 +46,8 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_FIT_HIGHLIGHTS,
     KEY_HIDDEN_REVIEW_DAYS,
     KEY_HISTORY_SETTINGS,
+    KEY_JOB_HISTORY_MAX_AGE_DAYS,
+    KEY_JOB_HISTORY_MAX_ENTRIES,
     KEY_LIMITS,
     KEY_LINKEDIN_EASY_APPLY_ONLY,
     KEY_LINKEDIN_HOURS_OLD,
@@ -70,11 +79,14 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_LLM_PROMPT_TEMPLATES,
     KEY_LLM_PROMPT_TITLE_JUDGMENT_MAX_OUTPUT_TOKENS,
     KEY_LLM_SETTINGS,
+    KEY_LLM_CACHE_MAX_AGE_DAYS,
     KEY_MIN_TRUSTED_DESCRIPTION_LENGTH,
     KEY_MODEL_OPTIONS,
     KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS,
     KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS,
     KEY_ONBOARDING_SETTINGS,
+    KEY_OCCUPATION_TITLE_CACHE_MAX_AGE_DAYS,
+    KEY_OCCUPATION_TITLE_CACHE_MAX_ENTRIES,
     KEY_PLAYWRIGHT_BROWSER_MODE,
     KEY_PLAYWRIGHT_HEADLESS,
     KEY_PLAYWRIGHT_SELECTOR_TIMEOUT,
@@ -83,6 +95,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_SEEK_ASSISTED_VERIFICATION_ENABLED,
     KEY_SESSION_MAX_AGE_DAYS,
     KEY_PREFERENCE_WEIGHTS,
+    KEY_LLM_CACHE_MAX_ENTRIES,
     KEY_REPEATED_LISTING_MIN_SPAN_DAYS,
     KEY_REPEATED_LISTING_MIN_TIMES_SEEN,
     KEY_REVIEW_CAPABILITY_SUGGESTION_MIN_COUNT,
@@ -503,10 +516,12 @@ def normalize_global_settings(
     salary_limits_source = limits_source.get("salary") or source.get(KEY_SALARY_LIMITS, {})
     onboarding_limits_source = limits_source.get("onboarding", {})
     history_limits_source = limits_source.get("history", {})
+    cache_limits_source = limits_source.get("cache", {})
 
     preference_source = source.get(KEY_PREFERENCE_WEIGHTS, {})
     evidence_source = source.get(KEY_EVIDENCE_TIER_WEIGHTS, {})
     history_source = source.get(KEY_HISTORY_SETTINGS, {})
+    cache_source = source.get(KEY_CACHE_SETTINGS, {})
     description_trust_source = source.get(KEY_DESCRIPTION_TRUST_SETTINGS, {})
     description_compaction_source = source.get(KEY_DESCRIPTION_COMPACTION_SETTINGS, {})
     source_document_source = source.get(KEY_SOURCE_DOCUMENT_SETTINGS, {})
@@ -542,6 +557,10 @@ def normalize_global_settings(
     if not isinstance(history_source, dict):
         raise ValueError(
             f"global_settings.{KEY_HISTORY_SETTINGS} must be a dict, got {type(history_source).__name__!r}"
+        )
+    if not isinstance(cache_source, dict):
+        raise ValueError(
+            f"global_settings.{KEY_CACHE_SETTINGS} must be a dict, got {type(cache_source).__name__!r}"
         )
     if not isinstance(description_trust_source, dict):
         raise ValueError(
@@ -708,7 +727,13 @@ def normalize_global_settings(
         history_limits_source,
         {k: {"min": v[0], "max": v[1]} for k, v in HISTORY_SETTING_LIMITS.items()},
         minimum=1,
-        maximum=1000,
+        maximum=100_000,
+    )
+    normalized_cache_limits = _normalize_limit_map(
+        cache_limits_source,
+        {k: {"min": v[0], "max": v[1]} for k, v in CACHE_SETTING_LIMITS.items()},
+        minimum=1,
+        maximum=100_000,
     )
 
     normalized_history_settings = {
@@ -725,6 +750,20 @@ def normalize_global_settings(
             DEFAULT_HISTORY_SETTINGS[KEY_HIDDEN_REVIEW_DAYS],
             1,
             365,
+        ),
+        KEY_JOB_HISTORY_MAX_ENTRIES: _require_int(
+            history_source,
+            KEY_JOB_HISTORY_MAX_ENTRIES,
+            DEFAULT_HISTORY_SETTINGS[KEY_JOB_HISTORY_MAX_ENTRIES],
+            normalized_history_limits[KEY_JOB_HISTORY_MAX_ENTRIES]["min"],
+            normalized_history_limits[KEY_JOB_HISTORY_MAX_ENTRIES]["max"],
+        ),
+        KEY_JOB_HISTORY_MAX_AGE_DAYS: _require_int(
+            history_source,
+            KEY_JOB_HISTORY_MAX_AGE_DAYS,
+            DEFAULT_HISTORY_SETTINGS[KEY_JOB_HISTORY_MAX_AGE_DAYS],
+            normalized_history_limits[KEY_JOB_HISTORY_MAX_AGE_DAYS]["min"],
+            normalized_history_limits[KEY_JOB_HISTORY_MAX_AGE_DAYS]["max"],
         ),
         KEY_REPEATED_LISTING_MIN_TIMES_SEEN: _require_int(
             history_source,
@@ -753,6 +792,64 @@ def normalize_global_settings(
             DEFAULT_HISTORY_SETTINGS[KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS],
             normalized_history_limits[KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS]["min"],
             normalized_history_limits[KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS]["max"],
+        ),
+    }
+    normalized_cache_settings = {
+        KEY_LLM_CACHE_MAX_ENTRIES: _require_int(
+            cache_source,
+            KEY_LLM_CACHE_MAX_ENTRIES,
+            DEFAULT_CACHE_SETTINGS[KEY_LLM_CACHE_MAX_ENTRIES],
+            normalized_cache_limits[KEY_LLM_CACHE_MAX_ENTRIES]["min"],
+            normalized_cache_limits[KEY_LLM_CACHE_MAX_ENTRIES]["max"],
+        ),
+        KEY_LLM_CACHE_MAX_AGE_DAYS: _require_int(
+            cache_source,
+            KEY_LLM_CACHE_MAX_AGE_DAYS,
+            DEFAULT_CACHE_SETTINGS[KEY_LLM_CACHE_MAX_AGE_DAYS],
+            normalized_cache_limits[KEY_LLM_CACHE_MAX_AGE_DAYS]["min"],
+            normalized_cache_limits[KEY_LLM_CACHE_MAX_AGE_DAYS]["max"],
+        ),
+        KEY_CV_EXTRACTION_CACHE_MAX_ENTRIES: _require_int(
+            cache_source,
+            KEY_CV_EXTRACTION_CACHE_MAX_ENTRIES,
+            DEFAULT_CACHE_SETTINGS[KEY_CV_EXTRACTION_CACHE_MAX_ENTRIES],
+            normalized_cache_limits[KEY_CV_EXTRACTION_CACHE_MAX_ENTRIES]["min"],
+            normalized_cache_limits[KEY_CV_EXTRACTION_CACHE_MAX_ENTRIES]["max"],
+        ),
+        KEY_CV_EXTRACTION_CACHE_MAX_AGE_DAYS: _require_int(
+            cache_source,
+            KEY_CV_EXTRACTION_CACHE_MAX_AGE_DAYS,
+            DEFAULT_CACHE_SETTINGS[KEY_CV_EXTRACTION_CACHE_MAX_AGE_DAYS],
+            normalized_cache_limits[KEY_CV_EXTRACTION_CACHE_MAX_AGE_DAYS]["min"],
+            normalized_cache_limits[KEY_CV_EXTRACTION_CACHE_MAX_AGE_DAYS]["max"],
+        ),
+        KEY_CANDIDATE_APPLICATION_HISTORY_CACHE_MAX_ENTRIES: _require_int(
+            cache_source,
+            KEY_CANDIDATE_APPLICATION_HISTORY_CACHE_MAX_ENTRIES,
+            DEFAULT_CACHE_SETTINGS[KEY_CANDIDATE_APPLICATION_HISTORY_CACHE_MAX_ENTRIES],
+            normalized_cache_limits[KEY_CANDIDATE_APPLICATION_HISTORY_CACHE_MAX_ENTRIES]["min"],
+            normalized_cache_limits[KEY_CANDIDATE_APPLICATION_HISTORY_CACHE_MAX_ENTRIES]["max"],
+        ),
+        KEY_CANDIDATE_APPLICATION_HISTORY_CACHE_MAX_AGE_DAYS: _require_int(
+            cache_source,
+            KEY_CANDIDATE_APPLICATION_HISTORY_CACHE_MAX_AGE_DAYS,
+            DEFAULT_CACHE_SETTINGS[KEY_CANDIDATE_APPLICATION_HISTORY_CACHE_MAX_AGE_DAYS],
+            normalized_cache_limits[KEY_CANDIDATE_APPLICATION_HISTORY_CACHE_MAX_AGE_DAYS]["min"],
+            normalized_cache_limits[KEY_CANDIDATE_APPLICATION_HISTORY_CACHE_MAX_AGE_DAYS]["max"],
+        ),
+        KEY_OCCUPATION_TITLE_CACHE_MAX_ENTRIES: _require_int(
+            cache_source,
+            KEY_OCCUPATION_TITLE_CACHE_MAX_ENTRIES,
+            DEFAULT_CACHE_SETTINGS[KEY_OCCUPATION_TITLE_CACHE_MAX_ENTRIES],
+            normalized_cache_limits[KEY_OCCUPATION_TITLE_CACHE_MAX_ENTRIES]["min"],
+            normalized_cache_limits[KEY_OCCUPATION_TITLE_CACHE_MAX_ENTRIES]["max"],
+        ),
+        KEY_OCCUPATION_TITLE_CACHE_MAX_AGE_DAYS: _require_int(
+            cache_source,
+            KEY_OCCUPATION_TITLE_CACHE_MAX_AGE_DAYS,
+            DEFAULT_CACHE_SETTINGS[KEY_OCCUPATION_TITLE_CACHE_MAX_AGE_DAYS],
+            normalized_cache_limits[KEY_OCCUPATION_TITLE_CACHE_MAX_AGE_DAYS]["min"],
+            normalized_cache_limits[KEY_OCCUPATION_TITLE_CACHE_MAX_AGE_DAYS]["max"],
         ),
     }
 
@@ -931,6 +1028,7 @@ def normalize_global_settings(
             "salary": normalized_salary_limits,
             "onboarding": normalized_onboarding_limits,
             "history": normalized_history_limits,
+            "cache": normalized_cache_limits,
         },
         KEY_PREFERENCE_WEIGHTS: _normalize_float_map(
             preference_source, DEFAULT_PREFERENCE_WEIGHTS, maximum=2.0
@@ -939,6 +1037,7 @@ def normalize_global_settings(
             evidence_source, DEFAULT_EVIDENCE_TIER_WEIGHTS
         ),
         KEY_HISTORY_SETTINGS: normalized_history_settings,
+        KEY_CACHE_SETTINGS: normalized_cache_settings,
         KEY_DESCRIPTION_TRUST_SETTINGS: normalized_description_trust_settings,
         KEY_DESCRIPTION_COMPACTION_SETTINGS: normalized_description_compaction_settings,
         KEY_SOURCE_DOCUMENT_SETTINGS: normalized_source_document_settings,

@@ -305,6 +305,8 @@ def _cache_save(
     classification: OccupationClassification,
     db_path: Path | None,
 ) -> None:
+    from job_hunter_agent.io_utils import prune_occupation_title_cache
+
     with db_conn(db_path) as conn:
         conn.execute(
             """
@@ -324,6 +326,7 @@ def _cache_save(
                 classification.match_type,
             ),
         )
+    prune_occupation_title_cache(db_path)
 
 
 def _log_classification(

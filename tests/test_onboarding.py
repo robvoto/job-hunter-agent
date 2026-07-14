@@ -1275,6 +1275,7 @@ def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch,
     saved_profiles = []
     saved_materials = []
     cleared = []
+    cleared_runtime_caches = []
 
     fake_users_dir = tmp_path / "users"
     fake_local_dir = fake_users_dir / "test_user"
@@ -1302,6 +1303,11 @@ def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch,
     monkeypatch.setattr(server_helpers, "clear_review_data", lambda: cleared.append("review_data"))
     monkeypatch.setattr(server_helpers, "clear_run_stats", lambda: cleared.append("run_stats"))
     monkeypatch.setattr(server_helpers, "clear_audit_rows", lambda: cleared.append("audit_rows"))
+    monkeypatch.setattr(
+        server_helpers,
+        "clear_runtime_caches",
+        lambda: cleared_runtime_caches.append(True) or {"ok": True, "cleared_files": []},
+    )
     monkeypatch.setattr(server_helpers, "get_workspace_results_path", lambda: workspace_path)
 
     workspace_path.write_text("old workspace", encoding="utf-8")
@@ -1321,6 +1327,7 @@ def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch,
     assert "review_data" in cleared
     assert "run_stats" in cleared
     assert "audit_rows" in cleared
+    assert cleared_runtime_caches == [True]
 
 
 def test_reset_global_learning_clears_shared_signal_registry(monkeypatch):

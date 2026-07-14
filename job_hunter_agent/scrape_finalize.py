@@ -25,6 +25,7 @@ from job_hunter_agent.posting_utils import parse_timestamp
 from job_hunter_agent.review_insights import build_review_data
 from job_hunter_agent.run_context import ScrapeRunContext
 from job_hunter_agent.run_control import run_stop_requested
+from job_hunter_agent.source_registry import get_source_display_label
 from job_hunter_agent.system_warnings import (
     make_system_warning_fingerprint,
     record_system_warning,
@@ -214,6 +215,83 @@ def _derive_run_summary_metrics(audit_rows: list[dict]) -> dict[str, int | dict[
     }
 
 
+def _build_source_breakdown(
+    enabled_sources: list[str] | tuple[str, ...] | None,
+    audit_rows: list[dict],
+) -> list[dict[str, int | str]]:
+    source_metrics: dict[str, dict[str, object]] = {}
+
+    for source in enabled_sources or []:
+        source_key = str(source or "").strip().lower()
+        if not source_key or source_key in source_metrics:
+            continue
+        source_metrics[source_key] = {
+            "source": get_source_display_label(source_key).upper(),
+            "seen": 0,
+            "read": 0,
+            "pages": set(),
+            "kept": 0,
+            "rejected": 0,
+        }
+
+    for row in audit_rows:
+        source_key = str(row.get("source") or "unknown").strip().lower()
+        if source_key not in source_metrics:
+            source_metrics[source_key] = {
+                "source": get_source_display_label(source_key).upper(),
+                "seen": 0,
+                "read": 0,
+                "pages": set(),
+                "kept": 0,
+                "rejected": 0,
+            }
+        source_metrics[source_key]["seen"] += 1
+        if _audit_row_has_details(row):
+            source_metrics[source_key]["read"] += 1
+        page_num = row.get("page")
+        if page_num is not None:
+            page_marker = (
+                str(row.get("search_location") or "Unknown"),
+                int(page_num),
+            )
+            source_metrics[source_key]["pages"].add(page_marker)
+        decision = str(row.get("decision") or "").strip().upper()
+        if decision == "KEEP":
+            source_metrics[source_key]["kept"] += 1
+        elif decision in {"REJECT", "FILTERED"}:
+            source_metrics[source_key]["rejected"] += 1
+
+    return [
+        {
+            "source": str(metrics["source"]),
+            "seen": int(metrics["seen"]),
+            "read": int(metrics["read"]),
+            "pages": len(metrics["pages"]),
+            "kept": int(metrics["kept"]),
+            "rejected": int(metrics["rejected"]),
+        }
+        for metrics in source_metrics.values()
+    ]
+
+
+def _log_source_final_stats(run_stats: dict) -> None:
+    source_breakdown = run_stats.get("source_breakdown") or []
+    for item in source_breakdown:
+        logger.info(
+            format_log_block(
+                "RUN][SOURCE_FINAL_STATS",
+                {
+                    "source": str(item.get("source") or "UNKNOWN"),
+                    "pages": int(item.get("pages", 0) or 0),
+                    "seen": int(item.get("seen", 0) or 0),
+                    "read": int(item.get("read", 0) or 0),
+                    "kept": int(item.get("kept", 0) or 0),
+                    "rejected": int(item.get("rejected", 0) or 0),
+                },
+            )
+        )
+
+
 def _log_run_summary(run_stats: dict, audit_rows: list[dict]) -> None:
     metrics = _derive_run_summary_metrics(audit_rows)
 
@@ -281,7 +359,7 @@ def _print_run_summary(run_stats: dict) -> None:
     )
     lines.append(f"  O*NET rejects: {onet_far_rejected}")
     if source_breakdown:
-        lines.append("  By platform:")
+        lines.append("  Final stats by platform:")
         for item in source_breakdown:
             source_name = str(item.get("source") or "unknown").strip().upper()
             seen_count = item.get("seen", 0)
@@ -398,8 +476,10 @@ def finalize_scrape_run(
 
         if not run_was_stopped:
             run_stats["last_run_error"] = NO_FRESH_CARDS_ERROR
+        run_stats["source_breakdown"] = _build_source_breakdown(context.enabled_sources, [])
 
         _log_run_summary(run_stats, [])
+        _log_source_final_stats(run_stats)
         _print_run_summary(run_stats)
 
         workspace_service.render_html(
@@ -487,42 +567,7 @@ def finalize_scrape_run(
     if no_fresh_cards:
         run_stats["last_run_error"] = NO_FRESH_CARDS_ERROR
 
-    # Build source_breakdown from audit rows using the same semantics as build_run_stats().
-    source_metrics: dict[str, dict[str, object]] = {}
-    for row in audit_rows:
-        source = str(row.get("source") or "unknown").strip().lower()
-        if source not in source_metrics:
-            source_metrics[source] = {
-                "source": source.upper(),
-                "seen": 0,
-                "read": 0,
-                "pages": set(),
-                "kept": 0,
-                "rejected": 0,
-            }
-        source_metrics[source]["seen"] += 1
-        if _audit_row_has_details(row):
-            source_metrics[source]["read"] += 1
-        page_num = row.get("page")
-        if page_num is not None:
-            page_marker = (
-                str(row.get("search_location") or "Unknown"),
-                int(page_num),
-            )
-            source_metrics[source]["pages"].add(page_marker)
-        decision = str(row.get("decision") or "").strip().upper()
-        if decision == "KEEP":
-            source_metrics[source]["kept"] += 1
-        elif decision in {"REJECT", "FILTERED"}:
-            source_metrics[source]["rejected"] += 1
-
-    run_stats["source_breakdown"] = [
-        {
-            **metrics,
-            "pages": len(metrics["pages"]),
-        }
-        for metrics in source_metrics.values()
-    ]
+    run_stats["source_breakdown"] = _build_source_breakdown(context.enabled_sources, audit_rows)
 
     workspace_records = workspace_service.build_workspace_record_sets(
         merged_pool,
@@ -573,6 +618,7 @@ def finalize_scrape_run(
     write_review_data(build_review_data(audit_rows, skill_observations, context.profile))
 
     _log_run_summary(run_stats, audit_rows)
+    _log_source_final_stats(run_stats)
     _print_run_summary(run_stats)
 
     if no_fresh_cards:
@@ -591,6 +637,6 @@ def finalize_scrape_run(
 
     logger.info("Saved review data to DB")
 
-    logger.info("Saved history for %d jobs to DB", len(context.job_history))
+    logger.info("Saved per-job history snapshots for %d jobs to DB", len(context.job_history))
 
     return str(workspace_path)

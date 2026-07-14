@@ -28,6 +28,8 @@ Examples:
 
 - enabled / disabled flags
 - max input characters
+- history retention windows
+- cache retention caps
 - minimum trusted character counts
 - retention ratios
 - thresholds
@@ -37,6 +39,16 @@ Examples:
 - timeout settings
 
 These settings should be visible in the Admin/global console when they affect runtime behaviour.
+
+Examples now managed in global settings include:
+
+- `history_settings.job_history_max_entries`
+- `history_settings.job_history_max_age_days`
+- `cache_settings.llm_cache_max_entries`
+- `cache_settings.cv_extraction_cache_max_entries`
+- `cache_settings.candidate_application_history_cache_max_entries`
+- `cache_settings.occupation_title_cache_max_entries`
+- `cache_settings.occupation_title_cache_max_age_days`
 
 ### Prompt copy
 

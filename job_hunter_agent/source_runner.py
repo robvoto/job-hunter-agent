@@ -34,6 +34,7 @@ from job_hunter_agent.system_warnings import (
     make_system_warning_fingerprint,
     record_system_warning,
 )
+from job_hunter_agent.logging_utils import format_log_block
 
 logger = logging.getLogger(__name__)
 
@@ -490,6 +491,36 @@ def _source_timeout_message(source: str) -> str:
     return f"{get_source_display_label(source)} is taking longer than expected; waiting for it to finish."
 
 
+def _log_source_start(source: str, *, execution_mode: str) -> None:
+    logger.info(
+        format_log_block(
+            f"{source.upper()}][SOURCE_START",
+            {
+                "source": get_source_display_label(source),
+                "execution_mode": execution_mode,
+                "timeout_seconds": _source_timeout_seconds(source),
+            },
+        )
+    )
+
+
+def _log_source_complete(result: SourceRunResult, *, elapsed_s: float) -> None:
+    log = logger.warning if result.error is not None else logger.info
+    log(
+        format_log_block(
+            f"{result.source.upper()}][SOURCE_COMPLETE",
+            {
+                "source": get_source_display_label(result.source),
+                "elapsed_seconds": int(elapsed_s),
+                "kept": len(result.kept_records),
+                "audit": len(result.audit_rows),
+                "skills": len(result.skill_observations),
+                "error": type(result.error).__name__ if result.error is not None else "none",
+            },
+        )
+    )
+
+
 def _enabled_source_order(context: ScrapeRunContext) -> list[str]:
     enabled_sources: list[str] = []
     for source in context.enabled_sources:
@@ -523,6 +554,7 @@ def _run_sources_in_parallel(
     started_at: dict[str, float] = {source: time.monotonic() for source in source_order}
     futures = {}
     for source in source_order:
+        _log_source_start(source, execution_mode="parallel")
         runner = _get_source_runner(source)
         worker_context = contextvars.copy_context()
         futures[executor.submit(worker_context.run, runner, context)] = source
@@ -584,16 +616,7 @@ def _run_sources_in_parallel(
                     result = future.result()
                     results_by_source[source] = result
                     elapsed_s = time.monotonic() - started_at[source]
-                    log = logger.warning if result.error is not None else logger.info
-                    log(
-                        "[%s][SOURCE_COMPLETE] elapsed_s=%d kept=%d audit=%d skills=%d error=%s",
-                        source.upper(),
-                        int(elapsed_s),
-                        len(result.kept_records),
-                        len(result.audit_rows),
-                        len(result.skill_observations),
-                        type(result.error).__name__ if result.error is not None else "none",
-                    )
+                    _log_source_complete(result, elapsed_s=elapsed_s)
                 except Exception as exc:
                     logger.exception(
                         "[%s] source worker failed after %ds",

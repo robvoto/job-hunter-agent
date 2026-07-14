@@ -26,6 +26,10 @@ from job_hunter_agent.global_settings import (
     is_candidate_application_history_enabled,
 )
 from job_hunter_agent.io_utils import load_json_list, save_json
+from job_hunter_agent.io_utils import (
+    load_candidate_application_history_cache,
+    save_candidate_application_history_cache,
+)
 from job_hunter_agent.llm_gate import (
     _log_llm_call,
     _strip_json_fence,
@@ -434,20 +438,11 @@ def _make_cache_key(raw_row: dict) -> str:
 
 
 def _load_cache() -> dict:
-    if not CANDIDATE_APPLICATION_HISTORY_CACHE_PATH.exists():
-        return {}
-    try:
-        return _json.loads(CANDIDATE_APPLICATION_HISTORY_CACHE_PATH.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
+    return load_candidate_application_history_cache(CANDIDATE_APPLICATION_HISTORY_CACHE_PATH)
 
 
 def _save_cache(cache: dict) -> None:
-    CANDIDATE_APPLICATION_HISTORY_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    CANDIDATE_APPLICATION_HISTORY_CACHE_PATH.write_text(
-        _json.dumps(cache, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    save_candidate_application_history_cache(cache, CANDIDATE_APPLICATION_HISTORY_CACHE_PATH)
 
 
 def _make_failed_normalized_row(raw_row: dict, reason: str) -> dict:

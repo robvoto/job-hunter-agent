@@ -30,6 +30,7 @@ from job_hunter_agent.fit_scoring import (
     build_fit_highlights,
     fit_score_and_breakdown_displayed,
     fit_score_displayed,
+    requirement_fit_audit_rows,
 )
 from job_hunter_agent.global_settings import get_default_country_suffix
 from job_hunter_agent.history import (
@@ -66,6 +67,7 @@ from job_hunter_agent.record_schema import (
     APPLY_METHOD_EASY_APPLY,
     APPLY_METHOD_QUICK_APPLY,
     RECORD_APPLY_METHOD_KEY,
+    RECORD_DECISION_KEY,
     RECORD_DUPLICATE_LINKS_KEY,
     RECORD_JOB_REQUIREMENTS_KEY,
     RECORD_LLM_COST_USD_KEY,
@@ -75,7 +77,10 @@ from job_hunter_agent.record_schema import (
     RECORD_LLM_INPUT_TOKENS_KEY,
     RECORD_LLM_OUTPUT_TOKENS_KEY,
     RECORD_POTENTIAL_DUPLICATE_LINKS_KEY,
+    RECORD_REJECT_REASON_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
+    RECORD_REVIEW_SOURCE_KEY,
+    RECORD_TITLE_REASON_KEY,
 )
 from job_hunter_agent.salary_utils import format_salary_display, salary_sort_value
 from job_hunter_agent.score_labels import (
@@ -358,6 +363,75 @@ def _capability_level_lookup(active_profile: Optional[dict]) -> dict[str, str]:
             if normalized:
                 lookup[normalized] = level_label
     return lookup
+
+
+def _render_scoring_audit_html(record: dict, active_profile: dict) -> str:
+    """Render the scoring inputs and decision conversion without changing judgement."""
+
+    audit_rows = requirement_fit_audit_rows(record, active_profile)
+    row_html = ""
+    for row in audit_rows:
+        profile_support = "; ".join(row["profile_support"]) or "No profile evidence returned"
+        mapping = row["profile_name"] or "No profile mapping"
+        if row["candidate_level"]:
+            mapping = f"{mapping} ({row['candidate_level']})"
+        credit_percent = round(float(row["credit_fraction"]) * 100)
+        credit = (
+            f"{float(row['weighted_credit']):g} / "
+            f"{float(row['requirement_weight']):g} ({credit_percent}%)"
+        )
+        row_html += (
+            "<tr>"
+            f"<td>{safe_html(row['requirement'])}</td>"
+            f"<td>{safe_html(row['importance'].replace('_', ' ').title())}</td>"
+            f"<td>{safe_html(profile_support)}</td>"
+            f"<td>{safe_html(mapping)}</td>"
+            f"<td>{safe_html(row['status'].replace('_', ' ').title())}</td>"
+            f"<td>{safe_html(credit)}</td>"
+            "</tr>"
+        )
+
+    audit_table = ""
+    if row_html:
+        audit_table = (
+            '<div class="job-insight-group is-secondary scoring-audit">'
+            "<strong>Scoring audit</strong>"
+            '<div class="scoring-audit-scroll"><table>'
+            "<thead><tr>"
+            "<th>Requirement</th><th>Importance</th><th>Profile evidence used</th>"
+            "<th>Mapped profile capability</th><th>Status</th><th>Credit awarded</th>"
+            "</tr></thead>"
+            f"<tbody>{row_html}</tbody>"
+            "</table></div></div>"
+        )
+
+    llm_decision = compact_whitespace(str(record.get(RECORD_LLM_DECISION_KEY) or ""))
+    final_decision = compact_whitespace(str(record.get(RECORD_DECISION_KEY) or ""))
+    review_source = compact_whitespace(str(record.get(RECORD_REVIEW_SOURCE_KEY) or ""))
+    title_reason = compact_whitespace(str(record.get(RECORD_TITLE_REASON_KEY) or ""))
+    reject_reason = compact_whitespace(str(record.get(RECORD_REJECT_REASON_KEY) or ""))
+    full_llm_review = "Run" if llm_decision else "Not run"
+    conversion = (
+        f"{llm_decision} → {final_decision}"
+        if llm_decision and final_decision and llm_decision != final_decision
+        else final_decision or llm_decision or "Unavailable"
+    )
+    trace_items = [
+        f"Title review: {title_reason or 'Unavailable'}",
+        f"Review source: {review_source or 'Unavailable'}",
+        f"Full LLM review: {full_llm_review}",
+        f"LLM decision: {llm_decision or 'Unavailable'}",
+        f"Final conversion: {conversion}",
+    ]
+    if reject_reason:
+        trace_items.append(f"Rejection reason: {reject_reason}")
+    trace_html = "".join(f"<li>{safe_html(item)}</li>" for item in trace_items)
+    return (
+        '<div class="job-insight-group is-secondary scoring-decision-trace">'
+        "<strong>Decision trace</strong>"
+        f"<ul>{trace_html}</ul></div>"
+        f"{audit_table}"
+    )
 
 
 _WORKSPACE_PAGE_LABEL_KEYS = (
@@ -1738,6 +1812,7 @@ def render_job_card(
                     f"<ul>{score_breakdown_html}</ul>"
                     "</div>"
                 )
+        llm_review_parts.append(_render_scoring_audit_html(display_record, active_profile))
         llm_review_html = (
             '<details class="job-insights job-llm-review">'
             "<summary>Debug: LLM fit review</summary>"

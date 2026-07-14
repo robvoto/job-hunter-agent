@@ -118,6 +118,9 @@ def test_admin_settings_script_exposes_system_warnings_controls():
         repo_root / "templates" / "static" / "settings" / "global" / "settings-admin.js"
     ).read_text(encoding="utf-8")
 
+    assert "initRuntimeMaintenanceControls" in js_text
+    assert "/api/admin/clear-runtime-caches" in js_text
+    assert "/api/admin/clear-current-user-search-state" in js_text
     assert "initSystemWarningsControls" in js_text
     assert "/api/admin/system-warnings" in js_text
 
@@ -135,6 +138,15 @@ def test_global_settings_page_renders_system_warnings_panel(monkeypatch):
     client = TestClient(create_app())
     html = client.get("/global-settings").text
 
+    assert 'id="runtime_maintenance_panel"' in html
+    assert 'id="clear_runtime_caches_button"' in html
+    assert 'id="clear_current_user_search_state_button"' in html
+    assert 'id="history_job_history_max_entries"' in html
+    assert 'id="history_job_history_max_age_days"' in html
+    assert 'id="cache_llm_cache_max_entries"' in html
+    assert 'id="cache_llm_cache_max_age_days"' in html
+    assert 'id="cache_candidate_application_history_cache_max_age_days"' in html
+    assert 'id="cache_occupation_title_cache_max_age_days"' in html
     assert 'id="system_warnings_panel"' in html
     assert 'id="system_warnings_list"' in html
     assert 'id="system_warnings_refresh_button"' in html

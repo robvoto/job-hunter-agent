@@ -33,6 +33,17 @@
             <div id="rejection_history_sync_status" class="field-help">Click once. Fetches the latest rows from your Job_Rejections sheet and updates the local store.</div>
           </section>
 
+          <section class="panel" id="runtime_maintenance_panel">
+            <div class="panel-header">
+              <h2>Runtime Maintenance</h2>
+              <p class="panel-copy">Use these admin actions to clear transient runtime data without resetting the full app. Cache clearing affects shared runtime caches. Search-state clearing affects only the current signed-in user.</p>
+            </div>
+            <button id="clear_runtime_caches_button" type="button" class="btn btn-secondary">Clear runtime caches</button>
+            <div id="clear_runtime_caches_status" class="field-help">Clears shared runtime cache files and the occupation-title lookup cache.</div>
+            <button id="clear_current_user_search_state_button" type="button" class="btn btn-secondary">Clear current user search state</button>
+            <div id="clear_current_user_search_state_status" class="field-help">Clears this user&apos;s saved job history, workspace results, applied jobs, hidden jobs, and current search-state records.</div>
+          </section>
+
           <section class="panel">
             <div class="panel-header">
               <h2>Card Highlight Display</h2>
@@ -256,6 +267,14 @@
               <p class="panel-copy">These shared retention limits control when archive and hidden jobs are re-reviewed.</p>
             </div>
 
+            <label for="history_job_history_max_entries">Saved job history max entries</label>
+            <input id="history_job_history_max_entries" type="number" min="100" max="50000" step="1">
+            <div class="field-help">Maximum number of saved job-history records kept per user before the oldest entries are pruned.</div>
+
+            <label for="history_job_history_max_age_days">Saved job history max age (days)</label>
+            <input id="history_job_history_max_age_days" type="number" min="30" max="3650" step="1">
+            <div class="field-help">Maximum age for saved job-history records. Older entries are pruned automatically.</div>
+
             <label for="history_archive_stale_after_days">Archive stale after days</label>
             <input id="history_archive_stale_after_days" type="number" min="1" max="365" step="1">
             <div class="field-help">How long an archived job stays fresh before the workspace treats it as stale.</div>
@@ -279,6 +298,45 @@
             <label for="history_multi_listing_red_flag_min_span_days">Multi-listing red flag minimum span days</label>
             <input id="history_multi_listing_red_flag_min_span_days" type="number" min="1" max="365" step="1">
             <div class="field-help">Minimum day span across that cluster before the multi-listing red flag triggers.</div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h2>Cache Retention</h2>
+              <p class="panel-copy">These shared limits cap runtime caches so they do not grow forever between runs.</p>
+            </div>
+
+            <label for="cache_llm_cache_max_entries">LLM cache max entries</label>
+            <input id="cache_llm_cache_max_entries" type="number" min="100" max="50000" step="1">
+            <div class="field-help">Maximum number of saved LLM cache entries kept on disk.</div>
+
+            <label for="cache_llm_cache_max_age_days">LLM cache max age (days)</label>
+            <input id="cache_llm_cache_max_age_days" type="number" min="1" max="3650" step="1">
+            <div class="field-help">Maximum age for saved LLM cache entries before pruning.</div>
+
+            <label for="cache_cv_extraction_cache_max_entries">CV extraction cache max entries</label>
+            <input id="cache_cv_extraction_cache_max_entries" type="number" min="10" max="5000" step="1">
+            <div class="field-help">Maximum number of saved CV extraction cache entries kept on disk.</div>
+
+            <label for="cache_cv_extraction_cache_max_age_days">CV extraction cache max age (days)</label>
+            <input id="cache_cv_extraction_cache_max_age_days" type="number" min="1" max="3650" step="1">
+            <div class="field-help">Maximum age for saved CV extraction cache entries before pruning.</div>
+
+            <label for="cache_candidate_application_history_cache_max_entries">Candidate application history cache max entries</label>
+            <input id="cache_candidate_application_history_cache_max_entries" type="number" min="100" max="20000" step="1">
+            <div class="field-help">Maximum number of saved spreadsheet-row extraction cache entries kept on disk.</div>
+
+            <label for="cache_candidate_application_history_cache_max_age_days">Candidate application history cache max age (days)</label>
+            <input id="cache_candidate_application_history_cache_max_age_days" type="number" min="1" max="3650" step="1">
+            <div class="field-help">Maximum age for saved spreadsheet-row extraction cache entries before pruning.</div>
+
+            <label for="cache_occupation_title_cache_max_entries">Occupation title cache max entries</label>
+            <input id="cache_occupation_title_cache_max_entries" type="number" min="100" max="100000" step="1">
+            <div class="field-help">Maximum number of saved occupation-title classification cache rows kept in SQLite.</div>
+
+            <label for="cache_occupation_title_cache_max_age_days">Occupation title cache max age (days)</label>
+            <input id="cache_occupation_title_cache_max_age_days" type="number" min="30" max="3650" step="1">
+            <div class="field-help">Maximum age for saved occupation-title classification cache rows before pruning.</div>
           </section>
 
           <section class="panel">

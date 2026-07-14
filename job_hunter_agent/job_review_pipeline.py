@@ -68,6 +68,14 @@ def _job_tag(source: str, title: str, company: str, job_key: str) -> str:
     return f"{name}{co}  ({src}{key})"
 
 
+def _job_source_prefix(source: str) -> str:
+    return f"[{source.upper() if source else '?'}]"
+
+
+def _job_url(record: dict[str, Any]) -> str:
+    return str(record.get(RECORD_URL_KEY) or "").strip()
+
+
 from job_hunter_agent.capability_matching import (
     build_risk_and_missing_profile_support,
     reviewed_signal_matches_for_text,
@@ -208,37 +216,50 @@ def _pipeline_log(stage: str, record: dict, source_name: str = "", **kwargs: Any
     job_key = str(record.get(RECORD_JOB_KEY) or "unknown")
     title = str(record.get(RECORD_TITLE_KEY) or "(no title)")
     company = str(record.get(RECORD_COMPANY_KEY) or "")
+    job_url = _job_url(record)
     result = str(kwargs.get("result") or "")
     reason = str(kwargs.get("reason") or "")
     decision = str(kwargs.get("decision") or "")
+    source_prefix = _job_source_prefix(source)
 
     # ── Open a new job block ──────────────────────────────────────────────────
     if stage == "CARD_SEEN":
         _job_start_times[job_key] = time.monotonic()
         _job_start_costs[job_key] = get_session_cost_usd()
         src = source.upper() if source else "?"
-        logger.info("\n%s\n  %s  @  %s\n  %s | %s\n", _SEP_OPEN, title, company, src, job_key)
+        logger.info(
+            "\n%s\n  %s  @  %s\n  %s | %s\n  %s\n",
+            _SEP_OPEN,
+            title,
+            company,
+            src,
+            job_key,
+            job_url or "(url unavailable)",
+        )
         return
 
     # ── Title gate ────────────────────────────────────────────────────────────
     if stage == "TITLE_GATE":
         if result == "REJECT":
             logger.info(
-                "  title: %s\n  ✗ REJECTED — title filtered out\n  %s\n%s",
+                "  %s title: %s\n  %s ✗ REJECTED — title filtered out\n  %s\n%s",
+                source_prefix,
                 _reason_label(reason),
+                source_prefix,
                 _job_time_summary(job_key),
                 _SEP_CLOSE,
             )
         elif result == "REVIEW":
             label = _REASON_LABELS.get(reason.split(":")[0], reason)
-            logger.info("  title: %s — needs title review", label)
+            logger.info("  %s title: %s — needs title review", source_prefix, label)
         return
 
     # ── Card gate (pre-description) ───────────────────────────────────────────
     if stage == "CARD_GATE":
         if result == "REJECT":
             logger.info(
-                "  ✗ REJECTED before reading — %s\n  %s",
+                "  %s ✗ REJECTED before reading — %s\n  %s",
+                source_prefix,
                 _reason_label(reason),
                 _job_time_summary(job_key),
             )
@@ -255,18 +276,25 @@ def _pipeline_log(stage: str, record: dict, source_name: str = "", **kwargs: Any
             parts = [f"grade {grade}" if grade else "", review_source]
             detail = "  |  ".join(p for p in parts if p)
             logger.info(
-                "  ✓ KEPT%s\n  %s",
+                "  %s ✓ KEPT%s\n  %s",
+                source_prefix,
                 f"  —  {detail}" if detail else "",
                 _job_time_summary(job_key),
             )
         elif decision == "REJECT":
-            logger.info("  ✗ REJECTED — %s\n  %s", _reason_label(reason), _job_time_summary(job_key))
+            logger.info(
+                "  %s ✗ REJECTED — %s\n  %s",
+                source_prefix,
+                _reason_label(reason),
+                _job_time_summary(job_key),
+            )
         logger.info(
             format_log_block(
                 "PIPELINE][FINAL_DECISION",
                 {
                     "source": source,
                     "job_key": job_key,
+                    "url": job_url,
                     "decision": decision,
                     "reason": reason,
                     "total_job_ms": total_job_ms,
@@ -280,7 +308,13 @@ def _pipeline_log(stage: str, record: dict, source_name: str = "", **kwargs: Any
         call = str(kwargs.get("call") or "")
         elapsed_ms = int(kwargs.get("elapsed_ms") or 0)
         payload_source = str(kwargs.get("payload_source") or "llm")
-        logger.info("  llm %s: elapsed=%dms  source=%s", call, elapsed_ms, payload_source)
+        logger.info(
+            "  %s llm %s: elapsed=%dms  source=%s",
+            source_prefix,
+            call,
+            elapsed_ms,
+            payload_source,
+        )
         return
 
     # ── Debug-only: show raw stage data for anything else ─────────────────────

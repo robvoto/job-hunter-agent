@@ -20,6 +20,18 @@ Use before editing managed JSON knowledge, rule loaders, paths, or approval-back
 
 `data/config/global_settings.json` is NOT a knowledge entry — it is stored in the `global_settings` DB table and always overwritten by `db_seed --upgrade`. When adding new required fields to the global settings schema, ship the JSON change and document that `--upgrade` is needed on deploy.
 
+Retention and cache knobs also live here. Current examples:
+- `history_settings.job_history_max_entries`
+- `history_settings.job_history_max_age_days`
+- `cache_settings.llm_cache_max_entries`
+- `cache_settings.llm_cache_max_age_days`
+- `cache_settings.cv_extraction_cache_max_entries`
+- `cache_settings.cv_extraction_cache_max_age_days`
+- `cache_settings.candidate_application_history_cache_max_entries`
+- `cache_settings.candidate_application_history_cache_max_age_days`
+- `cache_settings.occupation_title_cache_max_entries`
+- `cache_settings.occupation_title_cache_max_age_days`
+
 ## Rules
 - Business knowledge belongs in managed JSON/profile/config, not sealed Python constants.
 - JSON knowledge must have one owner module, clear metadata, and validation.
@@ -43,4 +55,5 @@ Use before editing managed JSON knowledge, rule loaders, paths, or approval-back
 - Is there one owner/loader?
 - Is schema validated at load/normalisation time?
 - Are defaults explicit in the owner, not feature code?
+- If this is a retention or cache knob, is it exposed through managed global settings?
 - Are consumers using canonical fields only?

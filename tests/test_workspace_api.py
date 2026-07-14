@@ -82,6 +82,11 @@ def test_api_clean_search_clears_search_state_and_review_buckets(monkeypatch, is
     )
     monkeypatch.setattr("job_hunter_agent.fastapi_app.verify_csrf_token", lambda request, token: True)
     monkeypatch.setattr(scrape_debug.srv, "DEBUG_MODE", True)
+    monkeypatch.setattr(
+        scrape_debug.srv,
+        "clear_runtime_caches",
+        lambda: {"ok": True, "cleared_files": ["llm_cache.json"]},
+    )
 
     fake_users_dir = tmp_path / "users"
     fake_user_dir = fake_users_dir / "test_user"
@@ -135,7 +140,8 @@ def test_api_clean_search_clears_search_state_and_review_buckets(monkeypatch, is
     assert response.status_code == 200
     assert response.json() == {
         "ok": True,
-        "message": "Search results, applied jobs, and hidden jobs were cleared. Profile and settings were preserved.",
+        "message": "Search results, applied jobs, hidden jobs, and transient caches were cleared. Profile and settings were preserved.",
+        "cleared_runtime_files": ["llm_cache.json"],
         "redirect_to": "/workspace",
     }
     assert not workspace_path.exists()

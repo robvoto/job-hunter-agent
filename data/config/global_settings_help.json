@@ -70,10 +70,25 @@
     "limits.history": {
       "description": "Validation bounds for history and repeated-listing red-flag settings.",
       "fields": {
+        "job_history_max_entries": "Allowed min/max number of saved job-history records kept per user.",
+        "job_history_max_age_days": "Allowed min/max age for saved job-history records before pruning.",
         "repeated_listing_min_times_seen": "Allowed min/max number of sightings before repeated-listing detection can trigger.",
         "repeated_listing_min_span_days": "Allowed min/max day span required before repeated-listing detection can trigger.",
         "multi_listing_red_flag_min_listings": "Allowed min/max number of related listings required before multi-listing red-flag detection can trigger.",
         "multi_listing_red_flag_min_span_days": "Allowed min/max day span required before multi-listing red-flag detection can trigger."
+      }
+    },
+    "limits.cache": {
+      "description": "Validation bounds for runtime cache retention settings.",
+      "fields": {
+        "llm_cache_max_entries": "Allowed min/max number of saved LLM cache entries.",
+        "llm_cache_max_age_days": "Allowed min/max age for saved LLM cache entries before pruning.",
+        "cv_extraction_cache_max_entries": "Allowed min/max number of saved CV extraction cache entries.",
+        "cv_extraction_cache_max_age_days": "Allowed min/max age for saved CV extraction cache entries before pruning.",
+        "candidate_application_history_cache_max_entries": "Allowed min/max number of saved candidate application history extraction cache entries.",
+        "candidate_application_history_cache_max_age_days": "Allowed min/max age for saved candidate application history extraction cache entries before pruning.",
+        "occupation_title_cache_max_entries": "Allowed min/max number of saved occupation-title classification cache rows.",
+        "occupation_title_cache_max_age_days": "Allowed min/max age for occupation-title classification cache rows before pruning."
       }
     },
     "preference_weights": {
@@ -99,12 +114,27 @@
     "history_settings": {
       "description": "Controls archive freshness, hidden-job review timing, and repeated-listing red flags.",
       "fields": {
+        "job_history_max_entries": "Maximum number of saved job-history records kept per user before the oldest entries are pruned.",
+        "job_history_max_age_days": "Maximum age for saved job-history records before they are pruned.",
         "archive_stale_after_days": "How long archived jobs stay fresh before they are considered stale.",
         "hidden_review_days": "How long hidden jobs stay hidden before they become eligible for review again.",
         "repeated_listing_min_times_seen": "How many times the same listing must be seen before a repeated-listing red flag can trigger.",
         "repeated_listing_min_span_days": "Minimum days between first and last sighting before repeated-listing detection can trigger.",
         "multi_listing_red_flag_min_listings": "How many similar listings from the same source/company/title cluster trigger a multi-listing red flag.",
         "multi_listing_red_flag_min_span_days": "Minimum day span across similar listings before a multi-listing red flag can trigger."
+      }
+    },
+    "cache_settings": {
+      "description": "Controls how many shared runtime cache entries are kept and, for occupation-title classifications, how old they may be.",
+      "fields": {
+        "llm_cache_max_entries": "Maximum number of saved LLM cache entries kept on disk.",
+        "llm_cache_max_age_days": "Maximum age for saved LLM cache entries before pruning.",
+        "cv_extraction_cache_max_entries": "Maximum number of saved CV extraction cache entries kept on disk.",
+        "cv_extraction_cache_max_age_days": "Maximum age for saved CV extraction cache entries before pruning.",
+        "candidate_application_history_cache_max_entries": "Maximum number of saved candidate application history extraction cache entries kept on disk.",
+        "candidate_application_history_cache_max_age_days": "Maximum age for saved candidate application history extraction cache entries before pruning.",
+        "occupation_title_cache_max_entries": "Maximum number of saved occupation-title classification cache rows kept in SQLite.",
+        "occupation_title_cache_max_age_days": "Maximum age for saved occupation-title classification cache rows before pruning."
       }
     },
     "description_trust_settings": {

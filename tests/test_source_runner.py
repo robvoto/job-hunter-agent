@@ -547,6 +547,21 @@ def test_job_history_changes_are_merged_back_to_context(monkeypatch):
     assert "linkedin:new" in context.job_history
 
 
+def test_parallel_runner_logs_source_start_and_complete_blocks(monkeypatch, caplog):
+    caplog.set_level(logging.INFO, logger="job_hunter_agent.source_runner")
+    context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
+
+    monkeypatch.setattr(source_runner, "_run_seek_source", lambda ctx: _seek_result())
+    monkeypatch.setattr(source_runner, "_run_linkedin_source", lambda ctx: _li_result())
+
+    run_enabled_sources(context)
+
+    assert "[SEEK][SOURCE_START]" in caplog.text
+    assert "[LINKEDIN][SOURCE_START]" in caplog.text
+    assert "[SEEK][SOURCE_COMPLETE]" in caplog.text
+    assert "[LINKEDIN][SOURCE_COMPLETE]" in caplog.text
+
+
 def test_parallel_runner_keeps_results_after_timeout_warning(monkeypatch, caplog):
     caplog.set_level(logging.INFO, logger="job_hunter_agent.source_runner")
     warnings = []

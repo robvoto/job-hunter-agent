@@ -160,6 +160,75 @@ def _append_requirement_mapping_uncertainty(record: dict, item: dict, detail: st
     )
 
 
+def requirement_fit_audit_rows(record: dict, profile: Optional[dict] = None) -> List[dict]:
+    """Return the exact per-requirement inputs and credit used by fit scoring."""
+
+    active_profile = profile or load_profile()
+    scoring_rules = get_scoring_rules(active_profile)
+    importance_weights = _requirement_importance_weights(scoring_rules)
+    capability_credits = _capability_level_credits(scoring_rules)
+    capability_levels = _candidate_capability_level_lookup(active_profile, capability_credits)
+    eligibility_levels = _candidate_eligibility_lookup(active_profile)
+    coverage = record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or []
+    if not isinstance(coverage, list):
+        return []
+
+    rows: List[dict] = []
+    for item in coverage:
+        if not isinstance(item, dict):
+            continue
+        requirement = compact_whitespace(str(item.get("requirement") or ""))
+        if not requirement:
+            continue
+        importance = str(item.get("importance") or "").strip().lower()
+        if importance not in importance_weights:
+            raise ValueError(f"Unknown requirement importance in coverage: {importance!r}")
+        requirement_type = str(item.get("requirement_type") or "").strip().lower()
+        status = str(item.get("status") or "").strip().lower()
+        profile_name = str(item.get("profile_name") or "").strip()
+        weight = importance_weights[importance]
+        candidate_level = ""
+        credit_fraction = 0.0
+
+        if status in {"supported", "partially_supported"}:
+            if requirement_type == "eligibility":
+                eligibility_key = _normalise_lookup_text(profile_name)
+                if eligibility_key in eligibility_levels and eligibility_levels[eligibility_key]:
+                    candidate_level = "confirmed"
+                    credit_fraction = 1.0
+            elif requirement_type in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES:
+                capability_key = _normalise_lookup_text(profile_name)
+                candidate_level = capability_levels.get(capability_key, "")
+                if candidate_level:
+                    credit_fraction = capability_credits[candidate_level]
+
+        raw_support = item.get("profile_support") or []
+        if isinstance(raw_support, str):
+            raw_support = [raw_support]
+        profile_support = [
+            compact_whitespace(str(value))
+            for value in raw_support
+            if compact_whitespace(str(value))
+        ] if isinstance(raw_support, list) else []
+
+        rows.append(
+            {
+                "requirement": requirement,
+                "importance": importance,
+                "requirement_type": requirement_type,
+                "status": status,
+                "profile_name": profile_name,
+                "candidate_level": candidate_level,
+                "matched_job_text": compact_whitespace(str(item.get("matched_job_text") or "")),
+                "profile_support": profile_support,
+                "requirement_weight": weight,
+                "credit_fraction": credit_fraction,
+                "weighted_credit": weight * credit_fraction,
+            }
+        )
+    return rows
+
+
 def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -> List[dict]:
     coverage = record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or []
     if not isinstance(coverage, list) or not coverage:

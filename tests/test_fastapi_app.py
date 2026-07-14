@@ -234,6 +234,46 @@ def test_admin_system_warnings_api_requires_admin(monkeypatch):
     assert response.status_code == 401
     assert response.json() == {"ok": False, "error": "Authentication required"}
 
+    response = client.post("/api/admin/clear-runtime-caches", headers={"X-CSRF-Token": "token"})
+    assert response.status_code == 401
+    assert response.json() == {"ok": False, "error": "Authentication required"}
+
+    response = client.post(
+        "/api/admin/clear-current-user-search-state",
+        headers={"X-CSRF-Token": "token"},
+    )
+    assert response.status_code == 401
+    assert response.json() == {"ok": False, "error": "Authentication required"}
+
+
+def test_admin_runtime_maintenance_routes(monkeypatch):
+    monkeypatch.setattr(_fa, "read_session_user", lambda request: _FAKE_USER)
+    monkeypatch.setattr(_fa, "verify_csrf_token", lambda request, token: True)
+    monkeypatch.setattr(_profile_materials, "is_admin", lambda request: True)
+    monkeypatch.setattr(
+        _profile_materials.srv,
+        "clear_runtime_caches",
+        lambda: {"ok": True, "message": "Runtime caches cleared."},
+    )
+    monkeypatch.setattr(
+        _profile_materials.srv,
+        "clear_current_user_search_state",
+        lambda: {"ok": True, "message": "Current user search state cleared."},
+    )
+
+    client = TestClient(create_app())
+
+    response = client.post("/api/admin/clear-runtime-caches", headers={"X-CSRF-Token": "token"})
+    assert response.status_code == 200
+    assert response.json() == {"ok": True, "message": "Runtime caches cleared."}
+
+    response = client.post(
+        "/api/admin/clear-current-user-search-state",
+        headers={"X-CSRF-Token": "token"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"ok": True, "message": "Current user search state cleared."}
+
 
 def test_admin_system_warnings_api_lists_and_updates(monkeypatch):
     monkeypatch.setattr(_fa, "read_session_user", lambda request: _FAKE_USER)

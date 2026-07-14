@@ -141,6 +141,28 @@ async def api_admin_rejection_history_sync(
         return json_response({"error": str(exc)}, 400)
 
 
+@router.post("/api/admin/clear-runtime-caches")
+def api_admin_clear_runtime_caches(request: Request):  # type: ignore[no-untyped-def]
+    if not is_admin(request):
+        return auth_required_response("/api/admin/clear-runtime-caches", False)
+    try:
+        return json_response(srv.clear_runtime_caches())
+    except Exception as exc:
+        return json_response({"error": str(exc)}, 400)
+
+
+@router.post("/api/admin/clear-current-user-search-state")
+def api_admin_clear_current_user_search_state(
+    request: Request,
+):  # type: ignore[no-untyped-def]
+    if not is_admin(request):
+        return auth_required_response("/api/admin/clear-current-user-search-state", False)
+    try:
+        return json_response(srv.clear_current_user_search_state())
+    except Exception as exc:
+        return json_response({"error": str(exc)}, 400)
+
+
 @router.get("/api/admin/system-warnings")
 def api_admin_system_warnings_get(request: Request):  # type: ignore[no-untyped-def]
     if not is_admin(request):

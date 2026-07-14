@@ -2498,6 +2498,57 @@ def test_render_job_card_shows_llm_review_section_in_debug_mode():
     assert "Base fit: +72" in html
 
 
+def test_render_job_card_debug_audit_shows_evidence_credit_and_decision_conversion():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-scoring-audit",
+            "title": "Solutions Lead",
+            "company": "Acme Health",
+            "url": "https://example.com/job",
+            "title_reason": "TITLE_POTENTIAL_MATCH",
+            "content_reason": "OK",
+            "review_source": "llm",
+            "decision": "KEEP",
+            "llm_decision": "MAYBE",
+            "llm_fit_grade": "WEAK",
+            RECORD_FIT_SCORE_KEY: 82,
+            RECORD_FIT_SCORE_BREAKDOWN_KEY: [
+                {"label": "Requirement Fit: 82%", "value": 82, "section": "requirement_fit"},
+            ],
+            "requirement_coverage": [
+                {
+                    "requirement": "5–7 years in digital health",
+                    "importance": "mandatory",
+                    "requirement_type": "capability",
+                    "status": "supported",
+                    "profile_name": "stakeholder engagement",
+                    "capability_name": "stakeholder engagement",
+                    "matched_job_text": "5–7 years' experience in digital health",
+                    "profile_support": ["Facilitated health-program stakeholders."],
+                }
+            ],
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Digital health solution leadership. " * 40,
+            "fit_highlights": [],
+            "source": "linkedin",
+        },
+        _capability_profile(),
+        debug_mode=True,
+    )
+
+    assert "Scoring audit" in html
+    assert "5–7 years in digital health" in html
+    assert "Facilitated health-program stakeholders." in html
+    assert "stakeholder engagement (Strong)" in html
+    assert "3 / 3 (100%)" in html
+    assert "Decision trace" in html
+    assert "Full LLM review: Run" in html
+    assert "Final conversion: MAYBE → KEEP" in html
+
+
 def test_render_job_card_hides_debug_fit_sections_in_normal_mode():
     html = workspace_renderer.render_job_card(
         {

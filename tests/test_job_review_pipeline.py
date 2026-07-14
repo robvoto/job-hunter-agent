@@ -821,6 +821,7 @@ def test_pipeline_logs_job_centric_block_format(caplog, monkeypatch):
 
     header = next((m for m in messages if "Business Analyst" in m and "Acme" in m), None)
     assert header is not None, "expected a job header line with title and company"
+    assert "https://example.com/seek/job/1" in header
 
     title_note = next(
         (

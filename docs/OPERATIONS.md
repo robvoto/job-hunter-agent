@@ -228,6 +228,8 @@ Run summary semantics:
 - source/platform `read` counts must reconcile with the total `descriptions read`
 - source/platform `pages` come only from explicit page markers; do not treat every LinkedIn row as a page
 - `kept` and `rejected` are collection/review outcomes for the run, not proof of strong fit
+- every job block now prints the job URL directly under `SOURCE | job_key` so a role can be traced back quickly in the log
+- parallel runs log `SOURCE_START` and `SOURCE_COMPLETE` blocks per source, plus end-of-run `RUN][SOURCE_FINAL_STATS` blocks for each enabled source, including zero-result sources
 
 Session cookie behavior:
 
@@ -494,6 +496,30 @@ python -m job_hunter_agent.db_seed --upgrade
 - Files with `version` but no `entries` list (scoring rules, ui_labels, etc.) — replaced only when the file version is newer than the DB version.
 
 Global settings are always overwritten by `--upgrade` (no per-entry user approvals exist, so replacement is always safe).
+
+### Retention and runtime-cache defaults
+
+The current managed defaults for history and cache retention live in `data/config/global_settings.json` and are editable from Admin > Global settings:
+
+- `history_settings.job_history_max_entries`: `2000`
+- `history_settings.job_history_max_age_days`: `365`
+- `cache_settings.llm_cache_max_entries`: `2000`
+- `cache_settings.llm_cache_max_age_days`: `30`
+- `cache_settings.cv_extraction_cache_max_entries`: `250`
+- `cache_settings.cv_extraction_cache_max_age_days`: `30`
+- `cache_settings.candidate_application_history_cache_max_entries`: `2000`
+- `cache_settings.candidate_application_history_cache_max_age_days`: `30`
+- `cache_settings.occupation_title_cache_max_entries`: `10000`
+- `cache_settings.occupation_title_cache_max_age_days`: `365`
+
+Behavior:
+
+- Job history is pruned by both age and count.
+- The occupation-title cache is pruned by both age and count.
+- The file-backed caches are pruned by both age and count.
+- Admin > Global settings also exposes maintenance actions to clear shared runtime caches or clear the current user search state immediately.
+- Clear current user search state also clears transient runtime caches, per-user agent state, the current workspace HTML, and recruiter/history review state so the next run regenerates from clean runtime state.
+- Clear runtime caches also deletes the transient candidate-application history JSON snapshot and any stale runtime-sidecar SQLite file under `data/runtime/`.
 
 ### Hard reset (wipes user-approved additions)
 

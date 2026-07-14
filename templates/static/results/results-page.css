@@ -604,6 +604,35 @@
   margin: 4px 0;
 }
 
+.scoring-audit {
+  margin-top: 14px;
+}
+
+.scoring-audit-scroll {
+  overflow-x: auto;
+}
+
+.scoring-audit table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.scoring-audit th,
+.scoring-audit td {
+  padding: 7px 8px;
+  border: 1px solid var(--border-subtle);
+  text-align: left;
+  vertical-align: top;
+}
+
+.scoring-audit th {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--bg-surface) 80%, transparent);
+}
+
 .job-requirement-list {
   list-style: none;
   padding-left: 0 !important;

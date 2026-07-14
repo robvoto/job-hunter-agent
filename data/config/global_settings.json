@@ -133,6 +133,14 @@
       }
     },
     "history": {
+      "job_history_max_entries": {
+        "min": 100,
+        "max": 50000
+      },
+      "job_history_max_age_days": {
+        "min": 30,
+        "max": 3650
+      },
       "repeated_listing_min_times_seen": {
         "min": 1,
         "max": 100
@@ -148,6 +156,40 @@
       "multi_listing_red_flag_min_span_days": {
         "min": 1,
         "max": 365
+      }
+    },
+    "cache": {
+      "llm_cache_max_entries": {
+        "min": 100,
+        "max": 50000
+      },
+      "llm_cache_max_age_days": {
+        "min": 1,
+        "max": 3650
+      },
+      "cv_extraction_cache_max_entries": {
+        "min": 10,
+        "max": 5000
+      },
+      "cv_extraction_cache_max_age_days": {
+        "min": 1,
+        "max": 3650
+      },
+      "candidate_application_history_cache_max_entries": {
+        "min": 100,
+        "max": 20000
+      },
+      "candidate_application_history_cache_max_age_days": {
+        "min": 1,
+        "max": 3650
+      },
+      "occupation_title_cache_max_entries": {
+        "min": 100,
+        "max": 100000
+      },
+      "occupation_title_cache_max_age_days": {
+        "min": 30,
+        "max": 3650
       }
     }
   },
@@ -165,10 +207,22 @@
   "history_settings": {
     "archive_stale_after_days": 15,
     "hidden_review_days": 30,
+    "job_history_max_entries": 2000,
+    "job_history_max_age_days": 365,
     "repeated_listing_min_times_seen": 4,
     "repeated_listing_min_span_days": 21,
     "multi_listing_red_flag_min_listings": 3,
     "multi_listing_red_flag_min_span_days": 30
+  },
+  "cache_settings": {
+    "llm_cache_max_entries": 2000,
+    "llm_cache_max_age_days": 30,
+    "cv_extraction_cache_max_entries": 250,
+    "cv_extraction_cache_max_age_days": 30,
+    "candidate_application_history_cache_max_entries": 2000,
+    "candidate_application_history_cache_max_age_days": 30,
+    "occupation_title_cache_max_entries": 10000,
+    "occupation_title_cache_max_age_days": 365
   },
   "description_trust_settings": {
     "min_trusted_description_length": 600

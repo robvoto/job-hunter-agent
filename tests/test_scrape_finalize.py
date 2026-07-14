@@ -673,10 +673,10 @@ def test_print_run_summary_includes_source_breakdown(caplog, tmp_path, monkeypat
     )
 
     assert "[RUN_SUMMARY]" in caplog.text
-    assert "By platform" not in caplog.text
+    assert "[RUN][SOURCE_FINAL_STATS]" not in caplog.text
 
     captured = capsys.readouterr()
-    assert "By platform" in captured.err
+    assert "Final stats by platform" in captured.err
     assert "SEEK" in captured.err
     assert "LINKEDIN" in captured.err
     assert "seen=3" in captured.err
@@ -714,3 +714,38 @@ def test_print_run_summary_file_and_stderr_use_single_visible_summary_block(
     captured = capsys.readouterr()
     assert captured.err.count("Run complete") == 1
     assert caplog.text.count("Run complete") == 0
+
+
+def test_log_source_final_stats_emits_one_block_per_source(caplog):
+    import logging as _logging
+
+    caplog.set_level(_logging.INFO)
+
+    scrape_finalize._log_source_final_stats(
+        {
+            "source_breakdown": [
+                {"source": "SEEK", "pages": 2, "seen": 3, "read": 2, "kept": 1, "rejected": 2},
+                {
+                    "source": "LINKEDIN",
+                    "pages": 1,
+                    "seen": 2,
+                    "read": 1,
+                    "kept": 1,
+                    "rejected": 1,
+                },
+            ]
+        }
+    )
+
+    assert caplog.text.count("[RUN][SOURCE_FINAL_STATS]") == 2
+    assert "source   = SEEK" in caplog.text
+    assert "source   = LINKEDIN" in caplog.text
+
+
+def test_build_source_breakdown_keeps_enabled_sources_with_zero_counts():
+    breakdown = scrape_finalize._build_source_breakdown(["seek", "linkedin"], [])
+
+    assert breakdown == [
+        {"source": "SEEK", "seen": 0, "read": 0, "pages": 0, "kept": 0, "rejected": 0},
+        {"source": "LINKEDIN", "seen": 0, "read": 0, "pages": 0, "kept": 0, "rejected": 0},
+    ]

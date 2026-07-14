@@ -42,10 +42,7 @@ from job_hunter_agent.io_utils import (
     clear_agent_state,
     clear_audit_rows,
     clear_job_history,
-    # Backwards compatibility shim: historically some server routes called
-    # `srv.load_job_history()` (i.e. via `from job_hunter_agent import server_helpers as srv`).
-    # Re-exporting `load_job_history` here avoids breaking older deployed
-    # installs that haven't been updated yet.
+    clear_runtime_caches,
     load_job_history,
     clear_review_data,
     clear_run_stats,
@@ -128,6 +125,7 @@ from job_hunter_agent.user_settings import (
     load_agent_state,
     list_user_setting_user_ids,
 )
+from job_hunter_agent.workspace_refresh_service import rebuild_workspace_after_rule_change
 from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
 
 _run_in_progress = False
@@ -611,6 +609,8 @@ def clear_current_user_search_state(*, preserve_profile: bool = True) -> dict[st
     clear_review_data()
     clear_run_stats()
     clear_audit_rows()
+    clear_agent_state()
+    cache_result = clear_runtime_caches()
 
     if preserve_profile:
         profile = load_profile()
@@ -634,7 +634,8 @@ def clear_current_user_search_state(*, preserve_profile: bool = True) -> dict[st
 
     return {
         "ok": True,
-        "message": "Search results, applied jobs, and hidden jobs were cleared. Profile and settings were preserved.",
+        "message": "Search results, applied jobs, hidden jobs, and transient caches were cleared. Profile and settings were preserved.",
+        "cleared_runtime_files": list(cache_result.get("cleared_files") or []),
         "redirect_to": "/workspace",
     }
 
@@ -1316,7 +1317,6 @@ class SettingsHandler:
 
         clear_current_user_search_state(preserve_profile=False)
         clear_user_settings()
-        clear_agent_state()
 
         return {
             "ok": True,

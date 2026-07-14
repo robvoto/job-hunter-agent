@@ -64,10 +64,22 @@ def test_save_global_settings_normalizes_values(isolated_db):
                 "capability_strength_preset": "recent_focus",
             },
             "history_settings": {
+                "job_history_max_entries": "1500",
+                "job_history_max_age_days": "365",
                 "repeated_listing_min_times_seen": "5",
                 "repeated_listing_min_span_days": "14",
                 "multi_listing_red_flag_min_listings": "4",
                 "multi_listing_red_flag_min_span_days": "45",
+            },
+            "cache_settings": {
+                "llm_cache_max_entries": "1900",
+                "llm_cache_max_age_days": "45",
+                "cv_extraction_cache_max_entries": "300",
+                "cv_extraction_cache_max_age_days": "60",
+                "candidate_application_history_cache_max_entries": "1750",
+                "candidate_application_history_cache_max_age_days": "90",
+                "occupation_title_cache_max_entries": "9000",
+                "occupation_title_cache_max_age_days": "400",
             },
             "llm_settings": {
                 "model_options": [
@@ -110,11 +122,31 @@ def test_save_global_settings_normalizes_values(isolated_db):
 
     assert saved["history_settings"]["repeated_listing_min_times_seen"] == 5
 
+    assert saved["history_settings"]["job_history_max_entries"] == 1500
+
+    assert saved["history_settings"]["job_history_max_age_days"] == 365
+
     assert saved["history_settings"]["repeated_listing_min_span_days"] == 14
 
     assert saved["history_settings"]["multi_listing_red_flag_min_listings"] == 4
 
     assert saved["history_settings"]["multi_listing_red_flag_min_span_days"] == 45
+
+    assert saved["cache_settings"]["llm_cache_max_entries"] == 1900
+
+    assert saved["cache_settings"]["llm_cache_max_age_days"] == 45
+
+    assert saved["cache_settings"]["cv_extraction_cache_max_entries"] == 300
+
+    assert saved["cache_settings"]["cv_extraction_cache_max_age_days"] == 60
+
+    assert saved["cache_settings"]["candidate_application_history_cache_max_entries"] == 1750
+
+    assert saved["cache_settings"]["candidate_application_history_cache_max_age_days"] == 90
+
+    assert saved["cache_settings"]["occupation_title_cache_max_entries"] == 9000
+
+    assert saved["cache_settings"]["occupation_title_cache_max_age_days"] == 400
 
     assert "capability_strength_presets" in saved["onboarding_settings"]
 

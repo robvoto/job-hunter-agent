@@ -187,6 +187,14 @@ def get_hidden_review_days() -> int:
     return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_HIDDEN_REVIEW_DAYS])
 
 
+def get_job_history_max_entries() -> int:
+    return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_JOB_HISTORY_MAX_ENTRIES])
+
+
+def get_job_history_max_age_days() -> int:
+    return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_JOB_HISTORY_MAX_AGE_DAYS])
+
+
 def get_repeated_listing_min_times_seen() -> int:
     return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_REPEATED_LISTING_MIN_TIMES_SEEN])
 
@@ -204,6 +212,48 @@ def get_multi_listing_red_flag_min_listings() -> int:
 def get_multi_listing_red_flag_min_span_days() -> int:
     return int(
         load_global_settings()[KEY_HISTORY_SETTINGS][KEY_MULTI_LISTING_RED_FLAG_MIN_SPAN_DAYS]
+    )
+
+
+def get_llm_cache_max_entries() -> int:
+    return int(load_global_settings()[KEY_CACHE_SETTINGS][KEY_LLM_CACHE_MAX_ENTRIES])
+
+
+def get_llm_cache_max_age_days() -> int:
+    return int(load_global_settings()[KEY_CACHE_SETTINGS][KEY_LLM_CACHE_MAX_AGE_DAYS])
+
+
+def get_cv_extraction_cache_max_entries() -> int:
+    return int(load_global_settings()[KEY_CACHE_SETTINGS][KEY_CV_EXTRACTION_CACHE_MAX_ENTRIES])
+
+
+def get_cv_extraction_cache_max_age_days() -> int:
+    return int(load_global_settings()[KEY_CACHE_SETTINGS][KEY_CV_EXTRACTION_CACHE_MAX_AGE_DAYS])
+
+
+def get_candidate_application_history_cache_max_entries() -> int:
+    return int(
+        load_global_settings()[KEY_CACHE_SETTINGS][
+            KEY_CANDIDATE_APPLICATION_HISTORY_CACHE_MAX_ENTRIES
+        ]
+    )
+
+
+def get_candidate_application_history_cache_max_age_days() -> int:
+    return int(
+        load_global_settings()[KEY_CACHE_SETTINGS][
+            KEY_CANDIDATE_APPLICATION_HISTORY_CACHE_MAX_AGE_DAYS
+        ]
+    )
+
+
+def get_occupation_title_cache_max_entries() -> int:
+    return int(load_global_settings()[KEY_CACHE_SETTINGS][KEY_OCCUPATION_TITLE_CACHE_MAX_ENTRIES])
+
+
+def get_occupation_title_cache_max_age_days() -> int:
+    return int(
+        load_global_settings()[KEY_CACHE_SETTINGS][KEY_OCCUPATION_TITLE_CACHE_MAX_AGE_DAYS]
     )
 
 

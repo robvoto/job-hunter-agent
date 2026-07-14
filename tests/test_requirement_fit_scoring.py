@@ -39,6 +39,39 @@ def test_requirement_fit_all_supported_strong_is_100():
     assert not any("Grade band" in label for label in labels)
 
 
+def test_requirement_fit_audit_exposes_exact_evidence_mapping_and_credit():
+    record = _record([
+        {
+            "requirement": "5–7 years in digital health",
+            "importance": "mandatory",
+            "requirement_type": "capability",
+            "status": "supported",
+            "profile_name": "stakeholder engagement",
+            "capability_name": "stakeholder engagement",
+            "matched_job_text": "5–7 years' experience in digital health",
+            "profile_support": ["Facilitated stakeholders on a health infrastructure program."],
+        }
+    ])
+
+    rows = fit_scoring.requirement_fit_audit_rows(record, _profile())
+
+    assert rows == [
+        {
+            "requirement": "5–7 years in digital health",
+            "importance": "mandatory",
+            "requirement_type": "capability",
+            "status": "supported",
+            "profile_name": "stakeholder engagement",
+            "candidate_level": "strong",
+            "matched_job_text": "5–7 years' experience in digital health",
+            "profile_support": ["Facilitated stakeholders on a health infrastructure program."],
+            "requirement_weight": 3.0,
+            "credit_fraction": 1.0,
+            "weighted_credit": 3.0,
+        }
+    ]
+
+
 def test_requirement_fit_uses_capability_level_not_llm_grade_or_title():
     record = _record([
         {"requirement": "Salesforce configuration", "importance": "mandatory", "status": "supported", "capability_name": "salesforce"}

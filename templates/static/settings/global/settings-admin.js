@@ -54,12 +54,22 @@ export const JobHunterAdminSettings = (function () {
     preference_salary_weight: ['preference_weights', 'salary'],
     preference_location_weight: ['preference_weights', 'location'],
     preference_freshness_weight: ['preference_weights', 'freshness'],
+    history_job_history_max_entries: ['history_settings', 'job_history_max_entries'],
+    history_job_history_max_age_days: ['history_settings', 'job_history_max_age_days'],
     history_archive_stale_after_days: ['history_settings', 'archive_stale_after_days'],
     history_hidden_review_days: ['history_settings', 'hidden_review_days'],
     history_repeated_listing_min_times_seen: ['history_settings', 'repeated_listing_min_times_seen'],
     history_repeated_listing_min_span_days: ['history_settings', 'repeated_listing_min_span_days'],
     history_multi_listing_red_flag_min_listings: ['history_settings', 'multi_listing_red_flag_min_listings'],
     history_multi_listing_red_flag_min_span_days: ['history_settings', 'multi_listing_red_flag_min_span_days'],
+    cache_llm_cache_max_entries: ['cache_settings', 'llm_cache_max_entries'],
+    cache_llm_cache_max_age_days: ['cache_settings', 'llm_cache_max_age_days'],
+    cache_cv_extraction_cache_max_entries: ['cache_settings', 'cv_extraction_cache_max_entries'],
+    cache_cv_extraction_cache_max_age_days: ['cache_settings', 'cv_extraction_cache_max_age_days'],
+    cache_candidate_application_history_cache_max_entries: ['cache_settings', 'candidate_application_history_cache_max_entries'],
+    cache_candidate_application_history_cache_max_age_days: ['cache_settings', 'candidate_application_history_cache_max_age_days'],
+    cache_occupation_title_cache_max_entries: ['cache_settings', 'occupation_title_cache_max_entries'],
+    cache_occupation_title_cache_max_age_days: ['cache_settings', 'occupation_title_cache_max_age_days'],
     description_trust_min_trusted_description_length: ['description_trust_settings', 'min_trusted_description_length'],
     source_document_allowed_suffixes: ['source_document_settings', 'allowed_suffixes'],
     onboarding_extraction_lookback_years: ['onboarding_settings', 'extraction_lookback_years'],
@@ -186,6 +196,7 @@ export const JobHunterAdminSettings = (function () {
     const evidenceWeights = settings.candidate_profile_tier_weights || {};
     const preferenceWeights = settings.preference_weights || {};
     const historySettings = settings.history_settings || {};
+    const cacheSettings = settings.cache_settings || {};
     const descriptionTrustSettings = settings.description_trust_settings || {};
     const descriptionCompactionSettings = settings.description_compaction_settings || {};
     const sourceDocumentSettings = settings.source_document_settings || {};
@@ -249,10 +260,20 @@ export const JobHunterAdminSettings = (function () {
     setFieldValue('preference_location_weight', preferenceWeights.location);
     setFieldValue('preference_freshness_weight', preferenceWeights.freshness);
 
+    setFieldValue('history_job_history_max_entries', historySettings.job_history_max_entries);
+    setFieldValue('history_job_history_max_age_days', historySettings.job_history_max_age_days);
     setFieldValue('history_repeated_listing_min_times_seen', historySettings.repeated_listing_min_times_seen);
     setFieldValue('history_repeated_listing_min_span_days', historySettings.repeated_listing_min_span_days);
     setFieldValue('history_multi_listing_red_flag_min_listings', historySettings.multi_listing_red_flag_min_listings);
     setFieldValue('history_multi_listing_red_flag_min_span_days', historySettings.multi_listing_red_flag_min_span_days);
+    setFieldValue('cache_llm_cache_max_entries', cacheSettings.llm_cache_max_entries);
+    setFieldValue('cache_llm_cache_max_age_days', cacheSettings.llm_cache_max_age_days);
+    setFieldValue('cache_cv_extraction_cache_max_entries', cacheSettings.cv_extraction_cache_max_entries);
+    setFieldValue('cache_cv_extraction_cache_max_age_days', cacheSettings.cv_extraction_cache_max_age_days);
+    setFieldValue('cache_candidate_application_history_cache_max_entries', cacheSettings.candidate_application_history_cache_max_entries);
+    setFieldValue('cache_candidate_application_history_cache_max_age_days', cacheSettings.candidate_application_history_cache_max_age_days);
+    setFieldValue('cache_occupation_title_cache_max_entries', cacheSettings.occupation_title_cache_max_entries);
+    setFieldValue('cache_occupation_title_cache_max_age_days', cacheSettings.occupation_title_cache_max_age_days);
     setFieldValue('onboarding_extraction_lookback_years', onboarding.extraction_lookback_years);
     setFieldValue('onboarding_title_extraction_min_months', onboarding.title_extraction_min_months);
     setFieldValue('onboarding_max_target_patterns', onboarding.max_target_patterns);
@@ -329,6 +350,7 @@ export const JobHunterAdminSettings = (function () {
     const currentSearchLimits = currentLimitsGroup.search || {};
     const currentSalaryLimits = currentLimitsGroup.salary || {};
     const currentHistory = current.history_settings || {};
+    const currentCacheSettings = current.cache_settings || {};
     const currentDescriptionTrust = current.description_trust_settings || {};
     const currentCompaction = current.description_compaction_settings || {};
     const currentSourceDocuments = current.source_document_settings || {};
@@ -381,6 +403,7 @@ export const JobHunterAdminSettings = (function () {
       },
       default_country_suffix: document.getElementById('default_country_suffix').value.trim(),
       limits: {
+        ...currentLimitsGroup,
         search: {
           ...currentSearchLimits,
           date_range_days: {
@@ -427,12 +450,40 @@ export const JobHunterAdminSettings = (function () {
       },
       history_settings: {
         ...currentHistory,
+        job_history_max_entries: readNumber('history_job_history_max_entries', currentHistory.job_history_max_entries),
+        job_history_max_age_days: readNumber('history_job_history_max_age_days', currentHistory.job_history_max_age_days),
         archive_stale_after_days: readNumber('history_archive_stale_after_days', currentHistory.archive_stale_after_days),
         hidden_review_days: readNumber('history_hidden_review_days', currentHistory.hidden_review_days),
         repeated_listing_min_times_seen: readNumber('history_repeated_listing_min_times_seen', currentHistory.repeated_listing_min_times_seen),
         repeated_listing_min_span_days: readNumber('history_repeated_listing_min_span_days', currentHistory.repeated_listing_min_span_days),
         multi_listing_red_flag_min_listings: readNumber('history_multi_listing_red_flag_min_listings', currentHistory.multi_listing_red_flag_min_listings),
         multi_listing_red_flag_min_span_days: readNumber('history_multi_listing_red_flag_min_span_days', currentHistory.multi_listing_red_flag_min_span_days),
+      },
+      cache_settings: {
+        ...currentCacheSettings,
+        llm_cache_max_entries: readNumber('cache_llm_cache_max_entries', currentCacheSettings.llm_cache_max_entries),
+        llm_cache_max_age_days: readNumber('cache_llm_cache_max_age_days', currentCacheSettings.llm_cache_max_age_days),
+        cv_extraction_cache_max_entries: readNumber('cache_cv_extraction_cache_max_entries', currentCacheSettings.cv_extraction_cache_max_entries),
+        cv_extraction_cache_max_age_days: readNumber(
+          'cache_cv_extraction_cache_max_age_days',
+          currentCacheSettings.cv_extraction_cache_max_age_days,
+        ),
+        candidate_application_history_cache_max_entries: readNumber(
+          'cache_candidate_application_history_cache_max_entries',
+          currentCacheSettings.candidate_application_history_cache_max_entries,
+        ),
+        candidate_application_history_cache_max_age_days: readNumber(
+          'cache_candidate_application_history_cache_max_age_days',
+          currentCacheSettings.candidate_application_history_cache_max_age_days,
+        ),
+        occupation_title_cache_max_entries: readNumber(
+          'cache_occupation_title_cache_max_entries',
+          currentCacheSettings.occupation_title_cache_max_entries,
+        ),
+        occupation_title_cache_max_age_days: readNumber(
+          'cache_occupation_title_cache_max_age_days',
+          currentCacheSettings.occupation_title_cache_max_age_days,
+        ),
       },
       description_trust_settings: {
         ...currentDescriptionTrust,
@@ -753,11 +804,77 @@ export const JobHunterAdminSettings = (function () {
     refresh();
   }
 
+  function initRuntimeMaintenanceControls(showStatus) {
+    const clearCachesButton = document.getElementById('clear_runtime_caches_button');
+    const clearCachesStatus = document.getElementById('clear_runtime_caches_status');
+    const clearSearchStateButton = document.getElementById('clear_current_user_search_state_button');
+    const clearSearchStateStatus = document.getElementById('clear_current_user_search_state_status');
+    if (
+      !clearCachesButton
+      || !clearCachesStatus
+      || !clearSearchStateButton
+      || !clearSearchStateStatus
+      || typeof window.jobHunterFetch !== 'function'
+    ) {
+      return;
+    }
+    if (clearCachesButton.dataset.bound === 'true' && clearSearchStateButton.dataset.bound === 'true') {
+      return;
+    }
+
+    const bindAction = (button, status, endpoint, loadingMessage, fallbackSuccessMessage) => {
+      button.dataset.bound = 'true';
+      const setStatus = (message, kind) => {
+        status.textContent = String(message || '');
+        status.className = kind ? `field-help sync-status sync-status--${kind}` : 'field-help';
+        if (typeof showStatus === 'function') {
+          showStatus(message, kind);
+        }
+      };
+
+      button.addEventListener('click', async () => {
+        const originalLabel = button.textContent;
+        button.disabled = true;
+        button.textContent = 'Working...';
+        setStatus(loadingMessage, 'loading');
+        try {
+          const response = await window.jobHunterFetch(endpoint, { method: 'POST' });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || 'Could not complete admin action.');
+          }
+          setStatus(payload.message || fallbackSuccessMessage, 'success');
+        } catch (error) {
+          setStatus(error.message || 'Could not complete admin action.', 'error');
+        } finally {
+          button.disabled = false;
+          button.textContent = originalLabel;
+        }
+      });
+    };
+
+    bindAction(
+      clearCachesButton,
+      clearCachesStatus,
+      '/api/admin/clear-runtime-caches',
+      'Clearing shared runtime caches...',
+      'Runtime caches cleared.',
+    );
+    bindAction(
+      clearSearchStateButton,
+      clearSearchStateStatus,
+      '/api/admin/clear-current-user-search-state',
+      'Clearing current user search state...',
+      'Current user search state cleared.',
+    );
+  }
+
   return {
     fillGlobalForm,
     collectGlobalSettings,
     loadGlobalSettingsHelp,
     applyGlobalSettingsHelp,
+    initRuntimeMaintenanceControls,
     initKnowledgeSyncControls,
     initRejectionHistorySyncControls,
     initSystemWarningsControls,

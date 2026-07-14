@@ -11,15 +11,18 @@ import json
 import logging
 import re
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from job_hunter_agent.config import AUTH_ENCODING, DEBUG_MODE, DEFAULT_ERRORS
 from job_hunter_agent.paths import (
+    CANDIDATE_APPLICATION_HISTORY_CACHE_PATH,
     CV_EXTRACTION_CACHE_PATH,
     DEBUG_SOURCE_PAYLOADS_DIR,
     LLM_CACHE_PATH,
+    RUNTIME_DIR,
+    get_candidate_application_history_path,
 )
 from job_hunter_agent.system_warnings import make_system_warning_fingerprint, record_system_warning
 
@@ -168,6 +171,178 @@ def save_json(path: Path, payload) -> None:
     )
 
 
+def _parse_timestamp(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    normalized = text.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+_CACHE_ENTRY_VALUE_KEY = "value"
+_CACHE_ENTRY_CREATED_AT_KEY = "created_at"
+_CACHE_ENTRY_UPDATED_AT_KEY = "updated_at"
+
+
+def _cache_timestamp_now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _load_strict_cache_entries(raw: Dict[str, Any]) -> dict[str, dict[str, Any]]:
+    entries: dict[str, dict[str, Any]] = {}
+    for key, entry in raw.items():
+        key_text = str(key or "").strip()
+        if not key_text or not isinstance(entry, dict):
+            continue
+        if _CACHE_ENTRY_VALUE_KEY not in entry:
+            continue
+        created_at = str(entry.get(_CACHE_ENTRY_CREATED_AT_KEY) or "").strip()
+        updated_at = str(entry.get(_CACHE_ENTRY_UPDATED_AT_KEY) or "").strip()
+        created_dt = _parse_timestamp(created_at)
+        updated_dt = _parse_timestamp(updated_at)
+        if created_dt is None or updated_dt is None:
+            continue
+        entries[key_text] = {
+            _CACHE_ENTRY_VALUE_KEY: entry[_CACHE_ENTRY_VALUE_KEY],
+            _CACHE_ENTRY_CREATED_AT_KEY: created_at,
+            _CACHE_ENTRY_UPDATED_AT_KEY: updated_at,
+            "_created_dt": created_dt,
+            "_updated_dt": updated_dt,
+        }
+    return entries
+
+
+def _prune_strict_cache_entries(
+    entries: dict[str, dict[str, Any]],
+    *,
+    max_entries: int,
+    max_age_days: int,
+    now: datetime | None = None,
+) -> tuple[dict[str, dict[str, Any]], int]:
+    current_time = now or datetime.now(timezone.utc)
+    cutoff = current_time - timedelta(days=max_age_days)
+    valid_items = [
+        (key, entry)
+        for key, entry in entries.items()
+        if entry["_updated_dt"] >= cutoff
+    ]
+    valid_items.sort(key=lambda item: (item[1]["_updated_dt"], item[0]), reverse=True)
+    kept_items = valid_items[: max(max_entries, 0)]
+    removed = len(entries) - len(kept_items)
+    return {
+        key: {
+            _CACHE_ENTRY_VALUE_KEY: entry[_CACHE_ENTRY_VALUE_KEY],
+            _CACHE_ENTRY_CREATED_AT_KEY: entry[_CACHE_ENTRY_CREATED_AT_KEY],
+            _CACHE_ENTRY_UPDATED_AT_KEY: entry[_CACHE_ENTRY_UPDATED_AT_KEY],
+        }
+        for key, entry in kept_items
+    }, removed
+
+
+def _load_timestamped_cache(
+    path: Path,
+    *,
+    max_entries: int,
+    max_age_days: int,
+) -> Dict[str, Any]:
+    raw = load_json_dict(path)
+    strict_entries = _load_strict_cache_entries(raw)
+    pruned_entries, removed = _prune_strict_cache_entries(
+        strict_entries,
+        max_entries=max_entries,
+        max_age_days=max_age_days,
+    )
+    if removed > 0 or len(strict_entries) != len(raw):
+        save_json(path, pruned_entries)
+    return {
+        key: entry[_CACHE_ENTRY_VALUE_KEY]
+        for key, entry in pruned_entries.items()
+    }
+
+
+def _save_timestamped_cache(
+    path: Path,
+    cache: Dict[str, Any],
+    *,
+    max_entries: int,
+    max_age_days: int,
+) -> None:
+    existing_entries = _load_strict_cache_entries(load_json_dict(path))
+    now_text = _cache_timestamp_now()
+    timestamped_entries: dict[str, dict[str, Any]] = {}
+    for key, value in cache.items():
+        key_text = str(key or "").strip()
+        if not key_text:
+            continue
+        existing = existing_entries.get(key_text)
+        created_at = (
+            str(existing.get(_CACHE_ENTRY_CREATED_AT_KEY) or "").strip()
+            if isinstance(existing, dict)
+            else ""
+        ) or now_text
+        timestamped_entries[key_text] = {
+            _CACHE_ENTRY_VALUE_KEY: value,
+            _CACHE_ENTRY_CREATED_AT_KEY: created_at,
+            _CACHE_ENTRY_UPDATED_AT_KEY: now_text,
+        }
+    pruned_entries, _ = _prune_strict_cache_entries(
+        _load_strict_cache_entries(timestamped_entries),
+        max_entries=max_entries,
+        max_age_days=max_age_days,
+    )
+    save_json(path, pruned_entries)
+
+
+def _job_history_sort_key(job_key: str, entry: dict) -> tuple[datetime, str]:
+    last_seen = (
+        _parse_timestamp(entry.get("last_seen_at"))
+        or _parse_timestamp(entry.get("first_seen_at"))
+        or datetime.min.replace(tzinfo=timezone.utc)
+    )
+    return (last_seen, str(job_key))
+
+
+def _prune_job_history_entries(
+    history: Dict[str, dict],
+    *,
+    max_entries: int,
+    max_age_days: int,
+    now: datetime | None = None,
+) -> tuple[Dict[str, dict], set[str]]:
+    current_time = now or datetime.now(timezone.utc)
+    cutoff = current_time - timedelta(days=max_age_days)
+    kept_items: list[tuple[str, dict]] = []
+    removed_keys: set[str] = set()
+
+    for job_key, entry in history.items():
+        if not isinstance(entry, dict):
+            removed_keys.add(str(job_key))
+            continue
+        latest_seen = _parse_timestamp(entry.get("last_seen_at")) or _parse_timestamp(
+            entry.get("first_seen_at")
+        )
+        if latest_seen is None:
+            removed_keys.add(str(job_key))
+            continue
+        if latest_seen < cutoff:
+            removed_keys.add(str(job_key))
+            continue
+        kept_items.append((str(job_key), entry))
+
+    kept_items.sort(key=lambda item: _job_history_sort_key(item[0], item[1]), reverse=True)
+    if max_entries > 0 and len(kept_items) > max_entries:
+        overflow = kept_items[max_entries:]
+        removed_keys.update(job_key for job_key, _ in overflow)
+        kept_items = kept_items[:max_entries]
+    return dict(kept_items), removed_keys
+
+
 def _slugify_debug_component(value: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "_", str(value or "").strip().lower()).strip("_")
     return slug or "unknown"
@@ -196,12 +371,30 @@ def _json_safe_payload(payload):
 
 
 def load_llm_cache() -> Dict[str, Any]:
-    raw = load_json_dict(LLM_CACHE_PATH)
-    return {str(k): v for k, v in raw.items()}
+    from job_hunter_agent.global_settings import (
+        get_llm_cache_max_age_days,
+        get_llm_cache_max_entries,
+    )
+
+    return _load_timestamped_cache(
+        LLM_CACHE_PATH,
+        max_entries=get_llm_cache_max_entries(),
+        max_age_days=get_llm_cache_max_age_days(),
+    )
 
 
 def save_llm_cache(cache: Dict[str, Any]) -> None:
-    save_json(LLM_CACHE_PATH, cache)
+    from job_hunter_agent.global_settings import (
+        get_llm_cache_max_age_days,
+        get_llm_cache_max_entries,
+    )
+
+    _save_timestamped_cache(
+        LLM_CACHE_PATH,
+        {str(key): value for key, value in cache.items()},
+        max_entries=get_llm_cache_max_entries(),
+        max_age_days=get_llm_cache_max_age_days(),
+    )
 
 
 def prune_llm_cache_for_current_profile(cache: Dict[str, Any]) -> tuple[Dict[str, Any], int]:
@@ -225,12 +418,59 @@ def prune_llm_cache_for_current_profile(cache: Dict[str, Any]) -> tuple[Dict[str
 
 
 def load_cv_extraction_cache() -> Dict[str, Any]:
-    raw = load_json_dict(CV_EXTRACTION_CACHE_PATH)
-    return {str(k): v for k, v in raw.items()}
+    from job_hunter_agent.global_settings import (
+        get_cv_extraction_cache_max_age_days,
+        get_cv_extraction_cache_max_entries,
+    )
+
+    return _load_timestamped_cache(
+        CV_EXTRACTION_CACHE_PATH,
+        max_entries=get_cv_extraction_cache_max_entries(),
+        max_age_days=get_cv_extraction_cache_max_age_days(),
+    )
 
 
 def save_cv_extraction_cache(cache: Dict[str, Any]) -> None:
-    save_json(CV_EXTRACTION_CACHE_PATH, cache)
+    from job_hunter_agent.global_settings import (
+        get_cv_extraction_cache_max_age_days,
+        get_cv_extraction_cache_max_entries,
+    )
+
+    _save_timestamped_cache(
+        CV_EXTRACTION_CACHE_PATH,
+        {str(key): value for key, value in cache.items()},
+        max_entries=get_cv_extraction_cache_max_entries(),
+        max_age_days=get_cv_extraction_cache_max_age_days(),
+    )
+
+
+def load_candidate_application_history_cache(path: Path | None = None) -> Dict[str, Any]:
+    from job_hunter_agent.global_settings import (
+        get_candidate_application_history_cache_max_age_days,
+        get_candidate_application_history_cache_max_entries,
+    )
+
+    cache_path = path or CANDIDATE_APPLICATION_HISTORY_CACHE_PATH
+    return _load_timestamped_cache(
+        cache_path,
+        max_entries=get_candidate_application_history_cache_max_entries(),
+        max_age_days=get_candidate_application_history_cache_max_age_days(),
+    )
+
+
+def save_candidate_application_history_cache(cache: Dict[str, Any], path: Path | None = None) -> None:
+    from job_hunter_agent.global_settings import (
+        get_candidate_application_history_cache_max_age_days,
+        get_candidate_application_history_cache_max_entries,
+    )
+
+    cache_path = path or CANDIDATE_APPLICATION_HISTORY_CACHE_PATH
+    _save_timestamped_cache(
+        cache_path,
+        {str(key): value for key, value in cache.items()},
+        max_entries=get_candidate_application_history_cache_max_entries(),
+        max_age_days=get_candidate_application_history_cache_max_age_days(),
+    )
 
 
 def load_parsing_rules() -> Dict[str, Any]:
@@ -269,30 +509,76 @@ def load_signal_defaults() -> Dict[str, Any]:
 
 def load_job_history() -> Dict[str, dict]:
     from job_hunter_agent.database import db_conn
+    from job_hunter_agent.global_settings import (
+        get_job_history_max_age_days,
+        get_job_history_max_entries,
+    )
     from job_hunter_agent.paths import get_active_user_id
 
     user_id = get_active_user_id()
     with db_conn() as conn:
         rows = conn.execute(
-            "SELECT job_key, data FROM job_history WHERE user_id = ? AND data IS NOT NULL",
+            """
+            SELECT job_key, data
+              FROM job_history
+             WHERE user_id = ?
+               AND data IS NOT NULL
+            """,
             (user_id,),
         ).fetchall()
-    return {row["job_key"]: json.loads(row["data"]) for row in rows}
+        loaded: Dict[str, dict] = {}
+        for row in rows:
+            job_key = str(row["job_key"] or "").strip()
+            if not job_key:
+                continue
+            payload = json.loads(row["data"])
+            if isinstance(payload, dict):
+                loaded[job_key] = payload
+        pruned, removed_keys = _prune_job_history_entries(
+            loaded,
+            max_entries=get_job_history_max_entries(),
+            max_age_days=get_job_history_max_age_days(),
+        )
+        if removed_keys:
+            conn.executemany(
+                "DELETE FROM job_history WHERE user_id = ? AND job_key = ?",
+                [(user_id, job_key) for job_key in sorted(removed_keys)],
+            )
+    return pruned
 
 
 def save_job_history(history: Dict[str, dict]) -> None:
     from job_hunter_agent.database import db_conn, ensure_user_row
+    from job_hunter_agent.global_settings import (
+        get_job_history_max_age_days,
+        get_job_history_max_entries,
+    )
     from job_hunter_agent.paths import get_active_user_id
 
     if not history:
         return
     user_id = get_active_user_id()
     ensure_user_row(user_id)
+    pruned_history, removed_keys = _prune_job_history_entries(
+        history,
+        max_entries=get_job_history_max_entries(),
+        max_age_days=get_job_history_max_age_days(),
+    )
+    history.clear()
+    history.update(pruned_history)
     with db_conn() as conn:
-        for job_key, entry in history.items():
+        if removed_keys:
+            conn.executemany(
+                "DELETE FROM job_history WHERE user_id = ? AND job_key = ?",
+                [(user_id, job_key) for job_key in sorted(removed_keys)],
+            )
+        for job_key, entry in pruned_history.items():
             if not isinstance(entry, dict):
                 continue
             source, _, platform_id = str(job_key).partition(":")
+            fallback_seen_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            first_seen_at = entry.get("first_seen_at") or entry.get("last_seen_at") or fallback_seen_at
+            last_seen_at = entry.get("last_seen_at") or entry.get("first_seen_at") or fallback_seen_at
             conn.execute(
                 """INSERT INTO job_history (user_id, job_key, source, platform_id, title, company, state, first_seen, last_seen, data)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -310,11 +596,88 @@ def save_job_history(history: Dict[str, dict]) -> None:
                     entry.get("title"),
                     entry.get("company"),
                     entry.get("state", "seen"),
-                    entry.get("first_seen_at"),
-                    entry.get("last_seen_at"),
+                    first_seen_at,
+                    last_seen_at,
                     json.dumps(entry, ensure_ascii=False),
                 ),
             )
+
+
+def prune_occupation_title_cache(db_path: Path | None = None) -> int:
+    from job_hunter_agent.database import db_conn
+    from job_hunter_agent.global_settings import (
+        get_occupation_title_cache_max_age_days,
+        get_occupation_title_cache_max_entries,
+    )
+
+    max_entries = get_occupation_title_cache_max_entries()
+    max_age_days = get_occupation_title_cache_max_age_days()
+    removed = 0
+    cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
+    cutoff_text = cutoff.replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S")
+
+    with db_conn(db_path) as conn:
+        age_result = conn.execute(
+            "DELETE FROM occupation_title_cache WHERE datetime(created_at) < datetime(?)",
+            (cutoff_text,),
+        )
+        removed += max(int(age_result.rowcount or 0), 0)
+        overflow_rows = conn.execute(
+            """
+            SELECT normalized_title, candidate_profile_hash, taxonomy_version
+              FROM occupation_title_cache
+             ORDER BY datetime(created_at) DESC, normalized_title, candidate_profile_hash, taxonomy_version
+             LIMIT -1 OFFSET ?
+            """,
+            (max_entries,),
+        ).fetchall()
+        if overflow_rows:
+            conn.executemany(
+                """
+                DELETE FROM occupation_title_cache
+                 WHERE normalized_title = ?
+                   AND candidate_profile_hash = ?
+                   AND taxonomy_version = ?
+                """,
+                [
+                    (
+                        str(row["normalized_title"]),
+                        str(row["candidate_profile_hash"]),
+                        str(row["taxonomy_version"]),
+                    )
+                    for row in overflow_rows
+                ],
+            )
+            removed += len(overflow_rows)
+    return removed
+
+
+def clear_runtime_caches(db_path: Path | None = None) -> dict[str, Any]:
+    from job_hunter_agent.database import db_conn
+
+    cleared_files: list[str] = []
+    for path in (
+        LLM_CACHE_PATH,
+        CV_EXTRACTION_CACHE_PATH,
+        CANDIDATE_APPLICATION_HISTORY_CACHE_PATH,
+        get_candidate_application_history_path(),
+        RUNTIME_DIR / "job_hunter.db",
+    ):
+        try:
+            path.unlink(missing_ok=True)
+        except Exception as exc:
+            logger.warning("[IO_UTILS][WARN] Failed to remove runtime cache %s: %s", path, exc)
+        else:
+            cleared_files.append(path.name)
+
+    with db_conn(db_path) as conn:
+        conn.execute("DELETE FROM occupation_title_cache")
+
+    return {
+        "ok": True,
+        "cleared_files": cleared_files,
+        "message": "Runtime caches cleared.",
+    }
 
 
 def clear_job_history() -> None:
