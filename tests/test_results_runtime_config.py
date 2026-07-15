@@ -396,7 +396,7 @@ def test_rendered_workspace_html_content(tmp_path):
             "rejection_how_this_works_body": "If you save a term here, future jobs are filtered only when it looks required. To block any mention, use global description blockers in Settings.",
             "rejection_loading_suggestions": "Loading suggestions&#8230;",
             "rejection_add_own_term_label": "Add your own required term",
-            "rejection_add_own_term_placeholder": "e.g. SAP, payroll, NV1 clearance",
+            "rejection_add_own_term_placeholder": "e.g. SAP, payroll, cold calling",
             "rejection_add_button": "Add",
             "rejection_save_button": "Save &amp; Continue",
             "rejection_skip_button": "Continue Without Extra Blocks",

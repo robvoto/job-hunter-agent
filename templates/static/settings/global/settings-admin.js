@@ -85,6 +85,7 @@ export const JobHunterAdminSettings = (function () {
     llm_model_options: ['llm_settings', 'model_options'],
     llm_max_llm_chars: ['llm_settings', 'max_llm_chars'],
     llm_pricing_per_1m: ['llm_settings', 'pricing_per_1m'],
+    llm_prompt_fit_review_debug_match_diagnostics_enabled: ['llm_settings.llm_prompt_settings', 'fit_review_debug_match_diagnostics_enabled'],
   };
 
   let globalSettingsHelp = null;
@@ -289,6 +290,8 @@ export const JobHunterAdminSettings = (function () {
     setFieldValue('llm_max_llm_chars', llmSettings.max_llm_chars);
     setFieldValue('llm_pricing_per_1m', JSON.stringify(llmSettings.pricing_per_1m || {}, null, 2));
     const promptTemplates = llmSettings.llm_prompt_settings?.match_preference_templates || {};
+    requireElement('llm_prompt_fit_review_debug_match_diagnostics_enabled').checked =
+      llmSettings.llm_prompt_settings?.fit_review_debug_match_diagnostics_enabled === true;
     for (const [templateKey, fieldId] of PROMPT_TEMPLATE_FIELDS) {
       setFieldValue(fieldId, promptTemplates[templateKey]);
     }
@@ -519,6 +522,9 @@ export const JobHunterAdminSettings = (function () {
         pricing_per_1m: JSON.parse(document.getElementById('llm_pricing_per_1m').value.trim() || '{}'),
         llm_prompt_settings: {
           ...currentLlmPromptSettings,
+          fit_review_debug_match_diagnostics_enabled: Boolean(
+            document.getElementById('llm_prompt_fit_review_debug_match_diagnostics_enabled')?.checked,
+          ),
           match_preference_templates: Object.fromEntries(
             PROMPT_TEMPLATE_FIELDS.map(([templateKey, fieldId]) => [
               templateKey,

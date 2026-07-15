@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 68,
+  "version": 71,
   "updated_at": "2026-07-14",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -45,6 +45,7 @@
   "capability_ui_labels_description": "Display labels and help text for capability review and editing screens.",
   "capability_ui_labels": {
     "settings_title": "Capability Matrix",
+    "matching_nav_label": "Matching",
     "onboarding_title": "Capabilities",
     "help_text": "Capabilities are the proven work strengths the agent found in your CV that help it match you to the right jobs. The strength you choose changes how much each capability influences matching, so use Strong for your best evidence and Basic for thinner or older evidence. Related skills are synonyms for the same capability, helping the agent recognize them across different job ads. You can delete any incorrect matches.",
     "add_button_aria_label": "Add capability",
@@ -63,6 +64,16 @@
     "onboarding_empty_text": "No capabilities found yet.",
     "onboarding_no_match_text": "No matching capabilities found.",
     "review_strength_prompt_label": "How strong is this capability for you?"
+  },
+  "settings_clearances_labels_description": "Display labels and help text for the Clearances rules editor.",
+  "settings_clearances_labels": {
+    "settings_title": "Clearances",
+    "help_text": "Clearances are pass/fail facts about you, like a security clearance or a work-rights check, rather than a skill or capability. If a job description lists one of these as an alternative (for example \"NV1 / Baseline / As per role\"), Job Hunter will only flag it as missing when none of the alternatives match what you've entered here.",
+    "add_button_aria_label": "Add clearance",
+    "settings_empty_text": "No clearances added yet. Add one below if a role you're applying for cares about a specific clearance or work-rights check.",
+    "name_placeholder": "e.g. NV1",
+    "have_label": "I have this",
+    "remove_button_aria_label": "Remove clearance"
   },
   "shared_ui_labels_description": "Shared labels for reusable app chrome and common action buttons.",
   "shared_ui_labels": {
@@ -367,6 +378,7 @@
     "job_requirements_empty_state": "No requirements were extracted for this job.",
     "job_requirements_detail_hint": "The hidden subtitle is the small grey line under a requirement row. It shows the matched capability name and the quoted job text, and debug mode turns it back on.",
     "risk_panel_summary": "Checks before applying",
+    "clearance_panel_summary": "Clearances",
     "debug_only_badge": "Debug only",
     "debug_only_tooltip": "This role was filtered out in the normal workspace view, but stays visible in debug mode.",
     "hard_blocked_badge": "Hard blocked",
@@ -470,7 +482,7 @@
     "rejection_how_this_works_body": "If you save a term here, future jobs are filtered only when it looks required. To block any mention, use global description blockers in Settings.",
     "rejection_loading_suggestions": "Loading suggestions…",
     "rejection_add_own_term_label": "Add your own required term",
-    "rejection_add_own_term_placeholder": "e.g. SAP, payroll, NV1 clearance",
+    "rejection_add_own_term_placeholder": "e.g. SAP, payroll, cold calling",
     "rejection_add_button": "Add",
     "rejection_save_button": "Save & Continue",
     "rejection_skip_button": "Continue Without Extra Blocks",

@@ -10,6 +10,7 @@ from job_hunter_agent.config import DEBUG_MODE
 from job_hunter_agent.logging_utils import format_log_block
 
 logger = logging.getLogger(__name__)
+_HUMAN_LOG_SEPARATOR = "-" * 80
 
 from job_hunter_agent.io_utils import (
     save_job_history,
@@ -277,18 +278,17 @@ def _build_source_breakdown(
 def _log_source_final_stats(run_stats: dict) -> None:
     source_breakdown = run_stats.get("source_breakdown") or []
     for item in source_breakdown:
+        source_name = str(item.get("source") or "UNKNOWN").strip().upper()
         logger.info(
-            format_log_block(
-                "RUN][SOURCE_FINAL_STATS",
-                {
-                    "source": str(item.get("source") or "UNKNOWN"),
-                    "pages": int(item.get("pages", 0) or 0),
-                    "seen": int(item.get("seen", 0) or 0),
-                    "read": int(item.get("read", 0) or 0),
-                    "kept": int(item.get("kept", 0) or 0),
-                    "rejected": int(item.get("rejected", 0) or 0),
-                },
-            )
+            "\n%s\nBOARD FINAL %s\nSeen: %d | Read: %d | Pages: %d | Kept: %d | Rejected: %d\n%s",
+            _HUMAN_LOG_SEPARATOR,
+            source_name,
+            int(item.get("seen", 0) or 0),
+            int(item.get("read", 0) or 0),
+            int(item.get("pages", 0) or 0),
+            int(item.get("kept", 0) or 0),
+            int(item.get("rejected", 0) or 0),
+            _HUMAN_LOG_SEPARATOR,
         )
 
 

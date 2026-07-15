@@ -171,11 +171,6 @@ def is_workspace_eligible(
         )
         return False
 
-    ok_title, _ = passes_title_filters(str(record.get("title") or ""))
-
-    if not ok_title:
-        return False
-
     active_workspace_min_score = (
         int(workspace_min_score)
         if workspace_min_score is not None

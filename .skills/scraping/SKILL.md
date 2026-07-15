@@ -1,4 +1,4 @@
-﻿---
+---
 name: scraping
 description: Use ONLY for SEEK/LinkedIn scraping, source connector behaviour, scraped job data shape, source diagnostics, work-mode provenance, and raw evidence capture. Do NOT use for scoring or candidate preference decisions.
 ---
@@ -43,7 +43,9 @@ See `.skills/scraping/DETAILS.md` for detailed work-mode extraction, source-spec
 - Debug zero results by checking both `search_settings.keywords` and role/title patterns.
 
 ## Current run logs
-Use `output/server.log` for current scrape diagnosis. Do not rely on stale `output/console.log`.
+Use `output/server.log` for the human-readable scrape summary.
+Use `output/server-debug.log` for raw current scrape diagnosis, including interleaved worker activity, LLM calls, HTTP lines, and detailed pipeline trace.
+Do not rely on stale `output/console.log`.
 
 ## Validation
 - Run the smallest relevant scraper/data-shape test first.

@@ -71,6 +71,36 @@ def test_fit_review_prompt_excludes_learning_guidance(monkeypatch):
     assert "requirement_coverage" in prompt
     assert "fit_review.grade" in prompt
     assert "Eligibility matrix:" in prompt
+    assert "match_source" not in prompt
+    assert "matched_profile_term" not in prompt
+
+
+def test_fit_review_prompt_debug_match_diagnostics_adds_debug_schema(monkeypatch):
+    monkeypatch.setattr(
+        llm_gate,
+        "load_profile",
+        lambda: {
+            "candidate_capabilities": [{"name": "stakeholder engagement", "level": "strong"}],
+            "candidate_eligibility": [{"name": "PV clearance", "value": True, "evidence": []}],
+            "match_preferences": {},
+            "salary_preferences": {},
+            "llm_profile_brief": "",
+            "candidate_profile_tiers": {},
+            "onboarding_settings": {},
+        },
+    )
+    monkeypatch.setattr(
+        llm_gate,
+        "get_llm_fit_review_debug_match_diagnostics_enabled",
+        lambda: True,
+    )
+
+    prompt = llm_gate._build_learning_prompt("Job description", fit_review=True)
+
+    assert "match_source" in prompt
+    assert "matched_profile_term" in prompt
+    assert '"match_source":"capability_name|related_skill|profile_brief|eligibility"' in prompt
+    assert "profile_support must contain only actual candidate evidence text" in prompt
 
 
 def test_learning_only_prompt_retains_learning_guidance():
@@ -249,6 +279,114 @@ def test_request_learning_payload_uses_single_llm_call(monkeypatch):
 
     assert called["count"] == 1
     assert payload["fit_review"] == {"decision": "KEEP", "grade": "STRONG"}
+
+
+def test_request_learning_payload_uses_debug_fit_review_schema_when_enabled(monkeypatch):
+    captured = {}
+
+    class _FakeParsed:
+        def model_dump(self):
+            return {
+                "fit_review": {"decision": "KEEP", "grade": "SOLID"},
+                "job_requirements": ["Stakeholder engagement"],
+                "requirement_coverage": [
+                    {
+                        "requirement": "Stakeholder engagement",
+                        "status": "supported",
+                        "capability_name": "Stakeholder Engagement",
+                        "match_source": "capability_name",
+                        "matched_profile_term": "Stakeholder Engagement",
+                        "matched_job_text": "work with stakeholders",
+                        "profile_support": ["Led stakeholder engagement."],
+                    },
+                ],
+            }
+
+    class _FakeResponse:
+        output_parsed = _FakeParsed()
+        usage = None
+
+    class _FakeResponses:
+        def parse(self, **kwargs):
+            captured["text_format"] = kwargs.get("text_format")
+            return _FakeResponse()
+
+    class _FakeClient:
+        responses = _FakeResponses()
+
+    monkeypatch.setattr(llm_gate, "client", _FakeClient())
+    monkeypatch.setattr(llm_gate, "_log_llm_call", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        llm_gate,
+        "load_profile",
+        lambda: {"candidate_capabilities": [{"name": "Stakeholder Engagement"}]},
+    )
+    monkeypatch.setattr(
+        llm_gate,
+        "get_llm_fit_review_debug_match_diagnostics_enabled",
+        lambda: True,
+    )
+
+    payload = llm_gate._request_learning_payload(
+        "Business analyst role supporting stakeholders.", fit_review=True
+    )
+
+    assert captured["text_format"] is llm_gate._LLMFitReviewDebugPayload
+    assert payload["requirement_coverage"][0]["match_source"] == "capability_name"
+    assert payload["requirement_coverage"][0]["matched_profile_term"] == "Stakeholder Engagement"
+
+
+def test_normalize_llm_review_payload_distinguishes_capability_name_and_related_skill_matches(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        llm_gate,
+        "get_llm_fit_review_debug_match_diagnostics_enabled",
+        lambda: True,
+    )
+
+    payload = llm_gate.normalize_llm_review_payload(
+        {
+            "fit_review": {"decision": "KEEP", "grade": "STRONG"},
+            "job_requirements": [
+                "Stakeholder engagement",
+                "Requirements traceability",
+            ],
+            "requirement_coverage": [
+                {
+                    "requirement": "Stakeholder engagement",
+                    "status": "supported",
+                    "capability_name": "stakeholder engagement",
+                    "match_source": "capability_name",
+                    "matched_profile_term": "stakeholder engagement",
+                    "matched_job_text": "work with stakeholders",
+                    "profile_support": ["Led stakeholder engagement across delivery teams."],
+                },
+                {
+                    "requirement": "Requirements traceability",
+                    "status": "supported",
+                    "capability_name": "business analysis",
+                    "match_source": "related_skill",
+                    "matched_profile_term": "requirements traceability",
+                    "matched_job_text": "support technical requirements traceability",
+                    "profile_support": [
+                        "Produced traceable requirements, user stories and acceptance criteria."
+                    ],
+                },
+            ],
+        },
+        valid_capability_names={
+            "stakeholder engagement": "Stakeholder Engagement",
+            "business analysis": "Business Analysis",
+        },
+    )
+
+    assert payload["requirement_coverage"][0]["profile_name"] == "Stakeholder Engagement"
+    assert payload["requirement_coverage"][0]["match_source"] == "capability_name"
+    assert payload["requirement_coverage"][0]["matched_profile_term"] == "stakeholder engagement"
+    assert payload["requirement_coverage"][1]["profile_name"] == "Business Analysis"
+    assert payload["requirement_coverage"][1]["match_source"] == "related_skill"
+    assert payload["requirement_coverage"][1]["matched_profile_term"] == "requirements traceability"
 
 
 def test_request_learning_payload_retries_once_on_invalid_json(monkeypatch, caplog):

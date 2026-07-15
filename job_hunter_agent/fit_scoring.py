@@ -5,7 +5,7 @@ Purpose: score covered requirements and render explainable fit breakdowns.
 
 import json
 import logging
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from job_hunter_agent.capability_matching import (
     find_profile_capability_matches,
@@ -55,6 +55,10 @@ LLM_REVIEW_INCOMPLETE_LABEL = "LLM review incomplete"
 
 
 REQUIREMENT_MAPPING_UNCERTAIN_REASON = "requirement_capability_mapping_uncertain"
+ELIGIBILITY_GATE_NOT_APPLICABLE = "not_applicable"
+ELIGIBILITY_GATE_PASS = "pass"
+ELIGIBILITY_GATE_FAIL = "fail"
+ELIGIBILITY_GATE_UNRESOLVED = "unresolved"
 
 
 def _requirement_importance_weights(scoring_rules: dict) -> dict[str, float]:
@@ -171,6 +175,79 @@ def _append_requirement_mapping_uncertainty(record: dict, item: dict, detail: st
     )
 
 
+def eligibility_gate_diagnostics(record: dict, profile: Optional[dict] = None) -> dict[str, Any]:
+    """Return shared eligibility-gate status from requirement_coverage.
+
+    Eligibility is a gate, not a score contributor. This helper is shared by logs
+    and debug UI so the explanation stays aligned with the same review payload.
+    """
+
+    active_profile = profile or load_profile()
+    eligibility_levels = _candidate_eligibility_lookup(active_profile)
+    coverage = record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or []
+    if not isinstance(coverage, list):
+        coverage = []
+
+    relevant_rows: list[dict[str, Any]] = []
+    for item in coverage:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("requirement_type") or "").strip().lower() != "eligibility":
+            continue
+        relevant_rows.append(item)
+
+    if not relevant_rows:
+        return {
+            "status": ELIGIBILITY_GATE_NOT_APPLICABLE,
+            "label": "Not applicable",
+            "reason": "No eligibility requirements were returned.",
+        }
+
+    unresolved = 0
+    for item in relevant_rows:
+        status = str(item.get("status") or "").strip().lower()
+        profile_name = compact_whitespace(
+            str(item.get("profile_name") or item.get("eligibility_name") or "")
+        )
+        eligibility_key = _normalise_lookup_text(profile_name)
+        if status == "mismatch":
+            return {
+                "status": ELIGIBILITY_GATE_FAIL,
+                "label": "Fail",
+                "reason": compact_whitespace(str(item.get("requirement") or "Eligibility mismatch")),
+            }
+        if status in {"supported", "partially_supported"}:
+            if not profile_name or eligibility_key not in eligibility_levels:
+                unresolved += 1
+                continue
+            if not eligibility_levels.get(eligibility_key, False):
+                return {
+                    "status": ELIGIBILITY_GATE_FAIL,
+                    "label": "Fail",
+                    "reason": compact_whitespace(
+                        str(item.get("requirement") or profile_name or "Eligibility mismatch")
+                    ),
+                }
+            continue
+        if status == "not_shown":
+            unresolved += 1
+            continue
+        unresolved += 1
+
+    if unresolved:
+        return {
+            "status": ELIGIBILITY_GATE_UNRESOLVED,
+            "label": "Unresolved",
+            "reason": f"{unresolved} eligibility requirement(s) were unresolved.",
+        }
+
+    return {
+        "status": ELIGIBILITY_GATE_PASS,
+        "label": "Pass",
+        "reason": f"{len(relevant_rows)} eligibility requirement(s) passed.",
+    }
+
+
 def requirement_fit_audit_rows(record: dict, profile: Optional[dict] = None) -> List[dict]:
     """Return the exact per-requirement inputs and credit used by fit scoring."""
 
@@ -199,7 +276,11 @@ def requirement_fit_audit_rows(record: dict, profile: Optional[dict] = None) -> 
         status = str(item.get("status") or "").strip().lower()
         profile_name = str(item.get("profile_name") or "").strip()
         weight = importance_weights[importance]
+        is_eligibility_gate = requirement_type == "eligibility"
+        scoring_weight = 0.0 if is_eligibility_gate else weight
         candidate_level = ""
+        level_credit = 0.0
+        status_credit = 0.0
         credit_fraction = 0.0
 
         if status in {"supported", "partially_supported"}:
@@ -208,12 +289,14 @@ def requirement_fit_audit_rows(record: dict, profile: Optional[dict] = None) -> 
                 eligibility_key = _normalise_lookup_text(profile_name)
                 if eligibility_key in eligibility_levels and eligibility_levels[eligibility_key]:
                     candidate_level = "confirmed"
-                    credit_fraction = status_credit
+                    level_credit = 0.0
+                    credit_fraction = 0.0
             elif requirement_type in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES:
                 capability_key = _normalise_lookup_text(profile_name)
                 candidate_level = capability_levels.get(capability_key, "")
                 if candidate_level:
-                    credit_fraction = capability_credits[candidate_level] * status_credit
+                    level_credit = capability_credits[candidate_level]
+                    credit_fraction = level_credit * status_credit
 
         raw_support = item.get("profile_support") or []
         if isinstance(raw_support, str):
@@ -233,13 +316,181 @@ def requirement_fit_audit_rows(record: dict, profile: Optional[dict] = None) -> 
                 "profile_name": profile_name,
                 "candidate_level": candidate_level,
                 "matched_job_text": compact_whitespace(str(item.get("matched_job_text") or "")),
+                "match_source": compact_whitespace(str(item.get("match_source") or "")).lower(),
+                "matched_profile_term": compact_whitespace(
+                    str(item.get("matched_profile_term") or "")
+                ),
                 "profile_support": profile_support,
-                "requirement_weight": weight,
+                "requirement_weight": scoring_weight,
+                "raw_requirement_weight": weight,
+                "is_eligibility_gate": is_eligibility_gate,
+                "level_credit": level_credit,
+                "status_credit": status_credit,
                 "credit_fraction": credit_fraction,
-                "weighted_credit": weight * credit_fraction,
+                "weighted_credit": scoring_weight * credit_fraction,
             }
         )
     return rows
+
+
+def requirement_fit_diagnostics(record: dict, profile: Optional[dict] = None) -> dict[str, Any]:
+    """Return shared requirement-fit diagnostics for logs and debug UI.
+
+    Uses requirement_fit_audit_rows() as the scoring source of truth so the UI and
+    logs cannot drift from the actual calculation.
+    """
+
+    rows = requirement_fit_audit_rows(record, profile)
+    earned_weighted_credit = sum(float(row["weighted_credit"]) for row in rows)
+    total_requirement_weight = sum(float(row["requirement_weight"]) for row in rows)
+    final_requirement_fit = (
+        round((earned_weighted_credit / total_requirement_weight) * 100)
+        if total_requirement_weight > 0
+        else 0
+    )
+
+    detailed_rows: list[dict[str, Any]] = []
+    for row in rows:
+        requirement_type = str(row["requirement_type"] or "").strip().lower() or "capability"
+        candidate_level = str(row["candidate_level"] or "").strip()
+        profile_name = compact_whitespace(str(row["profile_name"] or ""))
+        mapping_label = profile_name or "Unresolved mapping"
+        if candidate_level:
+            mapping_label = f"{mapping_label} ({candidate_level})"
+        level_credit = float(row.get("level_credit") or 0.0)
+        status_credit = float(row.get("status_credit") or 0.0)
+        match_source = compact_whitespace(str(row.get("match_source") or "")).lower()
+        matched_profile_term = compact_whitespace(str(row.get("matched_profile_term") or ""))
+        detailed_rows.append(
+            {
+                **row,
+                "importance_label": str(row["importance"]).replace("_", " ").title(),
+                "requirement_type_label": requirement_type.replace("_", " ").title(),
+                "status_label": str(row["status"]).replace("_", " ").title(),
+                "mapping_label": mapping_label,
+                "candidate_level_label": candidate_level or "Unresolved",
+                "match_source_label": (
+                    match_source.replace("_", " ").title() if match_source else "Unresolved"
+                ),
+                "matched_profile_term_label": matched_profile_term or "Unresolved",
+                "profile_support_label": "; ".join(row["profile_support"])
+                or "No profile evidence returned",
+                "calculation_label": (
+                    "Eligibility gate only — no points added"
+                    if row.get("is_eligibility_gate")
+                    else (
+                        f"{float(row['requirement_weight']):g} × "
+                        f"{level_credit:g} × "
+                        f"{status_credit:g} = "
+                        f"{float(row['weighted_credit']):g} / {float(row['requirement_weight']):g}"
+                    )
+                ),
+            }
+        )
+
+    return {
+        "rows": detailed_rows,
+        "earned_weighted_credit": earned_weighted_credit,
+        "total_requirement_weight": total_requirement_weight,
+        "final_requirement_fit": final_requirement_fit,
+        "final_calculation_label": (
+            f"{earned_weighted_credit:g} ÷ {total_requirement_weight:g} × 100"
+            if total_requirement_weight > 0
+            else "0 ÷ 0 × 100"
+        ),
+    }
+
+
+def format_requirement_fit_diagnostics_lines(record: dict, profile: Optional[dict] = None) -> list[str]:
+    """Format transparent per-requirement scoring diagnostics for logs/debug views."""
+
+    diagnostics = requirement_fit_diagnostics(record, profile)
+    eligibility_gate = eligibility_gate_diagnostics(record, profile)
+    lines: list[str] = []
+    for row in diagnostics["rows"]:
+        lines.extend(
+            [
+                f"Requirement: {row['requirement']}",
+                f"Importance: {row['importance_label']}",
+                f"Requirement type: {row['requirement_type_label']}",
+                f"Coverage: {row['status_label']}",
+                f"Mapped to: {row['mapping_label']}",
+                f"Matched via: {row['match_source_label']}",
+                f"Matched term: {row['matched_profile_term_label']}",
+                f"Candidate level: {row['candidate_level_label']}",
+                (
+                    f"Calculation: {row['calculation_label']}"
+                    if row.get("is_eligibility_gate")
+                    else (
+                        f"Calculation: {row['calculation_label']}"
+                        f" ({float(row['credit_fraction']) * 100:.0f}%)"
+                    )
+                ),
+                f"Profile evidence used: {row['profile_support_label']}",
+            ]
+        )
+    lines.extend(
+        [
+            f"Eligibility gate: {eligibility_gate['label']}",
+            f"Earned weighted credit: {diagnostics['earned_weighted_credit']:g}",
+            f"Total requirement weight: {diagnostics['total_requirement_weight']:g}",
+            f"Calculation: {diagnostics['final_calculation_label']}",
+            f"Final Requirement Fit: {diagnostics['final_requirement_fit']}%",
+        ]
+    )
+    return lines
+
+
+def format_requirement_fit_diagnostics_block(
+    record: dict,
+    profile: Optional[dict] = None,
+    *,
+    decision: str = "",
+    grade: str = "",
+    debug_reason: str = "",
+) -> str:
+    """Format one compact per-job diagnostics block for logs."""
+
+    diagnostics = requirement_fit_diagnostics(record, profile)
+    eligibility_gate = eligibility_gate_diagnostics(record, profile)
+    summary_lines = [
+        "  Requirement scoring",
+        (
+            "  Outcome: "
+            f"{compact_whitespace(decision) or 'Unavailable'}"
+            + (
+                f" | Grade: {compact_whitespace(grade)}"
+                if compact_whitespace(grade)
+                else ""
+            )
+            + f" | Requirement Fit: {diagnostics['final_requirement_fit']}%"
+        ),
+        (
+            "  Earned: "
+            f"{diagnostics['earned_weighted_credit']:g} / {diagnostics['total_requirement_weight']:g}"
+        ),
+        f"  Eligibility gate: {eligibility_gate['label']} | {compact_whitespace(eligibility_gate['reason'])}",
+        f"  Why: {compact_whitespace(debug_reason) or 'No debug reason provided'}",
+    ]
+    detail_lines = [
+        (
+            "  - "
+            f"{row['requirement']} | {row['importance_label']} | {row['requirement_type_label']} | "
+            f"{row['status_label']} | {row['mapping_label']} | Via: {row['match_source_label']} | "
+            f"Term: {row['matched_profile_term_label']} | {row['calculation_label']} | "
+            f"Evidence: {row['profile_support_label']}"
+        )
+        for row in diagnostics["rows"]
+    ]
+    footer_lines = [
+        (
+            "  Final calculation: "
+            f"{diagnostics['earned_weighted_credit']:g} ÷ "
+            f"{diagnostics['total_requirement_weight']:g} × 100 = "
+            f"{diagnostics['final_requirement_fit']}%"
+        )
+    ]
+    return "\n".join(summary_lines + detail_lines + footer_lines)
 
 
 def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -> List[dict]:
@@ -285,9 +536,10 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
             continue
         importance = str(item.get("importance") or "preferred").strip().lower()
         weight = importance_weights.get(importance, importance_weights["preferred"])
-        total_weight += weight
         status = str(item.get("status") or "").strip().lower()
         requirement_type = str(item.get("requirement_type") or "capability").strip().lower()
+        scoring_weight = 0.0 if requirement_type == "eligibility" else weight
+        total_weight += scoring_weight
         profile_name = str(
             item.get("profile_name") or item.get("capability_name") or item.get("eligibility_name") or ""
         ).strip()
@@ -343,10 +595,7 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
                 if importance == "mandatory":
                     mandatory_gaps.append(requirement)
                 continue
-            earned_weight += weight * float(status_weights[status])
             counts["eligibility"] += 1
-            if status == "partially_supported":
-                counts["partial"] += 1
             continue
 
         capability_key = _normalise_lookup_text(profile_name)

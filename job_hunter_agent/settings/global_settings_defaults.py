@@ -86,6 +86,9 @@ KEY_LLM_PROMPT_LEARNING_MAX_ITEMS = "learning_candidates_max_items"
 KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_ITEMS = "job_requirements_max_items"
 KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS = "rejection_blocker_suggestions_max_items"
 KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS = "rejection_blocker_suggestions_max_words"
+KEY_LLM_PROMPT_FIT_REVIEW_DEBUG_MATCH_DIAGNOSTICS_ENABLED = (
+    "fit_review_debug_match_diagnostics_enabled"
+)
 
 KEY_REVIEW_SETTINGS = "review_settings"
 KEY_REVIEW_MAX_EXAMPLES_PER_SKILL = "max_examples_per_skill"

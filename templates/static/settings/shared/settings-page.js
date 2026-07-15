@@ -1,5 +1,6 @@
 ﻿import { JobHunterChipEditor as chipEditor } from './settings-chip-editor.js';
 import { JobHunterCapabilityEditor as capabilityEditor } from './settings-capability-editor.js';
+import { JobHunterClearanceEditor as clearanceEditor } from './settings-clearance-editor.js';
 import { JobHunterAdminSettings as adminSettings } from '../global/settings-admin.js';
 import { JobHunterAlertsSettings as alertsSettings } from '../standard/settings-alerts.js';
 import * as capabilityUi from '../../common/capability-ui.js';
@@ -35,8 +36,8 @@ const isTestMode = document.body?.dataset.testMode === 'true';
 const capabilityLabels = capabilityUi.labels || {};
 
 const capabilityMatrixNav = document.getElementById('settings_capability_matrix_nav');
-if (capabilityMatrixNav && capabilityLabels.settings_title) {
-  capabilityMatrixNav.textContent = capabilityLabels.settings_title;
+if (capabilityMatrixNav && capabilityLabels.matching_nav_label) {
+  capabilityMatrixNav.textContent = capabilityLabels.matching_nav_label;
 }
 const fillUserSettings = (s) => alertsSettings.fillUserSettings(s);
 const collectUserSettings = () => alertsSettings.collectUserSettings(loadedUserSettings);
@@ -325,6 +326,7 @@ function collectProfile() {
     llm_profile_brief_mode: 'auto',
     llm_profile_brief: '',
     candidate_capabilities: capabilityEditor.collectCapabilityRuleState(),
+    candidate_eligibility: clearanceEditor.collectClearanceRuleState(),
     target_roles: toLines(settingsField('target_roles').value),
     also_consider_roles: toLines(settingsField('also_consider_roles').value),
     must_not_require_skills: toLines(settingsField('must_not_require_skills').value),
@@ -394,6 +396,7 @@ function fillForm(profile) {
   document.getElementById('government_weight').value = String(profile.preference_weights?.government);
   document.getElementById('freshness_weight').value = String(profile.preference_weights?.freshness);
   capabilityEditor.setCapabilityRuleState(profile.candidate_capabilities || []);
+  clearanceEditor.setClearanceRuleState(profile.candidate_eligibility || []);
   document.getElementById('cv_text_debug').value = (profile.cv_text || '').trim();
   for (const id of ['target_roles', 'also_consider_roles', 'must_not_require_skills']) {
     settingsField(id).value = (profile[id] || []).join('\n');
@@ -860,6 +863,7 @@ activeSaveButton?.addEventListener('click', (event) => {
 // -- Module event handlers (after markDirty is defined) ---------------------
 chipEditor.initEventHandlers(markDirty);
 capabilityEditor.initEventHandlers(markDirty);
+clearanceEditor.initEventHandlers(markDirty);
 
 // -- Init ------------------------------------------------------------------
 const pageLoads = isAdminPage

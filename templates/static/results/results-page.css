@@ -636,13 +636,17 @@
 .job-requirement-list {
   list-style: none;
   padding-left: 0 !important;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content max-content;
+  column-gap: 8px;
+  row-gap: 8px;
 }
 
 .job-requirement-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: start;
-  column-gap: 12px;
   row-gap: 8px;
   padding: 6px 8px;
   border-radius: var(--radius-sm);
@@ -672,17 +676,12 @@
 }
 
 .job-requirement-badges {
-  display: flex;
-  flex-wrap: wrap;
-  grid-column: 2;
-  justify-self: end;
-  justify-content: flex-end;
-  align-items: flex-start;
-  gap: 6px;
-  min-width: 11rem;
+  display: contents;
 }
 
 .job-requirement-status {
+  grid-column: 3;
+  justify-self: start;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -755,7 +754,8 @@
 }
 
 .req-add-to-profile {
-  flex: 0 0 auto;
+  grid-column: 2 / 4;
+  justify-self: start;
   display: inline-flex;
   align-items: center;
   font-size: 0.72rem;
@@ -783,7 +783,8 @@
 }
 
 .job-req-importance {
-  flex: 0 0 auto;
+  grid-column: 2;
+  justify-self: end;
   display: inline-flex;
   align-items: center;
   font-size: 0.68rem;
@@ -1625,11 +1626,23 @@
   .job-link { font-size: 1.2rem; }
   .job-header-row { flex-direction: column; }
   .match-tile { min-width: 0; width: 100%; }
+  .job-requirement-list { grid-template-columns: 1fr; }
   .job-requirement-item { grid-template-columns: 1fr; }
   .job-requirement-badges {
+    display: grid;
+    grid-template-columns: repeat(2, max-content);
     grid-column: 1;
     justify-self: start;
-    justify-content: flex-start;
-    min-width: 0;
+    justify-content: start;
+    justify-items: start;
+    column-gap: 6px;
+    row-gap: 8px;
   }
+  .job-requirement-status { grid-column: auto; }
+  .job-req-importance,
+  .req-add-to-profile {
+    grid-column: auto;
+    justify-self: start;
+  }
+  .req-add-to-profile { grid-column: 1 / -1; }
 }

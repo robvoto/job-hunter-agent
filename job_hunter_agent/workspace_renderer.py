@@ -28,9 +28,10 @@ from job_hunter_agent.description_trust import (
 from job_hunter_agent.filters import normalize_title_block_phrase
 from job_hunter_agent.fit_scoring import (
     build_fit_highlights,
+    eligibility_gate_diagnostics,
     fit_score_and_breakdown_displayed,
     fit_score_displayed,
-    requirement_fit_audit_rows,
+    requirement_fit_diagnostics,
 )
 from job_hunter_agent.global_settings import get_default_country_suffix
 from job_hunter_agent.history import (
@@ -371,41 +372,76 @@ def _capability_level_lookup(active_profile: Optional[dict]) -> dict[str, str]:
 def _render_scoring_audit_html(record: dict, active_profile: dict) -> str:
     """Render the scoring inputs and decision conversion without changing judgement."""
 
-    audit_rows = requirement_fit_audit_rows(record, active_profile)
+    diagnostics = requirement_fit_diagnostics(record, active_profile)
+    has_debug_match_details = any(
+        row.get("match_source_label") not in {"", "Unresolved"}
+        or row.get("matched_profile_term_label") not in {"", "Unresolved"}
+        for row in diagnostics["rows"]
+    )
     row_html = ""
-    for row in audit_rows:
-        profile_support = "; ".join(row["profile_support"]) or "No profile evidence returned"
-        mapping = row["profile_name"] or "No profile mapping"
-        if row["candidate_level"]:
-            mapping = f"{mapping} ({row['candidate_level']})"
-        credit_percent = round(float(row["credit_fraction"]) * 100)
-        credit = (
-            f"{float(row['weighted_credit']):g} / "
-            f"{float(row['requirement_weight']):g} ({credit_percent}%)"
-        )
+    for row in diagnostics["rows"]:
+        requirement_weight = f"{float(row['requirement_weight']):g}"
+        credit_fraction = f"{float(row['credit_fraction']):g}"
+        weighted_credit = f"{float(row['weighted_credit']):g}"
+        evidence_html = "".join(
+            f"<li>{safe_html(value)}</li>" for value in (row["profile_support"] or [])
+        ) or "<li>No profile evidence returned</li>"
         row_html += (
             "<tr>"
             f"<td>{safe_html(row['requirement'])}</td>"
-            f"<td>{safe_html(row['importance'].replace('_', ' ').title())}</td>"
-            f"<td>{safe_html(profile_support)}</td>"
-            f"<td>{safe_html(mapping)}</td>"
-            f"<td>{safe_html(row['status'].replace('_', ' ').title())}</td>"
-            f"<td>{safe_html(credit)}</td>"
+            f"<td>{safe_html(row['importance_label'])}</td>"
+            f"<td>{safe_html(row['requirement_type_label'])}</td>"
+            f"<td>{safe_html(row['status_label'])}</td>"
+            f"<td>{safe_html(row['mapping_label'])}</td>"
+            + (
+                f"<td>{safe_html(row['match_source_label'])}</td>"
+                f"<td>{safe_html(row['matched_profile_term_label'])}</td>"
+                if has_debug_match_details
+                else ""
+            )
+            + (
+            f"<td>{safe_html(row['candidate_level_label'])}</td>"
+            f"<td>{safe_html(requirement_weight)}</td>"
+            f"<td>{safe_html(credit_fraction)}</td>"
+            f"<td>{safe_html(weighted_credit)}</td>"
+            f"<td>{safe_html(row['calculation_label'])}</td>"
+            f"<td><ul>{evidence_html}</ul></td>"
             "</tr>"
+            )
         )
 
     audit_table = ""
     if row_html:
+        earned_weighted_credit = f"{float(diagnostics['earned_weighted_credit']):g}"
+        total_requirement_weight = f"{float(diagnostics['total_requirement_weight']):g}"
         audit_table = (
             '<div class="job-insight-group is-secondary scoring-audit">'
             "<strong>Scoring audit</strong>"
             '<div class="scoring-audit-scroll"><table>'
             "<thead><tr>"
-            "<th>Requirement</th><th>Importance</th><th>Profile evidence used</th>"
-            "<th>Mapped profile capability</th><th>Status</th><th>Credit awarded</th>"
+            "<th>Requirement</th><th>Importance</th><th>Requirement type</th><th>Status</th>"
+            "<th>Mapped profile capability or eligibility</th>"
+            + (
+                "<th>Matched via</th><th>Matched term</th>"
+                if has_debug_match_details
+                else ""
+            )
+            + "<th>Candidate level</th>"
+            "<th>Requirement weight</th><th>Credit fraction</th><th>Weighted credit</th>"
+            "<th>Calculation</th><th>Profile evidence used</th>"
             "</tr></thead>"
             f"<tbody>{row_html}</tbody>"
             "</table></div></div>"
+        )
+        audit_table += (
+            '<div class="job-insight-group is-secondary scoring-audit-summary">'
+            "<ul>"
+            f"<li>Earned weighted credit: {safe_html(earned_weighted_credit)}</li>"
+            f"<li>Total requirement weight: {safe_html(total_requirement_weight)}</li>"
+            f"<li>Calculation: {safe_html(diagnostics['final_calculation_label'])}</li>"
+            f"<li>Final Requirement Fit: {safe_html(str(diagnostics['final_requirement_fit']))}%</li>"
+            "</ul>"
+            "</div>"
         )
 
     llm_decision = compact_whitespace(str(record.get(RECORD_LLM_DECISION_KEY) or ""))
@@ -657,6 +693,11 @@ def _build_checks_before_applying_items(
     if isinstance(requirement_coverage, list):
         for row in requirement_coverage:
             if not isinstance(row, dict):
+                continue
+            # Eligibility rows (clearances, work rights, etc.) are surfaced exclusively
+            # by the dedicated Clearances panel — skip them here to avoid double-counting
+            # the same fact in both places.
+            if compact_whitespace(str(row.get("requirement_type") or "")).lower() == "eligibility":
                 continue
             requirement = compact_whitespace(
                 str(row.get("requirement") or row.get("capability_name") or "")
@@ -1019,7 +1060,7 @@ def render_job_card(
     hidden_record = bool(record.get("hidden"))
     is_stale = bool(record.get("is_stale"))
     seen_by_you = viewed_by_user(record)
-    stored_snapshot = compact_whitespace(
+    stored_snapshot = clean_display_text(
         record.get("role_snapshot") or record.get("teaser") or "N/A"
     )
     if stored_snapshot in {"", "N/A"}:
@@ -1044,12 +1085,19 @@ def render_job_card(
             record, active_profile
         )
         fit_highlights = build_fit_highlights(record, trusted_desc, active_profile)
-        soft_risk_reasons, missing_profile_support = build_risk_and_missing_profile_support(
+        (
+            soft_risk_reasons,
+            missing_profile_support,
+            missing_clearance_support,
+        ) = build_risk_and_missing_profile_support(
             trusted_desc,
             title_reason,
             active_profile,
             competitive_signals=display_record.get("competitive_signals")
             if isinstance(display_record.get("competitive_signals"), list)
+            else None,
+            requirement_coverage=record.get(RECORD_REQUIREMENT_COVERAGE_KEY)
+            if isinstance(record.get(RECORD_REQUIREMENT_COVERAGE_KEY), list)
             else None,
         )
         blocking_reasons = hard_block_reasons(display_record, active_profile)
@@ -1064,6 +1112,7 @@ def render_job_card(
         fit_highlights = []
         soft_risk_reasons = []
         missing_profile_support = [DESCRIPTION_CAPTURE_ISSUE]
+        missing_clearance_support = []
         blocking_reasons = []
 
     similar_applied_record = None
@@ -1082,6 +1131,7 @@ def render_job_card(
     display_record["fit_highlights"] = fit_highlights
     display_record["soft_risk_reasons"] = soft_risk_reasons
     display_record["missing_profile_support"] = missing_profile_support
+    display_record["missing_clearance_support"] = missing_clearance_support
     try:
         fit_points, score_breakdown = fit_score_and_breakdown_displayed(display_record, scoring_profile)
     except RuntimeError as _score_exc:
@@ -1116,7 +1166,7 @@ def render_job_card(
         else ("hidden" if hidden_record else ("saved" if archived else "current"))
     )
     company_attr = safe_html(company_display)
-    teaser_attr = safe_html(compact_whitespace(str(record.get("teaser") or "")))
+    teaser_attr = safe_html(clean_display_text(str(record.get("teaser") or "")))
     card_sector = "unknown"
     channel_signal = display_record.get("posting_channel_evidence")
     if not isinstance(channel_signal, dict):
@@ -1765,6 +1815,19 @@ def render_job_card(
         else ""
     )
 
+    clearance_items_html = "".join(
+        f"<li>{safe_html(item)}</li>"
+        for item in display_record.get("missing_clearance_support") or []
+    )
+    clearance_html = (
+        '<details class="job-insights job-clearance-panel">'
+        f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'clearance_panel_summary', 'Clearances'))}</summary>"
+        f'<div class="job-insight-group job-insight-warning"><ul>{clearance_items_html}</ul></div>'
+        "</details>"
+        if clearance_items_html
+        else ""
+    )
+
     llm_review_html = ""
     has_llm_review_data = any(
         record.get(key)
@@ -1788,6 +1851,10 @@ def render_job_card(
                 f"<li>Final score: {safe_html(str(fit_points))}</li>",
                 f"<li>LLM fit grade: {safe_html(llm_grade)}</li>",
             ]
+            eligibility_gate = eligibility_gate_diagnostics(display_record, active_profile)
+            summary_items.append(
+                f"<li>Eligibility gate: {safe_html(eligibility_gate['label'])} — {safe_html(str(eligibility_gate['reason'] or ''))}</li>"
+            )
             llm_elapsed_ms = record.get(RECORD_LLM_ELAPSED_MS_KEY)
             llm_cost_usd = record.get(RECORD_LLM_COST_USD_KEY)
             llm_input_tokens = record.get(RECORD_LLM_INPUT_TOKENS_KEY)
@@ -1953,6 +2020,7 @@ def render_job_card(
         f"{potential_duplicate_callout}"
         f'<div class="job-meta">{"".join(meta_items)}</div>'
         f"{risk_html}"
+        f"{clearance_html}"
         f"{job_requirements_html}"
         f"{llm_review_html}"
         f"{profile_gaps_html}"

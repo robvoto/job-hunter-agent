@@ -8,6 +8,9 @@ LLM_ALLOWED_COVERAGE_IMPORTANCES = frozenset(
 )
 
 LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES = frozenset({"capability", "eligibility"})
+LLM_ALLOWED_COVERAGE_MATCH_SOURCES = frozenset(
+    {"capability_name", "related_skill", "profile_brief", "eligibility"}
+)
 LLM_INVALID_COVERAGE_REQUIREMENT_TYPE = "invalid"
 LLM_INVALID_COVERAGE_STATUS = "invalid"
 
@@ -17,6 +20,15 @@ LLM_FIT_REVIEW_PROMPT_SHAPE = (
     '"requirement_coverage":[{"requirement":"...","importance":"mandatory|strongly_preferred|preferred|nice_to_have",'
     '"requirement_type":"capability|eligibility","status":"supported|partially_supported|not_shown|mismatch",'
     '"profile_name":"...","matched_job_text":"...","profile_support":["..."]}],'
+    '"debug_reason":"..."}'
+)
+LLM_FIT_REVIEW_DEBUG_PROMPT_SHAPE = (
+    '{"fit_review":{"decision":"KEEP|REJECT|MAYBE","grade":"EXCELLENT|STRONG|SOLID|WEAK|POOR|MISMATCH"},'
+    '"job_requirements":["..."],'
+    '"requirement_coverage":[{"requirement":"...","importance":"mandatory|strongly_preferred|preferred|nice_to_have",'
+    '"requirement_type":"capability|eligibility","status":"supported|partially_supported|not_shown|mismatch",'
+    '"profile_name":"...","match_source":"capability_name|related_skill|profile_brief|eligibility",'
+    '"matched_profile_term":"...","matched_job_text":"...","profile_support":["..."]}],'
     '"debug_reason":"..."}'
 )
 LLM_PROMPT_DEBUG_REASON_INTRO = (

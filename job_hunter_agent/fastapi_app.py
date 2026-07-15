@@ -51,8 +51,12 @@ from job_hunter_agent.config import (
     ONBOARDING_DEBUG_ALIAS_PATH,
     ONBOARDING_PATH,
 )
-from job_hunter_agent.logging_utils import ConsoleNoiseFilter, install_log_handler_filters
-from job_hunter_agent.paths import OUTPUT_DIR, SERVER_LOG_PATH
+from job_hunter_agent.logging_utils import (
+    ConsoleNoiseFilter,
+    HumanReadableLogFilter,
+    install_log_handler_filters,
+)
+from job_hunter_agent.paths import OUTPUT_DIR, SERVER_DEBUG_LOG_PATH, SERVER_LOG_PATH
 from job_hunter_agent.user_context import set_user_id
 from job_hunter_agent.run_control import enable_step_through
 
@@ -183,25 +187,32 @@ def _configure_server_logging() -> None:
                 "filename": str(SERVER_LOG_PATH),
                 "encoding": "utf-8",
             },
+            "debug_file": {
+                "class": "logging.FileHandler",
+                "level": "INFO",
+                "formatter": "standard",
+                "filename": str(SERVER_DEBUG_LOG_PATH),
+                "encoding": "utf-8",
+            },
         },
         "root": {
             "level": "INFO",
-            "handlers": ["console", "file"],
+            "handlers": ["console", "file", "debug_file"],
         },
         "loggers": {
             "uvicorn": {
                 "level": "INFO",
-                "handlers": ["console", "file"],
+                "handlers": ["console", "file", "debug_file"],
                 "propagate": False,
             },
             "uvicorn.error": {
                 "level": "INFO",
-                "handlers": ["console", "file"],
+                "handlers": ["console", "file", "debug_file"],
                 "propagate": False,
             },
             "uvicorn.access": {
                 "level": "INFO",
-                "handlers": ["console", "file"],
+                "handlers": ["console", "file", "debug_file"],
                 "propagate": False,
             },
         },
@@ -223,7 +234,11 @@ def _configure_server_logging() -> None:
         None,
     )
     if console_handler:
+        console_handler.addFilter(HumanReadableLogFilter())
         console_handler.addFilter(ConsoleNoiseFilter())
+    for handler in logging.getLogger().handlers:
+        if isinstance(handler, logging.FileHandler) and getattr(handler, "baseFilename", "").endswith("server.log"):
+            handler.addFilter(HumanReadableLogFilter())
 
     app_logger = logging.getLogger("job_hunter_agent.app")
     sys.stdout = _LineLoggingStream(app_logger, logging.INFO)

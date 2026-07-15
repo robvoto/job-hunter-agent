@@ -211,9 +211,10 @@ Repo-root launcher:
 
 Server logs:
 
-- runtime output is written to `output/server.log`
-- each line gets a timestamp
-- the terminal still shows the same server output
+- human-readable runtime output is written to `output/server.log`
+- full technical/debug output is written to `output/server-debug.log`
+- both logs are timestamped
+- the terminal mirrors the human-readable server output
 - browser `console.log` is separate from server logs and only matters for JS running in the page
 - debug/audit uncertainty events are appended to `output/uncertainty.jsonl`
 - reviewable runtime warnings are stored in SQLite `system_warnings` and shown in the admin settings page

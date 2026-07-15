@@ -164,6 +164,17 @@ def test_global_settings_layout_css_prevents_panel_overflow():
     assert ".subpanel .field-help {" in css
 
 
+def test_capability_matrix_group_owns_spacing_below_help_copy():
+
+    css = SETTINGS_PAGE_CSS_PATH.read_text(encoding="utf-8")
+
+    assert ".capability-group {" in css
+    assert "gap: var(--surface-gap-md);" in css
+    assert "margin-top: var(--surface-gap-md);" in css
+    assert ".capability-toolbar {" in css
+    assert "margin-bottom: 0;" in css
+
+
 def test_search_settings_location_listbox_uses_shared_dark_multiselect_styles():
 
     search_html = SETTINGS_SEARCH_PARTIAL_PATH.read_text(encoding="utf-8")
@@ -183,6 +194,14 @@ def test_search_settings_location_listbox_uses_shared_dark_multiselect_styles():
     assert ".jh-select[multiple]::-webkit-scrollbar {" in widgets_css
     assert ".search-settings-grid .settings-form-grid--search-basics {" in settings_css
     assert "column-gap: var(--surface-gap-lg);" in settings_css
+
+
+def test_search_settings_stack_does_not_add_extra_top_gap_below_section_head():
+
+    widgets_css = THEME_WIDGETS_CSS_PATH.read_text(encoding="utf-8")
+
+    assert ".settings-section-shell {" in widgets_css
+    assert ".search-settings-stack {\n  display: grid;\n  gap: var(--field-stack-gap);\n  margin-top: 0;\n}" in widgets_css
 
 
 def test_settings_page_renders_admin_link_only_for_admins(monkeypatch):
@@ -347,6 +366,12 @@ def test_settings_review_panel_empty_state_copy_is_defined():
     assert "Search/title tuning" in js
 
     assert "Filters already working correctly" in js
+
+    assert "No, I don't have this" in js
+
+    assert "decline-skill-btn" in js
+
+    assert "applyOneSkipDecision(skill, 'dismiss')" in js
 
 
 def test_settings_matrix_section_omits_outer_panel_wrapper(monkeypatch):

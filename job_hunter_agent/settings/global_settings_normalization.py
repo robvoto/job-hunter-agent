@@ -60,6 +60,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_LLM_PROMPT_CAPABILITY_RULE_ALIASES_MAX_ITEMS,
     KEY_LLM_PROMPT_CAPABILITY_RULES_MAX_ITEMS,
     KEY_LLM_PROMPT_CV_EVIDENCE_JSON_CHARS,
+    KEY_LLM_PROMPT_FIT_REVIEW_DEBUG_MATCH_DIAGNOSTICS_ENABLED,
     KEY_LLM_PROMPT_CV_FALLBACK_CHARS,
     KEY_LLM_PROMPT_EVIDENCE_TIERS,
     KEY_LLM_PROMPT_FIT_DECISION_MAX_OUTPUT_TOKENS,
@@ -431,6 +432,15 @@ def _normalize_llm_prompt_settings(
         KEY_LLM_PROMPT_FIT_GUIDANCE_MAX_CHARS: fit_guidance_max_chars,
         KEY_LLM_PROMPT_CAPABILITY_NAMING_ALIASES_MAX_ITEMS: capability_naming_aliases_max_items,
         KEY_LLM_PROMPT_RAW_OUTPUT_LOG_MAX_CHARS: raw_output_log_max_chars,
+        KEY_LLM_PROMPT_FIT_REVIEW_DEBUG_MATCH_DIAGNOSTICS_ENABLED: _normalize_bool(
+            source,
+            KEY_LLM_PROMPT_FIT_REVIEW_DEBUG_MATCH_DIAGNOSTICS_ENABLED,
+            bool(
+                DEFAULT_LLM_PROMPT_SETTINGS[
+                    KEY_LLM_PROMPT_FIT_REVIEW_DEBUG_MATCH_DIAGNOSTICS_ENABLED
+                ]
+            ),
+        ),
         KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_ITEMS: job_requirements_max_items,
         KEY_LLM_PROMPT_LEARNING_MAX_ITEMS: learning_max_items,
         KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS: rejection_blocker_max_items,

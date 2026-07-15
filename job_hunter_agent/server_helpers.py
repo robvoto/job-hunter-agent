@@ -159,6 +159,7 @@ _ONBOARDING_IMPORT_SUMMARY_LABEL_KEYS = (
 )
 _CAPABILITY_UI_LABEL_KEYS = (
     "settings_title",
+    "matching_nav_label",
     "onboarding_title",
     "help_text",
     "add_button_aria_label",
@@ -260,6 +261,16 @@ _SETTINGS_ALERTS_LABEL_KEYS = (
     "llm_copy",
     "llm_model_label",
     "llm_model_placeholder",
+)
+
+_SETTINGS_CLEARANCES_LABEL_KEYS = (
+    "settings_title",
+    "help_text",
+    "add_button_aria_label",
+    "settings_empty_text",
+    "name_placeholder",
+    "have_label",
+    "remove_button_aria_label",
 )
 
 _ONBOARDING_PAGE_LABEL_KEYS = (
@@ -652,6 +663,10 @@ def load_settings_alerts_labels() -> dict[str, str]:
     return {key: str(labels[key]).strip() for key in _SETTINGS_ALERTS_LABEL_KEYS}
 
 
+def load_settings_clearances_labels() -> dict[str, str]:
+    return _load_required_ui_labels("settings_clearances_labels", _SETTINGS_CLEARANCES_LABEL_KEYS)
+
+
 def load_onboarding_page_labels() -> dict[str, str]:
     return _load_required_ui_labels("onboarding_page_labels", _ONBOARDING_PAGE_LABEL_KEYS)
 
@@ -797,6 +812,9 @@ def build_bootstrap_script(
     )
     parts.append(
         f"<script>window.__JOB_HUNTER_SETTINGS_ALERTS_LABELS__ = {json.dumps(load_settings_alerts_labels(), ensure_ascii=True)};</script>"
+    )
+    parts.append(
+        f"<script>window.__JOB_HUNTER_SETTINGS_CLEARANCES_LABELS__ = {json.dumps(load_settings_clearances_labels(), ensure_ascii=True)};</script>"
     )
     parts.append(
         f"<script>window.__JOB_HUNTER_ONBOARDING_IMPORT_SUMMARY_LABELS__ = {json.dumps(load_onboarding_import_summary_labels(), ensure_ascii=True)};</script>"

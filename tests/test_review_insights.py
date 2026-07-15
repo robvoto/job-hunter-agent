@@ -415,6 +415,62 @@ def test_apply_capability_tuning_decisions_preserves_existing_icon_key():
     ]
 
 
+def test_apply_capability_tuning_decisions_can_ignore_capability_suggestion():
+    profile = {KEY_CANDIDATE_CAPABILITIES: [], "review_controls": {"applied_job_keys": []}}
+
+    updated = apply_capability_tuning_decisions(
+        profile,
+        [{"skill": "Process mapping", "choice": "dismiss"}],
+    )
+
+    assert updated[KEY_CANDIDATE_CAPABILITIES] == []
+    assert updated["review_controls"]["ignored_capability_suggestions"] == ["Process mapping"]
+
+
+def test_build_review_data_skips_ignored_capability_suggestions(monkeypatch):
+    monkeypatch.setattr(
+        "job_hunter_agent.review_insights.get_review_settings",
+        lambda: {
+            KEY_REVIEW_MAX_EXAMPLES_PER_SKILL: 2,
+            KEY_REVIEW_MAX_SAMPLES_PER_REJECTION: 2,
+            KEY_REVIEW_CAPABILITY_SUGGESTION_MIN_COUNT: 1,
+            KEY_REVIEW_CAPABILITY_WORKING_MIN_COUNT: 3,
+            KEY_REVIEW_TITLE_NOT_TARGET_MIN_COUNT: 3,
+            KEY_REVIEW_RULE_SUGGESTION_MIN_COUNT: 2,
+        },
+    )
+
+    result = build_review_data(
+        audit_rows=[
+            {
+                "decision": "KEEP",
+                "url": "https://example.test/job-1",
+                "title": "Business Analyst",
+                "company": "Example Co",
+                "search_location": "Sydney",
+            }
+        ],
+        skill_observations=[
+            {
+                "skill": "Process mapping",
+                "url": "https://example.test/job-1",
+                "title": "Business Analyst",
+                "company": "Example Co",
+                "search_location": "Sydney",
+            }
+        ],
+        profile={
+            KEY_CANDIDATE_CAPABILITIES: [],
+            "review_controls": {
+                "ignored_capability_suggestions": ["Process mapping"],
+            },
+        },
+    )
+
+    assert result["suggested_tuning"]["capability_suggestions"] == []
+    assert result["suggested_tuning"]["summary"]["capability_count"] == 0
+
+
 def test_build_review_data_does_not_fall_back_to_raw_signal_label(monkeypatch):
     monkeypatch.setattr(
         "job_hunter_agent.review_insights.get_review_settings",

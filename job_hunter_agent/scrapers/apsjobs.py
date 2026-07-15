@@ -48,6 +48,7 @@ from job_hunter_agent.scrapers.base import (
     map_job_type,
 )
 from job_hunter_agent.job_identity import normalize_job_key
+from job_hunter_agent.logging_utils import format_debug_marker
 from job_hunter_agent.source_registry import SOURCE_APSJOBS
 from job_hunter_agent.source_errors import PartialSourceResultsError
 from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order
@@ -456,6 +457,16 @@ class APSJobsScraper(BaseJobScraper):
 
         PLAYWRIGHT_USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
         total_targets = len(targets)
+        logger.info(
+            format_debug_marker(
+                "BOARD_START",
+                {
+                    "source": self.source_name,
+                    "targets": total_targets,
+                    "keywords": keywords or "(unset)",
+                },
+            )
+        )
         try:
             with sync_playwright() as playwright:
                 context = playwright.chromium.launch_persistent_context(
@@ -657,6 +668,17 @@ class APSJobsScraper(BaseJobScraper):
                 original_error=exc,
             ) from exc
 
+        logger.info(
+            format_debug_marker(
+                "BOARD_END",
+                {
+                    "source": self.source_name,
+                    "targets": total_targets,
+                    "kept": len(kept_records),
+                    "audit_rows": len(audit_rows),
+                },
+            )
+        )
         logger.info("[APSJobs] done | kept=%d audit=%d", len(kept_records), len(audit_rows))
         set_run_progress("APSJobs complete")
         return kept_records, audit_rows, skill_observations

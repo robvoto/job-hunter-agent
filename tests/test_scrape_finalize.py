@@ -737,9 +737,10 @@ def test_log_source_final_stats_emits_one_block_per_source(caplog):
         }
     )
 
-    assert caplog.text.count("[RUN][SOURCE_FINAL_STATS]") == 2
-    assert "source   = SEEK" in caplog.text
-    assert "source   = LINKEDIN" in caplog.text
+    assert caplog.text.count("BOARD FINAL") == 2
+    assert "BOARD FINAL SEEK" in caplog.text
+    assert "BOARD FINAL LINKEDIN" in caplog.text
+    assert "Seen: 3 | Read: 2 | Pages: 2 | Kept: 1 | Rejected: 2" in caplog.text
 
 
 def test_build_source_breakdown_keeps_enabled_sources_with_zero_counts():

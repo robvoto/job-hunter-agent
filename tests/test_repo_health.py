@@ -375,18 +375,38 @@ def test_results_panel_styles_use_shared_outer_panel_and_inset_job_cards():
     assert "border-bottom:" not in body
 
 
-def test_capability_strength_choice_cards_use_shared_semantic_tone_classes():
+def test_requirement_badges_use_two_column_grid_layout():
+    results_css = (
+        ROOT_DIR / "templates" / "static" / "results" / "results-page.css"
+    ).read_text(encoding="utf-8")
+
+    assert ".job-requirement-badges {\n  display: contents;\n}" in results_css
+    assert ".job-requirement-list {\n  list-style: none;\n  padding-left: 0 !important;\n  display: grid;" in results_css
+    assert ".job-requirement-item {\n  display: grid;\n  grid-column: 1 / -1;\n  grid-template-columns: subgrid;" in results_css
+    assert "@media (max-width: 700px) {\n  .job-card { padding: 16px; }" in results_css
+    assert "grid-template-columns: repeat(2, max-content);" in results_css
+    assert ".req-add-to-profile { grid-column: 1 / -1; }" in results_css
+
+
+def test_capability_strength_controls_use_shared_semantic_tone_classes():
     capability_editor_js = (
         ROOT_DIR / "templates" / "static" / "settings" / "shared" / "settings-capability-editor.js"
     ).read_text(encoding="utf-8")
     review_panel_js = (
         ROOT_DIR / "templates" / "static" / "settings" / "shared" / "settings-review-panel.js"
     ).read_text(encoding="utf-8")
+    settings_css = (
+        ROOT_DIR / "templates" / "static" / "settings" / "shared" / "settings-page.css"
+    ).read_text(encoding="utf-8")
     theme_widgets = (
         ROOT_DIR / "templates" / "static" / "theme" / "themes.widgets.css"
     ).read_text(encoding="utf-8")
 
-    assert "choice-card choice-card--strength ${escapeHtml(meta.tone || '')}" in capability_editor_js
+    assert "capability-strength-meter ${escapeHtml(selectedStrengthMeta.tone || '')}" in capability_editor_js
+    assert "selectedStrengthMeta.summary" in capability_editor_js
+    assert ".capability-strength-meter.strength-strong" in settings_css
+    assert ".capability-strength-meter.strength-working" in settings_css
+    assert ".capability-strength-meter.strength-basic" in settings_css
     assert "choice-card choice-card--strength ${escapeHtml(meta.tone || '')}" in review_panel_js
     assert ".choice-strip > .choice-card--strength.strength-strong" in theme_widgets
     assert ".choice-strip > .choice-card--strength.strength-working" in theme_widgets

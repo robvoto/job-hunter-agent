@@ -119,7 +119,12 @@ These logs exist to support later review and learning. They must not promote new
 
 ## Where to find current run logs
 
-When debugging a scrape run, use **`output/server.log`** — it contains both the FastAPI/uvicorn access log AND the full `job_hunter_agent.app` pipeline output (SEEK/LinkedIn progress, per-card REJECTED/KEPT lines, summaries). It is appended on every run, so the bottom is always the most recent run.
+When debugging a scrape run:
+
+- use **`output/server.log`** for the curated human view: one readable block per finished job plus board/run summaries
+- use **`output/server-debug.log`** for the full technical stream: FastAPI/uvicorn lines, raw `job_hunter_agent.app` pipeline output, interleaved worker activity, LLM/API detail, and machine-oriented diagnostics
+
+Both files are appended on every run, so the bottom is always the most recent run.
 
 Do **not** use `output/console.log` for diagnosing current behaviour — it is written by a separate PowerShell redirect mechanism and is stale from a previous run.
 

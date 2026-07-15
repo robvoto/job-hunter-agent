@@ -182,12 +182,12 @@ def _patch_llm_review_path(monkeypatch, payload):
     monkeypatch.setattr(
         job_review_pipeline,
         "build_risk_and_missing_profile_support",
-        lambda details_text, title_reason, profile, competitive_signals=None: ([], []),
+        lambda details_text, title_reason, profile, competitive_signals=None: ([], [], []),
     )
     monkeypatch.setattr(
         job_review_pipeline,
         "deterministic_review_outcome",
-        lambda record, profile, fit_highlights, missing_profile_support, soft_risk_reasons: None,
+        lambda record, profile, fit_highlights, missing_profile_support, soft_risk_reasons, missing_clearance_support=None: None,
     )
     monkeypatch.setattr(
         job_review_pipeline, "resolve_llm_review_payload", lambda record, llm_cache: payload
@@ -1017,6 +1017,7 @@ def test_llm_review_fields_persist_on_record(monkeypatch):
         "requirement_coverage": [
             {
                 "requirement": "Stakeholder engagement",
+                "importance": "mandatory",
                 "status": "supported",
                 "capability_name": "Stakeholder Engagement",
                 "matched_job_text": "work with stakeholders",
@@ -1052,7 +1053,7 @@ def test_deterministic_keep_candidate_requires_full_llm_review(monkeypatch, capl
     monkeypatch.setattr(
         job_review_pipeline,
         "deterministic_review_outcome",
-        lambda record, profile, fit_highlights, missing_profile_support, soft_risk_reasons: {
+        lambda record, profile, fit_highlights, missing_profile_support, soft_risk_reasons, missing_clearance_support=None: {
             "decision": "KEEP",
             "grade": "STRONG",
             "det_rule": "strong",
@@ -1130,6 +1131,7 @@ def test_frozen_requirement_fit_score_breakdown_is_stored_once(caplog, monkeypat
         "requirement_coverage": [
             {
                 "requirement": "Stakeholder engagement",
+                "importance": "mandatory",
                 "status": "supported",
                 "capability_name": "Stakeholder Engagement",
                 "matched_job_text": "work with stakeholders",
@@ -1151,6 +1153,54 @@ def test_frozen_requirement_fit_score_breakdown_is_stored_once(caplog, monkeypat
         e["value"] for e in updated_record["fit_score_breakdown"]
     )
     assert updated_record["fit_score_breakdown"][0]["section"] == "requirement_fit"
+
+
+def test_fit_review_logs_shared_requirement_score_diagnostics(monkeypatch, caplog):
+    payload = {
+        "fit_review": {"decision": "KEEP", "grade": "STRONG"},
+        "debug_reason": "Requirement coverage returned for scoring diagnostics.",
+        "job_requirements": ["Stakeholder engagement", "Australian citizenship"],
+        "requirement_coverage": [
+            {
+                "requirement": "Stakeholder engagement",
+                "importance": "mandatory",
+                "requirement_type": "capability",
+                "status": "supported",
+                "profile_name": "Stakeholder Engagement",
+                "capability_name": "Stakeholder Engagement",
+                "matched_job_text": "work with stakeholders",
+                "profile_support": ["Led stakeholder workshops."],
+            },
+            {
+                "requirement": "Australian citizenship",
+                "importance": "preferred",
+                "requirement_type": "eligibility",
+                "status": "mismatch",
+                "profile_name": "",
+                "matched_job_text": "Australian citizenship required",
+                "profile_support": [],
+            },
+        ],
+        "llm_cost_usd": 0.0123,
+    }
+    _patch_llm_review_path(monkeypatch, payload)
+
+    record = _base_record("seek", "seek_detail", "card")
+    with caplog.at_level(logging.INFO, logger="job_hunter_agent.job_review_pipeline"):
+        review_post_detail_normalized_job(record, _review_context("SEEK"))
+
+    messages = [entry.message for entry in caplog.records]
+    block = next(message for message in messages if "Requirement scoring" in message)
+    assert "Outcome: KEEP | Grade: STRONG" in block
+    assert "Eligibility gate: Fail | Australian citizenship" in block
+    assert "Why: Requirement coverage returned for scoring diagnostics." in block
+    assert (
+        "Stakeholder engagement | Mandatory | Capability | Supported | Stakeholder Engagement"
+        in block
+    )
+    assert "Evidence: Led stakeholder workshops." in block
+    assert "Australian citizenship | Preferred | Eligibility | Mismatch" in block
+    assert "Final calculation:" in block
 
 
 # ── observability log events ──────────────────────────────────────────────────
@@ -1210,7 +1260,7 @@ def test_llm_call_error_log_emitted_with_structured_fields(caplog, monkeypatch):
     monkeypatch.setattr(
         job_review_pipeline,
         "build_risk_and_missing_profile_support",
-        lambda details_text, title_reason, profile, competitive_signals=None: ([], []),
+        lambda details_text, title_reason, profile, competitive_signals=None: ([], [], []),
     )
     monkeypatch.setattr(
         job_review_pipeline, "detect_competitive_signals", lambda details_text, profile: []
@@ -1288,7 +1338,7 @@ def test_llm_missing_provider_key_is_reported_as_unavailable(caplog, monkeypatch
     monkeypatch.setattr(
         job_review_pipeline,
         "build_risk_and_missing_profile_support",
-        lambda details_text, title_reason, profile, competitive_signals=None: ([], []),
+        lambda details_text, title_reason, profile, competitive_signals=None: ([], [], []),
     )
     monkeypatch.setattr(
         job_review_pipeline, "deterministic_review_outcome", lambda *args, **kwargs: None

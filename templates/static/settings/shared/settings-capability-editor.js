@@ -250,14 +250,23 @@ export const JobHunterCapabilityEditor = (function () {
               <button class="cap-alias-chip-remove" type="button" data-remove-capability-alias="${index}" data-capability-alias="${escapeHtml(alias)}" aria-label="${escapeHtml(capabilityLabels.remove_related_skill_aria_label)}" title="${escapeHtml(capabilityLabels.remove_related_skill_aria_label)}">&times;</button>
             </span>
           `).join('');
-          const strengthChoices = capabilityLevels.map((level) => {
+          const meterLevels = ['basic', 'working', 'strong']
+            .filter(level => capabilityLevels.includes(level));
+          const selectedStrengthIndex = Math.max(0, meterLevels.indexOf(rule.level));
+          const selectedStrengthMeta = capabilityLevelMeta[rule.level] || {
+            label: rule.level,
+            summary: '',
+            tone: '',
+          };
+          const strengthChoices = meterLevels.map((level, levelIndex) => {
             const meta = capabilityLevelMeta[level] || { label: level };
             const inputId = `capability_level_${index}_${level}`;
             const checked = rule.level === level ? ' checked' : '';
+            const filledClass = levelIndex <= selectedStrengthIndex ? ' is-filled' : '';
             return `
-              <label class="choice-card choice-card--strength ${escapeHtml(meta.tone || '')}" for="${inputId}">
+              <label class="capability-strength-dot${filledClass}" for="${inputId}" title="${escapeHtml(meta.label)}">
                 <input id="${inputId}" type="radio" name="capability_level_${index}" value="${escapeHtml(level)}" data-capability-field="level"${checked} aria-label="${escapeHtml(meta.label)}">
-                <span>${escapeHtml(meta.label)}</span>
+                <span aria-hidden="true"></span>
               </label>
             `;
           }).join('');
@@ -272,8 +281,16 @@ export const JobHunterCapabilityEditor = (function () {
                 </div>
                 ${aliasPreviewHtml}
                 <div class="cap-strength">
-                  <div class="choice-strip capability-strength-strip" role="radiogroup" aria-label="Capability strength">
-                    ${strengthChoices}
+                  <div class="capability-strength-meter ${escapeHtml(selectedStrengthMeta.tone || '')}"
+                       role="radiogroup"
+                       aria-label="Capability strength"
+                       aria-describedby="capability_strength_help_${index}">
+                    <span class="capability-strength-dots">${strengthChoices}</span>
+                    <span class="capability-strength-label">${escapeHtml(selectedStrengthMeta.label)}</span>
+                    <span class="capability-strength-tooltip" id="capability_strength_help_${index}" role="tooltip">
+                      <strong>${escapeHtml(selectedStrengthMeta.label)}</strong>
+                      <span>${escapeHtml(selectedStrengthMeta.summary)}</span>
+                    </span>
                   </div>
                 </div>
                 <div class="capability-card-meta">

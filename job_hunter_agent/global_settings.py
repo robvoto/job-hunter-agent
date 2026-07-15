@@ -149,6 +149,15 @@ def get_llm_raw_output_log_max_chars() -> int:
     return get_llm_prompt_setting_int(KEY_LLM_PROMPT_RAW_OUTPUT_LOG_MAX_CHARS)
 
 
+def get_llm_fit_review_debug_match_diagnostics_enabled() -> bool:
+    """Whether fit review uses the temporary debug-only match diagnostics schema."""
+    return bool(
+        load_global_settings()[KEY_LLM_SETTINGS][KEY_LLM_PROMPT_SETTINGS][
+            KEY_LLM_PROMPT_FIT_REVIEW_DEBUG_MATCH_DIAGNOSTICS_ENABLED
+        ]
+    )
+
+
 def get_llm_learning_candidates_max_items() -> int:
     """Max learning candidates returned by the LLM."""
     return get_llm_prompt_setting_int(KEY_LLM_PROMPT_LEARNING_MAX_ITEMS)

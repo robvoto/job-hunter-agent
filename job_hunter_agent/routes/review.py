@@ -89,7 +89,7 @@ def api_tuning_decisions(body: dict = Body(...)):  # type: ignore[no-untyped-def
     return json_response(
         {
             "ok": True,
-            "message": "Capability tuning suggestions applied to the runtime profile.",
+            "message": "Capability tuning decision saved.",
             "profile": updated,
         },
     )

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextvars
 import logging
+import re
 
 # Console-only: fragments of raw per-stage pipeline trace that duplicate the
 # human-readable per-job summary block. Still written to server.log at INFO
@@ -21,6 +22,34 @@ CONSOLE_SUPPRESSED_FRAGMENTS = (
     "[LLM][MODEL]",
     "[LLM][REQUEST]",
     "[CAPABILITY_SUPPORT]",
+)
+
+HUMAN_LOG_SUPPRESSED_FRAGMENTS = CONSOLE_SUPPRESSED_FRAGMENTS + (
+    "[DEBUG_LOG][",
+    " title: ",
+    "✗ REJECTED — title filtered out",
+    "✗ REJECTED before reading —",
+    " llm fit_review: elapsed=",
+    "HTTP Request: POST https://api.openai.com",
+    "HTTP Request: GET https://api.openai.com",
+    "[LLM][COST]",
+    "[LLM][RESULT]",
+    "[LLM][CACHE]",
+    "[LLM][WARN]",
+    "[LLM][FAIL]",
+    "[DEBUG][",
+    "[RUN_SUMMARY]",
+    "[RUN][SOURCE_FINAL_STATS",
+    "[Pool]",
+    "Saved ",
+    "workspace_visible=",
+    "The previous workspace state was preserved.",
+    "Workspace results preserved at",
+)
+
+_DUPLICATE_JOB_RESULT_RE = re.compile(
+    r"^\[[^\]]+\]\s+(REJECTED\s+\(|KEPT\s+).+",
+    re.IGNORECASE,
 )
 
 _LOG_SOURCE_SCOPE: contextvars.ContextVar[str] = contextvars.ContextVar(
@@ -75,6 +104,18 @@ class ConsoleNoiseFilter(logging.Filter):
         return not any(fragment in msg for fragment in CONSOLE_SUPPRESSED_FRAGMENTS)
 
 
+class HumanReadableLogFilter(logging.Filter):
+    """Keep server.log and console focused on human-readable job/run summaries."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        if any(fragment in msg for fragment in HUMAN_LOG_SUPPRESSED_FRAGMENTS):
+            return False
+        if _DUPLICATE_JOB_RESULT_RE.match(msg.strip()):
+            return False
+        return True
+
+
 def format_log_block(title: str, fields: dict[str, object]) -> str:
     if not fields:
         return f"[{title}]"
@@ -85,6 +126,13 @@ def format_log_block(title: str, fields: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
+def format_debug_marker(marker: str, fields: dict[str, object]) -> str:
+    """Structured debug-only marker for server-debug.log."""
+
+    normalized_marker = str(marker or "").strip().upper() or "EVENT"
+    return format_log_block(f"DEBUG_LOG][{normalized_marker}", fields)
+
+
 def install_log_handler_filters() -> None:
     root_logger = logging.getLogger()
     for handler in root_logger.handlers:
@@ -92,14 +140,17 @@ def install_log_handler_filters() -> None:
 
 
 def setup_cli_logging() -> None:
-    """Configure root logger for CLI runs: console (stdout) + server.log file.
+    """Configure root logger for CLI runs.
+
+    Human-readable output goes to console + ``output/server.log``.
+    Full technical output goes to ``output/server-debug.log``.
 
     Mirrors the FastAPI logging config so CLI and server produce identical output.
     No-op when handlers are already configured (e.g. running inside the server).
     """
     import logging.config
 
-    from job_hunter_agent.paths import SERVER_LOG_PATH
+    from job_hunter_agent.paths import SERVER_DEBUG_LOG_PATH, SERVER_LOG_PATH
 
     if logging.getLogger().handlers:
         return
@@ -133,10 +184,17 @@ def setup_cli_logging() -> None:
                     "filename": str(SERVER_LOG_PATH),
                     "encoding": "utf-8",
                 },
+                "debug_file": {
+                    "class": "logging.FileHandler",
+                    "level": "INFO",
+                    "formatter": "standard",
+                    "filename": str(SERVER_DEBUG_LOG_PATH),
+                    "encoding": "utf-8",
+                },
             },
             "root": {
                 "level": "INFO",
-                "handlers": ["console", "file"],
+                "handlers": ["console", "file", "debug_file"],
             },
         }
     )
@@ -151,4 +209,8 @@ def setup_cli_logging() -> None:
         None,
     )
     if console_handler:
+        console_handler.addFilter(HumanReadableLogFilter())
         console_handler.addFilter(ConsoleNoiseFilter())
+    for handler in logging.getLogger().handlers:
+        if isinstance(handler, logging.FileHandler) and getattr(handler, "baseFilename", "").endswith("server.log"):
+            handler.addFilter(HumanReadableLogFilter())

@@ -48,6 +48,8 @@ def test_requirement_fit_audit_exposes_exact_evidence_mapping_and_credit():
             "status": "partially_supported",
             "profile_name": "stakeholder engagement",
             "capability_name": "stakeholder engagement",
+            "match_source": "related_skill",
+            "matched_profile_term": "stakeholder workshops",
             "matched_job_text": "5–7 years' experience in digital health",
             "profile_support": ["Facilitated stakeholders on a health infrastructure program."],
         }
@@ -63,13 +65,132 @@ def test_requirement_fit_audit_exposes_exact_evidence_mapping_and_credit():
             "status": "partially_supported",
             "profile_name": "stakeholder engagement",
             "candidate_level": "strong",
+            "match_source": "related_skill",
+            "matched_profile_term": "stakeholder workshops",
             "matched_job_text": "5–7 years' experience in digital health",
             "profile_support": ["Facilitated stakeholders on a health infrastructure program."],
             "requirement_weight": 3.0,
+            "raw_requirement_weight": 3.0,
+            "is_eligibility_gate": False,
+            "level_credit": 1.0,
+            "status_credit": 0.5,
             "credit_fraction": 0.5,
             "weighted_credit": 1.5,
         }
     ]
+
+
+def test_requirement_fit_diagnostics_and_formatter_cover_all_status_types():
+    profile = {
+        "candidate_capabilities": [
+            {"name": "stakeholder engagement", "level": "strong"},
+            {"name": "sql", "level": "working"},
+        ],
+        "candidate_eligibility": [{"name": "PV clearance", "value": True}],
+        "scoring_rules": {"fit_breakdown": {"hard_block_penalty": -100}},
+    }
+    record = _record(
+        [
+            {
+                "requirement": "Stakeholder workshops",
+                "importance": "mandatory",
+                "requirement_type": "capability",
+                "status": "supported",
+                "profile_name": "stakeholder engagement",
+                "match_source": "capability_name",
+                "matched_profile_term": "stakeholder engagement",
+                "profile_support": ["Ran stakeholder workshops."],
+            },
+            {
+                "requirement": "SQL analysis",
+                "importance": "mandatory",
+                "requirement_type": "capability",
+                "status": "partially_supported",
+                "profile_name": "sql",
+                "match_source": "related_skill",
+                "matched_profile_term": "sql analysis",
+                "profile_support": ["Used SQL for analysis."],
+            },
+            {
+                "requirement": "Hold PV clearance",
+                "importance": "mandatory",
+                "requirement_type": "eligibility",
+                "status": "supported",
+                "profile_name": "PV clearance",
+                "match_source": "eligibility",
+                "matched_profile_term": "PV clearance",
+                "profile_support": ["PV clearance confirmed."],
+            },
+            {
+                "requirement": "Python engineering",
+                "importance": "preferred",
+                "requirement_type": "capability",
+                "status": "not_shown",
+                "profile_name": "",
+                "profile_support": [],
+            },
+            {
+                "requirement": "Australian citizenship",
+                "importance": "preferred",
+                "requirement_type": "eligibility",
+                "status": "mismatch",
+                "profile_name": "",
+                "profile_support": [],
+            },
+            {
+                "requirement": "Data platform uplift",
+                "importance": "mandatory",
+                "requirement_type": "capability",
+                "status": "supported",
+                "profile_name": "",
+                "profile_support": [],
+            },
+        ]
+    )
+
+    diagnostics = fit_scoring.requirement_fit_diagnostics(record, profile)
+
+    assert diagnostics["earned_weighted_credit"] == 4.05
+    assert diagnostics["total_requirement_weight"] == 10.0
+    assert diagnostics["final_requirement_fit"] == 40
+    assert diagnostics["final_calculation_label"] == "4.05 ÷ 10 × 100"
+    assert [row["status"] for row in diagnostics["rows"]] == [
+        "supported",
+        "partially_supported",
+        "supported",
+        "not_shown",
+        "mismatch",
+        "supported",
+    ]
+    assert diagnostics["rows"][0]["calculation_label"] == "3 × 1 × 1 = 3 / 3"
+    assert diagnostics["rows"][1]["calculation_label"] == "3 × 0.7 × 0.5 = 1.05 / 3"
+    assert diagnostics["rows"][2]["mapping_label"] == "PV clearance (confirmed)"
+    assert diagnostics["rows"][2]["calculation_label"] == "Eligibility gate only — no points added"
+    assert diagnostics["rows"][0]["match_source_label"] == "Capability Name"
+    assert diagnostics["rows"][1]["match_source_label"] == "Related Skill"
+    assert diagnostics["rows"][2]["match_source_label"] == "Eligibility"
+    assert diagnostics["rows"][3]["mapping_label"] == "Unresolved mapping"
+    assert diagnostics["rows"][4]["candidate_level_label"] == "Unresolved"
+    assert diagnostics["rows"][5]["profile_support_label"] == "No profile evidence returned"
+
+    lines = fit_scoring.format_requirement_fit_diagnostics_lines(record, profile)
+
+    assert "Requirement: Stakeholder workshops" in lines
+    assert "Coverage: Supported" in lines
+    assert "Requirement type: Eligibility" in lines
+    assert "Mapped to: PV clearance (confirmed)" in lines
+    assert "Matched via: Capability Name" in lines
+    assert "Matched via: Related Skill" in lines
+    assert "Matched term: sql analysis" in lines
+    assert "Calculation: Eligibility gate only — no points added" in lines
+    assert "Eligibility gate: Fail" in lines
+    assert "Mapped to: Unresolved mapping" in lines
+    assert "Calculation: 3 × 0.7 × 0.5 = 1.05 / 3 (35%)" in lines
+    assert "Profile evidence used: No profile evidence returned" in lines
+    assert "Earned weighted credit: 4.05" in lines
+    assert "Total requirement weight: 10" in lines
+    assert "Calculation: 4.05 ÷ 10 × 100" in lines
+    assert "Final Requirement Fit: 40%" in lines
 
 
 def test_requirement_fit_partially_supported_uses_partial_status_credit():
@@ -150,7 +271,9 @@ def test_requirement_fit_eligibility_uses_candidate_eligibility_not_capability()
         "scoring_rules": {"fit_breakdown": {"hard_block_penalty": -100}},
     }
 
-    assert fit_scoring.fit_score(record, profile) == 100
+    assert fit_scoring.fit_score(record, profile) == 0
+    gate = fit_scoring.eligibility_gate_diagnostics(record, profile)
+    assert gate["label"] == "Pass"
 
 
 def test_requirement_fit_false_eligibility_counts_as_mismatch(tmp_path, monkeypatch):
@@ -173,6 +296,8 @@ def test_requirement_fit_false_eligibility_counts_as_mismatch(tmp_path, monkeypa
     }
 
     assert fit_scoring.fit_score(record, profile) == 0
+    gate = fit_scoring.eligibility_gate_diagnostics(record, profile)
+    assert gate["label"] == "Fail"
     breakdown = fit_scoring.fit_score_breakdown(record, profile)[0]["label"]
     assert "mismatch 1" in breakdown
     assert "needs review" not in breakdown

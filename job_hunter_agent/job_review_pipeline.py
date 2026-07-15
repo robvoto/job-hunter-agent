@@ -15,6 +15,7 @@ from job_hunter_agent import occupation_taxonomy
 logger = logging.getLogger(__name__)
 
 _PIPELINE_LOG_CORE_FIELDS = ("source", "job_key", "title", "company")
+_HUMAN_LOG_SEPARATOR = "-" * 80
 
 # Human-readable translations for internal pipeline reason codes.
 # Codes not listed fall back to the raw code in parentheses.
@@ -93,8 +94,10 @@ from job_hunter_agent.filters import (
 )
 from job_hunter_agent.fit_scoring import (
     build_fit_highlights,
+    eligibility_gate_diagnostics,
     fit_score_and_breakdown_displayed,
     fit_score_and_breakdown_frozen,
+    format_requirement_fit_diagnostics_block,
 )
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
 from job_hunter_agent.history import apply_kept_job_reuse, can_reuse_kept_job, finalize_record
@@ -107,7 +110,7 @@ from job_hunter_agent.llm_gate import (
     llm_judge_title,
 )
 from job_hunter_agent.llm_review_state import has_complete_llm_keep_data
-from job_hunter_agent.logging_utils import format_log_block
+from job_hunter_agent.logging_utils import format_debug_marker, format_log_block
 from job_hunter_agent.match_labels import score_to_match_label
 from job_hunter_agent.occupation_taxonomy import (
     OccupationClassification,
@@ -157,6 +160,7 @@ from job_hunter_agent.record_schema import (
     RECORD_LLM_OUTPUT_TOKENS_KEY,
     RECORD_LLM_TITLE_JUDGMENT_KEY,
     RECORD_LOCATION_KEY,
+    RECORD_MISSING_CLEARANCE_SUPPORT_KEY,
     RECORD_MISSING_PROFILE_SUPPORT_KEY,
     RECORD_ONET_CLASSIFICATION_KEY,
     RECORD_POSTED_AGE_DAYS_KEY,
@@ -266,6 +270,18 @@ def _pipeline_log(stage: str, record: dict, source_name: str = "", **kwargs: Any
         _job_start_costs[job_key] = get_session_cost_usd()
         src = source.upper() if source else "?"
         logger.info(
+            format_debug_marker(
+                "JOB_START",
+                {
+                    "source": src,
+                    "job_key": job_key,
+                    "title": title,
+                    "company": company,
+                    "url": job_url or "(url unavailable)",
+                },
+            )
+        )
+        logger.info(
             "\n%s\n  %s  @  %s\n  %s | %s\n  %s\n",
             _SEP_OPEN,
             title,
@@ -336,6 +352,19 @@ def _pipeline_log(stage: str, record: dict, source_name: str = "", **kwargs: Any
                     "decision": decision,
                     "reason": reason,
                     "total_job_ms": total_job_ms,
+                },
+            )
+        )
+        logger.info(
+            format_debug_marker(
+                "JOB_END",
+                {
+                    "source": source.upper() if source else "?",
+                    "job_key": job_key,
+                    "decision": decision,
+                    "reason": reason,
+                    "total_job_ms": total_job_ms,
+                    "llm_cost_usd": _job_cost(job_key),
                 },
             )
         )
@@ -666,13 +695,15 @@ def _apply_fit_summary_enrichment(
 ) -> None:
     record[RECORD_ROLE_SNAPSHOT_KEY] = build_role_summary(record, details_text, profile)
     record[RECORD_FIT_HIGHLIGHTS_KEY] = build_fit_highlights(record, details_text, profile)
-    record[RECORD_SOFT_RISK_REASONS_KEY], record[RECORD_MISSING_PROFILE_SUPPORT_KEY] = (
-        build_risk_and_missing_profile_support(
-            details_text,
-            title_reason,
-            profile,
-            competitive_signals=record[RECORD_COMPETITIVE_SIGNALS_KEY],
-        )
+    (
+        record[RECORD_SOFT_RISK_REASONS_KEY],
+        record[RECORD_MISSING_PROFILE_SUPPORT_KEY],
+        record[RECORD_MISSING_CLEARANCE_SUPPORT_KEY],
+    ) = build_risk_and_missing_profile_support(
+        details_text,
+        title_reason,
+        profile,
+        competitive_signals=record[RECORD_COMPETITIVE_SIGNALS_KEY],
     )
 
 
@@ -683,6 +714,7 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         record[RECORD_FIT_HIGHLIGHTS_KEY],
         record[RECORD_MISSING_PROFILE_SUPPORT_KEY],
         record[RECORD_SOFT_RISK_REASONS_KEY],
+        record[RECORD_MISSING_CLEARANCE_SUPPORT_KEY],
     )
     record["llm_learning_candidates"] = []
     record[RECORD_JOB_REQUIREMENTS_KEY] = []
@@ -742,6 +774,7 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         record[RECORD_LLM_OUTPUT_TOKENS_KEY] = llm_output_tokens
         credited_capabilities: list[str] = []
         imp_status_counts: dict[str, int] = {}
+        eligibility_gate = eligibility_gate_diagnostics(record, profile)
         for item in record[RECORD_REQUIREMENT_COVERAGE_KEY]:
             status = str(item.get("status") or "not_shown").strip().lower()
             importance = str(item.get("importance") or "preferred").strip().lower()
@@ -763,8 +796,19 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
                         f"{k}={v}" for k, v in sorted(imp_status_counts.items())
                     )
                     or "(empty)",
+                    "eligibility_gate": eligibility_gate["label"],
+                    "eligibility_reason": eligibility_gate["reason"],
                     "debug_reason": debug_reason or "(none)",
                 },
+            )
+        )
+        logger.info(
+            format_requirement_fit_diagnostics_block(
+                record,
+                profile,
+                decision=str(review.get("decision", "")),
+                grade=str(review.get("grade", "")),
+                debug_reason=debug_reason,
             )
         )
 
@@ -1280,11 +1324,19 @@ def print_job_human_summary(
 
     lines: list[str] = [
         "",
-        f"  {'─' * 70}",
-        f"  {title}  ·  {company}  ({source})",
-        f"  You target:  {target_str}{also_str}",
-        "",
+        _HUMAN_LOG_SEPARATOR,
+        f"JOB   {title} @ {company}",
+        f"BOARD {source} | {record.get(RECORD_JOB_KEY, '')}",
     ]
+    job_url = _job_url(record)
+    if job_url:
+        lines.append(f"URL   {job_url}")
+    lines.extend(
+        [
+            f"TARGET {target_str}{also_str}",
+            _HUMAN_LOG_SEPARATOR,
+        ]
+    )
 
     # ── Title gate ────────────────────────────────────────────────────────────
     if title_reason in {"TITLE_EMPTY", "TITLE_BAD_KEYWORD"}:
@@ -1358,14 +1410,12 @@ def print_job_human_summary(
         cost_note = f"  (LLM: ${llm_cost:.4f})" if llm_cost > 0.00005 else ""
         lines.append(f"  [~] LLM review unavailable — no provider key configured{cost_note}")
 
-    lines.append("")
-
     # ── Score breakdown ───────────────────────────────────────────────────────
     if decision == "KEEP" and breakdown:
         from job_hunter_agent.score_labels import format_score_breakdown_console
 
-        lines.extend(format_score_breakdown_console(breakdown))
         lines.append("")
+        lines.extend(format_score_breakdown_console(breakdown))
 
     # ── Final line ────────────────────────────────────────────────────────────
     time_note = f"  ·  {elapsed_s:.1f}s" if elapsed_s else ""
@@ -1375,6 +1425,7 @@ def print_job_human_summary(
         lines.append(f"  ✓  KEPT{score_note}{time_note}{cost_line}")
     else:
         lines.append(f"  ✗  REJECTED — {_reason_label(reject_reason)}{time_note}{cost_line}")
+    lines.append(_HUMAN_LOG_SEPARATOR)
 
     logger.info("\n".join(lines))
 

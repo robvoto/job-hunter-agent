@@ -1,19 +1,80 @@
-﻿        <section id="section-matrix" class="settings-group" data-screen="settings">
+        <section id="section-matrix" class="settings-group" data-screen="settings">
           <section class="panel advanced-shell settings-section-shell">
             <div class="settings-section-head">
-              <h2 id="capability_matrix_title"></h2>
-              <p class="panel-copy" id="capability_matrix_help"></p>
+              <h2>Matching</h2>
+              <p class="panel-copy">Tell Job Hunter which roles, skills, and clearances make a job a good fit for you.</p>
             </div>
-            <div class="capability-group">
-              <div class="capability-toolbar">
-                <div class="capability-toolbar-main">
-                  <input id="capability_matrix_filter" class="capability-filter" type="search" placeholder="">
-                  <span id="capability_matrix_copy" class="capability-toolbar-copy"></span>
+
+            <div class="search-settings-stack">
+              <section class="subpanel search-settings-subcard">
+                <h3>Role Matching</h3>
+
+                <div class="settings-form-field">
+                  <div class="field-label-row">
+                    <label for="target_roles_add">__JOB_HUNTER_TITLE_TIER_TARGET_ROLES_LABEL__</label>
+                    <details class="field-info-drawer">
+                      <summary class="field-info" aria-label="Help">i</summary>
+                      <div class="field-info-panel">__JOB_HUNTER_TITLE_TIER_TARGET_ROLES_HELP__</div>
+                    </details>
+                  </div>
+                  <div class="badge-editor" data-chip-editor="target_roles">
+                    <div id="target_roles_chips" class="badge-editor-list" aria-live="polite"></div>
+                  </div>
+                  <div class="badge-editor-form token-input-group">
+                    <input id="target_roles_add" class="token-input-field" type="text" data-chip-input="target_roles" placeholder="__JOB_HUNTER_TITLE_TIER_TARGET_ROLES_PLACEHOLDER__">
+                    <button class="btn-add token-input-action" type="button" data-add-chip="target_roles" aria-label="__JOB_HUNTER_ADD_BUTTON_ARIA_LABEL__" title="__JOB_HUNTER_ADD_BUTTON_TITLE__">__JOB_HUNTER_ADD_BUTTON_LABEL__</button>
+                  </div>
+                  <textarea id="target_roles" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
                 </div>
-                <div class="capability-toolbar-actions" id="capability_matrix_actions"></div>
-              </div>
-              <div id="capability_matrix_editor" class="capability-editor"></div>
+
+                <div class="settings-form-field">
+                  <div class="field-label-row">
+                    <label for="also_consider_roles_add">__JOB_HUNTER_TITLE_TIER_ALSO_CONSIDER_ROLES_LABEL__</label>
+                    <details class="field-info-drawer">
+                      <summary class="field-info" aria-label="Help">i</summary>
+                      <div class="field-info-panel">__JOB_HUNTER_TITLE_TIER_ALSO_CONSIDER_ROLES_HELP__</div>
+                    </details>
+                  </div>
+                  <div class="badge-editor" data-chip-editor="also_consider_roles">
+                    <div id="also_consider_roles_chips" class="badge-editor-list" aria-live="polite"></div>
+                  </div>
+                  <div class="badge-editor-form token-input-group">
+                    <input id="also_consider_roles_add" class="token-input-field" type="text" data-chip-input="also_consider_roles" placeholder="__JOB_HUNTER_TITLE_TIER_ALSO_CONSIDER_ROLES_PLACEHOLDER__">
+                    <button class="btn-add token-input-action" type="button" data-add-chip="also_consider_roles" aria-label="__JOB_HUNTER_ADD_BUTTON_ARIA_LABEL__" title="__JOB_HUNTER_ADD_BUTTON_TITLE__">__JOB_HUNTER_ADD_BUTTON_LABEL__</button>
+                  </div>
+                  <textarea id="also_consider_roles" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
+                </div>
+              </section>
+
+              <section class="subpanel search-settings-subcard">
+                <h3 id="capability_matrix_title"></h3>
+                <p class="panel-copy" id="capability_matrix_help"></p>
+                <div class="capability-group">
+                  <div class="capability-toolbar">
+                    <div class="capability-toolbar-main">
+                      <input id="capability_matrix_filter" class="capability-filter" type="search" placeholder="">
+                      <span id="capability_matrix_copy" class="capability-toolbar-copy"></span>
+                    </div>
+                    <div class="capability-toolbar-actions" id="capability_matrix_actions"></div>
+                  </div>
+                  <div id="capability_matrix_editor" class="capability-editor"></div>
+                </div>
+                <textarea id="candidate_capabilities" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
+              </section>
+
+              <section class="subpanel search-settings-subcard">
+                <div class="field-label-row">
+                  <h3 id="clearance_editor_title">Clearances</h3>
+                  <details class="field-info-drawer">
+                    <summary class="field-info" aria-label="Help">i</summary>
+                    <div class="field-info-panel" id="clearance_editor_help"></div>
+                  </details>
+                </div>
+
+                <div id="clearance_editor" class="capability-editor"></div>
+                <button class="btn-add" id="add_clearance_rule" type="button">+</button>
+                <textarea id="candidate_eligibility" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
+              </section>
             </div>
-            <textarea id="candidate_capabilities" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
           </section>
         </section>

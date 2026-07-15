@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from job_hunter_agent.config import DEBUG_MODE
 from job_hunter_agent.global_settings import (
+    get_llm_fit_review_debug_match_diagnostics_enabled,
     KEY_LLM_PRICING_PER_1M,
     KEY_LLM_PROMPT_EVIDENCE_TIERS,
     KEY_LLM_PROMPT_SETTINGS,
@@ -48,9 +49,11 @@ from job_hunter_agent.hard_blocker_rules import (
 )
 from job_hunter_agent.llm_protocol import (
     LLM_ALLOWED_COVERAGE_IMPORTANCES,
+    LLM_ALLOWED_COVERAGE_MATCH_SOURCES,
     LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES,
     LLM_ALLOWED_DECISIONS,
     LLM_ALLOWED_GRADES,
+    LLM_FIT_REVIEW_DEBUG_PROMPT_SHAPE,
     LLM_ALLOWED_TITLE_JUDGMENT_VERDICTS,
     LLM_INVALID_COVERAGE_REQUIREMENT_TYPE,
     LLM_INVALID_COVERAGE_STATUS,
@@ -302,6 +305,11 @@ class _LLMRequirementCoverageItem(BaseModel):
     profile_support: list[str] = Field(default_factory=list)
 
 
+class _LLMRequirementCoverageDebugItem(_LLMRequirementCoverageItem):
+    match_source: str = ""
+    matched_profile_term: str = ""
+
+
 class _LLMJobRequirementsPayload(BaseModel):
     job_requirements: list[str] = Field(default_factory=list)
 
@@ -315,6 +323,13 @@ class _LLMFitReviewPayload(BaseModel):
     fit_review: _LLMReviewDecision
     debug_reason: str = ""
     requirement_coverage: list[_LLMRequirementCoverageItem] = Field(default_factory=list)
+    job_requirements: list[str] = Field(default_factory=list)
+
+
+class _LLMFitReviewDebugPayload(BaseModel):
+    fit_review: _LLMReviewDecision
+    debug_reason: str = ""
+    requirement_coverage: list[_LLMRequirementCoverageDebugItem] = Field(default_factory=list)
     job_requirements: list[str] = Field(default_factory=list)
 
 
@@ -556,6 +571,16 @@ def build_requirement_coverage_guidance() -> str:
         "Use capability_name for capability requirements and profile_name for eligibility requirements.",
     ]
     parts.extend(f"- {line}" for line in REQUIREMENT_COVERAGE_DEFAULT_LINES)
+    return "\n".join(parts)
+
+
+def build_requirement_coverage_debug_guidance() -> str:
+    parts = [
+        'For debug match diagnostics: return match_source exactly as "capability_name", "related_skill", "profile_brief", or "eligibility".',
+        "For debug match diagnostics: return matched_profile_term as the exact capability name, related skill, or eligibility fact used.",
+        "For debug match diagnostics: profile_name must stay the canonical capability or eligibility name.",
+        "For debug match diagnostics: profile_support must contain only actual candidate evidence text, never just the capability name or related skill label.",
+    ]
     return "\n".join(parts)
 
 
@@ -842,6 +867,7 @@ def normalize_llm_requirement_coverage(
     valid_capability_names: dict[str, str] | None = None,
     valid_eligibility_names: dict[str, str] | None = None,
     max_items: int | None = None,
+    include_debug_match_diagnostics: bool = False,
 ) -> list[dict[str, Any]]:
     if max_items is None:
         max_items = get_llm_job_requirements_max_items()
@@ -915,6 +941,13 @@ def normalize_llm_requirement_coverage(
         matched_job_text = compact_whitespace(
             item.get("matched_job_text") or item.get("matched_text")
         )
+        match_source = ""
+        matched_profile_term = ""
+        if include_debug_match_diagnostics:
+            raw_match_source = compact_whitespace(item.get("match_source")).lower()
+            if raw_match_source in LLM_ALLOWED_COVERAGE_MATCH_SOURCES:
+                match_source = raw_match_source
+            matched_profile_term = compact_whitespace(item.get("matched_profile_term"))
         raw_support = item.get("profile_support") or []
         if isinstance(raw_support, str):
             raw_support = [raw_support]
@@ -999,19 +1032,21 @@ def normalize_llm_requirement_coverage(
         if key in seen:
             continue
         seen.add(key)
-        results.append(
-            {
-                "requirement": requirement,
-                "importance": importance,
-                "requirement_type": requirement_type,
-                "status": status,
-                "profile_name": profile_name,
-                "capability_name": capability_name,
-                "eligibility_name": eligibility_name,
-                "matched_job_text": matched_job_text,
-                "profile_support": profile_support,
-            }
-        )
+        normalized_item = {
+            "requirement": requirement,
+            "importance": importance,
+            "requirement_type": requirement_type,
+            "status": status,
+            "profile_name": profile_name,
+            "capability_name": capability_name,
+            "eligibility_name": eligibility_name,
+            "matched_job_text": matched_job_text,
+            "profile_support": profile_support,
+        }
+        if include_debug_match_diagnostics:
+            normalized_item["match_source"] = match_source
+            normalized_item["matched_profile_term"] = matched_profile_term
+        results.append(normalized_item)
         if len(results) >= max_items:
             break
     return results
@@ -1164,6 +1199,7 @@ def normalize_llm_review_payload(
     valid_capability_names: dict[str, str] | None = None,
     valid_eligibility_names: dict[str, str] | None = None,
 ) -> dict[str, Any]:
+    include_debug_match_diagnostics = get_llm_fit_review_debug_match_diagnostics_enabled()
     if isinstance(value, dict):
         fit_review = value.get("fit_review")
         has_explicit_fit_review = (
@@ -1179,6 +1215,7 @@ def normalize_llm_review_payload(
                 value.get("requirement_coverage"),
                 valid_capability_names=valid_capability_names,
                 valid_eligibility_names=valid_eligibility_names,
+                include_debug_match_diagnostics=include_debug_match_diagnostics,
             )
             job_requirements = normalize_llm_job_requirements(value.get("job_requirements"))
             derived_grade = derive_fit_review_grade(requirement_coverage, job_requirements)
@@ -1401,6 +1438,9 @@ def llm_should_consider(job_description_text: str) -> Dict[str, str]:
 
 
 def _build_learning_prompt(job_description_text: str, *, fit_review: bool) -> str:
+    debug_match_diagnostics = (
+        fit_review and get_llm_fit_review_debug_match_diagnostics_enabled()
+    )
     parts = [
         LLM_PROMPT_SYSTEM_REVIEW_INTRO
         if fit_review
@@ -1413,8 +1453,13 @@ def _build_learning_prompt(job_description_text: str, *, fit_review: bool) -> st
                 LLM_PROMPT_FIT_REVIEW_ONLY_INTRO,
                 build_fit_review_guidance(),
                 LLM_PROMPT_DEBUG_REASON_INTRO,
-                f"Return exactly this shape: {LLM_FIT_REVIEW_PROMPT_SHAPE}",
+                (
+                    f"Return exactly this shape: {LLM_FIT_REVIEW_DEBUG_PROMPT_SHAPE}"
+                    if debug_match_diagnostics
+                    else f"Return exactly this shape: {LLM_FIT_REVIEW_PROMPT_SHAPE}"
+                ),
                 build_requirement_coverage_guidance(),
+                build_requirement_coverage_debug_guidance() if debug_match_diagnostics else "",
                 build_fit_review_grade_guidance(),
                 build_job_requirements_guidance(),
                 f"Use at most {get_llm_job_requirements_max_items()} job_requirements.",
@@ -1445,6 +1490,9 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
     if client is None:
         raise RuntimeError("LLM review requested but no provider key is configured")
 
+    include_debug_match_diagnostics = (
+        fit_review and get_llm_fit_review_debug_match_diagnostics_enabled()
+    )
     valid_capability_names: dict[str, str] | None = None
     valid_eligibility_names: dict[str, str] | None = None
     if fit_review:
@@ -1500,7 +1548,11 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
                     },
                 ],
                 max_output_tokens=max_output_tokens,
-                text_format=_LLMFitReviewPayload if fit_review else _LLMReviewPayload,
+                text_format=(
+                    _LLMFitReviewDebugPayload
+                    if include_debug_match_diagnostics
+                    else (_LLMFitReviewPayload if fit_review else _LLMReviewPayload)
+                ),
             )
             _log_llm_call(
                 resp, "job_review_with_learning" if fit_review else "job_learning_candidates", model

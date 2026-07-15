@@ -34,9 +34,21 @@ from job_hunter_agent.record_schema import (
 )
 from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order
 
+_IGNORED_CAPABILITY_SUGGESTIONS_KEY = "ignored_capability_suggestions"
+
 
 def _normalize_term(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", (value or "").strip().lower()).strip()
+
+
+def _ignored_capability_suggestion_terms(profile: dict[str, Any]) -> set[str]:
+    review_controls = profile.get("review_controls") or {}
+    ignored = review_controls.get(_IGNORED_CAPABILITY_SUGGESTIONS_KEY) or []
+    return {
+        normalized
+        for normalized in (_normalize_term(str(skill)) for skill in ignored)
+        if normalized
+    }
 
 
 def _collect_known_terms(profile: dict[str, Any]) -> set[str]:
@@ -412,6 +424,7 @@ def build_capability_tuning_suggestions(
         if str(row.get("url") or "").strip()
     }
     rule_lookup = _capability_rule_lookup(profile)
+    ignored_terms = _ignored_capability_suggestion_terms(profile)
     grouped: dict[str, dict[str, Any]] = {}
 
     for observation in skill_observations:
@@ -422,7 +435,7 @@ def build_capability_tuning_suggestions(
 
         skill = str(observation.get("skill") or "").strip()
         normalized = _normalize_term(skill)
-        if not normalized:
+        if not normalized or normalized in ignored_terms:
             continue
         entry = grouped.setdefault(
             normalized,
@@ -697,6 +710,8 @@ def apply_capability_tuning_decisions(
 ) -> dict[str, Any]:
     capability_rules = list(profile.get(KEY_CANDIDATE_CAPABILITIES, []))
     existing_index = _capability_rule_index_lookup(capability_rules)
+    review_controls = dict(profile.get("review_controls") or {})
+    ignored_suggestions = list(review_controls.get(_IGNORED_CAPABILITY_SUGGESTIONS_KEY) or [])
 
     for item in decisions:
         skill = str(item.get("skill") or "").strip()
@@ -708,9 +723,19 @@ def apply_capability_tuning_decisions(
         if not normalized or not choice:
             continue
 
+        if choice in {"dismiss", "ignore", "decline", "do_not_have", "dont_have"}:
+            if not any(_normalize_term(str(existing)) == normalized for existing in ignored_suggestions):
+                ignored_suggestions.append(skill)
+            continue
+
         if choice not in {"strong", "working", "basic"}:
             continue
         level = choice
+        ignored_suggestions = [
+            existing
+            for existing in ignored_suggestions
+            if _normalize_term(str(existing)) != normalized
+        ]
 
         rule = {
             KEY_NAME: skill,
@@ -755,4 +780,8 @@ def apply_capability_tuning_decisions(
             existing_index[normalized] = len(capability_rules) - 1
 
     profile[KEY_CANDIDATE_CAPABILITIES] = capability_rules
+    review_controls[_IGNORED_CAPABILITY_SUGGESTIONS_KEY] = dedupe_preserve_order(
+        [str(skill).strip() for skill in ignored_suggestions if str(skill).strip()]
+    )
+    profile["review_controls"] = review_controls
     return profile

@@ -74,6 +74,7 @@ def deterministic_review_outcome(
     fit_highlights: list[str],
     missing_profile_support: list[str],
     soft_risk_reasons: list[str],
+    missing_clearance_support: list[str] | None = None,
 ) -> Optional[dict]:
 
     title_reason = str(record.get(RECORD_TITLE_REASON_KEY) or "")
@@ -82,7 +83,11 @@ def deterministic_review_outcome(
         [item for item in fit_highlights if item and not _is_location_fit_highlight(item)]
     )
 
-    high_risks = len(missing_profile_support)
+    # A clearance/eligibility gap is still a hard-block risk for the purpose of the
+    # cheap deterministic-KEEP shortcut, even though it's now displayed separately
+    # from missing_profile_support — an unresolved clearance concern must still force
+    # the full LLM review rather than being shortcut past silently.
+    high_risks = len(missing_profile_support) + len(missing_clearance_support or [])
 
     medium_risks = len(soft_risk_reasons)
 

@@ -53,6 +53,7 @@ const NO_CAPABILITY_OBSERVATIONS_COPY = 'No capability suggestions yet. We found
 const RULE_REASON_TITLE_NOT_TARGET = 'TITLE_NOT_TARGET';
 const RULE_REASON_TITLE_BAD_KEYWORD = 'TITLE_BAD_KEYWORD';
 const RULE_REASON_ONET_UNCERTAIN_TITLE = 'ONET_UNCERTAIN_TITLE';
+const DECLINE_CAPABILITY_LABEL = "No, I don't have this";
 
 function getReviewChoiceMeta(choice) {
   if (!choice) return { label: 'Choose a strength' };
@@ -260,6 +261,7 @@ function renderSuggestedTuning(reviewData) {
         </details>
         <div class="card-actions" style="margin-top:10px;">
           <button class="primary confirm-skill-btn" data-skill="${escapeHtml(item.skill || '')}" style="font-size:0.9rem;padding:8px 16px;">Confirm</button>
+          <button class="secondary decline-skill-btn" data-skill="${escapeHtml(item.skill || '')}" style="font-size:0.9rem;padding:8px 16px;">${escapeHtml(DECLINE_CAPABILITY_LABEL)}</button>
         </div>
       </div>
     `,
@@ -406,6 +408,16 @@ async function applyOneSkipDecision(skill, choice, aliases = []) {
   return payload;
 }
 
+function setAppliedCardState(card, button, label) {
+  if (card) {
+    card.style.opacity = 'var(--opacity-med)';
+    card.style.pointerEvents = 'none';
+  }
+  if (button) {
+    button.textContent = label;
+  }
+}
+
 // -- Event listeners ---------------------------------------
 
 const runNowButton = document.getElementById('run_now');
@@ -473,14 +485,32 @@ tuningPanel?.addEventListener('click', async (e) => {
     btn.textContent = 'Saving…';
     try {
       const result = await applyOneSkipDecision(skill, choice, aliases);
-      card.style.opacity = 'var(--opacity-med)';
-      card.style.pointerEvents = 'none';
-      btn.textContent = 'Applied';
+      setAppliedCardState(card, btn, 'Applied');
       if (result && result.profile) fillForm(result.profile);
       await loadReviewData();
     } catch (error) {
       btn.disabled = false;
       btn.textContent = 'Confirm';
+      showStatus(error.message, 'error');
+    }
+    return;
+  }
+
+  const declineBtn = e.target.closest('.decline-skill-btn');
+  if (declineBtn) {
+    const card = declineBtn.closest('.review-card');
+    const skill = declineBtn.dataset.skill;
+    if (!skill) return;
+    declineBtn.disabled = true;
+    declineBtn.textContent = 'Saving…';
+    try {
+      const result = await applyOneSkipDecision(skill, 'dismiss');
+      setAppliedCardState(card, declineBtn, 'Removed');
+      if (result && result.profile) fillForm(result.profile);
+      await loadReviewData();
+    } catch (error) {
+      declineBtn.disabled = false;
+      declineBtn.textContent = DECLINE_CAPABILITY_LABEL;
       showStatus(error.message, 'error');
     }
     return;

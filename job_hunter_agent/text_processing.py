@@ -3,6 +3,22 @@
 import re
 from typing import Dict, List, Optional, Set
 
+_ESCAPED_LIST_MARKER_RE = re.compile(r"(?<!\S)\\\*(?=\s+\S)")
+_STRUCTURED_SUMMARY_PREFIXES = (
+    "role:",
+    "location:",
+    "location of work:",
+    "length of contract:",
+    "contract extension:",
+    "contract extensions:",
+    "security clearance:",
+    "work mode:",
+    "work type:",
+    "contract term:",
+    "salary:",
+    "rate:",
+)
+
 
 def _generic_summary_phrases() -> set[str]:
     from job_hunter_agent.profile_learning import get_parsing_rule_set
@@ -34,9 +50,18 @@ def compact_whitespace(value: Optional[str]) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
 
 
+def _normalize_escaped_list_markers(text: str, replacement: str) -> str:
+
+    return _ESCAPED_LIST_MARKER_RE.sub(replacement, text)
+
+
 def clean_display_text(text: Optional[str]) -> str:
 
     cleaned = compact_whitespace(text)
+    cleaned = _normalize_escaped_list_markers(cleaned, " | ")
+    cleaned = re.sub(r"\s*\|\s*", " | ", cleaned)
+    cleaned = re.sub(r"^\|\s*", "", cleaned.strip())
+    cleaned = re.sub(r"\s*\|$", "", cleaned).strip()
 
     cleaned = _strip_markdown_emphasis(cleaned)
 
@@ -46,6 +71,7 @@ def clean_display_text(text: Optional[str]) -> str:
 def clean_display_text_preserving_blocks(text: Optional[str]) -> str:
 
     raw = str(text or "").replace("\r\n", "\n").replace("\r", "\n").replace("\xa0", " ")
+    raw = _normalize_escaped_list_markers(raw, "\n* ").lstrip("\n")
     lines: List[str] = []
     blank_run = 0
 
@@ -180,7 +206,11 @@ def description_summary_snippet(record: dict, details_text: str) -> str:
 
     company = compact_whitespace(record.get("company") or "")
 
-    snippets = [_clean_summary_candidate(snippet) for snippet in split_text_snippets(details_text)]
+    snippets = []
+    for raw_snippet in split_text_snippets(details_text):
+        if _is_structured_summary_snippet(raw_snippet):
+            continue
+        snippets.append(_clean_summary_candidate(raw_snippet))
 
     for snippet in snippets:
         if _is_summary_heading(snippet):
@@ -219,6 +249,18 @@ def _clean_summary_candidate(text: str) -> str:
     cleaned = re.sub(r"^[•\-–—]+\s*", "", cleaned).strip()
 
     return cleaned
+
+
+def _is_structured_summary_snippet(text: str) -> bool:
+
+    cleaned = clean_display_text(text)
+
+    if not cleaned:
+        return True
+
+    lowered = cleaned.lower()
+
+    return any(lowered.startswith(prefix) for prefix in _STRUCTURED_SUMMARY_PREFIXES)
 
 
 def _is_summary_heading(text: str) -> bool:
@@ -282,7 +324,12 @@ def build_role_summary(record: dict, details_text: str, profile: Optional[dict] 
     if detail_summary:
         return detail_summary
 
-    if teaser and teaser != "N/A" and not _is_generic_summary_text(teaser):
+    if (
+        teaser
+        and teaser != "N/A"
+        and not _is_generic_summary_text(teaser)
+        and not _is_structured_summary_snippet(teaser)
+    ):
         return summarize_snippet(teaser, max_length=220)
 
     domain_focus = ""

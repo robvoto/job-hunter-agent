@@ -33,6 +33,7 @@ from job_hunter_agent.job_review_pipeline import (
 )
 from job_hunter_agent.job_types import load_job_type
 from job_hunter_agent.locations import resolve_location
+from job_hunter_agent.logging_utils import format_debug_marker
 from job_hunter_agent.profile_store import get_search_settings
 from job_hunter_agent.record_schema import (
     APPLY_METHOD_EASY_APPLY,
@@ -165,6 +166,16 @@ class LinkedInScraper(BaseJobScraper):
         )
 
         total_targets = len(targets)
+        logger.info(
+            format_debug_marker(
+                "BOARD_START",
+                {
+                    "source": self.source_name,
+                    "targets": total_targets,
+                    "date_range_days": date_range_days,
+                },
+            )
+        )
         try:
             for target_index, target in enumerate(targets, start=1):
                 target_tag = f"[LinkedIn target {target_index}/{total_targets}]"
@@ -308,6 +319,17 @@ class LinkedInScraper(BaseJobScraper):
                 original_error=exc,
             ) from exc
 
+        logger.info(
+            format_debug_marker(
+                "BOARD_END",
+                {
+                    "source": self.source_name,
+                    "targets": total_targets,
+                    "kept": len(kept_records),
+                    "audit_rows": len(audit_rows),
+                },
+            )
+        )
         logger.info("[LinkedIn] done | kept=%d audit=%d", len(kept_records), len(audit_rows))
         set_run_progress("LinkedIn complete")
         return kept_records, audit_rows, skill_observations

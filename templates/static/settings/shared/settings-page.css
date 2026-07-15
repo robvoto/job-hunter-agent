@@ -831,6 +831,11 @@
     .settings-form-grid .settings-form-field + .settings-form-field {
       margin-top: 0;
     }
+    .capability-group {
+      display: grid;
+      gap: var(--surface-gap-md);
+      margin-top: var(--surface-gap-md);
+    }
     .capability-editor {
       display: grid;
       gap: 14px;
@@ -1005,7 +1010,7 @@
       justify-content: space-between;
       gap: 10px;
       align-items: flex-start;
-      margin-bottom: 12px;
+      margin-bottom: 0;
       flex-wrap: wrap;
     }
     .capability-toolbar-actions {
@@ -1267,26 +1272,122 @@
       box-shadow: 0 0 0 2px color-mix(in srgb, var(--selection-accent) 15%, transparent);
     }
     .cap-strength {
-      display: grid;
-      gap: 8px;
-      margin-top: 14px;
-      padding-top: 12px;
-      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      margin-top: 2px;
     }
-    .capability-strength-strip {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 10px;
-      margin-top: 0;
-      border: 0;
-      background: transparent;
-      box-shadow: none;
+    .capability-strength-meter {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      width: fit-content;
+      min-height: 28px;
+      padding: 3px 8px;
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--bg-surface) 92%, transparent);
+      color: var(--text-muted);
+      font-size: var(--text-role-caption-font-size);
+      line-height: 1;
     }
-    .capability-strength-strip > .choice-card--strength {
+    .capability-strength-dots {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .capability-strength-dot {
+      position: relative;
+      display: inline-flex;
+      width: 14px;
+      height: 18px;
+      align-items: center;
       justify-content: center;
-      min-width: 0;
-      padding-inline: 12px;
-      text-align: center;
+      margin: 0;
+      cursor: pointer;
+    }
+    .capability-strength-dot input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      opacity: 0;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      clip-path: inset(50%);
+    }
+    .capability-strength-dot > span {
+      width: 9px;
+      height: 9px;
+      border: 1px solid color-mix(in srgb, var(--text-muted) 70%, transparent);
+      border-radius: 50%;
+      background: transparent;
+      transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+    }
+    .capability-strength-dot:hover > span {
+      transform: scale(1.18);
+      border-color: var(--text-primary);
+    }
+    .capability-strength-dot:focus-within > span {
+      outline: 2px solid color-mix(in srgb, var(--accent) 60%, white);
+      outline-offset: 2px;
+    }
+    .capability-strength-meter.strength-strong .capability-strength-dot.is-filled > span {
+      border-color: color-mix(in srgb, var(--state-success-border) 72%, var(--border-subtle));
+      background: color-mix(in srgb, var(--state-success-text) 72%, var(--bg-surface));
+    }
+    .capability-strength-meter.strength-working .capability-strength-dot.is-filled > span {
+      border-color: color-mix(in srgb, var(--state-info-border) 72%, var(--border-subtle));
+      background: color-mix(in srgb, var(--state-info-text) 72%, var(--bg-surface));
+    }
+    .capability-strength-meter.strength-basic .capability-strength-dot.is-filled > span {
+      border-color: color-mix(in srgb, var(--text-muted) 78%, var(--border-subtle));
+      background: color-mix(in srgb, var(--text-muted) 72%, var(--bg-surface));
+    }
+    .capability-strength-label {
+      color: var(--text-primary);
+      font-weight: var(--text-role-status-font-weight);
+      white-space: nowrap;
+    }
+    .capability-strength-tooltip {
+      position: absolute;
+      z-index: 20;
+      left: 0;
+      bottom: calc(100% + 9px);
+      display: none;
+      width: max-content;
+      max-width: 260px;
+      padding: 9px 11px;
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      background: var(--bg-elevated, var(--bg-surface));
+      box-shadow: var(--shadow-soft);
+      color: var(--text-primary);
+      line-height: 1.35;
+      white-space: normal;
+    }
+    .capability-strength-tooltip::after {
+      content: '';
+      position: absolute;
+      left: 18px;
+      top: 100%;
+      border: 6px solid transparent;
+      border-top-color: var(--border-subtle);
+    }
+    .capability-strength-tooltip strong,
+    .capability-strength-tooltip span {
+      display: block;
+    }
+    .capability-strength-tooltip span {
+      margin-top: 3px;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+    .capability-strength-meter:hover .capability-strength-tooltip,
+    .capability-strength-meter:focus-within .capability-strength-tooltip {
+      display: block;
     }
     .capability-preset-grid {
       display: grid;

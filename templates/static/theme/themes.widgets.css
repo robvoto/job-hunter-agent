@@ -851,7 +851,7 @@
 .search-settings-stack {
   display: grid;
   gap: var(--field-stack-gap);
-  margin-top: var(--settings-section-stack-gap);
+  margin-top: 0;
 }
 
 .search-settings-subcard {

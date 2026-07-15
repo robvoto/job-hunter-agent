@@ -45,8 +45,9 @@ Primary modules:
 
 Server logging:
 
-- debug-mode runtime logging writes server output to `output/server.log`; see `docs/OPERATIONS.md` for the command
-- logs are timestamped and still mirrored to the terminal
+- human-readable runtime logging writes curated job/run summaries to `output/server.log`; see `docs/OPERATIONS.md` for the command
+- full technical runtime logging writes raw pipeline/LLM/API detail to `output/server-debug.log`
+- both logs are timestamped; the terminal mirrors the human-readable output
 - `/api/debug/browser-log` is for browser-side JS logs only
 - debug/audit uncertainty events go to `output/uncertainty.jsonl`
 - reviewable runtime warnings go to SQLite `system_warnings`

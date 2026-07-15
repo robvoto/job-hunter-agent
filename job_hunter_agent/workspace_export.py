@@ -183,6 +183,7 @@ def _build_export_job(record: dict, workspace_state: str, profile: dict[str, Any
         "hard_block_reasons": list(record.get("hard_block_reasons") or []),
         "soft_risk_reasons": list(record.get("soft_risk_reasons") or []),
         "missing_profile_support": list(record.get("missing_profile_support") or []),
+        "missing_clearance_support": list(record.get("missing_clearance_support") or []),
         "competitive_signals": list(record.get("competitive_signals") or []),
         "job_quality_signals": list(record.get("job_quality_signals") or []),
         "job_requirements": list(record.get("job_requirements") or []),

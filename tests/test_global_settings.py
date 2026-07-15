@@ -165,6 +165,12 @@ def test_save_global_settings_normalizes_values(isolated_db):
     assert (
         saved["llm_settings"]["llm_prompt_settings"]["rejection_blocker_suggestions_max_words"] == 6
     )
+    assert (
+        saved["llm_settings"]["llm_prompt_settings"][
+            "fit_review_debug_match_diagnostics_enabled"
+        ]
+        is False
+    )
 
     assert saved["source_document_settings"]["allowed_suffixes"] == [
         ".docx",
@@ -304,4 +310,20 @@ def test_managed_global_settings_accepts_valid_fit_decision_output_tokens():
     assert (
         normalized["llm_settings"]["llm_prompt_settings"]["fit_decision_max_output_tokens"]
         == 3000
+    )
+
+
+def test_managed_global_settings_normalizes_fit_review_debug_match_diagnostics_enabled():
+    payload = _load_managed_global_settings_payload()
+    payload["llm_settings"]["llm_prompt_settings"][
+        "fit_review_debug_match_diagnostics_enabled"
+    ] = "true"
+
+    normalized = normalize_global_settings(payload, strict_managed=True)
+
+    assert (
+        normalized["llm_settings"]["llm_prompt_settings"][
+            "fit_review_debug_match_diagnostics_enabled"
+        ]
+        is True
     )

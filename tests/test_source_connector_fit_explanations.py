@@ -940,7 +940,7 @@ def test_required_blocker_watchouts_do_not_mark_desirable_mentions_as_missing():
             "reject_title_rules": [],
         },
     )
-    risks, missing = capability_matching.build_risk_and_missing_profile_support(
+    risks, missing, missing_clearance = capability_matching.build_risk_and_missing_profile_support(
         "ERP experience is desirable for this business analyst role.",
         "OK",
         {
@@ -954,6 +954,145 @@ def test_required_blocker_watchouts_do_not_mark_desirable_mentions_as_missing():
     assert watchouts == ["erp appears desirable"]
     assert risks == ["erp appears desirable"]
     assert missing == []
+    assert missing_clearance == []
+
+
+def test_missing_mandatory_requirement_uses_deterministic_scan_without_llm_coverage():
+    profile = {
+        "must_not_require_skills": [],
+        "reject_description_phrase_rules": [],
+        "reject_title_rules": [],
+        "candidate_capabilities": [],
+        "candidate_eligibility": [{"name": "NV1", "value": False, "evidence": []}],
+    }
+
+    _, missing, missing_clearance = capability_matching.build_risk_and_missing_profile_support(
+        "Security Clearance: NV1 / Baseline / As per role",
+        "OK",
+        profile,
+    )
+
+    # No LLM judgment available yet: falls back to the deterministic keyword scan,
+    # which cannot see that NV1 is one option in an alternation. Clearance misses are
+    # reported in their own list, never merged into the generic "missing" list.
+    assert missing == []
+    assert missing_clearance == ["Missing mandatory requirement: Nv1"]
+
+
+def test_missing_mandatory_requirement_defers_to_llm_eligibility_coverage():
+    profile = {
+        "must_not_require_skills": [],
+        "reject_description_phrase_rules": [],
+        "reject_title_rules": [],
+        "candidate_capabilities": [],
+        "candidate_eligibility": [{"name": "NV1", "value": False, "evidence": []}],
+    }
+
+    # LLM already reviewed the alternation ("NV1 / Baseline / As per role") and judged
+    # the candidate satisfies it via the Baseline alternative.
+    requirement_coverage = [
+        {
+            "requirement": "Security Clearance: NV1 / Baseline / As per role",
+            "importance": "mandatory",
+            "requirement_type": "eligibility",
+            "status": "supported",
+            "eligibility_name": "Baseline clearance",
+        }
+    ]
+
+    _, missing, missing_clearance = capability_matching.build_risk_and_missing_profile_support(
+        "Security Clearance: NV1 / Baseline / As per role",
+        "OK",
+        profile,
+        requirement_coverage=requirement_coverage,
+    )
+
+    # LLM judgment is the single source of truth once available: no false-positive
+    # "Missing mandatory requirement: NV1", and the deterministic scan does not also run.
+    assert missing == []
+    assert missing_clearance == []
+
+
+def test_missing_mandatory_requirement_uses_llm_eligibility_mismatch_not_deterministic():
+    profile = {
+        "must_not_require_skills": [],
+        "reject_description_phrase_rules": [],
+        "reject_title_rules": [],
+        "candidate_capabilities": [],
+        "candidate_eligibility": [{"name": "NV1", "value": False, "evidence": []}],
+    }
+
+    requirement_coverage = [
+        {
+            "requirement": "Security Clearance: NV1 only, no alternatives accepted",
+            "importance": "mandatory",
+            "requirement_type": "eligibility",
+            "status": "mismatch",
+            "eligibility_name": "NV1",
+        }
+    ]
+
+    _, missing, missing_clearance = capability_matching.build_risk_and_missing_profile_support(
+        "Security Clearance: NV1 only, no alternatives accepted",
+        "OK",
+        profile,
+        requirement_coverage=requirement_coverage,
+    )
+
+    # Exactly one "Missing mandatory requirement" line — sourced only from the LLM
+    # judgment, confirming the deterministic scan is not also contributing a duplicate,
+    # and it lands in missing_clearance, never in the generic missing list.
+    assert missing == []
+    assert missing_clearance == ["Missing mandatory requirement: Nv1"]
+
+
+def test_eligibility_mismatch_is_not_double_counted_in_checks_before_applying():
+    profile = {
+        "must_not_require_skills": [],
+        "reject_description_phrase_rules": [],
+        "reject_title_rules": [],
+        "candidate_capabilities": [],
+        "candidate_eligibility": [{"name": "NV1", "value": False, "evidence": []}],
+    }
+
+    requirement_coverage = [
+        {
+            "requirement": "Security Clearance: NV1 only, no alternatives accepted",
+            "importance": "mandatory",
+            "requirement_type": "eligibility",
+            "status": "mismatch",
+            "eligibility_name": "NV1",
+        }
+    ]
+
+    _, missing, missing_clearance = capability_matching.build_risk_and_missing_profile_support(
+        "Security Clearance: NV1 only, no alternatives accepted",
+        "OK",
+        profile,
+        requirement_coverage=requirement_coverage,
+    )
+
+    # The eligibility miss lands exclusively in missing_clearance, never in the
+    # generic missing_profile_support list.
+    assert missing == []
+    assert missing_clearance == ["Missing mandatory requirement: Nv1"]
+
+    # And the generic "Checks before applying" builder must not also surface the
+    # same eligibility row from requirement_coverage — it is handled exclusively by
+    # the dedicated Clearances panel now, so double-counting would show the exact
+    # same fact in two places on the job card.
+    checks = workspace_renderer._build_checks_before_applying_items(
+        history_warning_signals=[],
+        description_issue=False,
+        is_possible_repost=False,
+        similar_applied_record=None,
+        candidate_history=None,
+        missing_profile_support=missing,
+        salary_fit_state="unknown",
+        requirement_coverage=requirement_coverage,
+        soft_risk_reasons=[],
+    )
+    assert checks == []
 
 
 def test_fit_score_breakdown_ignores_profile_title_scoring_rule_overrides():
@@ -1247,6 +1386,52 @@ def test_job_card_summary_unescapes_literal_pipe():
 
     assert "Business Analyst \\| Child Support Reform Program" not in html
     assert "Business Analyst | Child Support Reform Program" in html
+
+
+def test_job_card_summary_normalizes_escaped_list_markers():
+    teaser = (
+        "\\* Role: Business Analyst "
+        "\\* Location of work: Canberra, Brisbane, Melbourne and Sydney "
+        "\\* Length of contract: 12 Months (update if different) "
+        "\\* Contract Extensions: Extension Available (update if applicable) "
+        "\\* Security Clearance: NV1 / Baseline / As per role (update if applicable)"
+    )
+    full_description = (
+        "\\* Role: Business Analyst\n"
+        "\\* Location of work: Canberra, Brisbane, Melbourne and Sydney\n"
+        "\\* Length of contract: 12 Months (update if different)\n"
+        "\\* Contract Extensions: Extension Available (update if applicable)\n"
+        "\\* Security Clearance: NV1 / Baseline / As per role (update if applicable)\n"
+        "Candidates must have\n"
+        "- Strategic planning, business analysis, and solution design.\n"
+    )
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-summary-escaped-bullets",
+            "title": "Senior Business Analysts - Canberra, Brisbane, Melbourne and Sydney",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Canberra ACT",
+            "work_type": "Contract",
+            "work_mode": "On-site",
+            "salary": "N/A",
+            "teaser": teaser,
+            "full_description": full_description,
+            "fit_source_text": full_description,
+            "description_source": "linkedin_structured",
+            RECORD_DETAILS_STATUS_KEY: DETAILS_STATUS_OK,
+            "source": "linkedin",
+        },
+        _test_profile(),
+    )
+
+    assert "Business Analyst \\ Location of work" not in html
+    assert "Business Analyst | Location of work: Canberra, Brisbane, Melbourne and Sydney" in html
+    assert 'data-job-teaser="\\* Role: Business Analyst' not in html
+    assert 'data-job-teaser="Role: Business Analyst | Location of work: Canberra, Brisbane, Melbourne and Sydney' in html
 
 
 def test_posting_channel_badge_uses_token_classifier_review_class():
@@ -2338,6 +2523,28 @@ def test_is_workspace_eligible_uses_saved_workspace_minimum_score(monkeypatch):
     assert is_workspace_eligible({**valid_record, "score": 59}) is False
 
 
+def test_is_workspace_eligible_preserves_kept_jobs_when_title_filters_change(monkeypatch):
+    monkeypatch.setattr(workspace_service, "passes_title_filters", lambda title: (False, "TITLE_NOT_TARGET"))
+    monkeypatch.setattr(
+        workspace_service, "fit_score_displayed", lambda record, profile=None: int(record["score"])
+    )
+    monkeypatch.setattr(workspace_service, "get_workspace_minimum_score", lambda: 30)
+
+    from job_hunter_agent.workspace_service import is_workspace_eligible
+
+    kept_record = {
+        "title": "Senior Business Analysts - Canberra, Brisbane, Melbourne and Sydney",
+        "score": 94,
+        "llm_decision": "KEEP",
+        "llm_fit_grade": "STRONG",
+        "requirement_coverage": [
+            {"requirement": "Business analysis", "importance": "mandatory", "status": "supported"}
+        ],
+    }
+
+    assert is_workspace_eligible(kept_record) is True
+
+
 def test_score_filter_thresholds_hide_lowest_band_when_no_borderline_roles():
     thresholds = workspace_renderer.score_filter_thresholds(
         scoring_profile={},
@@ -2497,6 +2704,7 @@ def test_render_job_card_shows_llm_review_section_in_debug_mode():
     assert "Final decision: KEPT" in html
     assert "Final score" in html
     assert "LLM fit grade" in html
+    assert "Eligibility gate:" in html
     assert "Score breakdown" in html
     assert "Debug reason" not in html
     assert "Base fit: +72" in html
@@ -2527,9 +2735,27 @@ def test_render_job_card_debug_audit_shows_evidence_credit_and_decision_conversi
                     "status": "supported",
                     "profile_name": "stakeholder engagement",
                     "capability_name": "stakeholder engagement",
+                    "match_source": "related_skill",
+                    "matched_profile_term": "health program delivery",
                     "matched_job_text": "5–7 years' experience in digital health",
                     "profile_support": ["Facilitated health-program stakeholders."],
-                }
+                },
+                {
+                    "requirement": "Australian citizenship",
+                    "importance": "preferred",
+                    "requirement_type": "eligibility",
+                    "status": "mismatch",
+                    "profile_name": "",
+                    "profile_support": [],
+                },
+                {
+                    "requirement": "Domain architecture",
+                    "importance": "mandatory",
+                    "requirement_type": "capability",
+                    "status": "supported",
+                    "profile_name": "",
+                    "profile_support": [],
+                },
             ],
             "location": "Sydney NSW",
             "work_type": "Full Time",
@@ -2547,10 +2773,25 @@ def test_render_job_card_debug_audit_shows_evidence_credit_and_decision_conversi
     assert "5–7 years in digital health" in html
     assert "Facilitated health-program stakeholders." in html
     assert "stakeholder engagement (Strong)" in html
-    assert "3 / 3 (100%)" in html
+    assert "Requirement type" in html
+    assert "Matched via" in html
+    assert "Matched term" in html
+    assert "Related Skill" in html
+    assert "health program delivery" in html
+    assert "Calculation" in html
+    assert "3 × 1 × 1 = 3 / 3" in html
+    assert "Australian citizenship" in html
+    assert "Mismatch" in html
+    assert "Domain architecture" in html
+    assert "Unresolved mapping" in html
+    assert "No profile evidence returned" in html
+    assert "Earned weighted credit:" in html
+    assert "Total requirement weight:" in html
+    assert "Final Requirement Fit:" in html
     assert "Decision trace" in html
     assert "Full LLM review: Run" in html
     assert "Final conversion: MAYBE → KEEP" in html
+    assert "Eligibility gate: Fail" in html
 
 
 def test_render_job_card_hides_debug_fit_sections_in_normal_mode():
@@ -3107,7 +3348,7 @@ def test_build_risk_and_missing_profile_support_uses_shared_partial_support_labe
         lambda details_text, profile: {"must_not": [], "limited_depth": []},
     )
 
-    risks, missing = capability_matching.build_risk_and_missing_profile_support(
+    risks, missing, missing_clearance = capability_matching.build_risk_and_missing_profile_support(
         "",
         None,
         _test_profile(),
@@ -3122,6 +3363,7 @@ def test_build_risk_and_missing_profile_support_uses_shared_partial_support_labe
     )
 
     assert missing == []
+    assert missing_clearance == []
     assert risks == [
         "Role leans toward specialist depth is only partially supported by your profile"
     ]
