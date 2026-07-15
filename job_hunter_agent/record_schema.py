@@ -64,6 +64,8 @@ RECORD_REVIEWED_SIGNAL_MATCHES_KEY = "reviewed_signal_matches"
 RECORD_POSTING_CHANNEL_EVIDENCE_KEY = "posting_channel_evidence"
 RECORD_JOB_QUALITY_SIGNALS_KEY = "job_quality_signals"
 RECORD_REQUIREMENT_COVERAGE_KEY = "requirement_coverage"
+RECORD_OCCUPATION_ALIGNMENT_KEY = "occupation_alignment"
+RECORD_OCCUPATION_ALIGNMENT_REASON_KEY = "occupation_alignment_reason"
 RECORD_DESCRIPTION_COMPACTION_KEY = "description_compaction"
 RECORD_APPLY_METHOD_KEY = "apply_method"
 

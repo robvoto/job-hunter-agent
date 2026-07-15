@@ -2,19 +2,28 @@
 
 Private reference doc. Not committed to the repo.
 
-Last checked against code: 2026-07-11.
+Last checked against code: 2026-07-15.
 
 ---
 
 ## What the score is
 
-The fit score is now **Requirement Fit %**.
+The fit score is **Requirement Fit % + occupation alignment adjustment**:
 
-It answers one question only:
+```text
+final_score = requirement_fit + occupation_adjustment
+final_score = clamp(final_score, 0, 100)
+```
+
+`requirement_fit` answers:
 
 > How well does the candidate profile cover the job's stated requirements?
 
-A score of 57 means the candidate covered about 57% of the weighted job requirements based on requirement importance and the typed requirement coverage returned by review.
+`occupation_adjustment` answers a separate question:
+
+> Is this the same occupation as the candidate's target roles, an adjacent one, or a different one?
+
+A requirement_fit of 57 means the candidate covered about 57% of the weighted job requirements based on requirement importance and the typed requirement coverage returned by review. The occupation adjustment then shifts the final score down (never up) if the job is not classified as the same occupation.
 
 It does **not** include title bonus, salary, location, freshness, easy/quick apply, viewed status, LLM grade points, or grade-band clamping.
 
@@ -22,7 +31,7 @@ It does **not** include title bonus, salary, location, freshness, easy/quick app
 
 ## Current implemented model
 
-The current model is **requirement-coverage scoring**.
+The current model is **requirement-coverage scoring plus a deterministic occupation alignment adjustment**.
 
 The LLM still extracts job requirements and maps each requirement to either a candidate capability or an explicit eligibility fact. `fit_scoring.py` then calculates:
 
@@ -55,6 +64,26 @@ mismatch = 0
 ```
 
 If the LLM marks a requirement as covered but the mapped capability or eligibility fact cannot be resolved in the candidate profile, the score does not get inflated. The code writes a structured uncertainty event to `output/uncertainty.jsonl` and records a reviewable warning in the `system_warnings` table.
+
+### Occupation alignment adjustment
+
+Separately from requirement coverage, the LLM classifies the job's occupation relative to the candidate's target roles, based on job title, dominant duties, and candidate target roles. The LLM returns only the classification and a short reason — never a point value.
+
+```text
+same = 0
+adjacent = -10
+different = -20
+```
+
+These adjustments are managed values in `data/knowledge/scoring_rules.json` (`occupation_alignment`), looked up server-side by `_occupation_alignment_adjustments()` in `fit_scoring.py`. The LLM cannot choose the numeric penalty, and an unclassified or invalid value (missing, or outside `same`/`adjacent`/`different`) never rejects the job — it degrades to a "needs review" state with a zero adjustment.
+
+The adjustment is applied after Requirement Fit % and before the final 0–100 clamp:
+
+```text
+final_score = clamp(requirement_fit + occupation_adjustment, 0, 100)
+```
+
+Alignment, reason, adjustment, and the final calculation are logged in `server.log` and shown in the "Debug: LLM fit review" panel via `occupation_alignment_diagnostics()` / `format_occupation_alignment_diagnostics_block()` in `fit_scoring.py`.
 
 The main scoring consumer is:
 
@@ -190,7 +219,7 @@ If the job has not been reviewed, scoring raises an error instead of inventing a
 
 ### 2. Requirement Fit % entries
 
-The main score includes only requirement coverage:
+The main score includes requirement coverage and the occupation alignment adjustment (see step 4):
 
 | Signal | Current behaviour |
 |---|---|
@@ -214,14 +243,22 @@ Salary, location, freshness, Easy Apply / Quick Apply, viewed status, and action
 | Already viewed | Shown as history-aware display state. |
 | Checks before applying | Shown as a review panel for missing requirements, red flags, salary issues, and similar pre-apply checks. |
 
+### 4. Occupation alignment adjustment
+
+| Signal | Current behaviour |
+|---|---|
+| `occupation_alignment` (`same`/`adjacent`/`different`) | LLM-classified; adjustment value (`0`/`-10`/`-20`) is looked up server-side from `scoring_rules.json`, never chosen by the LLM. |
+| Missing or invalid classification | Degrades to a "needs review" state with a zero adjustment. Never rejects the job. |
+| Reason, adjustment, and final calculation | Logged in `server.log` and shown in the "Debug: LLM fit review" panel. |
+
 ### 5. Frozen/display score
 
 There are two scoring variants:
 
 | Function | Behaviour |
 |---|---|
-| `fit_score_breakdown_frozen` / `fit_score_frozen` | Stored at scrape/review time as Requirement Fit %. |
-| `fit_score_and_breakdown_displayed` / `fit_score_displayed` | Display-time score. Starts from frozen Requirement Fit %. Falls back to live scoring for old records without a frozen score. |
+| `fit_score_breakdown_frozen` / `fit_score_frozen` | Stored at scrape/review time as Requirement Fit % plus occupation alignment adjustment. |
+| `fit_score_and_breakdown_displayed` / `fit_score_displayed` | Display-time score. Starts from the frozen score. Falls back to live scoring for old records without a frozen score. |
 
 ### 6. Hard blockers
 
@@ -248,7 +285,7 @@ Allowed coverage statuses:
 
 Coverage entries are shown in the score breakdown for transparency, but they do not add separate score points.
 
-The fit score is intentionally narrow: requirement-coverage transparency and hard blockers only. The user-facing "Why this is a good fit" panel uses requirement coverage only. Convenience or preference signals such as Easy Apply, freshness, viewed status, salary, and location are badges, filters, or sort signals. Workspace run summaries report collection counts, not fit evidence.
+The fit score is intentionally narrow: requirement-coverage transparency, the occupation alignment adjustment, and hard blockers only. The user-facing "Why this is a good fit" panel uses requirement coverage only. Convenience or preference signals such as Easy Apply, freshness, viewed status, salary, and location are badges, filters, or sort signals. Workspace run summaries report collection counts, not fit evidence.
 
 Debug mode may still expose internal score calculation, matched source text, capability mapping, and reviewed-signal evidence for troubleshooting. That extra transparency is for investigation, not a second competing normal-mode fit explanation.
 
@@ -405,6 +442,7 @@ Remaining calibration areas include:
 | Preference weights | Managed/profile-side weights; affect ranking, not capability proof. |
 | Deterministic shortcut thresholds | Configured under `deterministic_review_thresholds`; audit the shortcut trigger via `det_rule` and the final reviewed keep via `review_source` and `requirement_coverage`. |
 | Convergence bonus | Explicit rule-based bonus; useful but still a calibration rule. |
+| Occupation alignment adjustments | Configured in `scoring_rules.json` (`occupation_alignment`: `same`/`adjacent`/`different`); LLM classifies only, never sets the point value; not empirically proven. |
 
 The point values are calibration choices, not fixed constants.
 
@@ -414,7 +452,7 @@ The point values are calibration choices, not fixed constants.
 
 The intended architecture is:
 
-> LLM extracts requirements, structured coverage maps to candidate capabilities or eligibility facts, Requirement Fit % is calculated from coverage, and explicit shortcuts remain auditable.
+> LLM extracts requirements, structured coverage maps to candidate capabilities or eligibility facts, Requirement Fit % is calculated from coverage, the LLM's occupation alignment classification is adjusted by a managed, non-LLM-chosen penalty, and explicit shortcuts remain auditable.
 
 ---
 

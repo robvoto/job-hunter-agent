@@ -17,11 +17,11 @@ Use before editing `fit_scoring.py`, `capability_matching.py`, `signal_detection
 - Workspace rendering consumes frozen score fields stored on the record; do not reintroduce live score recomputation there.
 
 ## Key owners
-- `fit_scoring.py`: assembles score entries and highlights. Breakdown is split into four builder functions: `build_core_fit_breakdown`, `build_preference_breakdown`, `build_convenience_breakdown`, `build_risk_breakdown`. Hard blockers appear in the risk section and do not short-circuit the full breakdown. Use `has_hard_blockers()` for downstream exclusion.
+- `fit_scoring.py`: assembles score entries and highlights. `fit_score_breakdown()` composes three builder functions: `_requirement_fit_entries` (Requirement Fit %), `build_occupation_alignment_breakdown` (occupation alignment adjustment), `build_risk_breakdown` (hard blockers). Hard blockers appear in the risk section and do not short-circuit the full breakdown. Use `has_hard_blockers()` for downstream exclusion.
 - `job_review_pipeline.py`: freezes `fit_score`, `fit_score_breakdown`, `fit_label`, and `fit_tone_class` onto kept records before persistence.
 - `workspace_renderer.py`: reads frozen score fields from records and should not call scoring functions for card display.
-- `profile_store.py`: loads/normalises scoring/profile settings.
-- `data/scoring_rules.json`: managed scoring policy.
+- `profile_store.py`: loads/normalises scoring/profile settings. New top-level `scoring_rules.json` sections must be added to `_load_default_scoring_rules()`'s explicit key whitelist (with a matching `KEY_*` constant) or they are silently dropped and never reach `get_scoring_rules()`.
+- `data/scoring_rules.json`: managed scoring policy, including `occupation_alignment` (same/adjacent/different adjustments).
 - `data/match_level_defaults.json`: match band thresholds.
 - `data/parsing_rules.json`: labels/display text where already owned there.
 
@@ -58,7 +58,7 @@ For LLM review data:
 There are two separate LLM calls with different schemas. Do not conflate them.
 
 **Fit review** (`_LLMFitReviewPayload`, `fit_review=True`):
-- Returns: `fit_review` (decision + grade), `job_requirements`, `requirement_coverage`, `debug_reason`
+- Returns: `fit_review` (decision + grade), `job_requirements`, `requirement_coverage`, `debug_reason`, `occupation_alignment`, `occupation_alignment_reason`
 - No `learning_candidates` field; the fit-review path does not extract learning signals
 - `requirement_coverage` is the single source for capability support — entries must link to profile capability rule names for `supported`/`partially_supported` status
 - Do NOT include learning category guidance (`LLM_PROMPT_ROLE_TITLE_PATTERN_GUIDANCE`) in this prompt
@@ -82,6 +82,15 @@ There are two separate LLM calls with different schemas. Do not conflate them.
 - Any `mismatch` present + some positive coverage → WEAK (hard cap, cannot be SOLID/STRONG/EXCELLENT)
 - No mismatch: EXCELLENT (all supported, ≥3 reqs), STRONG (≥80% support, ≤1 partial), SOLID (≥50% support), WEAK (some support), POOR (no support)
 - Grade derivation tests live in `tests/test_llm_gate.py` (section: derive_fit_review_grade contract)
+
+## Occupation alignment scoring
+
+`final_score = requirement_fit + occupation_adjustment`, clamped 0–100.
+
+- The LLM classifies `occupation_alignment` as one of `same`/`adjacent`/`different` (title + dominant duties vs. candidate target roles). It never sets the numeric penalty.
+- The adjustment is looked up server-side from `scoring_rules.json` `occupation_alignment` (`same=0`, `adjacent=-10`, `different=-20`) via `_occupation_alignment_adjustments()` in `fit_scoring.py`.
+- Missing or invalid values degrade to the `LLM_INVALID_OCCUPATION_ALIGNMENT` sentinel (`_normalize_llm_occupation_alignment` in `llm_gate.py`) — shown as "Needs review (not classified)" with a zero adjustment. This never blocks a KEEP or rejects the job; see `has_complete_llm_keep_data()` in `llm_review_state.py`, which deliberately does not require `occupation_alignment`.
+- `occupation_alignment_diagnostics()` / `format_occupation_alignment_diagnostics_block()` in `fit_scoring.py` are the single source for alignment, reason, adjustment, and final-calculation text shown in `server.log` (logged from `_freeze_fit_score_fields()` in `job_review_pipeline.py`) and in the "Debug: LLM fit review" panel (`workspace_renderer.py`).
 
 ## Government context scoring
 

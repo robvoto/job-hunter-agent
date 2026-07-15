@@ -369,3 +369,110 @@ def test_requirement_fit_invalid_status_does_not_score_even_with_valid_capabilit
     assert "not marked as supported" in rows[0]["detail"].lower()
     assert warnings
     assert warnings[0]["category"] == "requirement_coverage_uncertainty"
+
+
+def _fully_supported_record(**extra):
+    return _record(
+        [
+            {
+                "requirement": "Stakeholder engagement",
+                "importance": "mandatory",
+                "status": "supported",
+                "capability_name": "stakeholder engagement",
+            }
+        ],
+        **extra,
+    )
+
+
+def test_occupation_alignment_same_applies_zero_adjustment():
+    record = _fully_supported_record(
+        occupation_alignment="same", occupation_alignment_reason="Same job family and duties"
+    )
+
+    assert fit_scoring.fit_score(record, _profile()) == 100
+    breakdown = fit_scoring.fit_score_breakdown(record, _profile())
+    entry = next(item for item in breakdown if item["section"] == "occupation_alignment")
+    assert entry["value"] == 0
+    assert "Same" in entry["label"]
+
+
+def test_occupation_alignment_adjacent_applies_minus_ten():
+    record = _fully_supported_record(
+        occupation_alignment="adjacent", occupation_alignment_reason="Related but distinct duties"
+    )
+
+    assert fit_scoring.fit_score(record, _profile()) == 90
+    breakdown = fit_scoring.fit_score_breakdown(record, _profile())
+    entry = next(item for item in breakdown if item["section"] == "occupation_alignment")
+    assert entry["value"] == -10
+    assert "Adjacent" in entry["label"]
+
+
+def test_occupation_alignment_different_applies_minus_twenty():
+    record = _fully_supported_record(
+        occupation_alignment="different", occupation_alignment_reason="Unrelated occupation"
+    )
+
+    assert fit_scoring.fit_score(record, _profile()) == 80
+    breakdown = fit_scoring.fit_score_breakdown(record, _profile())
+    entry = next(item for item in breakdown if item["section"] == "occupation_alignment")
+    assert entry["value"] == -20
+    assert "Different" in entry["label"]
+
+
+def test_occupation_alignment_different_clamps_to_zero_not_negative():
+    record = _record(
+        [
+            {
+                "requirement": "SQL experience",
+                "importance": "mandatory",
+                "status": "mismatch",
+                "capability_name": "",
+            }
+        ],
+        occupation_alignment="different",
+    )
+
+    assert fit_scoring.fit_score(record, _profile()) == 0
+
+
+def test_occupation_alignment_missing_value_degrades_to_needs_review_zero_adjustment():
+    record = _fully_supported_record()
+
+    assert fit_scoring.fit_score(record, _profile()) == 100
+    breakdown = fit_scoring.fit_score_breakdown(record, _profile())
+    entry = next(item for item in breakdown if item["section"] == "occupation_alignment")
+    assert entry["value"] == 0
+    assert "needs review" in entry["label"].lower()
+
+
+def test_occupation_alignment_invalid_value_never_rejects_and_degrades_to_zero():
+    record = _fully_supported_record(occupation_alignment="not-a-real-alignment")
+
+    assert fit_scoring.fit_score(record, _profile()) == 100
+    breakdown = fit_scoring.fit_score_breakdown(record, _profile())
+    entry = next(item for item in breakdown if item["section"] == "occupation_alignment")
+    assert entry["value"] == 0
+    assert "needs review" in entry["label"].lower()
+
+
+def test_occupation_alignment_diagnostics_reports_alignment_reason_adjustment_and_calculation():
+    record = _fully_supported_record(
+        occupation_alignment="adjacent", occupation_alignment_reason="Related discipline"
+    )
+    profile = _profile()
+    scoring_rules = fit_scoring.get_scoring_rules(profile)
+
+    diagnostics = fit_scoring.occupation_alignment_diagnostics(record, scoring_rules)
+    assert diagnostics["alignment"] == "adjacent"
+    assert diagnostics["reason"] == "Related discipline"
+    assert diagnostics["adjustment"] == -10
+    assert diagnostics["is_classified"] is True
+
+    final_score = fit_scoring.fit_score(record, profile)
+    block = fit_scoring.format_occupation_alignment_diagnostics_block(record, final_score, profile)
+    assert "Alignment: Adjacent" in block
+    assert "Reason: Related discipline" in block
+    assert "Adjustment: -10" in block
+    assert f"= {final_score}" in block

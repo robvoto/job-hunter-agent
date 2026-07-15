@@ -97,6 +97,7 @@ from job_hunter_agent.fit_scoring import (
     eligibility_gate_diagnostics,
     fit_score_and_breakdown_displayed,
     fit_score_and_breakdown_frozen,
+    format_occupation_alignment_diagnostics_block,
     format_requirement_fit_diagnostics_block,
 )
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
@@ -162,6 +163,8 @@ from job_hunter_agent.record_schema import (
     RECORD_LOCATION_KEY,
     RECORD_MISSING_CLEARANCE_SUPPORT_KEY,
     RECORD_MISSING_PROFILE_SUPPORT_KEY,
+    RECORD_OCCUPATION_ALIGNMENT_KEY,
+    RECORD_OCCUPATION_ALIGNMENT_REASON_KEY,
     RECORD_ONET_CLASSIFICATION_KEY,
     RECORD_POSTED_AGE_DAYS_KEY,
     RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
@@ -516,6 +519,8 @@ def _build_outcome(record: dict) -> dict[str, Any]:
         "llm_fit_grade": record.get(RECORD_LLM_FIT_GRADE_KEY),
         "review_source": record.get("review_source"),
         RECORD_REQUIREMENT_COVERAGE_KEY: list(record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or []),
+        RECORD_OCCUPATION_ALIGNMENT_KEY: record.get(RECORD_OCCUPATION_ALIGNMENT_KEY),
+        RECORD_OCCUPATION_ALIGNMENT_REASON_KEY: record.get(RECORD_OCCUPATION_ALIGNMENT_REASON_KEY),
     }
 
 
@@ -530,6 +535,7 @@ def _freeze_fit_score_fields(record: dict, profile: dict) -> None:
     record[RECORD_FIT_SCORE_BREAKDOWN_KEY] = breakdown
     record[RECORD_FIT_LABEL_KEY] = score_to_match_label(fit_points, get_match_levels(profile))
     record[RECORD_FIT_TONE_CLASS_KEY] = score_to_tone_class(fit_points, profile)
+    logger.info(format_occupation_alignment_diagnostics_block(record, fit_points, profile))
 
 
 def _apply_detail_payload_to_record(
@@ -719,6 +725,8 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
     record["llm_learning_candidates"] = []
     record[RECORD_JOB_REQUIREMENTS_KEY] = []
     record[RECORD_REQUIREMENT_COVERAGE_KEY] = []
+    record[RECORD_OCCUPATION_ALIGNMENT_KEY] = ""
+    record[RECORD_OCCUPATION_ALIGNMENT_REASON_KEY] = ""
     debug_reason = ""
     llm_elapsed_ms = None
     llm_cost_usd = None
@@ -758,6 +766,10 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         record["llm_learning_candidates"] = []
         record[RECORD_JOB_REQUIREMENTS_KEY] = payload.get("job_requirements") or []
         record[RECORD_REQUIREMENT_COVERAGE_KEY] = payload.get("requirement_coverage") or []
+        record[RECORD_OCCUPATION_ALIGNMENT_KEY] = str(payload.get("occupation_alignment") or "")
+        record[RECORD_OCCUPATION_ALIGNMENT_REASON_KEY] = str(
+            payload.get("occupation_alignment_reason") or ""
+        )
         debug_reason = str(payload.get("debug_reason") or "")
         llm_cost_raw = payload.get("llm_cost_usd")
         llm_cost_usd = None if llm_cost_raw in (None, "") else float(llm_cost_raw)
@@ -798,6 +810,9 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
                     or "(empty)",
                     "eligibility_gate": eligibility_gate["label"],
                     "eligibility_reason": eligibility_gate["reason"],
+                    "occupation_alignment": record[RECORD_OCCUPATION_ALIGNMENT_KEY] or "(none)",
+                    "occupation_alignment_reason": record[RECORD_OCCUPATION_ALIGNMENT_REASON_KEY]
+                    or "(none)",
                     "debug_reason": debug_reason or "(none)",
                 },
             )
@@ -820,6 +835,8 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         "decision": "KEEP" if review["decision"] != "REJECT" else "REJECT",
         RECORD_JOB_REQUIREMENTS_KEY: record[RECORD_JOB_REQUIREMENTS_KEY],
         RECORD_REQUIREMENT_COVERAGE_KEY: record[RECORD_REQUIREMENT_COVERAGE_KEY],
+        RECORD_OCCUPATION_ALIGNMENT_KEY: record[RECORD_OCCUPATION_ALIGNMENT_KEY],
+        RECORD_OCCUPATION_ALIGNMENT_REASON_KEY: record[RECORD_OCCUPATION_ALIGNMENT_REASON_KEY],
         RECORD_LLM_ELAPSED_MS_KEY: llm_elapsed_ms,
         RECORD_LLM_COST_USD_KEY: llm_cost_usd,
         RECORD_LLM_INPUT_TOKENS_KEY: llm_input_tokens,

@@ -53,10 +53,12 @@ from job_hunter_agent.llm_protocol import (
     LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES,
     LLM_ALLOWED_DECISIONS,
     LLM_ALLOWED_GRADES,
+    LLM_ALLOWED_OCCUPATION_ALIGNMENTS,
     LLM_FIT_REVIEW_DEBUG_PROMPT_SHAPE,
     LLM_ALLOWED_TITLE_JUDGMENT_VERDICTS,
     LLM_INVALID_COVERAGE_REQUIREMENT_TYPE,
     LLM_INVALID_COVERAGE_STATUS,
+    LLM_INVALID_OCCUPATION_ALIGNMENT,
     LLM_FIT_REVIEW_PROMPT_SHAPE,
     LLM_JOB_REQUIREMENTS_PROMPT_SHAPE,
     LLM_LEARNING_ONLY_PROMPT_SHAPE,
@@ -76,7 +78,9 @@ from job_hunter_agent.llm_protocol import (
     LLM_PROMPT_LEARNING_PENDING_ONLY,
     LLM_PROMPT_MATCH_PREFERENCES_HEADER,
     LLM_PROMPT_NO_FIT_DECISION_REQUIRED,
+    LLM_PROMPT_OCCUPATION_ALIGNMENT_INTRO,
     LLM_PROMPT_SYSTEM_REVIEW_INTRO,
+    LLM_PROMPT_TARGET_ROLES_HEADER,
     LLM_PROMPT_USE_VISIBLE_STRINGS,
     LLM_REJECTION_SUGGESTIONS_JSON_SHAPE,
     LLM_SECTION_LABEL_CLASSIFICATION_SHAPE,
@@ -321,6 +325,8 @@ class _LLMReviewPayload(BaseModel):
 
 class _LLMFitReviewPayload(BaseModel):
     fit_review: _LLMReviewDecision
+    occupation_alignment: str = ""
+    occupation_alignment_reason: str = ""
     debug_reason: str = ""
     requirement_coverage: list[_LLMRequirementCoverageItem] = Field(default_factory=list)
     job_requirements: list[str] = Field(default_factory=list)
@@ -328,6 +334,8 @@ class _LLMFitReviewPayload(BaseModel):
 
 class _LLMFitReviewDebugPayload(BaseModel):
     fit_review: _LLMReviewDecision
+    occupation_alignment: str = ""
+    occupation_alignment_reason: str = ""
     debug_reason: str = ""
     requirement_coverage: list[_LLMRequirementCoverageDebugItem] = Field(default_factory=list)
     job_requirements: list[str] = Field(default_factory=list)
@@ -407,6 +415,7 @@ REJECTION_SUGGESTIONS_DEFAULT_LINES = _load_managed_prompt_lines(
 )
 REQUIREMENT_COVERAGE_DEFAULT_LINES = _load_managed_prompt_lines("llm_requirement_coverage_defaults")
 FIT_REVIEW_GRADE_DEFAULT_LINES = _load_managed_prompt_lines("llm_fit_review_grade_defaults")
+OCCUPATION_ALIGNMENT_DEFAULT_LINES = _load_managed_prompt_lines("llm_occupation_alignment_defaults")
 
 
 def llm_is_enabled() -> bool:
@@ -418,7 +427,9 @@ def build_profile_prompt_context() -> str:
         KEY_CANDIDATE_CAPABILITIES,
         KEY_CANDIDATE_ELIGIBILITY,
         KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT,
+        KEY_PRIMARY_PATTERNS,
         KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT,
+        KEY_SECONDARY_PATTERNS,
         KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT,
     )
 
@@ -512,6 +523,15 @@ def build_profile_prompt_context() -> str:
         parts.append(LLM_PROMPT_MATCH_PREFERENCES_HEADER)
         parts.extend(f"- {line}" for line in preference_lines)
 
+    target_roles = [str(r).strip() for r in (profile.get(KEY_PRIMARY_PATTERNS) or []) if str(r).strip()]
+    secondary_roles = [
+        str(r).strip() for r in (profile.get(KEY_SECONDARY_PATTERNS) or []) if str(r).strip()
+    ]
+    if target_roles or secondary_roles:
+        parts.append(LLM_PROMPT_TARGET_ROLES_HEADER)
+        parts.append(f"- Target roles: {', '.join(target_roles) or 'none'}")
+        parts.append(f"- Secondary target roles: {', '.join(secondary_roles) or 'none'}")
+
     # star_evidence_text intentionally excluded from fit-scoring prompt.
     # Field is preserved in the runtime profile for future application/CV generation.
     # See docs/ARCHITECTURE.md parked decisions.
@@ -590,6 +610,15 @@ def build_job_requirements_guidance() -> str:
 
 def build_fit_review_grade_guidance() -> str:
     return "\n".join(f"- {line}" for line in FIT_REVIEW_GRADE_DEFAULT_LINES)
+
+
+def build_occupation_alignment_guidance() -> str:
+    parts = [
+        LLM_PROMPT_OCCUPATION_ALIGNMENT_INTRO,
+        f"occupation_alignment must be one of: {', '.join(sorted(LLM_ALLOWED_OCCUPATION_ALIGNMENTS))}.",
+    ]
+    parts.extend(f"- {line}" for line in OCCUPATION_ALIGNMENT_DEFAULT_LINES)
+    return "\n".join(parts)
 
 
 def build_learning_guidance() -> str:
@@ -1181,6 +1210,23 @@ def _normalize_llm_review_text(value: Any, *, max_chars: int) -> str:
     return cleaned[:max_chars]
 
 
+def _normalize_llm_occupation_alignment(value: Any) -> str:
+    """Normalize the LLM's occupation_alignment classification to a validated value or an invalid sentinel.
+
+    occupation_alignment never blocks a KEEP (see has_complete_llm_keep_data) — an invalid or
+    missing classification degrades to LLM_INVALID_OCCUPATION_ALIGNMENT rather than raising, and
+    is treated as a zero-adjustment "needs review" entry by the scoring layer.
+    """
+    cleaned = compact_whitespace(value).lower()
+    if cleaned in LLM_ALLOWED_OCCUPATION_ALIGNMENTS:
+        return cleaned
+    logger.warning(
+        "[LLM][WARN] purpose=fit_review invalid_occupation_alignment occupation_alignment=%r",
+        value,
+    )
+    return LLM_INVALID_OCCUPATION_ALIGNMENT
+
+
 def _require_complete_keep_requirement_coverage(
     fit_review: dict[str, str], requirement_coverage: list[dict[str, Any]]
 ) -> None:
@@ -1267,6 +1313,12 @@ def normalize_llm_review_payload(
                     "decision": decision_to_use,
                     "grade": grade_to_use,
                 },
+                "occupation_alignment": _normalize_llm_occupation_alignment(
+                    value.get("occupation_alignment")
+                ),
+                "occupation_alignment_reason": _normalize_llm_review_text(
+                    value.get("occupation_alignment_reason"), max_chars=300
+                ),
                 "debug_reason": _normalize_llm_review_text(
                     value.get("debug_reason"), max_chars=300
                 ),
@@ -1461,6 +1513,7 @@ def _build_learning_prompt(job_description_text: str, *, fit_review: bool) -> st
                 build_requirement_coverage_guidance(),
                 build_requirement_coverage_debug_guidance() if debug_match_diagnostics else "",
                 build_fit_review_grade_guidance(),
+                build_occupation_alignment_guidance(),
                 build_job_requirements_guidance(),
                 f"Use at most {get_llm_job_requirements_max_items()} job_requirements.",
             ]

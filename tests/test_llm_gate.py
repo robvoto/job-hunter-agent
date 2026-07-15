@@ -103,6 +103,32 @@ def test_fit_review_prompt_debug_match_diagnostics_adds_debug_schema(monkeypatch
     assert "profile_support must contain only actual candidate evidence text" in prompt
 
 
+def test_fit_review_prompt_includes_occupation_alignment_guidance_and_target_roles(monkeypatch):
+    monkeypatch.setattr(
+        llm_gate,
+        "load_profile",
+        lambda: {
+            "candidate_capabilities": [{"name": "stakeholder engagement", "level": "strong"}],
+            "candidate_eligibility": [],
+            "match_preferences": {},
+            "salary_preferences": {},
+            "llm_profile_brief": "",
+            "candidate_profile_tiers": {},
+            "onboarding_settings": {},
+            "target_roles": ["Delivery Manager"],
+            "also_consider_roles": ["Program Manager"],
+        },
+    )
+
+    prompt = llm_gate._build_learning_prompt("Job description", fit_review=True)
+
+    assert '"occupation_alignment":"same|adjacent|different"' in prompt
+    assert "occupation_alignment_reason" in prompt
+    assert "Candidate target roles:" in prompt
+    assert "Delivery Manager" in prompt
+    assert "Program Manager" in prompt
+
+
 def test_learning_only_prompt_retains_learning_guidance():
     prompt = llm_gate._build_learning_prompt("Job description", fit_review=False)
 
@@ -150,6 +176,8 @@ def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
 
     assert payload == {
         "fit_review": {"decision": "KEEP", "grade": "SOLID"},
+        "occupation_alignment": llm_gate.LLM_INVALID_OCCUPATION_ALIGNMENT,
+        "occupation_alignment_reason": "",
         "debug_reason": "",
         "requirement_coverage": [
             {
@@ -232,6 +260,73 @@ def test_normalize_llm_review_payload_debug_reason_is_capped():
     )
 
     assert len(payload["debug_reason"]) <= 300
+
+
+def _keep_payload_with_alignment(**overrides):
+    base = {
+        "fit_review": {"decision": "KEEP", "grade": "STRONG"},
+        "job_requirements": ["Stakeholder engagement"],
+        "requirement_coverage": [
+            {
+                "requirement": "Stakeholder engagement",
+                "status": "supported",
+                "capability_name": "stakeholder engagement",
+                "matched_job_text": "work with stakeholders",
+                "profile_support": ["stakeholder management"],
+            },
+        ],
+    }
+    base.update(overrides)
+    return base
+
+
+@pytest.mark.parametrize("alignment", ["same", "adjacent", "different"])
+def test_normalize_llm_review_payload_accepts_allowed_occupation_alignments(alignment):
+    payload = llm_gate.normalize_llm_review_payload(
+        _keep_payload_with_alignment(
+            occupation_alignment=alignment,
+            occupation_alignment_reason=f"Matches {alignment} classification reasoning.",
+        ),
+        valid_capability_names={"stakeholder engagement": "Stakeholder Engagement"},
+    )
+
+    assert payload["occupation_alignment"] == alignment
+    assert payload["occupation_alignment_reason"] == f"Matches {alignment} classification reasoning."
+
+
+def test_normalize_llm_review_payload_degrades_invalid_occupation_alignment(caplog):
+    with caplog.at_level("WARNING"):
+        payload = llm_gate.normalize_llm_review_payload(
+            _keep_payload_with_alignment(
+                occupation_alignment="totally different career",
+                occupation_alignment_reason="nonsense",
+            ),
+            valid_capability_names={"stakeholder engagement": "Stakeholder Engagement"},
+        )
+
+    assert payload["occupation_alignment"] == llm_gate.LLM_INVALID_OCCUPATION_ALIGNMENT
+    assert "invalid_occupation_alignment" in caplog.text
+
+
+def test_normalize_llm_review_payload_degrades_missing_occupation_alignment():
+    payload = llm_gate.normalize_llm_review_payload(
+        _keep_payload_with_alignment(),
+        valid_capability_names={"stakeholder engagement": "Stakeholder Engagement"},
+    )
+
+    assert payload["occupation_alignment"] == llm_gate.LLM_INVALID_OCCUPATION_ALIGNMENT
+    assert payload["occupation_alignment_reason"] == ""
+
+
+def test_normalize_llm_review_payload_never_rejects_on_occupation_alignment():
+    # A KEEP with invalid occupation_alignment must still succeed — occupation
+    # alignment must never gate KEEP/REJECT, only adjust score downstream.
+    payload = llm_gate.normalize_llm_review_payload(
+        _keep_payload_with_alignment(occupation_alignment="not-a-real-value"),
+        valid_capability_names={"stakeholder engagement": "Stakeholder Engagement"},
+    )
+
+    assert payload["fit_review"]["decision"] == "KEEP"
 
 
 def test_request_learning_payload_uses_single_llm_call(monkeypatch):

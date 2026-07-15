@@ -1,0 +1,15 @@
+{
+  "kind": "system_config",
+  "name": "llm_occupation_alignment_defaults",
+  "version": 1,
+  "updated_at": "2026-07-15",
+  "description": "Managed default guidance for LLM occupation alignment classification behaviour.",
+  "lines": [
+    "Compare the job's title and dominant duties against the candidate's target roles, not against individual skills or tools.",
+    "same: the job title and dominant duties describe the same occupation as one of the candidate's target roles.",
+    "adjacent: the job is a related occupation with meaningful overlap in duties or a natural step from a target role, but is not the same occupation.",
+    "different: the job is a distinct occupation from all of the candidate's target roles, even if some individual skills overlap.",
+    "Base the classification only on job title and dominant duties — do not use requirement coverage, capability matches, or seniority alone to decide alignment.",
+    "occupation_alignment_reason names the target role compared against and the title/duties evidence that drove the same/adjacent/different call."
+  ]
+}

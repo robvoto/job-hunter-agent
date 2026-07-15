@@ -349,6 +349,8 @@ def test_normalize_llm_review_payload_fit_review_shape():
     assert payload == {
         "fit_review": {"decision": "KEEP", "grade": "STRONG"},
         "debug_reason": "",
+        "occupation_alignment": llm_gate.LLM_INVALID_OCCUPATION_ALIGNMENT,
+        "occupation_alignment_reason": "",
         "requirement_coverage": [
             {
                 "requirement": "Strong stakeholder engagement",
@@ -395,6 +397,8 @@ def test_request_learning_payload_uses_fit_review_only_schema(monkeypatch):
     assert payload == {
         "fit_review": {"decision": "KEEP", "grade": "SOLID"},
         "debug_reason": "",
+        "occupation_alignment": llm_gate.LLM_INVALID_OCCUPATION_ALIGNMENT,
+        "occupation_alignment_reason": "",
         "requirement_coverage": [
                 {
                     "requirement": "Stakeholder engagement",

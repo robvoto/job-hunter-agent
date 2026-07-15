@@ -31,6 +31,7 @@ from job_hunter_agent.fit_scoring import (
     eligibility_gate_diagnostics,
     fit_score_and_breakdown_displayed,
     fit_score_displayed,
+    occupation_alignment_diagnostics,
     requirement_fit_diagnostics,
 )
 from job_hunter_agent.global_settings import get_default_country_suffix
@@ -64,6 +65,7 @@ from job_hunter_agent.profile_store import (
     Engagement,
     VALID_ENGAGEMENT_TYPES,
     get_match_levels,
+    get_scoring_rules,
     load_profile,
     normalize_engagement_type_preferences,
 )
@@ -1854,6 +1856,19 @@ def render_job_card(
             eligibility_gate = eligibility_gate_diagnostics(display_record, active_profile)
             summary_items.append(
                 f"<li>Eligibility gate: {safe_html(eligibility_gate['label'])} — {safe_html(str(eligibility_gate['reason'] or ''))}</li>"
+            )
+            occupation_scoring_rules = get_scoring_rules(active_profile)
+            occupation_alignment = occupation_alignment_diagnostics(display_record, occupation_scoring_rules)
+            requirement_fit_points = requirement_fit_diagnostics(display_record, active_profile)[
+                "final_requirement_fit"
+            ]
+            occupation_calculation = (
+                f"{requirement_fit_points} + ({occupation_alignment['adjustment']:+d}) = {fit_points}"
+            )
+            summary_items.append(
+                f"<li>Occupation alignment: {safe_html(occupation_alignment['alignment_label'])} — "
+                f"{safe_html(occupation_alignment['reason'])} "
+                f"(adjustment {occupation_alignment['adjustment']:+d}, {safe_html(occupation_calculation)})</li>"
             )
             llm_elapsed_ms = record.get(RECORD_LLM_ELAPSED_MS_KEY)
             llm_cost_usd = record.get(RECORD_LLM_COST_USD_KEY)

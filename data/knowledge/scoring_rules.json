@@ -1,7 +1,7 @@
 {
   "kind": "system_config",
   "name": "scoring_rules",
-  "version": 11,
+  "version": 12,
   "updated_at": "2026-07-15",
   "description": "Central scoring configuration. Controls how different factors contribute to job fit scoring. Must remain transparent and not contain hidden rejection logic.",
   "calibration_notes": {
@@ -123,6 +123,12 @@
     "contract": 1.0,
     "government": 1.0,
     "freshness": 1.0
+  },
+  "occupation_alignment": {
+    "description": "Deterministic score adjustment applied on top of requirement fit, based on the LLM-classified occupation alignment between the job and the candidate's target roles. The LLM classifies same/adjacent/different only; this file owns the numeric adjustment.",
+    "same": 0,
+    "adjacent": -10,
+    "different": -20
   },
   "deterministic_review_thresholds": {
     "description": "Controls the pre-LLM deterministic KEEP-candidate shortcut in source_learning.deterministic_review_outcome. This shortcut must not reject ambiguous jobs; anything that is not a confident KEEP candidate continues to the full LLM fit review and requirement_coverage before any final KEEP is saved. To calibrate, filter audit_records.json on det_rule and inspect the final review_source and requirement_coverage fields.",

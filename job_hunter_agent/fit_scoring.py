@@ -17,10 +17,12 @@ from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent.paths import UNCERTAINTY_LOG_PATH
 from job_hunter_agent.llm_protocol import (
     LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES,
+    LLM_ALLOWED_OCCUPATION_ALIGNMENTS,
 )
 from job_hunter_agent.profile_store import (
     KEY_CANDIDATE_ELIGIBILITY,
     KEY_CAPABILITY_LEVEL_WEIGHTS,
+    KEY_OCCUPATION_ALIGNMENT,
     KEY_REQUIREMENT_IMPORTANCE_WEIGHTS,
     KEY_REQUIREMENT_STATUS_WEIGHTS,
     CapabilityLevel,
@@ -31,6 +33,8 @@ from job_hunter_agent.record_schema import (
     RECORD_FIT_SCORE_BREAKDOWN_KEY,
     RECORD_FIT_SCORE_KEY,
     RECORD_JOB_REQUIREMENTS_KEY,
+    RECORD_OCCUPATION_ALIGNMENT_KEY,
+    RECORD_OCCUPATION_ALIGNMENT_REASON_KEY,
     RECORD_RUN_STARTED_AT_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
 )
@@ -83,6 +87,16 @@ def _requirement_status_weights(scoring_rules: dict) -> dict[str, float]:
         if key not in weights:
             raise ValueError(f"{KEY_REQUIREMENT_STATUS_WEIGHTS} must define {key!r}")
     return weights
+
+
+def _occupation_alignment_adjustments(scoring_rules: dict) -> dict[str, int]:
+    adjustments = scoring_rules.get(KEY_OCCUPATION_ALIGNMENT)
+    if not isinstance(adjustments, dict) or not adjustments:
+        raise ValueError("occupation_alignment adjustments are required in scoring_rules")
+    for key in LLM_ALLOWED_OCCUPATION_ALIGNMENTS:
+        if key not in adjustments:
+            raise ValueError(f"{KEY_OCCUPATION_ALIGNMENT} must define {key!r}")
+    return adjustments
 
 
 def _normalise_lookup_text(value: str) -> str:
@@ -749,6 +763,66 @@ def _is_location_fit_highlight(text: str) -> bool:
     )
 
 
+def occupation_alignment_diagnostics(record: dict, scoring_rules: dict) -> dict[str, Any]:
+    """Shared occupation alignment diagnostics for logs and debug UI.
+
+    occupation_alignment never blocks scoring: an unclassified or invalid value
+    (missing, or outside LLM_ALLOWED_OCCUPATION_ALIGNMENTS) shows as "needs review"
+    with a zero adjustment rather than raising, per the "do not reject on occupation
+    alignment" rule.
+    """
+    adjustments = _occupation_alignment_adjustments(scoring_rules)
+    alignment = str(record.get(RECORD_OCCUPATION_ALIGNMENT_KEY) or "").strip().lower()
+    reason = compact_whitespace(record.get(RECORD_OCCUPATION_ALIGNMENT_REASON_KEY) or "")
+    is_classified = alignment in LLM_ALLOWED_OCCUPATION_ALIGNMENTS
+    return {
+        "alignment": alignment if is_classified else "",
+        "alignment_label": alignment.title() if is_classified else "Needs review (not classified)",
+        "reason": reason or "No reason provided",
+        "adjustment": int(adjustments[alignment]) if is_classified else 0,
+        "is_classified": is_classified,
+    }
+
+
+def build_occupation_alignment_breakdown(record: dict, scoring_rules: dict) -> List[dict]:
+    occupation = occupation_alignment_diagnostics(record, scoring_rules)
+    return [
+        {
+            "label": f"Occupation alignment: {occupation['alignment_label']}",
+            "value": occupation["adjustment"],
+            "section": "occupation_alignment",
+        }
+    ]
+
+
+def format_occupation_alignment_diagnostics_block(
+    record: dict, final_score: int, profile: Optional[dict] = None
+) -> str:
+    """Format the occupation alignment classification, reason, adjustment, and final
+    score calculation for logs and debug views."""
+
+    active_profile = profile or load_profile()
+    scoring_rules = get_scoring_rules(active_profile)
+    occupation = occupation_alignment_diagnostics(record, scoring_rules)
+    requirement_fit = requirement_fit_diagnostics(record, active_profile)["final_requirement_fit"]
+    hard_block_penalty = int(scoring_rules["fit_breakdown"]["hard_block_penalty"]) * len(
+        hard_block_reasons(record, active_profile)
+    )
+    calculation = f"{requirement_fit} + ({occupation['adjustment']:+d})"
+    if hard_block_penalty:
+        calculation += f" + ({hard_block_penalty:+d} hard blocker)"
+    calculation += f" = {final_score} (clamped 0-100)"
+    return "\n".join(
+        [
+            "  Occupation alignment",
+            f"  Alignment: {occupation['alignment_label']}",
+            f"  Reason: {occupation['reason']}",
+            f"  Adjustment: {occupation['adjustment']:+d}",
+            f"  Final calculation: {calculation}",
+        ]
+    )
+
+
 def build_risk_breakdown(scoring_rules: dict, hard_block_labels: List[str]) -> List[dict]:
     return [
         {
@@ -778,7 +852,11 @@ def fit_score_breakdown(record: dict, profile: Optional[dict] = None) -> List[di
     scoring_rules = get_scoring_rules(active_profile)
     entries = _requirement_fit_entries(record, active_profile, scoring_rules)
     hard_block_labels = hard_block_reasons(record, active_profile)
-    return entries + build_risk_breakdown(scoring_rules, hard_block_labels)
+    return (
+        entries
+        + build_occupation_alignment_breakdown(record, scoring_rules)
+        + build_risk_breakdown(scoring_rules, hard_block_labels)
+    )
 
 
 def has_hard_blockers(record: dict, profile: Optional[dict] = None) -> bool:
