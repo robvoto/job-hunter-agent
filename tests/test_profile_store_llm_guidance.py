@@ -55,6 +55,35 @@ def test_load_profile_drops_legacy_guidance_key(isolated_db):
     assert legacy_key not in loaded
 
 
+def test_load_profile_drops_obsolete_fit_context_fields(isolated_db):
+    from job_hunter_agent.database import db_conn, ensure_user_row
+    from job_hunter_agent.user_context import get_user_id_for_runtime
+
+    user_id = get_user_id_for_runtime()
+    ensure_user_row(user_id)
+    with db_conn() as conn:
+        conn.execute(
+            """INSERT INTO user_profile (user_id, data) VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET data = excluded.data""",
+            (
+                user_id,
+                json.dumps(
+                    {
+                        "".join(["llm_profile", "_brief_mode"]): "manual",
+                        "".join(["llm_profile", "_brief"]): "obsolete prompt text",
+                        "star_" + "evidence_text": "obsolete evidence text",
+                    }
+                ),
+            ),
+        )
+
+    loaded = profile_store.load_profile()
+
+    assert "".join(["llm_profile", "_brief_mode"]) not in loaded
+    assert "".join(["llm_profile", "_brief"]) not in loaded
+    assert "star_" + "evidence_text" not in loaded
+
+
 def test_load_profile_raises_for_non_object_data(isolated_db):
     from job_hunter_agent.database import db_conn, ensure_user_row
     from job_hunter_agent.user_context import get_user_id_for_runtime

@@ -55,7 +55,6 @@ def test_fit_review_prompt_excludes_learning_guidance(monkeypatch):
             "candidate_eligibility": [{"name": "PV clearance", "value": True, "evidence": []}],
             "match_preferences": {},
             "salary_preferences": {},
-            "llm_profile_brief": "",
             "candidate_profile_tiers": {},
             "onboarding_settings": {},
         },
@@ -84,7 +83,6 @@ def test_fit_review_prompt_debug_match_diagnostics_adds_debug_schema(monkeypatch
             "candidate_eligibility": [{"name": "PV clearance", "value": True, "evidence": []}],
             "match_preferences": {},
             "salary_preferences": {},
-            "llm_profile_brief": "",
             "candidate_profile_tiers": {},
             "onboarding_settings": {},
         },
@@ -99,7 +97,7 @@ def test_fit_review_prompt_debug_match_diagnostics_adds_debug_schema(monkeypatch
 
     assert "match_source" in prompt
     assert "matched_profile_term" in prompt
-    assert '"match_source":"capability_name|related_skill|profile_brief|eligibility"' in prompt
+    assert '"match_source":"capability_name|related_skill|eligibility"' in prompt
     assert "profile_support must contain only actual candidate evidence text" in prompt
 
 
@@ -112,7 +110,6 @@ def test_fit_review_prompt_includes_occupation_alignment_guidance_and_target_rol
             "candidate_eligibility": [],
             "match_preferences": {},
             "salary_preferences": {},
-            "llm_profile_brief": "",
             "candidate_profile_tiers": {},
             "onboarding_settings": {},
             "target_roles": ["Delivery Manager"],

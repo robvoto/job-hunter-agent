@@ -141,8 +141,6 @@ KEY_MAX_TARGET = "max_target_patterns"
 KEY_MAX_SECONDARY = "max_secondary_patterns"
 KEY_CV_MAX_PAGES = "cv_max_pages"
 
-KEY_BRIEF_MODE = "llm_profile_brief_mode"
-KEY_BRIEF = "llm_profile_brief"
 KEY_STAR_EVIDENCE = "star_candidate_profile_text"
 KEY_EVIDENCE_TIERS = "candidate_profile_tiers"
 KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT = "primary_candidate_profile_context"
@@ -227,14 +225,11 @@ DEFAULT_CANDIDATE_PROFILE_TIERS = {
 }
 
 DEFAULT_MATCH_LEVELS = normalize_match_levels(list(MATCH_LEVELS))
-
-
-class BriefMode:
-    AUTO = "auto"
-    MANUAL = "manual"
-
-
-DEFAULT_LLM_PROFILE_BRIEF_MODE = BriefMode.AUTO
+_OBSOLETE_PROFILE_KEYS = (
+    "".join(["llm_profile", "_brief_mode"]),
+    "".join(["llm_profile", "_brief"]),
+    "star_" + "evidence_text",
+)
 
 
 class ProfileLoadError(RuntimeError):
@@ -307,8 +302,6 @@ DEFAULT_PROFILE = {
         "short_contract_months": 6,
         "min_contract_months": None,
     },
-    "llm_profile_brief_mode": DEFAULT_LLM_PROFILE_BRIEF_MODE,
-    "llm_profile_brief": "",
     "star_candidate_profile_text": "",
     KEY_EVIDENCE_TIERS: {
         **DEFAULT_CANDIDATE_PROFILE_TIERS,
@@ -684,6 +677,8 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
         raise TypeError("profile must be a dict")
     merged = deep_merge(copy.deepcopy(DEFAULT_PROFILE), profile)
     merged.pop("".join(["llm", "_capability_naming_guidance"]), None)
+    for key in _OBSOLETE_PROFILE_KEYS:
+        merged.pop(key, None)
     merged["search_settings"] = normalize_search_settings(merged.get("search_settings", {}))
     merged["salary_preferences"] = normalize_salary_preferences(
         merged.get("salary_preferences", {})
@@ -693,9 +688,6 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
     )
     merged["scoring_rules"] = normalize_scoring_rules(merged.get("scoring_rules", {}))
     merged["match_levels"] = normalize_match_levels(merged.get("match_levels", []))
-    merged["llm_profile_brief_mode"] = normalize_llm_profile_brief_mode(
-        merged.get("llm_profile_brief_mode", DEFAULT_LLM_PROFILE_BRIEF_MODE)
-    )
     merged[KEY_EVIDENCE_TIERS] = normalize_candidate_profile_tiers(
         merged.get(KEY_EVIDENCE_TIERS, {}),
     )
@@ -1074,13 +1066,6 @@ def normalize_scoring_rules(payload: dict[str, Any] | None) -> dict[str, Any]:
 def normalize_profile_match_levels(payload: list[dict[str, Any]] | None) -> list[dict[str, object]]:
     normalized = normalize_match_levels(payload)
     return normalized or [dict(level) for level in DEFAULT_MATCH_LEVELS]
-
-
-def normalize_llm_profile_brief_mode(value: Any) -> str:
-    normalized = str(value or "").strip().lower()
-    if normalized == BriefMode.MANUAL:
-        return BriefMode.MANUAL
-    return DEFAULT_LLM_PROFILE_BRIEF_MODE
 
 
 _SECTION_BUCKET_TO_TIER = {

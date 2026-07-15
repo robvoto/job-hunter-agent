@@ -66,8 +66,6 @@ from job_hunter_agent.profile_store import (
     DEFAULT_PROFILE,
     ENGAGEMENT_TYPE_DEFAULT_VALUES,
     ENGAGEMENT_TYPE_OPTIONS,
-    KEY_BRIEF,
-    KEY_BRIEF_MODE,
     KEY_CANDIDATE_CAPABILITIES,
     KEY_CANDIDATE_ELIGIBILITY,
     KEY_CV_MAX_PAGES,
@@ -92,7 +90,6 @@ from job_hunter_agent.profile_store import (
     WORK_MODE_PREFERENCE_DEFAULT_VALUES,
     WORK_MODE_PREFERENCE_NONE_LABEL,
     WORK_MODE_PREFERENCE_OPTIONS,
-    BriefMode,
     GovPref,
     load_profile,
     normalize_engagement_type_preferences,
@@ -113,7 +110,6 @@ from job_hunter_agent.run_control import (
 from job_hunter_agent.source_connector import scrape_jobs_direct
 from job_hunter_agent.source_documents import (
     DEFAULT_SOURCE_MATERIALS,
-    build_llm_profile_brief,
     save_source_materials,
 )
 from job_hunter_agent.user_settings import (
@@ -165,6 +161,8 @@ _CAPABILITY_UI_LABEL_KEYS = (
     "add_button_aria_label",
     "related_skills_label",
     "related_skills_summary",
+    "settings_edit_multiple_label",
+    "settings_done_editing_label",
     "settings_select_label",
     "settings_selected_label",
     "settings_select_shown_label",
@@ -1273,34 +1271,6 @@ class SettingsHandler:
     @staticmethod
     def _normalize_profile_patch_for_save(current: dict, patch: dict) -> dict:
         normalized = dict(patch or {})
-        current = current or load_profile()
-        brief_mode = (
-            str(
-                normalized.get(KEY_BRIEF_MODE, current.get(KEY_BRIEF_MODE, BriefMode.AUTO))
-                or BriefMode.AUTO
-            )
-            .strip()
-            .lower()
-        )
-        if brief_mode != BriefMode.MANUAL:
-            brief_mode = BriefMode.AUTO
-        normalized[KEY_BRIEF_MODE] = brief_mode
-
-        if brief_mode == BriefMode.MANUAL:
-            normalized[KEY_BRIEF] = str(normalized.get(KEY_BRIEF) or "").strip()
-        else:
-            auto_brief = build_llm_profile_brief(
-                capability_rules=normalized.get(
-                    KEY_CANDIDATE_CAPABILITIES,
-                    current.get(KEY_CANDIDATE_CAPABILITIES, []),
-                ),
-                eligibility_rules=normalized.get(
-                    KEY_CANDIDATE_ELIGIBILITY,
-                    current.get(KEY_CANDIDATE_ELIGIBILITY, []),
-                ),
-            )
-            normalized[KEY_BRIEF] = auto_brief
-
         if KEY_STAR_EVIDENCE in normalized:
             normalized[KEY_STAR_EVIDENCE] = str(normalized.get(KEY_STAR_EVIDENCE) or "").strip()
         return normalized

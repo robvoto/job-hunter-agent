@@ -119,11 +119,6 @@ def get_llm_job_description_max_chars() -> int:
     return get_llm_prompt_setting_int(KEY_LLM_PROMPT_JOB_DESCRIPTION_MAX_CHARS)
 
 
-def get_llm_profile_brief_max_chars() -> int:
-    """Max profile-brief characters sent to the LLM."""
-    return get_llm_prompt_setting_int(KEY_LLM_PROMPT_PROFILE_BRIEF_MAX_CHARS)
-
-
 def get_llm_capability_rules_max_items() -> int:
     """Max capability rules included in the prompt."""
     return get_llm_prompt_setting_int(KEY_LLM_PROMPT_CAPABILITY_RULES_MAX_ITEMS)

@@ -61,8 +61,6 @@ ONBOARDING_RESET_FIELDS = (
     KEY_CANDIDATE_CAPABILITIES,
     KEY_ONBOARDING_COMPLETE,
     KEY_EVIDENCE_TIERS,
-    "llm_profile_brief",
-    "star_evidence_text",
     "dominant_signal_clusters",
     KEY_MUST_NOT_REQUIRED_SKILLS,
     KEY_CANDIDATE_ELIGIBILITY,
@@ -417,13 +415,6 @@ def run_onboarding(
     )
     patch.update(learning_patch)
 
-    brief = build_llm_profile_brief(
-        capability_rules=patch.get(KEY_CANDIDATE_CAPABILITIES) or [],
-        eligibility_rules=patch.get(KEY_CANDIDATE_ELIGIBILITY) or [],
-    )
-    if brief:
-        patch["llm_profile_brief"] = brief
-
     # --- Apply Search and Engagement Preferences ---
     search_settings = dict(current_profile.get("search_settings") or {})
     learned_match_preferences = dict(patch.get("match_preferences") or {})
@@ -487,40 +478,3 @@ def run_onboarding(
         "extraction_counts": extraction_counts,
         "page_limit_notice": page_limit_notice,
     }
-
-
-def build_llm_profile_brief(
-    capability_rules: Any,
-    eligibility_rules: Any = None,
-) -> str:
-    lines: list[str] = []
-
-    preferred_rules = []
-    rules = capability_rules if isinstance(capability_rules, list) else []
-    for rule in rules:
-        if not isinstance(rule, dict):
-            continue
-        name = str(rule.get("name") or "").strip()
-        level = str(rule.get("level") or "").strip()
-        if not name or not level:
-            continue
-        preferred_rules.append(f"{name} ({level})")
-
-    if preferred_rules:
-        lines.append("Capability profile: " + "; ".join(preferred_rules[:20]))
-
-    eligibility_lines = []
-    eligibility = eligibility_rules if isinstance(eligibility_rules, list) else []
-    for rule in eligibility:
-        if not isinstance(rule, dict):
-            continue
-        name = str(rule.get("name") or "").strip()
-        if not name:
-            continue
-        value = "true" if bool(rule.get("value", True)) else "false"
-        eligibility_lines.append(f"{name} ({value})")
-
-    if eligibility_lines:
-        lines.append("Eligibility profile: " + "; ".join(eligibility_lines[:20]))
-
-    return "\n".join(lines).strip()[:3000]

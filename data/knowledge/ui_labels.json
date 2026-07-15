@@ -1,8 +1,8 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 71,
-  "updated_at": "2026-07-14",
+  "version": 72,
+  "updated_at": "2026-07-15",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
     "remote_label": "Remote",
@@ -50,7 +50,9 @@
     "help_text": "Capabilities are the proven work strengths the agent found in your CV that help it match you to the right jobs. The strength you choose changes how much each capability influences matching, so use Strong for your best evidence and Basic for thinner or older evidence. Related skills are synonyms for the same capability, helping the agent recognize them across different job ads. You can delete any incorrect matches.",
     "add_button_aria_label": "Add capability",
     "related_skills_label": "Related skills",
-    "related_skills_summary": "Related skills ({count})",
+    "related_skills_summary": "View {count} related skills",
+    "settings_edit_multiple_label": "Edit multiple",
+    "settings_done_editing_label": "Done",
     "settings_select_label": "Select",
     "settings_selected_label": "Selected",
     "settings_select_shown_label": "Select shown",

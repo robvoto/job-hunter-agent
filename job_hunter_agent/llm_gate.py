@@ -36,7 +36,6 @@ from job_hunter_agent.global_settings import (
     get_llm_learning_candidates_max_items,
     get_llm_learning_candidates_max_output_tokens,
     get_llm_max_chars,
-    get_llm_profile_brief_max_chars,
     get_llm_raw_output_log_max_chars,
     get_llm_rejection_blocker_suggestions_max_items,
     get_llm_rejection_blocker_suggestions_max_output_tokens,
@@ -62,7 +61,6 @@ from job_hunter_agent.llm_protocol import (
     LLM_FIT_REVIEW_PROMPT_SHAPE,
     LLM_JOB_REQUIREMENTS_PROMPT_SHAPE,
     LLM_LEARNING_ONLY_PROMPT_SHAPE,
-    LLM_PROMPT_CANDIDATE_FIT_BRIEF_HEADER,
     LLM_PROMPT_CAPABILITY_LEVELS_HEADER,
     LLM_PROMPT_CAPABILITY_NAMING_INTRO,
     LLM_PROMPT_CLUSTERS_HEADER,
@@ -434,8 +432,6 @@ def build_profile_prompt_context() -> str:
     )
 
     profile = load_profile()
-    llm_profile_brief = str(profile.get("llm_profile_brief") or "").strip()
-    star_evidence_text = str(profile.get("star_evidence_text") or "").strip()
     evidence_tiers = get_candidate_profile_tiers(profile)
     evidence_weights = get_candidate_profile_tier_weights(profile)
     prompt_settings = _get_llm_prompt_settings()
@@ -451,10 +447,6 @@ def build_profile_prompt_context() -> str:
     )
 
     parts = []
-    if llm_profile_brief:
-        parts.append(LLM_PROMPT_CANDIDATE_FIT_BRIEF_HEADER)
-        parts.append(llm_profile_brief[: get_llm_profile_brief_max_chars()])
-
     if isinstance(capability_rules, list) and capability_rules:
         parts.append(LLM_PROMPT_CAPABILITY_LEVELS_HEADER)
         for rule in capability_rules[: get_llm_capability_rules_max_items()]:
@@ -532,10 +524,6 @@ def build_profile_prompt_context() -> str:
         parts.append(f"- Target roles: {', '.join(target_roles) or 'none'}")
         parts.append(f"- Secondary target roles: {', '.join(secondary_roles) or 'none'}")
 
-    # star_evidence_text intentionally excluded from fit-scoring prompt.
-    # Field is preserved in the runtime profile for future application/CV generation.
-    # See docs/ARCHITECTURE.md parked decisions.
-
     primary_evidence = str(evidence_tiers.get(KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT) or "").strip()
     secondary_evidence = str(
         evidence_tiers.get(KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT) or ""
@@ -596,7 +584,7 @@ def build_requirement_coverage_guidance() -> str:
 
 def build_requirement_coverage_debug_guidance() -> str:
     parts = [
-        'For debug match diagnostics: return match_source exactly as "capability_name", "related_skill", "profile_brief", or "eligibility".',
+        'For debug match diagnostics: return match_source exactly as "capability_name", "related_skill", or "eligibility".',
         "For debug match diagnostics: return matched_profile_term as the exact capability name, related skill, or eligibility fact used.",
         "For debug match diagnostics: profile_name must stay the canonical capability or eligibility name.",
         "For debug match diagnostics: profile_support must contain only actual candidate evidence text, never just the capability name or related skill label.",

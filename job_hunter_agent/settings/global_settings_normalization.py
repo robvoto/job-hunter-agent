@@ -70,7 +70,6 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_OUTPUT_TOKENS,
     KEY_LLM_PROMPT_LEARNING_CANDIDATES_MAX_OUTPUT_TOKENS,
     KEY_LLM_PROMPT_LEARNING_MAX_ITEMS,
-    KEY_LLM_PROMPT_PROFILE_BRIEF_MAX_CHARS,
     KEY_LLM_PROMPT_PROFILE_EXTRACTION_MAX_OUTPUT_TOKENS,
     KEY_LLM_PROMPT_RAW_OUTPUT_LOG_MAX_CHARS,
     KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS,
@@ -321,12 +320,6 @@ def _normalize_llm_prompt_settings(
         minimum=200,
         maximum=10_000,
     )
-    profile_brief_max_chars = _prompt_int(
-        KEY_LLM_PROMPT_PROFILE_BRIEF_MAX_CHARS,
-        KEY_LLM_PROMPT_PROFILE_BRIEF_MAX_CHARS,
-        minimum=200,
-        maximum=10_000,
-    )
     capability_rules_max_items = _prompt_int(
         KEY_LLM_PROMPT_CAPABILITY_RULES_MAX_ITEMS,
         KEY_LLM_PROMPT_CAPABILITY_RULES_MAX_ITEMS,
@@ -426,7 +419,6 @@ def _normalize_llm_prompt_settings(
         KEY_LLM_PROMPT_JOB_DESCRIPTION_MAX_CHARS: job_description_max_chars,
         KEY_LLM_PROMPT_CV_EVIDENCE_JSON_CHARS: cv_evidence_json_chars,
         KEY_LLM_PROMPT_CV_FALLBACK_CHARS: cv_fallback_chars,
-        KEY_LLM_PROMPT_PROFILE_BRIEF_MAX_CHARS: profile_brief_max_chars,
         KEY_LLM_PROMPT_CAPABILITY_RULES_MAX_ITEMS: capability_rules_max_items,
         KEY_LLM_PROMPT_CAPABILITY_RULE_ALIASES_MAX_ITEMS: capability_rule_aliases_max_items,
         KEY_LLM_PROMPT_FIT_GUIDANCE_MAX_CHARS: fit_guidance_max_chars,

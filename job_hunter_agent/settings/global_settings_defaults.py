@@ -76,7 +76,6 @@ KEY_LLM_PROMPT_PROFILE_EXTRACTION_MAX_OUTPUT_TOKENS = "profile_extraction_max_ou
 KEY_LLM_PROMPT_JOB_DESCRIPTION_MAX_CHARS = "job_description_max_chars"
 KEY_LLM_PROMPT_CV_EVIDENCE_JSON_CHARS = "cv_evidence_json_chars"
 KEY_LLM_PROMPT_CV_FALLBACK_CHARS = "cv_fallback_chars"
-KEY_LLM_PROMPT_PROFILE_BRIEF_MAX_CHARS = "profile_brief_max_chars"
 KEY_LLM_PROMPT_CAPABILITY_RULES_MAX_ITEMS = "capability_rules_max_items"
 KEY_LLM_PROMPT_CAPABILITY_RULE_ALIASES_MAX_ITEMS = "capability_rule_aliases_max_items"
 KEY_LLM_PROMPT_FIT_GUIDANCE_MAX_CHARS = "fit_guidance_max_chars"

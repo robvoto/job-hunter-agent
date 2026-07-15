@@ -21,30 +21,6 @@ Company Name | 2020 - 2022
 - Supported backlog refinement and sprint reporting.
 """
 
-
-def test_build_llm_profile_brief_ignores_malformed_capability_rules():
-    brief = source_documents.build_llm_profile_brief(
-        capability_rules=[
-            {"name": "process mapping", "level": "strong", "fit": "core"},
-            None,
-            "bad",
-            {"name": "", "level": "working"},
-        ],
-        eligibility_rules=[
-            {"name": "PV clearance", "value": True, "evidence": ["Baseline Security Clearance"]}
-        ],
-    )
-
-    assert "process mapping (strong)" in brief
-    assert "Eligibility profile:" in brief
-    assert "PV clearance (true)" in brief
-
-
-def test_build_llm_profile_brief_handles_non_list_input():
-    assert source_documents.build_llm_profile_brief(capability_rules="bad") == ""
-    assert source_documents.build_llm_profile_brief(capability_rules=None) == ""
-
-
 def test_run_onboarding_uses_llm_titles_without_parser(monkeypatch):
     captured: dict[str, object] = {}
 

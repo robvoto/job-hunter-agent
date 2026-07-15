@@ -323,8 +323,6 @@ function collectProfile() {
       government: Number(document.getElementById('government_weight').value || 1),
       freshness: Number(document.getElementById('freshness_weight').value || 1),
     },
-    llm_profile_brief_mode: 'auto',
-    llm_profile_brief: '',
     candidate_capabilities: capabilityEditor.collectCapabilityRuleState(),
     candidate_eligibility: clearanceEditor.collectClearanceRuleState(),
     target_roles: toLines(settingsField('target_roles').value),
@@ -385,7 +383,6 @@ function fillForm(profile) {
     _minContractEl.disabled = !(_engagementTypeValues.includes('contract') || _engagementTypeValues.includes('full_time_contract'));
   }
   updateContractChipLabel();
-  document.getElementById('llm_profile_brief').value = profile.llm_profile_brief || '';
   setCurrencyFieldValue('minimum_salary_yearly', profile.salary_preferences?.minimum_salary_yearly ?? 0);
   setCurrencyFieldValue('minimum_daily_rate', profile.salary_preferences?.minimum_daily_rate ?? 0);
   document.getElementById('fit_weight').value = String(profile.preference_weights?.fit);

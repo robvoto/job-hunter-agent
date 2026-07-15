@@ -447,7 +447,6 @@
       "job_description_max_chars": 5000,
       "cv_evidence_json_chars": 12000,
       "cv_fallback_chars": 3000,
-      "profile_brief_max_chars": 2500,
       "capability_rules_max_items": 20,
       "capability_rule_aliases_max_items": 8,
       "fit_guidance_max_chars": 1200,

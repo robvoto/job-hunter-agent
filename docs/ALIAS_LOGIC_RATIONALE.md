@@ -56,7 +56,7 @@ Stored by `normalize_capability_rules` → `derive_job_description_aliases`.
 ## Downstream usage
 
 - **Job matching** (`capability_matrix.py` → `expand_capability_terms`): returns name + all aliases as a flat list of searchable terms. The scorer checks all of them against the job ad.
-- **LLM fit context** (`llm_gate.py` → `build_profile_prompt_context`): formats as `"name: level (alias1, alias2, ...)"` for the fit-scoring prompt.
+- **LLM fit context** (`llm_gate.py` → `build_profile_prompt_context`): formats capabilities as `"name: level, fit (alias1, alias2, ...)"` inside the structured fit-scoring profile context.
 
 ---
 

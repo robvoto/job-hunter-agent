@@ -216,7 +216,7 @@ def test_concurrent_profile_writes_do_not_corrupt_state(isolated_db):
         profile_store.save_profile(
             {
                 **profile_store.DEFAULT_PROFILE,
-                "llm_profile_brief": f"brief-{index}",
+                "star_candidate_profile_text": f"candidate-profile-{index}",
             }
         )
 
@@ -232,7 +232,7 @@ def test_concurrent_profile_writes_do_not_corrupt_state(isolated_db):
     assert row is not None
     data = json.loads(row["data"])
     assert isinstance(data, dict)
-    assert str(data["llm_profile_brief"]).startswith("brief-")
+    assert str(data["star_candidate_profile_text"]).startswith("candidate-profile-")
 
 
 def test_concurrent_job_history_writes_do_not_corrupt_state(isolated_db):

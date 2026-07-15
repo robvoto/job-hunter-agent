@@ -203,7 +203,6 @@
         "job_description_max_chars": "Maximum job-description characters sent to job-requirement extraction.",
         "cv_evidence_json_chars": "Maximum structured CV evidence characters sent to profile extraction.",
         "cv_fallback_chars": "Fallback CV text budget when structured evidence is unavailable or insufficient.",
-        "profile_brief_max_chars": "Maximum candidate profile brief characters sent to fit-review prompts.",
         "capability_rules_max_items": "Maximum capability rules included in LLM fit-review prompts.",
         "capability_rule_aliases_max_items": "Maximum aliases shown per capability rule in LLM fit-review prompts.",
         "fit_guidance_max_chars": "Maximum managed fit-review guidance characters included in prompts.",

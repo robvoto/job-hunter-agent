@@ -8,9 +8,7 @@ LLM_ALLOWED_COVERAGE_IMPORTANCES = frozenset(
 )
 
 LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES = frozenset({"capability", "eligibility"})
-LLM_ALLOWED_COVERAGE_MATCH_SOURCES = frozenset(
-    {"capability_name", "related_skill", "profile_brief", "eligibility"}
-)
+LLM_ALLOWED_COVERAGE_MATCH_SOURCES = frozenset({"capability_name", "related_skill", "eligibility"})
 LLM_INVALID_COVERAGE_REQUIREMENT_TYPE = "invalid"
 LLM_INVALID_COVERAGE_STATUS = "invalid"
 
@@ -32,7 +30,7 @@ LLM_FIT_REVIEW_DEBUG_PROMPT_SHAPE = (
     '"job_requirements":["..."],'
     '"requirement_coverage":[{"requirement":"...","importance":"mandatory|strongly_preferred|preferred|nice_to_have",'
     '"requirement_type":"capability|eligibility","status":"supported|partially_supported|not_shown|mismatch",'
-    '"profile_name":"...","match_source":"capability_name|related_skill|profile_brief|eligibility",'
+    '"profile_name":"...","match_source":"capability_name|related_skill|eligibility",'
     '"matched_profile_term":"...","matched_job_text":"...","profile_support":["..."]}],'
     '"debug_reason":"..."}'
 )
@@ -54,7 +52,6 @@ LLM_LEARNING_ONLY_PROMPT_SHAPE = (
 LLM_JOB_REQUIREMENTS_PROMPT_SHAPE = '{"job_requirements":["..."]}'
 
 
-LLM_PROMPT_CANDIDATE_FIT_BRIEF_HEADER = "AI fit brief:"
 LLM_PROMPT_CAPABILITY_LEVELS_HEADER = "Capability matrix:"
 LLM_PROMPT_ELIGIBILITY_HEADER = "Eligibility matrix:"
 LLM_PROMPT_MATCH_PREFERENCES_HEADER = "Match preferences:"

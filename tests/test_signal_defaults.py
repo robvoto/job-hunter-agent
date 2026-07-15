@@ -68,8 +68,6 @@ def test_competitive_signal_alignment_preserves_managed_labels():
             }
         ],
         KEY_EVIDENCE_TIERS: {},
-        "star_evidence_text": "",
-        "llm_profile_brief": "",
     }
 
     aligned = signal_detection.evaluate_competitive_signal_alignment(signal, profile)
@@ -104,8 +102,6 @@ def test_competitive_signal_alignment_uses_profile_scoring_rules():
             }
         ],
         KEY_EVIDENCE_TIERS: {},
-        "star_evidence_text": "",
-        "llm_profile_brief": "",
     }
 
     aligned = signal_detection.evaluate_competitive_signal_alignment(
@@ -143,8 +139,6 @@ def test_competitive_signal_alignment_preserves_explicit_zero_bonus():
             }
         ],
         KEY_EVIDENCE_TIERS: {},
-        "star_evidence_text": "",
-        "llm_profile_brief": "",
     }
 
     aligned = signal_detection.evaluate_competitive_signal_alignment(

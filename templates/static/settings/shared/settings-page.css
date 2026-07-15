@@ -781,8 +781,6 @@
     .help-drawer summary::-webkit-details-marker { display: none; }
     .help-drawer p { margin: 0; padding: 0 var(--surface-pad-inline-sm) var(--surface-pad-block-sm); color: var(--text-muted); font-size: var(--help-copy-font-size); line-height: var(--help-copy-line-height); }
     textarea.is-readonly { background: var(--bg-muted); color: var(--text-muted); }
-    #llm_profile_brief { min-height: 170px; }
-    #star_evidence_text { min-height: 180px; }
     #target_roles, #also_consider_roles,
     #reject_title_rules, #reject_description_phrase_rules,
     #must_not_require_skills { min-height: 120px; }
@@ -861,8 +859,8 @@
     }
     .capability-grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 12px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px 14px;
       width: 100%;
       min-width: 0;
       align-items: stretch;
@@ -898,11 +896,27 @@
       flex: 1 1 auto;
       min-width: 0;
     }
-    .capability-alias-preview {
+    .capability-alias-row {
       display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px 10px;
+      min-width: 0;
+    }
+    .capability-alias-preview {
+      display: inline-flex;
       flex-wrap: wrap;
       gap: 4px;
-      margin-top: -2px;
+      margin: 0;
+    }
+    .capability-alias-row .capability-alias-drawer {
+      flex: 0 0 auto;
+    }
+    .capability-alias-row .capability-alias-drawer[open] {
+      flex-basis: 100%;
+    }
+    .capability-alias-row .cap-alias-summary {
+      color: var(--state-info-text);
     }
     .capability-card-actions {
       display: flex;

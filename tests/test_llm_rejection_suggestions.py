@@ -162,13 +162,11 @@ def test_build_fit_review_guidance_uses_current_header():
     assert guidance.startswith("Fit review guidance:")
 
 
-def test_build_profile_prompt_context_uses_managed_prompt_settings(monkeypatch):
+def test_build_profile_prompt_context_uses_structured_profile_sources(monkeypatch):
     monkeypatch.setattr(
         llm_gate,
         "load_profile",
         lambda: {
-            "llm_profile_brief": "AI fit brief body",
-            "star_evidence_text": "",
             "candidate_capabilities": [
                 {
                     "name": "Python",
@@ -243,8 +241,6 @@ def test_build_profile_prompt_context_uses_managed_prompt_settings(monkeypatch):
 
     context = llm_gate.build_profile_prompt_context()
 
-    assert "AI fit brief:" in context
-    assert "AI fit brief body" in context
     assert "Capability matrix:" in context
     assert "Python: strong, good (python)" in context
     assert "Yearly target 150000." in context

@@ -476,11 +476,33 @@ def _normalized_aliases(values: List[str]) -> List[str]:
 
 
 def _profile_auxiliary_text(profile: dict) -> str:
-    parts = [
-        profile.get("llm_profile_brief"),
-        profile.get("star_evidence_text"),
-    ]
-    return "\n".join(compact_whitespace(part).lower() for part in parts if compact_whitespace(part))
+    parts: list[str] = []
+
+    for rule in profile.get(KEY_CANDIDATE_CAPABILITIES, []):
+        if not isinstance(rule, dict):
+            continue
+        name = compact_whitespace(rule.get("name")).lower()
+        aliases = [
+            compact_whitespace(alias).lower()
+            for alias in (rule.get("aliases") or [])
+            if compact_whitespace(alias)
+        ]
+        if name:
+            parts.append(" ".join([name, *aliases]).strip())
+
+    for rule in profile.get(KEY_CANDIDATE_ELIGIBILITY, []):
+        if not isinstance(rule, dict):
+            continue
+        name = compact_whitespace(rule.get("name")).lower()
+        evidence = [
+            compact_whitespace(item).lower()
+            for item in (rule.get("evidence") or [])
+            if compact_whitespace(item)
+        ]
+        if name:
+            parts.append(" ".join([name, *evidence]).strip())
+
+    return "\n".join(part for part in parts if part)
 
 
 def evidence_tier_alignment_score(profile: dict, aliases: List[str]) -> float:
