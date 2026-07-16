@@ -6,6 +6,10 @@ import contextvars
 import logging
 import re
 
+HUMAN_LOGGER_NAME = "job_hunter.human"
+TECHNICAL_LOGGER_NAME = "job_hunter.technical"
+HUMAN_LOG_SEPARATOR = "-" * 80
+
 # Console-only: fragments of raw per-stage pipeline trace that duplicate the
 # human-readable per-job summary block. Still written to server.log at INFO
 # for post-run debugging — only the terminal display is suppressed.
@@ -133,6 +137,29 @@ def format_debug_marker(marker: str, fields: dict[str, object]) -> str:
     return format_log_block(f"DEBUG_LOG][{normalized_marker}", fields)
 
 
+def render_board_final_block(
+    source_name: str,
+    *,
+    seen: int,
+    read: int,
+    pages: int,
+    kept: int,
+    rejected: int,
+) -> str:
+    source_label = str(source_name or "UNKNOWN").strip().upper() or "UNKNOWN"
+    return (
+        f"\n{HUMAN_LOG_SEPARATOR}\n"
+        f"BOARD FINAL {source_label}\n"
+        f"Seen: {int(seen)} | Read: {int(read)} | Pages: {int(pages)} | "
+        f"Kept: {int(kept)} | Rejected: {int(rejected)}\n"
+        f"{HUMAN_LOG_SEPARATOR}"
+    )
+
+
+def get_human_logger() -> logging.Logger:
+    return logging.getLogger(HUMAN_LOGGER_NAME)
+
+
 def install_log_handler_filters() -> None:
     root_logger = logging.getLogger()
     for handler in root_logger.handlers:
@@ -161,26 +188,25 @@ def setup_cli_logging() -> None:
             "version": 1,
             "disable_existing_loggers": False,
             "formatters": {
+                "human": {
+                    "format": "%(message)s",
+                },
                 "standard": {
                     "format": "%(asctime)s %(levelname)s %(name)s: %(source_scope_prefix)s%(message)s",
                     "datefmt": "%Y-%m-%d %H:%M:%S",
                 },
-                "console": {
-                    "format": "%(asctime)s  %(source_scope_prefix)s%(message)s",
-                    "datefmt": "%H:%M:%S",
-                },
             },
             "handlers": {
-                "console": {
+                "human_console": {
                     "class": "logging.StreamHandler",
                     "level": "INFO",
-                    "formatter": "console",
+                    "formatter": "human",
                     "stream": "ext://sys.stdout",
                 },
-                "file": {
+                "human_file": {
                     "class": "logging.FileHandler",
                     "level": "INFO",
-                    "formatter": "standard",
+                    "formatter": "human",
                     "filename": str(SERVER_LOG_PATH),
                     "encoding": "utf-8",
                 },
@@ -194,23 +220,15 @@ def setup_cli_logging() -> None:
             },
             "root": {
                 "level": "INFO",
-                "handlers": ["console", "file", "debug_file"],
+                "handlers": ["debug_file"],
+            },
+            "loggers": {
+                HUMAN_LOGGER_NAME: {
+                    "level": "INFO",
+                    "handlers": ["human_console", "human_file"],
+                    "propagate": False,
+                },
             },
         }
     )
     install_log_handler_filters()
-
-    console_handler = next(
-        (
-            h
-            for h in logging.getLogger().handlers
-            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
-        ),
-        None,
-    )
-    if console_handler:
-        console_handler.addFilter(HumanReadableLogFilter())
-        console_handler.addFilter(ConsoleNoiseFilter())
-    for handler in logging.getLogger().handlers:
-        if isinstance(handler, logging.FileHandler) and getattr(handler, "baseFilename", "").endswith("server.log"):
-            handler.addFilter(HumanReadableLogFilter())

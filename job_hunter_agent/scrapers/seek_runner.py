@@ -24,7 +24,6 @@ from playwright.async_api import async_playwright as async_playwright_ctx
 from playwright.sync_api import sync_playwright
 
 import job_hunter_agent.record_schema as rs
-from job_hunter_agent.fit_scoring import fit_score_and_breakdown_displayed
 from job_hunter_agent.global_settings import get_playwright_browser_mode
 from job_hunter_agent.history import finalize_record
 from job_hunter_agent.io_utils import DEBUG_CAPTURE_SOURCE_PAYLOADS, write_source_payload_debug
@@ -32,8 +31,6 @@ from job_hunter_agent.job_quality import detect_broad_engagement_signal
 from job_hunter_agent.job_review_pipeline import (
     ReviewPipelineContext,
     ReviewPipelineHooks,
-    close_job_block,
-    print_job_human_summary,
     review_post_detail_normalized_job,
     review_pre_detail_normalized_job,
 )
@@ -1130,13 +1127,8 @@ def seek_scrape_to_records(
                                 title = str(record.get(rs.RECORD_TITLE_KEY) or "")
                                 company = str(record.get(rs.RECORD_COMPANY_KEY) or "")
                                 _job_decision = outcome.get("decision")
-                                _job_score = None
-                                _job_breakdown = None
 
                                 if _job_decision == "KEEP":
-                                    _job_score, _job_breakdown = fit_score_and_breakdown_displayed(
-                                        record, profile
-                                    )
                                     skill_observations.extend(record_skill_observations)
                                     kept_records.append(record)
                                     logger.info(
@@ -1146,17 +1138,6 @@ def seek_scrape_to_records(
                                         company,
                                         "SEEN_BEFORE" if record.get("seen_before") else "NEW",
                                     )
-
-                                if _job_decision in {"KEEP", "REJECT"}:
-                                    print_job_human_summary(
-                                        record,
-                                        profile,
-                                        elapsed_s=job_elapsed_s or None,
-                                        score=_job_score,
-                                        llm_cost=0.0,
-                                        breakdown=_job_breakdown,
-                                    )
-                                    close_job_block(str(record.get(rs.RECORD_JOB_KEY) or ""))
                         else:
                             # Phase 2: pre-detail checks (fast, no network)
                             pre_decided: list[tuple[int, tuple]] = []
@@ -1189,13 +1170,8 @@ def seek_scrape_to_records(
                                 title = str(record.get(rs.RECORD_TITLE_KEY) or "")
                                 company = str(record.get(rs.RECORD_COMPANY_KEY) or "")
                                 _job_decision = outcome.get("decision")
-                                _job_score = None
-                                _job_breakdown = None
 
                                 if _job_decision == "KEEP":
-                                    _job_score, _job_breakdown = fit_score_and_breakdown_displayed(
-                                        record, profile
-                                    )
                                     skill_observations.extend(record_skill_observations)
                                     kept_records.append(record)
                                     logger.info(
@@ -1205,17 +1181,6 @@ def seek_scrape_to_records(
                                         company,
                                         "SEEN_BEFORE" if record.get("seen_before") else "NEW",
                                     )
-
-                                if _job_decision in {"KEEP", "REJECT"}:
-                                    print_job_human_summary(
-                                        record,
-                                        profile,
-                                        elapsed_s=job_elapsed_s or None,
-                                        score=_job_score,
-                                        llm_cost=0.0,
-                                        breakdown=_job_breakdown,
-                                    )
-                                    close_job_block(str(record.get(rs.RECORD_JOB_KEY) or ""))
 
                         if target_closed:
                             break

@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 import sys
 
-from job_hunter_agent.fit_scoring import fit_score_and_breakdown_displayed
 from job_hunter_agent.global_settings import (
     DEFAULT_SEARCH_SETTINGS,
     KEY_DATE_RANGE_DAYS,
@@ -27,7 +26,6 @@ from job_hunter_agent.io_utils import DEBUG_CAPTURE_SOURCE_PAYLOADS, write_sourc
 from job_hunter_agent.job_review_pipeline import (
     ReviewPipelineContext,
     ReviewPipelineHooks,
-    print_job_human_summary,
     review_post_detail_normalized_job,
     review_pre_detail_normalized_job,
 )
@@ -52,11 +50,7 @@ from job_hunter_agent.record_schema import (
     RECORD_URL_KEY,
     RECORD_WORK_MODE_KEY,
 )
-from job_hunter_agent.run_control import (
-    run_stop_requested,
-    set_run_progress,
-    step_through_enabled,
-)
+from job_hunter_agent.run_control import run_stop_requested, set_run_progress
 from job_hunter_agent.runtime_helpers import CLI_FLAG_DEBUG, has_cli_flag
 from job_hunter_agent.salary import load_salary
 from job_hunter_agent.scrapers.base import BaseJobScraper, normalize_jobspy_record
@@ -289,9 +283,6 @@ class LinkedInScraper(BaseJobScraper):
                     if outcome["decision"] == "KEEP":
                         skill_observations.extend(record_skill_observations)
                         kept_records.append(record)
-                        _li_score, _li_breakdown = fit_score_and_breakdown_displayed(
-                            record, self.profile
-                        )
                         logger.info(
                             "%s KEPT %s @ %s | %s | %s | %s | %s",
                             target_tag,
@@ -302,11 +293,6 @@ class LinkedInScraper(BaseJobScraper):
                             record.get("work_type"),
                             record.get(RECORD_SALARY_KEY) or "N/A",
                         )
-                        print_job_human_summary(
-                            record, self.profile, score=_li_score, breakdown=_li_breakdown
-                        )
-                    elif step_through_enabled() and outcome["decision"] == "REJECT":
-                        print_job_human_summary(record, self.profile)
 
                     if outcome["decision"] != "KEEP":
                         continue

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import re
 import time
+import textwrap
 from dataclasses import dataclass
 from datetime import date
 from typing import Any, Callable, Optional
@@ -15,7 +16,7 @@ from job_hunter_agent import occupation_taxonomy
 logger = logging.getLogger(__name__)
 
 _PIPELINE_LOG_CORE_FIELDS = ("source", "job_key", "title", "company")
-_HUMAN_LOG_SEPARATOR = "-" * 80
+_HUMAN_JOB_SEPARATOR = "═" * 72
 
 # Human-readable translations for internal pipeline reason codes.
 # Codes not listed fall back to the raw code in parentheses.
@@ -62,6 +63,19 @@ def _reason_label(code: str) -> str:
     return f"({code})"
 
 
+def _human_reason_label(code: str) -> str:
+    if not code:
+        return ""
+    base = code.split(":")[0]
+    suffix = code[len(base) :]
+    label = _REASON_LABELS.get(base)
+    if label:
+        if suffix:
+            return f"{label} ({suffix.lstrip(':')} days)"
+        return label
+    return compact_whitespace(code.replace("_", " ")).lower()
+
+
 def _job_tag(source: str, title: str, company: str, job_key: str) -> str:
     src = source.upper() if source else "?"
     name = f'"{title}"' if title else "(no title)"
@@ -95,7 +109,6 @@ from job_hunter_agent.filters import (
 from job_hunter_agent.fit_scoring import (
     build_fit_highlights,
     eligibility_gate_diagnostics,
-    fit_score_and_breakdown_displayed,
     fit_score_and_breakdown_frozen,
     format_occupation_alignment_diagnostics_block,
     format_requirement_fit_diagnostics_block,
@@ -135,6 +148,7 @@ from job_hunter_agent.record_schema import (
     RECORD_COMPETITIVE_SIGNALS_KEY,
     RECORD_CONTENT_REASON_KEY,
     RECORD_DECISION_KEY,
+    RECORD_DECISION_EXPLANATION_KEY,
     RECORD_DESCRIPTION_COMPACTION_KEY,
     RECORD_DESCRIPTION_SOURCE_KEY,
     RECORD_DETAILS_LENGTH_KEY,
@@ -169,6 +183,7 @@ from job_hunter_agent.record_schema import (
     RECORD_POSTED_AGE_DAYS_KEY,
     RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
     RECORD_REJECT_REASON_KEY,
+    RECORD_REVIEW_SOURCE_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
     RECORD_REVIEWED_SIGNAL_MATCHES_KEY,
     RECORD_ROLE_SNAPSHOT_KEY,
@@ -184,7 +199,7 @@ from job_hunter_agent.record_schema import (
 )
 from job_hunter_agent.role_analysis import infer_posting_channel
 from job_hunter_agent.run_control import pause_for_step_through
-from job_hunter_agent.salary_utils import format_salary_display, preferred_salary_display
+from job_hunter_agent.salary_utils import preferred_salary_display
 from job_hunter_agent.score_labels import score_to_tone_class
 from job_hunter_agent.signal_detection import (
     detect_competitive_signals,
@@ -207,14 +222,12 @@ from job_hunter_agent.text_processing import (
     dedupe_preserve_order,
 )
 from job_hunter_agent.runtime_helpers import append_uncertainty_log, build_uncertainty_entry
+from job_hunter_agent.source_registry import get_source_display_label
 from job_hunter_agent.utils import extract_salary
 
 HookFn = Callable[[dict, "ReviewPipelineContext"], None]
 
 
-# Opening separator marks start of each job; closing marks end.
-_SEP_OPEN = "═" * 72
-_SEP_CLOSE = "─" * 72
 _job_start_times: dict[str, float] = {}
 _job_start_costs: dict[str, float] = {}
 
@@ -251,9 +264,131 @@ def _log_title_classification_uncertainty(
     append_uncertainty_log(UNCERTAINTY_LOG_PATH, entry)
 
 
-def close_job_block(job_key: str) -> None:
-    """Print the closing separator for a job block. Called by seek_runner after all output."""
-    logger.info("%s\n", _SEP_CLOSE)
+def _human_result_summary(record: dict[str, Any], decision: str, reason: str) -> str:
+    if decision == "KEEP":
+        score = record.get(RECORD_FIT_SCORE_KEY)
+        grade = str(record.get(RECORD_LLM_FIT_GRADE_KEY) or "").strip().upper()
+        if score is not None and grade:
+            return f"✓ KEPT — Score {score} | Grade {grade}"
+        if score is not None:
+            return f"✓ KEPT — Score {score}"
+        if grade:
+            return f"✓ KEPT — Grade {grade}"
+        return "✓ KEPT"
+
+    summary_map = {
+        "LLM_TITLE_NOT_TARGET": "✗ REJECTED — Title does not match your target roles",
+        "TITLE_NOT_TARGET": "✗ REJECTED — Title does not match your target roles",
+        "TITLE_BAD_KEYWORD": "✗ REJECTED — Title matches a blocked role",
+        "TITLE_EMPTY": "✗ REJECTED — Job title is missing",
+        "ONET_FAR_OCCUPATION": "✗ REJECTED — Title is outside your target role family",
+        "NO_DETAILS": "✗ REJECTED — Job description could not be read",
+        "DETAILS_CHALLENGE_PAGE": "✗ REJECTED — Job description could not be read",
+        "DETAILS_BLOCKED_PAGE": "✗ REJECTED — Job description could not be read",
+        "DETAILS_NAVIGATION_ERROR": "✗ REJECTED — Job description could not be read",
+        "NO_DESCRIPTION_TRUST": "✗ REJECTED — Job description was too weak to review",
+        "CONTENT_REJECT": "✗ REJECTED — Job description failed the content checks",
+        "LLM_REJECT": "✗ REJECTED — Full fit review rejected this role",
+        "DET_REJECT": "✗ REJECTED — Rule review rejected this role",
+        "LLM_ERROR": "✗ REJECTED — Full fit review failed",
+        "LLM_INVALID_REVIEW": "✗ REJECTED — Full fit review returned invalid data",
+        "LLM_UNAVAILABLE": "✗ REJECTED — Full fit review was unavailable",
+        "REVIEW_FAILED_TIMEOUT": "✗ REJECTED — Full fit review timed out",
+        "HARD_BLOCK": "✗ REJECTED — Job has a hard blocker",
+    }
+    base = reason.split(":")[0]
+    return summary_map.get(base, f"✗ REJECTED — {_human_reason_label(reason).capitalize()}")
+
+
+def _decision_explanation(record: dict[str, Any], reason: str, explanation: str) -> str:
+    explicit = compact_whitespace(explanation)
+    if explicit:
+        return explicit
+    stored = compact_whitespace(str(record.get(RECORD_DECISION_EXPLANATION_KEY) or ""))
+    if stored:
+        return stored
+    if reason == "LLM_TITLE_NOT_TARGET":
+        title_judgment = record.get(RECORD_LLM_TITLE_JUDGMENT_KEY) or {}
+        return compact_whitespace(str(title_judgment.get("reason") or ""))
+    if reason == "ONET_FAR_OCCUPATION":
+        onet = record.get(RECORD_ONET_CLASSIFICATION_KEY) or {}
+        return compact_whitespace(str(onet.get("reason") or ""))
+    if reason.startswith("DESC_HARD_BLOCK_RULE"):
+        blockers = record.get(RECORD_HARD_BLOCK_REASONS_KEY) or []
+        if blockers:
+            return f"Blocked by: {compact_whitespace(str(blockers[0]))}"
+    return ""
+
+
+def render_human_job_result(
+    record: dict[str, Any],
+    *,
+    decision: str,
+    reason: str = "",
+    explanation: str = "",
+    grade: str = "",
+    score: int | None = None,
+    elapsed: str = "",
+    llm_cost: str = "",
+) -> str:
+    title = compact_whitespace(str(record.get(RECORD_TITLE_KEY) or "(no title)"))
+    company = compact_whitespace(str(record.get(RECORD_COMPANY_KEY) or ""))
+    source = get_source_display_label(str(record.get("source") or ""))
+    url = _job_url(record)
+    result_summary = _human_result_summary(record, decision, reason)
+    details = _decision_explanation(record, reason, explanation)
+    if decision == "KEEP":
+        if score is None:
+            raw_score = record.get(RECORD_FIT_SCORE_KEY)
+            score = int(raw_score) if raw_score is not None else None
+        if not grade:
+            grade = str(record.get(RECORD_LLM_FIT_GRADE_KEY) or "").strip().upper()
+    lines = [
+        _HUMAN_JOB_SEPARATOR,
+        "",
+        title,
+        company,
+        source,
+        "",
+        result_summary,
+    ]
+    if details:
+        lines.extend(["", "Why:"])
+        for paragraph in textwrap.wrap(details, width=72):
+            lines.append(paragraph)
+    if url:
+        lines.extend(["", url])
+    meta_bits: list[str] = []
+    if elapsed:
+        meta_bits.append(f"Time: {elapsed}")
+    if llm_cost:
+        meta_bits.append(f"LLM cost: {llm_cost}")
+    if meta_bits:
+        lines.extend(["", " | ".join(meta_bits)])
+    lines.extend(["", _HUMAN_JOB_SEPARATOR])
+    return "\n".join(lines)
+
+
+def _finalize_job_result(
+    record: dict[str, Any],
+    context: ReviewPipelineContext,
+    *,
+    reason: str = "",
+    explanation: str = "",
+) -> None:
+    record[RECORD_DECISION_EXPLANATION_KEY] = compact_whitespace(explanation)
+    _finalize(record, context)
+    _pipeline_log(
+        "FINAL_DECISION",
+        record,
+        context.source_name,
+        decision=str(record.get(RECORD_DECISION_KEY) or ""),
+        reason=reason or str(record.get(RECORD_REJECT_REASON_KEY) or ""),
+        explanation=record[RECORD_DECISION_EXPLANATION_KEY],
+        review_source=str(record.get(RECORD_REVIEW_SOURCE_KEY) or ""),
+        grade=str(record.get(RECORD_LLM_FIT_GRADE_KEY) or ""),
+        score=record.get(RECORD_FIT_SCORE_KEY),
+    )
 
 
 def _pipeline_log(stage: str, record: dict, source_name: str = "", **kwargs: Any) -> None:
@@ -265,9 +400,6 @@ def _pipeline_log(stage: str, record: dict, source_name: str = "", **kwargs: Any
     result = str(kwargs.get("result") or "")
     reason = str(kwargs.get("reason") or "")
     decision = str(kwargs.get("decision") or "")
-    source_prefix = _job_source_prefix(source)
-
-    # ── Open a new job block ──────────────────────────────────────────────────
     if stage == "CARD_SEEN":
         _job_start_times[job_key] = time.monotonic()
         _job_start_costs[job_key] = get_session_cost_usd()
@@ -284,67 +416,64 @@ def _pipeline_log(stage: str, record: dict, source_name: str = "", **kwargs: Any
                 },
             )
         )
+        return
+
+    if stage == "TITLE_GATE":
         logger.info(
-            "\n%s\n  %s  @  %s\n  %s | %s\n  %s\n",
-            _SEP_OPEN,
-            title,
-            company,
-            src,
-            job_key,
-            job_url or "(url unavailable)",
+            format_log_block(
+                "PIPELINE][TITLE_GATE",
+                {
+                    "source": source,
+                    "job_key": job_key,
+                    "title": title,
+                    "company": company,
+                    "result": result,
+                    "reason": reason,
+                    **kwargs,
+                },
+            )
         )
         return
 
-    # ── Title gate ────────────────────────────────────────────────────────────
-    if stage == "TITLE_GATE":
-        if result == "REJECT":
-            logger.info(
-                "  %s title: %s\n  %s ✗ REJECTED — title filtered out\n  %s\n%s",
-                source_prefix,
-                _reason_label(reason),
-                source_prefix,
-                _job_time_summary(job_key),
-                _SEP_CLOSE,
-            )
-        elif result == "REVIEW":
-            label = _REASON_LABELS.get(reason.split(":")[0], reason)
-            logger.info("  %s title: %s — needs title review", source_prefix, label)
-        return
-
-    # ── Card gate (pre-description) ───────────────────────────────────────────
     if stage == "CARD_GATE":
-        if result == "REJECT":
-            logger.info(
-                "  %s ✗ REJECTED before reading — %s\n  %s",
-                source_prefix,
-                _reason_label(reason),
-                _job_time_summary(job_key),
+        logger.info(
+            format_log_block(
+                "PIPELINE][CARD_GATE",
+                {
+                    "source": source,
+                    "job_key": job_key,
+                    "title": title,
+                    "company": company,
+                    "result": result,
+                    "reason": reason,
+                    **kwargs,
+                },
             )
+        )
         return
 
-    # ── Final outcome — closing separator printed by seek_runner after score output ──
     if stage == "FINAL_DECISION":
-        start_time = _job_start_times.pop(job_key, None)
-        _job_start_costs.pop(job_key, None)
+        start_time = _job_start_times.get(job_key)
         total_job_ms = int((time.monotonic() - start_time) * 1000) if start_time is not None else 0
-        if decision == "KEEP":
-            grade = str(kwargs.get("grade") or "")
-            review_source = str(kwargs.get("review_source") or "")
-            parts = [f"grade {grade}" if grade else "", review_source]
-            detail = "  |  ".join(p for p in parts if p)
-            logger.info(
-                "  %s ✓ KEPT%s\n  %s",
-                source_prefix,
-                f"  —  {detail}" if detail else "",
-                _job_time_summary(job_key),
+        from job_hunter_agent.logging_utils import get_human_logger
+
+        elapsed = _elapsed(job_key) if start_time is not None else ""
+        llm_cost = _job_cost(job_key) if start_time is not None else ""
+        if llm_cost == "$0.000000":
+            llm_cost = ""
+        get_human_logger().info(
+            render_human_job_result(
+                record,
+                decision=decision,
+                reason=reason,
+                explanation=str(kwargs.get("explanation") or ""),
+                grade=str(kwargs.get("grade") or ""),
+                score=kwargs.get("score"),
+                elapsed=elapsed,
+                llm_cost=llm_cost,
             )
-        elif decision == "REJECT":
-            logger.info(
-                "  %s ✗ REJECTED — %s\n  %s",
-                source_prefix,
-                _reason_label(reason),
-                _job_time_summary(job_key),
-            )
+        )
+        pause_for_step_through(f"{title} @ {company} ({source}) — {decision or reason}")
         logger.info(
             format_log_block(
                 "PIPELINE][FINAL_DECISION",
@@ -373,18 +502,26 @@ def _pipeline_log(stage: str, record: dict, source_name: str = "", **kwargs: Any
         )
         return
 
-    # ── LLM call outcome ──────────────────────────────────────────────────────
     if stage == "LLM_CALL_DONE":
         call = str(kwargs.get("call") or "")
         elapsed_ms = int(kwargs.get("elapsed_ms") or 0)
         payload_source = str(kwargs.get("payload_source") or "llm")
         logger.info(
-            "  %s llm %s: elapsed=%dms  source=%s",
-            source_prefix,
-            call,
-            elapsed_ms,
-            payload_source,
+            format_log_block(
+                "PIPELINE][LLM_CALL_DONE",
+                {
+                    "source": source,
+                    "job_key": job_key,
+                    "title": title,
+                    "company": company,
+                    "call": call,
+                    "elapsed_ms": elapsed_ms,
+                    "payload_source": payload_source,
+                },
+            )
         )
+        _job_start_times.pop(job_key, None)
+        _job_start_costs.pop(job_key, None)
         return
 
     # ── Debug-only: show raw stage data for anything else ─────────────────────
@@ -487,10 +624,6 @@ def _has_job_closed_signal(record: dict) -> bool:
         ):
             return True
     return False
-
-
-def _source_tag(context: ReviewPipelineContext) -> str:
-    return f"[{context.source_name}]"
 
 
 def _call_hook(
@@ -688,10 +821,6 @@ def _apply_preference_result(
 ) -> tuple[bool, str]:
     ok_pref, pref_reason = passes_preference_filters(record, profile)
     if not ok_pref:
-        print(
-            f"{_source_tag(context)} REJECTED (preference gate) "
-            f"[{pref_reason}] {record.get(RECORD_TITLE_KEY)} @ {record.get(RECORD_COMPANY_KEY)}"
-        )
         return False, pref_reason
     return True, "OK"
 
@@ -855,7 +984,6 @@ def review_pre_detail_normalized_job(
     profile = context.profile
     title = str(record.get(RECORD_TITLE_KEY) or "")
     company = str(record.get(RECORD_COMPANY_KEY) or "N/A")
-    source_tag = _source_tag(context)
     skill_observations: list[dict] = []
 
     _pipeline_log("CARD_SEEN", record, context.source_name)
@@ -863,13 +991,13 @@ def review_pre_detail_normalized_job(
     if not record.get(RECORD_JOB_KEY):
         record[RECORD_DECISION_KEY] = "REJECT"
         record[RECORD_REJECT_REASON_KEY] = "NO_JOB_KEY"
-        _finalize(record, context)
+        _finalize_job_result(record, context)
         return _build_outcome(record), record, skill_observations, False
 
     if not record.get(RECORD_URL_KEY):
         record[RECORD_DECISION_KEY] = "REJECT"
         record[RECORD_REJECT_REASON_KEY] = "NO_URL"
-        _finalize(record, context)
+        _finalize_job_result(record, context)
         return _build_outcome(record), record, skill_observations, False
 
     if _has_job_closed_signal(record):
@@ -883,11 +1011,12 @@ def review_pre_detail_normalized_job(
             result="REJECT",
             reason=reject_reason,
         )
-        print(
-            f"{source_tag} REJECTED (closed) [{reject_reason}] {title} @ {company} "
-            "(no longer accepting applications)"
+        _finalize_job_result(
+            record,
+            context,
+            reason=reject_reason,
+            explanation="The listing appears to be closed and no longer accepting applications.",
         )
-        _finalize(record, context)
         return _build_outcome(record), record, skill_observations, False
 
     title_analysis = analyze_title_filters(title, profile)
@@ -948,10 +1077,14 @@ def review_pre_detail_normalized_job(
                     reason=reject_reason,
                     onet_code=onet.matched_occupation_code,
                 )
-                print(f"{source_tag} REJECTED (onet far) [{reject_reason}] {title}")
                 record[RECORD_DECISION_KEY] = "REJECT"
                 record[RECORD_REJECT_REASON_KEY] = reject_reason
-                _finalize(record, context)
+                _finalize_job_result(
+                    record,
+                    context,
+                    reason=reject_reason,
+                    explanation=str(onet.reason or ""),
+                )
                 return _build_outcome(record), record, skill_observations, False
 
             # near or uncertain: cheap title-only LLM check against target/secondary
@@ -991,20 +1124,22 @@ def review_pre_detail_normalized_job(
                     reason=reject_reason,
                     llm_reason=llm_reason,
                 )
-                reason_note = f" — {llm_reason}" if llm_reason else ""
-                print(f"{source_tag} REJECTED (llm title) [{reject_reason}] {title}{reason_note}")
                 record[RECORD_DECISION_KEY] = "REJECT"
                 record[RECORD_REJECT_REASON_KEY] = reject_reason
-                _finalize(record, context)
+                _finalize_job_result(
+                    record,
+                    context,
+                    reason=reject_reason,
+                    explanation=llm_reason,
+                )
                 return _build_outcome(record), record, skill_observations, False
             # match, uncertain, or LLM unavailable/failed: description and LLM decide; treat as potential match
             record[RECORD_TITLE_REASON_KEY] = TITLE_REASON_POTENTIAL_MATCH
         else:
             # TITLE_EMPTY, TITLE_BAD_KEYWORD, user-configured reject_title_rules — hard gates
-            print(f"{source_tag} REJECTED (title) [{title_reason}] {title}")
             record[RECORD_DECISION_KEY] = "REJECT"
             record[RECORD_REJECT_REASON_KEY] = title_reason
-            _finalize(record, context)
+            _finalize_job_result(record, context, reason=title_reason)
             return _build_outcome(record), record, skill_observations, False
 
     job_key = record[RECORD_JOB_KEY]
@@ -1023,7 +1158,6 @@ def review_pre_detail_normalized_job(
             record[RECORD_DECISION_KEY] = "SKIP"
             record[RECORD_REJECT_REASON_KEY] = "DUPLICATE_JOB_KEY"
             _finalize(record, context)
-            print(f"{source_tag} SKIPPED (duplicate job key) {title} @ {company}")
             return _build_outcome(record), record, skill_observations, False
         context.seen_job_keys.add(job_key)
 
@@ -1040,7 +1174,6 @@ def review_pre_detail_normalized_job(
             record[RECORD_DECISION_KEY] = "SKIP"
             record[RECORD_REJECT_REASON_KEY] = "DUPLICATE_URL"
             _finalize(record, context)
-            print(f"{source_tag} SKIPPED (duplicate URL) {title} @ {company}")
             return _build_outcome(record), record, skill_observations, False
         context.seen_urls.add(url)
 
@@ -1061,19 +1194,17 @@ def review_pre_detail_normalized_job(
         reason=card_reason,
     )
     if not ok_card:
-        print(f"{source_tag} REJECTED (card gate) [{card_reason}] {title} @ {company}")
         record[RECORD_DECISION_KEY] = "REJECT"
         record[RECORD_REJECT_REASON_KEY] = card_reason
         record["_obs_card_rejected"] = True
-        _finalize(record, context)
+        _finalize_job_result(record, context, reason=card_reason)
         return _build_outcome(record), record, skill_observations, False
 
     history_entry = context.job_history.get(job_key, {})
     if can_reuse_kept_job(history_entry, record, profile):
         record = apply_kept_job_reuse(record, history_entry)
         _freeze_fit_score_fields(record, profile)
-        _finalize(record, context)
-        print(f"{source_tag} KEPT (history reuse) {title} @ {company}")
+        _finalize_job_result(record, context)
         return _build_outcome(record), record, skill_observations, False
 
     record[RECORD_DECISION_KEY] = "KEEP"
@@ -1087,8 +1218,6 @@ def review_post_detail_normalized_job(
 ) -> tuple[dict, dict, list[dict]]:
     profile = context.profile
     title = str(record.get(RECORD_TITLE_KEY) or "")
-    company = str(record.get(RECORD_COMPANY_KEY) or "N/A")
-    source_tag = _source_tag(context)
     hooks = hooks or ReviewPipelineHooks()
     skill_observations: list[dict] = []
     title_reason = str(record.get(RECORD_TITLE_REASON_KEY) or "")
@@ -1102,7 +1231,7 @@ def review_post_detail_normalized_job(
     if not ok:
         record[RECORD_DECISION_KEY] = "REJECT"
         record[RECORD_REJECT_REASON_KEY] = reason
-        _finalize(record, context)
+        _finalize_job_result(record, context, reason=reason)
         return _build_outcome(record), record, skill_observations
 
     _apply_source_metadata_to_record(record, details_text)
@@ -1114,11 +1243,7 @@ def review_post_detail_normalized_job(
     if not ok:
         record[RECORD_DECISION_KEY] = "REJECT"
         record[RECORD_REJECT_REASON_KEY] = reason
-        _finalize(record, context)
-        print(f"{source_tag} REJECTED (content) [{reason}] {title} @ {company}")
-        _pipeline_log(
-            "FINAL_DECISION", record, context.source_name, decision="REJECT", reason=reason
-        )
+        _finalize_job_result(record, context, reason=reason)
         return _build_outcome(record), record, skill_observations
 
     _apply_competitive_signal_enrichment(record, details_text, profile)
@@ -1127,14 +1252,7 @@ def review_post_detail_normalized_job(
     if not ok:
         record[RECORD_DECISION_KEY] = "REJECT"
         record[RECORD_REJECT_REASON_KEY] = reason
-        _finalize(record, context)
-        print(
-            f"{source_tag} REJECTED (hard block) [{reason}] {title} @ {company} | "
-            f"{'; '.join(record.get(RECORD_HARD_BLOCK_REASONS_KEY) or [])}"
-        )
-        _pipeline_log(
-            "FINAL_DECISION", record, context.source_name, decision="REJECT", reason=reason
-        )
+        _finalize_job_result(record, context, reason=reason)
         return _build_outcome(record), record, skill_observations
 
     skill_observations = _apply_learning_signal_enrichment(record, details_text, profile)
@@ -1145,10 +1263,7 @@ def review_post_detail_normalized_job(
     if not ok:
         record[RECORD_DECISION_KEY] = "REJECT"
         record[RECORD_REJECT_REASON_KEY] = reason
-        _finalize(record, context)
-        _pipeline_log(
-            "FINAL_DECISION", record, context.source_name, decision="REJECT", reason=reason
-        )
+        _finalize_job_result(record, context, reason=reason)
         return _build_outcome(record), record, skill_observations
 
     _call_hook(hooks, "after_preference_filters", record, context)
@@ -1170,7 +1285,7 @@ def review_post_detail_normalized_job(
                     "source": context.source_name,
                     "job_key": record.get(RECORD_JOB_KEY, ""),
                     "title": title,
-                    "company": company,
+                    "company": record.get(RECORD_COMPANY_KEY, "N/A"),
                     "purpose": llm_exc.purpose,
                     "model": llm_exc.model,
                     "error_type": type(llm_exc).__name__,
@@ -1184,10 +1299,7 @@ def review_post_detail_normalized_job(
         record["_obs_llm_error"] = True
         record[RECORD_DECISION_KEY] = "REJECT"
         record[RECORD_REJECT_REASON_KEY] = _reject_reason
-        _finalize(record, context)
-        _pipeline_log(
-            "FINAL_DECISION", record, context.source_name, decision="REJECT", reason=_reject_reason
-        )
+        _finalize_job_result(record, context, reason=_reject_reason)
         return _build_outcome(record), record, skill_observations
     except LLMReviewValidationError as llm_exc:
         _llm_elapsed_ms = int((time.monotonic() - _llm_t0) * 1000)
@@ -1198,7 +1310,7 @@ def review_post_detail_normalized_job(
                     "source": context.source_name,
                     "job_key": record.get(RECORD_JOB_KEY, ""),
                     "title": title,
-                    "company": company,
+                    "company": record.get(RECORD_COMPANY_KEY, "N/A"),
                     "purpose": "fit_review",
                     "error_type": type(llm_exc).__name__,
                     "error_message": str(llm_exc),
@@ -1210,14 +1322,7 @@ def review_post_detail_normalized_job(
         record["_obs_llm_error"] = True
         record[RECORD_DECISION_KEY] = "REJECT"
         record[RECORD_REJECT_REASON_KEY] = "LLM_INVALID_REVIEW"
-        _finalize(record, context)
-        _pipeline_log(
-            "FINAL_DECISION",
-            record,
-            context.source_name,
-            decision="REJECT",
-            reason="LLM_INVALID_REVIEW",
-        )
+        _finalize_job_result(record, context, reason="LLM_INVALID_REVIEW")
         return _build_outcome(record), record, skill_observations
     except Exception as llm_exc:
         _llm_elapsed_ms = int((time.monotonic() - _llm_t0) * 1000)
@@ -1233,7 +1338,7 @@ def review_post_detail_normalized_job(
                     "source": context.source_name,
                     "job_key": record.get(RECORD_JOB_KEY, ""),
                     "title": title,
-                    "company": company,
+                    "company": record.get(RECORD_COMPANY_KEY, "N/A"),
                     "purpose": "fit_review",
                     "model": "",
                     "error_type": type(llm_exc).__name__,
@@ -1248,21 +1353,13 @@ def review_post_detail_normalized_job(
         record[RECORD_REJECT_REASON_KEY] = "LLM_UNAVAILABLE" if no_provider_key else "LLM_ERROR"
         if not no_provider_key:
             record["_obs_llm_error"] = True
-        _finalize(record, context)
-        _pipeline_log(
-            "FINAL_DECISION",
-            record,
-            context.source_name,
-            decision="REJECT",
-            reason=record[RECORD_REJECT_REASON_KEY],
-        )
+        _finalize_job_result(record, context, reason=record[RECORD_REJECT_REASON_KEY])
         return _build_outcome(record), record, skill_observations
 
     record.update(fit_eval)
     record[RECORD_JOB_REQUIREMENTS_KEY] = record.get(RECORD_JOB_REQUIREMENTS_KEY) or []
 
     if record[RECORD_DECISION_KEY] == "REJECT":
-        print(f"{source_tag} REJECTED ({record['review_source']}) {title} @ {company}")
         record[RECORD_REJECT_REASON_KEY] = (
             "LLM_REJECT" if record["review_source"] == "llm" else "DET_REJECT"
         )
@@ -1272,16 +1369,7 @@ def review_post_detail_normalized_job(
                 record.get("llm_learning_candidates") or [],
             )
         )
-        _finalize(record, context)
-        _pipeline_log(
-            "FINAL_DECISION",
-            record,
-            context.source_name,
-            decision="REJECT",
-            reason=record[RECORD_REJECT_REASON_KEY],
-            review_source=record.get("review_source", ""),
-            grade=record.get(RECORD_LLM_FIT_GRADE_KEY, ""),
-        )
+        _finalize_job_result(record, context, reason=record[RECORD_REJECT_REASON_KEY])
         return _build_outcome(record), record, skill_observations
 
     _freeze_fit_score_fields(record, profile)
@@ -1293,157 +1381,5 @@ def review_post_detail_normalized_job(
     record.pop("skill_observations", None)
     record.pop("ad_learning_signals", None)
     record.pop("llm_learning_candidates", None)
-    _finalize(record, context)
-    print(
-        f"{source_tag} KEPT {title} @ {company} | "
-        f"{record.get('posted')} | {record.get('location')} | {record.get('work_type')} | "
-        f"{format_salary_display(str(record.get(RECORD_SALARY_KEY) or 'N/A'), work_type=str(record.get(RECORD_WORK_TYPE_KEY) or ''))}"
-    )
-    _pipeline_log(
-        "FINAL_DECISION",
-        record,
-        context.source_name,
-        decision="KEEP",
-        review_source=record.get("review_source", ""),
-        grade=record.get(RECORD_LLM_FIT_GRADE_KEY, ""),
-    )
+    _finalize_job_result(record, context)
     return _build_outcome(record), record, skill_observations
-
-
-# ─── Human-readable per-job summary ──────────────────────────────────────────
-
-
-def print_job_human_summary(
-    record: dict,
-    profile: dict,
-    elapsed_s: float = 0.0,
-    score: int | None = None,
-    llm_cost: float = 0.0,
-    breakdown: list | None = None,
-) -> None:
-    """Single curated block printed to stdout at the end of every job's processing.
-
-    All structured machine logs still emit independently. This is the human view.
-    """
-    from job_hunter_agent.occupation_taxonomy import RESULT_FAR, RESULT_UNCERTAIN
-
-    title = str(record.get(RECORD_TITLE_KEY) or "(no title)")
-    company = str(record.get(RECORD_COMPANY_KEY) or "")
-    source = str(record.get("source") or "").upper()
-    decision = str(record.get(RECORD_DECISION_KEY) or "")
-    reject_reason = str(record.get(RECORD_REJECT_REASON_KEY) or "")
-    title_reason = str(record.get(RECORD_TITLE_REASON_KEY) or "")
-
-    targets = [str(r).strip() for r in (profile.get("target_roles") or []) if str(r).strip()]
-    also = [str(r).strip() for r in (profile.get("also_consider_roles") or []) if str(r).strip()]
-    target_str = ", ".join(targets[:4]) or "(not set)"
-    also_str = "  |  also: " + ", ".join(also[:3]) if also else ""
-
-    lines: list[str] = [
-        "",
-        _HUMAN_LOG_SEPARATOR,
-        f"JOB   {title} @ {company}",
-        f"BOARD {source} | {record.get(RECORD_JOB_KEY, '')}",
-    ]
-    job_url = _job_url(record)
-    if job_url:
-        lines.append(f"URL   {job_url}")
-    lines.extend(
-        [
-            f"TARGET {target_str}{also_str}",
-            _HUMAN_LOG_SEPARATOR,
-        ]
-    )
-
-    # ── Title gate ────────────────────────────────────────────────────────────
-    if title_reason in {"TITLE_EMPTY", "TITLE_BAD_KEYWORD"}:
-        lines.append(f"  [✗] Title rejected  ({_reason_label(title_reason)})")
-    elif reject_reason == "LLM_TITLE_NOT_TARGET":
-        llm_judgment = record.get(RECORD_LLM_TITLE_JUDGMENT_KEY) or {}
-        llm_reason = str(llm_judgment.get("reason") or "")
-        note = f"  ({llm_reason})" if llm_reason else ""
-        lines.append(f"  [✗] Title not in target roles  →  LLM judged no match{note}")
-    elif title_reason == "TITLE_NOT_TARGET":
-        onet = record.get(RECORD_ONET_CLASSIFICATION_KEY) or {}
-        onet_result = str(onet.get("result") or "")
-        onet_code = str(onet.get("matched_occupation_code") or "—")
-        onet_src = str(onet.get("reason") or "")
-        if onet_result == RESULT_FAR:
-            lines.append(f"  [✗] Title not in target roles  →  occupation too far ({onet_code})")
-        elif onet_result == RESULT_UNCERTAIN:
-            lines.append(
-                f"  [?] Title not in target roles  →  ONET uncertain ({onet_src}), description decides"
-            )
-        else:
-            lines.append(
-                f"  [?] Title not in target roles  →  ONET near ({onet_code}), description decides"
-            )
-    elif title_reason == TITLE_REASON_POTENTIAL_MATCH:
-        lines.append("  [?] Title is a potential match  →  description decides")
-    elif title_reason == "OK":
-        lines.append("  [✓] Title matched your target roles")
-
-    # ── Description fetch ─────────────────────────────────────────────────────
-    details_status = str(record.get(RECORD_DETAILS_STATUS_KEY) or "")
-    details_length = int(record.get(RECORD_DETAILS_LENGTH_KEY) or 0)
-    fetch_ms = int(record.get("_obs_detail_fetch_ms") or 0)
-    if details_length:
-        fetch_note = f"  ({fetch_ms / 1000:.1f}s)" if fetch_ms else ""
-        lines.append(f"  [✓] Description fetched  {details_length:,} chars{fetch_note}")
-    elif details_status and details_status not in {"", "ok"}:
-        lines.append(f"  [✗] Description {details_status}")
-
-    # ── Content / hard blocks ─────────────────────────────────────────────────
-    hard_blocks = list(record.get(RECORD_HARD_BLOCK_REASONS_KEY) or [])
-    content_reason = str(record.get(RECORD_CONTENT_REASON_KEY) or "")
-    if hard_blocks:
-        blocks_str = "; ".join(str(b) for b in hard_blocks[:2])
-        lines.append(f"  [✗] Hard blocked: {blocks_str}")
-    elif content_reason and content_reason not in {"OK", ""}:
-        lines.append(f"  [✗] Content rejected  ({content_reason})")
-    elif details_length:
-        lines.append("  [✓] Content passed, no hard blockers")
-
-    # ── Review outcome ────────────────────────────────────────────────────────
-    review_source = str(record.get("review_source") or "")
-    llm_grade = str(record.get(RECORD_LLM_FIT_GRADE_KEY) or "")
-    if review_source:
-        src_label = {"rule": "deterministic rule", "llm": "LLM", "cache": "LLM (cached)"}.get(
-            review_source, review_source
-        )
-        grade_note = f" · {llm_grade}" if llm_grade else ""
-        cost_note = f"  (LLM: ${llm_cost:.4f})" if llm_cost > 0.00005 else ""
-        if decision == "KEEP":
-            lines.append(f"  [✓] Review: KEEP{grade_note}  ·  via {src_label}{cost_note}")
-        else:
-            lines.append(f"  [✗] Review: REJECT{grade_note}  ·  via {src_label}{cost_note}")
-    elif reject_reason == "REVIEW_FAILED_TIMEOUT":
-        cost_note = f"  (LLM: ${llm_cost:.4f})" if llm_cost > 0.00005 else ""
-        lines.append(f"  [~] Not reviewed — LLM timed out. Will retry next run.{cost_note}")
-    elif reject_reason == "LLM_ERROR":
-        cost_note = f"  (LLM: ${llm_cost:.4f})" if llm_cost > 0.00005 else ""
-        lines.append(f"  [!] LLM review failed (API error){cost_note}")
-    elif reject_reason == "LLM_UNAVAILABLE":
-        cost_note = f"  (LLM: ${llm_cost:.4f})" if llm_cost > 0.00005 else ""
-        lines.append(f"  [~] LLM review unavailable — no provider key configured{cost_note}")
-
-    # ── Score breakdown ───────────────────────────────────────────────────────
-    if decision == "KEEP" and breakdown:
-        from job_hunter_agent.score_labels import format_score_breakdown_console
-
-        lines.append("")
-        lines.extend(format_score_breakdown_console(breakdown))
-
-    # ── Final line ────────────────────────────────────────────────────────────
-    time_note = f"  ·  {elapsed_s:.1f}s" if elapsed_s else ""
-    cost_line = f"  ·  LLM: ${llm_cost:.4f}" if llm_cost > 0.00005 else ""
-    if decision == "KEEP":
-        score_note = f"  ·  score {score}/100" if score is not None else ""
-        lines.append(f"  ✓  KEPT{score_note}{time_note}{cost_line}")
-    else:
-        lines.append(f"  ✗  REJECTED — {_reason_label(reject_reason)}{time_note}{cost_line}")
-    lines.append(_HUMAN_LOG_SEPARATOR)
-
-    logger.info("\n".join(lines))
-
-    pause_for_step_through(f"{title} @ {company} ({source}) — {decision or reject_reason}")

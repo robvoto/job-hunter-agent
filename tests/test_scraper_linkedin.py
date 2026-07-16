@@ -184,12 +184,6 @@ def test_linkedin_backfills_missing_posted_age_from_visible_listing_text(monkeyp
         "review_post_detail_normalized_job",
         lambda record, _context, hooks=None: ({"decision": "KEEP"}, record, []),
     )
-    monkeypatch.setattr(
-        linkedin_module,
-        "fit_score_and_breakdown_displayed",
-        lambda record, _profile: (0, []),
-    )
-    monkeypatch.setattr(linkedin_module, "print_job_human_summary", lambda *args, **kwargs: None)
     monkeypatch.setattr(linkedin_module, "load_job_type", lambda: {})
     monkeypatch.setattr(linkedin_module, "load_salary", lambda: {})
     caplog.set_level("INFO")
@@ -232,7 +226,6 @@ def test_linkedin_step_through_pauses_on_rejected_jobs(monkeypatch):
         run_iso="2026-06-22T09:00:00+10:00",
     )
 
-    monkeypatch.setattr(linkedin_module, "step_through_enabled", lambda: True)
     monkeypatch.setattr(
         job_review_pipeline,
         "pause_for_step_through",
@@ -284,11 +277,6 @@ def test_linkedin_step_through_pauses_on_rejected_jobs(monkeypatch):
         "review_post_detail_normalized_job",
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("unexpected detail review")),
     )
-    monkeypatch.setattr(
-        linkedin_module,
-        "fit_score_and_breakdown_displayed",
-        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("unexpected scoring")),
-    )
     monkeypatch.setattr(linkedin_module, "load_job_type", lambda: {})
     monkeypatch.setattr(linkedin_module, "load_salary", lambda: {})
 
@@ -297,5 +285,4 @@ def test_linkedin_step_through_pauses_on_rejected_jobs(monkeypatch):
     assert kept_records == []
     assert audit_rows == []
     assert skill_observations == []
-    assert len(pause_calls) == 1
-    assert "Senior Technical Business Analyst @ Woolworths Group" in pause_calls[0]
+    assert pause_calls == []

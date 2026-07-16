@@ -106,3 +106,18 @@ def test_format_debug_marker_uses_debug_log_prefix():
     assert marker.startswith("[DEBUG_LOG][JOB_START]")
     assert "source  = LINKEDIN" in marker
     assert "job_key = linkedin:1" in marker
+
+
+def test_render_board_final_block_uses_human_summary_layout():
+    block = logging_utils.render_board_final_block(
+        "apsjobs",
+        seen=7,
+        read=5,
+        pages=1,
+        kept=2,
+        rejected=5,
+    )
+
+    assert "BOARD FINAL APSJOBS" in block
+    assert "Seen: 7 | Read: 5 | Pages: 1 | Kept: 2 | Rejected: 5" in block
+    assert block.count(logging_utils.HUMAN_LOG_SEPARATOR) == 2

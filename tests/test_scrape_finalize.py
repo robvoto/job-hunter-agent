@@ -716,10 +716,14 @@ def test_print_run_summary_file_and_stderr_use_single_visible_summary_block(
     assert caplog.text.count("Run complete") == 0
 
 
-def test_log_source_final_stats_emits_one_block_per_source(caplog):
-    import logging as _logging
+def test_log_source_final_stats_emits_one_block_per_source(monkeypatch):
+    messages: list[str] = []
 
-    caplog.set_level(_logging.INFO)
+    class _FakeHumanLogger:
+        def info(self, message: str) -> None:
+            messages.append(str(message))
+
+    monkeypatch.setattr(scrape_finalize, "get_human_logger", lambda: _FakeHumanLogger())
 
     scrape_finalize._log_source_final_stats(
         {
@@ -737,10 +741,10 @@ def test_log_source_final_stats_emits_one_block_per_source(caplog):
         }
     )
 
-    assert caplog.text.count("BOARD FINAL") == 2
-    assert "BOARD FINAL SEEK" in caplog.text
-    assert "BOARD FINAL LINKEDIN" in caplog.text
-    assert "Seen: 3 | Read: 2 | Pages: 2 | Kept: 1 | Rejected: 2" in caplog.text
+    assert len(messages) == 2
+    assert "BOARD FINAL SEEK" in messages[0]
+    assert "BOARD FINAL LINKEDIN" in messages[1]
+    assert "Seen: 3 | Read: 2 | Pages: 2 | Kept: 1 | Rejected: 2" in messages[0]
 
 
 def test_build_source_breakdown_keeps_enabled_sources_with_zero_counts():

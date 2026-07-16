@@ -19,6 +19,7 @@ export const JobHunterCapabilityEditor = (function () {
   let expandedCapabilityRows = new Set();
   let selectedCapabilityRows = new Set();
   let visibleCapabilityRowIndices = [];
+  let capabilityBulkEditMode = false;
 
   function formatLabel(template, values = {}) {
     return String(template || '').replace(/\{(\w+)\}/g, (_, key) => {
@@ -132,15 +133,23 @@ export const JobHunterCapabilityEditor = (function () {
   function renderCapabilityToolbar(selectedCount) {
     const copy = document.getElementById('capability_matrix_copy');
     if (copy) {
-      copy.textContent = formatLabel(capabilityLabels.settings_selected_copy, { count: selectedCount });
+      copy.textContent = capabilityBulkEditMode
+        ? formatLabel(capabilityLabels.settings_selected_copy, { count: selectedCount })
+        : '';
     }
     const actions = document.getElementById('capability_matrix_actions');
     if (!actions) return;
-    actions.innerHTML = `
-      <button class="btn-add" id="add_capability_rule" type="button" aria-label="${escapeHtml(capabilityLabels.add_button_aria_label)}" title="${escapeHtml(capabilityLabels.add_button_aria_label)}">+</button>
-      <button class="btn btn-secondary btn-compact-action" type="button" data-select-visible-capabilities="true"${visibleCapabilityRowIndices.length ? '' : ' disabled'}>Select all</button>
+    const bulkActions = capabilityBulkEditMode ? `
+      <button class="btn btn-secondary btn-compact-action" type="button" data-select-visible-capabilities="true"${visibleCapabilityRowIndices.length ? '' : ' disabled'}>${escapeHtml(capabilityLabels.settings_select_shown_label)}</button>
       <button class="btn btn-secondary btn-compact-action" type="button" data-clear-capability-selection="true"${selectedCount ? '' : ' disabled'}>${escapeHtml(capabilityLabels.settings_clear_selection_label)}</button>
       <button class="btn btn-secondary btn-compact-action" type="button" data-remove-selected-capabilities="true"${selectedCount ? '' : ' disabled'}>${escapeHtml(capabilityLabels.settings_remove_selected_label)}</button>
+      <button class="btn btn-secondary btn-compact-action" type="button" data-exit-capability-bulk-edit="true">${escapeHtml(capabilityLabels.settings_done_editing_label)}</button>
+    ` : `
+      <button class="btn btn-secondary btn-compact-action" type="button" data-enter-capability-bulk-edit="true">${escapeHtml(capabilityLabels.settings_edit_multiple_label)}</button>
+    `;
+    actions.innerHTML = `
+      <button class="btn-add" id="add_capability_rule" type="button" aria-label="${escapeHtml(capabilityLabels.add_button_aria_label)}" title="${escapeHtml(capabilityLabels.add_button_aria_label)}">+</button>
+      ${bulkActions}
     `;
   }
 
@@ -237,11 +246,6 @@ export const JobHunterCapabilityEditor = (function () {
                   <span class="cap-alias-chip-label">${escapeHtml(alias)}</span>
                 </span>
               `).join('')}
-              ${aliasCount > previewAliases.length ? `
-                <span class="cap-alias-chip cap-alias-chip--preview cap-alias-chip--more" title="${escapeHtml(formatLabel(capabilityLabels.related_skills_summary, { count: aliasCount }))}">
-                  <span class="cap-alias-chip-label">+${escapeHtml(String(aliasCount - previewAliases.length))} more</span>
-                </span>
-              ` : ''}
             </div>
           ` : '';
           const aliasChips = aliases.map(alias => `
@@ -250,6 +254,17 @@ export const JobHunterCapabilityEditor = (function () {
               <button class="cap-alias-chip-remove" type="button" data-remove-capability-alias="${index}" data-capability-alias="${escapeHtml(alias)}" aria-label="${escapeHtml(capabilityLabels.remove_related_skill_aria_label)}" title="${escapeHtml(capabilityLabels.remove_related_skill_aria_label)}">&times;</button>
             </span>
           `).join('');
+          const aliasRowHtml = aliasCount ? `
+            <div class="capability-alias-row">
+              ${aliasPreviewHtml}
+              <details class="capability-alias-drawer"${expandedCapabilityRows.has(index) ? ' open' : ''}>
+                <summary class="cap-alias-summary">
+                  <span class="capability-summary-label">${escapeHtml(formatLabel(capabilityLabels.related_skills_summary, { count: aliasCount }))}</span>
+                </summary>
+                <div class="cap-alias-chips" aria-label="${escapeHtml(capabilityLabels.related_skills_label)}">${aliasChips}</div>
+              </details>
+            </div>
+          ` : '';
           const meterLevels = ['basic', 'working', 'strong']
             .filter(level => capabilityLevels.includes(level));
           const selectedStrengthIndex = Math.max(0, meterLevels.indexOf(rule.level));
@@ -279,7 +294,7 @@ export const JobHunterCapabilityEditor = (function () {
                          value="${escapeHtml(titleCaseName)}"
                          placeholder="e.g. Agile Delivery">
                 </div>
-                ${aliasPreviewHtml}
+                ${aliasRowHtml}
                 <div class="cap-strength">
                   <div class="capability-strength-meter ${escapeHtml(selectedStrengthMeta.tone || '')}"
                        role="radiogroup"
@@ -292,16 +307,6 @@ export const JobHunterCapabilityEditor = (function () {
                       <span>${escapeHtml(selectedStrengthMeta.summary)}</span>
                     </span>
                   </div>
-                </div>
-                <div class="capability-card-meta">
-                  ${aliasCount ? `
-                    <details class="capability-alias-drawer"${expandedCapabilityRows.has(index) ? ' open' : ''}>
-                      <summary class="cap-alias-summary">
-                        <span class="capability-summary-label">${escapeHtml(capabilityLabels.related_skills_summary.replace('{count}', String(aliasCount)))}</span>
-                      </summary>
-                      <div class="cap-alias-chips" aria-label="${escapeHtml(capabilityLabels.related_skills_label)}">${aliasChips}</div>
-                    </details>
-                  ` : ''}
                 </div>
               </div>
               <div class="capability-card-actions" role="group" aria-label="Capability actions">
@@ -398,6 +403,21 @@ export const JobHunterCapabilityEditor = (function () {
         return;
       }
 
+      const enterBulkEdit = event.target.closest('[data-enter-capability-bulk-edit]');
+      if (enterBulkEdit) {
+        capabilityBulkEditMode = true;
+        renderCapabilityRuleEditor();
+        return;
+      }
+
+      const exitBulkEdit = event.target.closest('[data-exit-capability-bulk-edit]');
+      if (exitBulkEdit) {
+        capabilityBulkEditMode = false;
+        selectedCapabilityRows.clear();
+        renderCapabilityRuleEditor();
+        return;
+      }
+
       const selectVisible = event.target.closest('[data-select-visible-capabilities]');
       if (selectVisible) {
         selectVisibleCapabilityRows();
@@ -437,13 +457,13 @@ export const JobHunterCapabilityEditor = (function () {
     });
 
     document.getElementById('capability_matrix_editor')?.addEventListener('click', (event) => {
+      if (!capabilityBulkEditMode) return;
       // Skip if clicking delete button or inside a form control
       if (event.target.closest('.cap-remove-btn, input, label, details')) return;
       const card = event.target.closest('[data-capability-index]');
       if (!card) return;
       const index = Number(card.dataset.capabilityIndex);
       toggleCapabilitySelection(index);
-      markDirty();
     });
 
     document.getElementById('capability_matrix_editor')?.addEventListener('click', (event) => {

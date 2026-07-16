@@ -2,6 +2,7 @@
 
 import json
 import logging
+from contextlib import contextmanager
 
 from job_hunter_agent import (
     job_review_pipeline,
@@ -28,6 +29,7 @@ from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
     RECORD_CONTENT_REASON_KEY,
     RECORD_DECISION_KEY,
+    RECORD_DECISION_EXPLANATION_KEY,
     RECORD_DESCRIPTION_SOURCE_KEY,
     RECORD_DETAILS_STATUS_KEY,
     RECORD_DETAILS_TEXT_KEY,
@@ -213,6 +215,27 @@ def _patch_llm_review_path(monkeypatch, payload):
     monkeypatch.setattr(
         job_review_pipeline, "build_role_summary", lambda record, details_text, profile: "summary"
     )
+
+
+@contextmanager
+def _attached_file_handler(logger_name: str, path, *, propagate: bool | None = None):
+    logger = logging.getLogger(logger_name)
+    handler = logging.FileHandler(path, encoding="utf-8")
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    old_level = logger.level
+    old_propagate = logger.propagate
+    logger.setLevel(logging.INFO)
+    if propagate is not None:
+        logger.propagate = propagate
+    logger.addHandler(handler)
+    try:
+        yield
+    finally:
+        logger.removeHandler(handler)
+        handler.close()
+        logger.setLevel(old_level)
+        logger.propagate = old_propagate
 
 
 def test_apply_source_metadata_to_record_preserves_direct_employer_kind():
@@ -716,7 +739,7 @@ def test_title_not_target_stops_before_detail_fetch_when_onet_is_far(monkeypatch
     assert updated_record[RECORD_ONET_CLASSIFICATION_KEY]["result"] == RESULT_FAR
 
 
-def test_llm_title_judgment_hard_rejects_confident_no_match(monkeypatch, capsys):
+def test_llm_title_judgment_hard_rejects_confident_no_match(monkeypatch):
     """JH-226: a confident LLM no_match verdict on a near/uncertain O*NET title is a hard reject.
 
     Regression case for the original false-KEEP: a title like "Business Enablement
@@ -755,9 +778,10 @@ def test_llm_title_judgment_hard_rejects_confident_no_match(monkeypatch, capsys)
     assert updated_record[RECORD_REJECT_REASON_KEY] == "LLM_TITLE_NOT_TARGET"
     assert updated_record[RECORD_LLM_TITLE_JUDGMENT_KEY]["verdict"] == "no_match"
 
-    console_output = capsys.readouterr().out
-    assert "REJECTED (llm title)" in console_output
-    assert "LLM_TITLE_NOT_TARGET" in console_output
+    assert (
+        updated_record[RECORD_DECISION_EXPLANATION_KEY]
+        == "Enablement/coordination role, not a target analyst or delivery role."
+    )
 
 
 def test_llm_title_judgment_uncertain_falls_through_to_detail_fetch(monkeypatch):
@@ -850,10 +874,17 @@ def test_llm_title_judgment_unavailable_falls_through_safely(monkeypatch):
     assert RECORD_LLM_TITLE_JUDGMENT_KEY not in updated_record
 
 
-def test_pipeline_logs_job_centric_block_format(caplog, monkeypatch):
-    """Pipeline emits a job-centric block: header at CARD_SEEN, status lines, close at FINAL_DECISION."""
-    record = _base_record("seek", "seek_detail", "card")
-    context = _review_context("SEEK")
+def test_pipeline_logs_single_human_block_for_title_rejection(tmp_path, monkeypatch):
+    record = _base_record("apsjobs", "apsjobs_detail_page", "card")
+    record[RECORD_JOB_KEY] = "apsjobs:a05oy00000pwiq1yap"
+    record[RECORD_TITLE_KEY] = "ServiceNow Team Member"
+    record[RECORD_COMPANY_KEY] = "Australian Federal Police"
+    record[RECORD_URL_KEY] = (
+        "https://www.apsjobs.gov.au/s/job-details?title=servicenow-team-member&Id=a05OY00000PWIQ1YAP"
+    )
+    context = _review_context("APSJOBS")
+    human_log_path = tmp_path / "server.log"
+    debug_log_path = tmp_path / "server-debug.log"
 
     monkeypatch.setattr(
         job_review_pipeline,
@@ -864,33 +895,62 @@ def test_pipeline_logs_job_centric_block_format(caplog, monkeypatch):
         job_review_pipeline,
         "_onet_classify_title",
         lambda title, profile: OccupationClassification(
-            result=RESULT_UNCERTAIN, matched_occupation_code=None, confidence=0.0, reason="no_match"
+            result=RESULT_UNCERTAIN,
+            matched_occupation_code=None,
+            confidence=0.0,
+            reason="service platform team role, not a business analysis title",
         ),
     )
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "llm_judge_title",
+        lambda title, target_roles, secondary_roles: {
+            "verdict": "no_match",
+            "reason": (
+                "The title suggests a general ServiceNow platform role rather than a "
+                "Business Analyst, Scrum Master or consulting role."
+            ),
+        },
+    )
+    monkeypatch.setattr(job_review_pipeline, "get_source_display_label", lambda source: "APSJobs")
 
-    with caplog.at_level(logging.INFO, logger="job_hunter_agent.job_review_pipeline"):
+    with (
+        _attached_file_handler("job_hunter.human", human_log_path, propagate=False),
+        _attached_file_handler("job_hunter_agent.job_review_pipeline", debug_log_path),
+    ):
         review_pre_detail_normalized_job(record, context)
 
-    messages = [r.message for r in caplog.records]
+    human_output = human_log_path.read_text(encoding="utf-8")
+    debug_output = debug_log_path.read_text(encoding="utf-8")
 
-    header = next((m for m in messages if "Business Analyst" in m and "Acme" in m), None)
-    assert header is not None, "expected a job header line with title and company"
-    assert "https://example.com/seek/job/1" in header
-
-    title_note = next(
-        (
-            m
-            for m in messages
-            if "title not in your target roles" in m or "needs title review" in m
-        ),
-        None,
+    assert human_output.count("═" * 72) == 2
+    assert human_output.count("ServiceNow Team Member") == 1
+    assert human_output.count("Australian Federal Police") == 1
+    assert (
+        human_output.count(
+            "https://www.apsjobs.gov.au/s/job-details?title=servicenow-team-member&Id=a05OY00000PWIQ1YAP"
+        )
+        == 1
     )
-    assert title_note is not None, "expected a title status line"
+    assert human_output.count("REJECTED") == 1
+    normalized_human_output = " ".join(human_output.split())
+    assert (
+        "The title suggests a general ServiceNow platform role rather than a Business Analyst, Scrum Master or consulting role."
+        in normalized_human_output
+    )
+    assert "needs title review" not in human_output
+    assert "TITLE_NOT_TARGET" not in human_output
+    assert "LLM_TITLE_NOT_TARGET" not in human_output
+    assert "apsjobs:a05oy00000pwiq1yap" not in human_output
+    assert "[APSJOBS] [APSJOBS]" not in human_output
+    assert "BOARD" not in human_output
+    assert "TARGET" not in human_output
+    assert "Description fetched" not in human_output
 
-    # ONET_DECISION with FETCH_DETAILS is the structured signal that
-    # description fetch will proceed after the title review path clears.
-    onet_line = next((m for m in messages if "ONET_DECISION" in m and "FETCH_DETAILS" in m), None)
-    assert onet_line is not None, "expected ONET_DECISION log with FETCH_DETAILS outcome"
+    assert "PIPELINE][TITLE_GATE" in debug_output
+    assert "LLM_TITLE_NOT_TARGET" in debug_output
+    assert "apsjobs:a05oy00000pwiq1yap" in debug_output
+    assert "PIPELINE][LLM_TITLE_JUDGMENT" in debug_output
 
 
 def test_explicit_title_reject_rule_logs_immediate_title_reject(monkeypatch, caplog):
@@ -910,8 +970,7 @@ def test_explicit_title_reject_rule_logs_immediate_title_reject(monkeypatch, cap
     assert outcome[RECORD_DECISION_KEY] == "REJECT"
     assert updated_record[RECORD_REJECT_REASON_KEY] == "TITLE_BAD_KEYWORD:sap"
     assert "will read description" not in caplog.text
-    assert "title filtered out" in caplog.text
-    assert "LLM:" not in caplog.text
+    assert "PIPELINE][TITLE_GATE" in caplog.text
 
 
 def test_job_cost_preserves_micro_cost_precision(monkeypatch):

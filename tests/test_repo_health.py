@@ -413,6 +413,21 @@ def test_capability_strength_controls_use_shared_semantic_tone_classes():
     assert ".choice-strip > .choice-card--strength.strength-basic" in theme_widgets
 
 
+def test_capability_matrix_uses_quiet_two_column_default_layout():
+    capability_editor_js = (
+        ROOT_DIR / "templates" / "static" / "settings" / "shared" / "settings-capability-editor.js"
+    ).read_text(encoding="utf-8")
+    settings_css = (
+        ROOT_DIR / "templates" / "static" / "settings" / "shared" / "settings-page.css"
+    ).read_text(encoding="utf-8")
+
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in settings_css
+    assert 'class="capability-alias-row"' in capability_editor_js
+    assert "cap-alias-chip--more" not in capability_editor_js
+    assert "data-enter-capability-bulk-edit" in capability_editor_js
+    assert "data-exit-capability-bulk-edit" in capability_editor_js
+
+
 def test_stop_state_copy_stays_intentional_and_non_failure():
     import json
 

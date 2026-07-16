@@ -52,8 +52,7 @@ from job_hunter_agent.config import (
     ONBOARDING_PATH,
 )
 from job_hunter_agent.logging_utils import (
-    ConsoleNoiseFilter,
-    HumanReadableLogFilter,
+    HUMAN_LOGGER_NAME,
     install_log_handler_filters,
 )
 from job_hunter_agent.paths import OUTPUT_DIR, SERVER_DEBUG_LOG_PATH, SERVER_LOG_PATH
@@ -164,26 +163,25 @@ def _configure_server_logging() -> None:
         "version": 1,
         "disable_existing_loggers": False,
         "formatters": {
+            "human": {
+                "format": "%(message)s",
+            },
             "standard": {
                 "format": "%(asctime)s %(levelname)s %(name)s: %(source_scope_prefix)s%(message)s",
                 "datefmt": "%Y-%m-%d %H:%M:%S",
             },
-            "console": {
-                "format": "%(asctime)s  %(source_scope_prefix)s%(message)s",
-                "datefmt": "%H:%M:%S",
-            },
         },
         "handlers": {
-            "console": {
+            "human_console": {
                 "class": "logging.StreamHandler",
                 "level": "INFO",
-                "formatter": "console",
+                "formatter": "human",
                 "stream": "ext://sys.__stdout__",
             },
-            "file": {
+            "human_file": {
                 "class": "logging.FileHandler",
                 "level": "INFO",
-                "formatter": "standard",
+                "formatter": "human",
                 "filename": str(SERVER_LOG_PATH),
                 "encoding": "utf-8",
             },
@@ -197,22 +195,27 @@ def _configure_server_logging() -> None:
         },
         "root": {
             "level": "INFO",
-            "handlers": ["console", "file", "debug_file"],
+            "handlers": ["debug_file"],
         },
         "loggers": {
+            HUMAN_LOGGER_NAME: {
+                "level": "INFO",
+                "handlers": ["human_console", "human_file"],
+                "propagate": False,
+            },
             "uvicorn": {
                 "level": "INFO",
-                "handlers": ["console", "file", "debug_file"],
+                "handlers": ["debug_file"],
                 "propagate": False,
             },
             "uvicorn.error": {
                 "level": "INFO",
-                "handlers": ["console", "file", "debug_file"],
+                "handlers": ["debug_file"],
                 "propagate": False,
             },
             "uvicorn.access": {
                 "level": "INFO",
-                "handlers": ["console", "file", "debug_file"],
+                "handlers": ["debug_file"],
                 "propagate": False,
             },
         },
@@ -222,23 +225,6 @@ def _configure_server_logging() -> None:
 
     access_filter = _AccessLogFilter()
     logging.getLogger("uvicorn.access").addFilter(access_filter)
-
-    # Console-only noise filter — applied to the handler, not the logger,
-    # so the file handler still receives everything at INFO.
-    console_handler = next(
-        (
-            h
-            for h in logging.getLogger().handlers
-            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
-        ),
-        None,
-    )
-    if console_handler:
-        console_handler.addFilter(HumanReadableLogFilter())
-        console_handler.addFilter(ConsoleNoiseFilter())
-    for handler in logging.getLogger().handlers:
-        if isinstance(handler, logging.FileHandler) and getattr(handler, "baseFilename", "").endswith("server.log"):
-            handler.addFilter(HumanReadableLogFilter())
 
     app_logger = logging.getLogger("job_hunter_agent.app")
     sys.stdout = _LineLoggingStream(app_logger, logging.INFO)
