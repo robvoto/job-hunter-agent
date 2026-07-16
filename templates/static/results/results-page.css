@@ -753,26 +753,9 @@
   background: var(--state-error-bg);
 }
 
-.req-add-to-profile {
+.job-requirement-action {
   grid-column: 2 / 4;
   justify-self: start;
-  display: inline-flex;
-  align-items: center;
-  font-size: 0.72rem;
-  font-weight: 700;
-  line-height: 1.2;
-  padding: 3px 8px;
-  border: 1px solid var(--state-info-border);
-  border-radius: var(--control-radius-pill);
-  color: var(--state-info-text);
-  background: var(--state-info-bg);
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.req-add-to-profile:hover,
-.req-add-to-profile:focus-visible {
-  text-decoration: underline;
 }
 
 .req-coverage-detail {
@@ -1640,9 +1623,8 @@
   }
   .job-requirement-status { grid-column: auto; }
   .job-req-importance,
-  .req-add-to-profile {
+  .job-requirement-action {
     grid-column: auto;
     justify-self: start;
   }
-  .req-add-to-profile { grid-column: 1 / -1; }
 }

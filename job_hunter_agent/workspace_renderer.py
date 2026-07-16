@@ -586,11 +586,6 @@ def _workspace_job_card_id(job_key: str) -> str:
     return f"job-card-{slug}" if slug else "job-card"
 
 
-def _duplicate_match_label(matched_on: str) -> str:
-    key = f"match_on_{matched_on}"
-    return _workspace_label("duplicate_labels", key, matched_on.replace("_", " "))
-
-
 _NV1_PATTERNS = re.compile(r"\bnv\s*1\b|\bnegative\s+vetting\s*1\b", re.IGNORECASE)
 _CLEARANCE_PATTERNS = re.compile(
     r"\b(baseline|nv\s*2|top\s+secret|protected)\s*(clearance)?\b|\bclearance\s+required\b",
@@ -1743,10 +1738,10 @@ def render_job_card(
             add_to_profile_html = ""
             if css_modifier in ("mismatch", "not-shown", "mandatory-not-shown", "unknown"):
                 add_to_profile_html = (
-                    f'<a class="req-add-to-profile" href="/settings#section-matrix" '
+                    f'<a class="btn btn-secondary btn-compact-action job-requirement-action" href="/settings#section-matrix" '
                     f'data-prefill="{safe_html(req_text)}" '
                     f'title="Add this to your capability profile" target="_blank" rel="noopener">'
-                    f'+ Add to profile</a>'
+                    f'Add to profile</a>'
                 )
             badges_html = ""
             if importance_html or status_html or add_to_profile_html:
@@ -2155,22 +2150,3 @@ def render_results_fragment(context: dict) -> str:
     return rendered_html
 
 
-def render_match_level_guide_html(profile: Optional[dict] = None) -> str:
-    active_profile = profile or load_profile()
-    match_levels = get_match_levels(active_profile)
-    guide_bits = [
-        f'<span class="chip"><strong>{safe_html(str(level["label"]))}:</strong> {safe_html(str(level["description"]))}</span>'
-        for level in match_levels
-    ]
-    guide_bits.extend(
-        [
-            '<span class="chip"><strong>Title match:</strong> direct titles are favored over secondary titles</span>',
-            '<span class="chip"><strong>Description review:</strong> stronger description fit lifts the match level</span>',
-            '<span class="chip"><strong>Competitive signals:</strong> specialist bias can lift or lower the match level</span>',
-            '<span class="chip"><strong>Freshness:</strong> newer roles are favored</span>',
-            '<span class="chip"><strong>Decision weights:</strong> fit, pay, location, work mode, work type, sector, and freshness can be dialed up or down</span>',
-            '<span class="chip"><strong>Watchouts:</strong> essential gaps hit harder than desirable-only gaps</span>',
-            '<span class="chip"><strong>Risks:</strong> essential gaps hit harder than desirable-only gaps</span>',
-        ]
-    )
-    return "".join(guide_bits)

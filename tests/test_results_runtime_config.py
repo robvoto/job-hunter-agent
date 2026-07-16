@@ -454,10 +454,6 @@ def test_rendered_workspace_html_content(tmp_path):
         ),
         patch("job_hunter_agent.workspace_service.render_section", side_effect=fake_render_section),
         patch(
-            "job_hunter_agent.workspace_renderer.render_match_level_guide_html",
-            return_value="<div>Match Level Guide</div>",
-        ),
-        patch(
             "job_hunter_agent.workspace_service._format_common_search_preferences",
             return_value=("Permanent", "Remote", "Any"),
         ),

@@ -60,7 +60,6 @@ from job_hunter_agent.workspace_renderer import (
     _workspace_ui_labels,
     humanize_reject_reason,
     load_workspace_page_labels,
-    render_match_level_guide_html,
     render_page_size_select_html,
     render_posted_filter_options,
     render_results_fragment,
