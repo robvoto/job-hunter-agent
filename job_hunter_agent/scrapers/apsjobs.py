@@ -5,12 +5,12 @@ from __future__ import annotations
 import logging
 import re
 from datetime import datetime
+from time import monotonic
 from typing import List
 from urllib.parse import urljoin, urlsplit
 
 from playwright.sync_api import sync_playwright
 
-from job_hunter_agent.fit_scoring import fit_score_and_breakdown_displayed
 from job_hunter_agent.global_settings import (
     DEFAULT_SEARCH_SETTINGS,
     KEY_APSJOBS_RESULTS_PER_SEARCH,
@@ -20,7 +20,6 @@ from job_hunter_agent.io_utils import DEBUG_CAPTURE_SOURCE_PAYLOADS, write_sourc
 from job_hunter_agent.job_review_pipeline import (
     ReviewPipelineContext,
     ReviewPipelineHooks,
-    print_job_human_summary,
     review_post_detail_normalized_job,
     review_pre_detail_normalized_job,
 )
@@ -121,6 +120,7 @@ _APSJOBS_LOCATION_TO_STATE = {
     "wa": "WA",
     "perth": "WA",
 }
+RUN_PROGRESS_ELAPSED_PREFIX = "elapsed "
 
 
 def _first_non_empty(*values: object) -> str:
@@ -208,6 +208,35 @@ def _looks_like_job_link(href: str, text: str) -> bool:
         or "jobid=" in query
         or "job_id=" in query
     )
+
+
+def _format_apsjobs_elapsed(elapsed_s: float | int | None) -> str:
+    if elapsed_s is None:
+        return "0s"
+    total_seconds = max(0, int(round(float(elapsed_s))))
+    minutes, seconds = divmod(total_seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes}m {seconds}s"
+    if minutes:
+        return f"{minutes}m {seconds}s"
+    return f"{seconds}s"
+
+
+def _format_apsjobs_run_progress(
+    target_index: int,
+    total_targets: int,
+    scanned_titles: list[str] | None = None,
+    elapsed_s: float | int | None = None,
+) -> str:
+    step = f"APSJobs search {target_index}/{total_targets}"
+    lines = [step]
+    for title in scanned_titles or ():
+        normalized_title = compact_whitespace(title)
+        if normalized_title:
+            lines.append(normalized_title)
+    lines.append(f"{RUN_PROGRESS_ELAPSED_PREFIX}{_format_apsjobs_elapsed(elapsed_s)}")
+    return "\n".join(lines)
 
 
 def _collect_candidate_links(page, base_url: str, results_wanted: int) -> list[dict[str, str]]:
@@ -433,6 +462,7 @@ class APSJobsScraper(BaseJobScraper):
         kept_records: List[dict] = []
         audit_rows: List[dict] = []
         skill_observations: List[dict] = []
+        scanned_titles: list[str] = []
 
         search_settings = get_search_settings(self.profile)
         keywords, targets = build_apsjobs_search_targets(search_settings)
@@ -467,6 +497,7 @@ class APSJobsScraper(BaseJobScraper):
                 },
             )
         )
+        started_at = monotonic()
         try:
             with sync_playwright() as playwright:
                 context = playwright.chromium.launch_persistent_context(
@@ -480,7 +511,14 @@ class APSJobsScraper(BaseJobScraper):
                             break
                         target_tag = f"[APSJobs target {target_index}/{total_targets}]"
                         target_state = _normalize_apsjobs_location_filter(target["location"])
-                        set_run_progress(f"APSJobs search {target_index}/{total_targets}")
+                        set_run_progress(
+                            _format_apsjobs_run_progress(
+                                target_index,
+                                total_targets,
+                                scanned_titles=scanned_titles,
+                                elapsed_s=monotonic() - started_at,
+                            )
+                        )
                         logger.info(
                             "\n"
                             "================================================================\n"
@@ -575,6 +613,16 @@ class APSJobsScraper(BaseJobScraper):
                             for link in candidate_links:
                                 if run_stop_requested():
                                     break
+                                scanned_title = compact_whitespace(link.get("text") or "") or "APSJobs listing"
+                                scanned_titles.append(scanned_title)
+                                set_run_progress(
+                                    _format_apsjobs_run_progress(
+                                        target_index,
+                                        total_targets,
+                                        scanned_titles=scanned_titles,
+                                        elapsed_s=monotonic() - started_at,
+                                    )
+                                )
                                 detail_page = context.new_page()
                                 try:
                                     detail_page.goto(link["url"], wait_until="domcontentloaded")
@@ -585,6 +633,17 @@ class APSJobsScraper(BaseJobScraper):
                                         anchor_text=link["text"],
                                         run_iso=self.run_iso,
                                     )
+                                    resolved_title = compact_whitespace(payload.get("title") or "")
+                                    if resolved_title and resolved_title != scanned_titles[-1]:
+                                        scanned_titles[-1] = resolved_title
+                                        set_run_progress(
+                                            _format_apsjobs_run_progress(
+                                                target_index,
+                                                total_targets,
+                                                scanned_titles=scanned_titles,
+                                                elapsed_s=monotonic() - started_at,
+                                            )
+                                        )
                                 finally:
                                     detail_page.close()
 
@@ -618,8 +677,6 @@ class APSJobsScraper(BaseJobScraper):
                                     record, review_context
                                 )
                                 if pre_outcome["decision"] != "KEEP" or not should_fetch_details:
-                                    if pre_outcome["decision"] in {"KEEP", "REJECT"}:
-                                        print_job_human_summary(record, self.profile)
                                     continue
 
                                 hooks = ReviewPipelineHooks()
@@ -627,13 +684,10 @@ class APSJobsScraper(BaseJobScraper):
                                     record, review_context, hooks=hooks
                                 )
                                 if outcome["decision"] != "KEEP":
-                                    if outcome["decision"] in {"KEEP", "REJECT"}:
-                                        print_job_human_summary(record, self.profile)
                                     continue
 
                                 skill_observations.extend(record_skill_observations)
                                 kept_records.append(record)
-                                score, breakdown = fit_score_and_breakdown_displayed(record, self.profile)
                                 logger.info(
                                     "%s KEPT %s @ %s | %s | %s | %s",
                                     target_tag,
@@ -643,7 +697,6 @@ class APSJobsScraper(BaseJobScraper):
                                     record.get(RECORD_LOCATION_KEY),
                                     record.get(RECORD_SALARY_KEY) or "N/A",
                                 )
-                                print_job_human_summary(record, self.profile, score=score, breakdown=breakdown)
                                 if DEBUG_CAPTURE_SOURCE_PAYLOADS:
                                     write_source_payload_debug(
                                         source=self.source_name,

@@ -20,15 +20,41 @@ function normalizeState(state) {
 function splitProgressText(progress) {
   const text = String(progress || '').trim();
   if (!text) {
-    return { step: '', elapsed: '' };
+    return { step: '', activityItems: [], elapsed: '' };
   }
-  const match = text.match(/^(.*?)(?:\s+\|\s+elapsed\s+(.+))$/i);
-  if (!match) {
-    return { step: text, elapsed: '' };
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length > 1) {
+    let elapsed = '';
+    const lastLine = lines[lines.length - 1] || '';
+    const elapsedMatch = lastLine.match(/^elapsed\s+(.+)$/i);
+    if (elapsedMatch) {
+      elapsed = String(elapsedMatch[1] || '').trim();
+      lines.pop();
+    }
+    return {
+      step: String(lines[0] || '').trim(),
+      activityItems: lines.slice(1),
+      elapsed,
+    };
+  }
+  const segments = text.split(/\s+\|\s+/).map((segment) => segment.trim()).filter(Boolean);
+  if (!segments.length) {
+    return { step: '', activityItems: [], elapsed: '' };
+  }
+  let elapsed = '';
+  const lastSegment = segments[segments.length - 1] || '';
+  const elapsedMatch = lastSegment.match(/^elapsed\s+(.+)$/i);
+  if (elapsedMatch) {
+    elapsed = String(elapsedMatch[1] || '').trim();
+    segments.pop();
   }
   return {
-    step: String(match[1] || '').trim(),
-    elapsed: String(match[2] || '').trim(),
+    step: String(segments[0] || '').trim(),
+    activityItems: segments.slice(1),
+    elapsed,
   };
 }
 
@@ -52,7 +78,8 @@ function renderWaitState(mount, state) {
   }
   const normalized = normalizeState(state);
   const progress = splitProgressText(normalized.progress);
-  const progressMarkup = progress.step || progress.elapsed
+  const activityItems = progress.activityItems.slice().reverse();
+  const progressMarkup = progress.step || progress.activityItems.length || progress.elapsed
     ? `
         <div class="wait-state__progress">
           ${progress.step ? `
@@ -60,6 +87,13 @@ function renderWaitState(mount, state) {
               <span class="wait-state__status-label">${escapeHtml(SEARCH_PROGRESS_PREFIX)}</span>
               <span class="wait-state__status-value">${escapeHtml(progress.step)}</span>
             </p>
+          ` : ''}
+          ${activityItems.length ? `
+            <div class="wait-state__activity">
+              <ul class="wait-state__activity-list">
+                ${activityItems.map((item) => `<li class="wait-state__activity-item">${escapeHtml(item)}</li>`).join('')}
+              </ul>
+            </div>
           ` : ''}
           ${progress.elapsed ? `
             <p class="wait-state__status wait-state__status--elapsed">
