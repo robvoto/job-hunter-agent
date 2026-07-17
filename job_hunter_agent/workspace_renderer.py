@@ -39,8 +39,10 @@ from job_hunter_agent.job_identity import find_confirmed_duplicate
 from job_hunter_agent.match_labels import score_to_match_label
 from job_hunter_agent.paths import RESULTS_TEMPLATE_PATH
 from job_hunter_agent.posting_utils import (
+    board_posted_display_label,
     current_posted_age_days,
     format_timestamp_label,
+    original_posted_display_label,
     posted_display_label,
 )
 from job_hunter_agent.preferences import (
@@ -63,6 +65,7 @@ from job_hunter_agent.profile_store import (
 from job_hunter_agent.record_schema import (
     APPLY_METHOD_EASY_APPLY,
     APPLY_METHOD_QUICK_APPLY,
+    ORIGINAL_POSTED_DATE_STATUS_VERIFIED,
     RECORD_APPLY_METHOD_KEY,
     RECORD_DECISION_KEY,
     RECORD_DUPLICATE_LINKS_KEY,
@@ -73,6 +76,7 @@ from job_hunter_agent.record_schema import (
     RECORD_LLM_FIT_GRADE_KEY,
     RECORD_LLM_INPUT_TOKENS_KEY,
     RECORD_LLM_OUTPUT_TOKENS_KEY,
+    RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY,
     RECORD_POTENTIAL_DUPLICATE_LINKS_KEY,
     RECORD_REJECT_REASON_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
@@ -1382,9 +1386,24 @@ def render_job_card(
 
     _posted_raw = posted_display_label(record)
     posted_display = "" if not _posted_raw or _posted_raw == "N/A" else _posted_raw
+    _original_posted_verified = (
+        str(record.get(RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY) or "").strip().lower()
+        == ORIGINAL_POSTED_DATE_STATUS_VERIFIED
+    )
+    _board_posted_display = board_posted_display_label(record) if _original_posted_verified else ""
+    _original_posted_display = (
+        original_posted_display_label(record) if _original_posted_verified else ""
+    )
     contract_duration_display = display_contract_duration_label(display_record)
     meta_items = []
-    if posted_display:
+    if _board_posted_display and _original_posted_display:
+        meta_items.append(
+            f'<span class="job-meta-item"><strong>{safe_html(source_label)} {safe_html(_workspace_label("workspace_meta_labels", "reposted_suffix"))}</strong> {safe_html(str(_board_posted_display))}</span>'
+        )
+        meta_items.append(
+            f'<span class="job-meta-item"><strong>{safe_html(_workspace_label("workspace_meta_labels", "originally_posted"))}</strong> {safe_html(str(_original_posted_display))}</span>'
+        )
+    elif posted_display:
         meta_items.append(
             f'<span class="job-meta-item"><strong>{safe_html(_workspace_label("workspace_meta_labels", "posted"))}</strong> {safe_html(str(posted_display))}</span>'
         )

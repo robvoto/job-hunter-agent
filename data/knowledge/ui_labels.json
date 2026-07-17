@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 77,
+  "version": 78,
   "updated_at": "2026-07-18",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -300,7 +300,9 @@
     "work_mode": "Work mode",
     "location": "Location",
     "salary": "Salary",
-    "posted": "Posted"
+    "posted": "Posted",
+    "reposted_suffix": "reposted",
+    "originally_posted": "Originally posted"
   },
   "reject_reason_human_map_description": "Human-readable labels for deterministic reject reasons.",
   "reject_reason_human_map": {
