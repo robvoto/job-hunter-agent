@@ -4,7 +4,6 @@ Purpose: render the results fragment, job cards, filters, and supporting labels
 that are injected into the workspace shell.
 """
 
-import json
 import logging
 import re
 from datetime import datetime
@@ -13,10 +12,7 @@ from html import escape, unescape
 from string import Template
 from typing import Any, Dict, List, Optional
 
-from job_hunter_agent.capability_matching import (
-    build_display_competitive_risks,
-    reviewed_signal_match_summary,
-)
+from job_hunter_agent.capability_matching import build_display_competitive_risks
 from job_hunter_agent.company_normalization import normalize_company_name
 from job_hunter_agent.config import DEBUG_MODE
 from job_hunter_agent.description_trust import (
@@ -30,7 +26,6 @@ from job_hunter_agent.fit_scoring import (
     build_fit_highlights,
     eligibility_gate_diagnostics,
     fit_score_and_breakdown_displayed,
-    fit_score_displayed,
     occupation_alignment_diagnostics,
     requirement_fit_diagnostics,
 )
@@ -59,15 +54,11 @@ from job_hunter_agent.profile_gaps import (
     classify_requirement_status,
     compute_profile_gaps,
 )
-from job_hunter_agent.preferences import get_match_preferences
 from job_hunter_agent.profile_store import (
     ENGAGEMENT_TYPE_OPTIONS,
-    Engagement,
-    VALID_ENGAGEMENT_TYPES,
     get_match_levels,
     get_scoring_rules,
     load_profile,
-    normalize_engagement_type_preferences,
 )
 from job_hunter_agent.record_schema import (
     APPLY_METHOD_EASY_APPLY,
@@ -101,14 +92,12 @@ from job_hunter_agent.signal_detection import (
 )
 from job_hunter_agent.signal_schema import TITLE_REASON_POTENTIAL_MATCH
 from job_hunter_agent.source_registry import get_source_display_label
-from job_hunter_agent.role_analysis import friendly_capability_label
 from job_hunter_agent.text_processing import (
     build_role_summary,
     clean_display_text,
     clean_display_text_preserving_blocks,
     compact_whitespace,
     dedupe_preserve_order,
-    list_to_phrase,
     synthesize_role_snapshot,
 )
 from job_hunter_agent.user_settings import get_workspace_minimum_score
@@ -369,7 +358,7 @@ def _render_scoring_audit_html(
         return ""
 
     def _audit_label(key: str) -> str:
-        return _workspace_label("scoring_audit_labels", key, "")
+        return _workspace_label("scoring_audit_labels", key)
 
     diagnostics = requirement_fit_diagnostics(record, active_profile)
     has_debug_match_details = any(
@@ -574,7 +563,7 @@ def load_workspace_page_labels() -> dict[str, str]:
     }
 
 
-def _workspace_label(group: str, key: str, default: str) -> str:
+def _workspace_label(group: str, key: str) -> str:
     payload = _workspace_ui_labels().get(group, {})
     if isinstance(payload, dict):
         value = payload.get(key)
@@ -583,9 +572,9 @@ def _workspace_label(group: str, key: str, default: str) -> str:
     raise ValueError(f"ui_labels.json is missing {group}.{key}")
 
 
-ARCHIVE_LABEL = _workspace_label("workspace_page_labels", "archive_label", "")
-ARCHIVE_CONTEXT_PREFIX = _workspace_label("workspace_page_labels", "archive_context_prefix", "")
-ARCHIVE_BADGE_TOOLTIP = _workspace_label("workspace_card_labels", "archive_badge_tooltip", "")
+ARCHIVE_LABEL = _workspace_label("workspace_page_labels", "archive_label")
+ARCHIVE_CONTEXT_PREFIX = _workspace_label("workspace_page_labels", "archive_context_prefix")
+ARCHIVE_BADGE_TOOLTIP = _workspace_label("workspace_card_labels", "archive_badge_tooltip")
 
 
 def _workspace_job_card_id(job_key: str) -> str:
@@ -615,9 +604,9 @@ def _humanize_check_item(text: str) -> str:
         if requirement_warning:
             return requirement_warning
     if _NV1_PATTERNS.search(lower):
-        return _workspace_label("check_item_labels", "nv1_clearance_warning", "")
+        return _workspace_label("check_item_labels", "nv1_clearance_warning")
     if _CLEARANCE_PATTERNS.search(lower):
-        return _workspace_label("check_item_labels", "security_clearance_warning", "")
+        return _workspace_label("check_item_labels", "security_clearance_warning")
     return t
 
 
@@ -696,9 +685,9 @@ def _build_checks_before_applying_items(
         add(cleaned)
 
     if description_issue:
-        add(_workspace_label("check_item_labels", "description_capture_issue", ""))
+        add(_workspace_label("check_item_labels", "description_capture_issue"))
 
-    possible_repost_prefix = _workspace_label("check_item_labels", "possible_repost_prefix", "")
+    possible_repost_prefix = _workspace_label("check_item_labels", "possible_repost_prefix")
     if is_possible_repost and similar_applied_record:
         repost_title = compact_whitespace(str(similar_applied_record.get("title") or ""))
         repost_company = compact_whitespace(str(similar_applied_record.get("company") or ""))
@@ -722,9 +711,9 @@ def _build_checks_before_applying_items(
         cand_confidence = compact_whitespace(str(candidate_history.get("llm_confidence") or "")).lower()
         if cand_company or cand_role:
             history_label = (
-                _workspace_label("check_item_labels", "rejected_before_label", "")
+                _workspace_label("check_item_labels", "rejected_before_label")
                 if cand_status == "rejection" and cand_confidence != "low"
-                else _workspace_label("check_item_labels", "possible_previous_application_label", "")
+                else _workspace_label("check_item_labels", "possible_previous_application_label")
             )
             history_bits = [bit for bit in [cand_company, cand_role] if bit]
             add(
@@ -733,7 +722,7 @@ def _build_checks_before_applying_items(
             )
 
     if salary_fit_state == "below":
-        add(_workspace_label("check_item_labels", "salary_below_target", ""))
+        add(_workspace_label("check_item_labels", "salary_below_target"))
 
     for item in hard_block_reasons_list:
         add(_humanize_check_item(str(item)))
@@ -877,9 +866,9 @@ def render_workspace_tabs_html(
     active_target: str = "potential",
 ) -> str:
     tabs = [
-        ("potential", _workspace_label("workspace_page_labels", "potential_jobs_tab", ""), shortlist_count),
-        ("applied", _workspace_label("workspace_page_labels", "applied_jobs_tab", ""), applied_count),
-        ("hidden", _workspace_label("workspace_page_labels", "hidden_jobs_tab", ""), hidden_count),
+        ("potential", _workspace_label("workspace_page_labels", "potential_jobs_tab"), shortlist_count),
+        ("applied", _workspace_label("workspace_page_labels", "applied_jobs_tab"), applied_count),
+        ("hidden", _workspace_label("workspace_page_labels", "hidden_jobs_tab"), hidden_count),
     ]
     buttons = []
     for target, label, count in tabs:
@@ -889,7 +878,7 @@ def render_workspace_tabs_html(
             f"{safe_html(label)} ({count})"
             "</button>"
         )
-    aria_label = safe_html(_workspace_label("workspace_page_labels", "top_level_workspace_views_aria_label", ""))
+    aria_label = safe_html(_workspace_label("workspace_page_labels", "top_level_workspace_views_aria_label"))
     return f'<div class="scope-tabs" aria-label="{aria_label}">' + "".join(buttons) + "</div>"
 
 
@@ -946,7 +935,7 @@ def humanize_reject_reason(reason: Optional[str]) -> str:
     if prefix == "PREF_SECTOR_OUTSIDE_SELECTED":
         return "Rejected because job sector is outside selected sectors."
     if prefix == TITLE_REASON_POTENTIAL_MATCH:
-        return _workspace_label("title_match_labels", "secondary_match", "")
+        return _workspace_label("title_match_labels", "secondary_match")
     if prefix == "CARD_SPECIALIST" and cleaned_detail:
         return f"Rejected early from card metadata: {cleaned_detail}"
     fallback = raw.replace("_", " ").lower()
@@ -1027,7 +1016,7 @@ def render_job_card(
     if _record_source == "linkedin" and record.get("posted_age_days") is None:
         soft_risk_reasons = dedupe_preserve_order([
             *soft_risk_reasons,
-            _workspace_label("check_item_labels", "linkedin_freshness_unknown_warning", ""),
+            _workspace_label("check_item_labels", "linkedin_freshness_unknown_warning"),
         ])
     display_record["hard_block_reasons"] = blocking_reasons
     display_record["role_snapshot"] = role_summary
@@ -1127,17 +1116,17 @@ def render_job_card(
     if applied_record:
         badges.append(
             render_badge(
-                _workspace_label("workspace_card_labels", "applied_badge", ""),
+                _workspace_label("workspace_card_labels", "applied_badge"),
                 "badge-viewed",
-                _workspace_label("workspace_card_labels", "applied_badge_tooltip", ""),
+                _workspace_label("workspace_card_labels", "applied_badge_tooltip"),
             )
         )
     elif hidden_record:
         badges.append(
             render_badge(
-                _workspace_label("workspace_card_labels", "hidden_badge", ""),
+                _workspace_label("workspace_card_labels", "hidden_badge"),
                 "badge-hidden",
-                _workspace_label("workspace_card_labels", "hidden_badge_tooltip", ""),
+                _workspace_label("workspace_card_labels", "hidden_badge_tooltip"),
             )
         )
     elif archived:
@@ -1145,17 +1134,17 @@ def render_job_card(
     if not applied_record and not seen_by_you:
         badges.append(
             render_badge(
-                _workspace_label("workspace_card_labels", "new_to_you_badge", ""),
+                _workspace_label("workspace_card_labels", "new_to_you_badge"),
                 "badge-new",
-                _workspace_label("workspace_card_labels", "new_to_you_badge_tooltip", ""),
+                _workspace_label("workspace_card_labels", "new_to_you_badge_tooltip"),
             )
         )
     if is_stale:
         badges.append(
             render_badge(
-                _workspace_label("workspace_card_labels", "stale_badge", ""),
+                _workspace_label("workspace_card_labels", "stale_badge"),
                 "badge-stale",
-                _workspace_label("workspace_card_labels", "stale_badge_tooltip", ""),
+                _workspace_label("workspace_card_labels", "stale_badge_tooltip"),
             )
         )
     elif seen_by_you:
@@ -1168,13 +1157,11 @@ def render_job_card(
         badges.append(
             render_badge(
                 _workspace_label(
-                    "workspace_card_labels", "apply_method_easy_apply_badge", "Easy Apply"
-                ),
+                    "workspace_card_labels", "apply_method_easy_apply_badge"),
                 "badge-apply-method",
                 _workspace_label(
                     "workspace_card_labels",
                     "apply_method_easy_apply_tooltip",
-                    "Apply directly on the job board with one click.",
                 ),
             )
         )
@@ -1182,13 +1169,11 @@ def render_job_card(
         badges.append(
             render_badge(
                 _workspace_label(
-                    "workspace_card_labels", "apply_method_quick_apply_badge", "Quick Apply"
-                ),
+                    "workspace_card_labels", "apply_method_quick_apply_badge"),
                 "badge-apply-method",
                 _workspace_label(
                     "workspace_card_labels",
                     "apply_method_quick_apply_tooltip",
-                    "Apply directly on the job board without leaving the site.",
                 ),
             )
         )
@@ -1211,13 +1196,11 @@ def render_job_card(
                     _workspace_label(
                         "workspace_card_labels",
                         "posting_channel_agency_recruiter_badge",
-                        "Agency recruiter",
                     ),
                     "badge-source-neutral",
                     _workspace_label(
                         "workspace_card_labels",
                         "posting_channel_agency_recruiter_tooltip",
-                        "Posted via a recruitment agency or third-party recruiter.",
                     ),
                 )
             )
@@ -1227,22 +1210,20 @@ def render_job_card(
                     _workspace_label(
                         "workspace_card_labels",
                         "posting_channel_likely_recruiter_badge",
-                        "Likely recruiter",
                     ),
                     "badge-warning",
                     _workspace_label(
                         "workspace_card_labels",
                         "posting_channel_likely_recruiter_tooltip",
-                        "Recruiter language detected in the description. This may be posted on behalf of an employer.",
                     ),
                 )
             )
     elif channel_kind == "direct_employer":
         badges.append(
             render_badge(
-                _workspace_label("workspace_card_labels", "posting_channel_direct_employer_badge", ""),
+                _workspace_label("workspace_card_labels", "posting_channel_direct_employer_badge"),
                 "badge-source-neutral",
-                _workspace_label("workspace_card_labels", "posting_channel_direct_employer_tooltip", ""),
+                _workspace_label("workspace_card_labels", "posting_channel_direct_employer_tooltip"),
             )
         )
     elif channel_signal.get("needs_review") or has_channel_evidence:
@@ -1251,13 +1232,11 @@ def render_job_card(
                 _workspace_label(
                     "workspace_card_labels",
                     "posting_channel_likely_recruiter_badge",
-                    "Likely recruiter",
                 ),
                 "badge-warning",
                 _workspace_label(
                     "workspace_card_labels",
                     "posting_channel_likely_recruiter_tooltip",
-                    "Recruiter language detected in the description. This may be posted on behalf of an employer.",
                 ),
             )
         )
@@ -1265,13 +1244,11 @@ def render_job_card(
         badges.append(
             render_badge(
                 _workspace_label(
-                    "workspace_card_labels", "posting_channel_unknown_badge", "Source unclear"
-                ),
+                    "workspace_card_labels", "posting_channel_unknown_badge"),
                 "badge-archive",
                 _workspace_label(
                     "workspace_card_labels",
                     "posting_channel_unknown_tooltip",
-                    "Couldn't determine whether this was posted by the employer directly or via a recruiter.",
                 ),
             )
         )
@@ -1280,11 +1257,10 @@ def render_job_card(
         duplicate_tooltip = _workspace_label(
             "duplicate_labels",
             "confirmed_tooltip",
-            "This job already has a matching card in your workspace.",
         )
         badges.append(
             render_badge(
-                _workspace_label("duplicate_labels", "confirmed_badge", "Duplicate in workspace"),
+                _workspace_label("duplicate_labels", "confirmed_badge"),
                 "badge-source-neutral",
                 duplicate_tooltip,
             )
@@ -1306,11 +1282,10 @@ def render_job_card(
             potential_tooltip = _workspace_label(
                 "duplicate_labels",
                 "potential_tooltip",
-                "This job looks related to another card in your workspace.",
             )
         badges.append(
             render_badge(
-                _workspace_label("duplicate_labels", "potential_badge", "Related cards"),
+                _workspace_label("duplicate_labels", "potential_badge"),
                 "badge-warning",
                 potential_tooltip,
             )
@@ -1340,9 +1315,9 @@ def render_job_card(
         if related_label_html:
             potential_duplicate_callout = (
                 '<div class="job-duplicate-callout">'
-                f"<strong>{safe_html(_workspace_label('duplicate_labels', 'potential_badge', 'Related cards'))}</strong> "
-                f"{safe_html(_workspace_label('duplicate_labels', 'callout_prefix', 'Open matching card'))} {related_label_html}. "
-                f'<span class="duplicate-help-text">{safe_html(_workspace_label("duplicate_labels", "help_text", "This is the matching card in your workspace. Use it to compare details."))}</span>'
+                f"<strong>{safe_html(_workspace_label('duplicate_labels', 'potential_badge'))}</strong> "
+                f"{safe_html(_workspace_label('duplicate_labels', 'callout_prefix'))} {related_label_html}. "
+                f'<span class="duplicate-help-text">{safe_html(_workspace_label("duplicate_labels", "help_text"))}</span>'
                 "</div>"
             )
     job_quality_signals = [
@@ -1353,24 +1328,22 @@ def render_job_card(
         if debug_status == "hard-blocked":
             badges.append(
                 render_badge(
-                    _workspace_label("workspace_card_labels", "hard_blocked_badge", "Hard blocked"),
+                    _workspace_label("workspace_card_labels", "hard_blocked_badge"),
                     "badge-hidden",
                     _workspace_label(
                         "workspace_card_labels",
                         "hard_blocked_tooltip",
-                        "This role hit a hard blocker and would normally be excluded.",
                     ),
                 )
             )
         else:
             badges.append(
                 render_badge(
-                    _workspace_label("workspace_card_labels", "debug_only_badge", "Debug only"),
+                    _workspace_label("workspace_card_labels", "debug_only_badge"),
                     "badge-source-neutral",
                     _workspace_label(
                         "workspace_card_labels",
                         "debug_only_tooltip",
-                        "This role was filtered out in the normal workspace view, but stays visible in debug mode.",
                     ),
                 )
             )
@@ -1385,9 +1358,9 @@ def render_job_card(
         _cand_hist_needs_review = bool(_cand_hist.get("llm_needs_review"))
         _cand_hist_review_reason = str(_cand_hist.get("llm_review_reason") or "").strip()
         _cand_hist_badge_label = (
-            _workspace_label("check_item_labels", "rejected_before_label", "")
+            _workspace_label("check_item_labels", "rejected_before_label")
             if _ch_status == "rejection" and _ch_confidence != "low"
-            else _workspace_label("check_item_labels", "possible_previous_application_label", "")
+            else _workspace_label("check_item_labels", "possible_previous_application_label")
         )
         _cand_hist_details = {
             "company": str(_cand_hist.get("llm_company") or "").strip(),
@@ -1413,27 +1386,27 @@ def render_job_card(
     meta_items = []
     if posted_display:
         meta_items.append(
-            f'<span class="job-meta-item"><strong>{safe_html(_workspace_label("workspace_meta_labels", "posted", ""))}</strong> {safe_html(str(posted_display))}</span>'
+            f'<span class="job-meta-item"><strong>{safe_html(_workspace_label("workspace_meta_labels", "posted"))}</strong> {safe_html(str(posted_display))}</span>'
         )
     for label, value, always_show in [
-        (_workspace_label("workspace_meta_labels", "location", ""), display_record.get("location"), False),
+        (_workspace_label("workspace_meta_labels", "location"), display_record.get("location"), False),
         (
-            _workspace_label("workspace_meta_labels", "work_mode", "Work mode"),
+            _workspace_label("workspace_meta_labels", "work_mode"),
             display_work_mode_label(display_record),
             False,
         ),
         (
-            _workspace_label("workspace_meta_labels", "work_type", "Work type"),
+            _workspace_label("workspace_meta_labels", "work_type"),
             display_work_type_label(display_record),
             False,
         ),
         (
-            _workspace_label("workspace_meta_labels", "contract_duration", "Contract term"),
+            _workspace_label("workspace_meta_labels", "contract_duration"),
             contract_duration_display,
             False,
         ),
         (
-            _workspace_label("workspace_meta_labels", "salary", ""),
+            _workspace_label("workspace_meta_labels", "salary"),
             format_salary_display(
                 str(display_record.get("salary") or "N/A"),
                 work_type=str(display_record.get("work_type") or ""),
@@ -1450,22 +1423,22 @@ def render_job_card(
         soft_risk_reasons = dedupe_preserve_order(
             [
                 *soft_risk_reasons,
-                _workspace_label("check_item_labels", "salary_below_target", ""),
+                _workspace_label("check_item_labels", "salary_below_target"),
             ]
         )
     if seen_by_you and record.get("last_viewed_at"):
         context_bits.append(
-            f"{_workspace_label('workspace_card_labels', 'opened_by_you_prefix', '')} "
+            f"{_workspace_label('workspace_card_labels', 'opened_by_you_prefix')} "
             f"{format_timestamp_label(record.get('last_viewed_at'))}"
         )
     if applied_record and record.get("last_applied_at"):
         context_bits.append(
-            f"{_workspace_label('workspace_card_labels', 'applied_context_prefix', '')} "
+            f"{_workspace_label('workspace_card_labels', 'applied_context_prefix')} "
             f"{format_timestamp_label(record.get('last_applied_at'))}"
         )
     if hidden_record and record.get("last_hidden_at"):
         context_bits.append(
-            f"{_workspace_label('workspace_card_labels', 'hidden_context_prefix', '')} "
+            f"{_workspace_label('workspace_card_labels', 'hidden_context_prefix')} "
             f"{format_timestamp_label(record.get('last_hidden_at'))}"
         )
     elif archived and record.get("last_kept_at"):
@@ -1491,14 +1464,13 @@ def render_job_card(
             f'<span class="job-summary-text">{safe_html(role_summary)}</span>'
             '<span class="job-summary-toggle" aria-hidden="true">'
             '<span class="job-summary-toggle-icon"></span>'
-            f'<span class="job-summary-toggle-label job-summary-toggle-label--closed">{safe_html(_workspace_label("workspace_card_labels", "show_more_label", ""))}</span>'
-            f'<span class="job-summary-toggle-label job-summary-toggle-label--open">{safe_html(_workspace_label("workspace_card_labels", "show_less_label", ""))}</span>'
+            f'<span class="job-summary-toggle-label job-summary-toggle-label--closed">{safe_html(_workspace_label("workspace_card_labels", "show_more_label"))}</span>'
+            f'<span class="job-summary-toggle-label job-summary-toggle-label--open">{safe_html(_workspace_label("workspace_card_labels", "show_less_label"))}</span>'
             '</span>'
             "</summary>"
             f'<div class="job-summary-expanded">{_render_full_description_html(display_trusted_desc)}</div>'
             "</details>"
         )
-    reviewed_signal_matches = reviewed_signal_match_summary(display_record, scoring_profile)
     check_items = _build_checks_before_applying_items(
         history_warning_signals,
         description_issue,
@@ -1604,7 +1576,6 @@ def render_job_card(
             importance_label = _workspace_label(
                 "workspace_card_labels",
                 importance_label_keys.get(importance, "importance_preferred"),
-                importance.replace("_", " ").title(),
             )
 
         detail_parts = []
@@ -1636,8 +1607,8 @@ def render_job_card(
             add_to_profile_html = (
                 f'<a class="btn btn-secondary btn-compact-action job-requirement-action" href="/settings#section-matrix" '
                 f'data-prefill="{safe_html(req_text)}" '
-                f'title="{safe_html(_workspace_label("workspace_card_labels", "add_to_profile_action_title", ""))}" target="_blank" rel="noopener">'
-                f'{safe_html(_workspace_label("workspace_card_labels", "add_to_profile_action_label", ""))}</a>'
+                f'title="{safe_html(_workspace_label("workspace_card_labels", "add_to_profile_action_title"))}" target="_blank" rel="noopener">'
+                f'{safe_html(_workspace_label("workspace_card_labels", "add_to_profile_action_label"))}</a>'
             )
         badges_html = ""
         if importance_html or status_html or add_to_profile_html:
@@ -1703,8 +1674,7 @@ def render_job_card(
             "mismatch" if occupation_alignment["alignment"] == "different" else "partially-supported"
         )
         occ_label = _workspace_label(
-            "workspace_card_labels", "occupation_alignment_row_label", "Job title match"
-        )
+            "workspace_card_labels", "occupation_alignment_row_label")
         occ_text = (
             f"{occ_label}: {occupation_alignment['alignment_label']} — "
             f"{occupation_alignment['reason']}"
@@ -1734,11 +1704,11 @@ def render_job_card(
             requirement_hint_html = ""
             if not active_debug_mode and has_requirement_subtitles:
                 requirement_hint_html = (
-                    f'<p class="job-requirements-hint">{safe_html(_workspace_label("workspace_card_labels", "job_requirements_detail_hint", "The hidden subtitle is the small grey line under a requirement row. It shows the matched capability name and the quoted job text, and debug mode turns it back on."))}</p>'
+                    f'<p class="job-requirements-hint">{safe_html(_workspace_label("workspace_card_labels", "job_requirements_detail_hint"))}</p>'
                 )
             job_requirements_html = (
                 '<details class="job-insights job-requirements-panel">'
-                f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'job_requirements_summary', 'Job Requirements'))}</summary>"
+                f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'job_requirements_summary'))}</summary>"
                 f'{requirement_hint_html}'
                 f'<div class="job-insight-group is-secondary"><ul class="job-requirement-list">{requirement_items_html}</ul></div>'
                 "</details>"
@@ -1746,20 +1716,20 @@ def render_job_card(
         else:
             job_requirements_html = (
                 '<details class="job-insights job-requirements-panel">'
-                f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'job_requirements_summary', 'Job Requirements'))}</summary>"
+                f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'job_requirements_summary'))}</summary>"
                 '<div class="job-insight-group is-secondary">'
-                f'<p class="job-requirements-empty">{safe_html(_workspace_label("workspace_card_labels", "job_requirements_empty_state", "No requirements were extracted for this job."))}</p>'
+                f'<p class="job-requirements-empty">{safe_html(_workspace_label("workspace_card_labels", "job_requirements_empty_state"))}</p>'
                 '</div>'
                 "</details>"
             )
 
     profile_gaps_html = ""
     if profile_gaps:
-        gap_confirm_have_label = safe_html(_workspace_label("workspace_card_labels", "gap_confirm_have_label", ""))
+        gap_confirm_have_label = safe_html(_workspace_label("workspace_card_labels", "gap_confirm_have_label"))
         gap_confirm_not_have_label = safe_html(
-            _workspace_label("workspace_card_labels", "gap_confirm_not_have_label", "")
+            _workspace_label("workspace_card_labels", "gap_confirm_not_have_label")
         )
-        gap_decide_later_label = safe_html(_workspace_label("workspace_card_labels", "gap_decide_later_label", ""))
+        gap_decide_later_label = safe_html(_workspace_label("workspace_card_labels", "gap_decide_later_label"))
         gap_items_html = "".join(
             f'<div class="job-gap-item">'
             f'<span class="job-gap-requirement">{safe_html(gap["requirement"])}</span>'
@@ -1771,7 +1741,7 @@ def render_job_card(
             f"</div>"
             for gap in profile_gaps
         )
-        gap_heading_label = safe_html(_workspace_label("workspace_card_labels", "gap_heading_label", ""))
+        gap_heading_label = safe_html(_workspace_label("workspace_card_labels", "gap_heading_label"))
         profile_gaps_html = (
             f'<div class="job-gaps-block" data-job-key="{job_key}">'
             f'<div class="job-gap-heading">{gap_heading_label} ({len(profile_gaps)})</div>'
@@ -1782,7 +1752,7 @@ def render_job_card(
 
     risk_html = (
         '<details class="job-insights job-risk-panel">'
-        f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'risk_panel_summary', 'Checks before applying'))}</summary>"
+        f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'risk_panel_summary'))}</summary>"
         f'<div class="job-insight-group job-insight-warning"><ul>{check_items_html}</ul></div>'
         "</details>"
         if check_items_html
@@ -1798,7 +1768,7 @@ def render_job_card(
         clearance_items_html += row_html
     clearance_html = (
         '<details class="job-insights job-clearance-panel">'
-        f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'clearance_panel_summary', 'Clearances'))}</summary>"
+        f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'clearance_panel_summary'))}</summary>"
         f'<div class="job-insight-group is-secondary"><ul class="job-requirement-list">{clearance_items_html}</ul></div>'
         "</details>"
         if clearance_items_html
@@ -1816,26 +1786,26 @@ def render_job_card(
     if active_debug_mode and (has_llm_review_data or score_breakdown):
         llm_review_parts = []
         if has_llm_review_data:
-            unknown_decision_label = _workspace_label("scoring_audit_labels", "decision_label_unknown", "")
+            unknown_decision_label = _workspace_label("scoring_audit_labels", "decision_label_unknown")
             llm_decision = str(record.get(RECORD_LLM_DECISION_KEY) or "").strip().upper()
             final_decision = (
-                _workspace_label("scoring_audit_labels", "decision_label_kept", "")
+                _workspace_label("scoring_audit_labels", "decision_label_kept")
                 if llm_decision == "KEEP"
                 else (
-                    _workspace_label("scoring_audit_labels", "decision_label_rejected", "")
+                    _workspace_label("scoring_audit_labels", "decision_label_rejected")
                     if llm_decision == "REJECT"
                     else llm_decision or unknown_decision_label
                 )
             )
             llm_grade = str(record.get(RECORD_LLM_FIT_GRADE_KEY) or "").strip().upper() or unknown_decision_label
             summary_items = [
-                f"<li>{safe_html(_workspace_label('scoring_audit_labels', 'final_decision_prefix', ''))} {safe_html(final_decision)}</li>",
-                f"<li>{safe_html(_workspace_label('scoring_audit_labels', 'final_score_prefix', ''))} {safe_html(str(fit_points))}</li>",
-                f"<li>{safe_html(_workspace_label('scoring_audit_labels', 'llm_fit_grade_prefix', ''))} {safe_html(llm_grade)}</li>",
+                f"<li>{safe_html(_workspace_label('scoring_audit_labels', 'final_decision_prefix'))} {safe_html(final_decision)}</li>",
+                f"<li>{safe_html(_workspace_label('scoring_audit_labels', 'final_score_prefix'))} {safe_html(str(fit_points))}</li>",
+                f"<li>{safe_html(_workspace_label('scoring_audit_labels', 'llm_fit_grade_prefix'))} {safe_html(llm_grade)}</li>",
             ]
             eligibility_gate = eligibility_gate_diagnostics(display_record, active_profile)
             summary_items.append(
-                f"<li>{safe_html(_workspace_label('scoring_audit_labels', 'eligibility_gate_prefix', ''))} "
+                f"<li>{safe_html(_workspace_label('scoring_audit_labels', 'eligibility_gate_prefix'))} "
                 f"{safe_html(eligibility_gate['label'])} — {safe_html(str(eligibility_gate['reason'] or ''))}</li>"
             )
             occupation_scoring_rules = get_scoring_rules(active_profile)
@@ -1847,7 +1817,7 @@ def render_job_card(
                 f"{requirement_fit_points} + ({occupation_alignment['adjustment']:+d}) = {fit_points}"
             )
             summary_items.append(
-                f"<li>{safe_html(_workspace_label('scoring_audit_labels', 'occupation_alignment_prefix', ''))} "
+                f"<li>{safe_html(_workspace_label('scoring_audit_labels', 'occupation_alignment_prefix'))} "
                 f"{safe_html(occupation_alignment['alignment_label'])} — "
                 f"{safe_html(occupation_alignment['reason'])} "
                 f"(adjustment {occupation_alignment['adjustment']:+d}, {safe_html(occupation_calculation)})</li>"
@@ -1858,19 +1828,19 @@ def render_job_card(
             llm_output_tokens = record.get(RECORD_LLM_OUTPUT_TOKENS_KEY)
             if llm_elapsed_ms not in (None, ""):
                 summary_items.append(
-                    f"<li>{safe_html(_workspace_label('workspace_card_labels', 'debug_llm_time_label', 'LLM time'))}: {safe_html(str(llm_elapsed_ms))} ms</li>"
+                    f"<li>{safe_html(_workspace_label('workspace_card_labels', 'debug_llm_time_label'))}: {safe_html(str(llm_elapsed_ms))} ms</li>"
                 )
             if llm_cost_usd not in (None, ""):
                 summary_items.append(
-                    f"<li>{safe_html(_workspace_label('workspace_card_labels', 'debug_llm_cost_label', 'LLM cost'))}: ${float(llm_cost_usd):.6f}</li>"
+                    f"<li>{safe_html(_workspace_label('workspace_card_labels', 'debug_llm_cost_label'))}: ${float(llm_cost_usd):.6f}</li>"
                 )
             if llm_input_tokens not in (None, ""):
                 summary_items.append(
-                    f"<li>{safe_html(_workspace_label('workspace_card_labels', 'debug_llm_input_tokens_label', 'Input tokens'))}: {safe_html(str(llm_input_tokens))}</li>"
+                    f"<li>{safe_html(_workspace_label('workspace_card_labels', 'debug_llm_input_tokens_label'))}: {safe_html(str(llm_input_tokens))}</li>"
                 )
             if llm_output_tokens not in (None, ""):
                 summary_items.append(
-                    f"<li>{safe_html(_workspace_label('workspace_card_labels', 'debug_llm_output_tokens_label', 'Output tokens'))}: {safe_html(str(llm_output_tokens))}</li>"
+                    f"<li>{safe_html(_workspace_label('workspace_card_labels', 'debug_llm_output_tokens_label'))}: {safe_html(str(llm_output_tokens))}</li>"
                 )
             llm_review_parts.append(
                 f'<div class="job-insight-group is-secondary"><ul>{"".join(summary_items)}</ul></div>'
@@ -1884,7 +1854,7 @@ def render_job_card(
             if score_breakdown_html:
                 llm_review_parts.append(
                     '<div class="job-insight-group is-secondary">'
-                    f"<strong>{safe_html(_workspace_label('workspace_card_labels', 'debug_score_breakdown_summary', 'Score breakdown'))}</strong>"
+                    f"<strong>{safe_html(_workspace_label('workspace_card_labels', 'debug_score_breakdown_summary'))}</strong>"
                     f"<ul>{score_breakdown_html}</ul>"
                     "</div>"
                 )
@@ -1897,7 +1867,7 @@ def render_job_card(
         )
         llm_review_html = (
             '<details class="job-insights job-llm-review">'
-            f"<summary>{safe_html(_workspace_label('scoring_audit_labels', 'debug_llm_review_summary', ''))}</summary>"
+            f"<summary>{safe_html(_workspace_label('scoring_audit_labels', 'debug_llm_review_summary'))}</summary>"
             f"{''.join(llm_review_parts)}"
             "</details>"
         )
@@ -1932,33 +1902,33 @@ def render_job_card(
             if _ch_header_parts:
                 _ch_items.append(" — ".join(_ch_header_parts))
             if _ch_role:
-                _ch_items.append(f"{_workspace_label('candidate_history_labels', 'role_prefix', '')} {_ch_role}")
+                _ch_items.append(f"{_workspace_label('candidate_history_labels', 'role_prefix')} {_ch_role}")
             if _ch_evidence_raw:
                 _ch_items.append(
-                    f"{_workspace_label('candidate_history_labels', 'evidence_prefix', '')} {_ch_evidence_raw}"
+                    f"{_workspace_label('candidate_history_labels', 'evidence_prefix')} {_ch_evidence}"
                 )
             if _ch_confidence:
                 _ch_items.append(
-                    f"{_workspace_label('candidate_history_labels', 'confidence_prefix', '')} {_ch_confidence}"
+                    f"{_workspace_label('candidate_history_labels', 'confidence_prefix')} {_ch_confidence}"
                 )
             if _ch_match_confidence:
                 _ch_items.append(
-                    f"{_workspace_label('candidate_history_labels', 'company_match_confidence_prefix', '')} "
+                    f"{_workspace_label('candidate_history_labels', 'company_match_confidence_prefix')} "
                     f"{_ch_match_confidence}"
                 )
             if _ch_match_reason:
                 _ch_items.append(
-                    f"{_workspace_label('candidate_history_labels', 'company_match_reason_prefix', '')} "
+                    f"{_workspace_label('candidate_history_labels', 'company_match_reason_prefix')} "
                     f"{_ch_match_reason}"
                 )
             if _cand_hist_review_reason:
                 _ch_items.append(
-                    f"{_workspace_label('candidate_history_labels', 'review_reason_prefix', '')} "
+                    f"{_workspace_label('candidate_history_labels', 'review_reason_prefix')} "
                     f"{_cand_hist_review_reason}"
                 )
             candidate_history_html = (
                 '<details class="job-candidate-history">'
-                f"<summary>{safe_html(_workspace_label('candidate_history_labels', 'summary', ''))}</summary>"
+                f"<summary>{safe_html(_workspace_label('candidate_history_labels', 'summary'))}</summary>"
                 f"<ul>{''.join(f'<li>{safe_html(item)}</li>' for item in _ch_items)}</ul>"
                 "</details>"
             )
@@ -1967,7 +1937,7 @@ def render_job_card(
         actions_html = (
             '<div class="job-actions">'
             f'<button class="review-button review-undo workspace-action-button workspace-action-button--primary workspace-action-button--selected" type="button" data-review-action="unapply" {button_data_attrs}>'
-            f'{safe_html(_workspace_label("workspace_card_labels", "action_undo_applied_label", ""))}</button>'
+            f'{safe_html(_workspace_label("workspace_card_labels", "action_undo_applied_label"))}</button>'
             '<span class="review-status" aria-live="polite"></span>'
             "</div>"
         )
@@ -1975,7 +1945,7 @@ def render_job_card(
         actions_html = (
             '<div class="job-actions">'
             f'<button class="review-button review-undo workspace-action-button workspace-action-button--neutral" type="button" data-review-action="unhide" {button_data_attrs}>'
-            f'{safe_html(_workspace_label("workspace_card_labels", "action_unhide_label", ""))}</button>'
+            f'{safe_html(_workspace_label("workspace_card_labels", "action_unhide_label"))}</button>'
             '<span class="review-status" aria-live="polite"></span>'
             "</div>"
         )
@@ -1983,13 +1953,13 @@ def render_job_card(
         actions_html = (
             '<div class="job-actions">'
             f'<button class="review-button review-applied workspace-action-button workspace-action-button--primary" type="button" data-review-action="applied" {button_data_attrs}>'
-            f'{safe_html(_workspace_label("workspace_card_labels", "action_applied_label", "Applied"))}</button>'
+            f'{safe_html(_workspace_label("workspace_card_labels", "action_applied_label"))}</button>'
             f'<button class="review-button review-not-for-me workspace-action-button workspace-action-button--danger" type="button" data-review-action="not_for_me" {button_data_attrs} '
-            f'title="{safe_html(_workspace_label("workspace_card_labels", "action_not_for_me_tooltip", ""))}">'
-            f'{safe_html(_workspace_label("workspace_card_labels", "action_not_for_me_label", ""))}</button>'
+            f'title="{safe_html(_workspace_label("workspace_card_labels", "action_not_for_me_tooltip"))}">'
+            f'{safe_html(_workspace_label("workspace_card_labels", "action_not_for_me_label"))}</button>'
             f'<button class="review-button review-hide workspace-action-button workspace-action-button--neutral" type="button" data-review-action="hidden" {button_data_attrs} '
-            f'title="{safe_html(_workspace_label("workspace_card_labels", "action_hide_tooltip", ""))}">'
-            f'{safe_html(_workspace_label("workspace_card_labels", "action_hide_label", "Hide"))}</button>'
+            f'title="{safe_html(_workspace_label("workspace_card_labels", "action_hide_tooltip"))}">'
+            f'{safe_html(_workspace_label("workspace_card_labels", "action_hide_label"))}</button>'
             '<span class="review-status" aria-live="polite"></span>'
             "</div>"
         )
@@ -2010,24 +1980,24 @@ def render_job_card(
         '<div class="job-title-row">'
         f'<a class="job-link" href="{url}" target="_blank" rel="noopener noreferrer" data-job-key="{job_key}" data-job-url="{url}" data-job-title="{title}">{title}</a>'
         + (
-            f'<button class="title-block-btn chip-button" type="button" data-review-action="block_similar" {button_data_attrs} aria-expanded="false" aria-controls="{safe_html(title_block_panel_id)}" title="{safe_html(_workspace_label("workspace_card_labels", "title_block_button_tooltip", "Hide future roles whose titles contain exact phrases you choose before Job Hunter spends time reading the full ad."))}">{safe_html(_workspace_label("workspace_card_labels", "title_block_button_label", "Hide similar titles"))}</button>'
+            f'<button class="title-block-btn chip-button" type="button" data-review-action="block_similar" {button_data_attrs} aria-expanded="false" aria-controls="{safe_html(title_block_panel_id)}" title="{safe_html(_workspace_label("workspace_card_labels", "title_block_button_tooltip"))}">{safe_html(_workspace_label("workspace_card_labels", "title_block_button_label"))}</button>'
             f'<div id="{safe_html(title_block_panel_id)}" class="block-confirm" data-block-confirm hidden>'
-            f'<p class="block-confirm-copy">{safe_html(_workspace_label("workspace_card_labels", "title_block_prompt_copy", ""))}</p>'
+            f'<p class="block-confirm-copy">{safe_html(_workspace_label("workspace_card_labels", "title_block_prompt_copy"))}</p>'
             '<details class="block-confirm-help">'
-            f'<summary>{safe_html(_workspace_label("workspace_card_labels", "title_block_help_summary", ""))}</summary>'
-            f'<p>{safe_html(_workspace_label("workspace_card_labels", "title_block_guidance_copy", ""))}</p>'
+            f'<summary>{safe_html(_workspace_label("workspace_card_labels", "title_block_help_summary"))}</summary>'
+            f'<p>{safe_html(_workspace_label("workspace_card_labels", "title_block_guidance_copy"))}</p>'
             "</details>"
-            f'<p class="block-confirm-copy">{safe_html(_workspace_label("workspace_card_labels", "current_title_prefix_label", ""))} <strong>{title}</strong></p>'
+            f'<p class="block-confirm-copy">{safe_html(_workspace_label("workspace_card_labels", "current_title_prefix_label"))} <strong>{title}</strong></p>'
             '<div class="block-manual-row">'
-            f'<span class="block-manual-label">{safe_html(_workspace_label("workspace_card_labels", "exact_title_phrase_label", ""))}</span>'
+            f'<span class="block-manual-label">{safe_html(_workspace_label("workspace_card_labels", "exact_title_phrase_label"))}</span>'
             f'<input class="block-manual-input" type="text" data-block-manual-input placeholder="e.g. sap, payroll, contract management" value="{block_title_hint}">'
-            f'<span class="block-manual-help">{safe_html(_workspace_label("workspace_card_labels", "title_block_manual_help", ""))}</span>'
+            f'<span class="block-manual-help">{safe_html(_workspace_label("workspace_card_labels", "title_block_manual_help"))}</span>'
             "</div>"
             '<p class="block-impact" data-block-impact></p>'
-            f'<p class="block-confirm-sub">{safe_html(_workspace_label("workspace_card_labels", "title_block_strong_filter_copy", ""))}</p>'
+            f'<p class="block-confirm-sub">{safe_html(_workspace_label("workspace_card_labels", "title_block_strong_filter_copy"))}</p>'
             '<div class="block-confirm-actions">'
-            f'<button class="mini-button mini-button-primary" type="button" data-confirm-block disabled>{safe_html(_workspace_label("workspace_card_labels", "action_block_matching_titles_label", ""))}</button>'
-            f'<button class="mini-button" type="button" data-cancel-block>{safe_html(_workspace_label("workspace_card_labels", "action_cancel_label", ""))}</button>'
+            f'<button class="mini-button mini-button-primary" type="button" data-confirm-block disabled>{safe_html(_workspace_label("workspace_card_labels", "action_block_matching_titles_label"))}</button>'
+            f'<button class="mini-button" type="button" data-cancel-block>{safe_html(_workspace_label("workspace_card_labels", "action_cancel_label"))}</button>'
             "</div>"
             "</div>"
             '<span class="block-status" aria-live="polite"></span>'
@@ -2093,8 +2063,8 @@ def render_section(
             '<div class="section-tools">'
             '<span class="pagination-label pagination-page-label"></span>'
             '<span class="pagination-match-count"></span>'
-            f'<button class="pagination-button" type="button" data-page-direction="prev">{safe_html(_workspace_label("workspace_card_labels", "pagination_prev_label", ""))}</button>'
-            f'<button class="pagination-button" type="button" data-page-direction="next">{safe_html(_workspace_label("workspace_card_labels", "pagination_next_label", ""))}</button>'
+            f'<button class="pagination-button" type="button" data-page-direction="prev">{safe_html(_workspace_label("workspace_card_labels", "pagination_prev_label"))}</button>'
+            f'<button class="pagination-button" type="button" data-page-direction="next">{safe_html(_workspace_label("workspace_card_labels", "pagination_next_label"))}</button>'
             "</div>"
             "</div>"
         )

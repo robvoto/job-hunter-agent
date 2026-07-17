@@ -22,7 +22,6 @@ def test_workspace_job_requirements_summary_label_comes_from_ui_labels():
         workspace_renderer._workspace_label(
             "workspace_card_labels",
             "job_requirements_summary",
-            "Requirements",
         )
         == "Job Requirements"
     )
@@ -58,5 +57,4 @@ def test_workspace_label_raises_when_label_is_missing(monkeypatch):
         workspace_renderer._workspace_label(
             "workspace_card_labels",
             "job_requirements_summary",
-            "Requirements",
         )

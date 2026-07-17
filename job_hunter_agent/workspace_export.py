@@ -113,7 +113,6 @@ def _build_badges(record: dict, workspace_state: str) -> list[str]:
                 _workspace_label(
                     "workspace_card_labels",
                     "posting_channel_agency_recruiter_badge",
-                    "Agency recruiter",
                 )
             )
         else:
