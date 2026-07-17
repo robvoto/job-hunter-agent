@@ -14,7 +14,7 @@ from string import Template
 from typing import Any, Dict, List, Optional
 
 from job_hunter_agent.capability_matching import (
-    build_risk_and_missing_profile_support,
+    build_display_competitive_risks,
     reviewed_signal_match_summary,
 )
 from job_hunter_agent.company_normalization import normalize_company_name
@@ -122,13 +122,6 @@ from job_hunter_agent.work_mode_extraction import (
 logger = logging.getLogger(__name__)
 
 WORKSPACE_DEBUG_MODE = DEBUG_MODE
-
-DESCRIPTION_CAPTURE_ISSUE = "Full job description not captured clearly"
-TITLE_BLOCK_GUIDANCE_COPY = (
-    "Job sites often return broad results even when the search is correct. "
-    "If a title clearly does not match what you want, enter the exact phrase you want blocked from future titles. "
-    "This helps remove repeated noise from future results without guessing which title fragments are safe to exclude."
-)
 
 
 def _chunk_full_description_text(description: str) -> list[str]:
@@ -332,12 +325,8 @@ def _render_structured_description_html(description: str) -> str:
 
 def _render_full_description_html(description: str) -> str:
     return _render_structured_description_html(description)
-TITLE_BLOCK_PROMPT_COPY = "Enter the exact title phrase to block before description review."
-TITLE_BLOCK_HELP_SUMMARY = "Learn more"
-TITLE_BLOCK_MANUAL_HELP = "Use exact phrases from the title. Use commas to add more than one."
-TITLE_BLOCK_STRONG_FILTER_COPY = (
-    "This is a strong filter. Matching titles will be hidden before description review."
-)
+
+
 _MANDATORY_REQUIREMENT_ACRONYMS = frozenset(
     {"3pl", "api", "erp", "hris", "nv1", "nv2", "sap", "sql", "uat", "wms"}
 )
@@ -371,8 +360,16 @@ def _capability_level_lookup(active_profile: Optional[dict]) -> dict[str, str]:
     return lookup
 
 
-def _render_scoring_audit_html(record: dict, active_profile: dict) -> str:
+def _render_scoring_audit_html(
+    record: dict, active_profile: dict, *, debug_mode: bool = False
+) -> str:
     """Render the scoring inputs and decision conversion without changing judgement."""
+
+    if not debug_mode:
+        return ""
+
+    def _audit_label(key: str) -> str:
+        return _workspace_label("scoring_audit_labels", key, "")
 
     diagnostics = requirement_fit_diagnostics(record, active_profile)
     has_debug_match_details = any(
@@ -387,7 +384,7 @@ def _render_scoring_audit_html(record: dict, active_profile: dict) -> str:
         weighted_credit = f"{float(row['weighted_credit']):g}"
         evidence_html = "".join(
             f"<li>{safe_html(value)}</li>" for value in (row["profile_support"] or [])
-        ) or "<li>No profile evidence returned</li>"
+        ) or f"<li>{safe_html(_audit_label('no_profile_evidence_returned'))}</li>"
         row_html += (
             "<tr>"
             f"<td>{safe_html(row['requirement'])}</td>"
@@ -418,19 +415,26 @@ def _render_scoring_audit_html(record: dict, active_profile: dict) -> str:
         total_requirement_weight = f"{float(diagnostics['total_requirement_weight']):g}"
         audit_table = (
             '<div class="job-insight-group is-secondary scoring-audit">'
-            "<strong>Scoring audit</strong>"
+            f"<strong>{safe_html(_audit_label('scoring_audit_heading'))}</strong>"
             '<div class="scoring-audit-scroll"><table>'
             "<thead><tr>"
-            "<th>Requirement</th><th>Importance</th><th>Requirement type</th><th>Status</th>"
-            "<th>Mapped profile capability or eligibility</th>"
+            f"<th>{safe_html(_audit_label('column_requirement'))}</th>"
+            f"<th>{safe_html(_audit_label('column_importance'))}</th>"
+            f"<th>{safe_html(_audit_label('column_requirement_type'))}</th>"
+            f"<th>{safe_html(_audit_label('column_status'))}</th>"
+            f"<th>{safe_html(_audit_label('column_mapped_profile_capability'))}</th>"
             + (
-                "<th>Matched via</th><th>Matched term</th>"
+                f"<th>{safe_html(_audit_label('column_matched_via'))}</th>"
+                f"<th>{safe_html(_audit_label('column_matched_term'))}</th>"
                 if has_debug_match_details
                 else ""
             )
-            + "<th>Candidate level</th>"
-            "<th>Requirement weight</th><th>Credit fraction</th><th>Weighted credit</th>"
-            "<th>Calculation</th><th>Profile evidence used</th>"
+            + f"<th>{safe_html(_audit_label('column_candidate_level'))}</th>"
+            f"<th>{safe_html(_audit_label('column_requirement_weight'))}</th>"
+            f"<th>{safe_html(_audit_label('column_credit_fraction'))}</th>"
+            f"<th>{safe_html(_audit_label('column_weighted_credit'))}</th>"
+            f"<th>{safe_html(_audit_label('column_calculation'))}</th>"
+            f"<th>{safe_html(_audit_label('column_profile_evidence_used'))}</th>"
             "</tr></thead>"
             f"<tbody>{row_html}</tbody>"
             "</table></div></div>"
@@ -438,10 +442,10 @@ def _render_scoring_audit_html(record: dict, active_profile: dict) -> str:
         audit_table += (
             '<div class="job-insight-group is-secondary scoring-audit-summary">'
             "<ul>"
-            f"<li>Earned weighted credit: {safe_html(earned_weighted_credit)}</li>"
-            f"<li>Total requirement weight: {safe_html(total_requirement_weight)}</li>"
-            f"<li>Calculation: {safe_html(diagnostics['final_calculation_label'])}</li>"
-            f"<li>Final Requirement Fit: {safe_html(str(diagnostics['final_requirement_fit']))}%</li>"
+            f"<li>{safe_html(_audit_label('earned_weighted_credit_prefix'))} {safe_html(earned_weighted_credit)}</li>"
+            f"<li>{safe_html(_audit_label('total_requirement_weight_prefix'))} {safe_html(total_requirement_weight)}</li>"
+            f"<li>{safe_html(_audit_label('calculation_prefix'))} {safe_html(diagnostics['final_calculation_label'])}</li>"
+            f"<li>{safe_html(_audit_label('final_requirement_fit_prefix'))} {safe_html(str(diagnostics['final_requirement_fit']))}%</li>"
             "</ul>"
             "</div>"
         )
@@ -451,25 +455,26 @@ def _render_scoring_audit_html(record: dict, active_profile: dict) -> str:
     review_source = compact_whitespace(str(record.get(RECORD_REVIEW_SOURCE_KEY) or ""))
     title_reason = compact_whitespace(str(record.get(RECORD_TITLE_REASON_KEY) or ""))
     reject_reason = compact_whitespace(str(record.get(RECORD_REJECT_REASON_KEY) or ""))
-    full_llm_review = "Run" if llm_decision else "Not run"
+    unavailable_label = _audit_label("unavailable_label")
+    full_llm_review = _audit_label("run_label") if llm_decision else _audit_label("not_run_label")
     conversion = (
         f"{llm_decision} → {final_decision}"
         if llm_decision and final_decision and llm_decision != final_decision
-        else final_decision or llm_decision or "Unavailable"
+        else final_decision or llm_decision or unavailable_label
     )
     trace_items = [
-        f"Title review: {title_reason or 'Unavailable'}",
-        f"Review source: {review_source or 'Unavailable'}",
-        f"Full LLM review: {full_llm_review}",
-        f"LLM decision: {llm_decision or 'Unavailable'}",
-        f"Final conversion: {conversion}",
+        f"{_audit_label('title_review_prefix')} {title_reason or unavailable_label}",
+        f"{_audit_label('review_source_prefix')} {review_source or unavailable_label}",
+        f"{_audit_label('full_llm_review_prefix')} {full_llm_review}",
+        f"{_audit_label('llm_decision_prefix')} {llm_decision or unavailable_label}",
+        f"{_audit_label('final_conversion_prefix')} {conversion}",
     ]
     if reject_reason:
-        trace_items.append(f"Rejection reason: {reject_reason}")
+        trace_items.append(f"{_audit_label('rejection_reason_prefix')} {reject_reason}")
     trace_html = "".join(f"<li>{safe_html(item)}</li>" for item in trace_items)
     return (
         '<div class="job-insight-group is-secondary scoring-decision-trace">'
-        "<strong>Decision trace</strong>"
+        f"<strong>{safe_html(_audit_label('decision_trace_heading'))}</strong>"
         f"<ul>{trace_html}</ul></div>"
         f"{audit_table}"
     )
@@ -547,9 +552,6 @@ _WORKSPACE_PAGE_LABEL_KEYS = (
     "rejection_admin_tip_prefix",
     "rejection_admin_tip_link_text",
 )
-ARCHIVE_LABEL = "Previously Saved Searches"
-ARCHIVE_BADGE_TOOLTIP = "This role was saved from an earlier search and kept on your workspace."
-ARCHIVE_CONTEXT_PREFIX = "Previously Saved Searches"
 
 
 @lru_cache(maxsize=1)
@@ -581,6 +583,11 @@ def _workspace_label(group: str, key: str, default: str) -> str:
     raise ValueError(f"ui_labels.json is missing {group}.{key}")
 
 
+ARCHIVE_LABEL = _workspace_label("workspace_page_labels", "archive_label", "")
+ARCHIVE_CONTEXT_PREFIX = _workspace_label("workspace_page_labels", "archive_context_prefix", "")
+ARCHIVE_BADGE_TOOLTIP = _workspace_label("workspace_card_labels", "archive_badge_tooltip", "")
+
+
 def _workspace_job_card_id(job_key: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", compact_whitespace(job_key).lower()).strip("-")
     return f"job-card-{slug}" if slug else "job-card"
@@ -608,15 +615,9 @@ def _humanize_check_item(text: str) -> str:
         if requirement_warning:
             return requirement_warning
     if _NV1_PATTERNS.search(lower):
-        return (
-            "This job appears to require NV1 clearance. "
-            "Your profile does not show NV1, so this may block the application."
-        )
+        return _workspace_label("check_item_labels", "nv1_clearance_warning", "")
     if _CLEARANCE_PATTERNS.search(lower):
-        return (
-            "This job appears to require a security clearance. "
-            "Check whether your clearance level meets the requirement before applying."
-        )
+        return _workspace_label("check_item_labels", "security_clearance_warning", "")
     return t
 
 
@@ -668,9 +669,8 @@ def _build_checks_before_applying_items(
     is_possible_repost: bool,
     similar_applied_record: Optional[dict],
     candidate_history: Optional[dict],
-    missing_profile_support: list[str],
+    hard_block_reasons_list: list[str],
     salary_fit_state: str,
-    requirement_coverage: Optional[list[dict]] = None,
     soft_risk_reasons: Optional[list[str]] = None,
     job_quality_signals: Optional[list[dict]] = None,
 ) -> list[str]:
@@ -687,35 +687,6 @@ def _build_checks_before_applying_items(
         seen.add(normalized)
         items.append(cleaned)
 
-    if isinstance(requirement_coverage, list):
-        for row in requirement_coverage:
-            if not isinstance(row, dict):
-                continue
-            # Eligibility rows (clearances, work rights, etc.) are surfaced exclusively
-            # by the dedicated Clearances panel — skip them here to avoid double-counting
-            # the same fact in both places.
-            if compact_whitespace(str(row.get("requirement_type") or "")).lower() == "eligibility":
-                continue
-            requirement = compact_whitespace(
-                str(row.get("requirement") or row.get("capability_name") or "")
-            )
-            if not requirement:
-                continue
-            status = compact_whitespace(str(row.get("status") or "")).lower()
-            importance = compact_whitespace(str(row.get("importance") or "")).lower()
-            label = friendly_capability_label(requirement) or requirement
-            if status == "invalid":
-                add(f"Needs review: {label}")
-                continue
-            if importance == "mandatory" and status in {"mismatch", "not_shown"}:
-                add(_humanize_missing_requirement_warning(requirement))
-            elif status == "partially_supported":
-                add(f"Partly matches your profile: {label}")
-            elif status == "mismatch":
-                add(f"Not in your profile: {label}")
-            elif status == "not_shown" and importance not in {"nice_to_have"}:
-                add(f"Not shown in your profile: {label}")
-
     for reason in history_warning_signals:
         cleaned = compact_whitespace(reason)
         if cleaned.lower().startswith("potential red flag:"):
@@ -725,8 +696,9 @@ def _build_checks_before_applying_items(
         add(cleaned)
 
     if description_issue:
-        add("Description issue: full job description was not captured clearly.")
+        add(_workspace_label("check_item_labels", "description_capture_issue", ""))
 
+    possible_repost_prefix = _workspace_label("check_item_labels", "possible_repost_prefix", "")
     if is_possible_repost and similar_applied_record:
         repost_title = compact_whitespace(str(similar_applied_record.get("title") or ""))
         repost_company = compact_whitespace(str(similar_applied_record.get("company") or ""))
@@ -735,11 +707,11 @@ def _build_checks_before_applying_items(
         )
         repost_bits = [bit for bit in [repost_title, repost_company, repost_source] if bit]
         add(
-            "Possible repost of applied job"
+            possible_repost_prefix
             + (f": {' — '.join(repost_bits)}" if repost_bits else ".")
         )
     elif is_possible_repost:
-        add("Possible repost of applied job.")
+        add(f"{possible_repost_prefix}.")
 
     if isinstance(candidate_history, dict) and candidate_history:
         cand_company = compact_whitespace(str(candidate_history.get("llm_company") or ""))
@@ -750,9 +722,9 @@ def _build_checks_before_applying_items(
         cand_confidence = compact_whitespace(str(candidate_history.get("llm_confidence") or "")).lower()
         if cand_company or cand_role:
             history_label = (
-                "Rejected before"
+                _workspace_label("check_item_labels", "rejected_before_label", "")
                 if cand_status == "rejection" and cand_confidence != "low"
-                else "Possible previous application"
+                else _workspace_label("check_item_labels", "possible_previous_application_label", "")
             )
             history_bits = [bit for bit in [cand_company, cand_role] if bit]
             add(
@@ -761,9 +733,9 @@ def _build_checks_before_applying_items(
             )
 
     if salary_fit_state == "below":
-        add("Salary below target.")
+        add(_workspace_label("check_item_labels", "salary_below_target", ""))
 
-    for item in missing_profile_support:
+    for item in hard_block_reasons_list:
         add(_humanize_check_item(str(item)))
 
     for item in soft_risk_reasons or []:
@@ -773,54 +745,6 @@ def _build_checks_before_applying_items(
         add(compact_whitespace(str(signal.get("evidence") or signal.get("label") or "")))
 
     return items[:6]
-
-
-def _humanize_score_breakdown_label(label: str, active_profile: Optional[dict]) -> str:
-    cleaned = compact_whitespace(label)
-    if not cleaned:
-        return ""
-    lowered = cleaned.lower()
-    if "role-family" in lowered:
-        if "alternative" in lowered or "also-consider" in lowered:
-            return "The job title matches one of your alternative roles"
-        return "The job title matches one of your target roles"
-    if lowered.startswith("description fit is"):
-        return "The job ad strongly matches your BA / technical BA experience"
-    if lowered.startswith("work type"):
-        if _all_work_types_selected(active_profile):
-            return ""
-        if "contract" in lowered:
-            return "This matches your contract preference"
-        if "permanent" in lowered:
-            return "This matches your permanent preference"
-        if "ftc" in lowered:
-            return "This matches your FTC preference"
-        return "Work type matches your preference"
-    if lowered.startswith("[") and "requirement supported:" in lowered:
-        match = re.search(
-            r"requirement supported:\s*(.*?)(?:\s*\|\s*capability:.*)?$",
-            cleaned,
-            re.IGNORECASE,
-        )
-        if match:
-            requirement = compact_whitespace(match.group(1))
-            if requirement:
-                return f"Requirement matched: {requirement}"
-    if lowered.startswith("[") and "requirement partially supported:" in lowered:
-        match = re.search(
-            r"requirement partially supported:\s*(.*?)(?:\s*\|\s*capability:.*)?$",
-            cleaned,
-            re.IGNORECASE,
-        )
-        if match:
-            requirement = compact_whitespace(match.group(1))
-            if requirement:
-                return f"Requirement partly supported: {requirement}"
-    if cleaned == "Passed content filters":
-        return "Passed content filters"
-    if cleaned == "Already viewed by you":
-        return "Already viewed by you"
-    return cleaned
 
 
 def score_filter_option_label(threshold: int, scoring_profile: Optional[dict] = None) -> str:
@@ -953,9 +877,9 @@ def render_workspace_tabs_html(
     active_target: str = "potential",
 ) -> str:
     tabs = [
-        ("potential", "Potential Jobs", shortlist_count),
-        ("applied", "Applied", applied_count),
-        ("hidden", "Hidden", hidden_count),
+        ("potential", _workspace_label("workspace_page_labels", "potential_jobs_tab", ""), shortlist_count),
+        ("applied", _workspace_label("workspace_page_labels", "applied_jobs_tab", ""), applied_count),
+        ("hidden", _workspace_label("workspace_page_labels", "hidden_jobs_tab", ""), hidden_count),
     ]
     buttons = []
     for target, label, count in tabs:
@@ -965,7 +889,8 @@ def render_workspace_tabs_html(
             f"{safe_html(label)} ({count})"
             "</button>"
         )
-    return '<div class="scope-tabs" aria-label="Top-level workspace views">' + "".join(buttons) + "</div>"
+    aria_label = safe_html(_workspace_label("workspace_page_labels", "top_level_workspace_views_aria_label", ""))
+    return f'<div class="scope-tabs" aria-label="{aria_label}">' + "".join(buttons) + "</div>"
 
 
 def _record_is_hard_blocked(record: dict) -> bool:
@@ -1000,6 +925,8 @@ def humanize_reject_reason(reason: Optional[str]) -> str:
         return f"Excluded role family: {cleaned_detail}"
     if prefix == "POSTED_TOO_OLD" and cleaned_detail:
         return f"Older than the search window ({cleaned_detail} days)"
+    if prefix == "STALE_REPOST":
+        return direct_map.get("STALE_REPOST", "Stale repost outside the search age")
     if prefix == "DESC_LOCATION" and cleaned_detail:
         return f"Location mismatch: {cleaned_detail}"
     if prefix == "DESC_CAPABILITY_LOW" and cleaned_detail:
@@ -1019,11 +946,7 @@ def humanize_reject_reason(reason: Optional[str]) -> str:
     if prefix == "PREF_SECTOR_OUTSIDE_SELECTED":
         return "Rejected because job sector is outside selected sectors."
     if prefix == TITLE_REASON_POTENTIAL_MATCH:
-        return (
-            load_ui_labels()
-            .get("title_match_labels", {})
-            .get("secondary_match", "Also-consider role-family match")
-        )
+        return _workspace_label("title_match_labels", "secondary_match", "")
     if prefix == "CARD_SPECIALIST" and cleaned_detail:
         return f"Rejected early from card metadata: {cleaned_detail}"
     fallback = raw.replace("_", " ").lower()
@@ -1051,7 +974,6 @@ def render_job_card(
     ) or compact_whitespace(str(record.get("company") or "N/A"))
     url = safe_html(record.get("url", "#"))
     job_key = safe_html(str(record.get("job_key") or ""))
-    title_reason = record.get("title_reason")
     applied_record = bool(record.get("applied"))
     archived = bool(record.get("archived"))
     hidden_record = bool(record.get("hidden"))
@@ -1082,34 +1004,18 @@ def render_job_card(
             record, active_profile
         )
         fit_highlights = build_fit_highlights(record, trusted_desc, active_profile)
-        (
-            soft_risk_reasons,
-            missing_profile_support,
-            missing_clearance_support,
-        ) = build_risk_and_missing_profile_support(
-            trusted_desc,
-            title_reason,
-            active_profile,
-            competitive_signals=display_record.get("competitive_signals")
+        soft_risk_reasons = build_display_competitive_risks(
+            display_record.get("competitive_signals")
             if isinstance(display_record.get("competitive_signals"), list)
-            else None,
-            requirement_coverage=record.get(RECORD_REQUIREMENT_COVERAGE_KEY)
-            if isinstance(record.get(RECORD_REQUIREMENT_COVERAGE_KEY), list)
-            else None,
+            else None
         )
         blocking_reasons = hard_block_reasons(display_record, active_profile)
-        if blocking_reasons:
-            missing_profile_support = dedupe_preserve_order(
-                [*blocking_reasons, *missing_profile_support]
-            )
     else:
         role_summary = stored_snapshot
         display_record["fit_confidence"] = "LOW"
         display_record["competitive_signals"] = []
         fit_highlights = []
         soft_risk_reasons = []
-        missing_profile_support = [DESCRIPTION_CAPTURE_ISSUE]
-        missing_clearance_support = []
         blocking_reasons = []
 
     similar_applied_record = None
@@ -1121,14 +1027,12 @@ def render_job_card(
     if _record_source == "linkedin" and record.get("posted_age_days") is None:
         soft_risk_reasons = dedupe_preserve_order([
             *soft_risk_reasons,
-            "Freshness unknown — LinkedIn did not provide a post date for this listing. Confirm it is still open before applying.",
+            _workspace_label("check_item_labels", "linkedin_freshness_unknown_warning", ""),
         ])
     display_record["hard_block_reasons"] = blocking_reasons
     display_record["role_snapshot"] = role_summary
     display_record["fit_highlights"] = fit_highlights
     display_record["soft_risk_reasons"] = soft_risk_reasons
-    display_record["missing_profile_support"] = missing_profile_support
-    display_record["missing_clearance_support"] = missing_clearance_support
     try:
         fit_points, score_breakdown = fit_score_and_breakdown_displayed(display_record, scoring_profile)
     except RuntimeError as _score_exc:
@@ -1221,21 +1125,37 @@ def render_job_card(
 
     badges = []
     if applied_record:
-        badges.append(render_badge("Applied", "badge-viewed", "You already applied for this role."))
+        badges.append(
+            render_badge(
+                _workspace_label("workspace_card_labels", "applied_badge", ""),
+                "badge-viewed",
+                _workspace_label("workspace_card_labels", "applied_badge_tooltip", ""),
+            )
+        )
     elif hidden_record:
-        badges.append(render_badge("Hidden", "badge-hidden", "You hid this role for now."))
+        badges.append(
+            render_badge(
+                _workspace_label("workspace_card_labels", "hidden_badge", ""),
+                "badge-hidden",
+                _workspace_label("workspace_card_labels", "hidden_badge_tooltip", ""),
+            )
+        )
     elif archived:
         badges.append(render_badge(ARCHIVE_LABEL, "badge-archive", ARCHIVE_BADGE_TOOLTIP))
     if not applied_record and not seen_by_you:
         badges.append(
             render_badge(
-                "New To You", "badge-new", "You have not opened this role from the workspace yet."
+                _workspace_label("workspace_card_labels", "new_to_you_badge", ""),
+                "badge-new",
+                _workspace_label("workspace_card_labels", "new_to_you_badge_tooltip", ""),
             )
         )
     if is_stale:
         badges.append(
             render_badge(
-                "15+ Days Old", "badge-stale", "This role is older, but still saved for reference."
+                _workspace_label("workspace_card_labels", "stale_badge", ""),
+                "badge-stale",
+                _workspace_label("workspace_card_labels", "stale_badge_tooltip", ""),
             )
         )
     elif seen_by_you:
@@ -1319,7 +1239,11 @@ def render_job_card(
             )
     elif channel_kind == "direct_employer":
         badges.append(
-            render_badge("Company", "badge-source-neutral", "Posted directly by the employer.")
+            render_badge(
+                _workspace_label("workspace_card_labels", "posting_channel_direct_employer_badge", ""),
+                "badge-source-neutral",
+                _workspace_label("workspace_card_labels", "posting_channel_direct_employer_tooltip", ""),
+            )
         )
     elif channel_signal.get("needs_review") or has_channel_evidence:
         badges.append(
@@ -1461,9 +1385,9 @@ def render_job_card(
         _cand_hist_needs_review = bool(_cand_hist.get("llm_needs_review"))
         _cand_hist_review_reason = str(_cand_hist.get("llm_review_reason") or "").strip()
         _cand_hist_badge_label = (
-            "Rejected before"
+            _workspace_label("check_item_labels", "rejected_before_label", "")
             if _ch_status == "rejection" and _ch_confidence != "low"
-            else "Possible previous application"
+            else _workspace_label("check_item_labels", "possible_previous_application_label", "")
         )
         _cand_hist_details = {
             "company": str(_cand_hist.get("llm_company") or "").strip(),
@@ -1489,11 +1413,15 @@ def render_job_card(
     meta_items = []
     if posted_display:
         meta_items.append(
-            f'<span class="job-meta-item"><strong>Posted</strong> {safe_html(str(posted_display))}</span>'
+            f'<span class="job-meta-item"><strong>{safe_html(_workspace_label("workspace_meta_labels", "posted", ""))}</strong> {safe_html(str(posted_display))}</span>'
         )
     for label, value, always_show in [
-        ("Location", display_record.get("location"), False),
-        ("Work mode", display_work_mode_label(display_record), False),
+        (_workspace_label("workspace_meta_labels", "location", ""), display_record.get("location"), False),
+        (
+            _workspace_label("workspace_meta_labels", "work_mode", "Work mode"),
+            display_work_mode_label(display_record),
+            False,
+        ),
         (
             _workspace_label("workspace_meta_labels", "work_type", "Work type"),
             display_work_type_label(display_record),
@@ -1505,7 +1433,7 @@ def render_job_card(
             False,
         ),
         (
-            "Salary",
+            _workspace_label("workspace_meta_labels", "salary", ""),
             format_salary_display(
                 str(display_record.get("salary") or "N/A"),
                 work_type=str(display_record.get("work_type") or ""),
@@ -1522,15 +1450,24 @@ def render_job_card(
         soft_risk_reasons = dedupe_preserve_order(
             [
                 *soft_risk_reasons,
-                "Salary below target.",
+                _workspace_label("check_item_labels", "salary_below_target", ""),
             ]
         )
     if seen_by_you and record.get("last_viewed_at"):
-        context_bits.append(f"Opened by you {format_timestamp_label(record.get('last_viewed_at'))}")
+        context_bits.append(
+            f"{_workspace_label('workspace_card_labels', 'opened_by_you_prefix', '')} "
+            f"{format_timestamp_label(record.get('last_viewed_at'))}"
+        )
     if applied_record and record.get("last_applied_at"):
-        context_bits.append(f"Applied {format_timestamp_label(record.get('last_applied_at'))}")
+        context_bits.append(
+            f"{_workspace_label('workspace_card_labels', 'applied_context_prefix', '')} "
+            f"{format_timestamp_label(record.get('last_applied_at'))}"
+        )
     if hidden_record and record.get("last_hidden_at"):
-        context_bits.append(f"Hidden {format_timestamp_label(record.get('last_hidden_at'))}")
+        context_bits.append(
+            f"{_workspace_label('workspace_card_labels', 'hidden_context_prefix', '')} "
+            f"{format_timestamp_label(record.get('last_hidden_at'))}"
+        )
     elif archived and record.get("last_kept_at"):
         context_bits.append(
             f"{ARCHIVE_CONTEXT_PREFIX} {format_timestamp_label(record.get('last_kept_at'))}"
@@ -1554,8 +1491,8 @@ def render_job_card(
             f'<span class="job-summary-text">{safe_html(role_summary)}</span>'
             '<span class="job-summary-toggle" aria-hidden="true">'
             '<span class="job-summary-toggle-icon"></span>'
-            '<span class="job-summary-toggle-label job-summary-toggle-label--closed">Show more</span>'
-            '<span class="job-summary-toggle-label job-summary-toggle-label--open">Show less</span>'
+            f'<span class="job-summary-toggle-label job-summary-toggle-label--closed">{safe_html(_workspace_label("workspace_card_labels", "show_more_label", ""))}</span>'
+            f'<span class="job-summary-toggle-label job-summary-toggle-label--open">{safe_html(_workspace_label("workspace_card_labels", "show_less_label", ""))}</span>'
             '</span>'
             "</summary>"
             f'<div class="job-summary-expanded">{_render_full_description_html(display_trusted_desc)}</div>'
@@ -1568,9 +1505,8 @@ def render_job_card(
         is_possible_repost,
         similar_applied_record,
         _cand_hist,
-        missing_profile_support,
+        blocking_reasons,
         salary_fit_state,
-        display_record.get(RECORD_REQUIREMENT_COVERAGE_KEY),
         soft_risk_reasons,
         job_quality_signals,
     )
@@ -1578,23 +1514,26 @@ def render_job_card(
     raw_coverage = display_record.get(RECORD_REQUIREMENT_COVERAGE_KEY)
     merged_requirement_rows: dict[str, dict[str, Any]] = {}
     merged_requirement_order: list[str] = []
+    eligibility_coverage_rows: dict[str, dict[str, Any]] = {}
+    eligibility_coverage_order: list[str] = []
     has_requirement_subtitles = False
     capability_level_lookup = _capability_level_lookup(active_profile)
     # When requirement_coverage is available, show only those rows (they are more
     # detailed and LLM-verified). Skip the short job_requirements bullets to avoid
     # showing the same requirements twice with different text.
     has_coverage = isinstance(raw_coverage, list) and len(raw_coverage) > 0
-    coverage_status_labels = {
-        "supported": "In profile",
-        "partially_supported": "Partial match",
-        "not_shown": "",
-        "mismatch": "Not in profile",
-        "invalid": "Needs review",
+    workspace_card_label_group = _workspace_ui_labels().get("workspace_card_labels", {})
+    coverage_status_label_keys = {
+        "supported": "coverage_status_supported",
+        "partially_supported": "coverage_status_partially_supported",
+        "not_shown": "coverage_status_not_shown",
+        "mismatch": "coverage_status_mismatch",
+        "invalid": "coverage_status_invalid",
     }
-    profile_status_labels = {
-        STATUS_CONFIRMED_HAVE: "In profile",
-        STATUS_CONFIRMED_DO_NOT_HAVE: "Not in profile",
-        STATUS_UNKNOWN: "",
+    profile_status_label_keys = {
+        STATUS_CONFIRMED_HAVE: "coverage_status_supported",
+        STATUS_CONFIRMED_DO_NOT_HAVE: "coverage_status_mismatch",
+        STATUS_UNKNOWN: "coverage_status_not_shown",
     }
     importance_label_keys = {
         "mandatory": "importance_mandatory",
@@ -1617,19 +1556,126 @@ def render_job_card(
             bucket = 2
         return (bucket, requirement)
 
+    def _render_requirement_row_html(row: dict[str, Any]) -> tuple[str, bool]:
+        req_text = compact_whitespace(str(row.get("requirement") or ""))
+        if not req_text:
+            return "", False
+        profile_status = str(row.get("profile_status") or "").strip()
+        coverage_status = str(row.get("coverage_status") or "").strip().lower()
+        importance = str(row.get("importance") or "").strip().lower()
+        profile_name = compact_whitespace(
+            str(
+                row.get("profile_name")
+                or row.get("capability_name")
+                or row.get("eligibility_name")
+                or ""
+            )
+        )
+        matched_text = compact_whitespace(str(row.get("matched_job_text") or ""))
+        level_label = capability_level_lookup.get(_normalize_capability_token(profile_name), "")
+
+        if coverage_status == "supported":
+            css_modifier = "supported"
+        elif coverage_status == "partially_supported":
+            css_modifier = "partially-supported"
+        elif coverage_status == "mismatch":
+            css_modifier = "mismatch"
+        elif coverage_status == "invalid":
+            css_modifier = "invalid"
+        elif coverage_status == "not_shown" and importance == "mandatory":
+            css_modifier = "mandatory-not-shown"
+        elif coverage_status == "not_shown":
+            css_modifier = "not-shown"
+        elif profile_status == STATUS_CONFIRMED_HAVE:
+            css_modifier = "confirmed-have"
+        elif profile_status == STATUS_CONFIRMED_DO_NOT_HAVE:
+            css_modifier = "confirmed-do-not-have"
+        else:
+            css_modifier = "unknown"
+
+        if coverage_status:
+            status_key = coverage_status_label_keys.get(coverage_status)
+        else:
+            status_key = profile_status_label_keys.get(profile_status)
+        status_label = workspace_card_label_group.get(status_key, "") if status_key else ""
+
+        importance_label = ""
+        if importance:
+            importance_label = _workspace_label(
+                "workspace_card_labels",
+                importance_label_keys.get(importance, "importance_preferred"),
+                importance.replace("_", " ").title(),
+            )
+
+        detail_parts = []
+        if profile_name:
+            profile_detail = profile_name
+            if level_label:
+                profile_detail = f"{profile_detail} ({level_label})"
+            detail_parts.append(profile_detail)
+        if matched_text and compact_whitespace(matched_text).lower() != req_text.lower():
+            detail_parts.append(f'"{matched_text}"')
+        detail_html = (
+            f'<span class="req-coverage-detail">{safe_html(" · ".join(detail_parts))}</span>'
+            if active_debug_mode and detail_parts
+            else ""
+        )
+        importance_html = (
+            f'<span class="job-req-importance job-req-importance--{safe_html(importance.replace("_", "-"))}">{safe_html(importance_label)}</span>'
+            if importance_label
+            else ""
+        )
+        status_html = (
+            f'<span class="job-requirement-status">{safe_html(status_label)}</span>'
+            if status_label
+            else ""
+        )
+
+        add_to_profile_html = ""
+        if css_modifier in ("mismatch", "not-shown", "mandatory-not-shown", "unknown"):
+            add_to_profile_html = (
+                f'<a class="btn btn-secondary btn-compact-action job-requirement-action" href="/settings#section-matrix" '
+                f'data-prefill="{safe_html(req_text)}" '
+                f'title="{safe_html(_workspace_label("workspace_card_labels", "add_to_profile_action_title", ""))}" target="_blank" rel="noopener">'
+                f'{safe_html(_workspace_label("workspace_card_labels", "add_to_profile_action_label", ""))}</a>'
+            )
+        badges_html = ""
+        if importance_html or status_html or add_to_profile_html:
+            badges_html = (
+                f'<div class="job-requirement-badges">'
+                f"{importance_html}"
+                f"{status_html}"
+                f"{add_to_profile_html}"
+                f"</div>"
+            )
+        html = (
+            f'<li class="job-requirement-item job-requirement-item--{safe_html(css_modifier)}">'
+            f'<span class="job-requirement-text">{safe_html(req_text)}{detail_html}</span>'
+            f"{badges_html}"
+            f"</li>"
+        )
+        return html, bool(detail_parts)
+
     if has_coverage:
-        # Coverage path: one row per coverage entry, no job_requirements duplication
+        # Coverage path: one row per coverage entry, no job_requirements duplication.
+        # Eligibility requirements (clearance, citizenship, work rights, etc.) get their
+        # own Clearances panel below rather than mixing into the general list.
         for item in raw_coverage:
             if not isinstance(item, dict):
                 continue
             req_text = compact_whitespace(str(item.get("requirement") or ""))
             if not req_text:
                 continue
+            is_eligibility = (
+                compact_whitespace(str(item.get("requirement_type") or "")).lower() == "eligibility"
+            )
+            target_rows = eligibility_coverage_rows if is_eligibility else merged_requirement_rows
+            target_order = eligibility_coverage_order if is_eligibility else merged_requirement_order
             key = _requirement_key(req_text)
-            if key not in merged_requirement_rows:
-                merged_requirement_rows[key] = {"requirement": req_text}
-                merged_requirement_order.append(key)
-            row = merged_requirement_rows[key]
+            if key not in target_rows:
+                target_rows[key] = {"requirement": req_text}
+                target_order.append(key)
+            row = target_rows[key]
             row["coverage_status"] = str(item.get("status") or "not_shown").strip().lower()
             row["importance"] = str(item.get("importance") or "preferred").strip().lower()
             row["profile_name"] = compact_whitespace(str(item.get("profile_name") or ""))
@@ -1648,8 +1694,28 @@ def render_job_card(
                 merged_requirement_order.append(key)
             merged_requirement_rows[key]["profile_status"] = item.get("status")
 
-    if requirement_statuses or isinstance(raw_coverage, list):
-        requirement_items_html = ""
+    occupation_row_html = ""
+    occupation_alignment = occupation_alignment_diagnostics(
+        display_record, get_scoring_rules(active_profile)
+    )
+    if occupation_alignment["is_classified"] and occupation_alignment["alignment"] != "same":
+        occ_modifier = (
+            "mismatch" if occupation_alignment["alignment"] == "different" else "partially-supported"
+        )
+        occ_label = _workspace_label(
+            "workspace_card_labels", "occupation_alignment_row_label", "Job title match"
+        )
+        occ_text = (
+            f"{occ_label}: {occupation_alignment['alignment_label']} — "
+            f"{occupation_alignment['reason']}"
+        )
+        occupation_row_html = (
+            f'<li class="job-requirement-item job-requirement-item--{occ_modifier}">'
+            f'<span class="job-requirement-text">{safe_html(occ_text)}</span></li>'
+        )
+
+    if requirement_statuses or isinstance(raw_coverage, list) or occupation_row_html:
+        requirement_items_html = occupation_row_html
         sorted_requirement_keys = sorted(
             merged_requirement_order,
             key=lambda key: _requirement_sort_key(merged_requirement_rows.get(key) or {}),
@@ -1658,106 +1724,11 @@ def render_job_card(
             row = merged_requirement_rows.get(key)
             if not isinstance(row, dict):
                 continue
-            req_text = compact_whitespace(str(row.get("requirement") or ""))
-            if not req_text:
+            row_html, has_subtitle = _render_requirement_row_html(row)
+            if not row_html:
                 continue
-            profile_status = str(row.get("profile_status") or "").strip()
-            coverage_status = str(row.get("coverage_status") or "").strip().lower()
-            importance = str(row.get("importance") or "").strip().lower()
-            profile_name = compact_whitespace(
-                str(
-                    row.get("profile_name")
-                    or row.get("capability_name")
-                    or row.get("eligibility_name")
-                    or ""
-                )
-            )
-            matched_text = compact_whitespace(str(row.get("matched_job_text") or ""))
-            level_label = capability_level_lookup.get(
-                _normalize_capability_token(profile_name), ""
-            )
-
-            if coverage_status == "supported":
-                css_modifier = "supported"
-            elif coverage_status == "partially_supported":
-                css_modifier = "partially-supported"
-            elif coverage_status == "mismatch":
-                css_modifier = "mismatch"
-            elif coverage_status == "invalid":
-                css_modifier = "invalid"
-            elif coverage_status == "not_shown" and importance == "mandatory":
-                css_modifier = "mandatory-not-shown"
-            elif coverage_status == "not_shown":
-                css_modifier = "not-shown"
-            elif profile_status == STATUS_CONFIRMED_HAVE:
-                css_modifier = "confirmed-have"
-            elif profile_status == STATUS_CONFIRMED_DO_NOT_HAVE:
-                css_modifier = "confirmed-do-not-have"
-            else:
-                css_modifier = "unknown"
-
-            if coverage_status:
-                status_label = coverage_status_labels.get(coverage_status, "")
-            else:
-                status_label = profile_status_labels.get(profile_status, "")
-
-            importance_label = ""
-            if importance:
-                importance_label = _workspace_label(
-                    "workspace_card_labels",
-                    importance_label_keys.get(importance, "importance_preferred"),
-                    importance.replace("_", " ").title(),
-                )
-
-            detail_parts = []
-            if profile_name:
-                profile_detail = profile_name
-                if level_label:
-                    profile_detail = f"{profile_detail} ({level_label})"
-                detail_parts.append(profile_detail)
-            if matched_text and compact_whitespace(matched_text).lower() != req_text.lower():
-                detail_parts.append(f'"{matched_text}"')
-            if detail_parts:
-                has_requirement_subtitles = True
-            detail_html = (
-                f'<span class="req-coverage-detail">{safe_html(" · ".join(detail_parts))}</span>'
-                if active_debug_mode and detail_parts
-                else ""
-            )
-            importance_html = (
-                f'<span class="job-req-importance job-req-importance--{safe_html(importance.replace("_", "-"))}">{safe_html(importance_label)}</span>'
-                if importance_label
-                else ""
-            )
-            status_html = (
-                f'<span class="job-requirement-status">{safe_html(status_label)}</span>'
-                if status_label
-                else ""
-            )
-
-            add_to_profile_html = ""
-            if css_modifier in ("mismatch", "not-shown", "mandatory-not-shown", "unknown"):
-                add_to_profile_html = (
-                    f'<a class="btn btn-secondary btn-compact-action job-requirement-action" href="/settings#section-matrix" '
-                    f'data-prefill="{safe_html(req_text)}" '
-                    f'title="Add this to your capability profile" target="_blank" rel="noopener">'
-                    f'Add to profile</a>'
-                )
-            badges_html = ""
-            if importance_html or status_html or add_to_profile_html:
-                badges_html = (
-                    f'<div class="job-requirement-badges">'
-                    f"{importance_html}"
-                    f"{status_html}"
-                    f"{add_to_profile_html}"
-                    f"</div>"
-                )
-            requirement_items_html += (
-                f'<li class="job-requirement-item job-requirement-item--{safe_html(css_modifier)}">'
-                f'<span class="job-requirement-text">{safe_html(req_text)}{detail_html}</span>'
-                f"{badges_html}"
-                f"</li>"
-            )
+            has_requirement_subtitles = has_requirement_subtitles or has_subtitle
+            requirement_items_html += row_html
 
         if requirement_items_html:
             requirement_hint_html = ""
@@ -1784,20 +1755,26 @@ def render_job_card(
 
     profile_gaps_html = ""
     if profile_gaps:
+        gap_confirm_have_label = safe_html(_workspace_label("workspace_card_labels", "gap_confirm_have_label", ""))
+        gap_confirm_not_have_label = safe_html(
+            _workspace_label("workspace_card_labels", "gap_confirm_not_have_label", "")
+        )
+        gap_decide_later_label = safe_html(_workspace_label("workspace_card_labels", "gap_decide_later_label", ""))
         gap_items_html = "".join(
             f'<div class="job-gap-item">'
             f'<span class="job-gap-requirement">{safe_html(gap["requirement"])}</span>'
             f'<div class="job-gap-actions">'
-            f'<button class="gap-btn gap-btn--have" data-requirement="{safe_html(gap["requirement"])}" data-action="confirm_have">Yes, I have this</button>'
-            f'<button class="gap-btn gap-btn--not-have" data-requirement="{safe_html(gap["requirement"])}" data-action="confirm_do_not_have">No, I don\'t have this</button>'
-            f'<button class="gap-btn gap-btn--later" data-requirement="{safe_html(gap["requirement"])}" data-action="decide_later">Decide later</button>'
+            f'<button class="gap-btn gap-btn--have" data-requirement="{safe_html(gap["requirement"])}" data-action="confirm_have">{gap_confirm_have_label}</button>'
+            f'<button class="gap-btn gap-btn--not-have" data-requirement="{safe_html(gap["requirement"])}" data-action="confirm_do_not_have">{gap_confirm_not_have_label}</button>'
+            f'<button class="gap-btn gap-btn--later" data-requirement="{safe_html(gap["requirement"])}" data-action="decide_later">{gap_decide_later_label}</button>'
             f"</div>"
             f"</div>"
             for gap in profile_gaps
         )
+        gap_heading_label = safe_html(_workspace_label("workspace_card_labels", "gap_heading_label", ""))
         profile_gaps_html = (
             f'<div class="job-gaps-block" data-job-key="{job_key}">'
-            f'<div class="job-gap-heading">Needs confirmation ({len(profile_gaps)})</div>'
+            f'<div class="job-gap-heading">{gap_heading_label} ({len(profile_gaps)})</div>'
             f'<div class="job-gap-items">{gap_items_html}</div>'
             f"</div>"
         )
@@ -1812,14 +1789,17 @@ def render_job_card(
         else ""
     )
 
-    clearance_items_html = "".join(
-        f"<li>{safe_html(item)}</li>"
-        for item in display_record.get("missing_clearance_support") or []
-    )
+    clearance_items_html = ""
+    for key in eligibility_coverage_order:
+        row = eligibility_coverage_rows.get(key)
+        if not isinstance(row, dict):
+            continue
+        row_html, _ = _render_requirement_row_html(row)
+        clearance_items_html += row_html
     clearance_html = (
         '<details class="job-insights job-clearance-panel">'
         f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'clearance_panel_summary', 'Clearances'))}</summary>"
-        f'<div class="job-insight-group job-insight-warning"><ul>{clearance_items_html}</ul></div>'
+        f'<div class="job-insight-group is-secondary"><ul class="job-requirement-list">{clearance_items_html}</ul></div>'
         "</details>"
         if clearance_items_html
         else ""
@@ -1836,21 +1816,27 @@ def render_job_card(
     if active_debug_mode and (has_llm_review_data or score_breakdown):
         llm_review_parts = []
         if has_llm_review_data:
+            unknown_decision_label = _workspace_label("scoring_audit_labels", "decision_label_unknown", "")
             llm_decision = str(record.get(RECORD_LLM_DECISION_KEY) or "").strip().upper()
             final_decision = (
-                "KEPT"
+                _workspace_label("scoring_audit_labels", "decision_label_kept", "")
                 if llm_decision == "KEEP"
-                else ("REJECTED" if llm_decision == "REJECT" else llm_decision or "UNKNOWN")
+                else (
+                    _workspace_label("scoring_audit_labels", "decision_label_rejected", "")
+                    if llm_decision == "REJECT"
+                    else llm_decision or unknown_decision_label
+                )
             )
-            llm_grade = str(record.get(RECORD_LLM_FIT_GRADE_KEY) or "").strip().upper() or "UNKNOWN"
+            llm_grade = str(record.get(RECORD_LLM_FIT_GRADE_KEY) or "").strip().upper() or unknown_decision_label
             summary_items = [
-                f"<li>Final decision: {safe_html(final_decision)}</li>",
-                f"<li>Final score: {safe_html(str(fit_points))}</li>",
-                f"<li>LLM fit grade: {safe_html(llm_grade)}</li>",
+                f"<li>{safe_html(_workspace_label('scoring_audit_labels', 'final_decision_prefix', ''))} {safe_html(final_decision)}</li>",
+                f"<li>{safe_html(_workspace_label('scoring_audit_labels', 'final_score_prefix', ''))} {safe_html(str(fit_points))}</li>",
+                f"<li>{safe_html(_workspace_label('scoring_audit_labels', 'llm_fit_grade_prefix', ''))} {safe_html(llm_grade)}</li>",
             ]
             eligibility_gate = eligibility_gate_diagnostics(display_record, active_profile)
             summary_items.append(
-                f"<li>Eligibility gate: {safe_html(eligibility_gate['label'])} — {safe_html(str(eligibility_gate['reason'] or ''))}</li>"
+                f"<li>{safe_html(_workspace_label('scoring_audit_labels', 'eligibility_gate_prefix', ''))} "
+                f"{safe_html(eligibility_gate['label'])} — {safe_html(str(eligibility_gate['reason'] or ''))}</li>"
             )
             occupation_scoring_rules = get_scoring_rules(active_profile)
             occupation_alignment = occupation_alignment_diagnostics(display_record, occupation_scoring_rules)
@@ -1861,7 +1847,8 @@ def render_job_card(
                 f"{requirement_fit_points} + ({occupation_alignment['adjustment']:+d}) = {fit_points}"
             )
             summary_items.append(
-                f"<li>Occupation alignment: {safe_html(occupation_alignment['alignment_label'])} — "
+                f"<li>{safe_html(_workspace_label('scoring_audit_labels', 'occupation_alignment_prefix', ''))} "
+                f"{safe_html(occupation_alignment['alignment_label'])} — "
                 f"{safe_html(occupation_alignment['reason'])} "
                 f"(adjustment {occupation_alignment['adjustment']:+d}, {safe_html(occupation_calculation)})</li>"
             )
@@ -1890,9 +1877,9 @@ def render_job_card(
             )
         if score_breakdown:
             score_breakdown_html = "".join(
-                f"<li>{safe_html(_humanize_score_breakdown_label(re.sub(r'\\s*\\[alias:[^\\]]*\\]', '', str(item['label'])).strip(), active_profile))}: {'{:+d}'.format(int(item['value']))}</li>"
+                f"<li>{safe_html(compact_whitespace(str(item['label'])))}: {'{:+d}'.format(int(item['value']))}</li>"
                 for item in score_breakdown
-                if int(item["value"]) != 0
+                if compact_whitespace(str(item.get("label") or "")) and int(item["value"]) != 0
             )
             if score_breakdown_html:
                 llm_review_parts.append(
@@ -1901,10 +1888,16 @@ def render_job_card(
                     f"<ul>{score_breakdown_html}</ul>"
                     "</div>"
                 )
-        llm_review_parts.append(_render_scoring_audit_html(display_record, active_profile))
+        llm_review_parts.append(
+            _render_scoring_audit_html(
+                display_record,
+                active_profile,
+                debug_mode=active_debug_mode,
+            )
+        )
         llm_review_html = (
             '<details class="job-insights job-llm-review">'
-            "<summary>Debug: LLM fit review</summary>"
+            f"<summary>{safe_html(_workspace_label('scoring_audit_labels', 'debug_llm_review_summary', ''))}</summary>"
             f"{''.join(llm_review_parts)}"
             "</details>"
         )
@@ -1939,20 +1932,33 @@ def render_job_card(
             if _ch_header_parts:
                 _ch_items.append(" — ".join(_ch_header_parts))
             if _ch_role:
-                _ch_items.append(f"Role: {_ch_role}")
+                _ch_items.append(f"{_workspace_label('candidate_history_labels', 'role_prefix', '')} {_ch_role}")
             if _ch_evidence_raw:
-                _ch_items.append(f"Evidence: {_ch_evidence_raw}")
+                _ch_items.append(
+                    f"{_workspace_label('candidate_history_labels', 'evidence_prefix', '')} {_ch_evidence_raw}"
+                )
             if _ch_confidence:
-                _ch_items.append(f"Confidence: {_ch_confidence}")
+                _ch_items.append(
+                    f"{_workspace_label('candidate_history_labels', 'confidence_prefix', '')} {_ch_confidence}"
+                )
             if _ch_match_confidence:
-                _ch_items.append(f"Company match confidence: {_ch_match_confidence}")
+                _ch_items.append(
+                    f"{_workspace_label('candidate_history_labels', 'company_match_confidence_prefix', '')} "
+                    f"{_ch_match_confidence}"
+                )
             if _ch_match_reason:
-                _ch_items.append(f"Company match reason: {_ch_match_reason}")
+                _ch_items.append(
+                    f"{_workspace_label('candidate_history_labels', 'company_match_reason_prefix', '')} "
+                    f"{_ch_match_reason}"
+                )
             if _cand_hist_review_reason:
-                _ch_items.append(f"Review reason: {_cand_hist_review_reason}")
+                _ch_items.append(
+                    f"{_workspace_label('candidate_history_labels', 'review_reason_prefix', '')} "
+                    f"{_cand_hist_review_reason}"
+                )
             candidate_history_html = (
                 '<details class="job-candidate-history">'
-                "<summary>Candidate application history</summary>"
+                f"<summary>{safe_html(_workspace_label('candidate_history_labels', 'summary', ''))}</summary>"
                 f"<ul>{''.join(f'<li>{safe_html(item)}</li>' for item in _ch_items)}</ul>"
                 "</details>"
             )
@@ -1960,23 +1966,30 @@ def render_job_card(
     if applied_record:
         actions_html = (
             '<div class="job-actions">'
-            f'<button class="review-button review-undo workspace-action-button workspace-action-button--primary workspace-action-button--selected" type="button" data-review-action="unapply" {button_data_attrs}>Undo Applied</button>'
+            f'<button class="review-button review-undo workspace-action-button workspace-action-button--primary workspace-action-button--selected" type="button" data-review-action="unapply" {button_data_attrs}>'
+            f'{safe_html(_workspace_label("workspace_card_labels", "action_undo_applied_label", ""))}</button>'
             '<span class="review-status" aria-live="polite"></span>'
             "</div>"
         )
     elif hidden_record:
         actions_html = (
             '<div class="job-actions">'
-            f'<button class="review-button review-undo workspace-action-button workspace-action-button--neutral" type="button" data-review-action="unhide" {button_data_attrs}>Unhide</button>'
+            f'<button class="review-button review-undo workspace-action-button workspace-action-button--neutral" type="button" data-review-action="unhide" {button_data_attrs}>'
+            f'{safe_html(_workspace_label("workspace_card_labels", "action_unhide_label", ""))}</button>'
             '<span class="review-status" aria-live="polite"></span>'
             "</div>"
         )
     elif not applied_record:
         actions_html = (
             '<div class="job-actions">'
-            f'<button class="review-button review-applied workspace-action-button workspace-action-button--primary" type="button" data-review-action="applied" {button_data_attrs}>Applied</button>'
-            f'<button class="review-button review-not-for-me workspace-action-button workspace-action-button--danger" type="button" data-review-action="not_for_me" {button_data_attrs} title="Marks this role as not a fit and stores it as learning feedback">Not For Me</button>'
-            f'<button class="review-button review-hide workspace-action-button workspace-action-button--neutral" type="button" data-review-action="hidden" {button_data_attrs} title="Hide this one job only. You can unhide it later from Hidden jobs.">Hide</button>'
+            f'<button class="review-button review-applied workspace-action-button workspace-action-button--primary" type="button" data-review-action="applied" {button_data_attrs}>'
+            f'{safe_html(_workspace_label("workspace_card_labels", "action_applied_label", "Applied"))}</button>'
+            f'<button class="review-button review-not-for-me workspace-action-button workspace-action-button--danger" type="button" data-review-action="not_for_me" {button_data_attrs} '
+            f'title="{safe_html(_workspace_label("workspace_card_labels", "action_not_for_me_tooltip", ""))}">'
+            f'{safe_html(_workspace_label("workspace_card_labels", "action_not_for_me_label", ""))}</button>'
+            f'<button class="review-button review-hide workspace-action-button workspace-action-button--neutral" type="button" data-review-action="hidden" {button_data_attrs} '
+            f'title="{safe_html(_workspace_label("workspace_card_labels", "action_hide_tooltip", ""))}">'
+            f'{safe_html(_workspace_label("workspace_card_labels", "action_hide_label", "Hide"))}</button>'
             '<span class="review-status" aria-live="polite"></span>'
             "</div>"
         )
@@ -1999,22 +2012,22 @@ def render_job_card(
         + (
             f'<button class="title-block-btn chip-button" type="button" data-review-action="block_similar" {button_data_attrs} aria-expanded="false" aria-controls="{safe_html(title_block_panel_id)}" title="{safe_html(_workspace_label("workspace_card_labels", "title_block_button_tooltip", "Hide future roles whose titles contain exact phrases you choose before Job Hunter spends time reading the full ad."))}">{safe_html(_workspace_label("workspace_card_labels", "title_block_button_label", "Hide similar titles"))}</button>'
             f'<div id="{safe_html(title_block_panel_id)}" class="block-confirm" data-block-confirm hidden>'
-            f'<p class="block-confirm-copy">{safe_html(_workspace_label("workspace_card_labels", "title_block_prompt_copy", TITLE_BLOCK_PROMPT_COPY))}</p>'
+            f'<p class="block-confirm-copy">{safe_html(_workspace_label("workspace_card_labels", "title_block_prompt_copy", ""))}</p>'
             '<details class="block-confirm-help">'
-            f'<summary>{safe_html(_workspace_label("workspace_card_labels", "title_block_help_summary", TITLE_BLOCK_HELP_SUMMARY))}</summary>'
-            f'<p>{safe_html(_workspace_label("workspace_card_labels", "title_block_guidance_copy", TITLE_BLOCK_GUIDANCE_COPY))}</p>'
+            f'<summary>{safe_html(_workspace_label("workspace_card_labels", "title_block_help_summary", ""))}</summary>'
+            f'<p>{safe_html(_workspace_label("workspace_card_labels", "title_block_guidance_copy", ""))}</p>'
             "</details>"
-            f'<p class="block-confirm-copy">Current title: <strong>{title}</strong></p>'
+            f'<p class="block-confirm-copy">{safe_html(_workspace_label("workspace_card_labels", "current_title_prefix_label", ""))} <strong>{title}</strong></p>'
             '<div class="block-manual-row">'
-            '<span class="block-manual-label">Exact title phrase</span>'
+            f'<span class="block-manual-label">{safe_html(_workspace_label("workspace_card_labels", "exact_title_phrase_label", ""))}</span>'
             f'<input class="block-manual-input" type="text" data-block-manual-input placeholder="e.g. sap, payroll, contract management" value="{block_title_hint}">'
-            f'<span class="block-manual-help">{safe_html(_workspace_label("workspace_card_labels", "title_block_manual_help", TITLE_BLOCK_MANUAL_HELP))}</span>'
+            f'<span class="block-manual-help">{safe_html(_workspace_label("workspace_card_labels", "title_block_manual_help", ""))}</span>'
             "</div>"
             '<p class="block-impact" data-block-impact></p>'
-            f'<p class="block-confirm-sub">{safe_html(_workspace_label("workspace_card_labels", "title_block_strong_filter_copy", TITLE_BLOCK_STRONG_FILTER_COPY))}</p>'
+            f'<p class="block-confirm-sub">{safe_html(_workspace_label("workspace_card_labels", "title_block_strong_filter_copy", ""))}</p>'
             '<div class="block-confirm-actions">'
-            '<button class="mini-button mini-button-primary" type="button" data-confirm-block disabled>Block Matching Titles</button>'
-            '<button class="mini-button" type="button" data-cancel-block>Cancel</button>'
+            f'<button class="mini-button mini-button-primary" type="button" data-confirm-block disabled>{safe_html(_workspace_label("workspace_card_labels", "action_block_matching_titles_label", ""))}</button>'
+            f'<button class="mini-button" type="button" data-cancel-block>{safe_html(_workspace_label("workspace_card_labels", "action_cancel_label", ""))}</button>'
             "</div>"
             "</div>"
             '<span class="block-status" aria-live="polite"></span>'
@@ -2080,8 +2093,8 @@ def render_section(
             '<div class="section-tools">'
             '<span class="pagination-label pagination-page-label"></span>'
             '<span class="pagination-match-count"></span>'
-            '<button class="pagination-button" type="button" data-page-direction="prev">Prev</button>'
-            '<button class="pagination-button" type="button" data-page-direction="next">Next</button>'
+            f'<button class="pagination-button" type="button" data-page-direction="prev">{safe_html(_workspace_label("workspace_card_labels", "pagination_prev_label", ""))}</button>'
+            f'<button class="pagination-button" type="button" data-page-direction="next">{safe_html(_workspace_label("workspace_card_labels", "pagination_next_label", ""))}</button>'
             "</div>"
             "</div>"
         )

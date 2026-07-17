@@ -337,6 +337,7 @@ def test_rendered_workspace_html_content(tmp_path):
             "potential_jobs_tab": "Potential Jobs",
             "applied_jobs_tab": "Applied",
             "hidden_jobs_tab": "Hidden",
+            "top_level_workspace_views_aria_label": "Top-level workspace views",
             "match_controls_heading": "Match Controls",
             "reset_all_filters_button": "Reset All Filters",
             "sort_label": "Sort",
