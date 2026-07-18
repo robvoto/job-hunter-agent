@@ -3472,6 +3472,55 @@ def test_fit_card_never_shows_internal_scoring_labels():
         )
 
 
+def test_fit_card_debug_score_breakdown_uses_frozen_labels_verbatim():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-frozen-score-breakdown-copy",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "decision": "KEEP",
+            "llm_decision": "KEEP",
+            "llm_fit_grade": "STRONG",
+            RECORD_FIT_SCORE_KEY: 72,
+            RECORD_FIT_SCORE_BREAKDOWN_KEY: [
+                {"label": "Requirement Fit: 72%", "value": 72, "section": "requirement_fit"},
+                {
+                    "label": "Hard blocker requirement mismatch: NV1 clearance",
+                    "value": -100,
+                    "section": "risk",
+                },
+            ],
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Business analyst role driving agile delivery. " * 20,
+            "fit_highlights": [],
+            "source": "seek",
+        },
+        _capability_profile(),
+        debug_mode=True,
+    )
+
+    assert "Requirement Fit: 72%: +72" in html
+    assert "Hard blocker requirement mismatch: NV1 clearance: -100" in html
+    assert "BA / technical BA experience" not in html
+
+
+def test_humanize_reject_reason_uses_owned_secondary_title_copy(monkeypatch):
+    labels = json.loads(json.dumps(workspace_renderer.load_ui_labels()))
+    labels["title_match_labels"]["secondary_match"] = "Configured alternative title copy"
+    monkeypatch.setattr(workspace_renderer, "_workspace_ui_labels", lambda: labels)
+
+    assert (
+        workspace_renderer.humanize_reject_reason("TITLE_POTENTIAL_MATCH")
+        == "Configured alternative title copy"
+    )
+
+
 def test_fit_card_capability_match_uses_sentence_format():
     """Capability matches render as 'The ad asks for X, and your profile includes this.'."""
     html = workspace_renderer.render_job_card(
