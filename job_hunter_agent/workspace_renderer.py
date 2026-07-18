@@ -1624,7 +1624,7 @@ def render_job_card(
         add_to_profile_html = ""
         if css_modifier in ("mismatch", "not-shown", "mandatory-not-shown", "unknown"):
             add_to_profile_html = (
-                f'<a class="btn btn-secondary btn-compact-action job-requirement-action" href="/settings#section-matrix" '
+                f'<a class="btn btn-secondary btn-compact-action job-requirement-action req-add-to-profile" href="/settings#section-matrix" '
                 f'data-prefill="{safe_html(req_text)}" '
                 f'title="{safe_html(_workspace_label("workspace_card_labels", "add_to_profile_action_title"))}" target="_blank" rel="noopener">'
                 f'{safe_html(_workspace_label("workspace_card_labels", "add_to_profile_action_label"))}</a>'

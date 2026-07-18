@@ -1627,4 +1627,5 @@
     grid-column: auto;
     justify-self: start;
   }
+  .req-add-to-profile { grid-column: 1 / -1; }
 }
