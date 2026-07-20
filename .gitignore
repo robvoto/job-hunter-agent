@@ -58,6 +58,9 @@ angular-log-prj-7cc59b5b73a0.json
 CLAUDE.md
 docs/archived-skills/
 
+# ---- Click-testing (Playwright E2E) artifacts ----
+tests/e2e/artifacts/
+
 # ---- Desktop installer build output ----
 installer/dist/
 installer/pyembed/

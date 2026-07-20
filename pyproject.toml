@@ -25,11 +25,22 @@ dependencies = [
 dev = [
     "httpx2>=2.5.0",
     "pytest>=9.0.3",
+    "pytest-playwright>=0.5.2,<1",
+    "pytest-timeout>=2.3.0,<3",
     "ruff>=0.9.0,<1",
 ]
 
 [tool.uv]
 package = false
+
+[tool.pytest.ini_options]
+markers = [
+    "llm_e2e: real-LLM end-to-end test, costs money and is skipped unless explicitly opted into (see tests/e2e/README.md)",
+]
+# Click-testing (tests/e2e) boots a real server + browser and is much slower
+# than the unit suite, so it is opt-in via an explicit path, not part of a
+# bare `pytest` run.
+norecursedirs = ["tests/e2e"]
 
 [tool.ruff]
 target-version = "py312"

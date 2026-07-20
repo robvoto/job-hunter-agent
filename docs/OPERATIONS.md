@@ -209,6 +209,15 @@ Repo-root launcher:
 ./run --debug
 ```
 
+Human-log debug launcher:
+
+```bash
+./run-debug-human
+```
+
+This mirrors `output/server.log` into the terminal while the debug server runs,
+so the shell shows the same human-readable runtime log that is written to disk.
+
 Server logs:
 
 - human-readable runtime output is written to `output/server.log`
@@ -600,6 +609,38 @@ Use targeted tests when validating a specific area, such as:
 For changes that cross modules, auth, UI, persistence, or shared template/bootstrap code, run the targeted tests plus at least one representative integration, end-to-end, or page-render path.
 
 Run the full suite before merging into `main`.
+
+## Click-Testing (Playwright E2E)
+
+`tests/e2e/` drives the real FastAPI app with a real Chromium browser (via Playwright), the way a human clicking through the app would notice bugs that mocked unit tests miss. It boots an isolated seeded server on a free local port, mints a signed session cookie instead of doing a real Google OAuth flow, and captures screenshots plus browser console/network errors on failure (see `tests/e2e/conftest.py`).
+
+It is **not** part of the default test run (`tests/e2e` is excluded via `norecursedirs` in `pyproject.toml`) because it is much slower than the unit suite. Run it explicitly:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests/e2e/
+```
+
+First-time setup on a new machine also needs the Chromium browser binary:
+
+```powershell
+.\.venv\Scripts\python.exe -m playwright install chromium
+```
+
+`tests/e2e/test_onboarding_flow.py` clicks through the onboarding wizard's upload -> extract -> review-step transition (real upload UI, real route validation, real DOM rendering) with the LLM extraction stubbed to a deterministic canned result, so the actual extraction click is exercised on every default e2e run at zero cost -- not only in the opt-in real-LLM test below.
+
+`tests/e2e/test_workspace_job_actions.py` seeds one KEEP-scored job directly into a dedicated test user's workspace (via the `workspace_job_page` fixture, since the default `candidate_page` workspace is empty) and clicks through the per-job-card actions that `test_workspace_flow.py`'s filter-only coverage never reaches: the visible score/match-tile, saving a job ("applied") and undoing it, and dismissing a job ("hidden") and unhiding it -- including the real full-page reload each review action triggers.
+
+### Real-LLM onboarding test (costs money, opt-in only)
+
+`tests/e2e/test_onboarding_llm_flow.py` drives the same wizard step with a real, billed OpenAI call instead of a stub. It is skipped at collection time unless both `JOB_HUNTER_E2E_ALLOW_LLM=1` and a real `OPENAI_API_KEY` are set, so it can never fire during a normal e2e run. It forces the cheapest selectable model (resolved live from `data/config/global_settings.json`'s pricing table, not hardcoded), asserts an on-record cost ceiling and exactly one request fired, and has a hard wall-clock timeout.
+
+It must run with `--confcutdir=tests/e2e` so it skips the root `tests/conftest.py`, which unconditionally blanks `OPENAI_API_KEY` for the unit suite (and `job_hunter_agent.llm_gate` builds its OpenAI client once at import time, so a blanked key anywhere earlier in the process stays blanked for the rest of it):
+
+```powershell
+$env:JOB_HUNTER_E2E_ALLOW_LLM = "1"
+$env:OPENAI_API_KEY = "sk-..."
+.\.venv\Scripts\python.exe -m pytest tests/e2e/test_onboarding_llm_flow.py --confcutdir=tests/e2e -m llm_e2e -v
+```
 
 ---
 

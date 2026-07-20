@@ -12,6 +12,7 @@ from starlette.requests import Request as StarletteRequest
 
 import job_hunter_agent.config as _config
 import job_hunter_agent.fastapi_app as _fa
+import job_hunter_agent.routes.auth_google as _auth_google
 import job_hunter_agent.routes.pages as _pages
 import job_hunter_agent.routes.profile_materials as _profile_materials
 from job_hunter_agent.fastapi_app import _cors_origin, create_app
@@ -96,6 +97,16 @@ def test_run_debug_wrapper_forwards_debug_flag_to_fastapi_app():
     assert "UV_CACHE_DIR" in run_debug_script
 
 
+def test_run_debug_human_wrapper_tails_server_log_and_disables_console_logger():
+    run_debug_human_script = Path("run-debug-human").read_text(encoding="utf-8")
+
+    assert 'tail -n 0 -F output/server.log &' in run_debug_human_script
+    assert 'JOB_HUNTER_CONSOLE_LOG=off uv run python -m job_hunter_agent.fastapi_app --debug "$@"' in (
+        run_debug_human_script
+    )
+    assert "trap cleanup EXIT INT TERM" in run_debug_human_script
+
+
 def test_line_logging_stream_respects_embedded_severity(caplog):
     caplog.set_level(logging.INFO, logger="job_hunter_agent.fastapi_app")
     stream = _fa._LineLoggingStream(logging.getLogger("job_hunter_agent.fastapi_app"), logging.ERROR)
@@ -123,6 +134,78 @@ def test_line_logging_stream_keeps_plain_stderr_as_error(caplog):
     )
 
 
+def test_configure_server_logging_keeps_terminal_output_visible(monkeypatch, tmp_path):
+    original_stdout = sys.stdout
+    original_stderr = sys.stderr
+
+    monkeypatch.setattr(_fa, "OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr(_fa, "SERVER_LOG_PATH", tmp_path / "server.log")
+    monkeypatch.setattr(_fa, "SERVER_DEBUG_LOG_PATH", tmp_path / "server-debug.log")
+
+    for logger_name in ("", _fa.HUMAN_LOGGER_NAME, "uvicorn", "uvicorn.error", "uvicorn.access"):
+        logger = logging.getLogger(logger_name)
+        for handler in list(logger.handlers):
+            logger.removeHandler(handler)
+            handler.close()
+        logger.filters.clear()
+
+    try:
+        _fa._configure_server_logging()
+
+        assert isinstance(sys.stdout, _fa._LineLoggingStream)
+        assert sys.stdout._logger.name == _fa.HUMAN_LOGGER_NAME
+        assert any(
+            isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler)
+            for handler in logging.getLogger("uvicorn.error").handlers
+        )
+    finally:
+        sys.stdout = original_stdout
+        sys.stderr = original_stderr
+        logging.shutdown()
+        for logger_name in ("", _fa.HUMAN_LOGGER_NAME, "uvicorn", "uvicorn.error", "uvicorn.access"):
+            logger = logging.getLogger(logger_name)
+            for handler in list(logger.handlers):
+                logger.removeHandler(handler)
+            logger.filters.clear()
+
+
+def test_configure_server_logging_can_disable_direct_console_output(monkeypatch, tmp_path):
+    original_stdout = sys.stdout
+    original_stderr = sys.stderr
+
+    monkeypatch.setattr(_fa, "OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr(_fa, "SERVER_LOG_PATH", tmp_path / "server.log")
+    monkeypatch.setattr(_fa, "SERVER_DEBUG_LOG_PATH", tmp_path / "server-debug.log")
+    monkeypatch.setenv("JOB_HUNTER_CONSOLE_LOG", "off")
+
+    for logger_name in ("", _fa.HUMAN_LOGGER_NAME, "uvicorn", "uvicorn.error", "uvicorn.access"):
+        logger = logging.getLogger(logger_name)
+        for handler in list(logger.handlers):
+            logger.removeHandler(handler)
+            handler.close()
+        logger.filters.clear()
+
+    try:
+        _fa._configure_server_logging()
+
+        assert isinstance(sys.stdout, _fa._LineLoggingStream)
+        assert sys.stdout._logger.name == _fa.HUMAN_LOGGER_NAME
+        assert not any(
+            isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler)
+            for handler in logging.getLogger(_fa.HUMAN_LOGGER_NAME).handlers
+        )
+    finally:
+        sys.stdout = original_stdout
+        sys.stderr = original_stderr
+        monkeypatch.delenv("JOB_HUNTER_CONSOLE_LOG", raising=False)
+        logging.shutdown()
+        for logger_name in ("", _fa.HUMAN_LOGGER_NAME, "uvicorn", "uvicorn.error", "uvicorn.access"):
+            logger = logging.getLogger(logger_name)
+            for handler in list(logger.handlers):
+                logger.removeHandler(handler)
+            logger.filters.clear()
+
+
 def test_settings_redirects_to_start_until_onboarding_is_complete(monkeypatch):
     monkeypatch.setattr(_fa, "read_session_user", lambda request: _FAKE_USER)
     monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: False)
@@ -132,6 +215,40 @@ def test_settings_redirects_to_start_until_onboarding_is_complete(monkeypatch):
 
     assert response.status_code == 302
     assert response.headers["location"] == "/start"
+
+
+def test_onboarding_page_logs_human_activity(monkeypatch, caplog):
+    page_logger = logging.getLogger("test.pages.human")
+    monkeypatch.setattr(_pages, "_human_logger", page_logger)
+    monkeypatch.setattr(_fa, "read_session_user", lambda request: _FAKE_USER)
+    monkeypatch.setattr(_pages, "read_session_user", lambda request: _FAKE_USER)
+    monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: False)
+
+    caplog.set_level(logging.INFO, logger="test.pages.human")
+    client = TestClient(create_app())
+    response = client.get("/start")
+
+    assert response.status_code == 200
+    assert any(
+        "PAGE | onboarding | user=test@example.com (admin) | opened" in record.getMessage()
+        for record in caplog.records
+    )
+
+
+def test_login_page_logs_human_activity(monkeypatch, caplog):
+    auth_logger = logging.getLogger("test.auth.human")
+    monkeypatch.setattr(_auth_google, "_human_logger", auth_logger)
+    monkeypatch.setattr(_auth_google, "read_session_user", lambda request: None)
+
+    caplog.set_level(logging.INFO, logger="test.auth.human")
+    client = TestClient(create_app())
+    response = client.get("/login")
+
+    assert response.status_code == 200
+    assert any(
+        "AUTH | login page opened | user=guest" in record.getMessage()
+        for record in caplog.records
+    )
 
 
 def test_global_settings_page_requires_admin(monkeypatch):
@@ -415,6 +532,22 @@ def test_logout_redirects_to_login_and_clears_session_cookie():
     assert response.status_code == 302
     assert response.headers["location"] == "/login"
     assert "job_hunter_session=" in response.headers.get("set-cookie", "")
+
+
+def test_logout_logs_human_activity(monkeypatch, caplog):
+    auth_logger = logging.getLogger("test.auth.human")
+    monkeypatch.setattr(_auth_google, "_human_logger", auth_logger)
+    monkeypatch.setattr(_auth_google, "read_session_user", lambda request: _FAKE_USER)
+
+    caplog.set_level(logging.INFO, logger="test.auth.human")
+    client = TestClient(create_app())
+    response = client.post("/logout", follow_redirects=False)
+
+    assert response.status_code == 302
+    assert any(
+        "AUTH | logged out | user=test@example.com (admin)" in record.getMessage()
+        for record in caplog.records
+    )
 
 
 def _make_request(origin: str | None = None) -> StarletteRequest:

@@ -419,6 +419,8 @@ class LinkedInScraper(BaseJobScraper):
             )
             if not is_easy_apply and apply_url and apply_url != linkedin_url:
                 ext_html = fetch_external_html(apply_url)
+                if ext_html:
+                    current_record["_external_apply_html"] = ext_html
                 run_date = datetime.fromisoformat(context.run_iso).date()
                 signals.extend(
                     detect_external_date_signals(

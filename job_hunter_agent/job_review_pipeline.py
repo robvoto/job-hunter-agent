@@ -45,6 +45,7 @@ _REASON_LABELS: dict[str, str] = {
     "DUPLICATE_URL": "duplicate listing",
     "DUPLICATE_JOB_KEY": "duplicate listing",
     "JOB_CLOSED": "no longer accepting applications",
+    "STALE_REPOST": "stale repost outside the search age",
     "NO_JOB_KEY": "missing job ID",
     "NO_URL": "missing job URL",
     "OK": "passed",
@@ -93,7 +94,7 @@ def _job_url(record: dict[str, Any]) -> str:
 
 
 from job_hunter_agent.capability_matching import (
-    build_risk_and_missing_profile_support,
+    build_pre_review_risk_signals,
     reviewed_signal_matches_for_text,
 )
 from job_hunter_agent.description_compactor import compact_description
@@ -116,7 +117,12 @@ from job_hunter_agent.fit_scoring import (
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
 from job_hunter_agent.history import apply_kept_job_reuse, can_reuse_kept_job, finalize_record
 from job_hunter_agent.job_types import infer_work_type_from_description
-from job_hunter_agent.job_quality import detect_external_date_signals, load_dodgy_job_rules
+from job_hunter_agent.job_quality import (
+    detect_external_date_signals,
+    extract_external_original_posting_date,
+    fetch_external_html,
+    load_dodgy_job_rules,
+)
 from job_hunter_agent.llm_gate import (
     LLMCallError,
     LLMReviewValidationError,
@@ -140,9 +146,13 @@ from job_hunter_agent.paths import UNCERTAINTY_LOG_PATH
 from job_hunter_agent.preferences import passes_preference_filters
 from job_hunter_agent.profile_store import get_match_levels
 from job_hunter_agent.record_schema import (
+    APPLY_METHOD_EXTERNAL_APPLY,
     CONFIDENCE_HIGH,
     CONFIDENCE_LOW,
     DETAILS_STATUS_OK,
+    ORIGINAL_POSTED_DATE_STATUS_UNVERIFIED,
+    ORIGINAL_POSTED_DATE_STATUS_VERIFIED,
+    RECORD_APPLY_METHOD_KEY,
     RECORD_CARD_SALARY_KEY,
     RECORD_COMPANY_KEY,
     RECORD_COMPETITIVE_SIGNALS_KEY,
@@ -180,6 +190,9 @@ from job_hunter_agent.record_schema import (
     RECORD_OCCUPATION_ALIGNMENT_KEY,
     RECORD_OCCUPATION_ALIGNMENT_REASON_KEY,
     RECORD_ONET_CLASSIFICATION_KEY,
+    RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY,
+    RECORD_ORIGINAL_POSTED_DATE_KEY,
+    RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY,
     RECORD_POSTED_AGE_DAYS_KEY,
     RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
     RECORD_REJECT_REASON_KEY,
@@ -189,6 +202,7 @@ from job_hunter_agent.record_schema import (
     RECORD_ROLE_SNAPSHOT_KEY,
     RECORD_SALARY_KEY,
     RECORD_SOFT_RISK_REASONS_KEY,
+    RECORD_SOURCE_METADATA_KEY,
     RECORD_TEASER_KEY,
     RECORD_TITLE_KEY,
     RECORD_TITLE_MATCH_METADATA_KEY,
@@ -626,6 +640,78 @@ def _has_job_closed_signal(record: dict) -> bool:
     return False
 
 
+def _source_key(record: dict) -> str:
+    return str(record.get("source") or "").strip().lower()
+
+
+def _defer_keep_reuse_until_post_detail(record: dict) -> bool:
+    return _source_key(record) in {"linkedin", "seek"}
+
+
+def _should_check_external_posting_date(record: dict) -> bool:
+    return (
+        _source_key(record) in {"linkedin", "seek"}
+        and str(record.get(RECORD_APPLY_METHOD_KEY) or "").strip().lower() == APPLY_METHOD_EXTERNAL_APPLY
+    )
+
+
+def _mark_original_posted_date_unverified(record: dict) -> None:
+    record[RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY] = ORIGINAL_POSTED_DATE_STATUS_UNVERIFIED
+    record[RECORD_ORIGINAL_POSTED_DATE_KEY] = ""
+    record[RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY] = None
+
+
+def _apply_external_posting_date_filter(
+    record: dict,
+    context: ReviewPipelineContext,
+) -> tuple[bool, str, str]:
+    if not _should_check_external_posting_date(record):
+        return True, "", ""
+
+    source_metadata = (
+        record.get(RECORD_SOURCE_METADATA_KEY)
+        if isinstance(record.get(RECORD_SOURCE_METADATA_KEY), dict)
+        else {}
+    )
+    apply_url = str(source_metadata.get("apply_url") or "").strip()
+    canonical_url = str(record.get(RECORD_URL_KEY) or "").strip()
+    if not apply_url or apply_url == canonical_url:
+        _mark_original_posted_date_unverified(record)
+        return True, "", ""
+
+    external_html = str(record.get("_external_apply_html") or "").strip()
+    if not external_html:
+        external_html = fetch_external_html(apply_url)
+        if external_html:
+            record["_external_apply_html"] = external_html
+    if not external_html:
+        _mark_original_posted_date_unverified(record)
+        return True, "", ""
+
+    verification = extract_external_original_posting_date(
+        external_html,
+        date.fromisoformat(context.run_iso[:10]),
+    )
+    if verification is None:
+        _mark_original_posted_date_unverified(record)
+        return True, "", ""
+
+    original_age_days = float(verification["age_days"])
+    record[RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY] = ORIGINAL_POSTED_DATE_STATUS_VERIFIED
+    record[RECORD_ORIGINAL_POSTED_DATE_KEY] = str(verification["posted_on"])
+    record[RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY] = original_age_days
+    if original_age_days > context.date_range_days:
+        return (
+            False,
+            "STALE_REPOST",
+            (
+                f"External apply page shows this role was originally posted on "
+                f"{verification['posted_on']}, outside the {context.date_range_days}-day search window."
+            ),
+        )
+    return True, "", ""
+
+
 def _call_hook(
     hooks: ReviewPipelineHooks | None, hook_name: str, record: dict, context: ReviewPipelineContext
 ) -> None:
@@ -834,7 +920,7 @@ def _apply_fit_summary_enrichment(
         record[RECORD_SOFT_RISK_REASONS_KEY],
         record[RECORD_MISSING_PROFILE_SUPPORT_KEY],
         record[RECORD_MISSING_CLEARANCE_SUPPORT_KEY],
-    ) = build_risk_and_missing_profile_support(
+    ) = build_pre_review_risk_signals(
         details_text,
         title_reason,
         profile,
@@ -1201,7 +1287,9 @@ def review_pre_detail_normalized_job(
         return _build_outcome(record), record, skill_observations, False
 
     history_entry = context.job_history.get(job_key, {})
-    if can_reuse_kept_job(history_entry, record, profile):
+    if not _defer_keep_reuse_until_post_detail(record) and can_reuse_kept_job(
+        history_entry, record, profile
+    ):
         record = apply_kept_job_reuse(record, history_entry)
         _freeze_fit_score_fields(record, profile)
         _finalize_job_result(record, context)
@@ -1267,6 +1355,20 @@ def review_post_detail_normalized_job(
         return _build_outcome(record), record, skill_observations
 
     _call_hook(hooks, "after_preference_filters", record, context)
+
+    ok, reason, explanation = _apply_external_posting_date_filter(record, context)
+    if not ok:
+        record[RECORD_DECISION_KEY] = "REJECT"
+        record[RECORD_REJECT_REASON_KEY] = reason
+        _finalize_job_result(record, context, reason=reason, explanation=explanation)
+        return _build_outcome(record), record, skill_observations
+
+    history_entry = context.job_history.get(str(record.get(RECORD_JOB_KEY) or ""), {})
+    if can_reuse_kept_job(history_entry, record, profile):
+        record = apply_kept_job_reuse(record, history_entry)
+        _freeze_fit_score_fields(record, profile)
+        _finalize_job_result(record, context)
+        return _build_outcome(record), record, skill_observations
 
     _apply_fit_summary_enrichment(record, details_text, profile, title_reason)
 

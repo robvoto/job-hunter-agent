@@ -14,20 +14,17 @@ Covers:
 - Edge cases: empty html, missing linkedin_age, whitespace noise
 """
 
-import json
 from datetime import date
 
 import pytest
 
-from job_hunter_agent import job_quality
 from job_hunter_agent.job_quality import (
     SIGNAL_KIND_CV_FARMING,
     SIGNAL_KIND_DATE_MISMATCH,
     SIGNAL_KIND_JOB_CLOSED,
-    _absolute_date_from_html,
-    _approx_age_days_from_html,
     detect_cv_farming_signals,
     detect_external_date_signals,
+    extract_external_original_posting_date,
     load_dodgy_job_rules,
 )
 
@@ -261,207 +258,124 @@ class TestJobClosedIndicators:
 
 
 # ---------------------------------------------------------------------------
-# Date mismatch — threshold boundary
+# Structured external posting-date evidence
 # ---------------------------------------------------------------------------
 
 
-class TestDateMismatchThreshold:
-    """Flag fires at exactly threshold, not below it."""
+class TestStructuredExternalPostingDate:
+    def test_extracts_jobposting_json_ld(self):
+        html = """
+        <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "JobPosting",
+          "title": "Business Analyst",
+          "datePosted": "2026-04-24"
+        }
+        </script>
+        """
+        result = extract_external_original_posting_date(html, RUN_DATE)
 
-    def test_at_threshold_fires(self, rules):
-        flag = rules["external_date_mismatch_flag_days"]  # 14
-        html = f"Posted {flag} days ago."
-        sigs = detect_external_date_signals(html, 0.0, rules, RUN_DATE)
-        assert sigs, f"Expected signal at exactly {flag} days difference"
-        assert sigs[0]["kind"] == SIGNAL_KIND_DATE_MISMATCH
+        assert result == {
+            "age_days": 17.0,
+            "posted_on": "2026-04-24",
+            "evidence_source": "jobposting_json_ld",
+            "raw_value": "2026-04-24",
+        }
 
-    def test_one_below_threshold_does_not_fire(self, rules):
-        flag = rules["external_date_mismatch_flag_days"]  # 14
-        html = f"Posted {flag - 1} days ago."
-        sigs = detect_external_date_signals(html, 0.0, rules, RUN_DATE)
-        mismatch = [s for s in sigs if s["kind"] == SIGNAL_KIND_DATE_MISMATCH]
-        assert not mismatch, f"Did not expect signal at {flag - 1} days difference"
+    def test_extracts_jobposting_from_json_ld_graph(self):
+        html = """
+        <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@graph": [
+            {"@type": "Organization", "name": "Example"},
+            {
+              "@type": "https://schema.org/JobPosting",
+              "datePosted": "2026-05-01T08:30:00+10:00"
+            }
+          ]
+        }
+        </script>
+        """
+        result = extract_external_original_posting_date(html, RUN_DATE)
 
-    def test_one_above_threshold_fires(self, rules):
-        flag = rules["external_date_mismatch_flag_days"]  # 14
-        html = f"Posted {flag + 1} days ago."
-        sigs = detect_external_date_signals(html, 0.0, rules, RUN_DATE)
-        assert sigs[0]["kind"] == SIGNAL_KIND_DATE_MISMATCH
+        assert result is not None
+        assert result["posted_on"] == "2026-05-01"
+        assert result["age_days"] == 10.0
+        assert result["evidence_source"] == "jobposting_json_ld"
 
-    def test_large_mismatch_fires(self, rules):
-        html = "Posted 90 days ago."
-        sigs = detect_external_date_signals(html, 1.0, rules, RUN_DATE)
-        assert sigs[0]["kind"] == SIGNAL_KIND_DATE_MISMATCH
-        assert sigs[0]["mismatch_days"] == 89
+    def test_extracts_schema_dateposted_microdata(self):
+        html = '<time itemprop="datePosted" datetime="2026-05-05">5 May 2026</time>'
+        result = extract_external_original_posting_date(html, RUN_DATE)
 
+        assert result is not None
+        assert result["posted_on"] == "2026-05-05"
+        assert result["evidence_source"] == "schema_dateposted_microdata"
 
-# ---------------------------------------------------------------------------
-# Date mismatch — arithmetic correctness
-# ---------------------------------------------------------------------------
+    def test_parses_ordinal_human_date_only_when_structured(self):
+        html = '<meta itemprop="datePosted" content="24th April 2026">'
+        result = extract_external_original_posting_date(html, RUN_DATE)
 
+        assert result is not None
+        assert result["posted_on"] == "2026-04-24"
 
-class TestDateMismatchArithmetic:
-    def test_mismatch_days_field_is_correct(self, rules):
-        html = "Posted 45 days ago."
-        linkedin_age = 2.0
-        sigs = detect_external_date_signals(html, linkedin_age, rules, RUN_DATE)
-        sig = sigs[0]
-        assert sig["mismatch_days"] == 43
-        assert sig["linkedin_age_days"] == 2
-        assert sig["external_age_days"] == 45
+    def test_visible_posted_copy_is_not_verified_evidence(self):
+        html = "<p>Originally posted: 24 April 2026</p>"
 
-    def test_mismatch_days_weeks_conversion(self, rules):
-        html = "Posted 4 weeks ago."
-        linkedin_age = 5.0
-        sigs = detect_external_date_signals(html, linkedin_age, rules, RUN_DATE)
-        sig = sigs[0]
-        assert sig["external_age_days"] == 28
-        assert sig["mismatch_days"] == 23
+        assert extract_external_original_posting_date(html, RUN_DATE) is None
 
-    def test_mismatch_days_months_conversion(self, rules):
-        html = "Posted 3 months ago."
-        linkedin_age = 1.0
-        sigs = detect_external_date_signals(html, linkedin_age, rules, RUN_DATE)
-        sig = sigs[0]
-        assert sig["external_age_days"] == 90
-        assert sig["mismatch_days"] == 89
+    def test_non_jobposting_json_ld_is_ignored(self):
+        html = """
+        <script type="application/ld+json">
+        {"@type": "Article", "datePosted": "2025-01-01"}
+        </script>
+        """
 
-    def test_fractional_linkedin_age_handled(self, rules):
-        html = "Posted 30 days ago."
-        sigs = detect_external_date_signals(html, 0.5, rules, RUN_DATE)
-        assert sigs[0]["linkedin_age_days"] == 0
+        assert extract_external_original_posting_date(html, RUN_DATE) is None
 
-    def test_no_signal_when_linkedin_older_than_external(self, rules):
-        # External says 5 days, LinkedIn says 30 days — not a LinkedIn-inflated-date issue
-        html = "Posted 5 days ago."
-        sigs = detect_external_date_signals(html, 30.0, rules, RUN_DATE)
-        mismatch = [s for s in sigs if s["kind"] == SIGNAL_KIND_DATE_MISMATCH]
-        assert not mismatch
-
-
-# ---------------------------------------------------------------------------
-# Relative date parsing
-# ---------------------------------------------------------------------------
-
-
-class TestApproxAgeDaysFromHtml:
-    @pytest.mark.parametrize(
-        "html,expected",
+    def test_conflicting_jobposting_dates_are_unverified(self):
+        html = """
+        <script type="application/ld+json">
         [
-            ("Posted 1 day ago", 1),
-            ("Posted 5 days ago", 5),
-            ("Posted 30 days ago", 30),
-            ("Posted 1 week ago", 7),
-            ("Posted 3 weeks ago", 21),
-            ("Posted 1 month ago", 30),
-            ("Posted 2 months ago", 60),
-            ("Posted 6 months ago", 180),
-        ],
-    )
-    def test_relative_units(self, html, expected):
-        assert _approx_age_days_from_html(html) == expected
+          {"@type": "JobPosting", "datePosted": "2026-04-01"},
+          {"@type": "JobPosting", "datePosted": "2026-05-01"}
+        ]
+        </script>
+        """
 
-    def test_case_insensitive(self):
-        assert _approx_age_days_from_html("POSTED 7 DAYS AGO") == 7
+        assert extract_external_original_posting_date(html, RUN_DATE) is None
 
-    def test_embedded_in_html_tags(self):
-        html = '<span class="date">Posted 14 days ago</span>'
-        assert _approx_age_days_from_html(html) == 14
+    def test_future_posting_date_is_unverified(self):
+        html = """
+        <script type="application/ld+json">
+        {"@type": "JobPosting", "datePosted": "2026-05-12"}
+        </script>
+        """
 
-    def test_embedded_in_surrounding_text(self):
-        html = "Great role at ACME Corp. Posted 21 days ago. Applications close soon."
-        assert _approx_age_days_from_html(html) == 21
+        assert extract_external_original_posting_date(html, RUN_DATE) is None
 
-    def test_returns_none_when_no_match(self):
-        assert _approx_age_days_from_html("Apply now for this great role!") is None
-
-    def test_returns_none_for_empty_string(self):
-        assert _approx_age_days_from_html("") is None
-
-    def test_does_not_match_closing_date(self):
-        # "closes in 5 days" should not be treated as posted age
-        result = _approx_age_days_from_html("Applications close in 5 days.")
-        assert result is None
-
-
-# ---------------------------------------------------------------------------
-# Absolute date parsing
-# ---------------------------------------------------------------------------
-
-
-class TestAbsoluteDateFromHtml:
-    @pytest.mark.parametrize(
-        "html,expected",
-        [
-            ("Posted: 2025-01-12", date(2025, 1, 12)),
-            ("Posted 2025-06-01", date(2025, 6, 1)),
-            ("Posted January 12, 2025", date(2025, 1, 12)),
-            ("Posted: February 3, 2025", date(2025, 2, 3)),
-            ("Posted March 31, 2025", date(2025, 3, 31)),
-            ("Posted April 1, 2025", date(2025, 4, 1)),
-            ("Posted May 15, 2025", date(2025, 5, 15)),
-            ("Posted June 30, 2025", date(2025, 6, 30)),
-            ("Posted July 4, 2025", date(2025, 7, 4)),
-            ("Posted August 20, 2025", date(2025, 8, 20)),
-            ("Posted September 9, 2025", date(2025, 9, 9)),
-            ("Posted October 10, 2025", date(2025, 10, 10)),
-            ("Posted November 11, 2025", date(2025, 11, 11)),
-            ("Posted December 25, 2025", date(2025, 12, 25)),
-            ("Posted on 12 January 2025", date(2025, 1, 12)),
-            ("Posted on 3 February 2025", date(2025, 2, 3)),
-            ("Posted on 1 July 2025", date(2025, 7, 1)),
-            ("Posted on 31 December 2025", date(2025, 12, 31)),
-        ],
-    )
-    def test_parses_date(self, html, expected):
-        assert _absolute_date_from_html(html) == expected
-
-    def test_case_insensitive_month(self):
-        assert _absolute_date_from_html("Posted MARCH 3, 2025") == date(2025, 3, 3)
-        assert _absolute_date_from_html("posted january 1, 2025") == date(2025, 1, 1)
-
-    def test_embedded_in_html_tags(self):
-        html = '<meta name="posted" content="2025-03-15">Posted March 15, 2025'
-        assert _absolute_date_from_html(html) == date(2025, 3, 15)
-
-    def test_returns_none_when_no_date(self):
-        assert _absolute_date_from_html("No date here") is None
-
-    def test_returns_none_for_empty_string(self):
-        assert _absolute_date_from_html("") is None
-
-    def test_relative_text_not_parsed_as_absolute(self):
-        assert _absolute_date_from_html("Posted 5 days ago") is None
-
-
-# ---------------------------------------------------------------------------
-# Absolute date path through detect_external_date_signals
-# ---------------------------------------------------------------------------
-
-
-class TestAbsoluteDateViaDetect:
-    """Ensure the absolute-date path is exercised through the main function."""
-
-    def test_iso_date_triggers_mismatch(self, rules):
-        # RUN_DATE = 2026-05-11; posted 2025-11-11 = ~181 days ago
-        html = "Posted: 2025-11-11"
-        sigs = detect_external_date_signals(html, 1.0, rules, RUN_DATE)
-        assert sigs
-        assert sigs[0]["kind"] == SIGNAL_KIND_DATE_MISMATCH
-        assert sigs[0]["external_age_days"] == 181
-
-    def test_month_name_date_triggers_mismatch(self, rules):
-        # RUN_DATE = 2026-05-11; posted January 11, 2026 = 120 days ago
-        html = "Posted January 11, 2026"
+    def test_structured_date_triggers_mismatch_signal(self, rules):
+        html = """
+        <script type="application/ld+json">
+        {"@type": "JobPosting", "datePosted": "2026-03-27"}
+        </script>
+        """
         sigs = detect_external_date_signals(html, 2.0, rules, RUN_DATE)
-        assert sigs[0]["kind"] == SIGNAL_KIND_DATE_MISMATCH
 
-    def test_absolute_date_within_threshold_no_signal(self, rules):
-        # RUN_DATE = 2026-05-11; posted 2026-05-05 = 6 days ago; linkedin = 5 days
-        html = "Posted: 2026-05-05"
-        sigs = detect_external_date_signals(html, 5.0, rules, RUN_DATE)
-        mismatch = [s for s in sigs if s["kind"] == SIGNAL_KIND_DATE_MISMATCH]
-        assert not mismatch
+        assert sigs[0]["kind"] == SIGNAL_KIND_DATE_MISMATCH
+        assert sigs[0]["external_age_days"] == 45
+        assert sigs[0]["mismatch_days"] == 43
+
+    def test_visible_text_cannot_trigger_mismatch_signal(self, rules):
+        sigs = detect_external_date_signals(
+            "<p>Posted 90 days ago</p>",
+            1.0,
+            rules,
+            RUN_DATE,
+        )
+
+        assert not [s for s in sigs if s["kind"] == SIGNAL_KIND_DATE_MISMATCH]
 
 
 # ---------------------------------------------------------------------------
@@ -491,6 +405,9 @@ class TestNoisyHtml:
     <body>
       <div class="job-header">
         <h1>Business Analyst – Digital Transformation</h1>
+        <script type="application/ld+json">
+          {"@type": "JobPosting", "datePosted": "2026-03-27"}
+        </script>
         <span class="posted-date">Posted 45 days ago</span>
         <span class="location">Sydney, NSW</span>
       </div>
@@ -545,7 +462,11 @@ class TestEdgeCases:
         assert not mismatch
 
     def test_linkedin_age_zero_compared_correctly(self, rules):
-        html = "Posted 15 days ago."
+        html = (
+            '<script type="application/ld+json">'
+            '{"@type":"JobPosting","datePosted":"2026-04-26"}'
+            "</script>"
+        )
         sigs = detect_external_date_signals(html, 0.0, rules, RUN_DATE)
         assert sigs[0]["kind"] == SIGNAL_KIND_DATE_MISMATCH
         assert sigs[0]["mismatch_days"] == 15

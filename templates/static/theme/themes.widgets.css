@@ -1551,6 +1551,13 @@
   color: var(--text-primary);
 }
 
+.job-hunter-page-utility__brand-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .job-hunter-page-utility__brand-icon {
   width: 40px;
   height: 40px;
@@ -1563,6 +1570,38 @@
   font-size: var(--text-role-brand-font-size);
   font-weight: var(--text-role-brand-font-weight);
   letter-spacing: -0.02em;
+}
+
+.job-hunter-page-utility__brand-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.job-hunter-page-utility__release-version {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--text-role-button-font-weight);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.job-hunter-page-utility__release-stage {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--selection-accent) 38%, var(--border-subtle));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--selection-accent) 12%, transparent);
+  color: color-mix(in srgb, var(--selection-accent) 82%, white 18%);
+  font-size: 0.68rem;
+  font-weight: var(--text-role-overline-font-weight);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .job-hunter-page-utility .job-hunter-account-bar {

@@ -23,6 +23,9 @@ from job_hunter_agent.record_schema import (
     RECORD_LLM_ELAPSED_MS_KEY,
     RECORD_LLM_INPUT_TOKENS_KEY,
     RECORD_LLM_OUTPUT_TOKENS_KEY,
+    RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY,
+    RECORD_ORIGINAL_POSTED_DATE_KEY,
+    RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY,
     RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
     RECORD_SOURCE_METADATA_KEY,
@@ -40,6 +43,9 @@ KEEP_SNAPSHOT_FIELDS = (
     "url",
     "posted",
     "posted_age_days",
+    RECORD_ORIGINAL_POSTED_DATE_KEY,
+    RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY,
+    RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY,
     "salary",
     "work_mode",
     "work_mode_source",
@@ -130,6 +136,19 @@ def apply_kept_job_reuse(record: dict, history_entry: dict) -> dict:
 
     if record.get("posted_age_days") is None and snapshot.get("posted_age_days") is not None:
         record["posted_age_days"] = snapshot.get("posted_age_days")
+    if not compact_whitespace(record.get(RECORD_ORIGINAL_POSTED_DATE_KEY) or ""):
+        record[RECORD_ORIGINAL_POSTED_DATE_KEY] = snapshot.get(RECORD_ORIGINAL_POSTED_DATE_KEY) or ""
+    if (
+        record.get(RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY) is None
+        and snapshot.get(RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY) is not None
+    ):
+        record[RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY] = snapshot.get(
+            RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY
+        )
+    if not compact_whitespace(record.get(RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY) or ""):
+        record[RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY] = (
+            snapshot.get(RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY) or ""
+        )
 
     if record.get("salary") in {None, "", "N/A"}:
         record["salary"] = snapshot.get("salary") or "N/A"

@@ -28,6 +28,9 @@ from job_hunter_agent.record_schema import (
     RECORD_LLM_FIT_GRADE_KEY,
     RECORD_LOCATION_KEY,
     RECORD_MISSING_PROFILE_SUPPORT_KEY,
+    RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY,
+    RECORD_ORIGINAL_POSTED_DATE_KEY,
+    RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY,
     RECORD_PAGE_KEY,
     RECORD_POSTED_AGE_DAYS_KEY,
     RECORD_POSTED_KEY,
@@ -164,6 +167,9 @@ def _build_initial_review_state() -> dict:
             "unresolved": [],
         },
         RECORD_POSTING_CHANNEL_EVIDENCE_KEY: blank_posting_channel_evidence(),
+        RECORD_ORIGINAL_POSTED_DATE_KEY: "",
+        RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY: None,
+        RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY: "",
     }
 
 

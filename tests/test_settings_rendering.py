@@ -1,6 +1,7 @@
 """Tests for settings rendering."""
 
 import json
+import tomllib
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -83,6 +84,10 @@ def test_settings_page_renders_keyword_label_and_location_field(monkeypatch):
     assert "Alerts &amp; AI" in html
     assert "Hide link preview" in html
     assert "preview card" in html
+    version = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    assert f"v{version}" in html
+    assert "Preview" in html
+    assert "job-hunter-page-utility__release-stage" in html
 
 
 def test_settings_capability_editor_preserves_icon_key_state():

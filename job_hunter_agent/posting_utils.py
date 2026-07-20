@@ -12,6 +12,13 @@ from typing import Optional, Set
 
 from job_hunter_agent.io_utils import normalize_posted_text
 from job_hunter_agent.job_identity import normalize_job_key
+from job_hunter_agent.record_schema import (
+    ORIGINAL_POSTED_DATE_STATUS_UNVERIFIED,
+    ORIGINAL_POSTED_DATE_STATUS_VERIFIED,
+    RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY,
+    RECORD_ORIGINAL_POSTED_DATE_KEY,
+    RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY,
+)
 from job_hunter_agent.text_processing import compact_whitespace
 
 
@@ -201,6 +208,37 @@ def posted_display_label(record: dict, now: Optional[datetime] = None) -> str:
     if posted_text in ("N/A", "") and posted_date_label != "Unknown":
         return posted_date_label
     return posted_text
+
+
+def board_posted_display_label(record: dict, now: Optional[datetime] = None) -> str:
+    posted_text = normalize_posted_text(record.get("posted"))
+    if posted_text not in ("", "N/A"):
+        return posted_text
+    return posted_display_label(record, now=now)
+
+
+def original_posted_display_label(record: dict) -> str:
+    if str(record.get(RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY) or "").strip().lower() != (
+        ORIGINAL_POSTED_DATE_STATUS_VERIFIED
+    ):
+        return ""
+    raw_date = compact_whitespace(record.get(RECORD_ORIGINAL_POSTED_DATE_KEY))
+    if raw_date:
+        try:
+            return date.fromisoformat(raw_date).strftime("%d %b %Y")
+        except ValueError:
+            pass
+
+    original_age_days = record.get(RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY)
+    reference_time = posted_reference_time(record)
+    return format_posted_date_label("", original_age_days, reference_time)
+
+
+def original_posted_is_unverified(record: dict) -> bool:
+    return (
+        str(record.get(RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY) or "").strip().lower()
+        == ORIGINAL_POSTED_DATE_STATUS_UNVERIFIED
+    )
 
 
 def current_posted_age_days(record: dict, now: Optional[datetime] = None) -> Optional[float]:

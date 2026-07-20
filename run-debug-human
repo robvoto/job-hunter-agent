@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")"
+
+# Keep uv's package cache outside the repo so repeated runs stay fast
+# without littering the project tree.
+export UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/job-hunter-agent-uv-cache}"
+mkdir -p "$UV_CACHE_DIR"
+
+mkdir -p output
+touch output/server.log
+
+tail -n 0 -F output/server.log &
+TAIL_PID=$!
+
+cleanup() {
+  kill "$TAIL_PID" 2>/dev/null || true
+}
+
+trap cleanup EXIT INT TERM
+
+JOB_HUNTER_CONSOLE_LOG=off uv run python -m job_hunter_agent.fastapi_app --debug "$@"

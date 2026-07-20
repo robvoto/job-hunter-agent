@@ -50,10 +50,32 @@ from job_hunter_agent.profile_store import (
 )
 from job_hunter_agent.routes.responses import html_response
 from job_hunter_agent.user_context import get_user_id_for_runtime
+from job_hunter_agent.logging_utils import get_human_logger
 
 router = APIRouter()
 
 JOB_HUNTER_LOGO_SRC = "/static/assets/job_hunter_img.png"
+_human_logger = get_human_logger()
+
+
+def _describe_session_user(request: Request) -> str:
+    user = read_session_user(request)
+    if not user:
+        return "guest"
+    email = str(user.get("email") or "").strip().lower()
+    role = str(user.get("role") or "").strip().lower()
+    if email and role:
+        return f"{email} ({role})"
+    if email:
+        return email
+    return "signed-in user"
+
+
+def _log_page_event(request: Request, page_label: str, message: str | None = None) -> None:
+    detail = f"PAGE | {page_label} | user={_describe_session_user(request)}"
+    if message:
+        detail = f"{detail} | {message}"
+    _human_logger.info(detail)
 
 
 def _build_top_utility_bar_html(
@@ -66,6 +88,7 @@ def _build_top_utility_bar_html(
 ) -> str:
 
     shared_labels = srv.load_shared_ui_labels()
+    release_metadata = srv.load_app_release_metadata()
 
     session_user = read_session_user(request)
 
@@ -86,7 +109,13 @@ def _build_top_utility_bar_html(
     brand_html = (
         '<div class="job-hunter-page-utility__brand" aria-label="Job Hunter">'
         f'<img src="{JOB_HUNTER_LOGO_SRC}" alt="" class="job-hunter-page-utility__brand-icon">'
+        '<div class="job-hunter-page-utility__brand-copy">'
         '<span class="job-hunter-page-utility__brand-name">Job Hunter</span>'
+        '<div class="job-hunter-page-utility__brand-meta">'
+        f'<span class="job-hunter-page-utility__release-version">v{_html_escape(release_metadata["version"])}</span>'
+        f'<span class="job-hunter-page-utility__release-stage" title="{_html_escape(release_metadata["stage_title"])}">{_html_escape(release_metadata["stage_label"])}</span>'
+        "</div>"
+        "</div>"
         "</div>"
     )
 
@@ -681,9 +710,11 @@ def page_workspace(request: Request):  # type: ignore[no-untyped-def]
     shared_labels = srv.load_shared_ui_labels()
 
     if not srv._onboarding_complete():
+        _log_page_event(request, "workspace", "blocked: onboarding incomplete -> redirecting to /start")
         return RedirectResponse(ONBOARDING_PATH, status_code=302)
 
     if WORKSPACE_HTML_PATH.exists():
+        _log_page_event(request, "workspace", "opened")
         html = _render_template_with_locations(
             request,
             WORKSPACE_HTML_PATH,
@@ -701,12 +732,19 @@ def page_workspace(request: Request):  # type: ignore[no-untyped-def]
 def page_admin_profile(request: Request):  # type: ignore[no-untyped-def]
 
     if not srv._onboarding_complete():
+        _log_page_event(
+            request, "global settings", "blocked: onboarding incomplete -> redirecting to /start"
+        )
         return RedirectResponse(ONBOARDING_PATH, status_code=302)
 
     if not is_admin(request):
+        _log_page_event(
+            request, "global settings", "blocked: admin access required -> redirecting to login"
+        )
         return auth_required_response(GLOBAL_SETTINGS_PATH, True)
 
     if GLOBAL_SETTINGS_HTML_PATH.exists():
+        _log_page_event(request, "global settings", "opened")
         html = _render_template_with_locations(
             request,
             GLOBAL_SETTINGS_HTML_PATH,
@@ -726,12 +764,19 @@ def page_admin_profile(request: Request):  # type: ignore[no-untyped-def]
 def page_aws_browser_session(request: Request):  # type: ignore[no-untyped-def]
 
     if not srv._onboarding_complete():
+        _log_page_event(
+            request, "aws browser session", "blocked: onboarding incomplete -> redirecting to /start"
+        )
         return RedirectResponse(ONBOARDING_PATH, status_code=302)
 
     if not is_admin(request):
+        _log_page_event(
+            request, "aws browser session", "blocked: admin access required -> redirecting to login"
+        )
         return auth_required_response(AWS_BROWSER_SESSION_PATH, True)
 
     if AWS_BROWSER_SESSION_HTML_PATH.exists():
+        _log_page_event(request, "aws browser session", "opened")
         html = _render_template_with_locations(
             request,
             AWS_BROWSER_SESSION_HTML_PATH,
@@ -759,9 +804,11 @@ def page_profile():  # type: ignore[no-untyped-def]
 def page_settings(request: Request):  # type: ignore[no-untyped-def]
 
     if not srv._onboarding_complete():
+        _log_page_event(request, "settings", "blocked: onboarding incomplete -> redirecting to /start")
         return RedirectResponse(ONBOARDING_PATH, status_code=302)
 
     if SETTINGS_HTML_PATH.exists():
+        _log_page_event(request, "settings", "opened")
         html = _render_template_with_locations(
             request,
             SETTINGS_HTML_PATH,
@@ -781,13 +828,16 @@ def page_settings(request: Request):  # type: ignore[no-untyped-def]
 def page_onboarding(request: Request):  # type: ignore[no-untyped-def]
 
     if srv._onboarding_complete() and not srv.DEBUG_MODE:
+        _log_page_event(request, "onboarding", "blocked: already complete -> redirecting to workspace")
         return RedirectResponse("/", status_code=302)
 
     if ONBOARDING_HTML_PATH.exists():
+        _log_page_event(request, "onboarding", "opened")
         html = _render_template_with_locations(
             request,
             ONBOARDING_HTML_PATH,
             onboarding_defaults=srv.DEFAULT_ONBOARDING_SETTINGS,
+            global_settings=srv.load_global_settings(),
             resume_step=srv._onboarding_resume_step(),
         )
 

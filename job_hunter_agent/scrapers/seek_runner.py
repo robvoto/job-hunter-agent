@@ -544,7 +544,9 @@ def _seek_source_metadata(
             redux_payload = None
 
     combined_payload = redux_payload if redux_payload not in (None, "", [], {}) else details_payload
-    apply_url = _seek_string_value(combined_payload, ("shareLink",))
+    apply_url = str(details_payload.get("apply_url") or "").strip() or _seek_string_value(
+        combined_payload, ("shareLink",)
+    )
     company_profile_url = _seek_string_value(combined_payload, ("companySearchUrl",))
     company_profile_name = _seek_string_value(
         combined_payload, ("normalisedOrganisationName", "companyProfileName")
@@ -571,6 +573,8 @@ def _seek_source_metadata(
         value = _seek_nested_value(combined_payload, (key,))
         if value not in (None, "", [], {}):
             raw_source_fields[key] = _seek_json_safe_value(value)
+    if apply_url:
+        raw_source_fields["apply_url"] = apply_url
 
     ats_requisition_id = str(
         _seek_string_value(combined_payload, ("seekHirerJobReference",)) or ""

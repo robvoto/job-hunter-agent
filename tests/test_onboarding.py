@@ -88,6 +88,7 @@ def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
     assert 'window.__JOB_HUNTER_USER_SCOPE__ = "' in html
     assert expected_scope in html
     assert legacy_bootstrap_name not in html
+    assert "window.__JOB_HUNTER_GLOBAL_SETTINGS__" in html
     assert "window.__JOB_HUNTER_CAPABILITY_UI_LABELS__" in html
     assert "window.__JOB_HUNTER_SHARED_UI_LABELS__" in html
     assert "/static/onboarding/onboarding-page.css" in html
@@ -153,9 +154,24 @@ def test_onboarding_template_uses_shared_primary_cv_copy_placeholders():
     html_path = Path(__file__).resolve().parents[1] / "templates" / "onboarding.html"
     html_text = html_path.read_text(encoding="utf-8")
 
+    assert 'accept=".docx,.pdf,.md,.txt"' in html_text
     assert '<div id="cv_drop_zone_content" class="drop-zone-content-shell">' in html_text
     assert "__JOB_HUNTER_ONBOARDING_PAGE_CV_DROP_ZONE_EMPTY_TITLE__" in html_text
     assert "__JOB_HUNTER_ONBOARDING_PAGE_CV_DROP_ZONE_EMPTY_HINT__" in html_text
+
+
+def test_onboarding_upload_js_accepts_txt_files():
+    upload_js_path = (
+        Path(__file__).resolve().parents[1]
+        / "templates"
+        / "static"
+        / "onboarding"
+        / "onboarding-upload.js"
+    )
+    upload_js_text = upload_js_path.read_text(encoding="utf-8")
+
+    assert "name.endsWith('.txt')" in upload_js_text
+    assert "Please upload a .docx, .pdf, .md, or .txt CV file." in upload_js_text
 
 
 def test_onboarding_privacy_copy_links_to_docs(monkeypatch):
@@ -169,12 +185,9 @@ def test_onboarding_privacy_copy_links_to_docs(monkeypatch):
 
     client = TestClient(create_app())
     html = client.get("/onboarding").text
-    expected_scope = hashlib.sha256("test-user".encode("utf-8")).hexdigest()[:16]
-    expected_scope = hashlib.sha256("test-user".encode("utf-8")).hexdigest()[:16]
-    expected_scope = hashlib.sha256("test-user".encode("utf-8")).hexdigest()[:16]
-
-    assert 'href="/docs"' in html
-    assert "fuller retention decision" in html.lower()
+    assert "Your uploaded CV is not stored." in html
+    assert "fuller retention decision" not in html.lower()
+    assert "the docs list" not in html.lower()
 
 
 def test_onboarding_flow_labels_include_capability_review_copy():
@@ -194,7 +207,7 @@ def test_onboarding_guidance_links_to_user_guide():
     labels = server_helpers.load_onboarding_page_labels()
 
     assert "Plain, detailed content beats pretty formatting." in labels["guidance_note"]
-    assert 'href="/docs"' in labels["guidance_note"]
+    assert 'href="/docs/view?doc=docs/USER_GUIDE.md"' in labels["guidance_note"]
     assert "User Guide" in labels["guidance_note"]
 
 

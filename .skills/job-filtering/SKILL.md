@@ -24,9 +24,9 @@ Use before editing `filters.py`, reject reasons, title/content filters, or hard 
 
 ## Title filter architecture
 
-**`primary_job_title_pattern` and `secondary_title_patterns` are scoring signals only — not hard gates.**
+**`primary_job_title_pattern` and `secondary_title_patterns` are title-routing signals only — not hard gates.**
 
-They influence `title_reason` and `match_family`, which feed into fit scoring and LLM context. They do NOT control whether a job is rejected.
+They influence `title_reason` and `match_family`, which feed into downstream filtering behaviour and LLM review context. They do NOT directly add or subtract fit-score points, and they do NOT control whether a job is rejected on their own.
 
 The hard gates in the title filter are:
 1. Empty title → `TITLE_EMPTY`
@@ -37,9 +37,9 @@ The hard gates in the title filter are:
    - The original O*NET verdict is preserved in `record["onet_classification"]` (never overwritten), so anything reading audit rows to detect "title didn't match but still went to review" must key off `onet_classification.result`, not `title_reason`/`reject_reason` — those get overwritten or never equal `TITLE_NOT_TARGET` once a row reaches final decision. See `review_insights.py::build_title_optimization_suggestions()`.
    - Do not insert extra deterministic semantic gates between `TITLE_NOT_TARGET` and this fallback path, such as "core keyword overlap" checks or guessed "domain qualifier" interpretations.
 
-**`match_family` values and their scoring impact:**
-- `"primary"` — title matched a `target_roles` entry → full title score, `title_reason="OK"`
-- `"secondary"` — title matched an `also_consider_roles` entry → partial title score, `title_reason=TITLE_REASON_POTENTIAL_MATCH`
+**`match_family` values and their downstream meaning:**
+- `"primary"` — title matched a `target_roles` entry → `title_reason="OK"`
+- `"secondary"` — title matched an `also_consider_roles` entry → `title_reason=TITLE_REASON_POTENTIAL_MATCH`
 - `"none"` — no pattern matched → goes through the O*NET fallback above; only a clearly-far occupation family is hard rejected (`ONET_FAR_OCCUPATION`)
 
 **`title_reason` downstream effects:**

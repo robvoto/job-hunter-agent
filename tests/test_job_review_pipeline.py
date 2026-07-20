@@ -17,19 +17,21 @@ from job_hunter_agent.job_review_pipeline import (
     review_post_detail_normalized_job,
     review_pre_detail_normalized_job,
 )
-from job_hunter_agent.paths import SCORING_RULES_PATH
 from job_hunter_agent.occupation_taxonomy import (
     RESULT_FAR,
     RESULT_UNCERTAIN,
     OccupationClassification,
     classify_title,
 )
+from job_hunter_agent.paths import SCORING_RULES_PATH
 from job_hunter_agent.record_schema import (
+    APPLY_METHOD_EXTERNAL_APPLY,
+    RECORD_APPLY_METHOD_KEY,
     RECORD_CARD_SALARY_KEY,
     RECORD_COMPANY_KEY,
     RECORD_CONTENT_REASON_KEY,
-    RECORD_DECISION_KEY,
     RECORD_DECISION_EXPLANATION_KEY,
+    RECORD_DECISION_KEY,
     RECORD_DESCRIPTION_SOURCE_KEY,
     RECORD_DETAILS_STATUS_KEY,
     RECORD_DETAILS_TEXT_KEY,
@@ -44,6 +46,9 @@ from job_hunter_agent.record_schema import (
     RECORD_LLM_TITLE_JUDGMENT_KEY,
     RECORD_LOCATION_KEY,
     RECORD_ONET_CLASSIFICATION_KEY,
+    RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY,
+    RECORD_ORIGINAL_POSTED_DATE_KEY,
+    RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY,
     RECORD_POSTED_AGE_DAYS_KEY,
     RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
     RECORD_REJECT_REASON_KEY,
@@ -183,7 +188,7 @@ def _patch_llm_review_path(monkeypatch, payload):
     )
     monkeypatch.setattr(
         job_review_pipeline,
-        "build_risk_and_missing_profile_support",
+        "build_pre_review_risk_signals",
         lambda details_text, title_reason, profile, competitive_signals=None: ([], [], []),
     )
     monkeypatch.setattr(
@@ -973,6 +978,68 @@ def test_explicit_title_reject_rule_logs_immediate_title_reject(monkeypatch, cap
     assert "PIPELINE][TITLE_GATE" in caplog.text
 
 
+def test_external_apply_stale_repost_rejects_before_llm(monkeypatch):
+    record = _base_record("linkedin", "jobAdDetails", "card")
+    record[RECORD_TITLE_REASON_KEY] = "OK"
+    record[RECORD_APPLY_METHOD_KEY] = APPLY_METHOD_EXTERNAL_APPLY
+    record["source_metadata"] = {
+        "apply_url": "https://jobs.example.com/apply/123",
+        "raw_source_fields": {},
+    }
+    context = _review_context("LINKEDIN")
+
+    _patch_llm_review_path(monkeypatch, _keep_review_payload())
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "fetch_external_html",
+        lambda _url: (
+            '<script type="application/ld+json">'
+            '{"@type":"JobPosting","datePosted":"2026-04-24"}'
+            "</script>"
+        ),
+    )
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "_evaluate_job_fit",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("LLM should not run")),
+    )
+
+    outcome, updated_record, _ = review_post_detail_normalized_job(record, context)
+
+    assert outcome[RECORD_DECISION_KEY] == "REJECT"
+    assert updated_record[RECORD_REJECT_REASON_KEY] == "STALE_REPOST"
+    assert updated_record[RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY] == "verified"
+    assert updated_record[RECORD_ORIGINAL_POSTED_DATE_KEY] == "2026-04-24"
+    assert updated_record[RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY] == 32.0
+    assert "outside the 30-day search window" in updated_record[RECORD_DECISION_EXPLANATION_KEY]
+
+
+def test_external_apply_unverified_original_date_does_not_reject(monkeypatch):
+    record = _base_record("linkedin", "jobAdDetails", "card")
+    record[RECORD_TITLE_REASON_KEY] = "OK"
+    record[RECORD_APPLY_METHOD_KEY] = APPLY_METHOD_EXTERNAL_APPLY
+    record["source_metadata"] = {
+        "apply_url": "https://jobs.example.com/apply/123",
+        "raw_source_fields": {},
+    }
+    context = _review_context("LINKEDIN")
+
+    _patch_llm_review_path(monkeypatch, _keep_review_payload())
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "fetch_external_html",
+        lambda _url: "<html><body>Apply now with your resume.</body></html>",
+    )
+
+    outcome, updated_record, _ = review_post_detail_normalized_job(record, context)
+
+    assert outcome[RECORD_DECISION_KEY] == "KEEP"
+    assert updated_record.get(RECORD_REJECT_REASON_KEY) is None
+    assert updated_record[RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY] == "unverified"
+    assert updated_record[RECORD_ORIGINAL_POSTED_DATE_KEY] == ""
+    assert updated_record[RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY] is None
+
+
 def test_job_cost_preserves_micro_cost_precision(monkeypatch):
     job_key = "seek-job-micro-cost"
     job_review_pipeline._job_start_costs[job_key] = 1.0
@@ -1318,7 +1385,7 @@ def test_llm_call_error_log_emitted_with_structured_fields(caplog, monkeypatch):
     )
     monkeypatch.setattr(
         job_review_pipeline,
-        "build_risk_and_missing_profile_support",
+        "build_pre_review_risk_signals",
         lambda details_text, title_reason, profile, competitive_signals=None: ([], [], []),
     )
     monkeypatch.setattr(
@@ -1396,7 +1463,7 @@ def test_llm_missing_provider_key_is_reported_as_unavailable(caplog, monkeypatch
     )
     monkeypatch.setattr(
         job_review_pipeline,
-        "build_risk_and_missing_profile_support",
+        "build_pre_review_risk_signals",
         lambda details_text, title_reason, profile, competitive_signals=None: ([], [], []),
     )
     monkeypatch.setattr(

@@ -52,7 +52,9 @@ from job_hunter_agent.config import (
     ONBOARDING_PATH,
 )
 from job_hunter_agent.logging_utils import (
+    ConsoleNoiseFilter,
     HUMAN_LOGGER_NAME,
+    HumanReadableLogFilter,
     install_log_handler_filters,
 )
 from job_hunter_agent.paths import OUTPUT_DIR, SERVER_DEBUG_LOG_PATH, SERVER_LOG_PATH
@@ -148,6 +150,11 @@ _SUPPRESSED_ACCESS_PATHS = frozenset(
 )
 
 
+def _console_logging_enabled() -> bool:
+    raw_value = str(os.environ.get("JOB_HUNTER_CONSOLE_LOG", "on")).strip().lower()
+    return raw_value not in {"0", "off", "false", "no"}
+
+
 class _AccessLogFilter(logging.Filter):
     """Drops uvicorn access log lines for high-frequency polling endpoints."""
 
@@ -158,6 +165,12 @@ class _AccessLogFilter(logging.Filter):
 
 def _configure_server_logging() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    console_enabled = _console_logging_enabled()
+    human_logger_handlers = ["human_file", "debug_file"]
+    uvicorn_error_handlers = ["human_file", "debug_file"]
+    if console_enabled:
+        human_logger_handlers.insert(0, "human_console")
+        uvicorn_error_handlers.insert(0, "human_console")
 
     logging_config = {
         "version": 1,
@@ -200,7 +213,7 @@ def _configure_server_logging() -> None:
         "loggers": {
             HUMAN_LOGGER_NAME: {
                 "level": "INFO",
-                "handlers": ["human_console", "human_file"],
+                "handlers": human_logger_handlers,
                 "propagate": False,
             },
             "uvicorn": {
@@ -210,7 +223,7 @@ def _configure_server_logging() -> None:
             },
             "uvicorn.error": {
                 "level": "INFO",
-                "handlers": ["debug_file"],
+                "handlers": uvicorn_error_handlers,
                 "propagate": False,
             },
             "uvicorn.access": {
@@ -226,7 +239,19 @@ def _configure_server_logging() -> None:
     access_filter = _AccessLogFilter()
     logging.getLogger("uvicorn.access").addFilter(access_filter)
 
-    app_logger = logging.getLogger("job_hunter_agent.app")
+    human_logger = logging.getLogger(HUMAN_LOGGER_NAME)
+    for handler in human_logger.handlers:
+        if console_enabled and isinstance(handler, logging.StreamHandler) and not isinstance(
+            handler, logging.FileHandler
+        ):
+            handler.addFilter(HumanReadableLogFilter())
+            handler.addFilter(ConsoleNoiseFilter())
+        elif isinstance(handler, logging.FileHandler) and getattr(handler, "baseFilename", "").endswith(
+            "server.log"
+        ):
+            handler.addFilter(HumanReadableLogFilter())
+
+    app_logger = human_logger
     sys.stdout = _LineLoggingStream(app_logger, logging.INFO)
     sys.stderr = _LineLoggingStream(app_logger, logging.ERROR)
 

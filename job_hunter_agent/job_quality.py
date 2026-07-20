@@ -6,9 +6,10 @@ signals without making the final rejection decision.
 
 from __future__ import annotations
 
+import json
 import re
-from datetime import date
-from typing import Optional
+from datetime import date, datetime
+from html.parser import HTMLParser
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
@@ -25,20 +26,7 @@ SIGNAL_KIND_JOB_CLOSED = "job_closed"
 SIGNAL_KIND_CV_FARMING = "cv_farming"
 SIGNAL_KIND_BROAD_ENGAGEMENT = "broad_engagement"
 
-_MONTH_NAMES = {
-    "january": 1,
-    "february": 2,
-    "march": 3,
-    "april": 4,
-    "may": 5,
-    "june": 6,
-    "july": 7,
-    "august": 8,
-    "september": 9,
-    "october": 10,
-    "november": 11,
-    "december": 12,
-}
+
 
 
 def _clean_text(value: object) -> str:
@@ -216,60 +204,192 @@ def fetch_external_html(url: str) -> str:
         return ""
 
 
-def _approx_age_days_from_html(html: str) -> Optional[int]:
-    m = re.search(r"\bposted\s+(\d+)\s+(day|week|month)s?\s+ago\b", html, re.IGNORECASE)
-    if not m:
+class _StructuredPostingDateParser(HTMLParser):
+    """Collect schema.org posting-date values without interpreting visible page copy."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.json_ld_blocks: list[str] = []
+        self.microdata_values: list[str] = []
+        self._json_ld_parts: list[str] | None = None
+        self._microdata_tag = ""
+        self._microdata_parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attr_map = {
+            str(name or "").strip().lower(): str(value or "").strip()
+            for name, value in attrs
+        }
+
+        if tag.lower() == "script":
+            media_type = attr_map.get("type", "").split(";", 1)[0].strip().lower()
+            if media_type == "application/ld+json":
+                self._json_ld_parts = []
+
+        itemprop_tokens = {
+            token.strip().lower()
+            for token in attr_map.get("itemprop", "").split()
+            if token.strip()
+        }
+        if "dateposted" not in itemprop_tokens:
+            return
+
+        structured_value = (
+            attr_map.get("content")
+            or attr_map.get("datetime")
+            or attr_map.get("value")
+        )
+        if structured_value:
+            self.microdata_values.append(structured_value)
+            return
+
+        self._microdata_tag = tag.lower()
+        self._microdata_parts = []
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+        self.handle_endtag(tag)
+
+    def handle_data(self, data: str) -> None:
+        if self._json_ld_parts is not None:
+            self._json_ld_parts.append(data)
+        if self._microdata_tag:
+            self._microdata_parts.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        lowered = tag.lower()
+        if lowered == "script" and self._json_ld_parts is not None:
+            block = "".join(self._json_ld_parts).strip()
+            if block:
+                self.json_ld_blocks.append(block)
+            self._json_ld_parts = None
+
+        if lowered == self._microdata_tag:
+            value = compact_whitespace(" ".join(self._microdata_parts))
+            if value:
+                self.microdata_values.append(value)
+            self._microdata_tag = ""
+            self._microdata_parts = []
+
+
+def _is_job_posting_schema_type(value: object) -> bool:
+    values = value if isinstance(value, list) else [value]
+    for item in values:
+        normalized = str(item or "").strip().rstrip("/").rsplit("/", 1)[-1].lower()
+        if normalized == "jobposting":
+            return True
+    return False
+
+
+def _iter_job_posting_date_values(value: object):
+    if isinstance(value, list):
+        for item in value:
+            yield from _iter_job_posting_date_values(item)
+        return
+    if not isinstance(value, dict):
+        return
+
+    if _is_job_posting_schema_type(value.get("@type")):
+        for key, candidate in value.items():
+            if str(key).strip().lower() != "dateposted":
+                continue
+            if isinstance(candidate, list):
+                for item in candidate:
+                    if str(item or "").strip():
+                        yield str(item).strip()
+            elif str(candidate or "").strip():
+                yield str(candidate).strip()
+
+    for candidate in value.values():
+        yield from _iter_job_posting_date_values(candidate)
+
+
+def _parse_structured_posting_date(value: object) -> date | None:
+    raw = compact_whitespace(value)
+    if not raw:
         return None
-    n = int(m.group(1))
-    unit = m.group(2).lower()
-    if unit == "day":
-        return n
-    if unit == "week":
-        return n * 7
-    if unit == "month":
-        return n * 30
+
+    normalized = re.sub(r"(?<=\d)(?:st|nd|rd|th)\b", "", raw, flags=re.IGNORECASE)
+    iso_value = normalized[:-1] + "+00:00" if normalized.endswith(("Z", "z")) else normalized
+    try:
+        return datetime.fromisoformat(iso_value).date()
+    except ValueError:
+        pass
+
+    for date_format in ("%d %B %Y", "%d %b %Y", "%B %d, %Y", "%b %d, %Y"):
+        try:
+            return datetime.strptime(normalized, date_format).date()
+        except ValueError:
+            continue
     return None
 
 
-def _absolute_date_from_html(html: str) -> Optional[date]:
-    month_pat = "|".join(_MONTH_NAMES.keys())
+def _unique_verified_date(
+    raw_values: list[str],
+    run_date: date,
+) -> tuple[date, str] | None:
+    parsed_values: list[tuple[date, str]] = []
+    for raw_value in raw_values:
+        parsed = _parse_structured_posting_date(raw_value)
+        if parsed is None or parsed > run_date:
+            continue
+        parsed_values.append((parsed, raw_value))
 
-    m = re.search(r"\bposted[:\s]+(\d{4}-\d{2}-\d{2})\b", html, re.IGNORECASE)
-    if m:
+    unique_dates = {parsed for parsed, _ in parsed_values}
+    if len(unique_dates) != 1:
+        return None
+
+    verified_date = next(iter(unique_dates))
+    raw_value = next(raw for parsed, raw in parsed_values if parsed == verified_date)
+    return verified_date, raw_value
+
+
+def extract_external_original_posting_date(html: str, run_date: date) -> dict[str, object] | None:
+    """Return a verified original posting date from structured job-page metadata only."""
+
+    if not str(html or "").strip():
+        return None
+
+    parser = _StructuredPostingDateParser()
+    try:
+        parser.feed(html)
+        parser.close()
+    except (TypeError, ValueError):
+        return None
+
+    json_ld_values: list[str] = []
+    for block in parser.json_ld_blocks:
         try:
-            return date.fromisoformat(m.group(1))
-        except ValueError:
-            pass
+            payload = json.loads(block)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        json_ld_values.extend(_iter_job_posting_date_values(payload))
 
-    m = re.search(
-        rf"\bposted[:\s]+({month_pat})\s+(\d{{1,2}}),?\s+(\d{{4}})\b",
-        html,
-        re.IGNORECASE,
+    structured_sources = (
+        ("jobposting_json_ld", json_ld_values),
+        ("schema_dateposted_microdata", parser.microdata_values),
     )
-    if m:
-        try:
-            return date(int(m.group(3)), _MONTH_NAMES[m.group(1).lower()], int(m.group(2)))
-        except (ValueError, KeyError):
-            pass
-
-    m = re.search(
-        rf"\bposted\s+(?:on\s+)?(\d{{1,2}})\s+({month_pat})\s+(\d{{4}})\b",
-        html,
-        re.IGNORECASE,
-    )
-    if m:
-        try:
-            return date(int(m.group(3)), _MONTH_NAMES[m.group(2).lower()], int(m.group(1)))
-        except (ValueError, KeyError):
-            print(f"[JOB_QUALITY][WARN] Failed to parse date from HTML (format 3): {m.group(0)}")
-            pass
+    for evidence_source, raw_values in structured_sources:
+        if not raw_values:
+            continue
+        verified = _unique_verified_date(raw_values, run_date)
+        if verified is None:
+            return None
+        posted_on, raw_value = verified
+        age_days = (run_date - posted_on).days
+        return {
+            "age_days": float(age_days),
+            "posted_on": posted_on.isoformat(),
+            "evidence_source": evidence_source,
+            "raw_value": raw_value,
+        }
 
     return None
 
 
 def detect_external_date_signals(
     html: str,
-    linkedin_age_days: Optional[float],
+    linkedin_age_days: float | None,
     rules: dict,
     run_date: date,
 ) -> list:
@@ -277,7 +397,7 @@ def detect_external_date_signals(
         return []
 
     signals = []
-    flag_days = int(rules.get("external_date_mismatch_flag_days", 14))
+    flag_days = int(rules["external_date_mismatch_flag_days"])
 
     for pat in rules.get("job_closed_indicators", []):
         if re.search(pat, html, re.IGNORECASE):
@@ -291,11 +411,8 @@ def detect_external_date_signals(
             )
             return signals
 
-    external_age = _approx_age_days_from_html(html)
-    if external_age is None:
-        ext_date = _absolute_date_from_html(html)
-        if ext_date is not None:
-            external_age = max((run_date - ext_date).days, 0)
+    verification = extract_external_original_posting_date(html, run_date)
+    external_age = int(verification["age_days"]) if verification is not None else None
 
     if external_age is not None and linkedin_age_days is not None:
         diff = external_age - float(linkedin_age_days)
@@ -306,7 +423,7 @@ def detect_external_date_signals(
                     "label": "Date Mismatch",
                     "evidence": (
                         f"LinkedIn shows ~{int(linkedin_age_days)}d old; "
-                        f"external page suggests ~{external_age}d old "
+                        f"external page metadata shows ~{external_age}d old "
                         f"({int(diff)}d discrepancy)."
                     ),
                     "needs_review": True,
@@ -317,6 +434,7 @@ def detect_external_date_signals(
             )
 
     return signals
+
 
 
 def detect_broad_engagement_signal(record: dict) -> list:

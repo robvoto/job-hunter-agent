@@ -12,7 +12,9 @@ import json
 import re
 import shutil
 import threading
+import tomllib
 from html import escape
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -182,6 +184,8 @@ _SHARED_UI_LABEL_KEYS = (
     "account_menu_aria_label",
     "account_menu_title",
     "account_menu_logout_label",
+    "app_stage_label",
+    "app_stage_title",
     "account_menu_settings_shortcut_label",
     "account_menu_settings_shortcut_aria_label",
     "account_menu_workspace_shortcut_label",
@@ -594,6 +598,24 @@ def load_shared_ui_labels() -> dict[str, str]:
     if missing:
         raise ValueError(f"ui_labels.json is missing shared_ui_labels values: {', '.join(missing)}")
     return {key: str(labels[key]).strip() for key in _SHARED_UI_LABEL_KEYS}
+
+
+@lru_cache(maxsize=1)
+def load_app_release_metadata() -> dict[str, str]:
+    pyproject_path = ROOT_DIR / "pyproject.toml"
+    payload = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+    project = payload.get("project")
+    if not isinstance(project, dict):
+        raise ValueError("pyproject.toml is missing [project]")
+    version = str(project.get("version", "")).strip()
+    if not version:
+        raise ValueError("pyproject.toml is missing project.version")
+    shared_labels = load_shared_ui_labels()
+    return {
+        "version": version,
+        "stage_label": shared_labels["app_stage_label"],
+        "stage_title": shared_labels["app_stage_title"],
+    }
 
 
 def load_search_source_labels() -> dict[str, str]:

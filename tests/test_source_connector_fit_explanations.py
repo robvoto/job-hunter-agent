@@ -26,6 +26,7 @@ from job_hunter_agent.profile_store import (
     KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT,
 )
 from job_hunter_agent.record_schema import (
+    APPLY_METHOD_EXTERNAL_APPLY,
     APPLY_METHOD_EASY_APPLY,
     APPLY_METHOD_QUICK_APPLY,
     CONFIDENCE_HIGH,
@@ -44,6 +45,9 @@ from job_hunter_agent.record_schema import (
     RECORD_LLM_FIT_GRADE_KEY,
     RECORD_LLM_INPUT_TOKENS_KEY,
     RECORD_LLM_OUTPUT_TOKENS_KEY,
+    RECORD_ORIGINAL_POSTED_DATE_KEY,
+    ORIGINAL_POSTED_DATE_STATUS_VERIFIED,
+    RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
 )
 from job_hunter_agent.scrapers.seek import build_seek_search_targets
@@ -940,7 +944,7 @@ def test_required_blocker_watchouts_do_not_mark_desirable_mentions_as_missing():
             "reject_title_rules": [],
         },
     )
-    risks, missing, missing_clearance = capability_matching.build_risk_and_missing_profile_support(
+    risks, missing, missing_clearance = capability_matching.build_pre_review_risk_signals(
         "ERP experience is desirable for this business analyst role.",
         "OK",
         {
@@ -966,7 +970,7 @@ def test_missing_mandatory_requirement_uses_deterministic_scan_without_llm_cover
         "candidate_eligibility": [{"name": "NV1", "value": False, "evidence": []}],
     }
 
-    _, missing, missing_clearance = capability_matching.build_risk_and_missing_profile_support(
+    _, missing, missing_clearance = capability_matching.build_pre_review_risk_signals(
         "Security Clearance: NV1 / Baseline / As per role",
         "OK",
         profile,
@@ -979,49 +983,39 @@ def test_missing_mandatory_requirement_uses_deterministic_scan_without_llm_cover
     assert missing_clearance == ["Missing mandatory requirement: Nv1"]
 
 
-def test_missing_mandatory_requirement_defers_to_llm_eligibility_coverage():
-    profile = {
-        "must_not_require_skills": [],
-        "reject_description_phrase_rules": [],
-        "reject_title_rules": [],
-        "candidate_capabilities": [],
-        "candidate_eligibility": [{"name": "NV1", "value": False, "evidence": []}],
-    }
-
-    # LLM already reviewed the alternation ("NV1 / Baseline / As per role") and judged
-    # the candidate satisfies it via the Baseline alternative.
-    requirement_coverage = [
+def test_eligibility_coverage_renders_in_clearance_panel_when_supported():
+    # Once the fit-review LLM has judged an eligibility requirement, its verdict is
+    # the single source of truth and lives in the dedicated Clearances panel — the
+    # pre-review deterministic scan is never consulted again for display.
+    html = workspace_renderer.render_job_card(
         {
-            "requirement": "Security Clearance: NV1 / Baseline / As per role",
-            "importance": "mandatory",
-            "requirement_type": "eligibility",
-            "status": "supported",
-            "eligibility_name": "Baseline clearance",
-        }
-    ]
-
-    _, missing, missing_clearance = capability_matching.build_risk_and_missing_profile_support(
-        "Security Clearance: NV1 / Baseline / As per role",
-        "OK",
-        profile,
-        requirement_coverage=requirement_coverage,
+            **_test_profile(),
+            "job_requirements": [],
+            "requirement_coverage": [
+                {
+                    "requirement": "Security Clearance: NV1 / Baseline / As per role",
+                    "importance": "mandatory",
+                    "requirement_type": "eligibility",
+                    "status": "supported",
+                    "eligibility_name": "Baseline clearance",
+                    "matched_job_text": "Security Clearance: NV1 / Baseline / As per role",
+                    "profile_support": [],
+                }
+            ],
+            "source": "seek",
+        },
+        _capability_profile(),
     )
 
-    # LLM judgment is the single source of truth once available: no false-positive
-    # "Missing mandatory requirement: NV1", and the deterministic scan does not also run.
-    assert missing == []
-    assert missing_clearance == []
+    assert "job-clearance-panel" in html
+    assert "job-requirement-item--supported" in html
+    assert "Security Clearance: NV1 / Baseline / As per role" in html
+    assert "Missing mandatory requirement" not in html
 
 
-def test_missing_mandatory_requirement_uses_llm_eligibility_mismatch_not_deterministic():
-    profile = {
-        "must_not_require_skills": [],
-        "reject_description_phrase_rules": [],
-        "reject_title_rules": [],
-        "candidate_capabilities": [],
-        "candidate_eligibility": [{"name": "NV1", "value": False, "evidence": []}],
-    }
-
+def test_eligibility_mismatch_renders_in_clearance_panel_not_checks_before_applying():
+    # An eligibility mismatch from the LLM must appear exactly once — in the
+    # Clearances panel — and never be duplicated into "Checks before applying".
     requirement_coverage = [
         {
             "requirement": "Security Clearance: NV1 only, no alternatives accepted",
@@ -1029,67 +1023,32 @@ def test_missing_mandatory_requirement_uses_llm_eligibility_mismatch_not_determi
             "requirement_type": "eligibility",
             "status": "mismatch",
             "eligibility_name": "NV1",
+            "matched_job_text": "Security Clearance: NV1 only, no alternatives accepted",
+            "profile_support": [],
         }
     ]
 
-    _, missing, missing_clearance = capability_matching.build_risk_and_missing_profile_support(
-        "Security Clearance: NV1 only, no alternatives accepted",
-        "OK",
-        profile,
-        requirement_coverage=requirement_coverage,
-    )
-
-    # Exactly one "Missing mandatory requirement" line — sourced only from the LLM
-    # judgment, confirming the deterministic scan is not also contributing a duplicate,
-    # and it lands in missing_clearance, never in the generic missing list.
-    assert missing == []
-    assert missing_clearance == ["Missing mandatory requirement: Nv1"]
-
-
-def test_eligibility_mismatch_is_not_double_counted_in_checks_before_applying():
-    profile = {
-        "must_not_require_skills": [],
-        "reject_description_phrase_rules": [],
-        "reject_title_rules": [],
-        "candidate_capabilities": [],
-        "candidate_eligibility": [{"name": "NV1", "value": False, "evidence": []}],
-    }
-
-    requirement_coverage = [
+    html = workspace_renderer.render_job_card(
         {
-            "requirement": "Security Clearance: NV1 only, no alternatives accepted",
-            "importance": "mandatory",
-            "requirement_type": "eligibility",
-            "status": "mismatch",
-            "eligibility_name": "NV1",
-        }
-    ]
-
-    _, missing, missing_clearance = capability_matching.build_risk_and_missing_profile_support(
-        "Security Clearance: NV1 only, no alternatives accepted",
-        "OK",
-        profile,
-        requirement_coverage=requirement_coverage,
+            **_test_profile(),
+            "job_requirements": [],
+            "requirement_coverage": requirement_coverage,
+            "source": "seek",
+        },
+        _capability_profile(),
     )
 
-    # The eligibility miss lands exclusively in missing_clearance, never in the
-    # generic missing_profile_support list.
-    assert missing == []
-    assert missing_clearance == ["Missing mandatory requirement: Nv1"]
+    assert "job-clearance-panel" in html
+    assert "NV1" in html
 
-    # And the generic "Checks before applying" builder must not also surface the
-    # same eligibility row from requirement_coverage — it is handled exclusively by
-    # the dedicated Clearances panel now, so double-counting would show the exact
-    # same fact in two places on the job card.
     checks = workspace_renderer._build_checks_before_applying_items(
         history_warning_signals=[],
         description_issue=False,
         is_possible_repost=False,
         similar_applied_record=None,
         candidate_history=None,
-        missing_profile_support=missing,
+        hard_block_reasons_list=[],
         salary_fit_state="unknown",
-        requirement_coverage=requirement_coverage,
         soft_risk_reasons=[],
     )
     assert checks == []
@@ -1359,6 +1318,39 @@ def test_job_card_omits_apply_method_badge_when_unknown():
     assert 'data-apply-method="unknown"' in html
 
 
+def test_job_card_shows_reposted_and_original_posted_dates_separately():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-repost-dates",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://linkedin.com/jobs/view/1",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Contract",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "linkedin",
+            "posted": "15 hours ago",
+            "posted_age_days": 15 / 24,
+            RECORD_APPLY_METHOD_KEY: APPLY_METHOD_EXTERNAL_APPLY,
+            RECORD_ORIGINAL_POSTED_DATE_KEY: "2026-06-24",
+            RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY: ORIGINAL_POSTED_DATE_STATUS_VERIFIED,
+        },
+        _test_profile(),
+    )
+
+    assert "LinkedIn reposted" in html
+    assert "15 hours ago" in html
+    assert "Originally posted" in html
+    assert "24 Jun 2026" in html
+    assert "<strong>Posted</strong>" not in html
+
+
 def test_job_card_summary_unescapes_literal_pipe():
     html = workspace_renderer.render_job_card(
         {
@@ -1602,7 +1594,7 @@ def test_render_job_card_requirement_coverage_shows_eligibility_details_in_debug
         debug_mode=True,
     )
 
-    assert "job-requirements-panel" in html
+    assert "job-clearance-panel" in html
     assert "req-coverage-detail" in html
     assert "PV clearance" in html
 
@@ -2827,6 +2819,7 @@ def test_render_job_card_hides_debug_fit_sections_in_normal_mode():
     assert "Debug: LLM fit review" not in html
     assert "Debug: score details" not in html
     assert "Debug: scoring notes" not in html
+    assert "Scoring audit" not in html
     assert "Base fit" not in html
     assert "Strong requirement coverage" not in html
 
@@ -3341,14 +3334,14 @@ def test_score_equivalent_where_no_hard_blockers():
     assert not any("Hard blocker" in item["label"] for item in breakdown)
 
 
-def test_build_risk_and_missing_profile_support_uses_shared_partial_support_label(monkeypatch):
+def test_build_pre_review_risk_signals_uses_shared_partial_support_label(monkeypatch):
     monkeypatch.setattr(
         capability_matching,
         "find_profile_capability_matches",
         lambda details_text, profile: {"must_not": [], "limited_depth": []},
     )
 
-    risks, missing, missing_clearance = capability_matching.build_risk_and_missing_profile_support(
+    risks, missing, missing_clearance = capability_matching.build_pre_review_risk_signals(
         "",
         None,
         _test_profile(),
@@ -3699,12 +3692,13 @@ def test_check_item_unescapes_html_entities_before_rendering():
     assert "'Contract Management'" in reason
 
 
-def test_nv1_check_item_in_rendered_card():
-    """A card where the description + profile triggers NV1 risk renders a plain-English check item."""
-    profile = {
-        **_test_profile(),
-        "must_not_require_skills": ["nv1"],
-    }
+def test_must_not_require_skills_keyword_scan_no_longer_drives_checks_before_applying():
+    """The pre-review must_not_require_skills keyword scan is used only to decide
+    whether the LLM review can be skipped (see build_pre_review_risk_signals) — it
+    must never leak a "Missing mandatory requirement" sentence into the rendered
+    card, since that panel is now LLM-sourced only (competitive_signals /
+    requirement_coverage), not a keyword scan of the description.
+    """
     html = workspace_renderer.render_job_card(
         {
             "job_key": "test-nv1-card",
@@ -3729,84 +3723,19 @@ def test_nv1_check_item_in_rendered_card():
             "fit_highlights": [],
             "source": "seek",
         },
-        profile,
-    )
-
-    assert "Checks before applying" in html
-    assert "Missing mandatory requirement: NV1" in html
-    assert html.lower().count("missing mandatory requirement: nv1") == 1
-    start = html.index("Checks before applying")
-    end = html.index("</details>", start)
-    check_section = html[start:end]
-    assert "nv1 clearance required" not in check_section.lower()
-
-
-def test_missing_mandatory_requirement_warning_preserves_common_acronyms():
-    html = workspace_renderer.render_job_card(
-        {
-            "job_key": "test-sap-missing-card",
-            "title": "Business Analyst",
-            "company": "Acme",
-            "url": "https://example.com/job",
-            "title_reason": "OK",
-            "content_reason": "OK",
-            "llm_fit_grade": "SOLID",
-            "location": "Sydney NSW",
-            "work_type": "Full Time",
-            "work_mode": "On-site",
-            "salary": "N/A",
-            "full_description": "Strong sap experience is required for this role. " * 20,
-            "fit_source_text": "Strong sap experience is required for this role. " * 20,
-            "description_source": "jobAdDetails",
-            RECORD_DETAILS_STATUS_KEY: DETAILS_STATUS_OK,
-            "fit_highlights": [],
-            "source": "seek",
-        },
         {
             **_test_profile(),
-            "must_not_require_skills": ["SAP"],
+            "must_not_require_skills": ["nv1"],
         },
     )
 
-    assert "Checks before applying" in html
-    assert "Missing mandatory requirement: SAP" in html
-    assert html.count("Missing mandatory requirement: SAP") == 1
-    assert "Sap explicitly required but not shown" not in html
+    assert "Missing mandatory requirement" not in html
 
 
-def test_missing_mandatory_requirement_warning_for_banking_uses_clean_copy_once():
-    html = workspace_renderer.render_job_card(
-        {
-            "job_key": "test-banking-missing-card",
-            "title": "Business Analyst",
-            "company": "Acme",
-            "url": "https://example.com/job",
-            "title_reason": "OK",
-            "content_reason": "OK",
-            "llm_fit_grade": "SOLID",
-            "location": "Sydney NSW",
-            "work_type": "Full Time",
-            "work_mode": "On-site",
-            "salary": "N/A",
-            "full_description": "Banking is explicitly required for this role. " * 20,
-            "fit_source_text": "Banking is explicitly required for this role. " * 20,
-            "description_source": "jobAdDetails",
-            RECORD_DETAILS_STATUS_KEY: DETAILS_STATUS_OK,
-            "fit_highlights": [],
-            "source": "seek",
-        },
-        {
-            **_test_profile(),
-            "must_not_require_skills": ["banking"],
-        },
-    )
-
-    assert "Checks before applying" in html
-    assert "Missing mandatory requirement: Banking" in html
-    assert html.count("Missing mandatory requirement: Banking") == 1
-
-
-def test_partial_requirement_coverage_uses_plain_english_copy():
+def test_partial_requirement_coverage_shows_badge_in_job_requirements_only():
+    # A partially-supported requirement is shown once, as a badged row in Job
+    # Requirements — it must not also be duplicated as a sentence in "Checks
+    # before applying".
     html = workspace_renderer.render_job_card(
         {
             "job_key": "test-partial-requirement-card",
@@ -3840,8 +3769,10 @@ def test_partial_requirement_coverage_uses_plain_english_copy():
         _test_profile(),
     )
 
-    assert "Checks before applying" in html
-    assert "Partly matches your profile: Data integration" in html
+    assert "job-requirements-panel" in html
+    assert "job-requirement-item--partially-supported" in html
+    assert "Data integration" in html
+    assert "Partly matches your profile: Data integration" not in html
     assert "Partial requirement coverage" not in html
 
 
@@ -3989,13 +3920,9 @@ def test_match_tile_number_is_debug_only():
 def test_fit_section_heading_uses_human_friendly_language():
     """Section headings use the new human-friendly copy, not the old internal labels.
 
-    We need the description + profile to produce a soft risk so the 'Things to check'
-    section renders. Using must_not_require_skills + SAP mention achieves this.
+    The LLM's own competitive_signals (not a keyword scan) is what surfaces a soft
+    risk so the 'Checks before applying' section renders.
     """
-    profile = {
-        **_capability_profile(),
-        "must_not_require_skills": ["SAP"],
-    }
     html = workspace_renderer.render_job_card(
         {
             "job_key": "test-headings",
@@ -4021,10 +3948,18 @@ def test_fit_section_heading_uses_human_friendly_language():
                 {"requirement": "Agile delivery", "importance": "mandatory", "status": "supported"},
                 {"requirement": "SAP experience", "importance": "mandatory", "status": "mismatch"},
             ],
+            "competitive_signals": [
+                {
+                    SIGNAL_LABEL_KEY: "specialist context",
+                    SIGNAL_RISK_LABEL_KEY: "Role leans toward specialist depth",
+                    SIGNAL_ALIGNMENT_KEY: "strong",
+                    SIGNAL_ADJUSTMENT_KEY: -1,
+                }
+            ],
             "fit_highlights": [],
             "source": "seek",
         },
-        profile,
+        _capability_profile(),
     )
 
     assert "Why this is a good fit" not in html

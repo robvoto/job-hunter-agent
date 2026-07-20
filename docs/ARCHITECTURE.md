@@ -174,19 +174,15 @@ Scoring characteristics:
 * support-based
 * bounded
 
-Scoring inputs include:
+The current implemented fit score is intentionally narrow. It uses:
 
-* title alignment
-* capability support
-* eligibility facts
-* profile support tiers
-* description quality
-* competitive fit
-* salary alignment
-* work mode
-* location preference
-* government context
-* freshness
+* requirement coverage
+* candidate capability support levels
+* candidate eligibility facts
+* occupation alignment adjustment
+* hard blockers
+
+Title analysis, salary, work mode, location, freshness, and similar convenience or preference signals still matter elsewhere in the system, but they are handled as filters, checks, metadata, or separate ranking/display context rather than direct fit-score inputs.
 
 The scoring layer must remain inspectable.
 

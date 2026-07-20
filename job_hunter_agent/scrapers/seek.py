@@ -238,6 +238,18 @@ def _read_visible_text(page, selector: str) -> str:
     return ""
 
 
+def _read_href(page, selector: str, page_url: str) -> str:
+    try:
+        page.wait_for_selector(selector, timeout=8000)
+    except Exception:
+        return ""
+    try:
+        href = str(page.locator(selector).get_attribute("href") or "").strip()
+    except Exception:
+        return ""
+    return urljoin(page_url, href) if href else ""
+
+
 def fetch_job_details_payload(detail_page, full_url: str, attempts: int = 2) -> dict:
     last_status = "empty"
     last_text = ""
@@ -249,6 +261,7 @@ def fetch_job_details_payload(detail_page, full_url: str, attempts: int = 2) -> 
 
     apply_button_text = _read_visible_text(detail_page, SELECTOR_APPLY_BUTTON)
     apply_method = classify_seek_apply_method(apply_button_text)
+    apply_url = _read_href(detail_page, SELECTOR_APPLY_BUTTON, full_url)
 
     for attempt_index in range(max(attempts, 1)):
         _expand_detail_page(detail_page)
@@ -263,6 +276,7 @@ def fetch_job_details_payload(detail_page, full_url: str, attempts: int = 2) -> 
                 "source": "jobAdDetails",
                 "retryable": False,
                 "apply_method": apply_method,
+                "apply_url": apply_url,
             }
 
         try:
@@ -280,6 +294,7 @@ def fetch_job_details_payload(detail_page, full_url: str, attempts: int = 2) -> 
                 "source": "body",
                 "retryable": False,
                 "apply_method": apply_method,
+                "apply_url": apply_url,
             }
 
         last_text = body_text or details_text or ""
@@ -301,6 +316,7 @@ def fetch_job_details_payload(detail_page, full_url: str, attempts: int = 2) -> 
         "retryable": last_status in {"challenge_page", "blocked_page"},
         "raw_text": last_text[:500],
         "apply_method": apply_method,
+        "apply_url": apply_url,
     }
 
 
@@ -357,6 +373,18 @@ async def _read_visible_text_async(page, selector: str) -> str:
     return ""
 
 
+async def _read_href_async(page, selector: str, page_url: str) -> str:
+    try:
+        await page.wait_for_selector(selector, timeout=8000)
+    except Exception:
+        return ""
+    try:
+        href = str(await page.locator(selector).get_attribute("href") or "").strip()
+    except Exception:
+        return ""
+    return urljoin(page_url, href) if href else ""
+
+
 async def fetch_job_details_payload_async(page, full_url: str, attempts: int = 2) -> dict:
     """Async mirror of fetch_job_details_payload — use with async_playwright pages."""
     last_status = "empty"
@@ -369,6 +397,7 @@ async def fetch_job_details_payload_async(page, full_url: str, attempts: int = 2
 
     apply_button_text = await _read_visible_text_async(page, SELECTOR_APPLY_BUTTON)
     apply_method = classify_seek_apply_method(apply_button_text)
+    apply_url = await _read_href_async(page, SELECTOR_APPLY_BUTTON, full_url)
 
     for attempt_index in range(max(attempts, 1)):
         await _expand_detail_page_async(page)
@@ -382,6 +411,7 @@ async def fetch_job_details_payload_async(page, full_url: str, attempts: int = 2
                 "source": "jobAdDetails",
                 "retryable": False,
                 "apply_method": apply_method,
+                "apply_url": apply_url,
             }
 
         try:
@@ -398,6 +428,7 @@ async def fetch_job_details_payload_async(page, full_url: str, attempts: int = 2
                 "source": "body",
                 "retryable": False,
                 "apply_method": apply_method,
+                "apply_url": apply_url,
             }
 
         last_text = body_text or details_text or ""
@@ -419,4 +450,5 @@ async def fetch_job_details_payload_async(page, full_url: str, attempts: int = 2
         "retryable": last_status in {"challenge_page", "blocked_page"},
         "raw_text": last_text[:500],
         "apply_method": apply_method,
+        "apply_url": apply_url,
     }

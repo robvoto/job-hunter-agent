@@ -377,72 +377,11 @@ def capability_fit_highlights(fit_highlights: List[str]) -> List[str]:
     ]
 
 
-def _eligibility_mismatch_labels(requirement_coverage: List[dict]) -> List[str]:
-    """Eligibility facts (clearance, work rights, etc.) confirmed mismatched by the LLM.
-
-    The LLM sees the full requirement clause (e.g. "NV1 / Baseline / As per role") and can
-    judge whether an alternative-satisfying phrasing still counts as a mismatch; a plain
-    keyword scan cannot. Once this judgment is available it is the single source of truth
-    for eligibility gaps — see find_profile_eligibility_matches, which must not also run.
-    """
-    labels: List[str] = []
-    for item in requirement_coverage:
-        if not isinstance(item, dict):
-            continue
-        if str(item.get("requirement_type") or "").strip().lower() != "eligibility":
-            continue
-        if str(item.get("status") or "").strip().lower() != "mismatch":
-            continue
-        label = compact_whitespace(
-            str(item.get("eligibility_name") or item.get("requirement") or "")
-        )
-        if label:
-            labels.append(label)
-    return dedupe_preserve_order(labels)
-
-
-def build_risk_and_missing_profile_support(
-    details_text: str,
-    title_reason: Optional[str],
-    profile: dict,
+def _competitive_signal_risk_lines(
     competitive_signals: Optional[List[dict]] = None,
-    requirement_coverage: Optional[List[dict]] = None,
-) -> Tuple[List[str], List[str], List[str]]:
+) -> Tuple[List[str], List[str]]:
     risks: List[str] = []
     missing: List[str] = []
-    missing_clearance: List[str] = []
-    capability_matches = find_profile_capability_matches(details_text, profile)
-
-    if title_reason == TITLE_REASON_POTENTIAL_MATCH:
-        risks.append("Secondary role-family match rather than direct target role")
-
-    if capability_matches["must_not"]:
-        missing.append(
-            f"Missing mandatory requirement: {list_to_phrase(capability_matches['must_not'][:2]).capitalize()}"
-        )
-
-    # Clearance/eligibility gaps are reported separately from generic requirements
-    # (their own UI panel) and come from exactly one source: the LLM's
-    # requirement_coverage judgment when it has already run (it can reason about
-    # alternative/OR-clause phrasing), otherwise the deterministic keyword scan.
-    # Never both, to avoid duplicate or conflicting lines for the same fact.
-    if requirement_coverage:
-        eligibility_missing = _eligibility_mismatch_labels(requirement_coverage)
-    else:
-        eligibility_missing = find_profile_eligibility_matches(details_text, profile)["do_not_have"]
-
-    if eligibility_missing:
-        missing_clearance.append(
-            f"Missing mandatory requirement: {list_to_phrase(eligibility_missing[:2]).capitalize()}"
-        )
-
-    if capability_matches["limited_depth"]:
-        risks.append(
-            f"{list_to_phrase(capability_matches['limited_depth'][:2]).capitalize()} appears in the role, but your profile marks it as beginner-level"
-        )
-
-    risks.extend(description_watchout_reasons(details_text, profile))
-
     for signal in competitive_signals or []:
         if int(signal.get(SIGNAL_ADJUSTMENT_KEY, 0)) < 0:
             alignment = compact_whitespace(signal.get(SIGNAL_ALIGNMENT_KEY) or "").lower()
@@ -457,12 +396,57 @@ def build_risk_and_missing_profile_support(
                         or "is only partially supported by your profile"
                     )
                     risks.append(f"{risk_label} {partial_suffix}")
+    return risks, missing
+
+
+def build_pre_review_risk_signals(
+    details_text: str,
+    title_reason: Optional[str],
+    profile: dict,
+    competitive_signals: Optional[List[dict]] = None,
+) -> Tuple[List[str], List[str], List[str]]:
+    risks: List[str] = []
+    missing: List[str] = []
+    missing_clearance: List[str] = []
+    capability_matches = find_profile_capability_matches(details_text, profile)
+
+    if title_reason == TITLE_REASON_POTENTIAL_MATCH:
+        risks.append("Secondary role-family match rather than direct target role")
+
+    if capability_matches["must_not"]:
+        missing.append(
+            f"Missing mandatory requirement: {list_to_phrase(capability_matches['must_not'][:2]).capitalize()}"
+        )
+
+    eligibility_missing = find_profile_eligibility_matches(details_text, profile)["do_not_have"]
+    if eligibility_missing:
+        missing_clearance.append(
+            f"Missing mandatory requirement: {list_to_phrase(eligibility_missing[:2]).capitalize()}"
+        )
+
+    if capability_matches["limited_depth"]:
+        risks.append(
+            f"{list_to_phrase(capability_matches['limited_depth'][:2]).capitalize()} appears in the role, but your profile marks it as beginner-level"
+        )
+
+    risks.extend(description_watchout_reasons(details_text, profile))
+
+    signal_risks, signal_missing = _competitive_signal_risk_lines(competitive_signals)
+    risks.extend(signal_risks)
+    missing.extend(signal_missing)
 
     return (
         dedupe_preserve_order(risks)[:4],
         dedupe_preserve_order(missing)[:4],
         dedupe_preserve_order(missing_clearance)[:4],
     )
+
+
+def build_display_competitive_risks(
+    competitive_signals: Optional[List[dict]] = None,
+) -> List[str]:
+    risks, missing = _competitive_signal_risk_lines(competitive_signals)
+    return dedupe_preserve_order([*risks, *missing])[:6]
 
 
 def _normalized_aliases(values: List[str]) -> List[str]:
