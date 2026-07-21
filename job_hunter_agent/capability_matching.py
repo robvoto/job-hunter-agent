@@ -34,7 +34,6 @@ from job_hunter_agent.signal_registry import (
     load_registry,
 )
 from job_hunter_agent.signal_schema import (
-    CATEGORY_HARD_BLOCKER_PATTERN,
     LEARNING_CATEGORY_KEY,
     LEARNING_ORIGINAL_TEXTS_KEY,
     LEARNING_SIGNAL_KEY,

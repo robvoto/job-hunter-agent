@@ -54,7 +54,7 @@ from job_hunter_agent.scrapers.seek import (
     stable_job_key,
 )
 from job_hunter_agent.source_errors import PartialSourceResultsError
-from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order
+from job_hunter_agent.text_processing import compact_whitespace
 from job_hunter_agent.utils import parse_seek_posted_age_days, set_page_param
 from job_hunter_agent.work_mode_extraction import (
     WORK_MODE_UNKNOWN,

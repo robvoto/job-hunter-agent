@@ -15,9 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 from job_hunter_agent import workspace_data
+from job_hunter_agent import filters as _filters
 from job_hunter_agent.config import DEBUG_MODE
-from job_hunter_agent.filters import passes_title_filters
-from job_hunter_agent.fit_scoring import fit_score, fit_score_displayed
+from job_hunter_agent.fit_scoring import fit_score_displayed
 from job_hunter_agent.global_settings import (
     get_archive_stale_after_days,
     get_candidate_application_history_sync_before_run,
@@ -57,7 +57,6 @@ from job_hunter_agent.user_settings import get_workspace_minimum_score
 from job_hunter_agent.utils import safe_html
 from job_hunter_agent.workspace_renderer import (
     ARCHIVE_LABEL,
-    _workspace_ui_labels,
     humanize_reject_reason,
     load_workspace_page_labels,
     render_page_size_select_html,
@@ -70,6 +69,7 @@ from job_hunter_agent.workspace_renderer import (
 )
 
 WORKSPACE_DEBUG_MODE = DEBUG_MODE
+passes_title_filters = _filters.passes_title_filters
 
 
 def _label_from_options(options: tuple[dict[str, Any], ...], value: object, default: str) -> str:
@@ -349,18 +349,25 @@ def build_workspace_record_sets(
     is_workspace_eligible_fn = is_workspace_eligible
 
     if debug_mode:
-        is_workspace_eligible_fn = lambda record, current_profile=None, workspace_min_score=None: (
-            True
-        )
+        def is_workspace_eligible_fn(
+            record: dict,
+            current_profile: Optional[dict] = None,
+            workspace_min_score: Optional[int] = None,
+        ) -> bool:
+            return True
 
     elif workspace_min_score is not None:
         active_workspace_min_score = int(workspace_min_score)
 
-        is_workspace_eligible_fn = lambda record, current_profile=None: is_workspace_eligible(
-            record,
-            current_profile,
-            active_workspace_min_score,
-        )
+        def is_workspace_eligible_fn(
+            record: dict,
+            current_profile: Optional[dict] = None,
+        ) -> bool:
+            return is_workspace_eligible(
+                record,
+                current_profile,
+                active_workspace_min_score,
+            )
 
     return workspace_data.build_workspace_record_sets(
         kept_records,
@@ -468,8 +475,6 @@ def render_html(
     shortlist_records = workspace_records["shortlist_records"]
 
     recent_archive_records = workspace_records["recent_archive_records"]
-
-    stale_archive_records = workspace_records["stale_archive_records"]
 
     applied_records = workspace_records["applied_records"]
 

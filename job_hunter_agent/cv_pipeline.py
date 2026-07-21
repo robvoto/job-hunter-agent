@@ -27,7 +27,6 @@ from collections import defaultdict
 from typing import Any
 
 from job_hunter_agent.capability_matrix import (
-    choose_capability_name,
     derive_job_description_aliases,
 )
 from job_hunter_agent.global_settings import (

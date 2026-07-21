@@ -437,18 +437,10 @@ def filter_registerable_signals(
     filtered: list[str | dict[str, Any]] = []
     seen: set[str] = set()
     for item in signal_names:
-        item_category = ""
-        suggested_values: list[str] | None = None
-        context_terms: list[str] | None = None
         if isinstance(item, dict):
             signal = _clean_text(
                 item.get(LEARNING_SIGNAL_KEY) or item.get("value") or item.get("name")
             )
-            item_category = _clean_term(
-                item.get(LEARNING_CATEGORY_KEY) or item.get(LEARNING_SUGGESTED_CATEGORY_KEY) or ""
-            )
-            suggested_values = _clean_text_list(item.get(LEARNING_SUGGESTED_VALUES_KEY))
-            context_terms = _clean_text_list(item.get(LEARNING_CONTEXT_TERMS_KEY))
         else:
             signal = _clean_text(item)
         key = _signal_key(signal)

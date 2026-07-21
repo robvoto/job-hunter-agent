@@ -9,7 +9,6 @@ import csv
 import hashlib
 import io
 import json as _json
-import re
 from datetime import datetime, timezone
 
 import requests

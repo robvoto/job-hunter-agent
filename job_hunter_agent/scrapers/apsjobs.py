@@ -36,8 +36,6 @@ from job_hunter_agent.record_schema import (
     RECORD_POSTED_AGE_DAYS_KEY,
     RECORD_SALARY_KEY,
     RECORD_TITLE_KEY,
-    RECORD_URL_KEY,
-    RECORD_WORK_MODE_KEY,
 )
 from job_hunter_agent.run_control import run_stop_requested, set_run_progress
 from job_hunter_agent.scrapers.base import (

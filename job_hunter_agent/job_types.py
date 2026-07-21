@@ -1,7 +1,6 @@
 """Helpers for job types."""
 
 import logging
-import re
 from typing import Dict, List, Optional
 
 from job_hunter_agent.text_processing import compact_whitespace

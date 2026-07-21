@@ -8,7 +8,7 @@ import time
 import textwrap
 from dataclasses import dataclass
 from datetime import date
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 from job_hunter_agent.config import DEBUG_MODE
 from job_hunter_agent import occupation_taxonomy

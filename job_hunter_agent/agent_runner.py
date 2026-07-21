@@ -14,10 +14,8 @@ consistent delivery of match summaries to the user.
 import argparse
 import html
 import json
-import sys
 import time
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from job_hunter_agent.runtime_helpers import load_repo_dotenv
@@ -56,7 +54,6 @@ from job_hunter_agent.user_settings import (
     DEFAULT_SUBJECT_PREFIX,
     DEFAULT_WORKSPACE_URL,
     KEY_EMAIL,
-    KEY_LLM,
     KEY_NOTIFICATION_RULES,
     KEY_ONLY_IF_NEW_MATCHES,
     KEY_TELEGRAM,

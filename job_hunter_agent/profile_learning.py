@@ -46,7 +46,6 @@ from job_hunter_agent.profile_store import (
     KEY_TARGET_OCCUPATION_QUERIES,
     VALID_CAPABILITY_ICON_KEYS,
     CapabilityLevel,
-    WorkMode,
 )
 from job_hunter_agent.runtime_helpers import is_desktop_runtime
 from job_hunter_agent.text_processing import compact_whitespace

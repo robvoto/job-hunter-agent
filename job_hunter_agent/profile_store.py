@@ -27,10 +27,8 @@ from job_hunter_agent.global_settings import (
     KEY_LINKEDIN_HOURS_OLD,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
     KEY_LOCATIONS_MAX_SELECTED,
-    KEY_SEARCH_LIMITS,
     KEY_SEEK_MAX_PAGES,
     KEY_SORT_NEWEST_FIRST,
-    ONBOARDING_SETTING_LIMITS,
     get_salary_limits,
     load_global_settings,
 )

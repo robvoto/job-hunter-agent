@@ -50,6 +50,7 @@ from job_hunter_agent.preferences import (
     display_work_type_label,
 )
 from job_hunter_agent.profile_gaps import (
+    PROFILE_GAP_JOB_REQUIREMENT_TEXT_KEY,
     STATUS_CONFIRMED_DO_NOT_HAVE,
     STATUS_CONFIRMED_HAVE,
     STATUS_UNKNOWN,
@@ -115,6 +116,14 @@ from job_hunter_agent.work_mode_extraction import (
 logger = logging.getLogger(__name__)
 
 WORKSPACE_DEBUG_MODE = DEBUG_MODE
+
+
+def _workspace_int(value: Any) -> int:
+    return int(value)
+
+
+def _match_level_minimum_score(level: dict[str, object]) -> int:
+    return _workspace_int(level.get("minimum_score", 0) or 0)
 
 
 def _chunk_full_description_text(description: str) -> list[str]:
@@ -744,7 +753,7 @@ def score_filter_option_label(threshold: int, scoring_profile: Optional[dict] = 
     active_profile = scoring_profile or load_profile()
     match_levels = get_match_levels(active_profile)
     label = score_to_match_label(threshold, match_levels)
-    highest_threshold = max(int(level.get("minimum_score", 0) or 0) for level in match_levels)
+    highest_threshold = max(_match_level_minimum_score(level) for level in match_levels)
     if threshold >= highest_threshold:
         return f"{label} only"
     return f"{label} or better"
@@ -763,11 +772,11 @@ def score_filter_thresholds(
         else get_workspace_minimum_score()
     )
     if debug_mode:
-        return [int(level.get("minimum_score", 0) or 0) for level in match_levels]
+        return [_match_level_minimum_score(level) for level in match_levels]
     return [
-        int(level.get("minimum_score", 0) or 0)
+        _match_level_minimum_score(level)
         for level in match_levels
-        if int(level.get("minimum_score", 0) or 0) >= active_workspace_min_score
+        if _match_level_minimum_score(level) >= active_workspace_min_score
     ]
 
 
@@ -1070,6 +1079,9 @@ def render_job_card(
         for item in (display_record.get(RECORD_JOB_REQUIREMENTS_KEY) or [])
         if compact_whitespace(item)
     ]
+    raw_coverage = display_record.get(RECORD_REQUIREMENT_COVERAGE_KEY)
+    raw_coverage_is_list = isinstance(raw_coverage, list)
+    coverage_rows = raw_coverage if isinstance(raw_coverage, list) else []
     candidate_capabilities = active_profile.get("candidate_capabilities") or []
     must_not_require_skills = active_profile.get("must_not_require_skills") or []
     requirement_statuses = [
@@ -1082,7 +1094,7 @@ def render_job_card(
         for item in job_requirements
     ]
     profile_gaps = compute_profile_gaps(
-        job_requirements,
+        coverage_rows,
         candidate_capabilities,
         must_not_require_skills,
     )
@@ -1502,7 +1514,6 @@ def render_job_card(
         job_quality_signals,
     )
     job_requirements_html = ""
-    raw_coverage = display_record.get(RECORD_REQUIREMENT_COVERAGE_KEY)
     merged_requirement_rows: dict[str, dict[str, Any]] = {}
     merged_requirement_order: list[str] = []
     eligibility_coverage_rows: dict[str, dict[str, Any]] = {}
@@ -1512,7 +1523,7 @@ def render_job_card(
     # When requirement_coverage is available, show only those rows (they are more
     # detailed and LLM-verified). Skip the short job_requirements bullets to avoid
     # showing the same requirements twice with different text.
-    has_coverage = isinstance(raw_coverage, list) and len(raw_coverage) > 0
+    has_coverage = len(coverage_rows) > 0
     workspace_card_label_group = _workspace_ui_labels().get("workspace_card_labels", {})
     coverage_status_label_keys = {
         "supported": "coverage_status_supported",
@@ -1650,7 +1661,7 @@ def render_job_card(
         # Coverage path: one row per coverage entry, no job_requirements duplication.
         # Eligibility requirements (clearance, citizenship, work rights, etc.) get their
         # own Clearances panel below rather than mixing into the general list.
-        for item in raw_coverage:
+        for item in coverage_rows:
             if not isinstance(item, dict):
                 continue
             req_text = compact_whitespace(str(item.get("requirement") or ""))
@@ -1703,7 +1714,7 @@ def render_job_card(
             f'<span class="job-requirement-text">{safe_html(occ_text)}</span></li>'
         )
 
-    if requirement_statuses or isinstance(raw_coverage, list) or occupation_row_html:
+    if requirement_statuses or raw_coverage_is_list or occupation_row_html:
         requirement_items_html = occupation_row_html
         sorted_requirement_keys = sorted(
             merged_requirement_order,
@@ -1750,15 +1761,26 @@ def render_job_card(
         )
         gap_decide_later_label = safe_html(_workspace_label("workspace_card_labels", "gap_decide_later_label"))
         gap_items_html = "".join(
-            f'<div class="job-gap-item">'
-            f'<span class="job-gap-requirement">{safe_html(gap["requirement"])}</span>'
-            f'<div class="job-gap-actions">'
-            f'<button class="gap-btn gap-btn--have" data-requirement="{safe_html(gap["requirement"])}" data-action="confirm_have">{gap_confirm_have_label}</button>'
-            f'<button class="gap-btn gap-btn--not-have" data-requirement="{safe_html(gap["requirement"])}" data-action="confirm_do_not_have">{gap_confirm_not_have_label}</button>'
-            f'<button class="gap-btn gap-btn--later" data-requirement="{safe_html(gap["requirement"])}" data-action="decide_later">{gap_decide_later_label}</button>'
-            f"</div>"
-            f"</div>"
+            (
+                f'<div class="job-gap-item">'
+                f'<span class="job-gap-requirement">{safe_html(gap_requirement)}</span>'
+                f'<div class="job-gap-actions">'
+                f'<button class="gap-btn gap-btn--have" data-requirement="{safe_html(gap_requirement)}" data-action="confirm_have">{gap_confirm_have_label}</button>'
+                f'<button class="gap-btn gap-btn--not-have" data-requirement="{safe_html(gap_requirement)}" data-action="confirm_do_not_have">{gap_confirm_not_have_label}</button>'
+                f'<button class="gap-btn gap-btn--later" data-requirement="{safe_html(gap_requirement)}" data-action="decide_later">{gap_decide_later_label}</button>'
+                f"</div>"
+                f"</div>"
+            )
             for gap in profile_gaps
+            for gap_requirement in [
+                str(
+                    gap.get(PROFILE_GAP_JOB_REQUIREMENT_TEXT_KEY)
+                    or gap.get("raw_requirement")
+                    or gap.get("capability_name")
+                    or ""
+                ).strip()
+            ]
+            if gap_requirement
         )
         gap_heading_label = safe_html(_workspace_label("workspace_card_labels", "gap_heading_label"))
         profile_gaps_html = (
@@ -1865,11 +1887,20 @@ def render_job_card(
                 f'<div class="job-insight-group is-secondary"><ul>{"".join(summary_items)}</ul></div>'
             )
         if score_breakdown:
-            score_breakdown_html = "".join(
-                f"<li>{safe_html(compact_whitespace(str(item['label'])))}: {'{:+d}'.format(int(item['value']))}</li>"
-                for item in score_breakdown
-                if compact_whitespace(str(item.get("label") or "")) and int(item["value"]) != 0
-            )
+            score_breakdown_items: list[str] = []
+            for raw_item in score_breakdown:
+                if not isinstance(raw_item, dict):
+                    continue
+                label = compact_whitespace(str(raw_item.get("label") or ""))
+                if not label:
+                    continue
+                score_value = _workspace_int(raw_item.get("value", 0) or 0)
+                if score_value == 0:
+                    continue
+                score_breakdown_items.append(
+                    f"<li>{safe_html(label)}: {'{:+d}'.format(score_value)}</li>"
+                )
+            score_breakdown_html = "".join(score_breakdown_items)
             if score_breakdown_html:
                 llm_review_parts.append(
                     '<div class="job-insight-group is-secondary">'

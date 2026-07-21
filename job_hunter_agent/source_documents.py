@@ -17,13 +17,10 @@ from typing import Any
 from xml.etree import ElementTree as ET
 
 from job_hunter_agent.global_settings import (
-    get_allowed_source_document_suffixes,
     get_cv_chars_per_page,
 )
 from job_hunter_agent.logging_utils import format_log_block
 from job_hunter_agent.paths import (
-    DATA_DIR,
-    OUTPUT_DIR,
     REPO_ROOT,
 )
 from job_hunter_agent.profile_learning import (

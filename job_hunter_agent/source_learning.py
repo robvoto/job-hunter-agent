@@ -41,11 +41,9 @@ from job_hunter_agent.signal_registry import (
 from job_hunter_agent.signal_schema import (
     CATEGORY_CAPABILITY_CONCEPT,
     CATEGORY_HARD_BLOCKER_PATTERN,
-    LEARNING_CATEGORY_KEY,
     LEARNING_ORIGINAL_TEXTS_KEY,
     LEARNING_SIGNAL_KEY,
     LEARNING_SUGGESTED_CATEGORY_KEY,
-    TITLE_REASON_POTENTIAL_MATCH,
 )
 from job_hunter_agent.text_processing import compact_whitespace
 from job_hunter_agent.runtime_helpers import is_desktop_runtime

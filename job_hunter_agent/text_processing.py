@@ -1,7 +1,7 @@
 """Helpers for text processing."""
 
 import re
-from typing import Dict, List, Optional, Set
+from typing import List, Optional, Set
 
 _ESCAPED_LIST_MARKER_RE = re.compile(r"(?<!\S)\\\*(?=\s+\S)")
 _STRUCTURED_SUMMARY_PREFIXES = (

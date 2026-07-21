@@ -5,7 +5,6 @@ from typing import Optional
 from job_hunter_agent.match_labels import score_to_match_level
 from job_hunter_agent.preferences import salary_fit_adjustment
 from job_hunter_agent.profile_store import get_match_levels, load_profile
-from job_hunter_agent.text_processing import compact_whitespace
 from job_hunter_agent.utils import safe_html
 
 

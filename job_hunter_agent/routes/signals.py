@@ -2,7 +2,6 @@
 
 from fastapi import APIRouter, Body
 
-from job_hunter_agent import server_helpers as srv
 from job_hunter_agent.routes.responses import json_response
 
 router = APIRouter()

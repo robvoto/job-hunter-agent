@@ -4,7 +4,7 @@ import logging
 import re
 from typing import Optional, Tuple
 
-from job_hunter_agent.io_utils import load_parsing_rules, load_ui_labels
+from job_hunter_agent.io_utils import load_parsing_rules
 from job_hunter_agent.job_types import load_job_type
 from job_hunter_agent.paths import UNCERTAINTY_LOG_PATH
 from job_hunter_agent.profile_store import (
@@ -12,7 +12,6 @@ from job_hunter_agent.profile_store import (
     ENGAGEMENT_TYPE_OPTIONS,
     KEY_WORK_MODE_PREFERENCE,
     VALID_ENGAGEMENT_TYPES,
-    VALID_WORK_MODE_PREFERENCES,
     Engagement,
     WorkMode,
     get_scoring_rules,

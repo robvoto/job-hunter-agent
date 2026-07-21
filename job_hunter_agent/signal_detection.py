@@ -69,8 +69,6 @@ from job_hunter_agent.signal_schema import (
     SIGNAL_SNIPPET_HITS_KEY,
     SIGNAL_WATCHOUT_LABEL_KEY,
     SOURCE_JOB_PARSING,
-    TITLE_REASON_KEY,
-    TITLE_REASON_POTENTIAL_MATCH,
 )
 from job_hunter_agent.text_processing import (
     compact_whitespace,

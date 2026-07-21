@@ -1,7 +1,6 @@
 """Route handlers for review."""
 
 import hashlib
-import json
 import logging
 import re
 

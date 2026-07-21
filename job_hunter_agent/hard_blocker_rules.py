@@ -16,11 +16,9 @@ from typing import Any
 from job_hunter_agent.managed_knowledge_store import (
     clean_knowledge_aliases,
     clean_knowledge_text,
-    merge_knowledge_entries,
 )
 from job_hunter_agent.signal_schema import (
     MANAGED_KNOWLEDGE_ALIASES_KEY,
-    MANAGED_KNOWLEDGE_DESCRIPTION_KEY,
     MANAGED_KNOWLEDGE_ENTRIES_KEY,
     MANAGED_KNOWLEDGE_KIND_KEY,
     MANAGED_KNOWLEDGE_NAME_KEY,

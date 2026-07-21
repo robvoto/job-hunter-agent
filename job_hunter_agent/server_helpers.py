@@ -18,6 +18,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from job_hunter_agent import profile_store as _profile_store
+from job_hunter_agent import workspace_refresh_service as _workspace_refresh_service
 from job_hunter_agent.config import (
     ALLOWED_DOC_REL_PATHS,
     DEBUG_MODE,
@@ -45,7 +47,6 @@ from job_hunter_agent.io_utils import (
     clear_audit_rows,
     clear_job_history,
     clear_runtime_caches,
-    load_job_history,
     clear_review_data,
     clear_run_stats,
     clear_user_settings,
@@ -68,8 +69,6 @@ from job_hunter_agent.profile_store import (
     DEFAULT_PROFILE,
     ENGAGEMENT_TYPE_DEFAULT_VALUES,
     ENGAGEMENT_TYPE_OPTIONS,
-    KEY_CANDIDATE_CAPABILITIES,
-    KEY_CANDIDATE_ELIGIBILITY,
     KEY_CV_MAX_PAGES,
     KEY_ENGAGEMENT_TYPE,
     KEY_KEYWORDS,
@@ -98,10 +97,7 @@ from job_hunter_agent.profile_store import (
     normalize_onboarding_settings,
     normalize_search_settings,
     normalize_work_mode_preferences,
-    profile_review_status,
-    patch_profile,
     save_profile,
-    require_profile_ready_for_review,
     validate_search_keywords,
 )
 from job_hunter_agent.run_control import (
@@ -123,12 +119,17 @@ from job_hunter_agent.user_settings import (
     load_agent_state,
     list_user_setting_user_ids,
 )
-from job_hunter_agent.workspace_refresh_service import rebuild_workspace_after_rule_change
 from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
 
 _run_in_progress = False
 _run_state_lock = threading.Lock()
 _rejection_suggestions_cache: dict[str, dict[str, Any]] = {}
+profile_review_status = _profile_store.profile_review_status
+patch_profile = _profile_store.patch_profile
+require_profile_ready_for_review = _profile_store.require_profile_ready_for_review
+rebuild_workspace_after_rule_change = (
+    _workspace_refresh_service.rebuild_workspace_after_rule_change
+)
 _ONBOARDING_TITLE_TIER_LABEL_KEYS = (
     "target_roles_label",
     "target_roles_help",

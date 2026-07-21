@@ -35,7 +35,6 @@ from job_hunter_agent.global_settings import (
     get_llm_job_requirements_max_output_tokens,
     get_llm_learning_candidates_max_items,
     get_llm_learning_candidates_max_output_tokens,
-    get_llm_max_chars,
     get_llm_raw_output_log_max_chars,
     get_llm_rejection_blocker_suggestions_max_items,
     get_llm_rejection_blocker_suggestions_max_output_tokens,

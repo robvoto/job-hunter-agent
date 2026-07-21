@@ -35,7 +35,6 @@ from job_hunter_agent.runtime_helpers import (
     CLI_FLAG_STEP,
     has_cli_flag,
 )
-from job_hunter_agent.user_settings import get_workspace_minimum_score
 
 logger = logging.getLogger(__name__)
 
