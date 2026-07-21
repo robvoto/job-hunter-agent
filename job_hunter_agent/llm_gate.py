@@ -506,6 +506,19 @@ def build_profile_prompt_context() -> str:
             if not title or months <= 0:
                 continue
             label = f"- {title}: {months} months"
+            variants = row.get("title_variants") or []
+            if isinstance(variants, list):
+                variant_labels = []
+                for variant in variants[:3]:
+                    if not isinstance(variant, dict):
+                        continue
+                    variant_title = compact_whitespace(str(variant.get("normalized_title") or ""))
+                    variant_months = int(variant.get("total_duration_months") or 0)
+                    if not variant_title or variant_title == title or variant_months <= 0:
+                        continue
+                    variant_labels.append(f"{variant_title} {variant_months} months")
+                if variant_labels:
+                    label += f" (title variants: {', '.join(variant_labels)})"
             if end_year > 0:
                 label += f", most recent end year {end_year}"
             parts.append(label)

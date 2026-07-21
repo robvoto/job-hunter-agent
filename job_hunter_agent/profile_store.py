@@ -674,7 +674,7 @@ def normalize_eligibility_rules(rules: list[dict[str, Any]] | list[str] | None) 
 
 
 def normalize_role_experience(items: Any) -> list[dict[str, Any]]:
-    aggregated: dict[str, dict[str, int | str]] = {}
+    aggregated: dict[str, dict[str, Any]] = {}
 
     for item in items or []:
         if not isinstance(item, dict):
@@ -703,6 +703,7 @@ def normalize_role_experience(items: Any) -> list[dict[str, Any]]:
                 "normalized_title": normalized_title,
                 "total_duration_months": 0,
                 "most_recent_end_year": 0,
+                "title_variants": {},
             },
         )
         existing["total_duration_months"] = int(existing["total_duration_months"]) + int(
@@ -713,7 +714,58 @@ def normalize_role_experience(items: Any) -> list[dict[str, Any]]:
             int(most_recent_end_year),
         )
 
-    return [aggregated[key] for key in sorted(aggregated)]
+        raw_variants = item.get("title_variants") or []
+        if not isinstance(raw_variants, list):
+            raw_variants = []
+        variant_items = raw_variants or [
+            {
+                "normalized_title": normalized_title,
+                "total_duration_months": total_duration_months,
+                "most_recent_end_year": most_recent_end_year,
+            }
+        ]
+        for raw_variant in variant_items:
+            if not isinstance(raw_variant, dict):
+                continue
+            variant_title = normalize_title_text(raw_variant.get("normalized_title"))
+            if not variant_title:
+                continue
+            variant_duration_months = coerce_int(
+                raw_variant.get("total_duration_months"),
+                default=0,
+                minimum=0,
+                maximum=12_000,
+            )
+            variant_end_year = coerce_int(
+                raw_variant.get("most_recent_end_year"),
+                default=0,
+                minimum=0,
+                maximum=9_999,
+            )
+            variants = existing["title_variants"]
+            variant = variants.setdefault(
+                variant_title,
+                {
+                    "normalized_title": variant_title,
+                    "total_duration_months": 0,
+                    "most_recent_end_year": 0,
+                },
+            )
+            variant["total_duration_months"] = int(variant["total_duration_months"]) + int(
+                variant_duration_months
+            )
+            variant["most_recent_end_year"] = max(
+                int(variant["most_recent_end_year"]),
+                int(variant_end_year),
+            )
+
+    result: list[dict[str, Any]] = []
+    for key in sorted(aggregated):
+        row = aggregated[key]
+        variants = row.pop("title_variants", {})
+        row["title_variants"] = [variants[name] for name in sorted(variants)]
+        result.append(row)
+    return result
 
 
 def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:

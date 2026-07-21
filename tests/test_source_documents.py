@@ -86,11 +86,25 @@ def test_run_onboarding_uses_llm_titles_without_parser(monkeypatch):
             "normalized_title": "agile project coordinator",
             "total_duration_months": 24,
             "most_recent_end_year": 2022,
+            "title_variants": [
+                {
+                    "normalized_title": "agile project coordinator",
+                    "total_duration_months": 24,
+                    "most_recent_end_year": 2022,
+                }
+            ],
         },
         {
             "normalized_title": "scrum master",
             "total_duration_months": 24,
             "most_recent_end_year": 2026,
+            "title_variants": [
+                {
+                    "normalized_title": "scrum master",
+                    "total_duration_months": 24,
+                    "most_recent_end_year": 2026,
+                }
+            ],
         },
     ]
     assert result["profile"]["candidate_capabilities"]

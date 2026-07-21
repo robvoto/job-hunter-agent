@@ -138,6 +138,13 @@ def test_fit_review_prompt_includes_role_experience_matrix(monkeypatch):
                     "normalized_title": "business analyst",
                     "total_duration_months": 42,
                     "most_recent_end_year": 2025,
+                    "title_variants": [
+                        {
+                            "normalized_title": "senior ba",
+                            "total_duration_months": 24,
+                            "most_recent_end_year": 2025,
+                        }
+                    ],
                 }
             ],
             "match_preferences": {},
@@ -150,7 +157,9 @@ def test_fit_review_prompt_includes_role_experience_matrix(monkeypatch):
     prompt = llm_gate._build_learning_prompt("Job description", fit_review=True)
 
     assert "Role experience matrix:" in prompt
-    assert "business analyst: 42 months, most recent end year 2025" in prompt
+    assert "business analyst: 42 months" in prompt
+    assert "title variants: senior ba 24 months" in prompt
+    assert "most recent end year 2025" in prompt
     assert "explicit years or months of experience" in prompt
 
 
@@ -312,6 +321,57 @@ def test_normalize_llm_review_payload_downgrades_supported_when_years_requiremen
     assert row["required_experience_months"] == 60
     assert row["experience_requirement_review_needed"] is True
     assert "matched_role_experience_title" not in row
+
+
+def test_normalize_llm_review_payload_matches_years_requirement_against_role_variants():
+    payload = llm_gate.normalize_llm_review_payload(
+        {
+            "decision": "KEEP",
+            "grade": "EXCELLENT",
+            "job_requirements": ["5+ years experience as BA"],
+            "requirement_coverage": [
+                {
+                    "requirement": "5+ years experience as BA",
+                    "status": "supported",
+                    "capability_name": "business analysis",
+                    "matched_job_text": "Minimum 5+ years experience as BA",
+                    "profile_support": ["Ran BA activities across delivery teams."],
+                }
+            ],
+        },
+        valid_capability_names={"business analysis": "Business Analysis"},
+        role_experience=[
+            {
+                "normalized_title": "business analyst",
+                "total_duration_months": 60,
+                "most_recent_end_year": 2024,
+                "title_variants": [
+                    {
+                        "normalized_title": "ba",
+                        "total_duration_months": 12,
+                        "most_recent_end_year": 2020,
+                    },
+                    {
+                        "normalized_title": "business analyst",
+                        "total_duration_months": 24,
+                        "most_recent_end_year": 2022,
+                    },
+                    {
+                        "normalized_title": "senior ba",
+                        "total_duration_months": 24,
+                        "most_recent_end_year": 2024,
+                    },
+                ],
+            }
+        ],
+    )
+
+    row = payload["requirement_coverage"][0]
+    assert row["status"] == "supported"
+    assert row["required_experience_months"] == 60
+    assert row["matched_role_experience_title"] == "business analyst"
+    assert row["matched_role_experience_months"] == 60
+    assert row["experience_requirement_met"] is True
 
 
 def test_normalize_llm_review_payload_falls_back_to_model_grade_without_coverage():

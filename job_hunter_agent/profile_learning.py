@@ -148,6 +148,7 @@ class _RoleExperienceExtraction(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     title: str
+    canonical_title: str = ""
     duration_months: int = 0
     end_year: int = 0
     is_current: bool = False
@@ -349,8 +350,9 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         "Only include aliases that are grounded in the evidence or are widely recognised industry synonyms.\n"
         f"For each capability, set icon_key to exactly one of: {', '.join(sorted(VALID_CAPABILITY_ICON_KEYS))}.\n"
         "- match_preferences: infer only from explicit statements; leave fields empty or null when not stated.\n"
-        "- role_experience: for each explicit role in the CV, return the title, duration_months, and end_year.\n"
-        "  Use the current year for Present/current roles and skip entries where the title cannot be identified.\n"
+        "- role_experience: for each explicit role in the CV, return the title as shown, a canonical_title when close title variants clearly belong to the same role family, plus duration_months and end_year.\n"
+        "  Example: BA, Business Analyst, and Senior BA can share canonical_title='Business Analyst' when the CV evidence clearly supports that grouping.\n"
+        "  Keep title as the displayed role wording from the CV. Use the current year for Present/current roles and skip entries where the title cannot be identified.\n"
         "- role_titles: list the job titles explicitly shown in the CV. One entry per role, no duplicates.\n"
         "- target_occupation_queries: generate 3 to 8 machine-facing occupation query strings that match the candidate's occupation family.\n"
         "  Use standard job titles a job-search system could match against.\n"
@@ -488,13 +490,15 @@ def _validate_eligibility(raw: list[Any]) -> list[dict[str, Any]]:
 
 
 def _aggregate_role_experience(raw: list[Any]) -> list[dict[str, Any]]:
-    aggregated: dict[str, dict[str, int | str]] = {}
+    aggregated: dict[str, dict[str, Any]] = {}
 
     for item in raw or []:
         if not isinstance(item, dict):
             continue
 
-        normalized_title = _simple_title(item.get("title") or "")
+        raw_title = _simple_title(item.get("title") or "")
+        canonical_title = _simple_title(item.get("canonical_title") or "")
+        normalized_title = canonical_title or raw_title
         if not normalized_title:
             continue
 
@@ -509,12 +513,32 @@ def _aggregate_role_experience(raw: list[Any]) -> list[dict[str, Any]]:
                 "normalized_title": normalized_title,
                 "total_duration_months": 0,
                 "most_recent_end_year": 0,
+                "title_variants": {},
             },
         )
         existing["total_duration_months"] = int(existing["total_duration_months"]) + duration_months
         existing["most_recent_end_year"] = max(int(existing["most_recent_end_year"]), end_year)
 
-    return [aggregated[key] for key in sorted(aggregated)]
+        variant_title = raw_title or normalized_title
+        variants = existing["title_variants"]
+        variant = variants.setdefault(
+            variant_title,
+            {
+                "normalized_title": variant_title,
+                "total_duration_months": 0,
+                "most_recent_end_year": 0,
+            },
+        )
+        variant["total_duration_months"] = int(variant["total_duration_months"]) + duration_months
+        variant["most_recent_end_year"] = max(int(variant["most_recent_end_year"]), end_year)
+
+    result: list[dict[str, Any]] = []
+    for key in sorted(aggregated):
+        row = aggregated[key]
+        variants = row.pop("title_variants", {})
+        row["title_variants"] = [variants[name] for name in sorted(variants)]
+        result.append(row)
+    return result
 
 
 def _capability_context_sections(

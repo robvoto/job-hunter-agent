@@ -96,16 +96,30 @@ def _match_role_experience(
     matched_job_text: Any,
     role_experience: list[dict[str, Any]],
 ) -> dict[str, Any] | None:
-    normalized_rows = [
-        {
-            "normalized_title": normalize_title_text(item.get("normalized_title")),
-            "occupation_title": normalize_occupation_title(item.get("normalized_title")),
-            "total_duration_months": int(item.get("total_duration_months") or 0),
-            "most_recent_end_year": int(item.get("most_recent_end_year") or 0),
-        }
-        for item in role_experience
-        if isinstance(item, dict) and normalize_title_text(item.get("normalized_title"))
-    ]
+    normalized_rows = []
+    for item in role_experience:
+        if not isinstance(item, dict):
+            continue
+        normalized_title = normalize_title_text(item.get("normalized_title"))
+        if not normalized_title:
+            continue
+        raw_variants = item.get("title_variants") or []
+        if not isinstance(raw_variants, list):
+            raw_variants = []
+        variant_titles = [
+            normalize_title_text(variant.get("normalized_title"))
+            for variant in raw_variants
+            if isinstance(variant, dict) and normalize_title_text(variant.get("normalized_title"))
+        ]
+        normalized_rows.append(
+            {
+                "normalized_title": normalized_title,
+                "occupation_title": normalize_occupation_title(normalized_title),
+                "total_duration_months": int(item.get("total_duration_months") or 0),
+                "most_recent_end_year": int(item.get("most_recent_end_year") or 0),
+                "variant_titles": variant_titles,
+            }
+        )
     if not normalized_rows:
         return None
 
@@ -121,6 +135,13 @@ def _match_role_experience(
         )
         if exact:
             return exact
+
+        variant_exact = next(
+            (row for row in normalized_rows if normalized_subject in row["variant_titles"]),
+            None,
+        )
+        if variant_exact:
+            return variant_exact
 
         exact_occupation = next(
             (row for row in normalized_rows if row["occupation_title"] == occupation_subject),

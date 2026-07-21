@@ -108,11 +108,25 @@ def test_build_learning_patch_returns_titles_capabilities_and_queries_without_pa
             "normalized_title": "delivery lead",
             "total_duration_months": 36,
             "most_recent_end_year": profile_learning._CURRENT_YEAR,
+            "title_variants": [
+                {
+                    "normalized_title": "delivery lead",
+                    "total_duration_months": 36,
+                    "most_recent_end_year": profile_learning._CURRENT_YEAR,
+                }
+            ],
         },
         {
             "normalized_title": "project coordinator",
             "total_duration_months": 36,
             "most_recent_end_year": 2019,
+            "title_variants": [
+                {
+                    "normalized_title": "project coordinator",
+                    "total_duration_months": 36,
+                    "most_recent_end_year": 2019,
+                }
+            ],
         },
     ]
 
@@ -152,6 +166,84 @@ def test_build_learning_patch_groups_role_experience_by_normalized_title():
             "normalized_title": "senior business analyst",
             "total_duration_months": 42,
             "most_recent_end_year": 2024,
+            "title_variants": [
+                {
+                    "normalized_title": "senior business analyst",
+                    "total_duration_months": 42,
+                    "most_recent_end_year": 2024,
+                }
+            ],
+        }
+    ]
+
+
+def test_build_learning_patch_groups_role_experience_by_canonical_title_and_preserves_variants():
+    fixture = {
+        "capabilities": [
+            {
+                "name": "stakeholder engagement",
+                "level": "strong",
+                "aliases": [],
+                "icon_key": "communication_stakeholders",
+                "needs_review": False,
+            },
+        ],
+        "role_experience": [
+            {
+                "title": "BA",
+                "canonical_title": "Business Analyst",
+                "duration_months": 12,
+                "end_year": 2020,
+            },
+            {
+                "title": "Business Analyst",
+                "canonical_title": "Business Analyst",
+                "duration_months": 24,
+                "end_year": 2022,
+            },
+            {
+                "title": "Senior BA",
+                "canonical_title": "Business Analyst",
+                "duration_months": 24,
+                "end_year": 2024,
+            },
+        ],
+        "role_titles": ["BA", "Business Analyst", "Senior BA"],
+        "target_occupation_queries": ["Business Analyst"],
+        "match_preferences": {},
+    }
+
+    with (
+        patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=fixture),
+        patch(
+            "job_hunter_agent.profile_learning.signal_in_approved_knowledge",
+            return_value=(False, ""),
+        ),
+    ):
+        patch_result = build_learning_patch(SAMPLE_CV)
+
+    assert patch_result["role_experience"] == [
+        {
+            "normalized_title": "business analyst",
+            "total_duration_months": 60,
+            "most_recent_end_year": 2024,
+            "title_variants": [
+                {
+                    "normalized_title": "ba",
+                    "total_duration_months": 12,
+                    "most_recent_end_year": 2020,
+                },
+                {
+                    "normalized_title": "business analyst",
+                    "total_duration_months": 24,
+                    "most_recent_end_year": 2022,
+                },
+                {
+                    "normalized_title": "senior ba",
+                    "total_duration_months": 24,
+                    "most_recent_end_year": 2024,
+                },
+            ],
         }
     ]
 
