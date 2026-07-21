@@ -623,6 +623,16 @@ def test_run_onboarding_logs_read_summary(monkeypatch, capsys, caplog, tmp_path)
             },
         ],
         "role_titles": ["Business Analyst"],
+        "role_experience": [
+            {"title": "BA", "canonical_title": "Business Analyst", "duration_months": 12, "end_year": 2020},
+            {
+                "title": "Business Analyst",
+                "canonical_title": "Business Analyst",
+                "duration_months": 24,
+                "end_year": 2022,
+            },
+            {"title": "Senior BA", "canonical_title": "Business Analyst", "duration_months": 24, "end_year": 2024},
+        ],
         "target_occupation_queries": ["Business Analyst"],
         "match_preferences": {},
     }
@@ -672,6 +682,9 @@ def test_run_onboarding_logs_read_summary(monkeypatch, capsys, caplog, tmp_path)
     assert "approx pages" in combined
     assert "[ONBOARDING] CV source read" in combined
     assert "[ONBOARDING][LLM_CALL_DONE] purpose=cv_extraction" in combined
+    assert "[ONBOARDING] Captured role history:" in combined
+    assert "business analyst: 5 years total" in combined
+    assert "variants: ba (1 year), business analyst (2 years), senior ba (2 years)" in combined
     assert "occupation_query_count=1" in combined
 
 

@@ -87,6 +87,53 @@ def _format_count(count: int, singular: str, plural: str) -> str:
     return f"{count} {plural}"
 
 
+def _format_duration_months(total_months: int) -> str:
+    months = max(int(total_months or 0), 0)
+    if months <= 0:
+        return "0 months"
+    years = months // 12
+    remainder = months % 12
+    parts: list[str] = []
+    if years > 0:
+        parts.append(f"{years} year" + ("" if years == 1 else "s"))
+    if remainder > 0:
+        parts.append(f"{remainder} month" + ("" if remainder == 1 else "s"))
+    return " ".join(parts) or "0 months"
+
+
+def _print_role_history_summary(role_experience: list[dict[str, Any]]) -> None:
+    rows = [row for row in role_experience if isinstance(row, dict)]
+    print(
+        "[ONBOARDING] Captured role history: "
+        + _format_count(len(rows), "role family", "role families")
+    )
+    for row in rows:
+        title = str(row.get("normalized_title") or "").strip() or "untitled role"
+        total_months = int(row.get("total_duration_months") or 0)
+        most_recent_end_year = int(row.get("most_recent_end_year") or 0)
+        line = (
+            f"[ONBOARDING]   - {title}: {_format_duration_months(total_months)} total"
+        )
+        if most_recent_end_year > 0:
+            line += f", most recent end year {most_recent_end_year}"
+        raw_variants = row.get("title_variants") or []
+        if isinstance(raw_variants, list) and raw_variants:
+            variant_parts: list[str] = []
+            for variant in raw_variants:
+                if not isinstance(variant, dict):
+                    continue
+                variant_title = str(variant.get("normalized_title") or "").strip()
+                variant_months = int(variant.get("total_duration_months") or 0)
+                if not variant_title or variant_months <= 0:
+                    continue
+                variant_parts.append(
+                    f"{variant_title} ({_format_duration_months(variant_months)})"
+                )
+            if variant_parts:
+                line += f" | variants: {', '.join(variant_parts)}"
+        print(line)
+
+
 def _normalize_uploaded_filename(filename: str) -> str:
     value = Path(str(filename or "").strip()).name
     if not value:
@@ -413,6 +460,7 @@ def run_onboarding(
         combined_text, active_onboarding_settings, source_sections
     )
     patch.update(learning_patch)
+    _print_role_history_summary(list(patch.get(KEY_ROLE_EXPERIENCE) or []))
 
     # --- Apply Search and Engagement Preferences ---
     search_settings = dict(current_profile.get("search_settings") or {})
