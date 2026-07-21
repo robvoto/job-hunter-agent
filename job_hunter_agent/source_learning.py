@@ -21,7 +21,7 @@ from job_hunter_agent.llm_gate import (
     normalize_llm_review_payload,
 )
 from job_hunter_agent.logging_utils import format_log_block
-from job_hunter_agent.profile_store import get_scoring_rules
+from job_hunter_agent.profile_store import KEY_ROLE_EXPERIENCE, get_scoring_rules, load_profile
 from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
     RECORD_FIT_SOURCE_TEXT_KEY,
@@ -333,7 +333,14 @@ def resolve_llm_review_payload(
 
     llm_fp = build_llm_cache_key(truncated_input)
 
-    cached = normalize_llm_review_payload(llm_cache.get(llm_fp)) if llm_fp in llm_cache else None
+    cached = (
+        normalize_llm_review_payload(
+            llm_cache.get(llm_fp),
+            role_experience=load_profile().get(KEY_ROLE_EXPERIENCE, []),
+        )
+        if llm_fp in llm_cache
+        else None
+    )
 
     if cached:
         if learning_only and cached.get("learning_candidates"):

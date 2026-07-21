@@ -53,6 +53,7 @@ LLM_JOB_REQUIREMENTS_PROMPT_SHAPE = '{"job_requirements":["..."]}'
 
 
 LLM_PROMPT_CAPABILITY_LEVELS_HEADER = "Capability matrix:"
+LLM_PROMPT_ROLE_EXPERIENCE_HEADER = "Role experience matrix:"
 LLM_PROMPT_ELIGIBILITY_HEADER = "Eligibility matrix:"
 LLM_PROMPT_MATCH_PREFERENCES_HEADER = "Match preferences:"
 LLM_PROMPT_TARGET_ROLES_HEADER = "Candidate target roles:"

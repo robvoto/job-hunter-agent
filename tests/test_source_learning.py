@@ -105,6 +105,58 @@ def test_resolve_llm_review_payload_learning_only_cache_hit_skips_llm(monkeypatc
     assert payload["learning_candidates"][0]["signal"] == "python"
 
 
+def test_resolve_llm_review_payload_cache_hit_uses_role_experience_for_years_requirements(monkeypatch):
+    record = _build_record()
+    llm_fp = source_learning.build_llm_cache_key("Title\nDescription")
+    llm_cache = {
+        llm_fp: {
+            "fit_review": {"decision": "KEEP", "grade": "EXCELLENT"},
+            "learning_candidates": [],
+            "job_requirements": ["5+ years experience as a Business Analyst"],
+            "requirement_coverage": [
+                {
+                    "requirement": "5+ years experience as a Business Analyst",
+                    "status": "supported",
+                    "capability_name": "business analysis",
+                    "matched_job_text": "Minimum 5+ years experience as a Business Analyst",
+                    "profile_support": ["Ran BA activities across delivery teams."],
+                }
+            ],
+        }
+    }
+
+    monkeypatch.setattr(source_learning, "llm_is_enabled", lambda: True)
+    monkeypatch.setattr(
+        source_learning,
+        "llm_should_consider_with_learning",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("LLM should not be called")),
+    )
+    monkeypatch.setattr(
+        source_learning,
+        "llm_should_consider_learning_candidates",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("LLM should not be called")),
+    )
+    monkeypatch.setattr(
+        source_learning,
+        "load_profile",
+        lambda: {
+            "role_experience": [
+                {
+                    "normalized_title": "business analyst",
+                    "total_duration_months": 24,
+                    "most_recent_end_year": 2024,
+                }
+            ]
+        },
+    )
+
+    payload = source_learning.resolve_llm_review_payload(record, llm_cache)
+
+    assert payload["payload_source"] == "cache"
+    assert payload["requirement_coverage"][0]["status"] == "partially_supported"
+    assert payload["requirement_coverage"][0]["required_experience_months"] == 60
+
+
 def test_resolve_llm_review_payload_cache_miss_calls_llm(monkeypatch):
     record = _build_record()
     llm_fp = source_learning.build_llm_cache_key("Title\nDescription")

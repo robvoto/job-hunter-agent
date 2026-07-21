@@ -126,6 +126,34 @@ def test_fit_review_prompt_includes_occupation_alignment_guidance_and_target_rol
     assert "Program Manager" in prompt
 
 
+def test_fit_review_prompt_includes_role_experience_matrix(monkeypatch):
+    monkeypatch.setattr(
+        llm_gate,
+        "load_profile",
+        lambda: {
+            "candidate_capabilities": [{"name": "business analysis", "level": "strong"}],
+            "candidate_eligibility": [],
+            "role_experience": [
+                {
+                    "normalized_title": "business analyst",
+                    "total_duration_months": 42,
+                    "most_recent_end_year": 2025,
+                }
+            ],
+            "match_preferences": {},
+            "salary_preferences": {},
+            "candidate_profile_tiers": {},
+            "onboarding_settings": {},
+        },
+    )
+
+    prompt = llm_gate._build_learning_prompt("Job description", fit_review=True)
+
+    assert "Role experience matrix:" in prompt
+    assert "business analyst: 42 months, most recent end year 2025" in prompt
+    assert "explicit years or months of experience" in prompt
+
+
 def test_learning_only_prompt_retains_learning_guidance():
     prompt = llm_gate._build_learning_prompt("Job description", fit_review=False)
 
@@ -216,6 +244,74 @@ def test_normalize_llm_review_payload_rejects_keep_without_requirement_coverage(
                 "requirement_coverage": [],
             }
         )
+
+
+def test_normalize_llm_review_payload_downgrades_supported_when_role_duration_is_below_requirement():
+    payload = llm_gate.normalize_llm_review_payload(
+        {
+            "decision": "KEEP",
+            "grade": "EXCELLENT",
+            "job_requirements": ["5+ years experience as a Business Analyst"],
+            "requirement_coverage": [
+                {
+                    "requirement": "5+ years experience as a Business Analyst",
+                    "status": "supported",
+                    "capability_name": "business analysis",
+                    "matched_job_text": "Minimum 5+ years experience as a Business Analyst in digital programs",
+                    "profile_support": ["Ran BA activities across delivery teams."],
+                }
+            ],
+        },
+        valid_capability_names={"business analysis": "Business Analysis"},
+        role_experience=[
+            {
+                "normalized_title": "business analyst",
+                "total_duration_months": 24,
+                "most_recent_end_year": 2024,
+            }
+        ],
+    )
+
+    row = payload["requirement_coverage"][0]
+    assert row["status"] == "partially_supported"
+    assert row["required_experience_months"] == 60
+    assert row["matched_role_experience_title"] == "business analyst"
+    assert row["matched_role_experience_months"] == 24
+    assert row["experience_requirement_met"] is False
+    assert payload["fit_review"]["grade"] == "SOLID"
+
+
+def test_normalize_llm_review_payload_downgrades_supported_when_years_requirement_has_no_role_duration_match():
+    payload = llm_gate.normalize_llm_review_payload(
+        {
+            "decision": "KEEP",
+            "grade": "EXCELLENT",
+            "job_requirements": ["5+ years Python backend development"],
+            "requirement_coverage": [
+                {
+                    "requirement": "5+ years Python backend development",
+                    "status": "supported",
+                    "capability_name": "python",
+                    "matched_job_text": "Minimum 5+ years Python backend development",
+                    "profile_support": ["Built Python services."],
+                }
+            ],
+        },
+        valid_capability_names={"python": "Python"},
+        role_experience=[
+            {
+                "normalized_title": "business analyst",
+                "total_duration_months": 24,
+                "most_recent_end_year": 2024,
+            }
+        ],
+    )
+
+    row = payload["requirement_coverage"][0]
+    assert row["status"] == "partially_supported"
+    assert row["required_experience_months"] == 60
+    assert row["experience_requirement_review_needed"] is True
+    assert "matched_role_experience_title" not in row
 
 
 def test_normalize_llm_review_payload_falls_back_to_model_grade_without_coverage():

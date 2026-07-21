@@ -18,6 +18,7 @@ from openai import APIStatusError, APITimeoutError, OpenAI
 from pydantic import BaseModel, Field, ValidationError
 
 from job_hunter_agent.config import DEBUG_MODE
+from job_hunter_agent.experience_requirements import resolve_role_experience_requirement
 from job_hunter_agent.global_settings import (
     get_llm_fit_review_debug_match_diagnostics_enabled,
     KEY_LLM_PRICING_PER_1M,
@@ -76,6 +77,7 @@ from job_hunter_agent.llm_protocol import (
     LLM_PROMPT_MATCH_PREFERENCES_HEADER,
     LLM_PROMPT_NO_FIT_DECISION_REQUIRED,
     LLM_PROMPT_OCCUPATION_ALIGNMENT_INTRO,
+    LLM_PROMPT_ROLE_EXPERIENCE_HEADER,
     LLM_PROMPT_SYSTEM_REVIEW_INTRO,
     LLM_PROMPT_TARGET_ROLES_HEADER,
     LLM_PROMPT_USE_VISIBLE_STRINGS,
@@ -94,6 +96,7 @@ from job_hunter_agent.system_warnings import (
 from job_hunter_agent.profile_store import (
     KEY_CANDIDATE_CAPABILITIES,
     KEY_CANDIDATE_ELIGIBILITY,
+    KEY_ROLE_EXPERIENCE,
     get_candidate_profile_tier_weights,
     get_candidate_profile_tiers,
     load_profile,
@@ -438,6 +441,7 @@ def build_profile_prompt_context() -> str:
     prompt_evidence_tiers = prompt_settings[KEY_LLM_PROMPT_EVIDENCE_TIERS]
     capability_rules = profile.get(KEY_CANDIDATE_CAPABILITIES, [])
     eligibility_rules = profile.get(KEY_CANDIDATE_ELIGIBILITY, [])
+    role_experience = profile.get(KEY_ROLE_EXPERIENCE, [])
     salary_preferences = profile.get("salary_preferences", {})
     match_preferences = (
         profile.get("match_preferences", {})
@@ -489,6 +493,21 @@ def build_profile_prompt_context() -> str:
             label = f"- {name}: {value}"
             if evidence_text:
                 label += f" ({evidence_text})"
+            parts.append(label)
+
+    if isinstance(role_experience, list) and role_experience:
+        parts.append(LLM_PROMPT_ROLE_EXPERIENCE_HEADER)
+        for row in role_experience[: get_llm_capability_rules_max_items()]:
+            if not isinstance(row, dict):
+                continue
+            title = compact_whitespace(str(row.get("normalized_title") or ""))
+            months = int(row.get("total_duration_months") or 0)
+            end_year = int(row.get("most_recent_end_year") or 0)
+            if not title or months <= 0:
+                continue
+            label = f"- {title}: {months} months"
+            if end_year > 0:
+                label += f", most recent end year {end_year}"
             parts.append(label)
 
     minimum_salary_yearly = int(salary_preferences.get("minimum_salary_yearly", 0) or 0)
@@ -576,6 +595,7 @@ def build_requirement_coverage_guidance() -> str:
         f"Use at most {get_llm_job_requirements_max_items()} requirement_coverage items.",
         "Classify each requirement as capability or eligibility.",
         "Use capability_name for capability requirements and profile_name for eligibility requirements.",
+        "When the ad states explicit years or months of experience, compare that threshold against the role experience matrix before choosing supported versus partially_supported.",
     ]
     parts.extend(f"- {line}" for line in REQUIREMENT_COVERAGE_DEFAULT_LINES)
     return "\n".join(parts)
@@ -882,6 +902,7 @@ def normalize_llm_requirement_coverage(
     value: Any,
     valid_capability_names: dict[str, str] | None = None,
     valid_eligibility_names: dict[str, str] | None = None,
+    role_experience: list[dict[str, Any]] | None = None,
     max_items: int | None = None,
     include_debug_match_diagnostics: bool = False,
 ) -> list[dict[str, Any]]:
@@ -1062,6 +1083,24 @@ def normalize_llm_requirement_coverage(
         if include_debug_match_diagnostics:
             normalized_item["match_source"] = match_source
             normalized_item["matched_profile_term"] = matched_profile_term
+        experience_requirement = resolve_role_experience_requirement(
+            requirement,
+            matched_job_text,
+            role_experience,
+        )
+        if experience_requirement:
+            normalized_item.update(experience_requirement)
+            if not normalized_item.get("matched_role_experience_title"):
+                normalized_item["experience_requirement_review_needed"] = True
+            if (
+                normalized_item["status"] == "supported"
+                and (
+                    not normalized_item.get("matched_role_experience_title")
+                    or int(normalized_item.get("matched_role_experience_months") or 0)
+                    < int(normalized_item["required_experience_months"])
+                )
+            ):
+                normalized_item["status"] = "partially_supported"
         results.append(normalized_item)
         if len(results) >= max_items:
             break
@@ -1231,6 +1270,7 @@ def normalize_llm_review_payload(
     value: Any,
     valid_capability_names: dict[str, str] | None = None,
     valid_eligibility_names: dict[str, str] | None = None,
+    role_experience: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     include_debug_match_diagnostics = get_llm_fit_review_debug_match_diagnostics_enabled()
     if isinstance(value, dict):
@@ -1248,6 +1288,7 @@ def normalize_llm_review_payload(
                 value.get("requirement_coverage"),
                 valid_capability_names=valid_capability_names,
                 valid_eligibility_names=valid_eligibility_names,
+                role_experience=role_experience,
                 include_debug_match_diagnostics=include_debug_match_diagnostics,
             )
             job_requirements = normalize_llm_job_requirements(value.get("job_requirements"))
@@ -1547,11 +1588,14 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
             for r in profile.get(KEY_CANDIDATE_ELIGIBILITY, [])
             if isinstance(r, dict) and str(r.get("name") or "").strip()
         }
+        role_experience = profile.get(KEY_ROLE_EXPERIENCE, [])
         if not valid_capability_names:
             raise ValueError(
                 "Fit review cannot run because the candidate profile has no capability rules "
                 "(candidate_capabilities is empty). Complete onboarding or seed the profile first."
             )
+    else:
+        role_experience = None
 
     model = _log_llm_model_once()
     purpose = "fit_review" if fit_review else "learning_candidates"
@@ -1637,6 +1681,7 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
         parsed.model_dump(),
         valid_capability_names=valid_capability_names,
         valid_eligibility_names=valid_eligibility_names,
+        role_experience=role_experience,
     )
     payload.update(_llm_usage_summary(resp, model))
     if fit_review:
