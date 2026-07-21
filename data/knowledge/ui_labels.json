@@ -1,8 +1,8 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 80,
-  "updated_at": "2026-07-20",
+  "version": 81,
+  "updated_at": "2026-07-21",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
     "remote_label": "Remote",
@@ -303,6 +303,7 @@
     "location": "Location",
     "salary": "Salary",
     "posted": "Posted",
+    "linkedin_listed": "LinkedIn listed",
     "reposted_suffix": "reposted",
     "originally_posted": "Originally posted"
   },
@@ -721,7 +722,8 @@
     "possible_repost_prefix": "Possible repost of applied job",
     "rejected_before_label": "Rejected before",
     "possible_previous_application_label": "Possible previous application",
-    "linkedin_freshness_unknown_warning": "Freshness unknown — LinkedIn did not provide a post date for this listing. Confirm it is still open before applying."
+    "linkedin_freshness_unknown_warning": "Freshness unknown — LinkedIn did not provide a post date for this listing. Confirm it is still open before applying.",
+    "linkedin_freshness_unverified_warning": "Freshness may be unreliable — LinkedIn can show a reposted date for external-apply listings, and the original posting date could not be verified."
   },
   "scoring_audit_labels_description": "Labels for the debug-only scoring audit table and decision trace shown on job cards.",
   "scoring_audit_labels": {

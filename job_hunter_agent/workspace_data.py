@@ -6,10 +6,8 @@ import logging
 from datetime import datetime
 from typing import Callable, Optional
 
-logger = logging.getLogger(__name__)
-
-
 from job_hunter_agent.record_schema import (
+    RECORD_APPLY_METHOD_KEY,
     RECORD_COMPANY_KEY,
     RECORD_CONTENT_REASON_KEY,
     RECORD_FIRST_KEPT_AT_KEY,
@@ -17,19 +15,22 @@ from job_hunter_agent.record_schema import (
     RECORD_FIRST_VIEWED_AT_KEY,
     RECORD_JOB_KEY,
     RECORD_JOB_REQUIREMENTS_KEY,
-    RECORD_LLM_COST_USD_KEY,
     RECORD_LAST_KEPT_AT_KEY,
     RECORD_LAST_SEEN_AT_KEY,
     RECORD_LAST_VIEWED_AT_KEY,
+    RECORD_LLM_COST_USD_KEY,
     RECORD_LLM_DECISION_KEY,
     RECORD_LLM_ELAPSED_MS_KEY,
     RECORD_LLM_FIT_GRADE_KEY,
     RECORD_LLM_INPUT_TOKENS_KEY,
     RECORD_LLM_OUTPUT_TOKENS_KEY,
     RECORD_LOCATION_KEY,
-    RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
+    RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY,
+    RECORD_ORIGINAL_POSTED_DATE_KEY,
+    RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY,
     RECORD_POSTED_AGE_DAYS_KEY,
     RECORD_POSTED_KEY,
+    RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
     RECORD_ROLE_SNAPSHOT_KEY,
     RECORD_SALARY_KEY,
@@ -47,6 +48,8 @@ from job_hunter_agent.record_schema import (
     RECORD_WORK_MODE_KEY,
     RECORD_WORK_TYPE_KEY,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _record_source(entry: dict, job_key: str) -> str:
@@ -100,6 +103,12 @@ def build_history_workspace_record(
         RECORD_URL_KEY: snapshot.get(RECORD_URL_KEY) or entry.get(RECORD_URL_KEY) or "#",
         RECORD_POSTED_KEY: snapshot.get(RECORD_POSTED_KEY) or "N/A",
         RECORD_POSTED_AGE_DAYS_KEY: snapshot.get(RECORD_POSTED_AGE_DAYS_KEY),
+        RECORD_ORIGINAL_POSTED_DATE_KEY: snapshot.get(RECORD_ORIGINAL_POSTED_DATE_KEY) or "",
+        RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY: snapshot.get(RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY),
+        RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY: snapshot.get(
+            RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY
+        )
+        or "",
         RECORD_SALARY_KEY: snapshot.get(RECORD_SALARY_KEY) or "N/A",
         RECORD_LOCATION_KEY: snapshot.get(RECORD_LOCATION_KEY) or "N/A",
         RECORD_WORK_MODE_KEY: snapshot.get(RECORD_WORK_MODE_KEY) or "N/A",
@@ -129,6 +138,8 @@ def build_history_workspace_record(
         "missing_clearance_support": snapshot.get("missing_clearance_support") or [],
         "competitive_signals": snapshot.get("competitive_signals") or [],
         "hard_block_reasons": snapshot.get("hard_block_reasons") or [],
+        RECORD_APPLY_METHOD_KEY: snapshot.get(RECORD_APPLY_METHOD_KEY) or "",
+        "job_quality_signals": snapshot.get("job_quality_signals") or [],
         RECORD_POSTING_CHANNEL_EVIDENCE_KEY: _posting_channel_evidence(entry, snapshot),
         RECORD_SEEN_BEFORE_KEY: True,
         RECORD_TIMES_VIEWED_KEY: int(entry.get(RECORD_TIMES_VIEWED_KEY, 0) or 0),
@@ -214,6 +225,12 @@ def build_hidden_workspace_record(
         RECORD_URL_KEY: snapshot.get(RECORD_URL_KEY) or entry.get(RECORD_URL_KEY) or "#",
         RECORD_POSTED_KEY: snapshot.get(RECORD_POSTED_KEY) or "N/A",
         RECORD_POSTED_AGE_DAYS_KEY: snapshot.get(RECORD_POSTED_AGE_DAYS_KEY),
+        RECORD_ORIGINAL_POSTED_DATE_KEY: snapshot.get(RECORD_ORIGINAL_POSTED_DATE_KEY) or "",
+        RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY: snapshot.get(RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY),
+        RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY: snapshot.get(
+            RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY
+        )
+        or "",
         RECORD_SALARY_KEY: snapshot.get(RECORD_SALARY_KEY) or "N/A",
         RECORD_LOCATION_KEY: snapshot.get(RECORD_LOCATION_KEY) or "N/A",
         RECORD_WORK_MODE_KEY: snapshot.get(RECORD_WORK_MODE_KEY) or "N/A",
@@ -241,6 +258,8 @@ def build_hidden_workspace_record(
         "missing_clearance_support": snapshot.get("missing_clearance_support") or [],
         "competitive_signals": snapshot.get("competitive_signals") or [],
         "hard_block_reasons": snapshot.get("hard_block_reasons") or [],
+        RECORD_APPLY_METHOD_KEY: snapshot.get(RECORD_APPLY_METHOD_KEY) or "",
+        "job_quality_signals": snapshot.get("job_quality_signals") or [],
         RECORD_POSTING_CHANNEL_EVIDENCE_KEY: _posting_channel_evidence(entry, snapshot),
         RECORD_SEARCH_LOCATION_KEY: snapshot.get(RECORD_SEARCH_LOCATION_KEY) or "N/A",
         RECORD_SEARCH_KEYWORDS_KEY: snapshot.get(RECORD_SEARCH_KEYWORDS_KEY) or "",
@@ -317,6 +336,12 @@ def build_applied_workspace_record(
         "url": snapshot.get("url") or entry.get("url") or "#",
         "posted": snapshot.get("posted") or "N/A",
         "posted_age_days": snapshot.get("posted_age_days"),
+        RECORD_ORIGINAL_POSTED_DATE_KEY: snapshot.get(RECORD_ORIGINAL_POSTED_DATE_KEY) or "",
+        RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY: snapshot.get(RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY),
+        RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY: snapshot.get(
+            RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY
+        )
+        or "",
         "salary": snapshot.get("salary") or "N/A",
         "location": snapshot.get("location") or "N/A",
         "work_mode": snapshot.get("work_mode") or "N/A",
@@ -344,6 +369,8 @@ def build_applied_workspace_record(
         "missing_clearance_support": snapshot.get("missing_clearance_support") or [],
         "competitive_signals": snapshot.get("competitive_signals") or [],
         "hard_block_reasons": snapshot.get("hard_block_reasons") or [],
+        RECORD_APPLY_METHOD_KEY: snapshot.get(RECORD_APPLY_METHOD_KEY) or "",
+        "job_quality_signals": snapshot.get("job_quality_signals") or [],
         RECORD_POSTING_CHANNEL_EVIDENCE_KEY: _posting_channel_evidence(entry, snapshot),
         "search_location": snapshot.get("search_location") or "N/A",
         "search_keywords": snapshot.get("search_keywords") or "",

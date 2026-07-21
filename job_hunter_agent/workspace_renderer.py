@@ -42,6 +42,8 @@ from job_hunter_agent.posting_utils import (
     board_posted_display_label,
     current_posted_age_days,
     format_timestamp_label,
+    linkedin_freshness_is_unknown,
+    linkedin_original_posted_is_unverified,
     original_posted_display_label,
     posted_display_label,
 )
@@ -1026,10 +1028,15 @@ def render_job_card(
         similar_applied_record = find_confirmed_duplicate(record, applied_pool)
         is_possible_repost = similar_applied_record is not None
     _record_source = str(record.get("source") or "").lower().strip()
-    if _record_source == "linkedin" and record.get("posted_age_days") is None:
+    if linkedin_freshness_is_unknown(record):
         soft_risk_reasons = dedupe_preserve_order([
             *soft_risk_reasons,
             _workspace_label("check_item_labels", "linkedin_freshness_unknown_warning"),
+        ])
+    elif linkedin_original_posted_is_unverified(record):
+        soft_risk_reasons = dedupe_preserve_order([
+            *soft_risk_reasons,
+            _workspace_label("check_item_labels", "linkedin_freshness_unverified_warning"),
         ])
     display_record["hard_block_reasons"] = blocking_reasons
     display_record["role_snapshot"] = role_summary
@@ -1402,6 +1409,7 @@ def render_job_card(
         str(record.get(RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY) or "").strip().lower()
         == ORIGINAL_POSTED_DATE_STATUS_VERIFIED
     )
+    _linkedin_original_unverified = linkedin_original_posted_is_unverified(record)
     _board_posted_display = board_posted_display_label(record) if _original_posted_verified else ""
     _original_posted_display = (
         original_posted_display_label(record) if _original_posted_verified else ""
@@ -1416,8 +1424,13 @@ def render_job_card(
             f'<span class="job-meta-item"><strong>{safe_html(_workspace_label("workspace_meta_labels", "originally_posted"))}</strong> {safe_html(str(_original_posted_display))}</span>'
         )
     elif posted_display:
+        posted_label = _workspace_label("workspace_meta_labels", "posted")
+        posted_value = posted_display
+        if _linkedin_original_unverified:
+            posted_label = _workspace_label("workspace_meta_labels", "linkedin_listed")
+            posted_value = board_posted_display_label(record) or posted_display
         meta_items.append(
-            f'<span class="job-meta-item"><strong>{safe_html(_workspace_label("workspace_meta_labels", "posted"))}</strong> {safe_html(str(posted_display))}</span>'
+            f'<span class="job-meta-item"><strong>{safe_html(posted_label)}</strong> {safe_html(str(posted_value))}</span>'
         )
     for label, value, always_show in [
         (_workspace_label("workspace_meta_labels", "location"), display_record.get("location"), False),

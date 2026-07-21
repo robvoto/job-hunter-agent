@@ -13,8 +13,10 @@ from typing import Optional, Set
 from job_hunter_agent.io_utils import normalize_posted_text
 from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.record_schema import (
+    APPLY_METHOD_EXTERNAL_APPLY,
     ORIGINAL_POSTED_DATE_STATUS_UNVERIFIED,
     ORIGINAL_POSTED_DATE_STATUS_VERIFIED,
+    RECORD_APPLY_METHOD_KEY,
     RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY,
     RECORD_ORIGINAL_POSTED_DATE_KEY,
     RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY,
@@ -238,6 +240,23 @@ def original_posted_is_unverified(record: dict) -> bool:
     return (
         str(record.get(RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY) or "").strip().lower()
         == ORIGINAL_POSTED_DATE_STATUS_UNVERIFIED
+    )
+
+
+def linkedin_freshness_is_unknown(record: dict) -> bool:
+    return (
+        str(record.get("source") or "").strip().lower() == "linkedin"
+        and record.get("posted_age_days") is None
+    )
+
+
+def linkedin_original_posted_is_unverified(record: dict) -> bool:
+    return (
+        str(record.get("source") or "").strip().lower() == "linkedin"
+        and str(record.get(RECORD_APPLY_METHOD_KEY) or "").strip().lower()
+        == APPLY_METHOD_EXTERNAL_APPLY
+        and str(record.get(RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY) or "").strip().lower()
+        != ORIGINAL_POSTED_DATE_STATUS_VERIFIED
     )
 
 

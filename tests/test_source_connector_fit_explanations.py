@@ -46,6 +46,7 @@ from job_hunter_agent.record_schema import (
     RECORD_LLM_INPUT_TOKENS_KEY,
     RECORD_LLM_OUTPUT_TOKENS_KEY,
     RECORD_ORIGINAL_POSTED_DATE_KEY,
+    ORIGINAL_POSTED_DATE_STATUS_UNVERIFIED,
     ORIGINAL_POSTED_DATE_STATUS_VERIFIED,
     RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
@@ -1349,6 +1350,38 @@ def test_job_card_shows_reposted_and_original_posted_dates_separately():
     assert "Originally posted" in html
     assert "24 Jun 2026" in html
     assert "<strong>Posted</strong>" not in html
+
+
+def test_job_card_flags_unverified_linkedin_external_apply_freshness():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-linkedin-unverified-freshness",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://linkedin.com/jobs/view/2",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Contract",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "linkedin",
+            "posted": "15 hours ago",
+            "posted_age_days": 15 / 24,
+            RECORD_APPLY_METHOD_KEY: APPLY_METHOD_EXTERNAL_APPLY,
+            RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY: ORIGINAL_POSTED_DATE_STATUS_UNVERIFIED,
+        },
+        _test_profile(),
+    )
+
+    assert "Freshness may be unreliable" in html
+    assert "LinkedIn listed" in html
+    assert "15 hours ago" in html
+    assert "<strong>Posted</strong>" not in html
+    assert "Originally posted" not in html
 
 
 def test_job_card_summary_unescapes_literal_pipe():
