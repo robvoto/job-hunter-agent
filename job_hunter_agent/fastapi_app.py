@@ -447,7 +447,7 @@ def create_app() -> FastAPI:
     @app.middleware("http")
     async def auth_enforcement(request: Request, call_next):  # type: ignore[no-untyped-def]
         path = request.url.path
-        if path in OPEN_PATHS or path.startswith("/static/"):
+        if path in OPEN_PATHS or path == "/favicon.ico" or path.startswith("/static/"):
             return await call_next(request)
         if read_session_user(request) is None:
             if path.startswith("/api/"):

@@ -52,6 +52,14 @@ def test_diagram_viewer_renders_mermaid_source():
     assert "Scoring Process Flow" in response.text
 
 
+def test_favicon_route_serves_app_icon():
+    client = TestClient(create_app())
+    response = client.get("/favicon.ico")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("image/png")
+    assert response.content
+
+
 def test_debug_flag_is_resolved_from_cli_args(monkeypatch):
     original_argv = list(sys.argv)
     monkeypatch.setattr(sys, "argv", ["job_hunter_agent.fastapi_app", "--debug"])

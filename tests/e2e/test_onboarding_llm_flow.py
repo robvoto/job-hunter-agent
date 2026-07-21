@@ -19,10 +19,10 @@ Safety, by design:
 
 Run explicitly with real credentials:
     JOB_HUNTER_E2E_ALLOW_LLM=1 OPENAI_API_KEY=sk-... \
-        uv run pytest tests/e2e/test_onboarding_llm_flow.py \
-        --confcutdir=tests/e2e -m llm_e2e -v
+        ./scripts/run-e2e.sh --llm tests/e2e/test_onboarding_llm_flow.py -v
 
---confcutdir=tests/e2e is required: the parent tests/conftest.py
+The wrapper adds --confcutdir=tests/e2e automatically. That flag is required:
+the parent tests/conftest.py
 unconditionally blanks OPENAI_API_KEY, and job_hunter_agent.llm_gate builds
 its OpenAI client once at import time, so once that env var has been blanked
 anywhere earlier in the process it stays blanked for the rest of it.

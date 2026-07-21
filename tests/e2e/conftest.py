@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import os
 import socket
+import sys
 import threading
 import time
 from dataclasses import dataclass, field
@@ -35,8 +36,6 @@ import requests
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 ARTIFACTS_DIR = Path(__file__).resolve().parent / "artifacts"
-
-import sys
 
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
@@ -79,10 +78,12 @@ if not os.environ.get("JOB_HUNTER_DB_PATH"):
 CANDIDATE_EMAIL = "candidate@e2e.test"
 FRESH_CANDIDATE_EMAIL = "fresh-candidate@e2e.test"
 WORKSPACE_CANDIDATE_EMAIL = "workspace-candidate@e2e.test"
+WORKSPACE_LINKEDIN_FRESHNESS_EMAIL = "workspace-linkedin-freshness@e2e.test"
 # normalize_job_key requires a pure-alphabetic "source:id" prefix (job_identity.py),
 # so this can't be namespaced "e2e:..." -- the digit in "e2e" fails that regex and
 # every review action on the seeded card would 400 with "Missing job key".
 SEEDED_JOB_KEY = "seek:e2e-sample-job-1"
+SEEDED_LINKEDIN_FRESHNESS_JOB_KEY = "linkedin:sample-freshness-job"
 
 
 def _free_port() -> int:
@@ -103,7 +104,13 @@ def live_server():
     os.environ["JOB_HUNTER_BASE_URL"] = base_url
 
     app = create_app()
-    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
+    config = uvicorn.Config(
+        app,
+        host="127.0.0.1",
+        port=port,
+        log_level="warning",
+        ws="websockets-sansio",
+    )
     server = uvicorn.Server(config)
     thread = threading.Thread(target=server.run, name="e2e-uvicorn", daemon=True)
     thread.start()
@@ -188,25 +195,8 @@ def _cheapest_llm_model() -> str:
     return min(options, key=_cost)
 
 
-def _seed_kept_job(email: str) -> None:
-    """Seed exactly one KEEP-scored, high-fit job into the workspace so a real job
-    card renders on /workspace -- used to click-test per-card actions (score
-    display, save/"applied", dismiss/"hidden") that filter-only workspace
-    coverage never exercises. Mirrors the fields workspace_data/workspace_renderer
-    actually require: a frozen `fit_score` (so live scoring isn't invoked) and the
-    llm_decision/llm_fit_grade/requirement_coverage trio that
-    has_complete_llm_keep_data() requires for the record to be workspace-eligible.
-
-    Three tests in test_workspace_job_actions.py share this fixture/user across
-    the same session-scoped DB. Each round-trips a review action (apply/unapply,
-    hide/unhide), so state returns to baseline by the end of a passing test -- but
-    a test that fails partway through a round trip would otherwise leak
-    applied/hidden state into the next test. Resetting via
-    clear_current_user_search_state() (the same reset the app's own "clear
-    search" action uses) before every seed makes each test's starting state
-    independent of whether earlier tests in the file passed, failed, or ran out
-    of order.
-    """
+def _seed_workspace_records(email: str, records: list[dict], *, reason: str) -> None:
+    """Seed a known workspace snapshot for a dedicated e2e user."""
     from job_hunter_agent.auth import get_or_create_user
     from job_hunter_agent.io_utils import write_debug_json
     from job_hunter_agent.server_helpers import clear_current_user_search_state
@@ -215,37 +205,92 @@ def _seed_kept_job(email: str) -> None:
 
     admin_email = os.environ["JOB_HUNTER_ADMIN_EMAIL"]
     user = get_or_create_user(email, admin_email)
-    run_started_at = "2026-07-20T08:00:00+00:00"
-    record = {
-        "job_key": SEEDED_JOB_KEY,
-        "url": "https://example.test/jobs/sample-job-1",
-        "title": "Senior Backend Engineer",
-        "company": "Acme Corp",
-        "teaser": "Build and ship backend services.",
-        "location": "Remote",
-        "posted": run_started_at,
-        "source": "seek",
-        "decision": "KEEP",
-        "run_started_at": run_started_at,
-        "fit_score": 95,
-        "fit_score_breakdown": [],
-        "llm_decision": "KEEP",
-        "llm_fit_grade": "STRONG",
-        "requirement_coverage": [
-            {
-                "capability_name": "Backend engineering",
-                "status": "supported",
-                "importance": "required",
-            }
-        ],
-    }
     set_user_id(user["user_id"])
     try:
         clear_current_user_search_state()
-        write_debug_json([record])
-        rebuild_workspace_results(reason="e2e workspace job seed")
+        write_debug_json(records)
+        rebuild_workspace_results(reason=reason)
     finally:
         set_user_id(None)
+
+
+def _seed_kept_job(email: str) -> None:
+    """Seed exactly one KEEP-scored, high-fit job into the workspace so a real job
+    card renders on /workspace -- used to click-test per-card actions (score
+    display, save/"applied", dismiss/"hidden") that filter-only workspace
+    coverage never exercises.
+    """
+    run_started_at = "2026-07-20T08:00:00+00:00"
+    _seed_workspace_records(
+        email,
+        [
+            {
+                "job_key": SEEDED_JOB_KEY,
+                "url": "https://example.test/jobs/sample-job-1",
+                "title": "Senior Backend Engineer",
+                "company": "Acme Corp",
+                "teaser": "Build and ship backend services.",
+                "location": "Remote",
+                "posted": run_started_at,
+                "source": "seek",
+                "decision": "KEEP",
+                "run_started_at": run_started_at,
+                "fit_score": 95,
+                "fit_score_breakdown": [],
+                "llm_decision": "KEEP",
+                "llm_fit_grade": "STRONG",
+                "requirement_coverage": [
+                    {
+                        "capability_name": "Backend engineering",
+                        "status": "supported",
+                        "importance": "required",
+                    }
+                ],
+            }
+        ],
+        reason="e2e workspace job seed",
+    )
+
+
+def _seed_linkedin_freshness_job(email: str) -> None:
+    """Seed one LinkedIn external-apply job whose original post date is unverified."""
+    run_started_at = "2026-07-20T08:00:00+00:00"
+    _seed_workspace_records(
+        email,
+        [
+            {
+                "job_key": SEEDED_LINKEDIN_FRESHNESS_JOB_KEY,
+                "url": "https://www.linkedin.com/jobs/view/123456789",
+                "title": "Senior Business Analyst",
+                "company": "Acme Corp",
+                "teaser": "Lead discovery and delivery alignment across product teams.",
+                "location": "Sydney NSW",
+                "posted": "15 hours ago",
+                "posted_age_days": 15 / 24,
+                "source": "linkedin",
+                "decision": "KEEP",
+                "run_started_at": run_started_at,
+                "fit_score": 91,
+                "fit_score_breakdown": [],
+                "llm_decision": "KEEP",
+                "llm_fit_grade": "STRONG",
+                "apply_method": "external_apply",
+                "original_posted_date_status": "unverified",
+                "full_description": (
+                    "Lead requirements discovery, stakeholder workshops, and delivery planning "
+                    "across digital transformation programs."
+                ),
+                "requirement_coverage": [
+                    {
+                        "capability_name": "Stakeholder engagement",
+                        "status": "supported",
+                        "importance": "required",
+                    }
+                ],
+            }
+        ],
+        reason="e2e linkedin freshness workspace seed",
+    )
 
 
 def _force_cheapest_llm_model(email: str) -> None:
@@ -367,6 +412,14 @@ def workspace_job_page(browser, live_server, request):
     """
     _seed_kept_job(WORKSPACE_CANDIDATE_EMAIL)
     cookie = _session_cookie(WORKSPACE_CANDIDATE_EMAIL)
+    yield from _authenticated_page(browser, live_server, request, cookie)
+
+
+@pytest.fixture()
+def workspace_linkedin_freshness_page(browser, live_server, request):
+    """An onboarding-complete candidate with one seeded LinkedIn freshness-risk job."""
+    _seed_linkedin_freshness_job(WORKSPACE_LINKEDIN_FRESHNESS_EMAIL)
+    cookie = _session_cookie(WORKSPACE_LINKEDIN_FRESHNESS_EMAIL)
     yield from _authenticated_page(browser, live_server, request, cookie)
 
 

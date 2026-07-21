@@ -13,6 +13,20 @@ from job_hunter_agent.routes.responses import guess_media_type, html_response, j
 router = APIRouter()
 
 
+@router.get("/favicon.ico")
+def favicon():  # type: ignore[no-untyped-def]
+    """Serve the app icon at the conventional browser favicon path."""
+
+    icon_path = (STATIC_DIR / "assets" / "job_hunter_img.png").resolve()
+    if not icon_path.is_file():
+        return json_response({"error": "Static asset not found"}, 404)
+    return Response(
+        content=icon_path.read_bytes(),
+        media_type=guess_media_type(icon_path),
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
+
+
 @router.get("/static/diagrams/{diagram_name}")
 def diagram_viewer(diagram_name: str):  # type: ignore[no-untyped-def]
 
