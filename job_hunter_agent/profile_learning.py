@@ -42,6 +42,7 @@ from job_hunter_agent.profile_store import (
     KEY_MAX_TARGET,
     KEY_NAME,
     KEY_PRIMARY_PATTERNS,
+    KEY_ROLE_EXPERIENCE,
     KEY_SECONDARY_PATTERNS,
     KEY_TARGET_OCCUPATION_QUERIES,
     VALID_CAPABILITY_ICON_KEYS,
@@ -143,6 +144,15 @@ class _MatchPreferenceExtraction(BaseModel):
     home_location: str = ""
 
 
+class _RoleExperienceExtraction(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    duration_months: int = 0
+    end_year: int = 0
+    is_current: bool = False
+
+
 class _CvExtractionResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -151,6 +161,7 @@ class _CvExtractionResponse(BaseModel):
     match_preferences: _MatchPreferenceExtraction = Field(
         default_factory=_MatchPreferenceExtraction
     )
+    role_experience: list[_RoleExperienceExtraction] = Field(default_factory=list)
     role_titles: list[str] = Field(default_factory=list)
     target_occupation_queries: list[str] = Field(default_factory=list)
 
@@ -286,7 +297,7 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
     """Single LLM call: extract capabilities, title patterns, and match preferences from CV text."""
     _ensure_cv_extraction_cache_loaded()
     cache_key = hashlib.sha256(
-        f"icon-v2:{lookback_years}:{alias_limit}:{source_text}".encode()
+        f"icon-v3:{lookback_years}:{alias_limit}:{source_text}".encode()
     ).hexdigest()[:16]
     if cache_key in _cv_extraction_cache:
         cached = _cv_extraction_cache[cache_key]
@@ -294,6 +305,7 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
             "[ONBOARDING][LLM_CACHE_HIT] purpose=cv_extraction "
             f"cache_key={cache_key} "
             f"capabilities={len(cached.get(KEY_CAPABILITIES, []) or [])} "
+            f"role_experience={len(cached.get(KEY_ROLE_EXPERIENCE, []) or [])} "
             f"role_titles={len(cached.get('role_titles', []) or [])} "
             f"target_queries={len(cached.get(KEY_TARGET_OCCUPATION_QUERIES, []) or [])}"
         )
@@ -337,6 +349,8 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         "Only include aliases that are grounded in the evidence or are widely recognised industry synonyms.\n"
         f"For each capability, set icon_key to exactly one of: {', '.join(sorted(VALID_CAPABILITY_ICON_KEYS))}.\n"
         "- match_preferences: infer only from explicit statements; leave fields empty or null when not stated.\n"
+        "- role_experience: for each explicit role in the CV, return the title, duration_months, and end_year.\n"
+        "  Use the current year for Present/current roles and skip entries where the title cannot be identified.\n"
         "- role_titles: list the job titles explicitly shown in the CV. One entry per role, no duplicates.\n"
         "- target_occupation_queries: generate 3 to 8 machine-facing occupation query strings that match the candidate's occupation family.\n"
         "  Use standard job titles a job-search system could match against.\n"
@@ -372,6 +386,7 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         f"cache_key={cache_key} "
         f"capabilities={len(result.get(KEY_CAPABILITIES, []) or [])} "
         f"eligibility={len(result.get('eligibility', []) or [])} "
+        f"role_experience={len(result.get(KEY_ROLE_EXPERIENCE, []) or [])} "
         f"role_titles={len(result.get('role_titles', []) or [])} "
         f"target_queries={len(result.get(KEY_TARGET_OCCUPATION_QUERIES, []) or [])}"
     )
@@ -470,6 +485,36 @@ def _validate_eligibility(raw: list[Any]) -> list[dict[str, Any]]:
     if rejected:
         _cap_log(f"[ELIGIBILITY_VALIDATE] rejected {len(rejected)}: {rejected}")
     return capped
+
+
+def _aggregate_role_experience(raw: list[Any]) -> list[dict[str, Any]]:
+    aggregated: dict[str, dict[str, int | str]] = {}
+
+    for item in raw or []:
+        if not isinstance(item, dict):
+            continue
+
+        normalized_title = _simple_title(item.get("title") or "")
+        if not normalized_title:
+            continue
+
+        duration_months = max(int(item.get("duration_months") or 0), 0)
+        end_year = max(int(item.get("end_year") or 0), 0)
+        if bool(item.get("is_current")):
+            end_year = max(end_year, _CURRENT_YEAR)
+
+        existing = aggregated.setdefault(
+            normalized_title,
+            {
+                "normalized_title": normalized_title,
+                "total_duration_months": 0,
+                "most_recent_end_year": 0,
+            },
+        )
+        existing["total_duration_months"] = int(existing["total_duration_months"]) + duration_months
+        existing["most_recent_end_year"] = max(int(existing["most_recent_end_year"]), end_year)
+
+    return [aggregated[key] for key in sorted(aggregated)]
 
 
 def _capability_context_sections(
@@ -598,11 +643,13 @@ def build_learning_patch(
     )
     capabilities = _validate_capabilities(raw_caps)
     eligibility = _validate_eligibility(raw_eligibility)
+    role_experience = _aggregate_role_experience(extracted.get(KEY_ROLE_EXPERIENCE) or [])
     approved_capabilities, review_signals = _split_learning_capabilities(
         capabilities, source_sections=source_sections
     )
     _cap_log(f"[BUILD_LEARNING_PATCH] {len(approved_capabilities)} capability group(s) written")
     _cap_log(f"[BUILD_LEARNING_PATCH] {len(eligibility)} eligibility fact(s) written")
+    _cap_log(f"[BUILD_LEARNING_PATCH] {len(role_experience)} role experience row(s) written")
     _cap_log(f"[BUILD_LEARNING_PATCH] {len(review_signals)} capability signal(s) need review")
 
     raw_titles = extracted.get("role_titles") or []
@@ -640,6 +687,7 @@ def build_learning_patch(
 
     patch[KEY_CANDIDATE_CAPABILITIES] = approved_capabilities
     patch[KEY_CANDIDATE_ELIGIBILITY] = eligibility
+    patch[KEY_ROLE_EXPERIENCE] = role_experience
     if review_signals and not is_desktop_runtime():
         register_signals(review_signals)
 

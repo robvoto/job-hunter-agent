@@ -38,6 +38,7 @@ from job_hunter_agent.profile_store import (
     KEY_MUST_NOT_REQUIRED_SKILLS,
     KEY_ONBOARDING_COMPLETE,
     KEY_PRIMARY_PATTERNS,
+    KEY_ROLE_EXPERIENCE,
     KEY_SECONDARY_PATTERNS,
     KEY_TARGET_OCCUPATION_QUERIES,
     build_candidate_profile_tiers_from_sections,
@@ -61,6 +62,7 @@ ONBOARDING_RESET_FIELDS = (
     "dominant_signal_clusters",
     KEY_MUST_NOT_REQUIRED_SKILLS,
     KEY_CANDIDATE_ELIGIBILITY,
+    KEY_ROLE_EXPERIENCE,
     KEY_TARGET_OCCUPATION_QUERIES,
 )
 

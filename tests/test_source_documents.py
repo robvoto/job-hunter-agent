@@ -54,6 +54,15 @@ def test_run_onboarding_uses_llm_titles_without_parser(monkeypatch):
                     "needs_review": False,
                 },
             ],
+            "role_experience": [
+                {
+                    "title": "Scrum Master",
+                    "duration_months": 24,
+                    "end_year": 2026,
+                    "is_current": True,
+                },
+                {"title": "Agile Project Coordinator", "duration_months": 24, "end_year": 2022},
+            ],
             "role_titles": ["Scrum Master", "Agile Project Coordinator"],
             "target_occupation_queries": ["Scrum Master", "Agile Project Coordinator"],
             "match_preferences": {},
@@ -71,6 +80,18 @@ def test_run_onboarding_uses_llm_titles_without_parser(monkeypatch):
     assert result["profile"]["target_occupation_queries"] == [
         "Scrum Master",
         "Agile Project Coordinator",
+    ]
+    assert result["profile"]["role_experience"] == [
+        {
+            "normalized_title": "agile project coordinator",
+            "total_duration_months": 24,
+            "most_recent_end_year": 2022,
+        },
+        {
+            "normalized_title": "scrum master",
+            "total_duration_months": 24,
+            "most_recent_end_year": 2026,
+        },
     ]
     assert result["profile"]["candidate_capabilities"]
     assert result["profile"]["candidate_capabilities"][0]["name"] == "agile delivery"

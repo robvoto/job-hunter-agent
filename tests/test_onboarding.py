@@ -1085,6 +1085,38 @@ def test_normalize_full_profile_preserves_candidate_capabilities():
     assert normalized["candidate_eligibility"][0]["value"] is True
 
 
+def test_normalize_full_profile_groups_role_experience_and_skips_blank_titles():
+    normalized = profile_store.normalize_full_profile(
+        {
+            "role_experience": [
+                {
+                    "normalized_title": "Senior Business Analyst",
+                    "total_duration_months": 24,
+                    "most_recent_end_year": 2024,
+                },
+                {
+                    "normalized_title": " senior   business analyst ",
+                    "total_duration_months": 18,
+                    "most_recent_end_year": 2022,
+                },
+                {
+                    "normalized_title": "",
+                    "total_duration_months": 12,
+                    "most_recent_end_year": 2021,
+                },
+            ]
+        }
+    )
+
+    assert normalized["role_experience"] == [
+        {
+            "normalized_title": "senior business analyst",
+            "total_duration_months": 42,
+            "most_recent_end_year": 2024,
+        }
+    ]
+
+
 def test_user_settings_schedule_payload_is_sanitized_and_exposed():
     sanitized = server_helpers.SettingsHandler._sanitize_user_settings_payload(
         {

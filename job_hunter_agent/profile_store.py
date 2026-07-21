@@ -46,6 +46,7 @@ from job_hunter_agent.parsing_schema import (
 )
 from job_hunter_agent.runtime_helpers import is_desktop_runtime
 from job_hunter_agent.runtime_helpers import log_settings_change
+from job_hunter_agent.title_normalization_rules import normalize_title_text
 from job_hunter_agent.utils import coerce_int, deep_merge
 
 # Shared Profile and Settings Keys
@@ -146,6 +147,7 @@ KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT = "secondary_candidate_profile_context"
 KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT = "supplementary_candidate_profile_context"
 KEY_CANDIDATE_CAPABILITIES = "candidate_capabilities"
 KEY_CANDIDATE_ELIGIBILITY = "candidate_eligibility"
+KEY_ROLE_EXPERIENCE = "role_experience"
 KEY_SIGNAL_CLUSTERS = "dominant_signal_clusters"
 KEY_MUST_NOT_REQUIRED_SKILLS = "must_not_require_skills"
 KEY_ONBOARDING_SETTINGS = "onboarding_settings"
@@ -309,6 +311,7 @@ DEFAULT_PROFILE = {
     },
     KEY_CANDIDATE_CAPABILITIES: [],
     KEY_CANDIDATE_ELIGIBILITY: [],
+    KEY_ROLE_EXPERIENCE: [],
     "dominant_signal_clusters": [],
     "target_roles": [],
     "also_consider_roles": [],
@@ -670,6 +673,49 @@ def normalize_eligibility_rules(rules: list[dict[str, Any]] | list[str] | None) 
     return cleaned
 
 
+def normalize_role_experience(items: Any) -> list[dict[str, Any]]:
+    aggregated: dict[str, dict[str, int | str]] = {}
+
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+
+        normalized_title = normalize_title_text(item.get("normalized_title"))
+        if not normalized_title:
+            continue
+
+        total_duration_months = coerce_int(
+            item.get("total_duration_months"),
+            default=0,
+            minimum=0,
+            maximum=12_000,
+        )
+        most_recent_end_year = coerce_int(
+            item.get("most_recent_end_year"),
+            default=0,
+            minimum=0,
+            maximum=9_999,
+        )
+
+        existing = aggregated.setdefault(
+            normalized_title,
+            {
+                "normalized_title": normalized_title,
+                "total_duration_months": 0,
+                "most_recent_end_year": 0,
+            },
+        )
+        existing["total_duration_months"] = int(existing["total_duration_months"]) + int(
+            total_duration_months
+        )
+        existing["most_recent_end_year"] = max(
+            int(existing["most_recent_end_year"]),
+            int(most_recent_end_year),
+        )
+
+    return [aggregated[key] for key in sorted(aggregated)]
+
+
 def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(profile, dict):
         raise TypeError("profile must be a dict")
@@ -714,6 +760,7 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
     merged[KEY_CANDIDATE_ELIGIBILITY] = normalize_eligibility_rules(
         merged.get(KEY_CANDIDATE_ELIGIBILITY, [])
     )
+    merged[KEY_ROLE_EXPERIENCE] = normalize_role_experience(merged.get(KEY_ROLE_EXPERIENCE, []))
     primary_titles, secondary_titles = normalize_title_pattern_lists(
         merged.get(KEY_PRIMARY_PATTERNS, []),
         merged.get(KEY_SECONDARY_PATTERNS, []),

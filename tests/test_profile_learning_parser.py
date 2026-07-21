@@ -59,6 +59,10 @@ _LLM_FIXTURE = {
             "icon_key": "analysis_requirements",
         },
     ],
+    "role_experience": [
+        {"title": "Delivery Lead", "duration_months": 36, "end_year": 2025, "is_current": True},
+        {"title": "Project Coordinator", "duration_months": 36, "end_year": 2019},
+    ],
     "role_titles": ["delivery lead", "project coordinator"],
     "target_occupation_queries": ["Delivery Lead", "Project Coordinator"],
     "match_preferences": {
@@ -99,6 +103,57 @@ def test_build_learning_patch_returns_titles_capabilities_and_queries_without_pa
     assert patch_result["target_occupation_queries"] == ["Delivery Lead", "Project Coordinator"]
     assert patch_result["candidate_eligibility"][0]["name"] == "PV clearance"
     assert patch_result["candidate_eligibility"][0]["value"] is True
+    assert patch_result["role_experience"] == [
+        {
+            "normalized_title": "delivery lead",
+            "total_duration_months": 36,
+            "most_recent_end_year": profile_learning._CURRENT_YEAR,
+        },
+        {
+            "normalized_title": "project coordinator",
+            "total_duration_months": 36,
+            "most_recent_end_year": 2019,
+        },
+    ]
+
+
+def test_build_learning_patch_groups_role_experience_by_normalized_title():
+    fixture = {
+        "capabilities": [
+            {
+                "name": "stakeholder engagement",
+                "level": "strong",
+                "aliases": [],
+                "icon_key": "communication_stakeholders",
+                "needs_review": False,
+            },
+        ],
+        "role_experience": [
+            {"title": "Senior Business Analyst", "duration_months": 24, "end_year": 2024},
+            {"title": " senior   business analyst ", "duration_months": 18, "end_year": 2022},
+            {"title": "", "duration_months": 12, "end_year": 2020},
+        ],
+        "role_titles": ["Business Analyst"],
+        "target_occupation_queries": ["Business Analyst"],
+        "match_preferences": {},
+    }
+
+    with (
+        patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=fixture),
+        patch(
+            "job_hunter_agent.profile_learning.signal_in_approved_knowledge",
+            return_value=(False, ""),
+        ),
+    ):
+        patch_result = build_learning_patch(SAMPLE_CV)
+
+    assert patch_result["role_experience"] == [
+        {
+            "normalized_title": "senior business analyst",
+            "total_duration_months": 42,
+            "most_recent_end_year": 2024,
+        }
+    ]
 
 
 @pytest.mark.parametrize(
@@ -385,7 +440,7 @@ def test_llm_extract_from_cv_cache_hit_skips_save(caplog):
     """A cache hit must return the stored result without calling save."""
     cv_text = "Test CV for cache-hit test"
     lookback, alias_limit = 5, 3
-    cache_key = _hashlib.sha256(f"icon-v2:{lookback}:{alias_limit}:{cv_text}".encode()).hexdigest()[
+    cache_key = _hashlib.sha256(f"icon-v3:{lookback}:{alias_limit}:{cv_text}".encode()).hexdigest()[
         :16
     ]
     fake_result = {
@@ -429,7 +484,7 @@ def test_llm_extract_from_cv_loads_disk_cache_before_calling_llm():
     """Simulates server restart: disk cache has a prior result; LLM must not be called."""
     cv_text = "My CV content for disk restore test"
     lookback, alias_limit = 5, 3
-    cache_key = _hashlib.sha256(f"icon-v2:{lookback}:{alias_limit}:{cv_text}".encode()).hexdigest()[
+    cache_key = _hashlib.sha256(f"icon-v3:{lookback}:{alias_limit}:{cv_text}".encode()).hexdigest()[
         :16
     ]
     prior_result = {
