@@ -1603,6 +1603,36 @@ def test_render_job_card_requirement_coverage_hides_evidence_subtitles_in_normal
     assert f'"{requirement}"' not in html
 
 
+def test_render_job_card_requirement_coverage_shows_role_duration_note_in_normal_mode():
+    html = workspace_renderer.render_job_card(
+        {
+            **_test_profile(),
+            "job_requirements": [],
+            "requirement_coverage": [
+                {
+                    "requirement": "Minimum 5 years experience as Business Analyst",
+                    "importance": "mandatory",
+                    "status": "partially_supported",
+                    "capability_name": "acceptance testing",
+                    "matched_job_text": "Minimum 5 years experience as Business Analyst",
+                    "profile_support": [],
+                    "required_experience_months": 60,
+                    "matched_role_experience_title": "business analyst",
+                    "matched_role_experience_months": 36,
+                    "matched_role_experience_end_year": 2024,
+                }
+            ],
+            "source": "seek",
+        },
+        _capability_profile(),
+        debug_mode=False,
+    )
+
+    assert "Role history proves 36 months in business analyst against 60 required months" in html
+    assert "most recent end year 2024" in html
+    assert "req-coverage-detail" not in html
+
+
 def test_render_job_card_requirement_coverage_shows_eligibility_details_in_debug_mode():
     html = workspace_renderer.render_job_card(
         {

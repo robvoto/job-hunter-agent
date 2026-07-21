@@ -84,6 +84,8 @@ def test_settings_page_renders_keyword_label_and_location_field(monkeypatch):
     assert "Alerts &amp; AI" in html
     assert "Hide link preview" in html
     assert "preview card" in html
+    assert "Captured role history" in html
+    assert 'id="role_experience_readonly"' in html
     version = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
     assert f"v{version}" in html
     assert "Preview" in html
@@ -105,6 +107,17 @@ def test_settings_capability_editor_preserves_icon_key_state():
     assert "capability-alias-preview" in js_text
     assert "settings_selected_copy" in js_text
     assert "settings_remove_selected_label" in js_text
+
+
+def test_settings_page_renders_role_history_readonly_panel_script():
+    repo_root = Path(__file__).resolve().parents[1]
+    js_text = (
+        repo_root / "templates" / "static" / "settings" / "shared" / "settings-page.js"
+    ).read_text(encoding="utf-8")
+
+    assert "function renderRoleExperienceReadonly(profile)" in js_text
+    assert "renderRoleExperienceReadonly(profile);" in js_text
+    assert "role_experience_readonly" in js_text
 
 
 def test_settings_utils_review_normaliser_preserves_icon_key():

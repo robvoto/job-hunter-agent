@@ -342,6 +342,20 @@ def requirement_fit_audit_rows(record: dict, profile: Optional[dict] = None) -> 
                 "status_credit": status_credit,
                 "credit_fraction": credit_fraction,
                 "weighted_credit": scoring_weight * credit_fraction,
+                "required_experience_months": int(item.get("required_experience_months") or 0),
+                "matched_role_experience_title": compact_whitespace(
+                    str(item.get("matched_role_experience_title") or "")
+                ),
+                "matched_role_experience_months": int(
+                    item.get("matched_role_experience_months") or 0
+                ),
+                "matched_role_experience_end_year": int(
+                    item.get("matched_role_experience_end_year") or 0
+                ),
+                "experience_requirement_met": bool(item.get("experience_requirement_met")),
+                "experience_requirement_review_needed": bool(
+                    item.get("experience_requirement_review_needed")
+                ),
             }
         )
     return rows
@@ -375,6 +389,38 @@ def requirement_fit_diagnostics(record: dict, profile: Optional[dict] = None) ->
         status_credit = float(row.get("status_credit") or 0.0)
         match_source = compact_whitespace(str(row.get("match_source") or "")).lower()
         matched_profile_term = compact_whitespace(str(row.get("matched_profile_term") or ""))
+        required_experience_months = int(row.get("required_experience_months") or 0)
+        matched_role_experience_title = compact_whitespace(
+            str(row.get("matched_role_experience_title") or "")
+        )
+        matched_role_experience_months = int(row.get("matched_role_experience_months") or 0)
+        matched_role_experience_end_year = int(row.get("matched_role_experience_end_year") or 0)
+        experience_requirement_review_needed = bool(
+            row.get("experience_requirement_review_needed")
+        )
+        if required_experience_months > 0:
+            required_years = required_experience_months / 12.0
+            if matched_role_experience_title:
+                experience_evidence_label = (
+                    f"Role history: {matched_role_experience_title} "
+                    f"{matched_role_experience_months} months matched against "
+                    f"required {required_experience_months} months"
+                )
+                if matched_role_experience_end_year > 0:
+                    experience_evidence_label += (
+                        f" (most recent end year {matched_role_experience_end_year})"
+                    )
+            elif experience_requirement_review_needed:
+                experience_evidence_label = (
+                    f"Role history: requirement asks for {required_years:g} years, "
+                    "but the saved role titles did not prove a matching role family."
+                )
+            else:
+                experience_evidence_label = (
+                    f"Role history: requirement asks for {required_years:g} years."
+                )
+        else:
+            experience_evidence_label = ""
         detailed_rows.append(
             {
                 **row,
@@ -389,6 +435,7 @@ def requirement_fit_diagnostics(record: dict, profile: Optional[dict] = None) ->
                 "matched_profile_term_label": matched_profile_term or "Unresolved",
                 "profile_support_label": "; ".join(row["profile_support"])
                 or "No profile evidence returned",
+                "experience_evidence_label": experience_evidence_label,
                 "calculation_label": (
                     "Eligibility gate only — no points added"
                     if row.get("is_eligibility_gate")
@@ -493,6 +540,11 @@ def format_requirement_fit_diagnostics_block(
             f"{row['status_label']} | {row['mapping_label']} | Via: {row['match_source_label']} | "
             f"Term: {row['matched_profile_term_label']} | {row['calculation_label']} | "
             f"Evidence: {row['profile_support_label']}"
+            + (
+                f" | {row['experience_evidence_label']}"
+                if compact_whitespace(str(row.get("experience_evidence_label") or ""))
+                else ""
+            )
         )
         for row in diagnostics["rows"]
     ]

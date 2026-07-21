@@ -99,6 +99,60 @@ const ruleTextAreas = [
   ['reject_description_phrase_rules', 'phrase'],
 ];
 
+function formatRoleExperienceDuration(months) {
+  const totalMonths = Number.isFinite(Number(months)) ? Number(months) : 0;
+  if (totalMonths <= 0) return '0 months';
+  const years = Math.floor(totalMonths / 12);
+  const remainderMonths = totalMonths % 12;
+  const parts = [];
+  if (years > 0) parts.push(`${years} year${years === 1 ? '' : 's'}`);
+  if (remainderMonths > 0) parts.push(`${remainderMonths} month${remainderMonths === 1 ? '' : 's'}`);
+  return parts.join(' ');
+}
+
+function renderRoleExperienceReadonly(profile) {
+  const container = document.getElementById('role_experience_readonly');
+  if (!container) return;
+  const rows = Array.isArray(profile?.role_experience) ? profile.role_experience : [];
+  if (!rows.length) {
+    container.innerHTML = '<p class="panel-copy">No role history captured yet. Re-run onboarding after uploading a CV.</p>';
+    return;
+  }
+  container.innerHTML = rows.map((row) => {
+    const title = escapeHtml(String(row?.normalized_title || '').trim() || 'Untitled role');
+    const totalMonths = Number(row?.total_duration_months || 0);
+    const endYear = Number(row?.most_recent_end_year || 0);
+    const variants = Array.isArray(row?.title_variants) ? row.title_variants : [];
+    const variantHtml = variants.length
+      ? `<div class="capability-card-meta">${
+          variants.map((variant) => {
+            const variantTitle = escapeHtml(String(variant?.normalized_title || '').trim() || 'untitled');
+            const variantMonths = formatRoleExperienceDuration(Number(variant?.total_duration_months || 0));
+            const variantEndYear = Number(variant?.most_recent_end_year || 0);
+            const variantSuffix = variantEndYear > 0 ? ` · most recent end year ${variantEndYear}` : '';
+            return `<div>${variantTitle}: ${escapeHtml(variantMonths)}${escapeHtml(variantSuffix)}</div>`;
+          }).join('')
+        }</div>`
+      : '';
+    const summary = `${formatRoleExperienceDuration(totalMonths)} total`;
+    const endYearCopy = endYear > 0 ? `Most recent end year ${endYear}` : 'Most recent end year unknown';
+    return `
+      <article class="capability-card">
+        <div class="capability-card-main">
+          <div class="capability-card-head">
+            <strong class="capability-group-title">${title}</strong>
+          </div>
+          <div class="capability-card-meta">
+            <div>${escapeHtml(summary)}</div>
+            <div>${escapeHtml(endYearCopy)}</div>
+          </div>
+          ${variantHtml}
+        </div>
+      </article>
+    `;
+  }).join('');
+}
+
 export function hideStatus() {
   statusUi.hide();
 }
@@ -395,6 +449,7 @@ function fillForm(profile) {
   capabilityEditor.setCapabilityRuleState(profile.candidate_capabilities || []);
   clearanceEditor.setClearanceRuleState(profile.candidate_eligibility || []);
   document.getElementById('cv_text_debug').value = (profile.cv_text || '').trim();
+  renderRoleExperienceReadonly(profile);
   for (const id of ['target_roles', 'also_consider_roles', 'must_not_require_skills']) {
     settingsField(id).value = (profile[id] || []).join('\n');
   }

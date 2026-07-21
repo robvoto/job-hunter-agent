@@ -1329,6 +1329,41 @@ def test_fit_review_logs_shared_requirement_score_diagnostics(monkeypatch, caplo
     assert "Final calculation:" in block
 
 
+def test_fit_review_logs_role_duration_requirement_diagnostics(monkeypatch, caplog):
+    payload = {
+        "fit_review": {"decision": "KEEP", "grade": "SOLID"},
+        "debug_reason": "Years-on-role requirement checked against onboarding role history.",
+        "job_requirements": ["Minimum 5 years experience as Business Analyst"],
+        "requirement_coverage": [
+            {
+                "requirement": "Minimum 5 years experience as Business Analyst",
+                "importance": "mandatory",
+                "requirement_type": "capability",
+                "status": "partially_supported",
+                "profile_name": "Business Analysis",
+                "capability_name": "Business Analysis",
+                "matched_job_text": "Minimum 5 years experience as Business Analyst",
+                "profile_support": ["Ran BA activities across delivery teams."],
+                "required_experience_months": 60,
+                "matched_role_experience_title": "business analyst",
+                "matched_role_experience_months": 36,
+                "matched_role_experience_end_year": 2024,
+            }
+        ],
+        "llm_cost_usd": 0.0123,
+    }
+    _patch_llm_review_path(monkeypatch, payload)
+
+    record = _base_record("seek", "seek_detail", "card")
+    with caplog.at_level(logging.INFO, logger="job_hunter_agent.job_review_pipeline"):
+        review_post_detail_normalized_job(record, _review_context("SEEK"))
+
+    messages = [entry.message for entry in caplog.records]
+    block = next(message for message in messages if "Requirement scoring" in message)
+    assert "Role history: business analyst 36 months matched against required 60 months" in block
+    assert "most recent end year 2024" in block
+
+
 # ── observability log events ──────────────────────────────────────────────────
 
 

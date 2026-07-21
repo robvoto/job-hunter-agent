@@ -1588,6 +1588,19 @@ def render_job_card(
         )
         matched_text = compact_whitespace(str(row.get("matched_job_text") or ""))
         level_label = capability_level_lookup.get(_normalize_capability_token(profile_name), "")
+        required_experience_months = _workspace_int(row.get("required_experience_months") or 0)
+        matched_role_experience_title = compact_whitespace(
+            str(row.get("matched_role_experience_title") or "")
+        )
+        matched_role_experience_months = _workspace_int(
+            row.get("matched_role_experience_months") or 0
+        )
+        matched_role_experience_end_year = _workspace_int(
+            row.get("matched_role_experience_end_year") or 0
+        )
+        experience_requirement_review_needed = bool(
+            row.get("experience_requirement_review_needed")
+        )
 
         if coverage_status == "supported":
             css_modifier = "supported"
@@ -1634,6 +1647,26 @@ def render_job_card(
             if active_debug_mode and detail_parts
             else ""
         )
+        experience_note_html = ""
+        if required_experience_months > 0:
+            required_years = required_experience_months / 12.0
+            if matched_role_experience_title:
+                experience_note = (
+                    f"Role history proves {matched_role_experience_months} months in "
+                    f"{matched_role_experience_title} against {required_experience_months} required months"
+                )
+                if matched_role_experience_end_year > 0:
+                    experience_note += f" (most recent end year {matched_role_experience_end_year})"
+            elif experience_requirement_review_needed:
+                experience_note = (
+                    f"Role history could not prove a matching role family for this "
+                    f"{required_years:g}-year requirement."
+                )
+            else:
+                experience_note = f"This requirement asks for {required_years:g} years of role history."
+            experience_note_html = (
+                f'<span class="job-requirement-note">{safe_html(experience_note)}</span>'
+            )
         importance_html = (
             f'<span class="job-req-importance job-req-importance--{safe_html(importance.replace("_", "-"))}">{safe_html(importance_label)}</span>'
             if importance_label
@@ -1664,7 +1697,7 @@ def render_job_card(
             )
         html = (
             f'<li class="job-requirement-item job-requirement-item--{safe_html(css_modifier)}">'
-            f'<span class="job-requirement-text">{safe_html(req_text)}{detail_html}</span>'
+            f'<span class="job-requirement-text">{safe_html(req_text)}{detail_html}{experience_note_html}</span>'
             f"{badges_html}"
             f"</li>"
         )
@@ -1696,6 +1729,21 @@ def render_job_card(
             row["capability_name"] = compact_whitespace(str(item.get("capability_name") or ""))
             row["eligibility_name"] = compact_whitespace(str(item.get("eligibility_name") or ""))
             row["matched_job_text"] = compact_whitespace(str(item.get("matched_job_text") or ""))
+            row["required_experience_months"] = _workspace_int(
+                item.get("required_experience_months") or 0
+            )
+            row["matched_role_experience_title"] = compact_whitespace(
+                str(item.get("matched_role_experience_title") or "")
+            )
+            row["matched_role_experience_months"] = _workspace_int(
+                item.get("matched_role_experience_months") or 0
+            )
+            row["matched_role_experience_end_year"] = _workspace_int(
+                item.get("matched_role_experience_end_year") or 0
+            )
+            row["experience_requirement_review_needed"] = bool(
+                item.get("experience_requirement_review_needed")
+            )
     else:
         # Fallback: no coverage — show job_requirements with profile-match status
         for item in requirement_statuses:
