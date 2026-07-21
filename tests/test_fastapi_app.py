@@ -362,6 +362,10 @@ def test_admin_system_warnings_api_requires_admin(monkeypatch):
     assert response.status_code == 401
     assert response.json() == {"ok": False, "error": "Authentication required"}
 
+    response = client.post("/api/admin/scraper-config-validation", headers={"X-CSRF-Token": "token"})
+    assert response.status_code == 401
+    assert response.json() == {"ok": False, "error": "Authentication required"}
+
 
 def test_admin_runtime_maintenance_routes(monkeypatch):
     monkeypatch.setattr(_fa, "read_session_user", lambda request: _FAKE_USER)
@@ -390,6 +394,31 @@ def test_admin_runtime_maintenance_routes(monkeypatch):
     )
     assert response.status_code == 200
     assert response.json() == {"ok": True, "message": "Current user search state cleared."}
+
+
+def test_admin_scraper_validation_route(monkeypatch):
+    monkeypatch.setattr(_fa, "read_session_user", lambda request: _FAKE_USER)
+    monkeypatch.setattr(_fa, "verify_csrf_token", lambda request, token: True)
+    monkeypatch.setattr(_profile_materials, "is_admin", lambda request: True)
+    monkeypatch.setattr(
+        _profile_materials,
+        "run_scraper_configuration_validation",
+        lambda: {
+            "ok": True,
+            "summary": "Scraper validation passed for seek, linkedin, apsjobs.",
+            "results": [{"source": "seek", "status": "ok", "summary": "seek: 3 checks passed."}],
+            "warnings_recorded": 0,
+        },
+    )
+
+    client = TestClient(create_app())
+
+    response = client.post("/api/admin/scraper-config-validation", headers={"X-CSRF-Token": "token"})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["warnings_recorded"] == 0
+    assert payload["results"][0]["source"] == "seek"
 
 
 def test_admin_system_warnings_api_lists_and_updates(monkeypatch):

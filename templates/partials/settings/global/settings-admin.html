@@ -24,6 +24,16 @@
             <div id="system_warnings_list" class="system-warnings-list" aria-live="polite"></div>
           </section>
 
+          <section class="panel" id="scraper_validation_panel">
+            <div class="panel-header">
+              <h2>Scraper validation</h2>
+              <p class="panel-copy">Run a manual source-configuration health check for SEEK, LinkedIn, and APSJobs. This validates the current scraper URLs, selectors, and key extraction assumptions and records a system warning if anything looks broken.</p>
+            </div>
+            <button id="scraper_validation_button" type="button" class="btn btn-secondary">Run scraper validation</button>
+            <div id="scraper_validation_status" class="field-help">Checks current source configuration assumptions and reports a success summary or warning details.</div>
+            <div id="scraper_validation_results" class="field-help" aria-live="polite"></div>
+          </section>
+
           <section class="panel" id="rejection_history_panel">
             <div class="panel-header">
               <h2>Rejection History</h2>

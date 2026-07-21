@@ -128,6 +128,8 @@ def test_admin_settings_script_exposes_system_warnings_controls():
     assert "/api/admin/clear-current-user-search-state" in js_text
     assert "initSystemWarningsControls" in js_text
     assert "/api/admin/system-warnings" in js_text
+    assert "initScraperValidationControls" in js_text
+    assert "/api/admin/scraper-config-validation" in js_text
 
 
 def test_global_settings_page_renders_system_warnings_panel(monkeypatch):
@@ -155,3 +157,6 @@ def test_global_settings_page_renders_system_warnings_panel(monkeypatch):
     assert 'id="system_warnings_panel"' in html
     assert 'id="system_warnings_list"' in html
     assert 'id="system_warnings_refresh_button"' in html
+    assert 'id="scraper_validation_panel"' in html
+    assert 'id="scraper_validation_button"' in html
+    assert 'id="scraper_validation_results"' in html

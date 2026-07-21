@@ -726,6 +726,17 @@ export const JobHunterAdminSettings = (function () {
     return payload.warning;
   }
 
+  async function runScraperValidation() {
+    const response = await window.jobHunterFetch('/api/admin/scraper-config-validation', {
+      method: 'POST',
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || 'Could not run scraper validation.');
+    }
+    return payload;
+  }
+
   function initSystemWarningsControls(showStatus) {
     const panel = document.getElementById('system_warnings_panel');
     const list = document.getElementById('system_warnings_list');
@@ -810,6 +821,68 @@ export const JobHunterAdminSettings = (function () {
     refresh();
   }
 
+  function initScraperValidationControls(showStatus) {
+    const button = document.getElementById('scraper_validation_button');
+    const status = document.getElementById('scraper_validation_status');
+    const results = document.getElementById('scraper_validation_results');
+    if (!button || !status || !results || typeof window.jobHunterFetch !== 'function') {
+      return;
+    }
+    if (button.dataset.bound === 'true') {
+      return;
+    }
+    button.dataset.bound = 'true';
+
+    const setStatus = (message, kind) => {
+      status.textContent = String(message || '');
+      status.className = kind ? `field-help sync-status sync-status--${kind}` : 'field-help';
+      if (typeof showStatus === 'function') {
+        showStatus(message, kind);
+      }
+    };
+
+    const renderResults = (payload) => {
+      const checks = Array.isArray(payload?.results) ? payload.results : [];
+      if (!checks.length) {
+        results.textContent = '';
+        return;
+      }
+      results.innerHTML = checks
+        .map((item) => {
+          const source = escapeHtml(String(item?.source || 'unknown'));
+          const summary = escapeHtml(String(item?.summary || ''));
+          const issues = Array.isArray(item?.issues) ? item.issues : [];
+          const issueHtml = issues.length
+            ? `<ul>${issues.map((issue) => `<li>${escapeHtml(String(issue || ''))}</li>`).join('')}</ul>`
+            : '';
+          return `<div class="scraper-validation-result"><strong>${source}</strong>: ${summary}${issueHtml}</div>`;
+        })
+        .join('');
+    };
+
+    button.addEventListener('click', async () => {
+      const originalLabel = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Running...';
+      setStatus('Running scraper validation...', 'loading');
+      results.textContent = '';
+      try {
+        const payload = await runScraperValidation();
+        renderResults(payload);
+        setStatus(
+          payload.summary || 'Scraper validation finished.',
+          payload.ok ? 'success' : 'error',
+        );
+      } catch (error) {
+        results.textContent = '';
+        setStatus(error.message || 'Could not run scraper validation.', 'error');
+      } finally {
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+    });
+  }
+
   function initRuntimeMaintenanceControls(showStatus) {
     const clearCachesButton = document.getElementById('clear_runtime_caches_button');
     const clearCachesStatus = document.getElementById('clear_runtime_caches_status');
@@ -883,6 +956,7 @@ export const JobHunterAdminSettings = (function () {
     initRuntimeMaintenanceControls,
     initKnowledgeSyncControls,
     initRejectionHistorySyncControls,
+    initScraperValidationControls,
     initSystemWarningsControls,
   };
 }());

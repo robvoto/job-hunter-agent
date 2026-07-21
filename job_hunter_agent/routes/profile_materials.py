@@ -9,11 +9,12 @@ from job_hunter_agent.auth import auth_required_response, is_admin
 from job_hunter_agent.config import GLOBAL_SETTINGS_PATH
 from job_hunter_agent.global_settings import save_global_settings
 from job_hunter_agent.knowledge_sync_roundtrip import sync_knowledge_roundtrip
+from job_hunter_agent.routes.responses import json_response
+from job_hunter_agent.scraper_health import run_scraper_configuration_validation
 from job_hunter_agent.system_warnings import (
     list_system_warnings,
     update_system_warning_status,
 )
-from job_hunter_agent.routes.responses import json_response
 
 router = APIRouter()
 
@@ -159,6 +160,16 @@ def api_admin_clear_current_user_search_state(
         return auth_required_response("/api/admin/clear-current-user-search-state", False)
     try:
         return json_response(srv.clear_current_user_search_state())
+    except Exception as exc:
+        return json_response({"error": str(exc)}, 400)
+
+
+@router.post("/api/admin/scraper-config-validation")
+def api_admin_scraper_config_validation(request: Request):  # type: ignore[no-untyped-def]
+    if not is_admin(request):
+        return auth_required_response("/api/admin/scraper-config-validation", False)
+    try:
+        return json_response(run_scraper_configuration_validation())
     except Exception as exc:
         return json_response({"error": str(exc)}, 400)
 

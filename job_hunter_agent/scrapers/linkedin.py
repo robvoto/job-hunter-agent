@@ -129,6 +129,46 @@ def classify_linkedin_apply_method(apply_url: str, canonical_url: str) -> str:
     return APPLY_METHOD_UNKNOWN
 
 
+def build_linkedin_search_targets(search_settings: dict) -> List[dict]:
+    keywords = str(search_settings.get("keywords") or "").strip()
+    locations = [str(loc).strip() for loc in search_settings.get("locations", []) if str(loc).strip()]
+    hours_old = int(
+        search_settings.get(
+            KEY_LINKEDIN_HOURS_OLD, DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD]
+        )
+        or DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD]
+    )
+    results_wanted = int(
+        search_settings.get(
+            KEY_LINKEDIN_RESULTS_PER_SEARCH,
+            DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_RESULTS_PER_SEARCH],
+        )
+        or DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_RESULTS_PER_SEARCH]
+    )
+    sort_newest_first = bool(
+        search_settings.get(KEY_SORT_NEWEST_FIRST, DEFAULT_SEARCH_SETTINGS[KEY_SORT_NEWEST_FIRST])
+    )
+    easy_apply = search_settings.get(KEY_LINKEDIN_EASY_APPLY_ONLY)
+
+    targets = []
+    for raw_loc in locations:
+        location = resolve_location(raw_loc)
+        scope = to_linkedin_search_scope(location)
+        targets.append(
+            {
+                "search_term": keywords,
+                "location": scope["location"],
+                "distance": scope["distance"],
+                "scope": scope["scope"],
+                "hours_old": hours_old,
+                "results_wanted": results_wanted,
+                "sort_newest_first": sort_newest_first,
+                "easy_apply": easy_apply,
+            }
+        )
+    return targets
+
+
 class LinkedInScraper(BaseJobScraper):
     source_name = SOURCE_LINKEDIN
 
@@ -321,47 +361,7 @@ class LinkedInScraper(BaseJobScraper):
         return kept_records, audit_rows, skill_observations
 
     def _build_search_targets(self, search_settings: dict) -> List[dict]:
-        keywords = str(search_settings.get("keywords") or "").strip()
-        locations = [
-            str(loc).strip() for loc in search_settings.get("locations", []) if str(loc).strip()
-        ]
-        hours_old = int(
-            search_settings.get(
-                KEY_LINKEDIN_HOURS_OLD, DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD]
-            )
-            or DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD]
-        )
-        results_wanted = int(
-            search_settings.get(
-                KEY_LINKEDIN_RESULTS_PER_SEARCH,
-                DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_RESULTS_PER_SEARCH],
-            )
-            or DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_RESULTS_PER_SEARCH]
-        )
-        sort_newest_first = bool(
-            search_settings.get(
-                KEY_SORT_NEWEST_FIRST, DEFAULT_SEARCH_SETTINGS[KEY_SORT_NEWEST_FIRST]
-            )
-        )
-        easy_apply = search_settings.get(KEY_LINKEDIN_EASY_APPLY_ONLY)
-
-        targets = []
-        for raw_loc in locations:
-            location = resolve_location(raw_loc)
-            scope = to_linkedin_search_scope(location)
-            targets.append(
-                {
-                    "search_term": keywords,
-                    "location": scope["location"],
-                    "distance": scope["distance"],
-                    "scope": scope["scope"],
-                    "hours_old": hours_old,
-                    "results_wanted": results_wanted,
-                    "sort_newest_first": sort_newest_first,
-                    "easy_apply": easy_apply,
-                }
-            )
-        return targets
+        return build_linkedin_search_targets(search_settings)
 
     def _build_review_hooks(self) -> ReviewPipelineHooks:
         def _after_description_loaded(current_record: dict, context: ReviewPipelineContext) -> None:
