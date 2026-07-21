@@ -612,7 +612,7 @@ Run the full suite before merging into `main`.
 
 ## Click-Testing (Playwright E2E)
 
-`tests/e2e/` drives the real FastAPI app with a real Chromium browser (via Playwright), the way a human clicking through the app would notice bugs that mocked unit tests miss. It boots an isolated seeded server on a free local port, mints a signed session cookie instead of doing a real Google OAuth flow, and captures screenshots plus browser console/network errors on failure (see `tests/e2e/conftest.py`).
+`tests/e2e/` drives the real FastAPI app with a real Chromium browser (via Playwright), the way a human clicking through the app would notice bugs that mocked unit tests miss. If you are looking for "Selenium-style" browser coverage, this is that suite in this repo; it uses Playwright rather than Selenium, but it serves the same full click-path purpose. It boots an isolated seeded server on a free local port, mints a signed session cookie instead of doing a real Google OAuth flow, and captures screenshots plus browser console/network errors on failure (see `tests/e2e/conftest.py`).
 
 It is **not** part of the default test run (`tests/e2e` is excluded via `norecursedirs` in `pyproject.toml`) because it is much slower than the unit suite. The preferred terminal entry point is:
 
@@ -644,7 +644,7 @@ Direct pytest still works when needed:
 uv run pytest tests/e2e --confcutdir=tests/e2e
 ```
 
-`tests/e2e/test_onboarding_flow.py` clicks through the onboarding wizard's upload -> extract -> review-step transition (real upload UI, real route validation, real DOM rendering) with the LLM extraction stubbed to a deterministic canned result, so the actual extraction click is exercised on every default e2e run at zero cost -- not only in the opt-in real-LLM test below.
+`tests/e2e/test_onboarding_flow.py` clicks through the onboarding wizard's upload -> extract -> review-step transition (real upload UI, real route validation, real DOM rendering) with the LLM extraction stubbed to a deterministic canned result, so the actual extraction click is exercised on every default e2e run at zero cost -- not only in the opt-in real-LLM test below. This is the main browser-level guard for onboarding upload regressions.
 
 `tests/e2e/test_workspace_job_actions.py` seeds one KEEP-scored job directly into a dedicated test user's workspace (via the `workspace_job_page` fixture, since the default `candidate_page` workspace is empty) and clicks through the per-job-card actions that `test_workspace_flow.py`'s filter-only coverage never reaches: the visible score/match-tile, saving a job ("applied") and undoing it, and dismissing a job ("hidden") and unhiding it -- including the real full-page reload each review action triggers.
 

@@ -109,6 +109,7 @@ Responsibilities:
 
 * maintain runtime candidate profile support
 * preserve extracted capabilities and explicit eligibility facts
+* preserve extracted `role_experience` rows for title-duration evidence
 * maintain preference weights
 * preserve learning state
 * provide scoring context
@@ -393,6 +394,8 @@ Expansion must preserve:
 ## Current fit-review architecture note 2026-06-02
 
 The current fit review has two layers. The LLM returns a holistic decision/grade plus contextual capability matches and job requirements. The scoring layer then consumes those stored fields. Capability matches are credited only when they match exact candidate capability names and have a configured credit confidence.
+
+As of 2026-07-21, explicit duration requirements such as "5+ years as Business Analyst" also compare the reviewed requirement text against stored onboarding `role_experience` rows. This does not add a new hidden score. Instead, it tightens `requirement_coverage` evidence: a row can be downgraded from `supported` to `partially_supported` when the runtime profile cannot prove the required role-duration threshold from saved title-duration evidence.
 
 Ongoing architecture direction: mandatory job requirements should become the main scoring spine. Candidate capabilities should be used as evidence to prove those requirements. The current implementation is not fully requirement-coverage-driven yet.
 
