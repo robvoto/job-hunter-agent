@@ -46,7 +46,9 @@ Retention and cache knobs also live here. Current examples:
 - `profile_store.py`: profile, scoring, settings normalisation.
 - `capability_knowledge.py`: capability knowledge.
 - `hard_blocker_rules.py`: hard blocker patterns.
-- `role_title_knowledge.py`: title knowledge.
+- `profile_store.py`: candidate-owned `target_roles` and `also_consider_roles`.
+- `filters.py`: title-rule evaluation and parsing-rule synonyms.
+- `occupation_taxonomy.py`: O*NET-backed title classification and taxonomy access.
 - `job_quality.py`: quality-rule loaders and learnable CV-farming patterns.
 - `signal_registry.py`: pending learned signals.
 

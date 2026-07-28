@@ -21,9 +21,9 @@ Use before editing `fit_scoring.py`, `capability_matching.py`, `signal_detection
 - `job_review_pipeline.py`: freezes `fit_score`, `fit_score_breakdown`, `fit_label`, and `fit_tone_class` onto kept records before persistence.
 - `workspace_renderer.py`: reads frozen score fields from records and should not call scoring functions for card display.
 - `profile_store.py`: loads/normalises scoring/profile settings. New top-level `scoring_rules.json` sections must be added to `_load_default_scoring_rules()`'s explicit key whitelist (with a matching `KEY_*` constant) or they are silently dropped and never reach `get_scoring_rules()`.
-- `data/scoring_rules.json`: managed scoring policy, including `occupation_alignment` (same/adjacent/different adjustments).
-- `data/match_level_defaults.json`: match band thresholds.
-- `data/parsing_rules.json`: labels/display text where already owned there.
+- `data/knowledge/scoring_rules.json`: managed scoring policy, including `occupation_alignment` (same/adjacent/different adjustments).
+- `data/knowledge/match_level_defaults.json`: match band thresholds.
+- `data/knowledge/parsing_rules.json`: labels/display text where already owned there.
 
 ## Breakdown label ownership
 Score breakdown labels shown to users must come from `data/knowledge/ui_labels.json`, never hardcoded:
@@ -67,7 +67,7 @@ There are two separate LLM calls with different schemas. Do not conflate them.
 **Learning-only** (`_LLMReviewPayload`, `fit_review=False`):
 - Returns: `learning_candidates` only
 - Called only when deterministic scoring fires AND high-value ambiguous learning candidates exist
-- This is where `role_title_pattern`, `government_context_pattern`, etc. belong
+- Candidates are validated against `llm_gate.ALLOWED_LEARNING_CATEGORIES`, derived from `signal_schema.VALID_SIGNAL_CATEGORIES`; removed legacy categories must not be reintroduced
 
 **Consequence for `requirement_coverage` in scoring:**
 - `fit_scoring.py` is a consumer only - it reads stored LLM output from the record, never calls the LLM
@@ -92,12 +92,3 @@ There are two separate LLM calls with different schemas. Do not conflate them.
 - Missing or invalid values degrade to the `LLM_INVALID_OCCUPATION_ALIGNMENT` sentinel (`_normalize_llm_occupation_alignment` in `llm_gate.py`) — shown as "Needs review (not classified)" with a zero adjustment. This never blocks a KEEP or rejects the job; see `has_complete_llm_keep_data()` in `llm_review_state.py`, which deliberately does not require `occupation_alignment`.
 - `occupation_alignment_diagnostics()` / `format_occupation_alignment_diagnostics_block()` in `fit_scoring.py` are the single source for alignment, reason, adjustment, and final-calculation text shown in `server.log` (logged from `_freeze_fit_score_fields()` in `job_review_pipeline.py`) and in the "Debug: LLM fit review" panel (`workspace_renderer.py`).
 
-## Government context scoring
-
-Three separate knowledge sources, each with a distinct role:
-
-- `government_context_rules` (DB key) - regex patterns for APS grades, EL levels, NV/baseline clearances. Used by `has_government_context()` in `role_analysis.py`. Hard detection.
-- `government_context_knowledge` (DB key) - approved concept terms ("government", "public sector", etc.). Also used by `has_government_context()` via word-boundary regex. Populated via signal approval.
-- `government_context_patterns` (DB key) - approved structural wildcard patterns ("NV[*] clearance"). Populated via signal approval of `government_context_pattern` learning candidates. Currently empty until patterns are approved.
-
-`has_government_context()` -> feeds `assess_sector_preference()` -> affects fit score bonus/penalty based on user's sector preference setting.

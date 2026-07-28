@@ -727,3 +727,36 @@ def build_learning_patch(
         patch[KEY_MATCH_PREFS] = match_prefs
 
     return patch
+
+
+def build_role_history_patch(
+    text: str,
+    onboarding_settings: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Extract role history only from CV text.
+
+    This exists for the settings-screen refresh action. It intentionally replaces the
+    entire ``role_experience`` section with a fresh first-pass extraction from the
+    saved CV source pack. It does not merge, diff, or preserve previous rows.
+    """
+    source_text = repair_text(text)
+    if not source_text:
+        return {KEY_ROLE_EXPERIENCE: []}
+
+    lookback_years = _resolve_extraction_lookback_years(onboarding_settings)
+    alias_limit = _resolve_onboarding_int(onboarding_settings or {}, KEY_CAPABILITY_ALIAS_LIMIT)
+    _cap_log(
+        format_log_block(
+            "BUILD_ROLE_HISTORY_PATCH",
+            {
+                "route": "settings_role_history_refresh",
+                "lookback_years": lookback_years,
+                "alias_limit": alias_limit,
+                "source_chars": len(source_text),
+            },
+        )
+    )
+    extracted = _llm_extract_from_cv(source_text, lookback_years, alias_limit)
+    role_experience = _aggregate_role_experience(extracted.get(KEY_ROLE_EXPERIENCE) or [])
+    _cap_log(f"[BUILD_ROLE_HISTORY_PATCH] {len(role_experience)} role experience row(s) written")
+    return {KEY_ROLE_EXPERIENCE: role_experience}

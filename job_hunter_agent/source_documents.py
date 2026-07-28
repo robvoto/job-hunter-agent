@@ -24,6 +24,7 @@ from job_hunter_agent.paths import (
     REPO_ROOT,
 )
 from job_hunter_agent.profile_learning import (
+    build_role_history_patch,
     build_learning_patch,
     clear_capability_debug_log,
     repair_text,
@@ -524,4 +525,88 @@ def run_onboarding(
         "fresh_onboarding_run_started": True,
         "extraction_counts": extraction_counts,
         "page_limit_notice": page_limit_notice,
+    }
+
+
+def refresh_role_history_from_saved_cv() -> dict[str, Any]:
+    """Refresh the role-history section only from the saved CV source pack.
+
+    This first-pass settings action is intentionally simple: it replaces the entire
+    persisted ``role_experience`` section with a fresh extraction from the saved CV
+    materials. It does not merge with existing rows or preserve manual edits yet.
+    """
+    resolved = normalize_source_materials(load_source_materials(create_if_missing=True))
+    import_sources = _collect_import_sources(resolved)
+    if not import_sources:
+        raise ValueError("No saved CV found. Upload your CV first.")
+
+    current_profile = load_profile()
+    active_onboarding_settings = (
+        current_profile.get("onboarding_settings") or dict(DEFAULT_ONBOARDING_SETTINGS)
+    )
+    cv_max_pages = max(
+        1,
+        int(
+            active_onboarding_settings.get(KEY_CV_MAX_PAGES)
+            or DEFAULT_ONBOARDING_SETTINGS.get(KEY_CV_MAX_PAGES)
+            or 5
+        ),
+    )
+    cv_chars_per_page = get_cv_chars_per_page()
+    cv_max_chars = cv_max_pages * cv_chars_per_page
+    combined_sections: list[str] = []
+    page_limit_notice = ""
+
+    for source in import_sources:
+        label = str(source.get("label") or "").strip()
+        text = str(source.get("content") or "").strip()
+        if not label or not text:
+            continue
+        raw_chars = len(text)
+        approx_pages = max(1, (raw_chars + cv_chars_per_page - 1) // cv_chars_per_page)
+        if len(text) > cv_max_chars:
+            text = text[:cv_max_chars]
+            page_limit_notice = (
+                f"CV was truncated to approximately {cv_max_pages} page(s) for processing."
+            )
+            logger.info(
+                format_log_block(
+                    "ROLE_HISTORY_SOURCE_READ",
+                    {
+                        "source": label,
+                        "read_chars": raw_chars,
+                        "approx_pages": approx_pages,
+                        "truncated_to_chars": len(text),
+                        "limit_pages": cv_max_pages,
+                    },
+                )
+            )
+        else:
+            logger.info(
+                "[ROLE_HISTORY][SOURCE_READ] %s read_chars=%s approx_pages=%s",
+                label,
+                raw_chars,
+                approx_pages,
+            )
+        combined_sections.append(f"## {label}\n{text}")
+
+    if not combined_sections:
+        raise ValueError("Could not read any saved CV files.")
+
+    role_history_patch = build_role_history_patch(
+        "\n\n".join(combined_sections).strip(),
+        active_onboarding_settings,
+    )
+    role_experience = list(role_history_patch.get(KEY_ROLE_EXPERIENCE) or [])
+    _print_role_history_summary(role_experience)
+    updated = patch_profile({KEY_ROLE_EXPERIENCE: role_experience})
+    return {
+        "ok": True,
+        "message": (
+            "Role history refreshed from saved CV. "
+            f"Extracted {_format_count(len(role_experience), 'role family', 'role families')}."
+        ),
+        "page_limit_notice": page_limit_notice,
+        KEY_ROLE_EXPERIENCE: role_experience,
+        "profile": updated,
     }

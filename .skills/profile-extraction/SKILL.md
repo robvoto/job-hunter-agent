@@ -35,9 +35,9 @@ must check the OLD key, not the new one. Checking the new key deletes capabiliti
 Test any change here with `test_normalize_full_profile_preserves_candidate_capabilities` and
 `test_normalize_full_profile_migrates_legacy_capability_profile_rules_key`.
 
-**No broad except swallowing in the capability path.** `normalize_capability_rules` has a guarded
-import of `capability_matrix` functions with `except Exception: pass`. This is acceptable for an
-optional enhancement module, but do not add further broad exception swallowing in this path.
+**No broad exception swallowing in the capability path.** Do not add `except Exception: pass` or
+similar fallbacks around capability normalisation. If the optional enhancement import is changed,
+catch only the expected import failure and keep unexpected errors visible.
 
 ## Checklist
 - Is every dropped signal intentionally discarded with a reason?

@@ -12,6 +12,10 @@ import logging
 import re
 from typing import Any
 
+from job_hunter_agent.capability_matrix import (
+    choose_capability_name,
+    derive_job_description_aliases,
+)
 from job_hunter_agent.global_settings import (
     CAPABILITY_STRENGTH_PRESETS,
     DEFAULT_EVIDENCE_TIER_WEIGHTS,
@@ -44,8 +48,7 @@ from job_hunter_agent.parsing_schema import (
     KEY_P_ROUTING_SECONDARY,
     KEY_P_ROUTING_SUPPLEMENTARY,
 )
-from job_hunter_agent.runtime_helpers import is_desktop_runtime
-from job_hunter_agent.runtime_helpers import log_settings_change
+from job_hunter_agent.runtime_helpers import is_desktop_runtime, log_settings_change
 from job_hunter_agent.title_normalization_rules import normalize_title_text
 from job_hunter_agent.utils import coerce_int, deep_merge
 
@@ -518,22 +521,6 @@ def normalize_capability_rules(
     """Normalise learned capability rules and keep alias growth under onboarding limits."""
     cleaned: list[dict[str, Any]] = []
     seen_names: set[str] = set()
-    derive_job_description_aliases = None
-
-    choose_capability_name = None
-    try:
-        from job_hunter_agent.capability_matrix import (
-            choose_capability_name as _choose_capability_name,
-        )
-        from job_hunter_agent.capability_matrix import (
-            derive_job_description_aliases as _derive_job_description_aliases,
-        )
-
-        derive_job_description_aliases = _derive_job_description_aliases
-        choose_capability_name = _choose_capability_name
-    except Exception:
-        pass
-
     source_onboarding = onboarding_settings if isinstance(onboarding_settings, dict) else {}
     try:
         alias_limit = int(

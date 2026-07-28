@@ -423,6 +423,25 @@ def test_api_profile_status_reports_readiness(monkeypatch):
     }
 
 
+def test_api_profile_refresh_role_history_from_saved_cv(monkeypatch):
+    refreshed = {
+        "ok": True,
+        "message": "Role history refreshed from saved CV. Extracted 1 role family.",
+        "role_experience": [{"normalized_title": "Business Analyst", "total_duration_months": 60}],
+        "page_limit_notice": "",
+    }
+    monkeypatch.setattr(
+        profile_materials,
+        "refresh_role_history_from_saved_cv",
+        lambda: refreshed,
+    )
+
+    response = profile_materials.api_profile_refresh_role_history_from_saved_cv()
+
+    assert response.status_code == 200
+    assert json.loads(response.body.decode("utf-8")) == refreshed
+
+
 def test_api_onboarding_import_accepts_supported_text_suffix(monkeypatch):
     monkeypatch.setattr(
         onboarding_api,
@@ -1144,6 +1163,7 @@ def test_user_settings_schedule_payload_is_sanitized_and_exposed():
                 "minimum_score": 150,
             },
             "schedule": {
+                "enabled": False,
                 "daily_time_local": "09:45",
                 "loop_sleep_seconds": 30,
             },
@@ -1154,6 +1174,7 @@ def test_user_settings_schedule_payload_is_sanitized_and_exposed():
         "minimum_score": 100,
     }
     assert sanitized["schedule"] == {
+        "enabled": False,
         "daily_time_local": "09:45",
         "loop_sleep_seconds": 60,
     }
@@ -1169,6 +1190,7 @@ def test_user_settings_schedule_payload_is_sanitized_and_exposed():
                 "minimum_score": 61,
             },
             "schedule": {
+                "enabled": False,
                 "daily_time_local": "09:45",
                 "loop_sleep_seconds": 120,
             },
@@ -1179,6 +1201,7 @@ def test_user_settings_schedule_payload_is_sanitized_and_exposed():
         "minimum_score": 61,
     }
     assert public_payload["schedule"] == {
+        "enabled": False,
         "daily_time_local": "09:45",
         "loop_sleep_seconds": 120,
     }

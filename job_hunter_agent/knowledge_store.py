@@ -12,10 +12,9 @@ Upgrade strategy (used by db_seed.py --upgrade):
   parsing_rules, etc.) — replaced wholesale when file version > DB version.
 
   Files with "version" AND a top-level "entries" list where each item has a
-  "value" field (capability_knowledge, hard_blocker_rules, cv_farming_rules,
-  role_title_knowledge, government_context_knowledge) — additive merge: new
-  entries from the file are appended; existing DB entries (including
-  user-approved ones) are always preserved.
+  "value" field (for example capability_knowledge, hard_blocker_rules, and
+  cv_farming_rules) — additive merge: new entries from the file are appended;
+  existing DB entries (including user-approved ones) are always preserved.
 """
 
 import json

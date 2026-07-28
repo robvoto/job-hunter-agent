@@ -56,7 +56,7 @@ if has_cli_flag(sys.argv, CLI_FLAG_STEP):
     enable_step_through()
 
 
-def scrape_jobs_direct() -> str:
+def scrape_jobs_direct(*, trigger_label: str = "manual scrape command") -> str:
     from job_hunter_agent.global_settings import (
         get_playwright_browser_mode,
         get_playwright_headless,
@@ -88,7 +88,7 @@ def scrape_jobs_direct() -> str:
     )
     logger.info(
         "\n%s\n  JOB HUNTER AGENT - SCRAPE RUN\n%s\n"
-        "  Trigger            : manual scrape command\n"
+        "  Trigger            : %s\n"
         "  Action             : scrape fresh jobs, review them, rebuild workspace\n"
         "  Enabled sources    : %s\n"
         "  Search params\n"
@@ -106,6 +106,7 @@ def scrape_jobs_direct() -> str:
         "%s",
         "=" * CONSOLE_BANNER_WIDTH,
         "=" * CONSOLE_BANNER_WIDTH,
+        trigger_label,
         ", ".join(context.enabled_sources) or "(none)",
         search_keywords or "(unset)",
         ", ".join(search_locations) or "(unset)",

@@ -76,6 +76,12 @@ def test_requirement_fit_audit_exposes_exact_evidence_mapping_and_credit():
             "status_credit": 0.5,
             "credit_fraction": 0.5,
             "weighted_credit": 1.5,
+            "required_experience_months": 0,
+            "matched_role_experience_title": "",
+            "matched_role_experience_months": 0,
+            "matched_role_experience_end_year": 0,
+            "experience_requirement_met": False,
+            "experience_requirement_review_needed": False,
         }
     ]
 

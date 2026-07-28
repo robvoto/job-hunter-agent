@@ -368,6 +368,11 @@ Operational sequence:
 5. persist runtime state
 6. continue runtime loop
 
+Current scheduler rule:
+
+* the loop must already be running before the configured daily time
+* if the process starts after that day's window, the runner records a missed window and waits for the next day instead of replaying a catch-up run
+
 ---
 
 ## Workspace-Only Workflow

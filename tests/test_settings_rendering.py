@@ -86,10 +86,13 @@ def test_settings_page_renders_keyword_label_and_location_field(monkeypatch):
     assert "preview card" in html
     assert "Captured role history" in html
     assert 'id="role_experience_readonly"' in html
+    assert 'id="refresh_role_history_from_saved_cv"' in html
+    assert "Refresh from saved CV" in html
     version = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
     assert f"v{version}" in html
-    assert "Preview" in html
-    assert "job-hunter-page-utility__release-stage" in html
+    assert "Preview" not in html
+    assert ">TEST<" not in html
+    assert "job-hunter-page-utility__release-stage" not in html
 
 
 def test_settings_capability_editor_preserves_icon_key_state():
@@ -118,6 +121,8 @@ def test_settings_page_renders_role_history_readonly_panel_script():
     assert "function renderRoleExperienceReadonly(profile)" in js_text
     assert "renderRoleExperienceReadonly(profile);" in js_text
     assert "role_experience_readonly" in js_text
+    assert "/api/profile/refresh-role-history-from-saved-cv" in js_text
+    assert "refresh_role_history_from_saved_cv" in js_text
 
 
 def test_settings_utils_review_normaliser_preserves_icon_key():

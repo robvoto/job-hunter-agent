@@ -1,6 +1,6 @@
 ---
 name: backlog-management
-description: Use ONLY for backlog work: Google Sheet rows, JH IDs, priorities, duplicates, implementation state, evidence, human review flags, or adding/updating backlog items. Do NOT use for code implementation except to update backlog evidence.
+description: "Use ONLY for backlog work: Google Sheet rows, JH IDs, priorities, duplicates, implementation state, evidence, human review flags, or adding/updating backlog items. Do NOT use for code implementation except to update backlog evidence."
 ---
 
 # Skill: Backlog Management

@@ -1,6 +1,6 @@
-﻿---
+---
 name: signal-registry
-description: Use ONLY for approved learning signal lifecycle: pending/approved/ignored signals, promotion into runtime knowledge, and signal governance. Do NOT use for raw ad extraction; use ad-learning.
+description: "Use ONLY for approved learning signal lifecycle: pending/approved/ignored signals, promotion into runtime knowledge, and signal governance. Do NOT use for raw ad extraction; use ad-learning."
 ---
 
 # Skill: Signal Registry
@@ -15,18 +15,15 @@ Use before editing learning candidates, approval flow, or signal registry behavi
 - Heuristic fallback findings may be logged and stored, but they are not learned unless they go through the approval flow.
 - Do not auto-promote suggestions.
 - Signal schema must be canonical at the registry boundary; consumers must not guess fields.
-- Title-related learning candidates (`role_title_token`, `title_normalization_candidate`, `title_parse_blocker`) are often triage noise in workspace cards; keep them in the registry if needed, but suppress them in user-facing review text instead of inventing new labels.
+- Reject any category not present in `signal_schema.VALID_SIGNAL_CATEGORIES`; do not retain or relabel removed legacy categories.
 
 ## Allowed categories
+The canonical list is `signal_schema.VALID_SIGNAL_CATEGORIES`:
 - `capability_concept`
-- `sector`
-- `role_title_token`
-- `role_title_pattern` — structural title pattern using `[*]` wildcard; routes to `role_title_rules.json` via `upsert_role_title_rule()`
-- `sector_pattern` — structural clearance/agency pattern using `[*]` wildcard; routes to `sector_patterns.json` via `upsert_sector_pattern()`
+- `job_type_normalization_candidate`
 - `hard_blocker_pattern`
-- `title_normalization_candidate`
 - `cv_farming_pattern`
-- `profile_section_label` — CV section heading the LLM couldn't confidently route; `suggested_values[0]` holds the bucket (`primary`/`secondary`/`supplementary`); approval calls `upsert_profile_section_label()` which appends the word to the correct list in `parsing_rules.json`
+- `profile_section_label` — CV section heading the LLM could not confidently route; `suggested_values[0]` holds the bucket (`primary`/`secondary`/`supplementary`), and approval calls `upsert_profile_section_label()` to update the runtime `parsing_rules` knowledge entry.
 
 ## Auto-promotion exception
 `profile_section_label` is the only category where confident LLM classification bypasses the registry and writes directly to `parsing_rules.json` via `upsert_profile_section_label()`. This is intentional and user-approved. All other categories must go through pending → review → approve.
@@ -54,7 +51,7 @@ Use before editing learning candidates, approval flow, or signal registry behavi
 - The fit review LLM schema (`_LLMFitReviewPayload`) has no `learning_candidates` field
 - Do not add learning category guidance to the fit review prompt; the fit-review schema has no learning fields and category names must not leak into capability names
 
-**Consequence:** `government_context_pattern`, `role_title_pattern`, and similar signals are only generated for jobs decided by the deterministic path. Jobs decided by the full LLM review produce no LLM-proposed learning candidates.
+**Consequence:** jobs decided by the full LLM review produce no LLM-proposed learning candidates. Any learning-only candidate must still use a category from `signal_schema.VALID_SIGNAL_CATEGORIES`.
 
 ## Capability alias review map
 Use this section only when tracing capability alias mapping between `dominant_signal_clusters`, `candidate_capabilities`, DB `user_profile`, and onboarding review screens.

@@ -1,6 +1,6 @@
-﻿---
+---
 name: suggested-tuning
-description: Use ONLY for Settings > Optimise > Suggested Tuning: empty suggestions, scrape/review-derived tuning items, capability suggestion confirmation, and rejection-pattern exclusion suggestions.
+description: "Use ONLY for Settings > Optimise > Suggested Tuning: empty suggestions, scrape/review-derived tuning items, capability suggestion confirmation, and rejection-pattern exclusion suggestions."
 ---
 
 # Suggested Tuning
@@ -20,12 +20,11 @@ It must not silently change the candidate profile without user confirmation.
 
 ## Runtime flow
 
-1. A scrape/review run writes review data.
-2. `GET /api/review-data` loads saved review data.
-3. `workspace_api.api_review_data()` calls `server_helpers.build_suggested_tuning_from_saved_review()`.
-4. The implementation is in `job_hunter_agent/review_insights.py`.
-5. The frontend renders into `#tuning_suggestions_panel` from `templates/static/settings/shared/settings-review-panel.js`.
-6. The HTML shell lives in `templates/partials/settings/standard/settings-optimise.html`.
+1. `scrape_finalize.py` calls `review_insights.build_review_data()` when finalising a run.
+2. `build_review_data()` creates the `suggested_tuning` payload through `build_suggested_tuning()` and persists it with `write_review_data()`.
+3. `GET /api/review-data` returns the saved payload through `workspace_api.api_review_data()`; it does not rebuild suggestions.
+4. The frontend renders into `#tuning_suggestions_panel` from `templates/static/settings/shared/settings-review-panel.js`.
+5. The HTML shell lives in `templates/partials/settings/standard/settings-optimise.html`.
 
 ## Empty state
 

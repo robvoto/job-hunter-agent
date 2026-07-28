@@ -11,6 +11,7 @@ from job_hunter_agent.global_settings import save_global_settings
 from job_hunter_agent.knowledge_sync_roundtrip import sync_knowledge_roundtrip
 from job_hunter_agent.routes.responses import json_response
 from job_hunter_agent.scraper_health import run_scraper_configuration_validation
+from job_hunter_agent.source_documents import refresh_role_history_from_saved_cv
 from job_hunter_agent.system_warnings import (
     list_system_warnings,
     update_system_warning_status,
@@ -82,6 +83,14 @@ def api_source_materials_put(body: dict = Body(...)):  # type: ignore[no-untyped
         return json_response({"error": str(exc)}, 400)
 
     return json_response(updated)
+
+
+@router.post("/api/profile/refresh-role-history-from-saved-cv")
+def api_profile_refresh_role_history_from_saved_cv():  # type: ignore[no-untyped-def]
+    try:
+        return json_response(refresh_role_history_from_saved_cv())
+    except Exception as exc:
+        return json_response({"error": str(exc)}, 400)
 
 
 @router.get("/api/global-settings")

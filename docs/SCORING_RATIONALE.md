@@ -411,7 +411,7 @@ They are useful for ordering jobs, not for proving the candidate meets the role.
 
 ## Reviewed signal registry
 
-Reviewed signal decisions from `signal_registry.json` are intentionally excluded from direct scoring.
+Reviewed signal decisions from the SQLite signal registry are intentionally excluded from direct scoring.
 
 Approving a signal means:
 

@@ -1,4 +1,4 @@
-﻿---
+---
 name: onboarding-ui
 description: Use ONLY for onboarding wizard/search-basics UI, onboarding templates/scripts/routes, bootstrap data, reset/resume flow, upload flow, and onboarding validation. Do NOT use for workspace/dashboard UI.
 ---

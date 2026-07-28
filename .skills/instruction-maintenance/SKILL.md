@@ -1,6 +1,6 @@
-﻿---
+---
 name: instruction-maintenance
-description: Use ONLY when editing agent instruction files: AGENTS.md, adapter files, .skills, DETAILS.md, or docs that define agent workflow. Do NOT use for product/code changes.
+description: "Use ONLY when editing agent instruction files: AGENTS.md, adapter files, .skills, DETAILS.md, or docs that define agent workflow. Do NOT use for product/code changes."
 ---
 
 # Skill: Instruction Maintenance

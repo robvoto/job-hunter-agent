@@ -4,6 +4,7 @@
     "minimum_score": 30
   },
   "schedule": {
+    "enabled": true,
     "daily_time_local": "08:30",
     "loop_sleep_seconds": 300
   },

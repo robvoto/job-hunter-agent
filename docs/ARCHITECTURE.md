@@ -222,10 +222,11 @@ Primary knowledge files:
 
 * `data/knowledge/capability_knowledge.json`
 * `data/knowledge/hard_blocker_rules.json`
-* `data/knowledge/role_title_knowledge.json`
-* `data/signals/signal_registry.json`
+* `data/signals/signal_defaults.json`
 * `data/knowledge/scoring_rules.json`
 * `data/knowledge/match_level_defaults.json`
+
+Approved and pending learned signals are stored in the SQLite signal registry; `signal_defaults.json` only seeds baseline records.
 
 Rules:
 
@@ -297,7 +298,7 @@ Current sections:
 * Profile
 * Capability Matrix
 * Rules
-* Alerts & AI
+* Messaging
 * Learning
 * Optimise
 

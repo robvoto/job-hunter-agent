@@ -95,6 +95,7 @@ def normalize_user_settings(payload: Any) -> dict[str, Any]:
 
     schedule = settings.get(KEY_SCHEDULE, {})
     settings[KEY_SCHEDULE] = {
+        "enabled": bool(schedule.get("enabled", defaults[KEY_SCHEDULE]["enabled"])),
         "daily_time_local": str(
             schedule.get("daily_time_local") or defaults[KEY_SCHEDULE]["daily_time_local"]
         ).strip(),

@@ -1,4 +1,4 @@
-﻿---
+---
 name: code-change
 description: Use for any code/test/runtime implementation change. Do NOT use for backlog-only edits, instruction cleanup, or business-rule ownership questions unless code also changes.
 ---

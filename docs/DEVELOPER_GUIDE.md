@@ -111,7 +111,7 @@ Runtime path:
 
 1. A scrape/review run writes saved review data.
 2. `GET /api/review-data` in `routes/workspace_api.py` loads that data.
-3. `build_suggested_tuning_from_saved_review()` in `review_insights.py` turns saved kept-job skill observations and repeated rejection reasons into suggestions.
+3. `build_review_data()` in `review_insights.py` builds `suggested_tuning` from kept-job evidence and rejection records before the payload is persisted.
 4. `templates/static/settings/shared/settings-review-panel.js` renders suggestions into `#tuning_suggestions_panel`.
 5. Confirmed capabilities are applied through `POST /api/tuning-decisions` and `apply_capability_tuning_decisions()`.
 6. Phrase exclusions are applied through `POST /api/rule/phrase`.

@@ -8,9 +8,9 @@ description: Use ONLY for candidate preference inputs and settings such as locat
 Use before editing location, salary, contract, government, work mode, or preference weights.
 
 ## Rules
-- Three preferences are **hard eligibility filters**, not score adjustments: work type (contract/permanent), sector (private only), and salary minimum. All use the same principle: exclude only when the value is explicitly known and incompatible; pass through when unknown or unlisted.
-- The hard filter entry point is `passes_preference_filters(record, profile)` — returns `(bool, reason_code)`. Called after full salary extraction in the scrape pipeline.
-- Scoring functions (`assess_contract_preference`, `assess_government_preference`, `salary_fit_adjustment`) still apply to records that passed the hard filter, for positive signals and edge cases.
+- Explicitly incompatible work type, sector, work mode, minimum contract length, and salary minimum are **hard eligibility filters**, not score adjustments. Each passes through when the job value is unknown or cannot be compared safely.
+- The hard filter entry point is `passes_preference_filters(record, profile)` — returns `(bool, reason_code)`. It is called after full salary extraction in the scrape pipeline.
+- `assess_location_preference()` supplies the canonical location-preference signal, and `salary_fit_adjustment()` handles the remaining salary scoring path. Do not reference removed contract or government scoring helpers.
 - Thresholds, aliases, labels, and scoring impacts come from profile/config/parsing rules, not feature code.
 - Preference helpers should return canonical labelled signals for consumers.
 - Consumers must not recreate preference logic.
@@ -19,8 +19,8 @@ Use before editing location, salary, contract, government, work mode, or prefere
 ## Owners
 - `preferences.py`: preference assessment functions.
 - `profile_store.py`: preference settings and normalisation.
-- `data/scoring_rules.json`: scoring impacts.
-- `data/parsing_rules.json`: parsing labels/keywords where already owned there.
+- `data/knowledge/scoring_rules.json`: scoring impacts.
+- `data/knowledge/parsing_rules.json`: parsing labels/keywords where already owned there.
 
 ## Checklist
 - Is this a hard eligibility block (known incompatible) or a score adjustment (unknown/partial)?
