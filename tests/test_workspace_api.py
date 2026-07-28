@@ -430,6 +430,19 @@ def test_run_status_and_stop_endpoint_report_stopping(monkeypatch):
     monkeypatch.setattr(
         workspace_api.srv, "_read_last_run_timestamp", lambda: "2026-05-26T00:00:00+10:00"
     )
+    monkeypatch.setattr(
+        workspace_api.srv,
+        "_read_scheduler_status",
+        lambda: {
+            "active": False,
+            "daily_time_local": "18:30",
+            "next_run_at": "2026-07-29T18:30:00+10:00",
+            "last_seen_at": None,
+            "last_attempt_at": None,
+            "last_status": None,
+            "last_message": None,
+        },
+    )
     monkeypatch.setattr(workspace_api.srv, "_is_run_in_progress", lambda: True)
     monkeypatch.setattr(workspace_api, "get_run_progress", lambda: "SEEK page 1/3")
     monkeypatch.setattr(workspace_api, "run_stop_requested", lambda: True)
@@ -443,6 +456,8 @@ def test_run_status_and_stop_endpoint_report_stopping(monkeypatch):
     assert status_response.json()["status"] == "stopping"
     assert status_response.json()["stop_requested"] is True
     assert status_response.json()["progress"] == "SEEK page 1/3"
+    assert status_response.json()["scheduler"]["active"] is True
+    assert status_response.json()["scheduler"]["daily_time_local"] == "18:30"
 
     stop_response = client.post("/api/run/stop")
     assert stop_response.status_code == 200

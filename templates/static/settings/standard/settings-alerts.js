@@ -25,6 +25,64 @@ function loadAlertsLabels() {
 export const JobHunterAlertsSettings = (function () {
 
   let telegramConnectLink = '';
+  let scheduleStatusRequestId = 0;
+
+  function formatScheduleDateTime(value) {
+    const parsed = new Date(String(value || '').trim());
+    if (Number.isNaN(parsed.getTime())) return '';
+    return parsed.toLocaleString([], {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  }
+
+  function renderScheduleStatus(settings, payload) {
+    const panel = document.getElementById('schedule_runtime_status');
+    if (!panel) return;
+    const scheduleEnabled = Boolean(settings?.schedule?.enabled);
+    const scheduler = payload?.scheduler || null;
+    if (!scheduleEnabled) {
+      panel.dataset.state = 'stopped';
+      panel.textContent = 'Automatic daily run is off.';
+      return;
+    }
+    if (!scheduler) {
+      panel.dataset.state = 'unknown';
+      panel.textContent = 'Next run is scheduled.';
+      return;
+    }
+    const nextRun = formatScheduleDateTime(scheduler.next_run_at);
+    if (nextRun) {
+      panel.dataset.state = scheduler.active ? 'running' : 'stopped';
+      panel.textContent = `Next run: ${nextRun}.`;
+      return;
+    }
+    panel.dataset.state = 'unknown';
+    panel.textContent = 'Next run is scheduled.';
+  }
+
+  async function refreshScheduleStatus(settings) {
+    const requestId = ++scheduleStatusRequestId;
+    const panel = document.getElementById('schedule_runtime_status');
+    if (panel) {
+      panel.dataset.state = 'unknown';
+      panel.textContent = 'Checking next run...';
+    }
+    try {
+      const response = await jobHunterFetch('/api/run-status', { method: 'GET' });
+      if (!response.ok) throw new Error('Could not load scheduler status');
+      const payload = await response.json().catch(() => ({}));
+      if (requestId !== scheduleStatusRequestId) return;
+      renderScheduleStatus(settings, payload);
+    } catch {
+      if (requestId !== scheduleStatusRequestId || !panel) return;
+      panel.dataset.state = 'unknown';
+      panel.textContent = 'Next run is scheduled.';
+    }
+  }
 
   function renderTelegramSubscribers(subscribers) {
     const labels = loadAlertsLabels();
@@ -68,8 +126,10 @@ export const JobHunterAlertsSettings = (function () {
   function fillUserSettings(settings) {
     settings = settings || {};
     const schedule = settings.schedule || {};
+    setToggleChecked('schedule_enabled', Boolean(schedule.enabled));
     const scheduleEl = document.getElementById('schedule_daily_time_local');
     if (scheduleEl) scheduleEl.value = schedule.daily_time_local || '08:30';
+    void refreshScheduleStatus(settings);
     const telegram = settings.telegram || {};
     setToggleChecked('telegram_enabled', Boolean(telegram.enabled));
     const botToken = document.getElementById('telegram_bot_token');
@@ -102,6 +162,7 @@ export const JobHunterAlertsSettings = (function () {
     ).trim();
     return {
       schedule: {
+        enabled: getToggleChecked('schedule_enabled'),
         daily_time_local: document.getElementById('schedule_daily_time_local')?.value || '08:30',
         loop_sleep_seconds: Number(currentSchedule.loop_sleep_seconds || 300),
       },

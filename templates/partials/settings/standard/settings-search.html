@@ -272,20 +272,37 @@
                   </div>
 
                   <div class="search-operations-body">
-                    <h3>Daily schedule</h3>
-                    <p>Automatic runs use the background loop. Keep <code>python -m job_hunter_agent.agent_runner --loop</code> running if you want scheduled collection.</p>
-                    <div class="settings-form-field">
-                      <div class="field-label-row">
-                        <label for="schedule_daily_time_local">Run every day at</label>
-                        <details class="field-info-drawer">
-                          <summary class="field-info" aria-label="Help">i</summary>
-                          <div class="field-info-panel">This uses your local machine time.</div>
-                        </details>
-                      </div>
-                      <input id="schedule_daily_time_local" type="time">
-                    </div>
-                    <div class="panel-actions search-operation-actions">
-                      <button class="secondary" id="save_daily_schedule" type="button">Save Daily Schedule</button>
+                    <h3>Daily run time</h3>
+                    <p>Set the time here, then use the main Save Settings button. If the scheduler is already running, changes apply automatically without a restart.</p>
+                    <div class="search-source-panels schedule-source-panels">
+                      <section class="search-source-panel schedule-source-panel">
+                        <div class="field-label-row search-source-panel-head">
+                          <div class="field-label-row">
+                            <label for="schedule_enabled" class="search-source-title">Automatic daily run</label>
+                            <details class="field-info-drawer">
+                              <summary class="field-info" aria-label="Help">i</summary>
+                              <div class="field-info-panel">Turn the daily schedule on or off without changing the saved time.</div>
+                            </details>
+                          </div>
+                          <label class="toggle-switch toggle-switch--compact" for="schedule_enabled">
+                            <span class="toggle-switch-control">
+                              <input id="schedule_enabled" type="checkbox" role="switch" aria-label="Enable automatic daily run">
+                              <span class="toggle-switch-ui"></span>
+                            </span>
+                          </label>
+                        </div>
+                        <div class="settings-form-field schedule-time-field">
+                          <div class="field-label-row">
+                            <label for="schedule_daily_time_local">Run every day at</label>
+                            <details class="field-info-drawer">
+                              <summary class="field-info" aria-label="Help">i</summary>
+                              <div class="field-info-panel">This uses your local machine time.</div>
+                            </details>
+                          </div>
+                          <input id="schedule_daily_time_local" type="time">
+                        </div>
+                        <p class="search-operation-runtime-status" id="schedule_runtime_status">Checking scheduler status...</p>
+                      </section>
                     </div>
                   </div>
                 </section>
