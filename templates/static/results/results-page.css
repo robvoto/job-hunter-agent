@@ -18,10 +18,7 @@
   scroll-margin-top: 120px;
 }
 
-.job-card:hover {
-  background-color: color-mix(in srgb, var(--bg-muted) 76%, var(--bg-page));
-  border-color: color-mix(in srgb, var(--border-strong) 55%, var(--border-subtle));
-}
+/* .job-card:hover is centralized in themes.widgets.css. */
 
 .job-card.tone-strong {
   --card-accent: var(--tone-strong);
@@ -887,8 +884,8 @@
 .review-button.workspace-action-button:active:not(:disabled) { transform: none; opacity: 0.9; }
 .review-button.workspace-action-button:focus-visible,
 .title-block-btn:focus-visible {
-  outline: 2px solid var(--selection-accent);
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .workspace-action-button--primary {

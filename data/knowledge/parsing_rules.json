@@ -1,7 +1,7 @@
 {
   "kind": "system_config",
   "name": "parsing_rules",
-  "version": 13,
+  "version": 14,
   "stopwords_description": "Common filler words stripped during title parsing and token matching.",
   "stopwords": [
     "a",
@@ -195,7 +195,44 @@
       "protected": [
         "protected clearance"
       ]
-    }
+    },
+    "clearance_ui_options": [
+      {
+        "value": "Baseline",
+        "label": "Baseline",
+        "aliases": [
+          "baseline clearance",
+          "baseline security clearance"
+        ]
+      },
+      {
+        "value": "NV1",
+        "label": "NV1",
+        "aliases": [
+          "nv 1",
+          "negative vetting 1",
+          "negative vetting level 1"
+        ]
+      },
+      {
+        "value": "NV2",
+        "label": "NV2",
+        "aliases": [
+          "nv 2",
+          "negative vetting 2",
+          "negative vetting level 2"
+        ]
+      },
+      {
+        "value": "PV clearance",
+        "label": "Positive Vetting",
+        "aliases": [
+          "pv",
+          "positive vetting",
+          "positive vetting clearance"
+        ]
+      }
+    ]
   },
   "government_discovery_patterns": {
     "aps": "\\baps\\s*(\\d+)\\b",

@@ -84,10 +84,11 @@ function validateSearchKeywords(keyword) {
 let loadedUserSettings = null;
 let loadedProfile = null;
 let loadedGlobalSettings = null;
+let loadedSourceMaterials = null;
 let suppressDirtyTracking = true;
 const pageMode = document.body?.dataset.pageMode === 'admin' ? 'admin' : 'settings';
 const isAdminPage = pageMode === 'admin';
-const isUserAdmin = isAdminPage || !!document.querySelector('.sidebar-brand-actions .nav-item-admin') || !!document.querySelector('.sidebar-brand-actions a[href*="admin"]');
+const isUserAdmin = isAdminPage || !!document.querySelector('.sidebar-nav .nav-item-admin');
 const bootstrapGlobalSettings = window.__JOB_HUNTER_GLOBAL_SETTINGS__ || null;
 
 document.querySelectorAll('[data-test-only]').forEach((element) => { element.hidden = !isTestMode; });
@@ -165,6 +166,22 @@ function renderRoleExperienceReadonly(profile) {
       </article>
     `;
   }).join('');
+}
+
+function buildCapturedCvText(sourceMaterials) {
+  const profileSources = Array.isArray(sourceMaterials?.profile_sources)
+    ? sourceMaterials.profile_sources
+    : [];
+  if (profileSources.length !== 1) {
+    return '';
+  }
+  return String(profileSources[0]?.content || '').trim();
+}
+
+function renderCapturedCvText(sourceMaterials) {
+  const field = document.getElementById('cv_text_debug');
+  if (!field) return;
+  field.value = buildCapturedCvText(sourceMaterials);
 }
 
 export function hideStatus() {
@@ -462,7 +479,7 @@ function fillForm(profile) {
   document.getElementById('freshness_weight').value = String(profile.preference_weights?.freshness);
   capabilityEditor.setCapabilityRuleState(profile.candidate_capabilities || []);
   clearanceEditor.setClearanceRuleState(profile.candidate_eligibility || []);
-  document.getElementById('cv_text_debug').value = (profile.cv_text || '').trim();
+  renderCapturedCvText(loadedSourceMaterials);
   renderRoleExperienceReadonly(profile);
   for (const id of ['target_roles', 'also_consider_roles', 'must_not_require_skills']) {
     settingsField(id).value = (profile[id] || []).join('\n');
@@ -480,6 +497,14 @@ async function loadProfile() {
   loadedProfile = profile;
   fillForm(profile);
   showStatus('Profile loaded.', 'success', { autoHideMs: 2600 });
+}
+
+async function loadSourceMaterials() {
+  const response = await jobHunterFetch('/api/source-materials');
+  if (!response.ok) throw new Error('Could not load source materials');
+  const materials = await response.json();
+  loadedSourceMaterials = materials;
+  renderCapturedCvText(materials);
 }
 
 async function loadGlobalSettings() {
@@ -793,7 +818,7 @@ document.getElementById('reload')?.addEventListener('click', async (e) => {
   btn.disabled = true;
   btn.textContent = 'Reloading...';
   try {
-    await loadProfile();
+    await Promise.all([loadProfile(), loadSourceMaterials()]);
     initSliders();
     clearDirty();
     showStatus('Profile reloaded from disk.', 'success', { autoHideMs: 2600 });
@@ -963,7 +988,7 @@ clearanceEditor.initEventHandlers(markDirty);
 // -- Init ------------------------------------------------------------------
 const pageLoads = isAdminPage
   ? [loadGlobalSettings()]
-  : [loadProfile(), loadUserSettings()];
+  : [loadProfile(), loadUserSettings(), loadSourceMaterials()];
 Promise.all(pageLoads).then(() => {
   initSliders();
   updateSearchPreferenceSummaries();

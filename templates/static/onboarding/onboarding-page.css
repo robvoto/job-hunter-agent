@@ -162,6 +162,9 @@ body {
 .wizard-progress-nav:not(:disabled) { cursor: pointer; }
 .wizard-progress-nav:disabled { cursor: default; }
 
+/* Local exception: hover and focus-visible are intentionally unified here
+   (underline + ring on the step circle) instead of a focus-ring outline, since
+   this is a step indicator, not a standard input/button control. */
 .wizard-progress-nav:not(:disabled):hover .wizard-progress-label,
 .wizard-progress-nav:not(:disabled):focus-visible .wizard-progress-label {
   text-decoration: underline;

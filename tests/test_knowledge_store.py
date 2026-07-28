@@ -154,7 +154,7 @@ def test_upgrade_seeds_missing_key(tmp_db, knowledge_dir):
     assert get_knowledge("rules", tmp_db)["entries"][0]["value"] == "A"
 
 
-def test_upgrade_skips_when_version_current(tmp_db, knowledge_dir):
+def test_upgrade_skips_when_version_current_for_additive_knowledge(tmp_db, knowledge_dir):
     data = {"version": 2, "entries": [{"value": "A"}]}
     set_knowledge("rules", data, tmp_db)
     (knowledge_dir / "rules.json").write_text(
@@ -163,6 +163,27 @@ def test_upgrade_skips_when_version_current(tmp_db, knowledge_dir):
     updated = upgrade_knowledge_from_dir(knowledge_dir, tmp_db)
     assert updated == []
     assert get_knowledge("rules", tmp_db)["entries"][0]["value"] == "A"
+
+
+def test_upgrade_same_version_config_replaces_when_payload_differs(tmp_db, knowledge_dir):
+    set_knowledge("config", {"version": 2, "threshold": 0.5}, tmp_db)
+    (knowledge_dir / "config.json").write_text('{"version": 2, "threshold": 0.8}', encoding="utf-8")
+
+    updated = upgrade_knowledge_from_dir(knowledge_dir, tmp_db)
+
+    assert updated == ["config"]
+    assert get_knowledge("config", tmp_db)["threshold"] == 0.8
+
+
+def test_upgrade_same_version_config_skips_when_payload_matches(tmp_db, knowledge_dir):
+    payload = {"version": 2, "threshold": 0.5}
+    set_knowledge("config", payload, tmp_db)
+    (knowledge_dir / "config.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    updated = upgrade_knowledge_from_dir(knowledge_dir, tmp_db)
+
+    assert updated == []
+    assert get_knowledge("config", tmp_db) == payload
 
 
 def test_upgrade_skips_when_db_version_ahead(tmp_db, knowledge_dir):
@@ -538,6 +559,8 @@ def test_build_bootstrap_script_includes_all_ui_label_sections():
         "__JOB_HUNTER_CAPABILITY_UI_LABELS__",
         "__JOB_HUNTER_SHARED_UI_LABELS__",
         "__JOB_HUNTER_SETTINGS_ALERTS_LABELS__",
+        "__JOB_HUNTER_SETTINGS_CLEARANCES_LABELS__",
+        "__JOB_HUNTER_CLEARANCE_OPTIONS__",
     ):
         assert sentinel in html, f"build_bootstrap_script() is missing {sentinel}"
 

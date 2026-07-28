@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import copy
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,15 @@ _LOCAL_CANDIDATE_APPLICATION_HISTORY_OVERRIDE_PATH = (
 
 class GlobalSettingsLoadError(RuntimeError):
     pass
+
+
+def _deep_merge_settings(base: Any, overlay: Any) -> Any:
+    if isinstance(base, dict) and isinstance(overlay, dict):
+        merged = copy.deepcopy(base)
+        for key, value in overlay.items():
+            merged[key] = _deep_merge_settings(merged.get(key), value)
+        return merged
+    return copy.deepcopy(overlay)
 
 
 def _load_managed_global_settings() -> dict[str, Any]:
@@ -377,7 +387,14 @@ def load_global_settings() -> dict[str, Any]:
         )
     if not isinstance(data, dict):
         raise GlobalSettingsLoadError("global_settings in DB must contain a JSON object")
-    return normalize_global_settings(data, strict_managed=True)
+    merged = _deep_merge_settings(_load_managed_global_settings(), data)
+    normalized = normalize_global_settings(merged, strict_managed=True)
+    if normalized != data:
+        logger.warning(
+            "Global settings DB row was missing or stale versus managed defaults; repairing in place."
+        )
+        _db_save(normalized)
+    return normalized
 
 
 def seed_global_settings_from_file(db_path: Path | None = None, *, overwrite: bool = False) -> bool:

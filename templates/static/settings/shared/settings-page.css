@@ -1000,6 +1000,45 @@
       gap: 0;
       margin-top: 12px;
     }
+    /* Local layout exception: fixed clearance rows reuse capability-card surfaces with compact status/toggle actions.
+       Clearance cards have no alias chips/expandable content, so they stay short — use the same 2-column grid as
+       .capability-grid (rather than a single full-width column) to avoid large empty space per row. */
+    .clearance-grid {
+      gap: var(--surface-gap-sm);
+    }
+    .clearance-card {
+      align-items: center;
+    }
+    .clearance-card-main {
+      gap: 4px;
+    }
+    .clearance-card-copy {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+    .clearance-card-title {
+      margin: 0;
+      font-size: var(--text-role-button-font-size);
+      font-weight: var(--text-role-button-font-weight);
+      line-height: 1.2;
+      color: var(--text-primary);
+    }
+    .clearance-card-state {
+      margin: 0;
+      color: var(--text-muted);
+      font-size: var(--text-role-status-font-size);
+      line-height: 1.4;
+    }
+    .clearance-card-actions {
+      flex-direction: row;
+      align-items: center;
+      gap: 0;
+      padding-top: 0;
+    }
+    .role-history-editor {
+      margin-top: var(--surface-gap-md);
+    }
     .capability-alias-drawer[open] .cap-alias-chips {
       margin-top: 10px;
     }

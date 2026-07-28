@@ -11,7 +11,11 @@ from job_hunter_agent.global_settings import save_global_settings
 from job_hunter_agent.knowledge_sync_roundtrip import sync_knowledge_roundtrip
 from job_hunter_agent.routes.responses import json_response
 from job_hunter_agent.scraper_health import run_scraper_configuration_validation
-from job_hunter_agent.source_documents import refresh_role_history_from_saved_cv
+from job_hunter_agent.source_documents import (
+    load_source_materials,
+    refresh_role_history_from_saved_cv,
+    save_source_materials,
+)
 from job_hunter_agent.system_warnings import (
     list_system_warnings,
     update_system_warning_status,
@@ -70,14 +74,14 @@ def api_profile_put(body: dict = Body(...)):  # type: ignore[no-untyped-def]
 @router.get("/api/source-materials")
 def api_source_materials_get():  # type: ignore[no-untyped-def]
 
-    return json_response(srv.load_source_materials(create_if_missing=True))
+    return json_response(load_source_materials(create_if_missing=True))
 
 
 @router.put("/api/source-materials")
 def api_source_materials_put(body: dict = Body(...)):  # type: ignore[no-untyped-def]
 
     try:
-        updated = srv.save_source_materials(body)
+        updated = save_source_materials(body)
 
     except Exception as exc:
         return json_response({"error": str(exc)}, 400)

@@ -52,6 +52,7 @@ from job_hunter_agent.io_utils import (
     clear_run_stats,
     clear_user_settings,
     clear_workspace_pool, 
+    load_parsing_rules,
     load_run_stats,
     load_ui_labels,
     write_run_stats,
@@ -276,6 +277,11 @@ _SETTINGS_CLEARANCES_LABEL_KEYS = (
     "settings_empty_text",
     "name_placeholder",
     "have_label",
+    "held_state_label",
+    "not_held_state_label",
+    "unset_state_label",
+    "clear_button_label",
+    "clear_button_aria_label",
     "remove_button_aria_label",
 )
 
@@ -696,6 +702,45 @@ def load_settings_clearances_labels() -> dict[str, str]:
     return _load_required_ui_labels("settings_clearances_labels", _SETTINGS_CLEARANCES_LABEL_KEYS)
 
 
+def load_clearance_ui_options() -> list[dict[str, Any]]:
+    rules = load_parsing_rules()
+    config = rules.get("government_discovery_config")
+    if not isinstance(config, dict):
+        raise ValueError("parsing_rules.json must define government_discovery_config")
+    options = config.get("clearance_ui_options")
+    if not isinstance(options, list) or not options:
+        raise ValueError("parsing_rules.json must define government_discovery_config.clearance_ui_options")
+
+    cleaned: list[dict[str, Any]] = []
+    seen_values: set[str] = set()
+    for option in options:
+        if not isinstance(option, dict):
+            raise ValueError("clearance_ui_options entries must be objects")
+        value = re.sub(r"\s+", " ", str(option.get("value") or "")).strip()
+        label = re.sub(r"\s+", " ", str(option.get("label") or "")).strip()
+        aliases = option.get("aliases") or []
+        if not value or not label:
+            raise ValueError("clearance_ui_options entries must define non-empty value and label")
+        key = value.casefold()
+        if key in seen_values:
+            raise ValueError(f"Duplicate clearance_ui_options value: {value}")
+        if not isinstance(aliases, list):
+            raise ValueError(f"clearance_ui_options aliases for {value} must be a list")
+        seen_values.add(key)
+        cleaned.append(
+            {
+                "value": value,
+                "label": label,
+                "aliases": [
+                    re.sub(r"\s+", " ", str(alias or "")).strip()
+                    for alias in aliases
+                    if str(alias or "").strip()
+                ],
+            }
+        )
+    return cleaned
+
+
 def load_role_history_labels() -> dict[str, str]:
     return _load_required_ui_labels("role_history_labels", _ROLE_HISTORY_LABEL_KEYS)
 
@@ -848,6 +893,9 @@ def build_bootstrap_script(
     )
     parts.append(
         f"<script>window.__JOB_HUNTER_SETTINGS_CLEARANCES_LABELS__ = {json.dumps(load_settings_clearances_labels(), ensure_ascii=True)};</script>"
+    )
+    parts.append(
+        f"<script>window.__JOB_HUNTER_CLEARANCE_OPTIONS__ = {json.dumps(load_clearance_ui_options(), ensure_ascii=True)};</script>"
     )
     parts.append(
         f"<script>window.__JOB_HUNTER_ROLE_HISTORY_LABELS__ = {json.dumps(load_role_history_labels(), ensure_ascii=True)};</script>"

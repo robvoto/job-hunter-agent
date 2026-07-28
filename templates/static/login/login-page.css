@@ -233,6 +233,9 @@
   box-shadow: 0 14px 30px rgba(0, 0, 0, 0.16);
 }
 
+/* Local exception: Google-branded button keeps fixed non-themed colors and a
+   wider outline to stay legible against its own white background regardless
+   of theme, so it does not use the shared --focus-ring-* tokens. */
 .login-google-button:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--accent) 42%, transparent);
   outline-offset: 3px;

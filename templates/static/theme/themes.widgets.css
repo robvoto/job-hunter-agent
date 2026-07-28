@@ -342,7 +342,8 @@
 }
 
 .job-card:hover {
-  background-color: var(--bg-muted);
+  background-color: color-mix(in srgb, var(--bg-muted) 76%, var(--bg-page));
+  border-color: color-mix(in srgb, var(--border-strong) 55%, var(--border-subtle));
 }
 
 .job-note {
@@ -726,8 +727,8 @@
 }
 
 .toggle-switch-control input:focus-visible + .toggle-switch-ui {
-  outline: 2px solid color-mix(in srgb, var(--selection-accent) 55%, white);
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--focus-ring-color-subtle);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .profile-main-panel {
@@ -1509,8 +1510,8 @@
 }
 
 .btn-add:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .btn-icon {
@@ -1539,8 +1540,8 @@
 }
 
 .btn-icon:focus-visible {
-  outline: 2px solid var(--state-info-border);
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .capability-group,
@@ -1889,8 +1890,8 @@
 }
 
 .job-hunter-account-bar__logout:focus-visible {
-  outline: 2px solid var(--selection-accent);
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
 }
 
 /* Shared chip editor layout for onboarding role review and settings rule editors.
@@ -2014,8 +2015,8 @@
 }
 
 .icon-action:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--selection-accent) 55%, white);
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--focus-ring-color-subtle);
+  outline-offset: var(--focus-ring-offset);
 }
 
 /* Shared compact typography for review cards, chips, and capability cards. */

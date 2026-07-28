@@ -22,6 +22,12 @@ CSS changes must improve the shared design system, not create another one-off pa
 - **If no existing pattern fits, the fix is a new central entry** (theme CSS + a new `UI_COMPONENT_MAP.md` row), not a page-local selector that happens to look right on one screen.
 - A page CSS file must not redefine or restyle a selector that `UI_COMPONENT_MAP.md` lists as centrally owned. Genuine page-scoped overrides are limited to layout properties (grid placement, width caps, margins) and must carry a one-line comment naming the exception, e.g. `/* Local layout exception: <reason>. */`.
 
+## Interactive states (hover, focus, active)
+
+- Any `:hover`, `:focus-visible`, or `:active` rule for a shared component belongs in `themes.widgets.css` (or `themes.primitives.css` for base primitives like `.btn`), not page CSS.
+- `:focus-visible` rules must use the shared tokens — `--focus-ring-width`, `--focus-ring-color` (or `--focus-ring-color-subtle` for controls on an already-tinted surface), `--focus-ring-offset` — instead of a hardcoded outline color or width. See `docs/UI_COMPONENT_MAP.md` for the full token table.
+- A page-local hover/focus/active treatment is only a legitimate exception when the control is not a standard input/button (e.g. a branded third-party button, a bespoke step indicator) — document it with a one-line comment naming the reason, same as any other local exception.
+
 ## Spacing discipline
 
 - Use existing spacing tokens before adding new values.

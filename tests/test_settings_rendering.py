@@ -9,7 +9,10 @@ from fastapi.testclient import TestClient
 import job_hunter_agent.fastapi_app as _fa
 import job_hunter_agent.routes.pages as _pages
 from job_hunter_agent.fastapi_app import create_app
-from job_hunter_agent.server_helpers import _SETTINGS_ALERTS_LABEL_KEYS
+from job_hunter_agent.server_helpers import (
+    _SETTINGS_ALERTS_LABEL_KEYS,
+    _SETTINGS_CLEARANCES_LABEL_KEYS,
+)
 
 _KNOWLEDGE_DIR = Path(__file__).resolve().parent.parent / "data" / "knowledge"
 
@@ -23,6 +26,17 @@ def test_ui_labels_json_contains_all_settings_alerts_keys():
     missing = [k for k in _SETTINGS_ALERTS_LABEL_KEYS if not str(section.get(k, "")).strip()]
 
     assert not missing, f"ui_labels.json is missing settings_alerts_labels keys: {missing}"
+
+
+def test_ui_labels_json_contains_all_settings_clearances_keys():
+
+    data = json.loads((_KNOWLEDGE_DIR / "ui_labels.json").read_text(encoding="utf-8"))
+
+    section = data.get("settings_clearances_labels", {})
+
+    missing = [k for k in _SETTINGS_CLEARANCES_LABEL_KEYS if not str(section.get(k, "")).strip()]
+
+    assert not missing, f"ui_labels.json is missing settings_clearances_labels keys: {missing}"
 
 
 def test_settings_page_renders_keyword_label_and_location_field(monkeypatch):
@@ -80,6 +94,9 @@ def test_settings_page_renders_keyword_label_and_location_field(monkeypatch):
     assert "window.__JOB_HUNTER_SHARED_UI_LABELS__" in html
 
     assert "window.__JOB_HUNTER_SETTINGS_ALERTS_LABELS__" in html
+    assert "window.__JOB_HUNTER_SETTINGS_CLEARANCES_LABELS__" in html
+    assert "window.__JOB_HUNTER_CLEARANCE_OPTIONS__" in html
+    assert 'id="add_clearance_rule"' not in html
 
     assert "Alerts &amp; AI" in html
     assert "Hide link preview" in html
@@ -119,6 +136,13 @@ def test_settings_page_renders_role_history_readonly_panel_script():
     ).read_text(encoding="utf-8")
 
     assert "function renderRoleExperienceReadonly(profile)" in js_text
+    assert "function renderCapturedCvText(sourceMaterials)" in js_text
+    assert "/api/source-materials" in js_text
+    assert "renderCapturedCvText(materials);" in js_text
+    assert "profile?.cv_text" not in js_text
+    assert "loadSourceMaterials().catch(() => null)" not in js_text
+    assert "data-clear-clearance" not in js_text
+    assert "clearClearanceRule" not in js_text
     assert "renderRoleExperienceReadonly(profile);" in js_text
     assert "role_experience_readonly" in js_text
     assert "/api/profile/refresh-role-history-from-saved-cv" in js_text

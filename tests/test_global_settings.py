@@ -257,6 +257,89 @@ def test_load_global_settings_requires_seeded_table(tmp_path, monkeypatch):
         global_settings.load_global_settings()
 
 
+def test_load_global_settings_repairs_missing_managed_limits(tmp_path, monkeypatch):
+    db = tmp_path / "stale.db"
+    init_db(db)
+
+    stale_payload = {
+        "fit_highlights": {
+            "strong_capability_count": 3,
+            "working_capability_count": 2,
+            "basic_capability_count": 1,
+            "reviewed_signal_count": 3,
+            "max_highlights": 8,
+        },
+        "search_settings": {
+            "keywords": "",
+            "locations": [],
+            "classification_ids": [],
+            "date_range_days": 3,
+            "seek_max_pages": 3,
+            "sort_newest_first": True,
+            "linkedin_hours_old": 24,
+            "linkedin_results_per_search": 25,
+        },
+        "limits": {
+            "search": {
+                "date_range_days": {"min": 1, "max": 30},
+                "seek_max_pages": {"min": 1, "max": 10},
+                "linkedin_hours_old": {"min": 1, "max": 720},
+                "linkedin_results_per_search": {"min": 5, "max": 100},
+            },
+            "salary": {
+                "minimum_salary_yearly": {"min": 0, "max": 1000000},
+                "minimum_daily_rate": {"min": 0, "max": 10000},
+            },
+            "onboarding": {},
+            "history": {},
+            "cache": {},
+        },
+        "preference_weights": {
+            "fit": 1.0,
+            "salary": 1.0,
+            "location": 1.0,
+            "freshness": 1.0,
+        },
+        "candidate_profile_tier_weights": {
+            "primary_candidate_profile_context": 1.0,
+            "secondary_candidate_profile_context": 0.55,
+            "supplementary_candidate_profile_context": 0.25,
+        },
+        "onboarding_settings": {},
+        "llm_settings": {"model_options": ["gpt-4o-mini"]},
+        "review_settings": {},
+        "history_settings": {},
+        "cache_settings": {},
+        "description_trust_settings": {},
+        "description_compaction_settings": {},
+        "source_document_settings": {},
+        "default_country_suffix": ".com.au",
+        "playwright_settings": {},
+        "candidate_application_history": {},
+    }
+
+    with db_conn(db) as conn:
+        conn.execute(
+            "INSERT INTO global_settings (key, value) VALUES (?, ?)",
+            ("global_settings", json.dumps(stale_payload)),
+        )
+
+    monkeypatch.setenv("JOB_HUNTER_DB_PATH", str(db))
+    global_settings.load_global_settings.cache_clear()
+
+    loaded = global_settings.load_global_settings()
+
+    assert loaded["limits"]["search"]["locations_max_selected"]["max"] == 3
+
+    with db_conn(db) as conn:
+        repaired = json.loads(
+            conn.execute(
+                "SELECT value FROM global_settings WHERE key = ?", ("global_settings",)
+            ).fetchone()["value"]
+        )
+    assert repaired["limits"]["search"]["locations_max_selected"]["max"] == 3
+
+
 def _load_managed_global_settings_payload() -> dict:
     return json.loads(GLOBAL_SETTINGS_PATH.read_text(encoding="utf-8-sig"))
 

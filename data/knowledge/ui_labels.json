@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 82,
+  "version": 83,
   "updated_at": "2026-07-28",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -70,11 +70,16 @@
   "settings_clearances_labels_description": "Display labels and help text for the Clearances rules editor.",
   "settings_clearances_labels": {
     "settings_title": "Clearances",
-    "help_text": "Clearances are pass/fail facts about you, like a security clearance or a work-rights check, rather than a skill or capability. If a job description lists one of these as an alternative (for example \"NV1 / Baseline / As per role\"), Job Hunter will only flag it as missing when none of the alternatives match what you've entered here.",
+    "help_text": "Tell Job Hunter which Australian government clearance levels you hold. These are eligibility facts, not skills, and they are checked separately from your capability matrix. Leave a row as Not set if you do not want to record that clearance yet.",
     "add_button_aria_label": "Add clearance",
-    "settings_empty_text": "No clearances added yet. Add one below if a role you're applying for cares about a specific clearance or work-rights check.",
+    "settings_empty_text": "No clearance options configured.",
     "name_placeholder": "e.g. NV1",
     "have_label": "I hold this clearance",
+    "held_state_label": "Held",
+    "not_held_state_label": "Not held",
+    "unset_state_label": "Not set",
+    "clear_button_label": "Clear",
+    "clear_button_aria_label": "Clear clearance status",
     "remove_button_aria_label": "Remove clearance"
   },
   "role_history_labels_description": "Display labels for the read-only captured role history panel in Settings.",

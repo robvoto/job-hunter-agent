@@ -508,7 +508,7 @@ python -m job_hunter_agent.db_seed --upgrade
 `--upgrade` uses version-aware merge logic for knowledge files:
 - Files with no `version` field (pure reference data) — always replaced.
 - Files with `version` and an `entries` list (capability knowledge, blocker rules, etc.) — new entries appended; existing DB entries (including user-approved ones) are preserved.
-- Files with `version` but no `entries` list (scoring rules, ui_labels, etc.) — replaced only when the file version is newer than the DB version.
+- Files with `version` but no `entries` list (scoring rules, ui_labels, etc.) — replaced when the file version is newer than the DB version. If the version number is unchanged but the shipped config payload differs, startup now replaces the DB row from the file and logs a warning so stale config does not survive a forgotten version bump.
 
 Global settings are always overwritten by `--upgrade` (no per-entry user approvals exist, so replacement is always safe).
 

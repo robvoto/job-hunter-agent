@@ -64,7 +64,8 @@ A code change is done only when:
 2. Tests are added or updated when behaviour changes.
 3. The solution is not an unapproved fallback, hardcoding, heuristic, compatibility shim, or dead path.
 4. Current project patterns are followed.
-5. Relevant docs, skills, backlog evidence, or operations notes are updated when affected.
+5. Relevant docs, skills, or operations notes are updated when affected.
+6. **If the task came from a backlog item (human-supplied JH ID or agent-picked row), the backlog row is always updated before reporting done** — `Implementation State`, `Implementation Date`, `Implemented By`, `Evidence` — via `.skills/backlog-management/SKILL.md`. This is not conditional on whether it seems "affected"; it is a required last step whenever a backlog row exists for the task.
 
 ## Finish format
 Report:

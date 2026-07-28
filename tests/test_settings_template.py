@@ -212,8 +212,18 @@ def test_profile_cv_debug_drawer_avoids_duplicate_visible_heading():
     profile_html = SETTINGS_PROFILE_PARTIAL_PATH.read_text(encoding="utf-8")
 
     assert "<summary>Captured CV text</summary>" in profile_html
+    assert 'data-test-only' not in profile_html
     assert '<label for="cv_text_debug">Captured CV text</label>' not in profile_html
     assert 'id="cv_text_debug" class="is-readonly" aria-label="Captured CV text"' in profile_html
+
+
+def test_role_history_uses_single_readonly_panel():
+
+    html = (
+        ROOT_DIR / "templates" / "partials" / "settings" / "standard" / "settings-matrix.html"
+    ).read_text(encoding="utf-8")
+
+    assert 'id="role_experience_readonly" class="capability-editor role-history-editor"' in html
 
 
 def test_settings_page_renders_admin_link_only_for_admins(monkeypatch):

@@ -130,6 +130,14 @@
   --control-radius-xl: 14px;
   --control-radius-2xl: 16px;
   --control-radius-pill: 999px;
+
+  /* Shared interactive states (hover/focus/active). Width and offset are
+     theme-independent; color derives from the active theme's --selection-accent
+     so it stays consistent everywhere without redesigning the palette. */
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --focus-ring-color: var(--selection-accent);
+  --focus-ring-color-subtle: color-mix(in srgb, var(--selection-accent) 55%, white);
 }
 
 /* Theme: Soft Professional

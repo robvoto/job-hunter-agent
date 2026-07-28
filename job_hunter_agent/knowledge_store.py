@@ -10,6 +10,9 @@ Upgrade strategy (used by db_seed.py --upgrade):
 
   Files with "version" but whose entries are config (scoring_rules, ui_labels,
   parsing_rules, etc.) — replaced wholesale when file version > DB version.
+  If the file and DB versions match but the config payload differs, the file
+  still replaces the DB row so shipped config edits do not get stranded behind
+  a forgotten manual version bump.
 
   Files with "version" AND a top-level "entries" list where each item has a
   "value" field (for example capability_knowledge, hard_blocker_rules, and
@@ -18,10 +21,13 @@ Upgrade strategy (used by db_seed.py --upgrade):
 """
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Iterable
 
 from job_hunter_agent.database import db_conn
+
+logger = logging.getLogger(__name__)
 
 _UI_LABELS_MOJIBAKE_MARKERS = (
     "â€™",
@@ -125,6 +131,27 @@ def _merge_additive(db_data: dict, file_data: dict) -> dict:
     return merged
 
 
+def _should_replace_same_version_config(file_data: dict, db_data: Any) -> bool:
+    """True when managed config changed but the version number did not.
+
+    Additive knowledge keeps its version-gated merge semantics. This safeguard
+    is only for wholesale-replaced config payloads where a forgotten version
+    bump would otherwise leave the runtime on stale shipped defaults.
+    """
+
+    if not isinstance(db_data, dict):
+        return False
+    file_version = file_data.get("version")
+    db_version = db_data.get("version")
+    if not isinstance(file_version, int) or not isinstance(db_version, int):
+        return False
+    if file_version != db_version:
+        return False
+    if _is_additive_knowledge(file_data):
+        return False
+    return file_data != db_data
+
+
 def _iter_seed_json_files(source_dir: Path, json_files: Iterable[Path] | None = None) -> list[Path]:
     if json_files is None:
         return sorted(source_dir.glob("*.json"))
@@ -144,6 +171,8 @@ def upgrade_knowledge_from_dir(
       preserve all existing DB entries including user-approved ones.
     - Config knowledge (versioned, not additive) → replace when file version
       is newer than DB version.
+    - Same-version config drift → replace from file and log a warning so a
+      forgotten version bump does not leave runtime knowledge stale.
 
     Returns list of keys that were updated.
     """
@@ -170,6 +199,13 @@ def upgrade_knowledge_from_dir(
 
         if file_version is None:
             # No version — pure reference data, always replace.
+            set_knowledge(key, file_data, db_path)
+            updated.append(key)
+        elif _should_replace_same_version_config(file_data, db_data):
+            logger.warning(
+                "Knowledge config '%s' changed without a version bump; replacing DB row from file.",
+                key,
+            )
             set_knowledge(key, file_data, db_path)
             updated.append(key)
         elif isinstance(file_version, int) and (
