@@ -13,6 +13,7 @@ import re
 import shutil
 import threading
 import tomllib
+from datetime import datetime, timedelta
 from html import escape
 from functools import lru_cache
 from pathlib import Path
@@ -61,6 +62,7 @@ from job_hunter_agent.paths import (
     USERS_DIR,
     get_workspace_results_path,
 )
+from job_hunter_agent.posting_utils import parse_timestamp
 from job_hunter_agent.paths import (
     REPO_ROOT as ROOT_DIR,
 )
@@ -117,6 +119,7 @@ from job_hunter_agent.user_settings import (
     KEY_TELEGRAM,
     KEY_WORKSPACE,
     load_agent_state,
+    load_user_settings,
     list_user_setting_user_ids,
 )
 from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
@@ -274,6 +277,14 @@ _SETTINGS_CLEARANCES_LABEL_KEYS = (
     "name_placeholder",
     "have_label",
     "remove_button_aria_label",
+)
+
+_ROLE_HISTORY_LABEL_KEYS = (
+    "settings_title",
+    "help_text",
+    "refresh_button_label",
+    "refresh_button_busy_label",
+    "empty_text",
 )
 
 _ONBOARDING_PAGE_LABEL_KEYS = (
@@ -611,11 +622,8 @@ def load_app_release_metadata() -> dict[str, str]:
     version = str(project.get("version", "")).strip()
     if not version:
         raise ValueError("pyproject.toml is missing project.version")
-    shared_labels = load_shared_ui_labels()
     return {
         "version": version,
-        "stage_label": shared_labels["app_stage_label"],
-        "stage_title": shared_labels["app_stage_title"],
     }
 
 
@@ -686,6 +694,10 @@ def load_settings_alerts_labels() -> dict[str, str]:
 
 def load_settings_clearances_labels() -> dict[str, str]:
     return _load_required_ui_labels("settings_clearances_labels", _SETTINGS_CLEARANCES_LABEL_KEYS)
+
+
+def load_role_history_labels() -> dict[str, str]:
+    return _load_required_ui_labels("role_history_labels", _ROLE_HISTORY_LABEL_KEYS)
 
 
 def load_onboarding_page_labels() -> dict[str, str]:
@@ -836,6 +848,9 @@ def build_bootstrap_script(
     )
     parts.append(
         f"<script>window.__JOB_HUNTER_SETTINGS_CLEARANCES_LABELS__ = {json.dumps(load_settings_clearances_labels(), ensure_ascii=True)};</script>"
+    )
+    parts.append(
+        f"<script>window.__JOB_HUNTER_ROLE_HISTORY_LABELS__ = {json.dumps(load_role_history_labels(), ensure_ascii=True)};</script>"
     )
     parts.append(
         f"<script>window.__JOB_HUNTER_ONBOARDING_IMPORT_SUMMARY_LABELS__ = {json.dumps(load_onboarding_import_summary_labels(), ensure_ascii=True)};</script>"
@@ -1151,6 +1166,67 @@ def _read_last_run_timestamp() -> str | None:
         return None
 
 
+def _read_scheduler_status() -> dict[str, Any]:
+    from job_hunter_agent.agent_runner import (
+        STATE_LAST_SCHEDULED_ATTEMPT_AT,
+        STATE_LAST_SCHEDULED_MESSAGE,
+        STATE_LAST_SCHEDULED_STATUS,
+        STATE_SCHEDULER_LAST_SEEN_AT,
+    )
+
+    settings = load_user_settings(None, create_if_missing=True)
+    schedule = settings.get(KEY_SCHEDULE, {}) if isinstance(settings, dict) else {}
+    schedule_enabled = bool(
+        schedule.get("enabled", DEFAULT_USER_SETTINGS[KEY_SCHEDULE]["enabled"])
+    )
+    daily_time_local = str(
+        schedule.get("daily_time_local")
+        or DEFAULT_USER_SETTINGS[KEY_SCHEDULE]["daily_time_local"]
+    ).strip()
+    loop_sleep_seconds = int(
+        schedule.get("loop_sleep_seconds")
+        or DEFAULT_USER_SETTINGS[KEY_SCHEDULE]["loop_sleep_seconds"]
+    )
+    state = load_agent_state()
+    now = datetime.now().astimezone()
+    heartbeat_at = str(state.get(STATE_SCHEDULER_LAST_SEEN_AT) or "").strip()
+    heartbeat_dt = parse_timestamp(heartbeat_at)
+    heartbeat_window = timedelta(seconds=max(loop_sleep_seconds * 2, loop_sleep_seconds + 60))
+    scheduler_active = bool(
+        heartbeat_dt and (now - heartbeat_dt) <= heartbeat_window
+    )
+
+    try:
+        hour_text, minute_text = daily_time_local.split(":", 1)
+        scheduled_hour = int(hour_text)
+        scheduled_minute = int(minute_text)
+    except Exception:
+        daily_time_local = str(DEFAULT_USER_SETTINGS[KEY_SCHEDULE]["daily_time_local"]).strip()
+        hour_text, minute_text = daily_time_local.split(":", 1)
+        scheduled_hour = int(hour_text)
+        scheduled_minute = int(minute_text)
+
+    next_run_at = now.replace(
+        hour=scheduled_hour,
+        minute=scheduled_minute,
+        second=0,
+        microsecond=0,
+    )
+    if next_run_at <= now:
+        next_run_at += timedelta(days=1)
+
+    return {
+        "active": scheduler_active,
+        "enabled": schedule_enabled,
+        "daily_time_local": daily_time_local,
+        "next_run_at": next_run_at.isoformat(timespec="seconds"),
+        "last_seen_at": heartbeat_at or None,
+        "last_attempt_at": str(state.get(STATE_LAST_SCHEDULED_ATTEMPT_AT) or "").strip() or None,
+        "last_status": str(state.get(STATE_LAST_SCHEDULED_STATUS) or "").strip() or None,
+        "last_message": str(state.get(STATE_LAST_SCHEDULED_MESSAGE) or "").strip() or None,
+    }
+
+
 def _normalize_search_settings_payload(payload: dict | None) -> dict[str, Any]:
     source = payload if isinstance(payload, dict) else {}
     if isinstance(source.get("search_settings"), dict):
@@ -1412,6 +1488,12 @@ class SettingsHandler:
                     "Schedule polling interval must be a whole number of seconds."
                 ) from exc
             sanitized[KEY_SCHEDULE] = {
+                "enabled": bool(
+                    schedule_payload.get(
+                        "enabled",
+                        DEFAULT_USER_SETTINGS[KEY_SCHEDULE]["enabled"],
+                    )
+                ),
                 "daily_time_local": daily_time_local,
                 "loop_sleep_seconds": max(60, loop_sleep_seconds),
             }
@@ -1441,6 +1523,9 @@ class SettingsHandler:
                 ),
             },
             KEY_SCHEDULE: {
+                "enabled": bool(
+                    schedule.get("enabled", DEFAULT_USER_SETTINGS[KEY_SCHEDULE]["enabled"])
+                ),
                 "daily_time_local": str(
                     schedule.get("daily_time_local")
                     or DEFAULT_USER_SETTINGS[KEY_SCHEDULE]["daily_time_local"]

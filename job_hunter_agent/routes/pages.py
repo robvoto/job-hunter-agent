@@ -89,6 +89,14 @@ def _build_top_utility_bar_html(
 
     shared_labels = srv.load_shared_ui_labels()
     release_metadata = srv.load_app_release_metadata()
+    release_stage_html = ""
+    if srv.DEBUG_MODE:
+        release_stage_html = (
+            f'<span class="job-hunter-page-utility__release-stage" '
+            f'title="{_html_escape(shared_labels["app_stage_title"])}">'
+            f'{_html_escape(shared_labels["app_stage_label"])}'
+            "</span>"
+        )
 
     session_user = read_session_user(request)
 
@@ -113,7 +121,7 @@ def _build_top_utility_bar_html(
         '<span class="job-hunter-page-utility__brand-name">Job Hunter</span>'
         '<div class="job-hunter-page-utility__brand-meta">'
         f'<span class="job-hunter-page-utility__release-version">v{_html_escape(release_metadata["version"])}</span>'
-        f'<span class="job-hunter-page-utility__release-stage" title="{_html_escape(release_metadata["stage_title"])}">{_html_escape(release_metadata["stage_label"])}</span>'
+        f"{release_stage_html}"
         "</div>"
         "</div>"
         "</div>"

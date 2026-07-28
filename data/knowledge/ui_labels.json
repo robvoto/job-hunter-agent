@@ -1,8 +1,8 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 81,
-  "updated_at": "2026-07-21",
+  "version": 82,
+  "updated_at": "2026-07-28",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
     "remote_label": "Remote",
@@ -74,8 +74,16 @@
     "add_button_aria_label": "Add clearance",
     "settings_empty_text": "No clearances added yet. Add one below if a role you're applying for cares about a specific clearance or work-rights check.",
     "name_placeholder": "e.g. NV1",
-    "have_label": "I have this",
+    "have_label": "I hold this clearance",
     "remove_button_aria_label": "Remove clearance"
+  },
+  "role_history_labels_description": "Display labels for the read-only captured role history panel in Settings.",
+  "role_history_labels": {
+    "settings_title": "Captured role history",
+    "help_text": "Read-only onboarding role history used when a job asks for explicit years or months in a role.",
+    "refresh_button_label": "Refresh from saved CV",
+    "refresh_button_busy_label": "Refreshing...",
+    "empty_text": "No role history captured yet. Upload your CV, then use Refresh from saved CV."
   },
   "shared_ui_labels_description": "Shared labels for reusable app chrome and common action buttons.",
   "shared_ui_labels": {
@@ -83,8 +91,8 @@
     "account_menu_aria_label": "Account",
     "account_menu_title": "Account",
     "account_menu_logout_label": "Log out",
-    "app_stage_label": "Preview",
-    "app_stage_title": "Pre-release build for testing and validation. Core flows are still being hardened.",
+    "app_stage_label": "TEST",
+    "app_stage_title": "Test mode is enabled for this session.",
     "account_menu_settings_shortcut_label": "⚙",
     "account_menu_settings_shortcut_aria_label": "Open settings",
     "account_menu_workspace_shortcut_label": "↩ Workspace",

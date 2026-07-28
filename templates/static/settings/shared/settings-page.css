@@ -351,6 +351,31 @@
       font-size: var(--text-role-body-compact-font-size);
       line-height: var(--text-role-body-compact-line-height);
     }
+    /* Local layout exception: schedule uses the same two-column source grid but only fills one column. */
+    .schedule-source-panels {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-top: 0;
+    }
+    .schedule-source-panel {
+      grid-column: 1;
+    }
+    /* Local layout exception: the schedule time input should stay compact inside the source-style column. */
+    .schedule-time-field > input {
+      width: min(100%, 14rem);
+      justify-self: start;
+    }
+    .search-operation-runtime-status {
+      margin: 0;
+      font-size: var(--help-copy-font-size);
+      line-height: var(--help-copy-line-height);
+      color: var(--text-muted);
+    }
+    .search-operation-runtime-status[data-state="running"] {
+      color: var(--state-success-text);
+    }
+    .search-operation-runtime-status[data-state="stopped"] {
+      color: var(--state-warning-text);
+    }
     .search-operation-status {
       margin-top: auto;
     }

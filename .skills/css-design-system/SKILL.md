@@ -18,6 +18,9 @@ CSS changes must improve the shared design system, not create another one-off pa
 - Shared primitives/overlays belong in `templates/static/theme/themes.primitives.css`.
 - Page CSS is only for page layout, responsive placement, or genuine local exceptions.
 - If a rule can be reused by another screen, it is not page-local.
+- **Before adding a selector or component to any file, check `docs/UI_COMPONENT_MAP.md`** for the pattern that already owns this look, including which file, which classes, and which consumers use it. Add to that entry rather than creating a parallel selector.
+- **If no existing pattern fits, the fix is a new central entry** (theme CSS + a new `UI_COMPONENT_MAP.md` row), not a page-local selector that happens to look right on one screen.
+- A page CSS file must not redefine or restyle a selector that `UI_COMPONENT_MAP.md` lists as centrally owned. Genuine page-scoped overrides are limited to layout properties (grid placement, width caps, margins) and must carry a one-line comment naming the exception, e.g. `/* Local layout exception: <reason>. */`.
 
 ## Spacing discipline
 

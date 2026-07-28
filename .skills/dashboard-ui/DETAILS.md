@@ -1,4 +1,4 @@
-﻿# Skill: Workspace UI
+# Skill: Workspace UI
 
 Use before editing FastAPI routes, templates, workspace data, settings UI, or score/highlight display.
 
@@ -44,6 +44,13 @@ Use before editing FastAPI routes, templates, workspace data, settings UI, or sc
 - JS reads/writes via `getToggleChecked(id)` / `setToggleChecked(id, bool)` / `setToggleStateText(stateId, bool)` from `settings-utils.js`.
 - `collectProfile()` builds `enabled_sources` using `getToggleChecked('seek_enabled')` and `getToggleChecked('linkedin_enabled')`.
 - **Never use `.value === 'true'` for a checkbox toggle** — a checkbox's `.value` is `"on"`, not `"true"`.
+- When adding a new settings toggle near these controls, reuse the full owning structure, not just the switch classes in isolation. For search/settings source-style controls that means a real `search-source-panel` with a `search-source-panel-head`, not a loose row that happens to contain `toggle-switch--compact`.
+- For any persisted settings toggle, verify three things before handoff: the value is collected from the DOM, the API round-trips the saved value after reload, and a Playwright click test confirms the real browser save/reload path.
+
+### Settings subpanel head (title + help + trailing action button)
+- Wrap a subpanel's title/help text and its trailing action button (e.g. "+", "Refresh from saved CV") in `<div class="settings-subpanel-head">` with a `<div class="settings-subpanel-actions">` for the button(s) — see the Clearances and Captured role history sections of `settings-matrix.html`.
+- Do not build a bespoke flex row for this layout; the pair of classes is the reusable pattern and lives in `themes.widgets.css`.
+- Any label text rendered inside must come from the owning `ui_labels.json` group (e.g. `role_history_labels`, `settings_clearances_labels`), applied via `textContent` in JS — never hardcode it in the template or in a JS template literal.
 
 ### Government preference (two patterns — do not merge them)
 - **Settings** uses a choice strip (two checkboxes: Public, Private) via `__JOB_HUNTER_SECTOR_PREFERENCE_CHOICES__` → `render_sector_preference_choices()`. Both checked = "any". JS: `getSectorPreferenceValues()` / `setSectorPreferenceValues()`. Uses `card_class="choice-card--work-mode"` — same styled buttons as work mode and engagement type. Never use `choice-card--sector` (class does not exist).
@@ -93,7 +100,7 @@ Use before editing FastAPI routes, templates, workspace data, settings UI, or sc
 ## Reset User flow
 
 - The reset redirects to `/start?fresh=1`. `initWizard()` in `onboarding-flow.js` detects `?fresh=1`, calls `clearOnboardingBrowserState()`, strips the param from the URL, explicitly clears the search-keyword and salary fields to `''`, awaits `loadProfileDefaults()`, then sets step 1. Do not change this without preserving all five steps.
-- `clearOnboardingBrowserState()` removes sessionStorage key `jobHunter.onboardingWizard`. This function is defined in two places: `onboarding-page.js` for onboarding and inline in `workspace.html` for workspace. Keep them in sync if the key ever changes.
+- `clearOnboardingBrowserState()` removes the account-scoped `jobHunter.onboardingWizard` key from `localStorage`. The function is defined in `onboarding-flow.js` and inline in `workspace.html`; keep both callers aligned with `WIZARD_STATE_KEY`/`scopedOnboardingStorageKey()` if the base key changes.
 - `setCurrencyFieldValue` and `readCurrencyFieldValue` in `settings-utils.js` accept either a string ID or an HTMLElement. Do not change this back to ID-only, because onboarding callers always pass elements.
 - After reset, keywords and location on the Search Basics step will re-populate from fresh CV extraction. That is correct, not stale state.
 - `_onboarding_resume_step()` returns 2, Review Draft, only when `candidate_capabilities` is non-empty. A fresh-reset profile has `[]`, so it returns 1 and onboarding always starts at step 1 after reset.
@@ -130,7 +137,6 @@ Target aesthetic: Linear / GitHub dark / Vercel dashboard. Enterprise dark SaaS.
 - Blue (`--state-info-*`): source/info only — SEEK badge uses info-blue
 - Amber (`--state-warning-*`): advisory signals — Potential Duplicates, Description Issue, block-confirm panel
 - Red (`--state-error-*`): destructive or hard blockers only — badge-hidden, error states
-- Neutral (`--state-neutral-*`): default labels, LinkedIn badge, Government badge, inactive states
 - Neutral (`--state-neutral-*`): default labels, LinkedIn badge, Sector badge, inactive states
 
 **Component-specific rules:**
@@ -164,7 +170,7 @@ Target aesthetic: Linear / GitHub dark / Vercel dashboard. Enterprise dark SaaS.
 - `workspace_data.py`: workspace data transformation.
 - `history.py`: viewed/applied/hidden state.
 - `profile_store.py`: profile/settings normalisation.
-- `data/parsing_rules.json`: display labels where already owned there.
+- `data/knowledge/parsing_rules.json`: display labels where already owned there.
 
 ## JS debugging: "X is not defined" at a line where X IS defined
 

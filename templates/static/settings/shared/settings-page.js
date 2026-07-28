@@ -34,11 +34,25 @@ const statusEl = document.getElementById('status');
 const statusUi = createMessageBannerController(statusEl);
 const isTestMode = document.body?.dataset.testMode === 'true';
 const capabilityLabels = capabilityUi.labels || {};
+const roleHistoryLabels = window.__JOB_HUNTER_ROLE_HISTORY_LABELS__;
+if (!roleHistoryLabels) {
+  throw new Error('Missing role history labels.');
+}
 
 const capabilityMatrixNav = document.getElementById('settings_capability_matrix_nav');
 if (capabilityMatrixNav && capabilityLabels.matching_nav_label) {
   capabilityMatrixNav.textContent = capabilityLabels.matching_nav_label;
 }
+
+function applyRoleHistoryUiLabels() {
+  const title = document.getElementById('role_history_title');
+  const help = document.getElementById('role_history_help');
+  const refreshBtn = document.getElementById('refresh_role_history_from_saved_cv');
+  if (title) title.textContent = roleHistoryLabels.settings_title;
+  if (help) help.textContent = roleHistoryLabels.help_text;
+  if (refreshBtn) refreshBtn.textContent = roleHistoryLabels.refresh_button_label;
+}
+applyRoleHistoryUiLabels();
 const fillUserSettings = (s) => alertsSettings.fillUserSettings(s);
 const collectUserSettings = () => alertsSettings.collectUserSettings(loadedUserSettings);
 
@@ -115,7 +129,7 @@ function renderRoleExperienceReadonly(profile) {
   if (!container) return;
   const rows = Array.isArray(profile?.role_experience) ? profile.role_experience : [];
   if (!rows.length) {
-    container.innerHTML = '<p class="panel-copy">No role history captured yet. Re-run onboarding after uploading a CV.</p>';
+    container.innerHTML = `<p class="panel-copy">${escapeHtml(roleHistoryLabels.empty_text)}</p>`;
     return;
   }
   container.innerHTML = rows.map((row) => {
@@ -783,6 +797,35 @@ document.getElementById('reload')?.addEventListener('click', async (e) => {
     initSliders();
     clearDirty();
     showStatus('Profile reloaded from disk.', 'success', { autoHideMs: 2600 });
+  } catch (error) {
+    showStatus(error.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
+});
+
+document.getElementById('refresh_role_history_from_saved_cv')?.addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = roleHistoryLabels.refresh_button_busy_label;
+  try {
+    const response = await jobHunterFetch('/api/profile/refresh-role-history-from-saved-cv', {
+      method: 'POST',
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || 'Could not refresh role history from saved CV.');
+    }
+    const roleExperience = Array.isArray(payload?.role_experience) ? payload.role_experience : [];
+    loadedProfile = { ...(loadedProfile || {}), role_experience: roleExperience };
+    renderRoleExperienceReadonly(loadedProfile);
+    const pageLimitNotice = String(payload?.page_limit_notice || '').trim();
+    const message = pageLimitNotice
+      ? `${String(payload?.message || 'Role history refreshed from saved CV.').trim()} ${pageLimitNotice}`
+      : String(payload?.message || 'Role history refreshed from saved CV.').trim();
+    showStatus(message, 'success', { autoHideMs: 4000 });
   } catch (error) {
     showStatus(error.message, 'error');
   } finally {

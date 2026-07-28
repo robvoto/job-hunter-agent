@@ -56,13 +56,15 @@ export const JobHunterClearanceEditor = (function () {
                    value="${escapeHtml(rule.name)}" placeholder="${escapeHtml(labels.name_placeholder)}">
           </div>
           <div class="cap-strength">
-            <label class="toggle-switch toggle-switch--compact">
+            <label class="toggle-switch">
+              <span class="toggle-switch-copy">
+                <span class="toggle-switch-title">${escapeHtml(labels.have_label)}</span>
+              </span>
               <span class="toggle-switch-control">
                 <input type="checkbox" role="switch" data-clearance-field="value"
                        aria-label="${escapeHtml(labels.have_label)}: ${escapeHtml(rule.name || labels.name_placeholder)}"${rule.value ? ' checked' : ''}>
                 <span class="toggle-switch-ui"></span>
               </span>
-              <span class="toggle-switch-title">${escapeHtml(labels.have_label)}</span>
             </label>
           </div>
         </div>

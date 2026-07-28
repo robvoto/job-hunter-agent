@@ -822,6 +822,39 @@
   gap: var(--settings-header-gap);
 }
 
+.settings-subpanel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--surface-gap-sm);
+  flex-wrap: wrap;
+}
+
+.settings-subpanel-head > div:first-child {
+  min-width: 0;
+}
+
+.settings-subpanel-head h3 {
+  margin: 0;
+}
+
+.settings-subpanel-head > .panel-copy,
+.settings-subpanel-head > div:first-child > .panel-copy {
+  margin: 8px 0 0;
+}
+
+.settings-subpanel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--surface-gap-sm);
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.settings-subpanel-actions > .btn-add {
+  margin: 0;
+}
+
 .settings-section-head > .panel-kicker {
   margin: 0;
 }
