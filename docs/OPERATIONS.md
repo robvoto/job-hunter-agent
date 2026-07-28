@@ -397,7 +397,7 @@ Current runtime sections:
 * Profile
 * Capability Matrix
 * Rules
-* Alerts & AI
+* Messaging
 * Learning
 * Optimise
 

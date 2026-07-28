@@ -40,6 +40,10 @@ def test_workspace_archive_and_alert_labels_come_from_ui_labels():
     )
     assert workspace_renderer.ARCHIVE_LABEL == "Previously Saved Searches"
     assert workspace_renderer.ARCHIVE_CONTEXT_PREFIX == "Previously Saved Searches"
+    assert settings_alerts_labels["section_title"] == "Messaging"
+    assert settings_alerts_labels["section_copy"] == (
+        "Connect Telegram alerts. Admins can also choose the model used for fit decisions."
+    )
     assert settings_alerts_labels["telegram_disable_link_preview_label"] == "Hide link preview"
     assert settings_alerts_labels["telegram_disable_link_preview_help"] == (
         "When on, Telegram sends workspace links without a preview card."

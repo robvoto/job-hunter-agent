@@ -669,10 +669,10 @@
     "capability_presets_copy": "These presets define how the shared capability strength options behave.",
     "capability_presets_empty_help": "Load Global settings to view the preset tables."
   },
-  "settings_alerts_labels_description": "Display labels and helper copy for the Alerts & AI settings section.",
+  "settings_alerts_labels_description": "Display labels and helper copy for the Messaging settings section.",
   "settings_alerts_labels": {
-    "section_title": "Alerts & AI",
-    "section_copy": "Connect Telegram alerts and choose the model used for fit decisions.",
+    "section_title": "Messaging",
+    "section_copy": "Connect Telegram alerts. Admins can also choose the model used for fit decisions.",
     "telegram_heading": "Telegram setup & alerts",
     "telegram_copy": "Connect your bot, check the connection, and send yourself a test message.",
     "telegram_enabled_label": "Turn on Telegram alerts",
@@ -683,7 +683,7 @@
     "telegram_bot_username_help": "Used for the Connect with Telegram button. Leave off the @ symbol.",
     "telegram_disable_link_preview_label": "Hide link preview",
     "telegram_disable_link_preview_help": "When on, Telegram sends workspace links without a preview card.",
-    "telegram_connect_heading": "Required: Connect your Telegram account",
+    "telegram_connect_heading": "Connect your Telegram account",
     "telegram_connect_help": "You must connect your own Telegram account here before alerts or commands will work. Click Connect with Telegram, press Start in the bot chat, then click Check Connection.",
     "telegram_connect_help_missing": "Enter the bot token and username above, then save settings. After that, connect your Telegram account below.",
     "telegram_connect_help_ready": "Required step: click Connect with Telegram, press Start in the bot chat, then click Check Connection.",
