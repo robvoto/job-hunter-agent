@@ -91,6 +91,28 @@ def test_server_step_flag_is_ignored_when_off(monkeypatch):
     assert called == []
 
 
+def test_app_lifespan_starts_and_stops_background_services(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(_fa, "_start_shared_telegram_poller", lambda: calls.append("start_telegram"))
+    monkeypatch.setattr(
+        _fa,
+        "_start_shared_scheduled_agent_loop",
+        lambda: calls.append("start_scheduler"),
+    )
+    monkeypatch.setattr(
+        _fa,
+        "_stop_shared_scheduled_agent_loop",
+        lambda: calls.append("stop_scheduler"),
+    )
+    monkeypatch.setattr(_fa, "_stop_shared_telegram_poller", lambda: calls.append("stop_telegram"))
+
+    with TestClient(create_app()):
+        assert calls[:2] == ["start_telegram", "start_scheduler"]
+
+    assert calls == ["start_telegram", "start_scheduler", "stop_scheduler", "stop_telegram"]
+
+
 def test_run_wrapper_forwards_cli_args_to_fastapi_app():
     run_script = Path("run").read_text(encoding="utf-8")
 
@@ -502,6 +524,9 @@ def test_workspace_page_bootstrap_includes_account_scope(monkeypatch):
         'id="job_hunter_reset_user_btn"'
     )
     assert "Reset Signals" not in html
+    assert ">TEST<" in html
+    assert 'job-hunter-page-utility__release-stage' in html
+    assert "Preview" not in html
 
 
 def test_create_app_bootstrap_precedes_routes_import():

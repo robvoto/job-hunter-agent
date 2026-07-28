@@ -16,6 +16,7 @@ import html
 import json
 import time
 from datetime import datetime
+import threading
 from typing import Any
 
 from job_hunter_agent.runtime_helpers import load_repo_dotenv
@@ -66,6 +67,25 @@ from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
 from job_hunter_agent.workspace_service import build_workspace_record_sets, load_last_kept_records
 
 AGENT_SUMMARY_PATH = OUTPUT_DIR / "agent_last_summary.txt"
+
+SCHEDULE_ACTION_WAIT = "wait"
+SCHEDULE_ACTION_RUN = "run"
+SCHEDULE_ACTION_MISSED_WINDOW = "missed_window"
+
+SCHEDULE_STATUS_RUNNING = "running"
+SCHEDULE_STATUS_SUCCEEDED = "succeeded"
+SCHEDULE_STATUS_FAILED = "failed"
+SCHEDULE_STATUS_MISSED_WINDOW = "missed_window"
+
+STATE_LAST_SCHEDULED_ATTEMPT_AT = "last_scheduled_attempt_at"
+STATE_LAST_SCHEDULED_STARTED_AT = "last_scheduled_started_at"
+STATE_LAST_SCHEDULED_FINISHED_AT = "last_scheduled_finished_at"
+STATE_LAST_SCHEDULED_SUCCESS_AT = "last_scheduled_success_at"
+STATE_LAST_SCHEDULED_FAILURE_AT = "last_scheduled_failure_at"
+STATE_LAST_SCHEDULED_STATUS = "last_scheduled_status"
+STATE_LAST_SCHEDULED_MESSAGE = "last_scheduled_message"
+STATE_LAST_SCHEDULED_SUMMARY_PATH = "last_scheduled_summary_path"
+STATE_SCHEDULER_LAST_SEEN_AT = "scheduler_last_seen_at"
 
 # Digest payload keys
 KEY_DIGEST_NEW_RECORDS = "new_records"
@@ -348,7 +368,78 @@ def should_send_digest(payload: dict[str, Any], settings: dict[str, Any]) -> boo
     return int(payload.get(KEY_DIGEST_NEW_COUNT, 0)) > 0
 
 
-def run_agent_once(no_scrape: bool = False, notify: bool = True) -> dict[str, Any]:
+def _timestamp_day(value: str) -> str:
+    timestamp = parse_timestamp(value)
+    if timestamp:
+        return timestamp.astimezone().date().isoformat()
+    return value[:10]
+
+
+def _parse_scheduled_time(daily_time_local: str) -> tuple[int, int]:
+    try:
+        hour_text, minute_text = daily_time_local.split(":", 1)
+        return int(hour_text), int(minute_text)
+    except Exception as exc:
+        print(
+            f"[AGENT_RUNNER][WARN] Failed to parse scheduled time '{daily_time_local}', using default: {exc}"
+        )
+        hour_text, minute_text = DEFAULT_DAILY_TIME_LOCAL.split(":", 1)
+        return int(hour_text), int(minute_text)
+
+
+def evaluate_schedule_action(
+    state: dict[str, Any], daily_time_local: str, now: datetime, loop_started_at: datetime
+) -> str:
+    scheduled_hour, scheduled_minute = _parse_scheduled_time(daily_time_local)
+    after_window = (now.hour, now.minute) >= (scheduled_hour, scheduled_minute)
+    if not after_window:
+        return SCHEDULE_ACTION_WAIT
+
+    last_attempt_at = str(state.get(STATE_LAST_SCHEDULED_ATTEMPT_AT) or "").strip()
+    if _timestamp_day(last_attempt_at) == now.date().isoformat():
+        return SCHEDULE_ACTION_WAIT
+
+    # Do not replay a missed run if the loop was started after today's window.
+    if loop_started_at.date() == now.date() and (
+        loop_started_at.hour,
+        loop_started_at.minute,
+    ) > (scheduled_hour, scheduled_minute):
+        return SCHEDULE_ACTION_MISSED_WINDOW
+    return SCHEDULE_ACTION_RUN
+
+
+def _scheduled_state_updates(
+    status: str,
+    *,
+    attempted_at: str,
+    message: str,
+    summary_path: str | None = None,
+    finished_at: str | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        STATE_LAST_SCHEDULED_ATTEMPT_AT: attempted_at,
+        STATE_LAST_SCHEDULED_STATUS: status,
+        STATE_LAST_SCHEDULED_MESSAGE: message,
+    }
+    if status == SCHEDULE_STATUS_RUNNING:
+        payload[STATE_LAST_SCHEDULED_STARTED_AT] = attempted_at
+    if summary_path:
+        payload[STATE_LAST_SCHEDULED_SUMMARY_PATH] = summary_path
+    if finished_at:
+        payload[STATE_LAST_SCHEDULED_FINISHED_AT] = finished_at
+    if status == SCHEDULE_STATUS_SUCCEEDED and finished_at:
+        payload[STATE_LAST_SCHEDULED_SUCCESS_AT] = finished_at
+    if status == SCHEDULE_STATUS_FAILED and finished_at:
+        payload[STATE_LAST_SCHEDULED_FAILURE_AT] = finished_at
+    return payload
+
+
+def run_agent_once(
+    no_scrape: bool = False,
+    notify: bool = True,
+    *,
+    scrape_trigger: str = "agent runner command",
+) -> dict[str, Any]:
     settings = load_user_settings(None, create_if_missing=True)
     state = load_agent_state()
     previous_records = load_last_kept_records()
@@ -358,7 +449,7 @@ def run_agent_once(no_scrape: bool = False, notify: bool = True) -> dict[str, An
         rebuild_workspace_results(reason="agent runner --send-notification-no-scrape")
     else:
         print("Starting job collection...")
-        scrape_jobs_direct()
+        scrape_jobs_direct(trigger_label=scrape_trigger)
         print("Job collection finished.")
 
     current_records = load_last_kept_records()
@@ -426,41 +517,92 @@ def run_agent_once(no_scrape: bool = False, notify: bool = True) -> dict[str, An
 
 
 def should_run_now(state: dict[str, Any], daily_time_local: str, now: datetime) -> bool:
-    try:
-        hour_text, minute_text = daily_time_local.split(":", 1)
-        scheduled_hour = int(hour_text)
-        scheduled_minute = int(minute_text)
-    except Exception as exc:
-        print(
-            f"[AGENT_RUNNER][WARN] Failed to parse scheduled time '{daily_time_local}', using default: {exc}"
-        )
-        hour_text, minute_text = DEFAULT_DAILY_TIME_LOCAL.split(":", 1)
-        scheduled_hour = int(hour_text)
-        scheduled_minute = int(minute_text)
-
-    last_run_at = str(state.get("last_agent_run_at") or "")
-    last_run_day = last_run_at[:10]
-    today = now.date().isoformat()
+    scheduled_hour, scheduled_minute = _parse_scheduled_time(daily_time_local)
     after_window = (now.hour, now.minute) >= (scheduled_hour, scheduled_minute)
-    return after_window and last_run_day != today
+    last_attempt_at = str(state.get(STATE_LAST_SCHEDULED_ATTEMPT_AT) or "").strip()
+    return after_window and _timestamp_day(last_attempt_at) != now.date().isoformat()
 
 
-def run_agent_loop() -> None:
+def run_agent_loop(stop_event: threading.Event | None = None) -> None:
     print("Daily agent loop started.")
-    while True:
+    active_stop_event = stop_event or threading.Event()
+    loop_started_at = datetime.now().astimezone()
+    while not active_stop_event.is_set():
         settings = load_user_settings(None, create_if_missing=True)
         sleep_seconds = int(settings["schedule"]["loop_sleep_seconds"])
+        schedule_enabled = bool(settings["schedule"].get("enabled", True))
         daily_time_local = str(
             settings["schedule"]["daily_time_local"] or DEFAULT_DAILY_TIME_LOCAL
         ).strip()
 
         now = datetime.now().astimezone()
         state = load_agent_state()
-        if should_run_now(state, daily_time_local, now):
-            result = run_agent_once(no_scrape=False, notify=True)
-            print(result["summary_text"])
-            print(f"Summary saved to {result['summary_path']}")
-        time.sleep(sleep_seconds)
+        state[STATE_SCHEDULER_LAST_SEEN_AT] = now.isoformat(timespec="seconds")
+        save_agent_state(state)
+        if not schedule_enabled:
+            active_stop_event.wait(sleep_seconds)
+            continue
+        schedule_action = evaluate_schedule_action(state, daily_time_local, now, loop_started_at)
+        if schedule_action == SCHEDULE_ACTION_MISSED_WINDOW:
+            attempted_at = now.isoformat(timespec="seconds")
+            message = (
+                f"Scheduled run skipped on startup because the runner started after the "
+                f"{daily_time_local} window."
+            )
+            state.update(
+                _scheduled_state_updates(
+                    SCHEDULE_STATUS_MISSED_WINDOW,
+                    attempted_at=attempted_at,
+                    message=message,
+                    finished_at=attempted_at,
+                )
+            )
+            save_agent_state(state)
+            print(f"[AGENT_RUNNER][INFO] {message}")
+        elif schedule_action == SCHEDULE_ACTION_RUN:
+            attempted_at = now.isoformat(timespec="seconds")
+            state.update(
+                _scheduled_state_updates(
+                    SCHEDULE_STATUS_RUNNING,
+                    attempted_at=attempted_at,
+                    message="Scheduled run started.",
+                )
+            )
+            save_agent_state(state)
+            try:
+                result = run_agent_once(
+                    no_scrape=False,
+                    notify=True,
+                    scrape_trigger="scheduled daily runner",
+                )
+            except Exception as exc:
+                failed_at = datetime.now().astimezone().isoformat(timespec="seconds")
+                state = load_agent_state()
+                state.update(
+                    _scheduled_state_updates(
+                        SCHEDULE_STATUS_FAILED,
+                        attempted_at=attempted_at,
+                        message=f"Scheduled run failed: {exc}",
+                        finished_at=failed_at,
+                    )
+                )
+                save_agent_state(state)
+                print(f"[AGENT_RUNNER][ERROR] Scheduled run failed: {exc}")
+            else:
+                state = load_agent_state()
+                state.update(
+                    _scheduled_state_updates(
+                        SCHEDULE_STATUS_SUCCEEDED,
+                        attempted_at=attempted_at,
+                        message="Scheduled run completed successfully.",
+                        summary_path=result["summary_path"],
+                        finished_at=str(result["summary"]["run_finished_at"]),
+                    )
+                )
+                save_agent_state(state)
+                print(result["summary_text"])
+                print(f"Summary saved to {result['summary_path']}")
+        active_stop_event.wait(sleep_seconds)
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:

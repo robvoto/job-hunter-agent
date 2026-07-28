@@ -66,6 +66,7 @@ _logger = logging.getLogger(__name__)
 _CORS_METHODS = "GET, PUT, PATCH, POST, DELETE, OPTIONS"
 _CORS_HEADERS = "Content-Type"
 _TELEGRAM_POLLER: "_TelegramPollThread | None" = None
+_SCHEDULED_AGENT_LOOP: "_ScheduledAgentLoopThread | None" = None
 
 
 def _origin_from_url(value: str) -> str | None:
@@ -344,6 +345,27 @@ class _TelegramPollThread(threading.Thread):
             self._stop_event.wait(10.0)
 
 
+class _ScheduledAgentLoopThread(threading.Thread):
+    def __init__(self) -> None:
+        super().__init__(daemon=True, name="scheduled-agent-loop")
+        self._stop_event = threading.Event()
+
+    def stop(self) -> None:
+        self._stop_event.set()
+
+    def run(self) -> None:
+        from job_hunter_agent.agent_runner import run_agent_loop
+        from job_hunter_agent.user_context import set_user_context_from_admin_env
+
+        try:
+            set_user_context_from_admin_env()
+            run_agent_loop(self._stop_event)
+        except Exception as exc:
+            _logger.warning("[AGENT_RUNNER][WARN] Scheduled agent loop stopped unexpectedly: %s", exc)
+        finally:
+            set_user_id(None)
+
+
 def _start_shared_telegram_poller() -> None:
     global _TELEGRAM_POLLER
     if os.environ.get("PYTEST_CURRENT_TEST"):
@@ -367,12 +389,37 @@ def _stop_shared_telegram_poller() -> None:
     _logger.info("[TELEGRAM] Background Telegram poller stopped.")
 
 
+def _start_shared_scheduled_agent_loop() -> None:
+    global _SCHEDULED_AGENT_LOOP
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return
+    if os.environ.get("JOB_HUNTER_DESKTOP_MODE") == "1":
+        return
+    if _SCHEDULED_AGENT_LOOP and _SCHEDULED_AGENT_LOOP.is_alive():
+        return
+    _SCHEDULED_AGENT_LOOP = _ScheduledAgentLoopThread()
+    _SCHEDULED_AGENT_LOOP.start()
+    _logger.info("[AGENT_RUNNER] Background scheduled agent loop started.")
+
+
+def _stop_shared_scheduled_agent_loop() -> None:
+    global _SCHEDULED_AGENT_LOOP
+    if not _SCHEDULED_AGENT_LOOP:
+        return
+    _SCHEDULED_AGENT_LOOP.stop()
+    _SCHEDULED_AGENT_LOOP.join(timeout=5.0)
+    _SCHEDULED_AGENT_LOOP = None
+    _logger.info("[AGENT_RUNNER] Background scheduled agent loop stopped.")
+
+
 @asynccontextmanager
 async def _app_lifespan(_app: FastAPI):
     _start_shared_telegram_poller()
+    _start_shared_scheduled_agent_loop()
     try:
         yield
     finally:
+        _stop_shared_scheduled_agent_loop()
         _stop_shared_telegram_poller()
 
 
