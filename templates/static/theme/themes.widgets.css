@@ -2178,20 +2178,23 @@
   line-height: var(--control-line-height);
   cursor: pointer;
 }
-input[type="checkbox"]:not([role="switch"]) {
+.jh-checkbox {
   appearance: none;
   display: inline-grid;
   place-content: center;
   width: calc(var(--control-space-lg) + var(--control-space-xs));
   height: calc(var(--control-space-lg) + var(--control-space-xs));
   margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  flex: 0 0 auto;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   background: var(--bg-muted);
   color: var(--bg-page);
   cursor: pointer;
 }
-input[type="checkbox"]:not([role="switch"])::before {
+.jh-checkbox::before {
   content: "";
   width: var(--control-space-md);
   height: var(--control-space-xs);
@@ -2200,18 +2203,18 @@ input[type="checkbox"]:not([role="switch"])::before {
   transform: rotate(-45deg) scale(0);
   transform-origin: center;
 }
-input[type="checkbox"]:not([role="switch"]):checked {
+.jh-checkbox:checked {
   border-color: var(--selection-accent);
   background: var(--selection-accent);
 }
-input[type="checkbox"]:not([role="switch"]):checked::before {
+.jh-checkbox:checked::before {
   transform: rotate(-45deg) scale(1);
 }
-input[type="checkbox"]:not([role="switch"]):focus-visible {
+.jh-checkbox:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
 }
-input[type="checkbox"]:not([role="switch"]):disabled {
+.jh-checkbox:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }

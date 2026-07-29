@@ -820,7 +820,7 @@
         const escapedValue = _rejEscapeHtml(item.value);
         const escapedCat = _rejEscapeHtml(item.category);
         return `<div class="rejection-chip">` +
-          `<label><input type="checkbox" data-value="${escapedValue}" data-cat="${escapedCat}" /> ${escapedValue}</label>` +
+          `<label><input class="jh-checkbox" type="checkbox" data-value="${escapedValue}" data-cat="${escapedCat}" /> ${escapedValue}</label>` +
           `</div>`;
       }).join('');
       body.innerHTML =
@@ -861,7 +861,7 @@
           <div class="rejection-group">
             <div class="rejection-chip" style="display:flex;align-items:flex-start;width:100%;border-radius:14px;padding:10px 12px;">
               <label style="display:flex;gap:8px;align-items:flex-start;width:100%;cursor:pointer;">
-                <input type="checkbox" data-direct-description-followup="1" data-phrase="${phrase}" />
+                <input class="jh-checkbox" type="checkbox" data-direct-description-followup="1" data-phrase="${phrase}" />
                 <span>
                   <strong>${phrase}</strong><br>
                   <span style="color:var(--muted);font-size:0.8rem;">Reject any future job that mentions this exact phrase anywhere in the description.</span>
@@ -886,7 +886,7 @@
           <div class="rejection-group">
             <div class="rejection-chip" style="display:flex;align-items:flex-start;width:100%;border-radius:14px;padding:10px 12px;">
               <label style="display:flex;gap:8px;align-items:flex-start;width:100%;cursor:pointer;">
-                <input type="checkbox" data-description-followup="1" data-phrase="${phrase}" />
+                <input class="jh-checkbox" type="checkbox" data-description-followup="1" data-phrase="${phrase}" />
                 <span>
                   <strong>${phrase}</strong><br>
                   <span style="color:var(--muted);font-size:0.8rem;">Matched ${rejectedCount} rejected description${rejectedCount === 1 ? '' : 's'} and no kept roles.</span>
@@ -911,7 +911,7 @@
           <div class="rejection-group">
             <div class="rejection-chip" style="display:flex;align-items:flex-start;width:100%;border-radius:14px;padding:10px 12px;">
               <label style="display:flex;gap:8px;align-items:flex-start;width:100%;cursor:pointer;">
-                <input type="checkbox" data-title-followup="1" data-phrase="${phrase}" />
+                <input class="jh-checkbox" type="checkbox" data-title-followup="1" data-phrase="${phrase}" />
                 <span>
                   <strong>${phrase}</strong><br>
                   <span style="color:var(--muted);font-size:0.8rem;">Matched ${rejectedCount} rejected title${rejectedCount === 1 ? '' : 's'} and no kept titles.</span>

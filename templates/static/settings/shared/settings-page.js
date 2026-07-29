@@ -297,6 +297,7 @@ function renderLocationOptions() {
       item.className = 'checkbox-list-option location-checkbox-option';
       const input = document.createElement('input');
       input.type = 'checkbox';
+      input.className = 'jh-checkbox';
       input.dataset.locationValue = value;
       input.checked = savedValues.has(value);
       input.addEventListener('change', () => {
