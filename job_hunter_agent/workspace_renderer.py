@@ -605,7 +605,6 @@ def _workspace_label(group: str, key: str) -> str:
 
 
 ARCHIVE_LABEL = _workspace_label("workspace_page_labels", "archive_label")
-ARCHIVE_CONTEXT_PREFIX = ARCHIVE_LABEL
 ARCHIVE_BADGE_TOOLTIP = _workspace_label("workspace_card_labels", "archive_badge_tooltip")
 
 
@@ -1508,7 +1507,7 @@ def render_job_card(
         )
     elif archived and record.get("last_kept_at"):
         context_bits.append(
-            f"{ARCHIVE_CONTEXT_PREFIX} {format_timestamp_label(record.get('last_kept_at'))}"
+            f"{ARCHIVE_LABEL} {format_timestamp_label(record.get('last_kept_at'))}"
         )
     context_html = (
         f'<div class="job-context">{safe_html(" | ".join(context_bits))}</div>'

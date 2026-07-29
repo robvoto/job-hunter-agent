@@ -41,7 +41,6 @@ def test_workspace_archive_and_alert_labels_come_from_ui_labels():
         "No shortlist matches right now."
     )
     assert workspace_renderer.ARCHIVE_LABEL == "Previously Saved Searches"
-    assert workspace_renderer.ARCHIVE_CONTEXT_PREFIX == "Previously Saved Searches"
     assert settings_alerts_labels["section_title"] == "Messaging"
     assert settings_alerts_labels["section_copy"] == (
         "Connect Telegram alerts. Admins can also choose the model used for fit decisions."
