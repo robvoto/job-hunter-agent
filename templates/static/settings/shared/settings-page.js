@@ -283,7 +283,7 @@ function renderLocationOptions() {
   container.innerHTML = '';
   grouped.forEach((groupOptions, group) => {
     const section = document.createElement('fieldset');
-    section.className = 'checkbox-list-group location-checkbox-group';
+    section.className = ['checkbox-list-group', 'location-checkbox-group', groupOptions.length > 6 ? 'checkbox-list-group--dense' : ''].filter(Boolean).join(' ');
     const legend = document.createElement('legend');
     legend.textContent = group;
     section.appendChild(legend);

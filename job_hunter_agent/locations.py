@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 
 _LOCATIONS_AU_PATH = KNOWLEDGE_DIR / "locations_au.json"
 LOCATION_GROUP_LABELS = {
-    "state": "States",
     "city": "Capital cities",
+    "state": "States",
     "territory": "Territories",
 }
 
@@ -71,6 +71,9 @@ def load_location_options(force_reload: bool = False) -> list[dict[str, str]]:
                 "group": LOCATION_GROUP_LABELS[kind],
             }
         )
+
+    group_order = {kind: index for index, kind in enumerate(LOCATION_GROUP_LABELS)}
+    options.sort(key=lambda option: group_order[str(option["kind"])])
 
     _cached_location_options = options
     return options
