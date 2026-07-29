@@ -658,6 +658,10 @@ def _render_template_with_locations(
         .replace("__JOB_HUNTER_ADD_BUTTON_ARIA_LABEL__", shared_labels["add_button_aria_label"])
         .replace("__JOB_HUNTER_ADD_BUTTON_TITLE__", shared_labels["add_button_title"])
         .replace(
+            "__JOB_HUNTER_SHARED_UI_LOCATION_HELP__",
+            shared_labels["location_help"],
+        )
+        .replace(
             "__JOB_HUNTER_SHARED_UI_SCHEDULE_SECTION_TITLE__",
             shared_labels["schedule_section_title"],
         )
