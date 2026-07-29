@@ -131,7 +131,9 @@
     "settings_privacy_title": "CV data and privacy",
     "settings_privacy_copy": "Job Hunter uses your uploaded CV to build the runtime profile used for matching. The raw CV is not the long-term source of truth, and packaged or shared builds must not include developer CVs, scraped jobs, logs, runtime databases, or private examples.",
     "settings_privacy_link_label": "Read the retention decision",
-    "settings_search_save_button_label": "Save Search Settings"
+    "settings_search_save_button_label": "Save Search Settings",
+    "schedule_section_title": "Run & Schedule",
+    "schedule_section_copy": "These controls use your current search settings. Set the time here, then use the main Save Settings button. If the scheduler is already running, changes apply automatically without a restart."
   },
   "onboarding_import_summary_labels_description": "Display labels for the onboarding import helper summary.",
   "onboarding_import_summary_labels": {

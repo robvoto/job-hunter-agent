@@ -307,6 +307,11 @@ def test_settings_search_section_uses_shared_choice_strip_widget(monkeypatch):
     assert "Job board search" in html
     assert 'class="panel search-operations-panel"' not in html
     assert 'class="subpanel search-settings-subcard search-operations-panel"' in html
+    schedule_panel = html.split('id="schedule-panel"', 1)[1].split('</section>', 1)[0]
+    assert 'class="settings-section-head search-operations-head"' in schedule_panel
+    assert '<h3>Run & Schedule</h3>' in schedule_panel
+    assert 'These controls use your current search settings.' in schedule_panel
+    assert schedule_panel.index('settings-section-head search-operations-head') < schedule_panel.index('search-operations-body')
 
     assert "search-common-panel" not in html
 

@@ -204,6 +204,8 @@ _SHARED_UI_LABEL_KEYS = (
     "add_button_aria_label",
     "add_button_title",
     "location_help",
+    "schedule_section_title",
+    "schedule_section_copy",
     "search_wait_copy",
     "search_running_title",
     "search_running_copy",

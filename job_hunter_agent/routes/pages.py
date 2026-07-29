@@ -658,6 +658,14 @@ def _render_template_with_locations(
         .replace("__JOB_HUNTER_ADD_BUTTON_ARIA_LABEL__", shared_labels["add_button_aria_label"])
         .replace("__JOB_HUNTER_ADD_BUTTON_TITLE__", shared_labels["add_button_title"])
         .replace(
+            "__JOB_HUNTER_SHARED_UI_SCHEDULE_SECTION_TITLE__",
+            shared_labels["schedule_section_title"],
+        )
+        .replace(
+            "__JOB_HUNTER_SHARED_UI_SCHEDULE_SECTION_COPY__",
+            shared_labels["schedule_section_copy"],
+        )
+        .replace(
             "__JOB_HUNTER_ENGAGEMENT_TYPE_CHOICES__",
             srv.render_engagement_type_choices(
                 name="engagement_type", selected_values=ENGAGEMENT_TYPE_DEFAULT_VALUES

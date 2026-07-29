@@ -271,3 +271,21 @@ All resolved in `pages.py → _render_template_with_locations()`.
 | CSS tokens/primitives | `templates/static/theme/` (`themes.tokens.css`, `themes.widgets.css`, `themes.primitives.css`) |
 | Settings HTML partials | `templates/partials/settings/standard/` |
 | Onboarding HTML | `templates/onboarding.html` |
+
+### Settings section card header contract
+
+Major settings subpanels must keep their identity in an outer header before their controls:
+
+```html
+<section class="subpanel ...">
+  <div class="settings-section-head ...">
+    <h3>...</h3>
+    <p class="panel-copy">...</p>
+  </div>
+  <div class="...-body">
+    <!-- controls or inner cards -->
+  </div>
+</section>
+```
+
+Do not place explanatory `panel-copy` directly in the body without the section title. Inner control cards own controls only; they do not replace the outer section heading.
