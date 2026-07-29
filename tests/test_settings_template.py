@@ -184,7 +184,7 @@ def test_search_settings_location_listbox_uses_shared_dark_multiselect_styles():
     widgets_css = THEME_WIDGETS_CSS_PATH.read_text(encoding="utf-8")
     settings_css = SETTINGS_PAGE_CSS_PATH.read_text(encoding="utf-8")
 
-    assert 'select id="locations" class="jh-select" multiple size="8"' in search_html
+    assert 'id="locations" class="location-checkbox-grid" role="group"' in search_html
     assert ".jh-select[multiple] {" in widgets_css
     assert "background-image: none;" in widgets_css
     assert "scrollbar-gutter: stable;" in widgets_css
@@ -466,8 +466,8 @@ def test_search_settings_partial_has_privacy_subcards_and_shared_save_bar():
     assert 'id="save_search_settings_shortcut"' not in html
     assert 'id="apsjobs_locations"' not in html
     assert 'id="locations"' in html
-    assert 'multiple size="8"' in html
-    assert "limitSelectedLocations" in js
+    assert 'class="location-checkbox-grid" role="group"' in html
+    assert "syncLocationSelectionLimit" in js
 
     assert 'class="panel search-operations-panel"' not in html
     assert 'class="subpanel search-settings-subcard search-operations-panel"' in html

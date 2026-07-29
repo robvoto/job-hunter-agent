@@ -236,9 +236,33 @@ function renderLlmModelOptions() {
 }
 
 
+function getLocationInputs() {
+  const container = document.getElementById('locations');
+  if (!container) return [];
+  return Array.from(container.querySelectorAll('input[type="checkbox"][data-location-value]'));
+}
+
+function getSelectedLocationValues() {
+  return getLocationInputs()
+    .filter((input) => input.checked)
+    .map((input) => String(input.dataset.locationValue || '').trim())
+    .filter(Boolean);
+}
+
+function syncLocationSelectionLimit() {
+  const inputs = getLocationInputs();
+  const configuredMax = loadedGlobalSettings?.limits?.search?.locations_max_selected?.max;
+  const maxSelected = Number(configuredMax);
+  if (!Number.isFinite(maxSelected) || maxSelected < 1) return;
+  const selectedCount = inputs.filter((input) => input.checked).length;
+  inputs.forEach((input) => {
+    input.disabled = !input.checked && selectedCount >= maxSelected;
+  });
+}
+
 function renderLocationOptions() {
-  const select = document.getElementById('locations');
-  if (!select || !locationUi.renderLocationOptions) return;
+  const container = document.getElementById('locations');
+  if (!container || !locationUi.renderLocationOptions) return;
   const options = Array.isArray(locationUi.options)
     ? locationUi.options.filter((option) => ['state', 'territory', 'city'].includes(String(option?.kind || '').trim().toLowerCase()))
     : [];
@@ -249,42 +273,43 @@ function renderLocationOptions() {
   );
   const grouped = new Map();
   options.forEach((option) => {
-    const group = String(option?.group || 'Locations').trim();
+    const group = String(option?.group || '').trim();
+    if (!group) return;
     if (!grouped.has(group)) grouped.set(group, []);
     grouped.get(group).push(option);
   });
-  const markup = [];
+  container.innerHTML = '';
   grouped.forEach((groupOptions, group) => {
-    markup.push(`<optgroup label="${escapeHtml(group)}">`);
+    const section = document.createElement('fieldset');
+    section.className = 'location-checkbox-group';
+    const legend = document.createElement('legend');
+    legend.textContent = group;
+    section.appendChild(legend);
+    const optionsWrap = document.createElement('div');
+    optionsWrap.className = 'location-checkbox-options';
     groupOptions.forEach((option) => {
       const value = String(option?.value || '').trim();
-      const label = String(option?.label || value).trim();
-      const selected = savedValues.has(value) ? ' selected' : '';
-      markup.push(`<option value="${escapeHtml(value)}"${selected}>${escapeHtml(label)}</option>`);
+      const label = String(option?.label || '').trim();
+      if (!value || !label) return;
+      const item = document.createElement('label');
+      item.className = 'location-checkbox-option';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.dataset.locationValue = value;
+      input.checked = savedValues.has(value);
+      input.addEventListener('change', () => {
+        syncLocationSelectionLimit();
+        markDirty();
+      });
+      const text = document.createElement('span');
+      text.textContent = label;
+      item.append(input, text);
+      optionsWrap.appendChild(item);
     });
-    markup.push('</optgroup>');
+    section.appendChild(optionsWrap);
+    container.appendChild(section);
   });
-  select.innerHTML = markup.join('');
-}
-
-function getSelectedValues(select) {
-  if (!select) return [];
-  return Array.from(select.selectedOptions || [])
-    .map((option) => String(option.value || '').trim())
-    .filter(Boolean);
-}
-
-function limitSelectedLocations() {
-  const select = document.getElementById('locations');
-  const maxSelected = Number(loadedGlobalSettings?.limits?.search?.locations_max_selected?.max || 3);
-  if (!select || !Number.isFinite(maxSelected) || maxSelected < 1) return;
-  const selectedValues = getSelectedValues(select);
-  if (selectedValues.length <= maxSelected) return;
-  const allowed = new Set(selectedValues.slice(0, maxSelected));
-  Array.from(select.options).forEach((option) => {
-    const value = String(option?.value || '').trim();
-    option.selected = allowed.has(value);
-  });
+  syncLocationSelectionLimit();
 }
 
 function buildSettingsHelpDrawer(bodyHtml, extraClass = '') {
@@ -365,7 +390,6 @@ initFieldInfoDrawers();
 
 function collectProfile() {
   chipEditor.flushChipEditorInputs();
-  const locationSelect = document.getElementById('locations');
   const searchDateWindow = Number(document.getElementById('search_date_window')?.value || '3');
   const hoursMap = { 0: 720, 1: 24, 3: 72, 7: 168, 15: 360, 30: 720 };
   const linkedinEasyApplyRaw = document.getElementById(LINKEDIN_EASY_APPLY_ONLY)?.value;
@@ -381,7 +405,7 @@ function collectProfile() {
   return {
     search_settings: {
       keywords: String(settingsField('keywords').value || '').trim(),
-      locations: getSelectedValues(locationSelect),
+      locations: getSelectedLocationValues(),
       classification_ids: toLines(document.getElementById('classification_ids').value),
       date_range_days: searchDateWindow === 0 ? 30 : searchDateWindow,
       linkedin_hours_old: hoursMap[searchDateWindow] ?? 72,
@@ -429,18 +453,6 @@ function fillForm(profile) {
   const onboardingKeywords = savedKeywords ? '' : readOnboardingWelcomeSearchKeywords();
   settingsField('keywords').value = savedKeywords || onboardingKeywords || '';
   renderLocationOptions();
-  const locationSelect = document.getElementById('locations');
-  if (locationSelect) {
-    const selectedValues = new Set(
-      (profile.search_settings?.locations || [])
-        .map((value) => String(value || '').trim())
-        .filter(Boolean)
-    );
-    Array.from(locationSelect.options).forEach((option) => {
-      option.selected = selectedValues.has(String(option.value || '').trim());
-    });
-    limitSelectedLocations();
-  }
   document.getElementById('classification_ids').value = (profile.search_settings?.classification_ids || []).join('\n');
   setChoiceGroupValue('seek_max_pages', profile.search_settings?.seek_max_pages);
   document.getElementById('linkedin_results_per_search').value = String(profile.search_settings?.linkedin_results_per_search);
