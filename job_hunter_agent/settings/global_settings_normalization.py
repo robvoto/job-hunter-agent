@@ -50,6 +50,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_JOB_HISTORY_MAX_ENTRIES,
     KEY_LIMITS,
     KEY_LINKEDIN_EASY_APPLY_ONLY,
+    KEY_SEEK_QUICK_APPLY_ONLY,
     KEY_LINKEDIN_HOURS_OLD,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
     KEY_LLM_MAX_CHARS,
@@ -989,6 +990,17 @@ def normalize_global_settings(
                 DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_RESULTS_PER_SEARCH],
                 normalized_search_limits[KEY_LINKEDIN_RESULTS_PER_SEARCH]["min"],
                 normalized_search_limits[KEY_LINKEDIN_RESULTS_PER_SEARCH]["max"],
+            ),
+            KEY_SEEK_QUICK_APPLY_ONLY: (
+                None
+                if search_source.get(KEY_SEEK_QUICK_APPLY_ONLY) in (None, "")
+                else (
+                    True
+                    if str(search_source.get(KEY_SEEK_QUICK_APPLY_ONLY)).strip().lower() == "true"
+                    else False
+                    if str(search_source.get(KEY_SEEK_QUICK_APPLY_ONLY)).strip().lower() == "false"
+                    else None
+                )
             ),
             KEY_LINKEDIN_EASY_APPLY_ONLY: (
                 None

@@ -14,6 +14,7 @@ from job_hunter_agent.record_schema import (
     RECORD_URL_KEY,
 )
 from job_hunter_agent.scrapers.seek import classify_seek_apply_method
+from job_hunter_agent.scrapers.seek_runner import seek_quick_apply_filter_matches
 from job_hunter_agent.scrapers import seek_runner
 
 
@@ -83,3 +84,12 @@ def test_fetch_seek_job_detail_async_stores_external_apply_url(monkeypatch):
 
     assert result[RECORD_APPLY_METHOD_KEY] == APPLY_METHOD_EXTERNAL_APPLY
     assert result[RECORD_SOURCE_METADATA_KEY]["apply_url"] == "https://programmed.example.com/jobs/123"
+
+
+def test_seek_quick_apply_filter_matches_all_modes():
+    assert seek_quick_apply_filter_matches(None, "quick_apply") is True
+    assert seek_quick_apply_filter_matches(None, "external_apply") is True
+    assert seek_quick_apply_filter_matches(True, "quick_apply") is True
+    assert seek_quick_apply_filter_matches(True, "external_apply") is False
+    assert seek_quick_apply_filter_matches(False, "quick_apply") is False
+    assert seek_quick_apply_filter_matches(False, "external_apply") is True

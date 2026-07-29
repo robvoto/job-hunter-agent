@@ -12,6 +12,7 @@
     "classification_ids": [],
     "date_range_days": 3,
     "seek_max_pages": 3,
+    "seek_quick_apply_only": null,
     "sort_newest_first": true,
     "linkedin_hours_old": 24,
     "linkedin_results_per_search": 25,

@@ -24,7 +24,7 @@ from playwright.async_api import async_playwright as async_playwright_ctx
 from playwright.sync_api import sync_playwright
 
 import job_hunter_agent.record_schema as rs
-from job_hunter_agent.global_settings import get_playwright_browser_mode
+from job_hunter_agent.global_settings import KEY_SEEK_QUICK_APPLY_ONLY, get_playwright_browser_mode
 from job_hunter_agent.history import finalize_record
 from job_hunter_agent.io_utils import DEBUG_CAPTURE_SOURCE_PAYLOADS, write_source_payload_debug
 from job_hunter_agent.job_quality import detect_broad_engagement_signal
@@ -65,6 +65,14 @@ from job_hunter_agent.work_mode_extraction import (
 
 WORKSPACE_DEBUG_MODE = has_cli_flag(sys.argv, CLI_FLAG_DEBUG)
 RUN_PROGRESS_ITEM_SEPARATOR = " | "
+
+
+def seek_quick_apply_filter_matches(setting: object, apply_method: str) -> bool:
+    """Return whether a SEEK record passes the configured Quick Apply filter."""
+    if setting is None:
+        return True
+    is_quick_apply = str(apply_method or "").strip() == rs.APPLY_METHOD_QUICK_APPLY
+    return bool(setting) == is_quick_apply
 
 
 class BotChallengeDetected(Exception):
@@ -811,7 +819,26 @@ async def _seek_detail_batch_on_context(
             t0 = time.monotonic()
             try:
                 rec = await _fetch_seek_job_detail_async(rec, page)
-                result = await asyncio.to_thread(_review_seek_job_detail, rec, review_context)
+                quick_apply_only = review_context.profile.get("search_settings", {}).get(
+                    KEY_SEEK_QUICK_APPLY_ONLY
+                )
+                apply_method = str(rec.get(rs.RECORD_APPLY_METHOD_KEY) or rs.APPLY_METHOD_UNKNOWN)
+                if not seek_quick_apply_filter_matches(quick_apply_only, apply_method):
+                    rec[rs.RECORD_DECISION_KEY] = "REJECT"
+                    rec[rs.RECORD_REJECT_REASON_KEY] = "SEEK_QUICK_APPLY_FILTER"
+                    finalize_record(
+                        review_context.job_history,
+                        review_context.audit_rows,
+                        rec,
+                        review_context.run_iso,
+                    )
+                    result = (
+                        {"decision": "REJECT", "reject_reason": "SEEK_QUICK_APPLY_FILTER"},
+                        rec,
+                        [],
+                    )
+                else:
+                    result = await asyncio.to_thread(_review_seek_job_detail, rec, review_context)
                 results[idx] = (*result, time.monotonic() - t0)
             except Exception as exc:
                 rec[rs.RECORD_DECISION_KEY] = "REJECT"

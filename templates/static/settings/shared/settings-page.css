@@ -2068,27 +2068,11 @@
   padding-top: 10px;
 }
 
-
-/* Search settings: data-driven location checkbox groups. */
+/* Local layout exception: location groups use three columns on the Search Settings page. */
 .location-checkbox-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0;
-  padding: var(--surface-gap-md);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--surface-raised);
 }
-.location-checkbox-group { min-width: 0; margin: 0; padding: 0 var(--surface-gap-lg); border: 0; }
-.location-checkbox-group + .location-checkbox-group { border-left: 1px solid var(--border-subtle); }
-.location-checkbox-group legend { margin-bottom: var(--surface-gap-sm); padding: 0; font-weight: 700; }
-.location-checkbox-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--surface-gap-xs) var(--surface-gap-md); }
-.location-checkbox-group:not(:first-child) .location-checkbox-options { grid-template-columns: minmax(0, 1fr); }
-.location-checkbox-option { display: inline-flex; align-items: center; gap: var(--surface-gap-sm); min-width: 0; cursor: pointer; }
-.location-checkbox-option input { flex: 0 0 auto; }
-.location-checkbox-option input:disabled + span { opacity: 0.55; }
 @media (max-width: 900px) {
   .location-checkbox-grid { grid-template-columns: 1fr; }
-  .location-checkbox-group { padding: var(--surface-gap-md) 0; }
-  .location-checkbox-group + .location-checkbox-group { border-left: 0; border-top: 1px solid var(--border-subtle); }
 }

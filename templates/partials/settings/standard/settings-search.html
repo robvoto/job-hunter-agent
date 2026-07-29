@@ -29,7 +29,7 @@
                           <div class="field-info-panel">Select one or more locations where you want to find jobs.</div>
                         </details>
                       </div>
-                      <div id="locations" class="location-checkbox-grid" role="group" aria-label="Locations"></div>
+                      <div id="locations" class="checkbox-list-grid location-checkbox-grid" role="group" aria-label="Locations"></div>
                     </div>
 
                     <div class="settings-form-field settings-form-field--summary">
@@ -183,6 +183,21 @@
                         <div class="field-control-shell">
                           __JOB_HUNTER_SEEK_MAX_PAGES_CHOICES__
                         </div>
+                      </div>
+
+                      <div class="settings-form-field">
+                        <div class="field-label-row">
+                          <label for="seek_quick_apply_only">Quick Apply filter</label>
+                          <details class="field-info-drawer">
+                            <summary class="field-info" aria-label="Help">i</summary>
+                            <div class="field-info-panel">Choose whether SEEK results should include Quick Apply jobs only, exclude them, or include both.</div>
+                          </details>
+                        </div>
+                        <select id="seek_quick_apply_only" class="jh-select">
+                          <option value="">Both (no filter)</option>
+                          <option value="true">Quick Apply only</option>
+                          <option value="false">Non-Quick Apply only</option>
+                        </select>
                       </div>
                     </section>
 

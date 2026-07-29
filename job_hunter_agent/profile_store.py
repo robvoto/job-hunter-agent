@@ -32,6 +32,7 @@ from job_hunter_agent.global_settings import (
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
     KEY_LOCATIONS_MAX_SELECTED,
     KEY_SEEK_MAX_PAGES,
+    KEY_SEEK_QUICK_APPLY_ONLY,
     KEY_SORT_NEWEST_FIRST,
     get_salary_limits,
     load_global_settings,
@@ -39,7 +40,7 @@ from job_hunter_agent.global_settings import (
 from job_hunter_agent.global_settings import (
     KEY_ONBOARDING_SETTINGS as GLOBAL_KEY_ONBOARDING_SETTINGS,
 )
-from job_hunter_agent.io_utils import load_parsing_rules
+from job_hunter_agent.io_utils import load_parsing_rules, load_ui_labels
 from job_hunter_agent.match_labels import MATCH_LEVELS, normalize_match_levels
 from job_hunter_agent.parsing_schema import (
     KEY_P_ROUTING,
@@ -62,6 +63,17 @@ KEY_MIN_SALARY_YEARLY = "minimum_salary_yearly"
 KEY_MIN_DAILY_RATE = "minimum_daily_rate"
 
 
+def _profile_ui_labels() -> dict[str, Any]:
+    return load_ui_labels()
+
+
+def _profile_label(group: str, key: str) -> str:
+    group_labels = _profile_ui_labels().get(group)
+    if not isinstance(group_labels, dict) or not str(group_labels.get(key, "")).strip():
+        raise ValueError(f"Missing required ui_labels.json entry: {group}.{key}")
+    return str(group_labels[key])
+
+
 class Engagement:
     PERMANENT = "permanent"
     CONTRACT = "contract"
@@ -69,23 +81,23 @@ class Engagement:
 
 
 ENGAGEMENT_TYPE_OPTIONS = (
-    {"value": Engagement.PERMANENT, "label": "Permanent"},
-    {"value": Engagement.CONTRACT, "label": "Contract"},
-    {"value": Engagement.FULL_TIME_CONTRACT, "label": "FTC"},
+    {"value": Engagement.PERMANENT, "label": _profile_label("profile_field_labels", "engagement_option_permanent")},
+    {"value": Engagement.CONTRACT, "label": _profile_label("profile_field_labels", "engagement_option_contract")},
+    {
+        "value": Engagement.FULL_TIME_CONTRACT,
+        "label": _profile_label("profile_field_labels", "engagement_option_full_time_contract"),
+    },
 )
 VALID_ENGAGEMENT_TYPES = frozenset({item["value"] for item in ENGAGEMENT_TYPE_OPTIONS})
 ENGAGEMENT_TYPE_DEFAULT_VALUES = [item["value"] for item in ENGAGEMENT_TYPE_OPTIONS]
 MIN_CONTRACT_MONTH_OPTIONS = (
-    {"value": "3", "label": "3+ months"},
-    {"value": "6", "label": "6+ months"},
-    {"value": "12", "label": "12+ months"},
+    {"value": "3", "label": _profile_label("profile_field_labels", "min_contract_month_option_3")},
+    {"value": "6", "label": _profile_label("profile_field_labels", "min_contract_month_option_6")},
+    {"value": "12", "label": _profile_label("profile_field_labels", "min_contract_month_option_12")},
 )
-MIN_CONTRACT_MONTH_LABEL = "Minimum contract length"
-MIN_CONTRACT_MONTH_NONE_LABEL = "All"
-MIN_CONTRACT_MONTH_HELP_TEXT = (
-    "Contracts shorter than this are excluded before scoring. "
-    "Only applies when the listing states a duration explicitly."
-)
+MIN_CONTRACT_MONTH_LABEL = _profile_label("profile_field_labels", "min_contract_month_label")
+MIN_CONTRACT_MONTH_NONE_LABEL = _profile_label("profile_field_labels", "min_contract_month_none_label")
+MIN_CONTRACT_MONTH_HELP_TEXT = _profile_label("profile_field_labels", "min_contract_month_help_text")
 
 
 class WorkMode:
@@ -97,15 +109,15 @@ class WorkMode:
 
 
 WORK_MODE_PREFERENCE_OPTIONS = (
-    {"value": WorkMode.REMOTE, "label": "Remote"},
-    {"value": WorkMode.HYBRID, "label": "Hybrid"},
-    {"value": WorkMode.ONSITE, "label": "On-site"},
+    {"value": WorkMode.REMOTE, "label": _profile_label("work_mode_labels", "remote_label")},
+    {"value": WorkMode.HYBRID, "label": _profile_label("work_mode_labels", "hybrid_label")},
+    {"value": WorkMode.ONSITE, "label": _profile_label("work_mode_labels", "onsite_label")},
 )
 VALID_WORK_MODE_PREFERENCES = frozenset({item["value"] for item in WORK_MODE_PREFERENCE_OPTIONS})
 WORK_MODE_PREFERENCE_DEFAULT_VALUES = tuple(item["value"] for item in WORK_MODE_PREFERENCE_OPTIONS)
-WORK_MODE_PREFERENCE_HELP_TEXT = "Choose the work arrangements you prefer."
-WORK_MODE_PREFERENCE_NONE_LABEL = "Any"
-WORK_TYPE_PREFERENCE_HELP_TEXT = "Choose the worktype you prefer."
+WORK_MODE_PREFERENCE_HELP_TEXT = _profile_label("profile_field_labels", "work_mode_preference_help_text")
+WORK_MODE_PREFERENCE_NONE_LABEL = _profile_label("workspace_page_labels", "work_mode_option_any")
+WORK_TYPE_PREFERENCE_HELP_TEXT = _profile_label("profile_field_labels", "work_type_preference_help_text")
 
 
 class GovPref:
@@ -115,13 +127,13 @@ class GovPref:
 
 
 SECTOR_PREFERENCE_OPTIONS = (
-    {"value": GovPref.ANY, "label": "No preference"},
-    {"value": GovPref.GOVERNMENT, "label": "Public sector"},
-    {"value": GovPref.PRIVATE, "label": "Private sector"},
+    {"value": GovPref.ANY, "label": _profile_label("profile_field_labels", "sector_option_no_preference")},
+    {"value": GovPref.GOVERNMENT, "label": _profile_label("workspace_page_labels", "sector_option_public")},
+    {"value": GovPref.PRIVATE, "label": _profile_label("workspace_page_labels", "sector_option_private")},
 )
 SECTOR_PREFERENCE_CHOICE_OPTIONS = (
-    {"value": GovPref.GOVERNMENT, "label": "Public sector"},
-    {"value": GovPref.PRIVATE, "label": "Private sector"},
+    {"value": GovPref.GOVERNMENT, "label": _profile_label("workspace_page_labels", "sector_option_public")},
+    {"value": GovPref.PRIVATE, "label": _profile_label("workspace_page_labels", "sector_option_private")},
 )
 VALID_SECTOR_PREFERENCE_VALUES = frozenset(
     {item["value"] for item in SECTOR_PREFERENCE_CHOICE_OPTIONS}
@@ -129,13 +141,13 @@ VALID_SECTOR_PREFERENCE_VALUES = frozenset(
 SECTOR_PREFERENCE_DEFAULT_LABEL = next(
     (item["label"] for item in SECTOR_PREFERENCE_OPTIONS if item["value"] == GovPref.ANY), ""
 )
-SECTOR_PREFERENCE_HELP_TEXT = "Select both if sector preference does not matter."
+SECTOR_PREFERENCE_HELP_TEXT = _profile_label("profile_field_labels", "sector_preference_help_text")
 
-SALARY_MIN_ANNUAL_LABEL = "Minimum annual base (excludes super)"
-SALARY_MIN_DAILY_LABEL = "Minimum daily rate (excludes super)"
-SALARY_MIN_COMPENSATION_HELP_TEXT = "Set the lowest pay you want included in search."
-SETTINGS_SALARY_ANNUAL_HELP_TEXT = "Used when permanent roles list salary."
-SETTINGS_SALARY_DAILY_HELP_TEXT = "Used when contract roles list a day rate."
+SALARY_MIN_ANNUAL_LABEL = _profile_label("profile_field_labels", "salary_min_annual_label")
+SALARY_MIN_DAILY_LABEL = _profile_label("profile_field_labels", "salary_min_daily_label")
+SALARY_MIN_COMPENSATION_HELP_TEXT = _profile_label("profile_field_labels", "salary_min_compensation_help_text")
+SETTINGS_SALARY_ANNUAL_HELP_TEXT = _profile_label("profile_field_labels", "settings_salary_annual_help_text")
+SETTINGS_SALARY_DAILY_HELP_TEXT = _profile_label("profile_field_labels", "settings_salary_daily_help_text")
 
 KEY_LOOKBACK_YEARS = "extraction_lookback_years"
 KEY_MIN_MONTHS = "title_extraction_min_months"
@@ -199,9 +211,11 @@ VALID_CAPABILITY_ICON_KEYS = frozenset(
 )
 KEY_CONVERGENCE = "convergence"
 KEY_COMPETITIVE_SIGNAL_ALIGNMENT = "competitive_signal_alignment"
-PROFILE_REVIEW_BLOCKING_REASON_NO_PROFILE = "Create your profile before reviewing jobs."
-PROFILE_REVIEW_BLOCKING_REASON_NO_CAPABILITIES = (
-    "Your profile has no capability rules. Rebuild onboarding before reviewing jobs."
+PROFILE_REVIEW_BLOCKING_REASON_NO_PROFILE = _profile_label(
+    "profile_field_labels", "profile_review_blocking_reason_no_profile"
+)
+PROFILE_REVIEW_BLOCKING_REASON_NO_CAPABILITIES = _profile_label(
+    "profile_field_labels", "profile_review_blocking_reason_no_capabilities"
 )
 
 logger = logging.getLogger(__name__)
@@ -1024,6 +1038,19 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
         if len(normalized_locations) >= max_locations:
             break
     merged["locations"] = normalized_locations
+    quick_apply_only = merged.get(KEY_SEEK_QUICK_APPLY_ONLY)
+    if quick_apply_only is None or quick_apply_only == "":
+        merged[KEY_SEEK_QUICK_APPLY_ONLY] = None
+    elif isinstance(quick_apply_only, str):
+        normalized_quick_apply_only = quick_apply_only.strip().lower()
+        if normalized_quick_apply_only == "true":
+            merged[KEY_SEEK_QUICK_APPLY_ONLY] = True
+        elif normalized_quick_apply_only == "false":
+            merged[KEY_SEEK_QUICK_APPLY_ONLY] = False
+        else:
+            merged[KEY_SEEK_QUICK_APPLY_ONLY] = None
+    else:
+        merged[KEY_SEEK_QUICK_APPLY_ONLY] = bool(quick_apply_only)
     easy_apply_only = merged.get(KEY_LINKEDIN_EASY_APPLY_ONLY)
     if easy_apply_only is None or easy_apply_only == "":
         merged[KEY_LINKEDIN_EASY_APPLY_ONLY] = None
@@ -1045,11 +1072,9 @@ def validate_search_keywords(value: object, *, require_phrase: bool = False) -> 
     if not keywords:
         return ""
     if len(keywords) < 2 or len(keywords) > 120:
-        raise ValueError("Please keep the primary search title between 2 and 120 characters.")
+        raise ValueError(_profile_label("profile_field_labels", "search_keywords_length_error"))
     if require_phrase and len(keywords.split()) < 2:
-        raise ValueError(
-            "Please use at least two words for the primary search title, or leave it blank."
-        )
+        raise ValueError(_profile_label("profile_field_labels", "search_keywords_phrase_error"))
     return keywords
 
 

@@ -83,6 +83,8 @@ function validateSearchKeywords(keyword) {
 }
 
 let loadedUserSettings = null;
+const SEEK_QUICK_APPLY_ONLY = 'seek_quick_apply_only';
+
 let loadedProfile = null;
 let loadedGlobalSettings = null;
 let loadedSourceMaterials = null;
@@ -281,18 +283,18 @@ function renderLocationOptions() {
   container.innerHTML = '';
   grouped.forEach((groupOptions, group) => {
     const section = document.createElement('fieldset');
-    section.className = 'location-checkbox-group';
+    section.className = 'checkbox-list-group location-checkbox-group';
     const legend = document.createElement('legend');
     legend.textContent = group;
     section.appendChild(legend);
     const optionsWrap = document.createElement('div');
-    optionsWrap.className = 'location-checkbox-options';
+    optionsWrap.className = 'checkbox-list-options location-checkbox-options';
     groupOptions.forEach((option) => {
       const value = String(option?.value || '').trim();
       const label = String(option?.label || '').trim();
       if (!value || !label) return;
       const item = document.createElement('label');
-      item.className = 'location-checkbox-option';
+      item.className = 'checkbox-list-option location-checkbox-option';
       const input = document.createElement('input');
       input.type = 'checkbox';
       input.dataset.locationValue = value;
@@ -392,6 +394,7 @@ function collectProfile() {
   chipEditor.flushChipEditorInputs();
   const searchDateWindow = Number(document.getElementById('search_date_window')?.value || '3');
   const hoursMap = { 0: 720, 1: 24, 3: 72, 7: 168, 15: 360, 30: 720 };
+  const seekQuickApplyRaw = document.getElementById(SEEK_QUICK_APPLY_ONLY)?.value;
   const linkedinEasyApplyRaw = document.getElementById(LINKEDIN_EASY_APPLY_ONLY)?.value;
   const sectorPreferenceValues = getSectorPreferenceValues();
   const seekMaxPages = Number(getChoiceGroupValue('seek_max_pages'));
@@ -410,6 +413,7 @@ function collectProfile() {
       date_range_days: searchDateWindow === 0 ? 30 : searchDateWindow,
       linkedin_hours_old: hoursMap[searchDateWindow] ?? 72,
       seek_max_pages: seekMaxPages,
+      [SEEK_QUICK_APPLY_ONLY]: seekQuickApplyRaw === '' ? null : seekQuickApplyRaw === 'true',
       linkedin_results_per_search: Number(document.getElementById('linkedin_results_per_search').value) || 25,
       [LINKEDIN_EASY_APPLY_ONLY]: linkedinEasyApplyRaw === '' ? null : linkedinEasyApplyRaw === 'true',
       apsjobs_results_per_search: Number(document.getElementById('apsjobs_results_per_search').value) || 25,
@@ -455,6 +459,8 @@ function fillForm(profile) {
   renderLocationOptions();
   document.getElementById('classification_ids').value = (profile.search_settings?.classification_ids || []).join('\n');
   setChoiceGroupValue('seek_max_pages', profile.search_settings?.seek_max_pages);
+  const _seekQuickApply = profile.search_settings?.[SEEK_QUICK_APPLY_ONLY];
+  document.getElementById(SEEK_QUICK_APPLY_ONLY).value = (_seekQuickApply === null || _seekQuickApply === undefined) ? '' : String(_seekQuickApply);
   document.getElementById('linkedin_results_per_search').value = String(profile.search_settings?.linkedin_results_per_search);
   document.getElementById('apsjobs_results_per_search').value = String(profile.search_settings?.apsjobs_results_per_search);
   const _dateWindowEl = document.getElementById('search_date_window');
