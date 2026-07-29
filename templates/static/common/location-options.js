@@ -102,4 +102,91 @@ export function ensureDefaultLocation(select) {
   return String(select.value || '').trim();
 }
 
+function groupedLocationOptions() {
+  const groups = new Map([
+    ['Capital cities', []],
+    ['States and territories', []],
+  ]);
+  rawOptions.forEach((option) => {
+    const kind = String(option?.kind || '').trim().toLowerCase();
+    const group = kind === 'city'
+      ? 'Capital cities'
+      : ['state', 'territory'].includes(kind)
+        ? 'States and territories'
+        : '';
+    if (group) groups.get(group).push(option);
+  });
+  return groups;
+}
+
+export function renderLocationCheckboxes(container, options = {}) {
+  if (!container) return;
+  const selectedValues = new Set(
+    (Array.isArray(options.selectedValues) ? options.selectedValues : [])
+      .map(normalizeValue)
+      .filter(Boolean)
+  );
+  const maxSelected = Number(options.maxSelected);
+  const onChange = typeof options.onChange === 'function' ? options.onChange : () => {};
+
+  container.innerHTML = '';
+  groupedLocationOptions().forEach((groupOptions, group) => {
+    const fieldset = document.createElement('fieldset');
+    fieldset.className = 'checkbox-list-group location-checkbox-group';
+
+    const legend = document.createElement('legend');
+    legend.textContent = group;
+    fieldset.appendChild(legend);
+
+    const optionList = document.createElement('div');
+    optionList.className = 'checkbox-list-options checkbox-list-options--two-column location-checkbox-options';
+
+    groupOptions.forEach((option) => {
+      const value = optionValue(option);
+      const label = optionLabel(option);
+      if (!value || !label) return;
+
+      const item = document.createElement('label');
+      item.className = 'checkbox-list-option location-checkbox-option';
+
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.className = 'jh-checkbox';
+      input.dataset.locationValue = value;
+      input.checked = selectedValues.has(value);
+
+      const text = document.createElement('span');
+      text.textContent = label;
+      item.append(input, text);
+      optionList.appendChild(item);
+    });
+
+    fieldset.appendChild(optionList);
+    container.appendChild(fieldset);
+  });
+
+  const inputs = Array.from(container.querySelectorAll('.jh-checkbox[data-location-value]'));
+  const syncLimit = () => {
+    if (!Number.isFinite(maxSelected) || maxSelected < 1) return;
+    const count = inputs.filter((input) => input.checked).length;
+    inputs.forEach((input) => {
+      input.disabled = !input.checked && count >= maxSelected;
+    });
+  };
+  inputs.forEach((input) => {
+    input.addEventListener('change', () => {
+      syncLimit();
+      onChange(getSelectedLocationValues(container));
+    });
+  });
+  syncLimit();
+}
+
+export function getSelectedLocationValues(container) {
+  if (!container) return [];
+  return Array.from(container.querySelectorAll('.jh-checkbox[data-location-value]:checked'))
+    .map((input) => normalizeValue(input.dataset.locationValue))
+    .filter(Boolean);
+}
+
 export { defaultLocation, rawOptions as options };

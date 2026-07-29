@@ -34,13 +34,7 @@ export function setSelectedLocations(locations) {
     .map((value) => onboardingLocationUi.resolveLocationValue ? onboardingLocationUi.resolveLocationValue(value) : String(value || '').trim())
     .filter(Boolean);
   onboardingPage.setSelectedLocations(resolved);
-  if (select) {
-    const selectedValues = new Set(onboardingPage.selectedLocations);
-    Array.from(select.options).forEach((option) => {
-      option.selected = selectedValues.has(String(option.value || '').trim());
-    });
-  }
-  onboardingPage.renderLocationSelect();
+  if (select) onboardingPage.renderLocationSelect();
 }
 
 export function hydrateSearchBasics(profile) {

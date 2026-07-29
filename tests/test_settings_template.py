@@ -474,7 +474,9 @@ def test_search_settings_partial_has_privacy_subcards_and_shared_save_bar():
     assert 'class="checkbox-list-grid location-checkbox-grid" role="group"' in html
     assert 'id="seek_quick_apply_only"' in html
     assert "Quick Apply only" in html
-    assert "syncLocationSelectionLimit" in js
+    assert "renderLocationCheckboxes" in js
+    shared_location_js = (ROOT_DIR / "templates" / "static" / "common" / "location-options.js").read_text(encoding="utf-8")
+    assert "const syncLimit = () =>" in shared_location_js
 
     assert 'class="panel search-operations-panel"' not in html
     assert 'class="subpanel search-settings-subcard search-operations-panel"' in html
