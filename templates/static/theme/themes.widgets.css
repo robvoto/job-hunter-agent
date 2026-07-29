@@ -2139,8 +2139,6 @@
 
 /* Shared grouped checkbox list */
 .checkbox-list-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0;
   padding: var(--surface-gap-md);
   border: 1px solid var(--border-subtle);
@@ -2165,7 +2163,7 @@
   display: grid;
   gap: var(--surface-gap-sm) var(--surface-gap-lg);
 }
-.checkbox-list-options--two-column {
+.checkbox-list-group--dense .checkbox-list-options {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .checkbox-list-option {
@@ -2234,6 +2232,5 @@
   }
 }
 @media (max-width: 640px) {
-  .checkbox-list-grid,
-  .checkbox-list-options--two-column { grid-template-columns: 1fr; }
+  .checkbox-list-group--dense .checkbox-list-options { grid-template-columns: 1fr; }
 }
