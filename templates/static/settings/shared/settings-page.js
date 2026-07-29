@@ -23,6 +23,7 @@ import {
   setWorkModePreferenceValues,
   setToggleChecked,
   getToggleChecked,
+  syncSourcePanelDisabledState,
   setChoiceGroupValue,
   getChoiceGroupValue,
   LINKEDIN_EASY_APPLY_ONLY,
@@ -458,6 +459,7 @@ function fillForm(profile) {
   setToggleChecked('seek_enabled', _enabledSources.includes('seek'));
   setToggleChecked('linkedin_enabled', _enabledSources.includes('linkedin'));
   setToggleChecked('apsjobs_enabled', _enabledSources.includes('apsjobs'));
+  ['seek_enabled', 'linkedin_enabled', 'apsjobs_enabled'].forEach(syncSourcePanelDisabledState);
   setEngagementTypeValues(profile.match_preferences?.engagement_type);
   setWorkModePreferenceValues(profile.match_preferences?.work_mode_preference || []);
   setSectorPreferenceValues(profile.match_preferences?.prefer_sector || sectorPreferenceDefault);
@@ -671,6 +673,10 @@ document.querySelectorAll('input, select, textarea').forEach(el => {
   if (el.tagName === 'TEXTAREA' || ['text', 'time', 'number', 'password', 'search'].includes(el.type)) {
     el.addEventListener('input', markDirty);
   }
+});
+
+['seek_enabled', 'linkedin_enabled', 'apsjobs_enabled'].forEach((toggleId) => {
+  document.getElementById(toggleId)?.addEventListener('change', () => syncSourcePanelDisabledState(toggleId));
 });
 
 const pageLabels = window.__JOB_HUNTER_ONBOARDING_PAGE_LABELS__;
@@ -984,6 +990,7 @@ activeSaveButton?.addEventListener('click', (event) => {
 chipEditor.initEventHandlers(markDirty);
 capabilityEditor.initEventHandlers(markDirty);
 clearanceEditor.initEventHandlers(markDirty);
+alertsSettings.initEventHandlers();
 
 // -- Init ------------------------------------------------------------------
 const pageLoads = isAdminPage

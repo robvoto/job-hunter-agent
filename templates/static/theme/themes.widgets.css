@@ -922,9 +922,9 @@
 
 .search-source-panels {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--surface-gap-lg);
-  align-items: start;
+  align-items: stretch;
   margin-top: var(--field-stack-gap);
 }
 
@@ -932,7 +932,11 @@
   display: grid;
   align-content: start;
   gap: var(--field-stack-gap);
-  padding: 0;
+  padding: var(--surface-pad-block-lg) var(--surface-pad-inline-xl);
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  background: var(--bg-surface);
+  height: 100%;
 }
 
 .review-block > .field-label-row + .chip-list {
@@ -960,6 +964,18 @@
 
 .search-source-panel-head {
   justify-content: space-between;
+  padding-bottom: var(--surface-pad-block-lg);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.search-source-panel.is-source-disabled > :not(.search-source-panel-head) {
+  opacity: 0.5;
+}
+
+.search-source-panel.is-source-disabled input:disabled,
+.search-source-panel.is-source-disabled select:disabled,
+.search-source-panel.is-source-disabled .choice-card:has(input:disabled) {
+  cursor: not-allowed;
 }
 
 .search-source-title {

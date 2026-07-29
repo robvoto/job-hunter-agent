@@ -480,6 +480,15 @@ body {
   margin-top: 16px;
 }
 
+.review-grid-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.review-grid-col > .review-block {
+  flex: 1;
+}
+
 .check-list {
   margin: 14px 0 0;
 }

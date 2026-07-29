@@ -103,9 +103,9 @@ WORK_MODE_PREFERENCE_OPTIONS = (
 )
 VALID_WORK_MODE_PREFERENCES = frozenset({item["value"] for item in WORK_MODE_PREFERENCE_OPTIONS})
 WORK_MODE_PREFERENCE_DEFAULT_VALUES = tuple(item["value"] for item in WORK_MODE_PREFERENCE_OPTIONS)
-WORK_MODE_PREFERENCE_HELP_TEXT = "Choose the work arrangements you want to include in search."
+WORK_MODE_PREFERENCE_HELP_TEXT = "Choose the work arrangements you prefer."
 WORK_MODE_PREFERENCE_NONE_LABEL = "Any"
-WORK_TYPE_PREFERENCE_HELP_TEXT = "Select both if permanent versus contract does not matter."
+WORK_TYPE_PREFERENCE_HELP_TEXT = "Choose the worktype you prefer."
 
 
 class GovPref:

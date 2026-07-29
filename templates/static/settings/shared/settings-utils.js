@@ -230,6 +230,18 @@ function getToggleChecked(id) {
   return Boolean(document.getElementById(id)?.checked);
 }
 
+function syncSourcePanelDisabledState(toggleId) {
+  const toggleInput = document.getElementById(toggleId);
+  const panel = toggleInput?.closest('.search-source-panel');
+  if (!panel) return;
+  const enabled = Boolean(toggleInput.checked);
+  panel.classList.toggle('is-source-disabled', !enabled);
+  panel.querySelectorAll('input, select, textarea').forEach((field) => {
+    if (field === toggleInput) return;
+    field.disabled = !enabled;
+  });
+}
+
 function setChoiceGroupValue(name, value) {
   const inputs = Array.from(document.querySelectorAll(`input[name="${name}"]`));
   if (!inputs.length) {
@@ -317,6 +329,7 @@ export {
   setSectorPreferenceValues,
   setToggleChecked,
   getToggleChecked,
+  syncSourcePanelDisabledState,
   setChoiceGroupValue,
   getChoiceGroupValue,
   ensureAtLeastOneChoiceSelected,

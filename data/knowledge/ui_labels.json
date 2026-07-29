@@ -724,7 +724,7 @@
     "linkedin_toggle_label": "Include LinkedIn in search",
     "linkedin_toggle_help": "Select if you want to include LinkedIn in search runs.",
     "apsjobs_toggle_label": "Include APS Jobs in search",
-    "apsjobs_toggle_help": "Select if you want to include Australian Public Service (APS) job listings in search runs. Off by default."
+    "apsjobs_toggle_help": "Select if you want to include Australian Public Service (APS) job listings in search runs."
   },
   "check_item_labels_description": "Full-sentence risk and warning copy shown in the 'Checks before applying' panel on job cards.",
   "check_item_labels": {

@@ -329,12 +329,6 @@
     .settings-privacy-note a:hover {
       text-decoration: underline;
     }
-    .search-operations-head {
-      display: flex;
-      gap: var(--surface-gap-md);
-      align-items: flex-start;
-      flex-wrap: wrap;
-    }
     .search-operations-body {
       display: grid;
       gap: var(--surface-gap-sm);
@@ -1517,7 +1511,6 @@
       .profile-shell { grid-template-columns: 1fr; }
       .advanced-grid { grid-template-columns: 1fr; }
       .alerts-grid { grid-template-columns: 1fr; }
-      .search-operations-head { flex-direction: column; }
       .search-source-panels { grid-template-columns: 1fr; }
       .advanced-grid > .subpanel:first-child { grid-row: auto; }
       .tuning-summary { grid-template-columns: 1fr; }

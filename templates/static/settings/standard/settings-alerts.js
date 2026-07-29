@@ -2,6 +2,7 @@ import {
   escapeHtml,
   setToggleChecked,
   getToggleChecked,
+  syncSourcePanelDisabledState,
 } from '../shared/settings-utils.js';
 
 let alertsLabels = null;
@@ -46,7 +47,7 @@ export const JobHunterAlertsSettings = (function () {
     const scheduler = payload?.scheduler || null;
     if (!scheduleEnabled) {
       panel.dataset.state = 'stopped';
-      panel.textContent = 'Automatic daily run is off.';
+      panel.textContent = 'Schedule Run is off.';
       return;
     }
     if (!scheduler) {
@@ -127,6 +128,7 @@ export const JobHunterAlertsSettings = (function () {
     settings = settings || {};
     const schedule = settings.schedule || {};
     setToggleChecked('schedule_enabled', Boolean(schedule.enabled));
+    syncSourcePanelDisabledState('schedule_enabled');
     const scheduleEl = document.getElementById('schedule_daily_time_local');
     if (scheduleEl) scheduleEl.value = schedule.daily_time_local || '08:30';
     void refreshScheduleStatus(settings);
@@ -174,6 +176,12 @@ export const JobHunterAlertsSettings = (function () {
       },
       llm: currentLlmModel ? { model: currentLlmModel } : {},
     };
+  }
+
+  function initEventHandlers() {
+    document.getElementById('schedule_enabled')?.addEventListener('change', () => {
+      syncSourcePanelDisabledState('schedule_enabled');
+    });
   }
 
   function getTelegramConnectLink() {
@@ -234,6 +242,7 @@ export const JobHunterAlertsSettings = (function () {
   return {
     fillUserSettings,
     collectUserSettings,
+    initEventHandlers,
     getTelegramConnectLink,
     loadTelegramConnectLink,
     syncTelegramSubscribers,

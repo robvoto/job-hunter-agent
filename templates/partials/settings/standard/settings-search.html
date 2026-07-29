@@ -21,12 +21,12 @@
                       <input id="keywords" type="text" autocomplete="off" placeholder="__JOB_HUNTER_TITLE_TIER_SEARCH_KEYWORD_EXAMPLE__">
                     </div>
 
-                    <div class="settings-form-field">
+                    <div class="settings-form-field settings-form-field--full">
                       <div class="field-label-row">
                         <label for="locations">Location</label>
                         <details class="field-info-drawer">
                           <summary class="field-info" aria-label="Help">i</summary>
-                          <div class="field-info-panel">__JOB_HUNTER_SHARED_UI_LOCATION_HELP__</div>
+                          <div class="field-info-panel">Select one or more locations where you want to find jobs.</div>
                         </details>
                       </div>
                       <div class="field-control-shell">
@@ -264,21 +264,13 @@
                 </section>
 
                 <section class="subpanel search-settings-subcard search-operations-panel" id="schedule-panel">
-                  <div class="search-operations-head">
-                    <div>
-                      <h3>Run &amp; Schedule</h3>
-                      <p class="panel-copy">These controls use your current search settings.</p>
-                    </div>
-                  </div>
-
                   <div class="search-operations-body">
-                    <h3>Daily run time</h3>
-                    <p>Set the time here, then use the main Save Settings button. If the scheduler is already running, changes apply automatically without a restart.</p>
+                    <p class="panel-copy">These controls use your current search settings. Set the time here, then use the main Save Settings button. If the scheduler is already running, changes apply automatically without a restart.</p>
                     <div class="search-source-panels schedule-source-panels">
                       <section class="search-source-panel schedule-source-panel">
                         <div class="field-label-row search-source-panel-head">
                           <div class="field-label-row">
-                            <label for="schedule_enabled" class="search-source-title">Automatic daily run</label>
+                            <label for="schedule_enabled" class="search-source-title">Schedule Run</label>
                             <details class="field-info-drawer">
                               <summary class="field-info" aria-label="Help">i</summary>
                               <div class="field-info-panel">Turn the daily schedule on or off without changing the saved time.</div>
@@ -286,7 +278,7 @@
                           </div>
                           <label class="toggle-switch toggle-switch--compact" for="schedule_enabled">
                             <span class="toggle-switch-control">
-                              <input id="schedule_enabled" type="checkbox" role="switch" aria-label="Enable automatic daily run">
+                              <input id="schedule_enabled" type="checkbox" role="switch" aria-label="Enable Schedule Run">
                               <span class="toggle-switch-ui"></span>
                             </span>
                           </label>
