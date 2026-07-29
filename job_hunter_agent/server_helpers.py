@@ -227,6 +227,9 @@ _SHARED_UI_LABEL_KEYS = (
     "settings_privacy_copy",
     "settings_privacy_link_label",
     "settings_search_save_button_label",
+    "select_shown_label",
+    "clear_selection_label",
+    "remove_selected_label",
 )
 _SEARCH_SOURCE_LABEL_KEYS = (
     "section_title",
@@ -380,7 +383,6 @@ _ONBOARDING_FLOW_LABEL_KEYS = (
     "create_profile_ready_message",
     "create_profile_status_started",
     "create_profile_status_reading_pages",
-    "create_profile_status_reading_cv",
     "create_profile_status_extracting",
     "create_profile_status_reviewing",
     "create_profile_status_building",
@@ -599,9 +601,21 @@ def load_onboarding_import_summary_labels() -> dict:
 
 
 def load_capability_ui_labels() -> dict[str, str]:
-    labels = load_ui_labels().get("capability_ui_labels", {})
-    if not isinstance(labels, dict):
+    payload = load_ui_labels()
+    raw_labels = payload.get("capability_ui_labels", {})
+    if not isinstance(raw_labels, dict):
         raise ValueError("ui_labels.json is missing capability_ui_labels")
+    shared_labels = payload.get("shared_ui_labels", {})
+    if not isinstance(shared_labels, dict):
+        raise ValueError("ui_labels.json is missing shared_ui_labels")
+    # shared_ui_labels is the canonical source for these bulk-selection action
+    # labels so the settings and onboarding capability editors show the same text.
+    labels = {
+        **raw_labels,
+        "settings_select_shown_label": shared_labels.get("select_shown_label", ""),
+        "settings_clear_selection_label": shared_labels.get("clear_selection_label", ""),
+        "settings_remove_selected_label": shared_labels.get("remove_selected_label", ""),
+    }
     missing = [key for key in _CAPABILITY_UI_LABEL_KEYS if not str(labels.get(key, "")).strip()]
     if missing:
         raise ValueError(
@@ -689,9 +703,13 @@ def clear_current_user_search_state(*, preserve_profile: bool = True) -> dict[st
 
 
 def load_settings_alerts_labels() -> dict[str, str]:
-    labels = load_ui_labels().get("settings_alerts_labels", {})
-    if not isinstance(labels, dict):
+    raw_labels = load_ui_labels().get("settings_alerts_labels", {})
+    if not isinstance(raw_labels, dict):
         raise ValueError("ui_labels.json is missing settings_alerts_labels")
+    labels = {
+        **raw_labels,
+        "telegram_subscribers_empty": raw_labels.get("telegram_connection_status_empty", ""),
+    }
     missing = [key for key in _SETTINGS_ALERTS_LABEL_KEYS if not str(labels.get(key, "")).strip()]
     if missing:
         raise ValueError(
@@ -748,11 +766,51 @@ def load_role_history_labels() -> dict[str, str]:
 
 
 def load_onboarding_page_labels() -> dict[str, str]:
-    return _load_required_ui_labels("onboarding_page_labels", _ONBOARDING_PAGE_LABEL_KEYS)
+    payload = load_ui_labels()
+    raw_labels = payload.get("onboarding_page_labels", {})
+    if not isinstance(raw_labels, dict):
+        raise ValueError("ui_labels.json is missing onboarding_page_labels")
+    workspace_page_labels = payload.get("workspace_page_labels", {})
+    if not isinstance(workspace_page_labels, dict):
+        raise ValueError("ui_labels.json is missing workspace_page_labels")
+    # workspace_page_labels is the canonical source for these field labels so the
+    # onboarding profile builder and the workspace search sidebar show the same text.
+    labels = {
+        **raw_labels,
+        "locations_label": workspace_page_labels.get("locations_label", ""),
+        "work_type_label": workspace_page_labels.get("work_type_sidebar_label", ""),
+        "work_mode_label": workspace_page_labels.get("work_mode_sidebar_label", ""),
+    }
+    missing = [key for key in _ONBOARDING_PAGE_LABEL_KEYS if not str(labels.get(key, "")).strip()]
+    if missing:
+        raise ValueError(
+            f"ui_labels.json is missing onboarding_page_labels values: {', '.join(missing)}"
+        )
+    return {key: str(labels[key]).strip() for key in _ONBOARDING_PAGE_LABEL_KEYS}
 
 
 def load_onboarding_flow_labels() -> dict[str, str]:
-    return _load_required_ui_labels("onboarding_flow_labels", _ONBOARDING_FLOW_LABEL_KEYS)
+    payload = load_ui_labels()
+    raw_labels = payload.get("onboarding_flow_labels", {})
+    if not isinstance(raw_labels, dict):
+        raise ValueError("ui_labels.json is missing onboarding_flow_labels")
+    shared_labels = payload.get("shared_ui_labels", {})
+    if not isinstance(shared_labels, dict):
+        raise ValueError("ui_labels.json is missing shared_ui_labels")
+    # shared_ui_labels is the canonical source for these bulk-selection action
+    # labels so the settings and onboarding capability editors show the same text.
+    labels = {
+        **raw_labels,
+        "capability_select_shown_label": shared_labels.get("select_shown_label", ""),
+        "capability_clear_selection_label": shared_labels.get("clear_selection_label", ""),
+        "capability_remove_selected_label": shared_labels.get("remove_selected_label", ""),
+    }
+    missing = [key for key in _ONBOARDING_FLOW_LABEL_KEYS if not str(labels.get(key, "")).strip()]
+    if missing:
+        raise ValueError(
+            f"ui_labels.json is missing onboarding_flow_labels values: {', '.join(missing)}"
+        )
+    return {key: str(labels[key]).strip() for key in _ONBOARDING_FLOW_LABEL_KEYS}
 
 
 def load_global_settings_labels() -> dict[str, str]:

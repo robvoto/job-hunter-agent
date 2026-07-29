@@ -23,7 +23,16 @@ def test_ui_labels_json_contains_all_settings_alerts_keys():
 
     section = data.get("settings_alerts_labels", {})
 
-    missing = [k for k in _SETTINGS_ALERTS_LABEL_KEYS if not str(section.get(k, "")).strip()]
+    # telegram_subscribers_empty is composed at runtime from
+    # telegram_connection_status_empty (see load_settings_alerts_labels in
+    # server_helpers.py) rather than stored as a second literal copy.
+    composed_at_runtime = {"telegram_subscribers_empty"}
+
+    missing = [
+        k
+        for k in _SETTINGS_ALERTS_LABEL_KEYS
+        if k not in composed_at_runtime and not str(section.get(k, "")).strip()
+    ]
 
     assert not missing, f"ui_labels.json is missing settings_alerts_labels keys: {missing}"
 

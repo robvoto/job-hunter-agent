@@ -33,6 +33,31 @@ _UI_LABEL_SECTION_KEYS = {
     "settings_alerts_labels": _SETTINGS_ALERTS_LABEL_KEYS,
 }
 
+# Keys the loader composes at runtime from another canonical section instead of
+# storing a second literal copy in the section's own JSON block (see
+# load_capability_ui_labels, load_onboarding_flow_labels, and
+# load_onboarding_page_labels in server_helpers.py).
+_UI_LABEL_SECTION_KEYS_COMPOSED_AT_RUNTIME = {
+    "onboarding_flow_labels": {
+        "capability_select_shown_label",
+        "capability_clear_selection_label",
+        "capability_remove_selected_label",
+    },
+    "capability_ui_labels": {
+        "settings_select_shown_label",
+        "settings_clear_selection_label",
+        "settings_remove_selected_label",
+    },
+    "onboarding_page_labels": {
+        "locations_label",
+        "work_type_label",
+        "work_mode_label",
+    },
+    "settings_alerts_labels": {
+        "telegram_subscribers_empty",
+    },
+}
+
 
 @pytest.fixture()
 def tmp_db(tmp_path):
@@ -252,7 +277,12 @@ def test_ui_labels_json_contains_required_onboarding_and_server_keys():
         (repo_root / "data" / "knowledge" / "ui_labels.json").read_text(encoding="utf-8")
     )
     missing = {
-        section: [key for key in keys if not str(data.get(section, {}).get(key, "")).strip()]
+        section: [
+            key
+            for key in keys
+            if key not in _UI_LABEL_SECTION_KEYS_COMPOSED_AT_RUNTIME.get(section, set())
+            and not str(data.get(section, {}).get(key, "")).strip()
+        ]
         for section, keys in _UI_LABEL_SECTION_KEYS.items()
     }
     missing = {section: keys for section, keys in missing.items() if keys}

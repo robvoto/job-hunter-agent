@@ -19,6 +19,9 @@ Do not mask failures with fallback encoders, fallback parsers, fallback labels, 
 - Consumer-side schema guessing, e.g. `signal.get("fit_label") or signal.get("name")`
 - Scattered raw strings for schema keys, rule IDs, categories, or decision reasons
 - Numeric caps/slices that affect business or display policy without config ownership
+- Inline `"label": "..."` dict literals for option lists (e.g. `{"value": X, "label": "Public sector"}`) — the label must come from a `ui_labels.json` lookup, even though the `value` token stays in code
+- One hand-authored sentence per enum/category value (e.g. a separate bespoke warning string for every clearance type) — this is hardcoding in disguise even when each string individually lives in `ui_labels.json`. Use one template plus a short data-driven token instead
+- Any user-facing sentence/label assigned as a Python string literal in a designated owner module (see Enforcement below), even as a "helper" constant
 
 ## Required
 - Before editing, inspect the relevant project files, docs, and skills for the area being changed.
@@ -39,6 +42,23 @@ Do not mask failures with fallback encoders, fallback parsers, fallback labels, 
 - Search for inline dicts mapping labels to points/weights.
 - Search for numeric caps/slices that affect behaviour.
 - Search for consumer-side alternate fields like `x or y`.
+
+## Enforcement — owner modules
+
+`tests/test_no_hardcoding.py` scans a fixed list of owner modules (currently
+`job_hunter_agent/profile_store.py`, `job_hunter_agent/workspace_renderer.py`) for
+inline `"label": "..."` literals and top-level ALL_CAPS constants assigned directly
+to a multi-word string. This check is unconditional — it runs in every `pytest`
+run regardless of whether the change "looks like" a labels change. This exists
+because the old rule ("load this skill if the change touches labels") depends on
+the change being recognized as label-related first, which is exactly what failed
+previously: an edit to a data-model file (not obviously "UI text") reintroduced a
+hardcoded label because nothing forced a check.
+
+When adding a new file whose whole job is holding profile/business constants
+(anything like `*_store.py`, `*_settings.py`, workspace/report renderers), add it
+to `OWNER_MODULES` in that test as part of the same change — don't wait for a
+second pass to catch it.
 
 ## Advanced settings ownership
 

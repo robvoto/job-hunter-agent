@@ -564,9 +564,26 @@ def _workspace_ui_labels() -> dict:
 
 
 def load_workspace_page_labels() -> dict[str, str]:
-    labels = _workspace_ui_labels().get("workspace_page_labels", {})
-    if not isinstance(labels, dict):
+    payload = _workspace_ui_labels()
+    raw_labels = payload.get("workspace_page_labels", {})
+    if not isinstance(raw_labels, dict):
         raise ValueError("ui_labels.json is missing workspace_page_labels")
+    work_mode_labels = payload.get("work_mode_labels", {})
+    if not isinstance(work_mode_labels, dict):
+        raise ValueError("ui_labels.json is missing work_mode_labels")
+    card_labels = payload.get("workspace_card_labels", {})
+    if not isinstance(card_labels, dict):
+        raise ValueError("ui_labels.json is missing workspace_card_labels")
+    # work_mode_labels and workspace_card_labels are the canonical sources for these
+    # option/tab strings so they stay in sync with the same text used elsewhere in the app.
+    labels = {
+        **raw_labels,
+        "work_mode_option_remote": work_mode_labels.get("remote_label", ""),
+        "work_mode_option_hybrid": work_mode_labels.get("hybrid_label", ""),
+        "work_mode_option_on_site": work_mode_labels.get("onsite_label", ""),
+        "applied_jobs_tab": card_labels.get("applied_badge", ""),
+        "hidden_jobs_tab": card_labels.get("hidden_badge", ""),
+    }
     missing = [key for key in _WORKSPACE_PAGE_LABEL_KEYS if not str(labels.get(key, "")).strip()]
     if missing:
         raise ValueError(
@@ -588,7 +605,7 @@ def _workspace_label(group: str, key: str) -> str:
 
 
 ARCHIVE_LABEL = _workspace_label("workspace_page_labels", "archive_label")
-ARCHIVE_CONTEXT_PREFIX = _workspace_label("workspace_page_labels", "archive_context_prefix")
+ARCHIVE_CONTEXT_PREFIX = ARCHIVE_LABEL
 ARCHIVE_BADGE_TOOLTIP = _workspace_label("workspace_card_labels", "archive_badge_tooltip")
 
 
@@ -619,9 +636,13 @@ def _humanize_check_item(text: str) -> str:
         if requirement_warning:
             return requirement_warning
     if _NV1_PATTERNS.search(lower):
-        return _workspace_label("check_item_labels", "nv1_clearance_warning")
+        return _workspace_label("check_item_labels", "clearance_requirement_warning").format(
+            clearance="NV1"
+        )
     if _CLEARANCE_PATTERNS.search(lower):
-        return _workspace_label("check_item_labels", "security_clearance_warning")
+        return _workspace_label("check_item_labels", "clearance_requirement_warning").format(
+            clearance="a security"
+        )
     return t
 
 
@@ -882,8 +903,8 @@ def render_workspace_tabs_html(
 ) -> str:
     tabs = [
         ("potential", _workspace_label("workspace_page_labels", "potential_jobs_tab"), shortlist_count),
-        ("applied", _workspace_label("workspace_page_labels", "applied_jobs_tab"), applied_count),
-        ("hidden", _workspace_label("workspace_page_labels", "hidden_jobs_tab"), hidden_count),
+        ("applied", _workspace_label("workspace_card_labels", "applied_badge"), applied_count),
+        ("hidden", _workspace_label("workspace_card_labels", "hidden_badge"), hidden_count),
     ]
     buttons = []
     for target, label, count in tabs:
@@ -1424,7 +1445,7 @@ def render_job_card(
             f'<span class="job-meta-item"><strong>{safe_html(_workspace_label("workspace_meta_labels", "originally_posted"))}</strong> {safe_html(str(_original_posted_display))}</span>'
         )
     elif posted_display:
-        posted_label = _workspace_label("workspace_meta_labels", "posted")
+        posted_label = _workspace_label("workspace_page_labels", "posted_label")
         posted_value = posted_display
         if _linkedin_original_unverified:
             posted_label = _workspace_label("workspace_meta_labels", "linkedin_listed")
@@ -1435,12 +1456,12 @@ def render_job_card(
     for label, value, always_show in [
         (_workspace_label("workspace_meta_labels", "location"), display_record.get("location"), False),
         (
-            _workspace_label("workspace_meta_labels", "work_mode"),
+            _workspace_label("workspace_page_labels", "work_mode_sidebar_label"),
             display_work_mode_label(display_record),
             False,
         ),
         (
-            _workspace_label("workspace_meta_labels", "work_type"),
+            _workspace_label("workspace_page_labels", "work_type_sidebar_label"),
             display_work_type_label(display_record),
             False,
         ),
@@ -1477,12 +1498,12 @@ def render_job_card(
         )
     if applied_record and record.get("last_applied_at"):
         context_bits.append(
-            f"{_workspace_label('workspace_card_labels', 'applied_context_prefix')} "
+            f"{_workspace_label('workspace_card_labels', 'applied_badge')} "
             f"{format_timestamp_label(record.get('last_applied_at'))}"
         )
     if hidden_record and record.get("last_hidden_at"):
         context_bits.append(
-            f"{_workspace_label('workspace_card_labels', 'hidden_context_prefix')} "
+            f"{_workspace_label('workspace_card_labels', 'hidden_badge')} "
             f"{format_timestamp_label(record.get('last_hidden_at'))}"
         )
     elif archived and record.get("last_kept_at"):
@@ -1934,15 +1955,15 @@ def render_job_card(
                 )
             if llm_cost_usd not in (None, ""):
                 summary_items.append(
-                    f"<li>{safe_html(_workspace_label('workspace_card_labels', 'debug_llm_cost_label'))}: ${float(llm_cost_usd):.6f}</li>"
+                    f"<li>{safe_html(_workspace_label('workspace_page_labels', 'last_run_llm_cost_label'))}: ${float(llm_cost_usd):.6f}</li>"
                 )
             if llm_input_tokens not in (None, ""):
                 summary_items.append(
-                    f"<li>{safe_html(_workspace_label('workspace_card_labels', 'debug_llm_input_tokens_label'))}: {safe_html(str(llm_input_tokens))}</li>"
+                    f"<li>{safe_html(_workspace_label('workspace_page_labels', 'last_run_input_tokens_label'))}: {safe_html(str(llm_input_tokens))}</li>"
                 )
             if llm_output_tokens not in (None, ""):
                 summary_items.append(
-                    f"<li>{safe_html(_workspace_label('workspace_card_labels', 'debug_llm_output_tokens_label'))}: {safe_html(str(llm_output_tokens))}</li>"
+                    f"<li>{safe_html(_workspace_label('workspace_page_labels', 'last_run_output_tokens_label'))}: {safe_html(str(llm_output_tokens))}</li>"
                 )
             llm_review_parts.append(
                 f'<div class="job-insight-group is-secondary"><ul>{"".join(summary_items)}</ul></div>'
@@ -2064,7 +2085,7 @@ def render_job_card(
         actions_html = (
             '<div class="job-actions">'
             f'<button class="review-button review-applied workspace-action-button workspace-action-button--primary" type="button" data-review-action="applied" {button_data_attrs}>'
-            f'{safe_html(_workspace_label("workspace_card_labels", "action_applied_label"))}</button>'
+            f'{safe_html(_workspace_label("workspace_card_labels", "applied_badge"))}</button>'
             f'<button class="review-button review-not-for-me workspace-action-button workspace-action-button--danger" type="button" data-review-action="not_for_me" {button_data_attrs} '
             f'title="{safe_html(_workspace_label("workspace_card_labels", "action_not_for_me_tooltip"))}">'
             f'{safe_html(_workspace_label("workspace_card_labels", "action_not_for_me_label"))}</button>'

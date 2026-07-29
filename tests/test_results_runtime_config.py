@@ -332,11 +332,18 @@ def test_rendered_workspace_html_content(tmp_path):
     }
 
     mock_ui_labels_content = {
+        "work_mode_labels": {
+            "remote_label": "Remote",
+            "hybrid_label": "Hybrid",
+            "onsite_label": "On-site",
+        },
+        "workspace_card_labels": {
+            "applied_badge": "Applied",
+            "hidden_badge": "Hidden",
+        },
         "workspace_page_labels": {
             "hero_title": "Jobs Workspace",
             "potential_jobs_tab": "Potential Jobs",
-            "applied_jobs_tab": "Applied",
-            "hidden_jobs_tab": "Hidden",
             "top_level_workspace_views_aria_label": "Top-level workspace views",
             "match_controls_heading": "Match Controls",
             "reset_all_filters_button": "Reset All Filters",
@@ -353,9 +360,6 @@ def test_rendered_workspace_html_content(tmp_path):
             "type_label": "Type",
             "work_mode_label": "Work mode",
             "work_mode_option_any": "Any",
-            "work_mode_option_remote": "Remote",
-            "work_mode_option_hybrid": "Hybrid",
-            "work_mode_option_on_site": "On-site",
             "sector_label": "Sector",
             "sector_option_any": "Any sector",
             "sector_option_public": "Public sector",
