@@ -665,7 +665,7 @@ use-ubuntu
 deploy-jobhunter
 ```
 
-That's it. `deploy-jobhunter` pulls, syncs deps, updates service, seeds DB, restarts, and health-checks.
+That's it. `deploy-jobhunter` pulls, syncs deps, updates service, seeds DB, restarts, rebuilds saved workspace output on startup, and health-checks.
 
 ---
 
@@ -902,7 +902,9 @@ deploy-jobhunter
 7. Installs repo-managed helpers into `/usr/local/bin`
 8. Installs repo-managed AWS browser-session packages, launcher scripts, and systemd service (full PATH)
 9. Runs `db_seed --upgrade`
-10. Restarts `job-hunter.service` and health-checks
+10. Restarts `job-hunter.service`
+11. Rebuilds saved workspace output during startup so the rendered page matches the current code
+12. Waits for a successful health-check
 
 ## 23. Production checklist
 

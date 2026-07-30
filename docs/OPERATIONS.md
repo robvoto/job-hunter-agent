@@ -223,6 +223,7 @@ Server logs:
 - both logs are timestamped
 - `./run --debug` writes both logs; the terminal mirrors the same human-readable stream
 - on AWS, use your service manager or `tail -f output/server-human.log` instead of a separate human-log wrapper
+- the AWS service startup path rebuilds saved workspace HTML before serving requests, so `deploy-jobhunter` refreshes rendered workspace output as part of a normal deploy
 - browser `console.log` is separate from server logs and only matters for JS running in the page
 - debug/audit uncertainty events are appended to `output/uncertainty.jsonl`
 - reviewable runtime warnings are stored in SQLite `system_warnings` and shown in the admin settings page

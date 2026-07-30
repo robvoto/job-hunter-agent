@@ -32,6 +32,7 @@ SETTINGS_ADMIN_JS_PATH = (
 AWS_BROWSER_SESSION_START_SCRIPT = ROOT_DIR / "scripts" / "ec2" / "start-aws-browser-session.sh"
 AWS_BROWSER_SESSION_INSTALL_SCRIPT = ROOT_DIR / "scripts" / "ec2" / "install-aws-browser-session.sh"
 AWS_BROWSER_SESSION_SMOKE_SCRIPT = ROOT_DIR / "scripts" / "ec2" / "smoke-seek-aws-browser-session.sh"
+AWS_DEPLOY_SCRIPT = ROOT_DIR / "scripts" / "ec2" / "deploy-jobhunter.sh"
 
 
 def test_source_document_suffixes_are_rendered_read_only():
@@ -121,15 +122,19 @@ def test_aws_browser_session_scripts_are_committed():
     start_script = AWS_BROWSER_SESSION_START_SCRIPT.read_text(encoding="utf-8")
     install_script = AWS_BROWSER_SESSION_INSTALL_SCRIPT.read_text(encoding="utf-8")
     smoke_script = AWS_BROWSER_SESSION_SMOKE_SCRIPT.read_text(encoding="utf-8")
+    deploy_script = AWS_DEPLOY_SCRIPT.read_text(encoding="utf-8")
 
     assert "Xvfb" in start_script
     assert "openbox" in start_script
     assert "x11vnc" in start_script
     assert "websockify" in start_script
     assert "playwright_user_data" in start_script
+    assert "python -m job_hunter_agent.fastapi_app --rebuild" in start_script
     assert "aws browser-session dependencies" in install_script.lower()
     assert "JOB_HUNTER_SMOKE_SEEK_URL" in smoke_script
     assert "cards=" in smoke_script
+    assert "Startup rebuild refreshes saved workspace output" in deploy_script
+    assert "curl -fsSI" in deploy_script
 
 
 def test_aws_browser_session_page_redirects_non_admin(monkeypatch):

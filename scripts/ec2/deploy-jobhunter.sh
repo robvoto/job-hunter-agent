@@ -27,7 +27,9 @@ Steps:
   6. Install repo-managed helper commands into /usr/local/bin
   7. Install repo-managed systemd service (AWS browser session wrapper)
   8. Run db_seed --upgrade
-  9. Restart job-hunter.service and health-check
+  9. Restart job-hunter.service
+ 10. Startup rebuild refreshes saved workspace output
+ 11. Wait for health-check
 HELP
   exit 0
 fi
@@ -108,13 +110,21 @@ done
 
 echo "==> Restart service"
 sudo systemctl restart "$SERVICE"
-sleep 5
 
 echo "==> Status"
 sudo systemctl status "$SERVICE" --no-pager
 sudo journalctl -u "$SERVICE" -n 30 --no-pager
 
 echo "==> Health check"
-curl -sI "$HEALTH_URL" | head -3
-
-echo "==> Done"
+for attempt in {1..20}; do
+  if curl -fsSI "$HEALTH_URL" >/tmp/jobhunter-health-check.$$ 2>/dev/null; then
+    head -3 /tmp/jobhunter-health-check.$$
+    rm -f /tmp/jobhunter-health-check.$$
+    echo "==> Done"
+    exit 0
+  fi
+  sleep 2
+done
+rm -f /tmp/jobhunter-health-check.$$
+echo "ERROR: Health check failed for $HEALTH_URL" >&2
+exit 1
