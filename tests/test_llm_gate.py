@@ -219,7 +219,7 @@ def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
                 "importance": "preferred",
                 "requirement_type": "capability",
                 "status": "supported",
-                "profile_name": "Stakeholder Engagement",
+                "matched_candidate_fact": "Stakeholder Engagement",
                 "capability_name": "Stakeholder Engagement",
                 "eligibility_name": "",
                 "matched_job_text": "work with stakeholders",
@@ -230,7 +230,7 @@ def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
                 "importance": "preferred",
                 "requirement_type": "capability",
                 "status": "partially_supported",
-                "profile_name": "Process Mapping",
+                "matched_candidate_fact": "Process Mapping",
                 "capability_name": "Process Mapping",
                 "eligibility_name": "",
                 "matched_job_text": "map the current process",
@@ -629,10 +629,10 @@ def test_normalize_llm_review_payload_distinguishes_capability_name_and_related_
         },
     )
 
-    assert payload["requirement_coverage"][0]["profile_name"] == "Stakeholder Engagement"
+    assert payload["requirement_coverage"][0]["matched_candidate_fact"] == "Stakeholder Engagement"
     assert payload["requirement_coverage"][0]["match_source"] == "capability_name"
     assert payload["requirement_coverage"][0]["matched_profile_term"] == "stakeholder engagement"
-    assert payload["requirement_coverage"][1]["profile_name"] == "Business Analysis"
+    assert payload["requirement_coverage"][1]["matched_candidate_fact"] == "Business Analysis"
     assert payload["requirement_coverage"][1]["match_source"] == "related_skill"
     assert payload["requirement_coverage"][1]["matched_profile_term"] == "requirements traceability"
 
@@ -998,7 +998,7 @@ def _cov_elig(req: str, status: str, importance: str = "mandatory") -> dict:
         "importance": importance,
         "requirement_type": "eligibility",
         "status": status,
-        "profile_name": req,
+        "matched_candidate_fact": req,
         "matched_job_text": "",
         "profile_support": [],
     }
@@ -1054,7 +1054,7 @@ def test_normalize_llm_review_payload_overrides_keep_to_reject_on_eligibility_mi
                     "status": "mismatch",
                     "importance": "mandatory",
                     "requirement_type": "eligibility",
-                    "profile_name": "security clearance",
+                    "matched_candidate_fact": "security clearance",
                 },
             ],
         },
@@ -1128,7 +1128,7 @@ def test_normalize_coverage_supports_eligibility_items():
             "importance": "mandatory",
             "requirement_type": "eligibility",
             "status": "supported",
-            "profile_name": "PV clearance",
+            "matched_candidate_fact": "PV clearance",
             "matched_job_text": "Must hold PV clearance",
             "profile_support": ["PV clearance"],
         }
@@ -1138,7 +1138,7 @@ def test_normalize_coverage_supports_eligibility_items():
         valid_eligibility_names={"pv clearance": "PV clearance"},
     )
     assert result[0]["requirement_type"] == "eligibility"
-    assert result[0]["profile_name"] == "PV clearance"
+    assert result[0]["matched_candidate_fact"] == "PV clearance"
     assert result[0]["eligibility_name"] == "PV clearance"
     assert result[0]["capability_name"] == ""
 
@@ -1156,7 +1156,7 @@ def test_normalize_coverage_converts_invalid_eligibility_match_to_not_shown(monk
             "importance": "mandatory",
             "requirement_type": "eligibility",
             "status": "supported",
-            "profile_name": "government environments",
+            "matched_candidate_fact": "government environments",
             "matched_job_text": "Must hold PV security clearance",
             "profile_support": ["government environments"],
         }
@@ -1168,7 +1168,7 @@ def test_normalize_coverage_converts_invalid_eligibility_match_to_not_shown(monk
     assert result[0]["requirement_type"] == "eligibility"
     assert result[0]["status"] == "not_shown"
     assert result[0]["requirement"] == "Hold PV security clearance"
-    assert result[0]["profile_name"] == ""
+    assert result[0]["matched_candidate_fact"] == ""
     assert result[0]["eligibility_name"] == ""
     assert result[0]["capability_name"] == ""
     assert warnings
@@ -1219,7 +1219,7 @@ def test_normalize_coverage_converts_invalid_capability_match_to_not_shown(monke
             "importance": "mandatory",
             "requirement_type": "capability",
             "status": "supported",
-            "profile_name": "finance transformation",
+            "matched_candidate_fact": "finance transformation",
             "matched_job_text": "SAP experience",
             "profile_support": ["finance transformation"],
         }
@@ -1231,7 +1231,7 @@ def test_normalize_coverage_converts_invalid_capability_match_to_not_shown(monke
     assert result[0]["requirement_type"] == "capability"
     assert result[0]["status"] == "not_shown"
     assert result[0]["requirement"] == "SAP experience"
-    assert result[0]["profile_name"] == ""
+    assert result[0]["matched_candidate_fact"] == ""
     assert result[0]["capability_name"] == ""
     assert result[0]["eligibility_name"] == ""
     assert warnings
@@ -1264,7 +1264,7 @@ def test_normalize_coverage_marks_invalid_requirement_type_for_review(monkeypatc
             "importance": "mandatory",
             "requirement_type": "credential",
             "status": "supported",
-            "profile_name": "PV clearance",
+            "matched_candidate_fact": "PV clearance",
             "matched_job_text": "Must hold PV clearance",
             "profile_support": ["PV clearance"],
         }
@@ -1277,7 +1277,7 @@ def test_normalize_coverage_marks_invalid_requirement_type_for_review(monkeypatc
     assert result[0]["requirement_type"] == "invalid"
     assert result[0]["status"] == "invalid"
     assert result[0]["requirement"] == "PV clearance"
-    assert result[0]["profile_name"] == ""
+    assert result[0]["matched_candidate_fact"] == ""
     assert result[0]["eligibility_name"] == ""
     assert result[0]["capability_name"] == ""
     assert warnings

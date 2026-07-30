@@ -122,9 +122,11 @@ def compute_profile_gaps(
         requirement_type = str(item.get("requirement_type") or "capability").strip().lower()
         if requirement_type not in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES:
             continue
-        profile_name = str(item.get("profile_name") or capability_name or "").strip()
+        matched_candidate_fact = str(
+            item.get("matched_candidate_fact") or item.get("profile_name") or capability_name or ""
+        ).strip()
         if not capability_name:
-            capability_name = profile_name
+            capability_name = matched_candidate_fact
         if not capability_name:
             continue
         if (
@@ -143,7 +145,7 @@ def compute_profile_gaps(
         gaps.append(
             {
                 "capability_name": capability_name,
-                "profile_name": profile_name,
+                "matched_candidate_fact": matched_candidate_fact,
                 "requirement_type": requirement_type,
                 "raw_requirement": raw_requirement,
                 "matched_job_text": matched_job_text,

@@ -1,5 +1,6 @@
 """Helpers for description trust."""
 
+from job_hunter_agent.detail_page_text import looks_like_browser_interstitial_text
 from job_hunter_agent.global_settings import (
     KEY_DESCRIPTION_TRUST_SETTINGS,
     KEY_MIN_TRUSTED_DESCRIPTION_LENGTH,
@@ -42,12 +43,15 @@ def get_trusted_full_description(record: dict) -> str:
 
     full = compact_whitespace(record.get(RECORD_FULL_DESCRIPTION_KEY) or "")
 
-    if full:
+    if full and not looks_like_browser_interstitial_text(full):
         return full
 
     source = str(record.get(RECORD_DESCRIPTION_SOURCE_KEY) or "").strip().lower()
 
     fallback_text = compact_whitespace(record.get(RECORD_FIT_SOURCE_TEXT_KEY) or "")
+
+    if looks_like_browser_interstitial_text(fallback_text):
+        return ""
 
     if len(fallback_text) < get_min_trusted_description_length():
         return ""

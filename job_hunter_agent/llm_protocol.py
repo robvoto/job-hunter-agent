@@ -21,7 +21,7 @@ LLM_FIT_REVIEW_PROMPT_SHAPE = (
     '"job_requirements":["..."],'
     '"requirement_coverage":[{"requirement":"...","importance":"mandatory|strongly_preferred|preferred|nice_to_have",'
     '"requirement_type":"capability|eligibility","status":"supported|partially_supported|not_shown|mismatch",'
-    '"profile_name":"...","matched_job_text":"...","profile_support":["..."]}],'
+    '"matched_candidate_fact":"...","matched_job_text":"...","profile_support":["..."]}],'
     '"debug_reason":"..."}'
 )
 LLM_FIT_REVIEW_DEBUG_PROMPT_SHAPE = (
@@ -30,7 +30,7 @@ LLM_FIT_REVIEW_DEBUG_PROMPT_SHAPE = (
     '"job_requirements":["..."],'
     '"requirement_coverage":[{"requirement":"...","importance":"mandatory|strongly_preferred|preferred|nice_to_have",'
     '"requirement_type":"capability|eligibility","status":"supported|partially_supported|not_shown|mismatch",'
-    '"profile_name":"...","match_source":"capability_name|related_skill|eligibility",'
+    '"matched_candidate_fact":"...","match_source":"capability_name|related_skill|eligibility",'
     '"matched_profile_term":"...","matched_job_text":"...","profile_support":["..."]}],'
     '"debug_reason":"..."}'
 )

@@ -15,7 +15,7 @@ import sys
 from typing import Any, Dict
 
 from openai import APIStatusError, APITimeoutError, OpenAI
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import AliasChoices, BaseModel, Field, ValidationError
 
 from job_hunter_agent.config import DEBUG_MODE
 from job_hunter_agent.experience_requirements import resolve_role_experience_requirement
@@ -36,7 +36,9 @@ from job_hunter_agent.global_settings import (
     get_llm_job_requirements_max_output_tokens,
     get_llm_learning_candidates_max_items,
     get_llm_learning_candidates_max_output_tokens,
+    get_llm_max_retries,
     get_llm_raw_output_log_max_chars,
+    get_llm_request_timeout_seconds,
     get_llm_rejection_blocker_suggestions_max_items,
     get_llm_rejection_blocker_suggestions_max_output_tokens,
     get_llm_rejection_blocker_suggestions_max_words,
@@ -304,7 +306,10 @@ class _LLMRequirementCoverageItem(BaseModel):
     importance: str = "preferred"
     requirement_type: str = "capability"
     status: str
-    profile_name: str = ""
+    matched_candidate_fact: str = Field(
+        default="",
+        validation_alias=AliasChoices("matched_candidate_fact", "profile_name"),
+    )
     matched_job_text: str = ""
     profile_support: list[str] = Field(default_factory=list)
 
@@ -384,7 +389,11 @@ def _build_openai_client() -> OpenAI | None:
     api_key = str(os.environ.get("OPENAI_API_KEY") or "").strip()
     if not api_key:
         return None
-    return OpenAI(api_key=api_key)
+    return OpenAI(
+        api_key=api_key,
+        timeout=get_llm_request_timeout_seconds(),
+        max_retries=get_llm_max_retries(),
+    )
 
 
 client = _build_openai_client()
@@ -607,7 +616,7 @@ def build_requirement_coverage_guidance() -> str:
     parts = [
         f"Use at most {get_llm_job_requirements_max_items()} requirement_coverage items.",
         "Classify each requirement as capability or eligibility.",
-        "Use capability_name for capability requirements and profile_name for eligibility requirements.",
+        "Use matched_candidate_fact for the exact candidate fact that supports the requirement.",
         "When the ad states explicit years or months of experience, compare that threshold against the role experience matrix before choosing supported versus partially_supported.",
     ]
     parts.extend(f"- {line}" for line in REQUIREMENT_COVERAGE_DEFAULT_LINES)
@@ -618,7 +627,7 @@ def build_requirement_coverage_debug_guidance() -> str:
     parts = [
         'For debug match diagnostics: return match_source exactly as "capability_name", "related_skill", or "eligibility".',
         "For debug match diagnostics: return matched_profile_term as the exact capability name, related skill, or eligibility fact used.",
-        "For debug match diagnostics: profile_name must stay the canonical capability or eligibility name.",
+        "For debug match diagnostics: matched_candidate_fact must stay the canonical capability or eligibility name.",
         "For debug match diagnostics: profile_support must contain only actual candidate evidence text, never just the capability name or related skill label.",
     ]
     return "\n".join(parts)
@@ -859,7 +868,7 @@ def _record_requirement_coverage_warning(
     requirement_type_after: str,
     status_before: str,
     status_after: str,
-    proposed_profile_name: str,
+    proposed_matched_candidate_fact: str,
     proposed_capability_name: str,
     proposed_eligibility_name: str,
     matched_job_text: str,
@@ -874,7 +883,7 @@ def _record_requirement_coverage_warning(
         requirement,
         requirement_type_before,
         status_before,
-        proposed_profile_name,
+        proposed_matched_candidate_fact,
         matched_job_text,
     )
     record_system_warning(
@@ -890,7 +899,7 @@ def _record_requirement_coverage_warning(
             "requirement_type_after": requirement_type_after,
             "status_before": status_before,
             "status_after": status_after,
-            "proposed_profile_name": proposed_profile_name,
+            "proposed_matched_candidate_fact": proposed_matched_candidate_fact,
             "proposed_capability_name": proposed_capability_name,
             "proposed_eligibility_name": proposed_eligibility_name,
             "matched_job_text": matched_job_text,
@@ -959,26 +968,26 @@ def normalize_llm_requirement_coverage(
         else:
             requirement_type = "capability"
             requirement_type_is_valid = True
-        profile_name_raw = item.get("profile_name")
-        if not profile_name_raw:
-            profile_name_raw = item.get("capability_name") or item.get("eligibility_name")
-        profile_name = compact_whitespace(profile_name_raw)
+        matched_candidate_fact_raw = item.get("matched_candidate_fact") or item.get("profile_name")
+        if not matched_candidate_fact_raw:
+            matched_candidate_fact_raw = item.get("capability_name") or item.get("eligibility_name")
+        matched_candidate_fact = compact_whitespace(matched_candidate_fact_raw)
         capability_name = ""
         eligibility_name = ""
         if requirement_type_is_valid and requirement_type == "eligibility":
             eligibility_name = (
-                valid_eligibility_lookup.get(profile_name.lower(), "")
+                valid_eligibility_lookup.get(matched_candidate_fact.lower(), "")
                 if valid_eligibility_lookup is not None
-                else profile_name.lower()
+                else matched_candidate_fact.lower()
             )
-            profile_name = eligibility_name or profile_name
+            matched_candidate_fact = eligibility_name or matched_candidate_fact
         elif requirement_type_is_valid:
             capability_name = (
-                valid_capability_lookup.get(profile_name.lower(), "")
+                valid_capability_lookup.get(matched_candidate_fact.lower(), "")
                 if valid_capability_lookup is not None
-                else profile_name.lower()
+                else matched_candidate_fact.lower()
             )
-            profile_name = capability_name or profile_name
+            matched_candidate_fact = capability_name or matched_candidate_fact
         else:
             logger.warning(
                 "[LLM][WARN] purpose=fit_review invalid_requirement_type requirement=%r requirement_type=%r status=%s importance=%s",
@@ -1021,13 +1030,13 @@ def normalize_llm_requirement_coverage(
                 requirement_type_after=requirement_type,
                 status_before=status_before,
                 status_after=status,
-                proposed_profile_name=profile_name,
+                proposed_matched_candidate_fact=matched_candidate_fact,
                 proposed_capability_name=capability_name,
                 proposed_eligibility_name=eligibility_name,
                 matched_job_text=matched_job_text,
                 reason="invalid_requirement_type",
             )
-            profile_name = ""
+            matched_candidate_fact = ""
             capability_name = ""
             eligibility_name = ""
         if requirement_type == "eligibility" and status in {"supported", "partially_supported"} and not eligibility_name:
@@ -1044,14 +1053,14 @@ def normalize_llm_requirement_coverage(
                 requirement_type_after=requirement_type,
                 status_before=status_before,
                 status_after="not_shown",
-                proposed_profile_name=profile_name,
+                proposed_matched_candidate_fact=matched_candidate_fact,
                 proposed_capability_name=capability_name,
                 proposed_eligibility_name=eligibility_name,
                 matched_job_text=matched_job_text,
                 reason="invalid_eligibility_match",
             )
             status = "not_shown"
-            profile_name = ""
+            matched_candidate_fact = ""
             capability_name = ""
             eligibility_name = ""
         if requirement_type != "eligibility" and status in {"supported", "partially_supported"} and not capability_name:
@@ -1068,14 +1077,14 @@ def normalize_llm_requirement_coverage(
                 requirement_type_after=requirement_type,
                 status_before=status_before,
                 status_after="not_shown",
-                proposed_profile_name=profile_name,
+                proposed_matched_candidate_fact=matched_candidate_fact,
                 proposed_capability_name=capability_name,
                 proposed_eligibility_name=eligibility_name,
                 matched_job_text=matched_job_text,
                 reason="invalid_capability_match",
             )
             status = "not_shown"
-            profile_name = ""
+            matched_candidate_fact = ""
             capability_name = ""
             eligibility_name = ""
         key = requirement.lower()
@@ -1087,7 +1096,7 @@ def normalize_llm_requirement_coverage(
             "importance": importance,
             "requirement_type": requirement_type,
             "status": status,
-            "profile_name": profile_name,
+            "matched_candidate_fact": matched_candidate_fact,
             "capability_name": capability_name,
             "eligibility_name": eligibility_name,
             "matched_job_text": matched_job_text,

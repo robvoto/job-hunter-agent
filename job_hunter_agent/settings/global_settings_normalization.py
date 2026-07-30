@@ -55,6 +55,8 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
     KEY_LLM_MAX_CHARS,
     KEY_LLM_MAX_CHARS_LIMITS,
+    KEY_LLM_MAX_RETRIES,
+    KEY_LLM_REQUEST_TIMEOUT_SECONDS,
     KEY_LLM_PRICING_PER_1M,
     KEY_LLM_PROMPT_CAPABILITY_NAMING_ALIASES_MAX_ITEMS,
     KEY_LLM_PROMPT_CAPABILITY_NAMING_MAX_OUTPUT_TOKENS,
@@ -693,6 +695,21 @@ def normalize_global_settings(
             f"{normalized_max_chars_limits['min']} and {normalized_max_chars_limits['max']}"
         )
 
+    llm_request_timeout_seconds = _require_float(
+        llm_source,
+        KEY_LLM_REQUEST_TIMEOUT_SECONDS,
+        DEFAULT_LLM_SETTINGS[KEY_LLM_REQUEST_TIMEOUT_SECONDS],
+        5.0,
+        120.0,
+    )
+    llm_max_retries = _require_int(
+        llm_source,
+        KEY_LLM_MAX_RETRIES,
+        DEFAULT_LLM_SETTINGS[KEY_LLM_MAX_RETRIES],
+        0,
+        5,
+    )
+
     preset_table_source = onboarding_source.get(KEY_CAPABILITY_STRENGTH_PRESETS, {})
     if not isinstance(preset_table_source, dict):
         preset_table_source = {}
@@ -1078,6 +1095,8 @@ def normalize_global_settings(
             KEY_LLM_MAX_CHARS_LIMITS: normalized_max_chars_limits,
             KEY_LLM_PROMPT_SETTINGS: normalized_llm_prompt_settings,
             KEY_LLM_MAX_CHARS: max_llm_chars,
+            KEY_LLM_REQUEST_TIMEOUT_SECONDS: llm_request_timeout_seconds,
+            KEY_LLM_MAX_RETRIES: llm_max_retries,
         },
         KEY_REVIEW_SETTINGS: {
             KEY_REVIEW_MAX_EXAMPLES_PER_SKILL: _require_int(

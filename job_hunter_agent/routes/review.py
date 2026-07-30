@@ -282,7 +282,11 @@ def _profile_gap_confirmable_item(job_key: str, value: str) -> dict:
         if raw_requirement_type and raw_requirement_type not in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES:
             continue
         coverage_name = str(
-            item.get("profile_name") or item.get("capability_name") or item.get("eligibility_name") or ""
+            item.get("matched_candidate_fact")
+            or item.get("profile_name")
+            or item.get("capability_name")
+            or item.get("eligibility_name")
+            or ""
         ).strip()
         if _profile_gap_name_key(coverage_name) != target_name:
             continue
@@ -331,7 +335,8 @@ def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
                 "capability_name is not a confirmable requirement coverage item for this job"
             )
         canonical_item_name = str(
-            canonical_item.get("profile_name")
+            canonical_item.get("matched_candidate_fact")
+            or canonical_item.get("profile_name")
             or canonical_item.get("capability_name")
             or canonical_item.get("eligibility_name")
             or ""

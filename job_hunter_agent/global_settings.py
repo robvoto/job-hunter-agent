@@ -86,6 +86,21 @@ def get_llm_prompt_setting_int(key: str) -> int:
     return int(load_global_settings()[KEY_LLM_SETTINGS][KEY_LLM_PROMPT_SETTINGS][key])
 
 
+def get_llm_request_timeout_seconds() -> float:
+    """Per-request timeout (seconds) for the OpenAI client.
+
+    Bounds how long a stalled fit-review call can hold up a scrape run before
+    raising APITimeoutError, instead of falling back to the SDK's own
+    multi-minute default.
+    """
+    return float(load_global_settings()[KEY_LLM_SETTINGS][KEY_LLM_REQUEST_TIMEOUT_SECONDS])
+
+
+def get_llm_max_retries() -> int:
+    """SDK-level retry count for the OpenAI client (kept low; app has its own retry path)."""
+    return int(load_global_settings()[KEY_LLM_SETTINGS][KEY_LLM_MAX_RETRIES])
+
+
 def get_llm_fit_decision_max_output_tokens() -> int:
     """Max tokens for the fit decision response."""
     return get_llm_prompt_setting_int(KEY_LLM_PROMPT_FIT_DECISION_MAX_OUTPUT_TOKENS)
@@ -401,6 +416,21 @@ def seed_global_settings_from_file(db_path: Path | None = None, *, overwrite: bo
     if not overwrite and _db_load(db_path) is not None:
         return False
     normalized = normalize_global_settings(_load_managed_global_settings(), strict_managed=True)
+    _db_save(normalized, db_path)
+    load_global_settings.cache_clear()
+    return True
+
+
+def upgrade_global_settings_from_file(db_path: Path | None = None) -> bool:
+    current = _db_load(db_path)
+    if current is None:
+        return seed_global_settings_from_file(db_path, overwrite=True)
+    if not isinstance(current, dict):
+        raise GlobalSettingsLoadError("global_settings in DB must contain a JSON object")
+    merged = _deep_merge_settings(_load_managed_global_settings(), current)
+    normalized = normalize_global_settings(merged, strict_managed=True)
+    if normalized == current:
+        return False
     _db_save(normalized, db_path)
     load_global_settings.cache_clear()
     return True

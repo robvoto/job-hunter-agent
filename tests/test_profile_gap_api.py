@@ -273,7 +273,7 @@ def test_profile_gap_confirm_have_adds_candidate_eligibility(client, monkeypatch
                     "requirement": "Hold PV security clearance",
                     "status": "not_shown",
                     "requirement_type": "eligibility",
-                    "profile_name": "PV clearance",
+                    "matched_candidate_fact": "PV clearance",
                     "matched_job_text": "Must hold a PV clearance",
                 }
             ],
@@ -319,7 +319,7 @@ def test_profile_gap_confirm_do_not_have_adds_candidate_eligibility_false(client
                     "requirement": "Hold PV security clearance",
                     "status": "not_shown",
                     "requirement_type": "eligibility",
-                    "profile_name": "PV clearance",
+                    "matched_candidate_fact": "PV clearance",
                     "matched_job_text": "Must hold a PV clearance",
                 }
             ],

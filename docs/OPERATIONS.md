@@ -218,6 +218,13 @@ Human-log debug launcher:
 This mirrors `output/server.log` into the terminal while the debug server runs,
 so the shell shows the same human-readable runtime log that is written to disk.
 
+Background-service rule:
+
+- the FastAPI server does not auto-start the scheduled agent loop or the shared Telegram poller
+- use `python -m job_hunter_agent.agent_runner` for persistent scheduled automation
+- desktop mode owns its own Telegram poller while the launcher is open
+- server-side background loops are opt-in only via `JOB_HUNTER_ENABLE_SERVER_TELEGRAM_POLLER=true` and/or `JOB_HUNTER_ENABLE_SERVER_SCHEDULED_AGENT_LOOP=true`
+
 Server logs:
 
 - human-readable runtime output is written to `output/server.log`

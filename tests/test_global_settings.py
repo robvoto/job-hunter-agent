@@ -340,6 +340,55 @@ def test_load_global_settings_repairs_missing_managed_limits(tmp_path, monkeypat
     assert repaired["limits"]["search"]["locations_max_selected"]["max"] == 3
 
 
+def test_upgrade_global_settings_from_file_preserves_existing_admin_values(
+    tmp_path, monkeypatch
+):
+    db = tmp_path / "upgrade.db"
+    init_db(db)
+
+    current = normalize_global_settings(
+        {
+            "playwright_settings": {
+                "headless": False,
+                "playwright_browser_mode": "ephemeral",
+            },
+        }
+    )
+    current["playwright_settings"].pop("session_max_age_days", None)
+
+    with db_conn(db) as conn:
+        conn.execute(
+            "INSERT INTO global_settings (key, value) VALUES (?, ?)",
+            ("global_settings", json.dumps(current)),
+        )
+
+    managed_payload = _load_managed_global_settings_payload()
+    managed_payload["playwright_settings"]["headless"] = True
+    managed_payload["playwright_settings"]["session_max_age_days"] = 30
+
+    monkeypatch.setenv("JOB_HUNTER_DB_PATH", str(db))
+    monkeypatch.setattr(
+        global_settings,
+        "_load_managed_global_settings",
+        lambda: managed_payload,
+    )
+    global_settings.load_global_settings.cache_clear()
+
+    updated = global_settings.upgrade_global_settings_from_file(db)
+
+    assert updated is True
+
+    with db_conn(db) as conn:
+        saved = json.loads(
+            conn.execute(
+                "SELECT value FROM global_settings WHERE key = ?", ("global_settings",)
+            ).fetchone()["value"]
+        )
+
+    assert saved["playwright_settings"]["headless"] is False
+    assert saved["playwright_settings"]["session_max_age_days"] == 30
+
+
 def _load_managed_global_settings_payload() -> dict:
     return json.loads(GLOBAL_SETTINGS_PATH.read_text(encoding="utf-8-sig"))
 

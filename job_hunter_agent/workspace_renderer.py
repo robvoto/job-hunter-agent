@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 from job_hunter_agent.capability_matching import build_display_competitive_risks
 from job_hunter_agent.company_normalization import normalize_company_name
 from job_hunter_agent.config import DEBUG_MODE
+from job_hunter_agent.detail_page_text import looks_like_browser_interstitial_text
 from job_hunter_agent.description_trust import (
     full_description_confidence,
     get_min_trusted_description_length,
@@ -170,15 +171,23 @@ _DESCRIPTION_HEADING_JOINERS = frozenset(
 )
 
 
+def _clean_job_card_text(value: object, *, preserve_blocks: bool = False) -> str:
+    cleaner = clean_display_text_preserving_blocks if preserve_blocks else clean_display_text
+    cleaned = cleaner(value or "")
+    if looks_like_browser_interstitial_text(cleaned):
+        return ""
+    return cleaned
+
+
 def _get_trusted_display_description(record: dict) -> str:
     """Return trusted description text while preserving source line structure for display."""
 
-    full_description = clean_display_text_preserving_blocks(record.get("full_description") or "")
+    full_description = _clean_job_card_text(record.get("full_description") or "", preserve_blocks=True)
     if full_description:
         return full_description
 
     source = str(record.get("description_source") or "").strip().lower()
-    fallback_text = clean_display_text_preserving_blocks(record.get("fit_source_text") or "")
+    fallback_text = _clean_job_card_text(record.get("fit_source_text") or "", preserve_blocks=True)
     if len(compact_whitespace(fallback_text)) < get_min_trusted_description_length():
         return ""
     if source in get_trusted_sources():
@@ -1003,11 +1012,14 @@ def render_job_card(
     hidden_record = bool(record.get("hidden"))
     is_stale = bool(record.get("is_stale"))
     seen_by_you = viewed_by_user(record)
-    stored_snapshot = clean_display_text(
-        record.get("role_snapshot") or record.get("teaser") or "N/A"
-    )
+    teaser_text = _clean_job_card_text(record.get("teaser") or "")
+    stored_snapshot = _clean_job_card_text(record.get("role_snapshot") or "")
+    if not stored_snapshot:
+        stored_snapshot = teaser_text or "N/A"
     if stored_snapshot in {"", "N/A"}:
-        stored_snapshot = synthesize_role_snapshot(record)
+        snapshot_record = dict(record)
+        snapshot_record["teaser"] = teaser_text
+        stored_snapshot = synthesize_role_snapshot(snapshot_record)
     fit_confidence_level = full_description_confidence(record)
     trusted_desc = get_trusted_full_description(record)
     trusted_display_desc = _get_trusted_display_description(record)
@@ -1096,7 +1108,7 @@ def render_job_card(
         else ("hidden" if hidden_record else ("saved" if archived else "current"))
     )
     company_attr = safe_html(company_display)
-    teaser_attr = safe_html(clean_display_text(str(record.get("teaser") or "")))
+    teaser_attr = safe_html(teaser_text)
     card_sector = "unknown"
     channel_signal = display_record.get("posting_channel_evidence")
     if not isinstance(channel_signal, dict):
@@ -1598,16 +1610,19 @@ def render_job_card(
         profile_status = str(row.get("profile_status") or "").strip()
         coverage_status = str(row.get("coverage_status") or "").strip().lower()
         importance = str(row.get("importance") or "").strip().lower()
-        profile_name = compact_whitespace(
+        matched_candidate_fact = compact_whitespace(
             str(
-                row.get("profile_name")
+                row.get("matched_candidate_fact")
+                or row.get("profile_name")
                 or row.get("capability_name")
                 or row.get("eligibility_name")
                 or ""
             )
         )
         matched_text = compact_whitespace(str(row.get("matched_job_text") or ""))
-        level_label = capability_level_lookup.get(_normalize_capability_token(profile_name), "")
+        level_label = capability_level_lookup.get(
+            _normalize_capability_token(matched_candidate_fact), ""
+        )
         required_experience_months = _workspace_int(row.get("required_experience_months") or 0)
         matched_role_experience_title = compact_whitespace(
             str(row.get("matched_role_experience_title") or "")
@@ -1655,8 +1670,8 @@ def render_job_card(
             )
 
         detail_parts = []
-        if profile_name:
-            profile_detail = profile_name
+        if matched_candidate_fact:
+            profile_detail = matched_candidate_fact
             if level_label:
                 profile_detail = f"{profile_detail} ({level_label})"
             detail_parts.append(profile_detail)
@@ -1745,7 +1760,9 @@ def render_job_card(
             row = target_rows[key]
             row["coverage_status"] = str(item.get("status") or "not_shown").strip().lower()
             row["importance"] = str(item.get("importance") or "preferred").strip().lower()
-            row["profile_name"] = compact_whitespace(str(item.get("profile_name") or ""))
+            row["matched_candidate_fact"] = compact_whitespace(
+                str(item.get("matched_candidate_fact") or item.get("profile_name") or "")
+            )
             row["capability_name"] = compact_whitespace(str(item.get("capability_name") or ""))
             row["eligibility_name"] = compact_whitespace(str(item.get("eligibility_name") or ""))
             row["matched_job_text"] = compact_whitespace(str(item.get("matched_job_text") or ""))

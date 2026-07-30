@@ -27,7 +27,10 @@ from job_hunter_agent.runtime_helpers import load_repo_dotenv
 load_repo_dotenv()
 
 from job_hunter_agent.database import init_db
-from job_hunter_agent.global_settings import seed_global_settings_from_file
+from job_hunter_agent.global_settings import (
+    seed_global_settings_from_file,
+    upgrade_global_settings_from_file,
+)
 from job_hunter_agent.knowledge_store import seed_knowledge_from_dir, upgrade_knowledge_from_dir
 from job_hunter_agent.paths import (
     DATA_DIR,
@@ -123,10 +126,9 @@ def run(overwrite: bool = False, upgrade: bool = False) -> None:
             f"  {len(updated)} signal config entries updated: {updated or '(none - all current)'}"
         )
 
-        print(f"Seeding global settings from {global_settings_path} ...")
-        # Global settings has no per-entry user approvals, so upgrade always overwrites.
-        written = seed_global_settings_from_file(overwrite=True)
-        print(f"  {'updated' if written else 'already present'}")
+        print(f"Upgrading global settings from {global_settings_path} ...")
+        written = upgrade_global_settings_from_file()
+        print(f"  {'updated' if written else 'already current'}")
     else:
         print(f"Seeding knowledge from {knowledge_dir} ...")
         seeded = seed_knowledge_from_dir(

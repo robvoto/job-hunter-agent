@@ -291,6 +291,33 @@ def test_extract_job_payload_uses_visible_text_and_shared_key_logic(monkeypatch)
     assert payload["source_metadata"]["platform"] == "apsjobs"
 
 
+def test_extract_job_payload_marks_browser_interstitial_as_challenge_page(monkeypatch):
+    monkeypatch.setattr(apsjobs_module, "job_type_rules", {"ongoing": "Ongoing"})
+
+    page = _FakePage(
+        url="https://www.apsjobs.gov.au/s/job-details/123",
+        body_text=(
+            "Loading×Sorry to interruptCSS ErrorRefresh (function() { "
+            "if (!navigator.cookieEnabled) { var cookieMessage = document.createElement('div'); "
+            "cookieMessage.innerHTML = \"<section role='alert'>\"; } })"
+        ),
+        title_text="",
+        anchors=[],
+    )
+
+    payload = apsjobs_module._extract_job_payload(
+        page,
+        job_url=page.url,
+        anchor_text="Analyst (Multiple Positions)",
+        run_iso="2026-06-23T09:00:00+10:00",
+    )
+
+    assert payload["title"] == "Analyst (Multiple Positions)"
+    assert payload["details_status"] == "challenge_page"
+    assert payload["details_text"] == ""
+    assert payload["teaser"] == ""
+
+
 def test_build_apsjobs_search_targets_uses_configured_default_when_unset():
     keywords, targets = apsjobs_module.build_apsjobs_search_targets(
         {"keywords": "data analyst", "locations": []}

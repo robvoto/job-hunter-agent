@@ -440,6 +440,21 @@ def test_fit_confidence_low_when_no_trusted_description_exists():
     assert not description_trust.is_description_trusted(record)
 
 
+def test_fit_confidence_low_for_browser_interstitial_text():
+    record = {
+        RECORD_DETAILS_STATUS_KEY: DETAILS_STATUS_OK,
+        RECORD_FULL_DESCRIPTION_KEY: (
+            "Loading×Sorry to interruptCSS ErrorRefresh (function() { "
+            "if (!navigator.cookieEnabled) { var cookieMessage = document.createElement('div'); } })"
+        ),
+        RECORD_FIT_CONFIDENCE_KEY: CONFIDENCE_HIGH,
+    }
+
+    assert description_trust.full_description_confidence(record) == CONFIDENCE_LOW
+    assert description_trust.get_trusted_full_description(record) == ""
+    assert not description_trust.is_description_trusted(record)
+
+
 def test_extract_work_mode_prioritises_strict_office_requirement_over_delivery_method():
     result = extract_from_text(
         "Familiarity with Agile, Waterfall, or hybrid delivery environments. This role is 5 days in office."
@@ -1459,6 +1474,40 @@ def test_job_card_summary_normalizes_escaped_list_markers():
     assert 'data-job-teaser="Role: Business Analyst | Location of work: Canberra, Brisbane, Melbourne and Sydney' in html
 
 
+def test_render_job_card_hides_browser_interstitial_summary_text():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-browser-interstitial-summary",
+            "title": "Analyst (Multiple Positions)",
+            "company": "Australian Energy Regulator",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "DETAILS_CHALLENGE_PAGE",
+            "llm_fit_grade": "",
+            "location": "Canberra ACT",
+            "work_type": "",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "teaser": (
+                "Loading×Sorry to interruptCSS ErrorRefresh (function() { "
+                "if (!navigator.cookieEnabled) { var cookieMessage = document.createElement('div'); } })"
+            ),
+            "role_snapshot": (
+                "Loading×Sorry to interruptCSS ErrorRefresh (function() { "
+                "if (!navigator.cookieEnabled) { var cookieMessage = document.createElement('div'); } })"
+            ),
+            RECORD_DETAILS_STATUS_KEY: "challenge_page",
+            "source": "apsjobs",
+        },
+        _test_profile(),
+    )
+
+    assert "Sorry to interrupt" not in html
+    assert "navigator.cookieEnabled" not in html
+    assert "Analyst (Multiple Positions)" in html
+    assert 'data-job-teaser=""' in html
+
+
 def test_posting_channel_badge_uses_token_classifier_review_class():
     channel = role_analysis.infer_posting_channel(
         {"company": "Acme", "source_metadata": {"platform": "seek", "raw_source_fields": {}}},
@@ -1644,7 +1693,7 @@ def test_render_job_card_requirement_coverage_shows_eligibility_details_in_debug
                     "importance": "mandatory",
                     "requirement_type": "eligibility",
                     "status": "supported",
-                    "profile_name": "PV clearance",
+                    "matched_candidate_fact": "PV clearance",
                     "eligibility_name": "PV clearance",
                     "capability_name": "",
                     "matched_job_text": "Must hold a PV clearance",
@@ -2788,7 +2837,7 @@ def test_render_job_card_debug_audit_shows_evidence_credit_and_decision_conversi
                     "importance": "mandatory",
                     "requirement_type": "capability",
                     "status": "supported",
-                    "profile_name": "stakeholder engagement",
+                    "matched_candidate_fact": "stakeholder engagement",
                     "capability_name": "stakeholder engagement",
                     "match_source": "related_skill",
                     "matched_profile_term": "health program delivery",
@@ -2800,7 +2849,7 @@ def test_render_job_card_debug_audit_shows_evidence_credit_and_decision_conversi
                     "importance": "preferred",
                     "requirement_type": "eligibility",
                     "status": "mismatch",
-                    "profile_name": "",
+                    "matched_candidate_fact": "",
                     "profile_support": [],
                 },
                 {
@@ -2808,7 +2857,7 @@ def test_render_job_card_debug_audit_shows_evidence_credit_and_decision_conversi
                     "importance": "mandatory",
                     "requirement_type": "capability",
                     "status": "supported",
-                    "profile_name": "",
+                    "matched_candidate_fact": "",
                     "profile_support": [],
                 },
             ],
@@ -2922,7 +2971,7 @@ def test_render_job_card_folds_debug_fit_internals_into_llm_review_panel_without
     assert "Final decision" not in debug_panel_html
 
 
-def test_render_job_card_fit_breakdown_starts_with_plain_english_summary_from_requirement_coverage():
+def test_render_job_card_fit_breakdown_starts_with_plain_english_summary_from_requirement_coverage_explicit_record_key():
     html = workspace_renderer.render_job_card(
         {
             "job_key": "test-fit-summary-coverage",

@@ -46,7 +46,7 @@ def test_requirement_fit_audit_exposes_exact_evidence_mapping_and_credit():
             "importance": "mandatory",
             "requirement_type": "capability",
             "status": "partially_supported",
-            "profile_name": "stakeholder engagement",
+            "matched_candidate_fact": "stakeholder engagement",
             "capability_name": "stakeholder engagement",
             "match_source": "related_skill",
             "matched_profile_term": "stakeholder workshops",
@@ -63,7 +63,7 @@ def test_requirement_fit_audit_exposes_exact_evidence_mapping_and_credit():
             "importance": "mandatory",
             "requirement_type": "capability",
             "status": "partially_supported",
-            "profile_name": "stakeholder engagement",
+            "matched_candidate_fact": "stakeholder engagement",
             "candidate_level": "strong",
             "match_source": "related_skill",
             "matched_profile_term": "stakeholder workshops",
@@ -102,7 +102,7 @@ def test_requirement_fit_diagnostics_and_formatter_cover_all_status_types():
                 "importance": "mandatory",
                 "requirement_type": "capability",
                 "status": "supported",
-                "profile_name": "stakeholder engagement",
+                "matched_candidate_fact": "stakeholder engagement",
                 "match_source": "capability_name",
                 "matched_profile_term": "stakeholder engagement",
                 "profile_support": ["Ran stakeholder workshops."],
@@ -112,7 +112,7 @@ def test_requirement_fit_diagnostics_and_formatter_cover_all_status_types():
                 "importance": "mandatory",
                 "requirement_type": "capability",
                 "status": "partially_supported",
-                "profile_name": "sql",
+                "matched_candidate_fact": "sql",
                 "match_source": "related_skill",
                 "matched_profile_term": "sql analysis",
                 "profile_support": ["Used SQL for analysis."],
@@ -122,7 +122,7 @@ def test_requirement_fit_diagnostics_and_formatter_cover_all_status_types():
                 "importance": "mandatory",
                 "requirement_type": "eligibility",
                 "status": "supported",
-                "profile_name": "PV clearance",
+                "matched_candidate_fact": "PV clearance",
                 "match_source": "eligibility",
                 "matched_profile_term": "PV clearance",
                 "profile_support": ["PV clearance confirmed."],
@@ -132,7 +132,7 @@ def test_requirement_fit_diagnostics_and_formatter_cover_all_status_types():
                 "importance": "preferred",
                 "requirement_type": "capability",
                 "status": "not_shown",
-                "profile_name": "",
+                "matched_candidate_fact": "",
                 "profile_support": [],
             },
             {
@@ -140,7 +140,7 @@ def test_requirement_fit_diagnostics_and_formatter_cover_all_status_types():
                 "importance": "preferred",
                 "requirement_type": "eligibility",
                 "status": "mismatch",
-                "profile_name": "",
+                "matched_candidate_fact": "",
                 "profile_support": [],
             },
             {
@@ -148,7 +148,7 @@ def test_requirement_fit_diagnostics_and_formatter_cover_all_status_types():
                 "importance": "mandatory",
                 "requirement_type": "capability",
                 "status": "supported",
-                "profile_name": "",
+                "matched_candidate_fact": "",
                 "profile_support": [],
             },
         ]
@@ -265,7 +265,7 @@ def test_requirement_fit_eligibility_uses_candidate_eligibility_not_capability()
             "importance": "mandatory",
             "status": "supported",
             "requirement_type": "eligibility",
-            "profile_name": "PV clearance",
+            "matched_candidate_fact": "PV clearance",
             "matched_job_text": "Must hold a PV clearance",
         }
     ])
@@ -291,7 +291,7 @@ def test_requirement_fit_false_eligibility_counts_as_mismatch(tmp_path, monkeypa
             "importance": "mandatory",
             "status": "supported",
             "requirement_type": "eligibility",
-            "profile_name": "PV clearance",
+            "matched_candidate_fact": "PV clearance",
             "matched_job_text": "Must hold a PV clearance",
         }
     ])
@@ -325,7 +325,7 @@ def test_requirement_fit_invalid_requirement_type_logs_uncertainty(tmp_path, mon
             "importance": "mandatory",
             "status": "invalid",
             "requirement_type": "credential",
-            "profile_name": "",
+            "matched_candidate_fact": "",
             "matched_job_text": "Must hold PV clearance",
         }
     ])

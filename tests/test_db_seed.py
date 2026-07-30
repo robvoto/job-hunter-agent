@@ -87,3 +87,28 @@ def test_sync_required_runtime_files_fails_when_required_knowledge_seed_is_missi
         assert "onet_index.json" in str(exc)
     else:
         raise AssertionError("sync_required_runtime_files() should fail on missing required seeds")
+
+
+def test_run_upgrade_uses_global_settings_upgrade_path(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(db_seed, "init_db", lambda: calls.append("init_db"))
+    monkeypatch.setattr(
+        db_seed,
+        "sync_required_runtime_files",
+        lambda: calls.append("sync_runtime") or [],
+    )
+    monkeypatch.setattr(
+        db_seed,
+        "upgrade_knowledge_from_dir",
+        lambda *args, **kwargs: calls.append(("upgrade_knowledge", args[0])) or [],
+    )
+    monkeypatch.setattr(
+        db_seed,
+        "upgrade_global_settings_from_file",
+        lambda: calls.append("upgrade_global_settings") or True,
+    )
+
+    db_seed.run(upgrade=True)
+
+    assert "upgrade_global_settings" in calls

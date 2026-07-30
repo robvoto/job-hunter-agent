@@ -66,6 +66,27 @@ function sameState(left, right) {
     && left.subcopy === right.subcopy;
 }
 
+function shouldRenderSearchWhy(state) {
+  return String(state?.title || '').trim() === SEARCH_RUNNING_TITLE;
+}
+
+function renderSearchWhyMarkup() {
+  return `
+    <details class="wait-state__explainer">
+      <summary class="wait-state__explainer-summary">${escapeHtml(SEARCH_WAIT_WHY_LABEL)}</summary>
+      <div class="wait-state__explainer-body">
+        <p class="wait-state__explainer-copy">${escapeHtml(SEARCH_WAIT_WHY_INTRO)}</p>
+        <ul class="wait-state__explainer-list">
+          <li>${escapeHtml(SEARCH_WAIT_WHY_BROWSER)}</li>
+          <li>${escapeHtml(SEARCH_WAIT_WHY_PACING)}</li>
+          <li>${escapeHtml(SEARCH_WAIT_WHY_DETAILS)}</li>
+          <li>${escapeHtml(SEARCH_WAIT_WHY_SCORING)}</li>
+        </ul>
+      </div>
+    </details>
+  `;
+}
+
 function renderWaitState(mount, state) {
   if (!mount) {
     return;
@@ -114,6 +135,7 @@ function renderWaitState(mount, state) {
         <p class="wait-state__title">${escapeHtml(normalized.title)}</p>
         ${normalized.copy ? `<p class="wait-state__copy">${escapeHtml(normalized.copy)}</p>` : ''}
         ${progressMarkup}
+        ${shouldRenderSearchWhy(normalized) ? renderSearchWhyMarkup() : ''}
         ${normalized.subcopy ? `<p class="wait-state__subcopy">${escapeHtml(normalized.subcopy)}</p>` : ''}
       </div>
     </div>
@@ -156,6 +178,12 @@ export function createController(mount) {
 export const WORKSPACE_PATH = '/workspace';
 const SHARED_UI_LABELS = window.__JOB_HUNTER_SHARED_UI_LABELS__ || {};
 export const SEARCH_WAIT_COPY = String(SHARED_UI_LABELS.search_wait_copy || '').trim();
+export const SEARCH_WAIT_WHY_LABEL = String(SHARED_UI_LABELS.search_wait_why_label || '').trim();
+export const SEARCH_WAIT_WHY_INTRO = String(SHARED_UI_LABELS.search_wait_why_intro || '').trim();
+export const SEARCH_WAIT_WHY_BROWSER = String(SHARED_UI_LABELS.search_wait_why_browser || '').trim();
+export const SEARCH_WAIT_WHY_PACING = String(SHARED_UI_LABELS.search_wait_why_pacing || '').trim();
+export const SEARCH_WAIT_WHY_DETAILS = String(SHARED_UI_LABELS.search_wait_why_details || '').trim();
+export const SEARCH_WAIT_WHY_SCORING = String(SHARED_UI_LABELS.search_wait_why_scoring || '').trim();
 export const SEARCH_RUNNING_TITLE = String(SHARED_UI_LABELS.search_running_title || '').trim();
 export const SEARCH_RUNNING_COPY = String(SHARED_UI_LABELS.search_running_copy || '').trim();
 export const SEARCH_STARTING_TITLE = String(SHARED_UI_LABELS.search_starting_title || '').trim();
@@ -166,7 +194,7 @@ export const SEARCH_PROGRESS_PREFIX = String(SHARED_UI_LABELS.search_progress_pr
 export const SEARCH_ELAPSED_PREFIX = String(SHARED_UI_LABELS.search_elapsed_prefix || '').trim();
 export const SEARCH_RUNNING_SUBCOPY = String(SHARED_UI_LABELS.search_running_subcopy || '').trim();
 export const SEARCH_STARTING_SUBCOPY = String(SHARED_UI_LABELS.search_starting_subcopy || '').trim();
-if (!SEARCH_WAIT_COPY || !SEARCH_RUNNING_TITLE || !SEARCH_RUNNING_COPY || !SEARCH_STARTING_TITLE || !SEARCH_STARTING_COPY || !SEARCH_REFRESHING_TITLE || !SEARCH_REFRESHING_COPY || !SEARCH_PROGRESS_PREFIX || !SEARCH_ELAPSED_PREFIX || !SEARCH_RUNNING_SUBCOPY || !SEARCH_STARTING_SUBCOPY) {
+if (!SEARCH_WAIT_COPY || !SEARCH_WAIT_WHY_LABEL || !SEARCH_WAIT_WHY_INTRO || !SEARCH_WAIT_WHY_BROWSER || !SEARCH_WAIT_WHY_PACING || !SEARCH_WAIT_WHY_DETAILS || !SEARCH_WAIT_WHY_SCORING || !SEARCH_RUNNING_TITLE || !SEARCH_RUNNING_COPY || !SEARCH_STARTING_TITLE || !SEARCH_STARTING_COPY || !SEARCH_REFRESHING_TITLE || !SEARCH_REFRESHING_COPY || !SEARCH_PROGRESS_PREFIX || !SEARCH_ELAPSED_PREFIX || !SEARCH_RUNNING_SUBCOPY || !SEARCH_STARTING_SUBCOPY) {
   throw new Error('Missing shared UI labels for workspace wait copy.');
 }
 export const RUN_COMPLETE_REDIRECT_DELAY_MS = 600;

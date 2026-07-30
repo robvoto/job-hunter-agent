@@ -11,6 +11,7 @@ from urllib.parse import urljoin, urlsplit
 
 from playwright.sync_api import sync_playwright
 
+from job_hunter_agent.detail_page_text import classify_captured_page_text
 from job_hunter_agent.global_settings import (
     DEFAULT_SEARCH_SETTINGS,
     KEY_APSJOBS_RESULTS_PER_SEARCH,
@@ -30,6 +31,7 @@ from job_hunter_agent.profile_store import get_search_settings
 from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
     RECORD_DESCRIPTION_SOURCE_KEY,
+    RECORD_DETAILS_STATUS_KEY,
     RECORD_DETAILS_TEXT_KEY,
     RECORD_JOB_KEY,
     RECORD_LOCATION_KEY,
@@ -322,7 +324,9 @@ def _extract_job_type_text(text: str) -> str:
 
 def _extract_job_payload(page, *, job_url: str, anchor_text: str, run_iso: str) -> dict:
     body_text = _page_text(page)
-    lines = body_text.splitlines()
+    details_status = classify_captured_page_text(body_text)
+    details_text = body_text if details_status == "ok" else ""
+    lines = details_text.splitlines()
     title = _first_non_empty(
         _locator_text(page, APSJOBS_TITLE_SELECTORS),
         anchor_text,
@@ -338,11 +342,11 @@ def _extract_job_payload(page, *, job_url: str, anchor_text: str, run_iso: str) 
         _locator_text(page, APSJOBS_DETAIL_LOCATION_SELECTORS),
         _extract_labeled_value(lines, ("location", "locations")),
     )
-    posted_text = _extract_posted_text(body_text)
+    posted_text = _extract_posted_text(details_text)
     run_date = datetime.fromisoformat(run_iso).date()
-    posted_age_days = parse_visible_posted_age_days(posted_text or body_text, run_date)
+    posted_age_days = parse_visible_posted_age_days(posted_text or details_text, run_date)
 
-    work_mode_result = extract_from_text(body_text, source_label="apsjobs_text")
+    work_mode_result = extract_from_text(details_text, source_label="apsjobs_text")
     work_mode = str(work_mode_result.get("work_mode") or WORK_MODE_UNKNOWN)
     work_mode_source = str(work_mode_result.get("work_mode_source") or "apsjobs_text")
     work_mode_evidence = dedupe_preserve_order(
@@ -362,7 +366,7 @@ def _extract_job_payload(page, *, job_url: str, anchor_text: str, run_iso: str) 
         },
     )
 
-    raw_job_type = _extract_job_type_text(body_text)
+    raw_job_type = _extract_job_type_text(details_text)
     work_type = map_job_type(raw_job_type, job_type_rules)
     salary = ""
 
@@ -411,8 +415,9 @@ def _extract_job_payload(page, *, job_url: str, anchor_text: str, run_iso: str) 
         "work_type": work_type,
         "salary": salary,
         "url": job_url,
-        "teaser": body_text[:240].strip(),
-        "details_text": body_text,
+        "teaser": details_text[:240].strip(),
+        "details_text": details_text,
+        "details_status": details_status,
         "source_metadata": source_metadata,
     }
 
@@ -668,7 +673,13 @@ class APSJobsScraper(BaseJobScraper):
                                     details_length=len(payload["details_text"]),
                                     source_metadata=payload["source_metadata"],
                                 )
-                                record[RECORD_DESCRIPTION_SOURCE_KEY] = "apsjobs_detail_page"
+                                record[RECORD_DETAILS_STATUS_KEY] = str(
+                                    payload.get("details_status") or ""
+                                )
+                                if record[RECORD_DETAILS_STATUS_KEY] == "ok":
+                                    record[RECORD_DESCRIPTION_SOURCE_KEY] = (
+                                        "apsjobs_detail_page"
+                                    )
                                 record[RECORD_DETAILS_TEXT_KEY] = str(record.get(RECORD_DETAILS_TEXT_KEY) or "")
 
                                 pre_outcome, record, _, should_fetch_details = review_pre_detail_normalized_job(

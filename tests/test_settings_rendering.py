@@ -107,7 +107,8 @@ def test_settings_page_renders_keyword_label_and_location_field(monkeypatch):
     assert "window.__JOB_HUNTER_CLEARANCE_OPTIONS__" in html
     assert 'id="add_clearance_rule"' not in html
 
-    assert "Alerts &amp; AI" in html
+    assert "Messaging" in html
+    assert "AI / LLM" in html
     assert "Hide link preview" in html
     assert "preview card" in html
     assert "Captured role history" in html

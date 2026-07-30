@@ -35,7 +35,11 @@ const statusEl = document.getElementById('status');
 const statusUi = createMessageBannerController(statusEl);
 const isTestMode = document.body?.dataset.testMode === 'true';
 const capabilityLabels = capabilityUi.labels || {};
+const sharedUiLabels = window.__JOB_HUNTER_SHARED_UI_LABELS__;
 const roleHistoryLabels = window.__JOB_HUNTER_ROLE_HISTORY_LABELS__;
+if (!sharedUiLabels) {
+  throw new Error('Missing shared UI labels.');
+}
 if (!roleHistoryLabels) {
   throw new Error('Missing role history labels.');
 }
@@ -199,6 +203,140 @@ export function showInlineStatus(element, message, kind) {
   if (!element) return;
   element.textContent = message;
   element.className = `inline-status ${kind}`;
+}
+
+function normalizeSummaryWhitespace(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function normalizeSummaryList(values) {
+  if (!Array.isArray(values)) return [];
+  return values
+    .map((value) => normalizeSummaryWhitespace(value))
+    .filter(Boolean);
+}
+
+function fieldLabelText(fieldId) {
+  const label = document.querySelector(`label[for="${fieldId}"]`);
+  return label ? normalizeSummaryWhitespace(label.textContent) : '';
+}
+
+function formatSummaryBoolean(value) {
+  return value ? sharedUiLabels.settings_value_on : sharedUiLabels.settings_value_off;
+}
+
+function formatSummaryText(value) {
+  const text = normalizeSummaryWhitespace(value);
+  return text || sharedUiLabels.settings_value_blank;
+}
+
+function formatSummaryList(values) {
+  const normalized = normalizeSummaryList(values);
+  return normalized.length ? normalized.join(', ') : sharedUiLabels.settings_value_none;
+}
+
+function formatSummaryCurrency(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return sharedUiLabels.settings_value_not_set;
+  }
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: 'AUD',
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+function formatSummarySelect(fieldId, value) {
+  const select = document.getElementById(fieldId);
+  if (!select) return formatSummaryText(value);
+  const match = Array.from(select.options).find((option) => String(option.value) === String(value));
+  const text = normalizeSummaryWhitespace(match?.textContent || '');
+  return text || formatSummaryText(value);
+}
+
+function formatSummaryTime(value) {
+  const text = normalizeSummaryWhitespace(value);
+  return text || sharedUiLabels.settings_value_not_set;
+}
+
+function captureCandidateSettingsSnapshot(profile, userSettings) {
+  const normalizedProfile = profile || {};
+  const normalizedUserSettings = userSettings || {};
+  const enabledSources = Array.isArray(normalizedProfile.enabled_sources)
+    ? normalizedProfile.enabled_sources.map((value) => String(value || '').trim().toLowerCase())
+    : [];
+  return {
+    searchKeyword: normalizedProfile.search_settings?.keywords || '',
+    locations: normalizedProfile.search_settings?.locations || [],
+    searchDateWindow: normalizedProfile.search_settings?.date_range_days ?? '',
+    minimumSalaryYearly: normalizedProfile.salary_preferences?.minimum_salary_yearly ?? 0,
+    minimumDailyRate: normalizedProfile.salary_preferences?.minimum_daily_rate ?? 0,
+    targetRoles: normalizedProfile.target_roles || [],
+    alsoConsiderRoles: normalizedProfile.also_consider_roles || [],
+    mustNotRequireSkills: normalizedProfile.must_not_require_skills || [],
+    seekEnabled: enabledSources.includes('seek'),
+    linkedinEnabled: enabledSources.includes('linkedin'),
+    apsjobsEnabled: enabledSources.includes('apsjobs'),
+    scheduleEnabled: Boolean(normalizedUserSettings.schedule?.enabled),
+    scheduleTimeLocal: normalizedUserSettings.schedule?.daily_time_local || '',
+    telegramEnabled: Boolean(normalizedUserSettings.telegram?.enabled),
+    telegramBotUsername: normalizedUserSettings.telegram?.bot_username || '',
+    telegramDisableLinkPreview: Boolean(normalizedUserSettings.telegram?.disable_link_preview),
+    llmModel: normalizedUserSettings.llm?.model || '',
+  };
+}
+
+const candidateSettingsSummaryFields = [
+  { key: 'searchKeyword', fieldId: 'keywords', format: formatSummaryText },
+  { key: 'locations', fieldId: 'locations', format: formatSummaryList },
+  { key: 'searchDateWindow', fieldId: 'search_date_window', format: (value) => formatSummarySelect('search_date_window', value) },
+  { key: 'minimumSalaryYearly', fieldId: 'minimum_salary_yearly', format: formatSummaryCurrency },
+  { key: 'minimumDailyRate', fieldId: 'minimum_daily_rate', format: formatSummaryCurrency },
+  { key: 'targetRoles', fieldId: 'target_roles', format: formatSummaryList },
+  { key: 'alsoConsiderRoles', fieldId: 'also_consider_roles', format: formatSummaryList },
+  { key: 'mustNotRequireSkills', fieldId: 'must_not_require_skills', format: formatSummaryList },
+  { key: 'seekEnabled', fieldId: 'seek_enabled', format: formatSummaryBoolean },
+  { key: 'linkedinEnabled', fieldId: 'linkedin_enabled', format: formatSummaryBoolean },
+  { key: 'apsjobsEnabled', fieldId: 'apsjobs_enabled', format: formatSummaryBoolean },
+  { key: 'scheduleEnabled', fieldId: 'schedule_enabled', format: formatSummaryBoolean },
+  { key: 'scheduleTimeLocal', fieldId: 'schedule_daily_time_local', format: formatSummaryTime },
+  { key: 'telegramEnabled', fieldId: 'telegram_enabled', format: formatSummaryBoolean },
+  { key: 'telegramBotUsername', fieldId: 'telegram_bot_username', format: formatSummaryText },
+  { key: 'telegramDisableLinkPreview', fieldId: 'telegram_disable_link_preview', format: formatSummaryBoolean },
+  { key: 'llmModel', fieldId: 'llm_model', format: formatSummaryText },
+];
+
+function buildCandidateSettingsSaveMessage(beforeProfile, beforeUserSettings, afterProfile, afterUserSettings) {
+  const beforeSnapshot = captureCandidateSettingsSnapshot(beforeProfile, beforeUserSettings);
+  const afterSnapshot = captureCandidateSettingsSnapshot(afterProfile, afterUserSettings);
+  const lines = [];
+
+  candidateSettingsSummaryFields.forEach((field) => {
+    const beforeValue = beforeSnapshot[field.key];
+    const afterValue = afterSnapshot[field.key];
+    if (JSON.stringify(beforeValue) === JSON.stringify(afterValue)) {
+      return;
+    }
+    const label = fieldLabelText(field.fieldId);
+    if (!label) {
+      return;
+    }
+    lines.push(`${label}: ${field.format(beforeValue)} -> ${field.format(afterValue)}`);
+  });
+
+  if (!lines.length) {
+    return [
+      sharedUiLabels.settings_saved_success,
+      sharedUiLabels.settings_saved_no_effective_changes,
+    ].join('\n');
+  }
+
+  return [
+    sharedUiLabels.settings_saved_success,
+    sharedUiLabels.settings_saved_changes_heading,
+    ...lines,
+  ].join('\n');
 }
 
 export function markDirty() {
@@ -964,8 +1102,10 @@ async function saveActivePage() {
       adminSettings.initSystemWarningsControls?.(showStatus);
       renderLlmModelOptions();
       showInlineStatus(globalStatus, 'Global settings saved.', 'success');
-      showStatus('Global settings saved successfully.', 'success');
+      showStatus(sharedUiLabels.global_settings_saved_success, 'success');
     } else {
+      const previousProfile = loadedProfile;
+      const previousUserSettings = loadedUserSettings;
       const profile = collectProfile();
       const userSettingsPayload = alertsSettings.collectUserSettings(loadedUserSettings);
       const profileResponse = await jobHunterFetch('/api/profile', {
@@ -982,12 +1122,21 @@ async function saveActivePage() {
       });
       const userPayload = await userResponse.json().catch(() => ({}));
       if (!userResponse.ok) throw new Error(userPayload.error || 'Could not save user settings.');
+      loadedProfile = profilePayload;
       fillForm(profilePayload);
       loadedUserSettings = userPayload;
       alertsSettings.fillUserSettings(userPayload);
       initSliders();
       showInlineStatus(globalStatus, 'Settings saved.', 'success');
-      showStatus('Settings saved successfully.', 'success', { autoHideMs: 2500 });
+      showStatus(
+        buildCandidateSettingsSaveMessage(
+          previousProfile,
+          previousUserSettings,
+          profilePayload,
+          userPayload,
+        ),
+        'success',
+      );
     }
     clearDirty();
   } catch (err) {

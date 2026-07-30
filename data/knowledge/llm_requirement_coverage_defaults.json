@@ -11,9 +11,9 @@
     "Store the original job-ad sentence in matched_job_text for traceability — do not match the whole sentence directly to a capability.",
     "Classify each supported or partially_supported requirement as either capability or eligibility.",
     "Link capability requirements to the exact profile capability name and eligibility requirements to the exact profile eligibility fact.",
-    "Use profile_name for the matched profile fact and keep capability_name / eligibility_name aligned with the requirement_type.",
-    "Leave profile_name empty only for not_shown or mismatch items.",
-    "Keep each requirement_coverage item compact: short phrases only for requirement, matched_job_text, profile_name, and profile_support.",
+    "Use matched_candidate_fact for the matched profile fact and keep capability_name / eligibility_name aligned with the requirement_type.",
+    "Leave matched_candidate_fact empty only for not_shown or mismatch items.",
+    "Keep each requirement_coverage item compact: short phrases only for requirement, matched_job_text, matched_candidate_fact, and profile_support.",
     "Prefer the most important atomic requirements when the ad is long."
   ]
 }

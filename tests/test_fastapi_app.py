@@ -106,11 +106,47 @@ def test_app_lifespan_starts_and_stops_background_services(monkeypatch):
         lambda: calls.append("stop_scheduler"),
     )
     monkeypatch.setattr(_fa, "_stop_shared_telegram_poller", lambda: calls.append("stop_telegram"))
+    monkeypatch.setenv(_fa._SERVER_TELEGRAM_POLLER_ENV, "true")
+    monkeypatch.setenv(_fa._SERVER_SCHEDULED_AGENT_LOOP_ENV, "true")
 
     with TestClient(create_app()):
         assert calls[:2] == ["start_telegram", "start_scheduler"]
 
     assert calls == ["start_telegram", "start_scheduler", "stop_scheduler", "stop_telegram"]
+
+
+def test_app_lifespan_skips_background_services_by_default(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(_fa, "_start_shared_telegram_poller", lambda: calls.append("start_telegram"))
+    monkeypatch.setattr(
+        _fa,
+        "_start_shared_scheduled_agent_loop",
+        lambda: calls.append("start_scheduler"),
+    )
+    monkeypatch.setattr(
+        _fa,
+        "_stop_shared_scheduled_agent_loop",
+        lambda: calls.append("stop_scheduler"),
+    )
+    monkeypatch.setattr(_fa, "_stop_shared_telegram_poller", lambda: calls.append("stop_telegram"))
+    monkeypatch.delenv(_fa._SERVER_TELEGRAM_POLLER_ENV, raising=False)
+    monkeypatch.delenv(_fa._SERVER_SCHEDULED_AGENT_LOOP_ENV, raising=False)
+
+    with TestClient(create_app()):
+        pass
+
+    assert calls == []
+
+
+def test_background_service_env_flags_fail_fast_for_invalid_values(monkeypatch):
+    monkeypatch.setenv(_fa._SERVER_TELEGRAM_POLLER_ENV, "sometimes")
+
+    try:
+        with TestClient(create_app()):
+            raise AssertionError("app startup should have rejected the invalid env flag")
+    except RuntimeError as exc:
+        assert _fa._SERVER_TELEGRAM_POLLER_ENV in str(exc)
 
 
 def test_run_wrapper_forwards_cli_args_to_fastapi_app():

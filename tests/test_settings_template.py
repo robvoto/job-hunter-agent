@@ -443,10 +443,14 @@ def test_settings_sidebar_has_client_side_section_search():
     assert "__JOB_HUNTER_SETTINGS_SECTION_SEARCH_PLACEHOLDER__" in html
     assert labels["shared_ui_labels"]["settings_section_search_label"] == "Find setting"
     assert labels["shared_ui_labels"]["settings_section_search_placeholder"] == "Search settings"
+    assert labels["shared_ui_labels"]["settings_saved_success"] == "Settings saved successfully."
+    assert labels["shared_ui_labels"]["settings_saved_changes_heading"] == "Changed:"
     assert "applySettingsSectionSearch" in js
     assert "settingsSectionSearchHaystack" in js
     assert "group.classList.remove('is-active');" in js
     assert "saveActivePage()" in js
+    assert "buildCandidateSettingsSaveMessage" in js
+    assert "settings_saved_no_effective_changes" in js
     assert "el.id === 'settings_section_search'" in js
     assert ".settings-sidebar-search" in css
     assert ".settings-group.is-search-result" in css

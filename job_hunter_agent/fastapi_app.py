@@ -67,6 +67,8 @@ _CORS_METHODS = "GET, PUT, PATCH, POST, DELETE, OPTIONS"
 _CORS_HEADERS = "Content-Type"
 _TELEGRAM_POLLER: "_TelegramPollThread | None" = None
 _SCHEDULED_AGENT_LOOP: "_ScheduledAgentLoopThread | None" = None
+_SERVER_TELEGRAM_POLLER_ENV = "JOB_HUNTER_ENABLE_SERVER_TELEGRAM_POLLER"
+_SERVER_SCHEDULED_AGENT_LOOP_ENV = "JOB_HUNTER_ENABLE_SERVER_SCHEDULED_AGENT_LOOP"
 
 
 def _origin_from_url(value: str) -> str | None:
@@ -154,6 +156,26 @@ _SUPPRESSED_ACCESS_PATHS = frozenset(
 def _console_logging_enabled() -> bool:
     raw_value = str(os.environ.get("JOB_HUNTER_CONSOLE_LOG", "on")).strip().lower()
     return raw_value not in {"0", "off", "false", "no"}
+
+
+def _explicit_env_flag(name: str) -> bool:
+    """Parse a boolean env var strictly so bad deploy values fail fast."""
+    raw_value = str(os.environ.get(name, "")).strip()
+    if not raw_value:
+        return False
+    normalized = raw_value.lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise RuntimeError(f"Invalid {name} value {raw_value!r}. Use true/false, 1/0, yes/no, or on/off.")
+
+
+def _server_background_service_enabled(name: str) -> bool:
+    """Only run long-lived background services in the web app when explicitly enabled."""
+    if os.environ.get("JOB_HUNTER_DESKTOP_MODE") == "1":
+        return False
+    return _explicit_env_flag(name)
 
 
 class _AccessLogFilter(logging.Filter):
@@ -414,13 +436,19 @@ def _stop_shared_scheduled_agent_loop() -> None:
 
 @asynccontextmanager
 async def _app_lifespan(_app: FastAPI):
-    _start_shared_telegram_poller()
-    _start_shared_scheduled_agent_loop()
+    telegram_enabled = _server_background_service_enabled(_SERVER_TELEGRAM_POLLER_ENV)
+    scheduler_enabled = _server_background_service_enabled(_SERVER_SCHEDULED_AGENT_LOOP_ENV)
+    if telegram_enabled:
+        _start_shared_telegram_poller()
+    if scheduler_enabled:
+        _start_shared_scheduled_agent_loop()
     try:
         yield
     finally:
-        _stop_shared_scheduled_agent_loop()
-        _stop_shared_telegram_poller()
+        if scheduler_enabled:
+            _stop_shared_scheduled_agent_loop()
+        if telegram_enabled:
+            _stop_shared_telegram_poller()
 
 
 def create_app() -> FastAPI:
