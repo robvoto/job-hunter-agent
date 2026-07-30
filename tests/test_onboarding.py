@@ -78,6 +78,7 @@ def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
     assert "Review Draft" in html
     assert "Search Basics" in html
     assert "Check Setup" in html
+    assert "This draft was built from your CV." in html
     assert "Sydney means a city search on SEEK" in html
     assert "50-mile radius on LinkedIn" in html
     assert "0 shown" in html
@@ -197,8 +198,6 @@ def test_onboarding_flow_labels_include_capability_review_copy():
         labels["review_capability_helper_copy"]
         == "Review the capability groups extracted from your CV."
     )
-    assert labels["review_capability_extracted_skills_label_one"] == "1 extracted skill"
-    assert labels["review_capability_extracted_skills_label_many"] == "{count} extracted skills"
     assert labels["create_profile_status_extracting"] == "Extracting titles and capabilities..."
     assert labels["create_profile_status_reviewing"] == "Calculating experience duration and recency..."
 
@@ -207,6 +206,7 @@ def test_onboarding_guidance_links_to_user_guide():
     labels = server_helpers.load_onboarding_page_labels()
 
     assert "Plain, detailed content beats pretty formatting." in labels["guidance_note"]
+    assert labels["extraction_review_caution"].startswith("This draft was built from your CV.")
     assert 'href="/docs/view?doc=docs/USER_GUIDE.md"' in labels["guidance_note"]
     assert "User Guide" in labels["guidance_note"]
 
@@ -246,8 +246,10 @@ def test_onboarding_capability_cards_use_one_shared_generic_icon():
     assert "review-capability-title-row" in onboarding_flow_js
     assert "capability-alias-preview" in onboarding_flow_js
     assert "settings_selected_label" in onboarding_flow_js
+    assert "related_skills_summary" in onboarding_flow_js
     assert "const extractedSkillPreview" not in onboarding_flow_js
     assert '<p class="help">${extractedSkillPreview}</p>' not in onboarding_flow_js
+    assert "cap-alias-chip--more" not in onboarding_flow_js
     assert ".capability-shell .capability-alias-preview" in onboarding_css
     assert ".capability-card.is-selected" in onboarding_css
     assert "capability-card-icon" in theme_widgets
@@ -642,6 +644,8 @@ def test_run_onboarding_logs_read_summary(monkeypatch, capsys, caplog, tmp_path)
             },
         ],
         "role_titles": ["Business Analyst"],
+        "preferred_role_titles": ["Business Analyst"],
+        "alternative_role_titles": [],
         "role_experience": [
             {"title": "BA", "canonical_title": "Business Analyst", "duration_months": 12, "end_year": 2020},
             {
@@ -1002,6 +1006,8 @@ def test_run_onboarding_uses_saved_onboarding_settings_when_argument_missing(mon
                 }
             ],
             "role_titles": ["Delivery Lead"],
+            "preferred_role_titles": ["Delivery Lead"],
+            "alternative_role_titles": [],
             "target_occupation_queries": ["Delivery Lead"],
             "match_preferences": {},
         }

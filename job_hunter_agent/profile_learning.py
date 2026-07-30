@@ -164,6 +164,8 @@ class _CvExtractionResponse(BaseModel):
     )
     role_experience: list[_RoleExperienceExtraction] = Field(default_factory=list)
     role_titles: list[str] = Field(default_factory=list)
+    preferred_role_titles: list[str] = Field(default_factory=list)
+    alternative_role_titles: list[str] = Field(default_factory=list)
     target_occupation_queries: list[str] = Field(default_factory=list)
 
 
@@ -298,7 +300,7 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
     """Single LLM call: extract capabilities, title patterns, and match preferences from CV text."""
     _ensure_cv_extraction_cache_loaded()
     cache_key = hashlib.sha256(
-        f"icon-v3:{lookback_years}:{alias_limit}:{source_text}".encode()
+        f"role-tier-v1:{lookback_years}:{alias_limit}:{source_text}".encode()
     ).hexdigest()[:16]
     if cache_key in _cv_extraction_cache:
         cached = _cv_extraction_cache[cache_key]
@@ -308,6 +310,8 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
             f"capabilities={len(cached.get(KEY_CAPABILITIES, []) or [])} "
             f"role_experience={len(cached.get(KEY_ROLE_EXPERIENCE, []) or [])} "
             f"role_titles={len(cached.get('role_titles', []) or [])} "
+            f"preferred_role_titles={len(cached.get('preferred_role_titles', []) or [])} "
+            f"alternative_role_titles={len(cached.get('alternative_role_titles', []) or [])} "
             f"target_queries={len(cached.get(KEY_TARGET_OCCUPATION_QUERIES, []) or [])}"
         )
         return cached
@@ -354,6 +358,12 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         "  Example: BA, Business Analyst, and Senior BA can share canonical_title='Business Analyst' when the CV evidence clearly supports that grouping.\n"
         "  Keep title as the displayed role wording from the CV. Use the current year for Present/current roles and skip entries where the title cannot be identified.\n"
         "- role_titles: list the job titles explicitly shown in the CV. One entry per role, no duplicates.\n"
+        "  If one displayed role clearly combines two standalone roles (for example with ' - ' or '/'), split it into separate role title entries instead of returning one composite title.\n"
+        "- preferred_role_titles: list the candidate's main role directions from the CV.\n"
+        "  These should be the strongest current or core occupation-family titles the candidate would most likely target first.\n"
+        "  Use standalone role titles only, no duplicates.\n"
+        "- alternative_role_titles: list credible adjacent or secondary role directions from the CV that are less central than preferred_role_titles.\n"
+        "  Do not repeat any preferred_role_titles entry here. Use standalone role titles only, no duplicates.\n"
         "- target_occupation_queries: generate 3 to 8 machine-facing occupation query strings that match the candidate's occupation family.\n"
         "  Use standard job titles a job-search system could match against.\n"
         "- eligibility: extract explicit true/false facts the candidate formally holds or is legally allowed to claim. "
@@ -390,6 +400,8 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         f"eligibility={len(result.get('eligibility', []) or [])} "
         f"role_experience={len(result.get(KEY_ROLE_EXPERIENCE, []) or [])} "
         f"role_titles={len(result.get('role_titles', []) or [])} "
+        f"preferred_role_titles={len(result.get('preferred_role_titles', []) or [])} "
+        f"alternative_role_titles={len(result.get('alternative_role_titles', []) or [])} "
         f"target_queries={len(result.get(KEY_TARGET_OCCUPATION_QUERIES, []) or [])}"
     )
 
@@ -541,6 +553,18 @@ def _aggregate_role_experience(raw: list[Any]) -> list[dict[str, Any]]:
     return result
 
 
+def _dedupe_role_titles(values: Any) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values or []:
+        cleaned = _simple_title(value)
+        if not cleaned or cleaned in seen:
+            continue
+        seen.add(cleaned)
+        result.append(cleaned)
+    return result
+
+
 def _capability_context_sections(
     capability_name: str,
     aliases: list[str],
@@ -677,9 +701,14 @@ def build_learning_patch(
     _cap_log(f"[BUILD_LEARNING_PATCH] {len(review_signals)} capability signal(s) need review")
 
     raw_titles = extracted.get("role_titles") or []
-    extracted_titles = list(
-        dict.fromkeys(_simple_title(value) for value in raw_titles if _simple_title(value))
+    extracted_titles = _dedupe_role_titles(raw_titles)
+    preferred_titles = _dedupe_role_titles(extracted.get("preferred_role_titles") or [])
+    alternative_titles_raw = _dedupe_role_titles(
+        extracted.get("alternative_role_titles") or []
     )
+    alternative_titles = [
+        value for value in alternative_titles_raw if value not in set(preferred_titles)
+    ]
     raw_queries = extracted.get(KEY_TARGET_OCCUPATION_QUERIES) or []
     occupation_queries = list(
         dict.fromkeys(
@@ -690,6 +719,12 @@ def build_learning_patch(
         f"[BUILD_LEARNING_PATCH] LLM extraction returned {len(extracted_titles)} role title(s)"
     )
     _cap_log(
+        f"[BUILD_LEARNING_PATCH] LLM extraction returned {len(preferred_titles)} preferred role title(s)"
+    )
+    _cap_log(
+        f"[BUILD_LEARNING_PATCH] LLM extraction returned {len(alternative_titles)} alternative role title(s)"
+    )
+    _cap_log(
         f"[BUILD_LEARNING_PATCH] LLM extraction returned {len(occupation_queries)} target occupation query(ies)"
     )
 
@@ -698,6 +733,8 @@ def build_learning_patch(
         missing.append("capability groups")
     if not extracted_titles:
         missing.append("role titles")
+    if not preferred_titles:
+        missing.append("preferred role titles")
     if not occupation_queries:
         missing.append("target occupation queries")
     if missing:
@@ -705,7 +742,8 @@ def build_learning_patch(
 
     _cap_log(
         "[ONBOARDING][LLM_CALL_DONE] purpose=cv_extraction "
-        f"capability_count={len(approved_capabilities)} target_count={len(extracted_titles)} "
+        f"capability_count={len(approved_capabilities)} role_title_count={len(extracted_titles)} "
+        f"preferred_role_count={len(preferred_titles)} alternative_role_count={len(alternative_titles)} "
         f"occupation_query_count={len(occupation_queries)}"
     )
 
@@ -717,8 +755,8 @@ def build_learning_patch(
 
     max_target = _resolve_onboarding_int(onboarding_settings, KEY_MAX_TARGET)
     max_secondary = _resolve_onboarding_int(onboarding_settings, KEY_MAX_SECONDARY)
-    patch[KEY_PRIMARY_PATTERNS] = extracted_titles[:max_target]
-    patch[KEY_SECONDARY_PATTERNS] = extracted_titles[max_target : max_target + max_secondary]
+    patch[KEY_PRIMARY_PATTERNS] = preferred_titles[:max_target]
+    patch[KEY_SECONDARY_PATTERNS] = alternative_titles[:max_secondary]
     patch[KEY_TARGET_OCCUPATION_QUERIES] = occupation_queries
 
     raw_prefs = extracted.get(KEY_MATCH_PREFS) or {}

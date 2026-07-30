@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 88,
+  "version": 89,
   "updated_at": "2026-07-30",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -153,8 +153,10 @@
   "onboarding_import_summary_labels_description": "Display labels for the onboarding import helper summary.",
   "onboarding_import_summary_labels": {
     "lead_in": "We extracted",
-    "target_roles_singular": "target role",
-    "target_roles_plural": "target roles",
+    "target_roles_singular": "preferred role",
+    "target_roles_plural": "preferred roles",
+    "secondary_roles_singular": "alternative role",
+    "secondary_roles_plural": "alternative roles",
     "capabilities_singular": "capability row",
     "capabilities_plural": "capability rows",
     "llm_cost_label": "LLM cost this run:",
@@ -226,6 +228,7 @@
     "review_setup_copy": "Review your draft profile and search direction before Job Hunter starts matching roles.",
     "draft_profile_label": "Draft profile",
     "draft_profile_ready_label": "Draft profile ready",
+    "extraction_review_caution": "This draft was built from your CV. Review and correct anything that looks off before continuing.",
     "edit_label": "✎ Edit",
     "search_basics_label": "Search basics",
     "finish_setup_label": "Finish Setup",
@@ -244,8 +247,6 @@
     "create_profile_status_reviewing": "Calculating experience duration and recency...",
     "create_profile_status_building": "Building your draft profile...",
     "review_capability_helper_copy": "Review the capability groups extracted from your CV.",
-    "review_capability_extracted_skills_label_one": "1 extracted skill",
-    "review_capability_extracted_skills_label_many": "{count} extracted skills",
     "continue_search_basics_error": "Could not save onboarding search basics before continuing.",
     "finish_setup_error": "Could not finish onboarding",
     "profile_status_error": "Could not check whether a saved profile exists.",

@@ -64,6 +64,8 @@ _LLM_FIXTURE = {
         {"title": "Project Coordinator", "duration_months": 36, "end_year": 2019},
     ],
     "role_titles": ["delivery lead", "project coordinator"],
+    "preferred_role_titles": ["delivery lead"],
+    "alternative_role_titles": ["project coordinator"],
     "target_occupation_queries": ["Delivery Lead", "Project Coordinator"],
     "match_preferences": {
         "prefer_permanent": None,
@@ -98,8 +100,8 @@ def test_build_learning_patch_returns_titles_capabilities_and_queries_without_pa
     assert "stakeholder engagement" in names
     assert "process mapping" in names
     assert all(rule["icon_key"] in VALID_CAPABILITY_ICON_KEYS for rule in rules)
-    assert patch_result["target_roles"] == ["delivery lead", "project coordinator"]
-    assert patch_result["also_consider_roles"] == []
+    assert patch_result["target_roles"] == ["delivery lead"]
+    assert patch_result["also_consider_roles"] == ["project coordinator"]
     assert patch_result["target_occupation_queries"] == ["Delivery Lead", "Project Coordinator"]
     assert patch_result["candidate_eligibility"][0]["name"] == "PV clearance"
     assert patch_result["candidate_eligibility"][0]["value"] is True
@@ -148,6 +150,8 @@ def test_build_learning_patch_groups_role_experience_by_normalized_title():
             {"title": "", "duration_months": 12, "end_year": 2020},
         ],
         "role_titles": ["Business Analyst"],
+        "preferred_role_titles": ["Business Analyst"],
+        "alternative_role_titles": [],
         "target_occupation_queries": ["Business Analyst"],
         "match_preferences": {},
     }
@@ -209,6 +213,8 @@ def test_build_learning_patch_groups_role_experience_by_canonical_title_and_pres
             },
         ],
         "role_titles": ["BA", "Business Analyst", "Senior BA"],
+        "preferred_role_titles": ["Business Analyst"],
+        "alternative_role_titles": [],
         "target_occupation_queries": ["Business Analyst"],
         "match_preferences": {},
     }
@@ -263,15 +269,19 @@ def test_build_learning_patch_groups_role_experience_by_canonical_title_and_pres
                     },
                 ],
                 "role_titles": [],
+                "preferred_role_titles": [],
+                "alternative_role_titles": [],
                 "target_occupation_queries": ["Delivery Lead"],
                 "match_preferences": {},
             },
-            "role titles",
+            "role titles, preferred role titles",
         ),
         (
             {
                 "capabilities": [],
                 "role_titles": ["Delivery Lead"],
+                "preferred_role_titles": ["Delivery Lead"],
+                "alternative_role_titles": [],
                 "target_occupation_queries": ["Delivery Lead"],
                 "match_preferences": {},
             },
@@ -289,6 +299,8 @@ def test_build_learning_patch_groups_role_experience_by_canonical_title_and_pres
                     },
                 ],
                 "role_titles": ["Delivery Lead"],
+                "preferred_role_titles": ["Delivery Lead"],
+                "alternative_role_titles": [],
                 "target_occupation_queries": [],
                 "match_preferences": {},
             },
@@ -321,6 +333,8 @@ def test_build_learning_patch_raises_when_llm_omits_required_fields(fixture, exp
                 },
             ],
             "role_titles": ["Delivery Lead"],
+            "preferred_role_titles": ["Delivery Lead"],
+            "alternative_role_titles": [],
             "target_occupation_queries": ["Delivery Lead"],
             "match_preferences": {},
         },
@@ -335,6 +349,8 @@ def test_build_learning_patch_raises_when_llm_omits_required_fields(fixture, exp
                 },
             ],
             "role_titles": ["Delivery Lead"],
+            "preferred_role_titles": ["Delivery Lead"],
+            "alternative_role_titles": [],
             "target_occupation_queries": ["Delivery Lead"],
             "match_preferences": {},
         },
@@ -372,6 +388,8 @@ def test_build_learning_patch_does_not_register_title_normalization_candidate_si
                     },
                 ],
                 "role_titles": ["Business Analyst"],
+                "preferred_role_titles": ["Business Analyst"],
+                "alternative_role_titles": [],
                 "target_occupation_queries": ["Business Analyst"],
                 "match_preferences": {},
             },
@@ -417,6 +435,8 @@ def test_build_learning_patch_routes_uncertain_capabilities_to_signal_registry()
             },
         ],
         "role_titles": ["Business Analyst"],
+        "preferred_role_titles": ["Business Analyst"],
+        "alternative_role_titles": [],
         "target_occupation_queries": ["Business Analyst"],
         "match_preferences": {},
     }
@@ -472,6 +492,8 @@ def test_build_learning_patch_does_not_emit_hard_blocker_pattern():
             },
         ],
         "role_titles": ["Business Analyst"],
+        "preferred_role_titles": ["Business Analyst"],
+        "alternative_role_titles": [],
         "target_occupation_queries": ["Business Analyst"],
         "match_preferences": {},
     }
@@ -532,7 +554,7 @@ def test_llm_extract_from_cv_cache_hit_skips_save(caplog):
     """A cache hit must return the stored result without calling save."""
     cv_text = "Test CV for cache-hit test"
     lookback, alias_limit = 5, 3
-    cache_key = _hashlib.sha256(f"icon-v3:{lookback}:{alias_limit}:{cv_text}".encode()).hexdigest()[
+    cache_key = _hashlib.sha256(f"role-tier-v1:{lookback}:{alias_limit}:{cv_text}".encode()).hexdigest()[
         :16
     ]
     fake_result = {
@@ -576,7 +598,7 @@ def test_llm_extract_from_cv_loads_disk_cache_before_calling_llm():
     """Simulates server restart: disk cache has a prior result; LLM must not be called."""
     cv_text = "My CV content for disk restore test"
     lookback, alias_limit = 5, 3
-    cache_key = _hashlib.sha256(f"icon-v3:{lookback}:{alias_limit}:{cv_text}".encode()).hexdigest()[
+    cache_key = _hashlib.sha256(f"role-tier-v1:{lookback}:{alias_limit}:{cv_text}".encode()).hexdigest()[
         :16
     ]
     prior_result = {

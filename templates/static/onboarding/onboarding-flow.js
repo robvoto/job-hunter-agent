@@ -84,13 +84,6 @@ if (!onboardingFlowLabels) {
 if (!capabilityLabels || !capabilityLabels.onboarding_title || !capabilityLabels.help_text || !capabilityLabels.onboarding_no_match_text) {
   throw new Error('Missing capability UI labels.');
 }
-if (
-  !onboardingFlowLabels.review_capability_extracted_skills_label_one
-  || !onboardingFlowLabels.review_capability_extracted_skills_label_many
-) {
-  throw new Error('Missing review capability labels.');
-}
-
 function normalizeReviewTitle(value) {
   return patternToLabel(value) || normalizeReviewText(value);
 }
@@ -110,12 +103,6 @@ function formatLabel(template, values = {}) {
     }
     return '';
   });
-}
-
-function formatReviewCapabilitySkillsLabel(count) {
-  return count === 1
-    ? onboardingFlowLabels.review_capability_extracted_skills_label_one
-    : formatLabel(onboardingFlowLabels.review_capability_extracted_skills_label_many, { count });
 }
 
 function locationLabel(value) {
@@ -474,20 +461,14 @@ function renderReviewCapabilities() {
   const rowsHtml = visibleRules.length ? visibleRules.map(({ rule, index }) => {
     const titleCaseName = rule.name.toLowerCase().split(' ').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
     const displayName = titleCaseName || onboardingFlowLabels.capability_untitled_label;
-    const extractedSkillsLabel = formatReviewCapabilitySkillsLabel(rule.aliases.length);
     const previewAliases = rule.aliases.slice(0, 2);
     const aliasPreviewHtml = previewAliases.length ? `
-      <div class="capability-alias-preview" aria-label="${escapeHtml(extractedSkillsLabel)}">
+      <div class="capability-alias-preview" aria-label="${escapeHtml(capabilityLabels.related_skills_label)}">
         ${previewAliases.map((alias) =>
           `<span class="cap-alias-chip cap-alias-chip--preview" title="${escapeHtml(patternToLabel(alias) || alias)}">
             <span class="cap-alias-chip-label">${escapeHtml(patternToLabel(alias) || alias)}</span>
           </span>`
         ).join('')}
-        ${rule.aliases.length > previewAliases.length ? `
-          <span class="cap-alias-chip cap-alias-chip--preview cap-alias-chip--more" title="${escapeHtml(extractedSkillsLabel)}">
-            <span class="cap-alias-chip-label">+${escapeHtml(String(rule.aliases.length - previewAliases.length))} more</span>
-          </span>
-        ` : ''}
       </div>
     ` : '';
     const aliasHtml = (() => {
@@ -501,9 +482,9 @@ function renderReviewCapabilities() {
       return `
         <details class="capability-alias-drawer">
           <summary class="cap-alias-summary">
-            <span class="capability-summary-label">${escapeHtml(extractedSkillsLabel)}</span>
+            <span class="capability-summary-label">${escapeHtml(formatLabel(capabilityLabels.related_skills_summary, { count: rule.aliases.length }))}</span>
           </summary>
-          <div class="cap-alias-chips" aria-label="${escapeHtml(extractedSkillsLabel)}">${aliasChips}</div>
+          <div class="cap-alias-chips" aria-label="${escapeHtml(capabilityLabels.related_skills_label)}">${aliasChips}</div>
         </details>
       `;
     })();
@@ -648,11 +629,15 @@ function storeCompletionRedirectState(payload, searchPrefs) {
 
 function formatExtractionSummary(counts) {
   const primary = Number(counts.target_titles || 0);
+  const secondary = Number(counts.secondary_titles || 0);
   const capabilities = Number(counts.capabilities || 0);
   const formatCount = (count, singular, plural) => `${count} ${count === 1 ? singular : plural}`;
   const parts = [];
   if (primary > 0) {
     parts.push(formatCount(primary, onboardingImportSummaryLabels.target_roles_singular, onboardingImportSummaryLabels.target_roles_plural));
+  }
+  if (secondary > 0) {
+    parts.push(formatCount(secondary, onboardingImportSummaryLabels.secondary_roles_singular, onboardingImportSummaryLabels.secondary_roles_plural));
   }
   if (capabilities > 0) {
     parts.push(formatCount(capabilities, onboardingImportSummaryLabels.capabilities_singular, onboardingImportSummaryLabels.capabilities_plural));
@@ -660,7 +645,9 @@ function formatExtractionSummary(counts) {
   if (!parts.length) {
     return '';
   }
-  const joined = parts.length === 2 ? `${parts[0]}, and ${parts[1]}` : parts[0];
+  const joined = parts.length === 1
+    ? parts[0]
+    : `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`;
   return `${onboardingImportSummaryLabels.lead_in} ${joined} ${onboardingImportSummaryLabels.source_suffix}`;
 }
 

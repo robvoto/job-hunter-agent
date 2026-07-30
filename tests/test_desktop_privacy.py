@@ -63,6 +63,8 @@ def test_desktop_mode_blocks_cv_learning_signal_registration(monkeypatch):
             }
         ],
         "role_titles": ["Delivery Lead"],
+        "preferred_role_titles": ["Delivery Lead"],
+        "alternative_role_titles": [],
         "target_occupation_queries": ["Delivery Lead"],
         "match_preferences": {},
     }

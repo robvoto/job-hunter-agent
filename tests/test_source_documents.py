@@ -64,6 +64,8 @@ def test_run_onboarding_uses_llm_titles_without_parser(monkeypatch):
                 {"title": "Agile Project Coordinator", "duration_months": 24, "end_year": 2022},
             ],
             "role_titles": ["Scrum Master", "Agile Project Coordinator"],
+            "preferred_role_titles": ["Scrum Master"],
+            "alternative_role_titles": ["Agile Project Coordinator"],
             "target_occupation_queries": ["Scrum Master", "Agile Project Coordinator"],
             "match_preferences": {},
         }
@@ -76,7 +78,8 @@ def test_run_onboarding_uses_llm_titles_without_parser(monkeypatch):
 
     assert result["ok"] is True
     assert "Scrum Master\nCompany Name | 2022 - Present" in str(captured["text"])
-    assert result["profile"]["target_roles"] == ["scrum master", "agile project coordinator"]
+    assert result["profile"]["target_roles"] == ["scrum master"]
+    assert result["profile"]["also_consider_roles"] == ["agile project coordinator"]
     assert result["profile"]["target_occupation_queries"] == [
         "Scrum Master",
         "Agile Project Coordinator",
@@ -126,15 +129,19 @@ def test_run_onboarding_uses_llm_titles_without_parser(monkeypatch):
                     },
                 ],
                 "role_titles": [],
+                "preferred_role_titles": [],
+                "alternative_role_titles": [],
                 "target_occupation_queries": ["Scrum Master"],
                 "match_preferences": {},
             },
-            "role titles",
+            "role titles, preferred role titles",
         ),
         (
             {
                 "capabilities": [],
                 "role_titles": ["Scrum Master"],
+                "preferred_role_titles": ["Scrum Master"],
+                "alternative_role_titles": [],
                 "target_occupation_queries": ["Scrum Master"],
                 "match_preferences": {},
             },
