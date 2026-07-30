@@ -104,8 +104,33 @@ run_tests() {
   ./scripts/run-e2e.sh -q
 }
 
+assert_release_base_unchanged() {
+  current_head="$(git rev-parse HEAD)"
+  [[ "$current_head" == "$local_head" ]] || fail \
+    "Local HEAD changed while release checks were running. Another agent may have committed; restart the release."
+
+  git fetch origin main
+  current_remote_head="$(git rev-parse origin/main)"
+  [[ "$current_remote_head" == "$remote_head" ]] || fail \
+    "origin/main changed while release checks were running. Refresh main and restart the release."
+}
+
+assert_only_version_files_changed() {
+  unexpected_changes="$(
+    git status --porcelain --untracked-files=all \
+      | awk '{print $2}' \
+      | grep -Ev '^(pyproject\.toml|uv\.lock)$' \
+      || true
+  )"
+  [[ -z "$unexpected_changes" ]] || fail \
+    "Unexpected files changed during release checks: $unexpected_changes"
+}
+
 if ((dry_run)); then
   run_tests
+  assert_release_base_unchanged
+  [[ -z "$(git status --porcelain --untracked-files=all)" ]] || fail \
+    "The working tree changed while release checks were running. Another agent may be editing it."
   echo "==> Dry run passed. No files, commits, tags, or remote branches were changed."
   exit 0
 fi
@@ -129,16 +154,11 @@ actual_version="$(uv version --short)"
 
 uv run python scripts/check-release-integrity.py --expected-version "$next_version"
 
-unexpected_changes="$(
-  git status --porcelain --untracked-files=all \
-    | awk '{print $2}' \
-    | grep -Ev '^(pyproject\.toml|uv\.lock)$' \
-    || true
-)"
-[[ -z "$unexpected_changes" ]] || fail \
-  "Version bump changed unexpected files: $unexpected_changes"
+assert_only_version_files_changed
 
 run_tests
+assert_release_base_unchanged
+assert_only_version_files_changed
 uv run python scripts/check-release-integrity.py --expected-version "$next_version"
 
 release_tag="v$next_version"
@@ -150,11 +170,17 @@ git add pyproject.toml uv.lock
 git commit -m "Release $release_tag"
 rollback_version_files=0
 
+release_commit="$(git rev-parse HEAD)"
 echo "==> Create annotated tag $release_tag"
-git tag -a "$release_tag" -m "Job Hunter $release_tag"
+git tag -a "$release_tag" "$release_commit" -m "Job Hunter $release_tag"
 
-echo "==> Push main and $release_tag atomically"
-git push --atomic origin main "$release_tag"
+[[ "$(git rev-parse HEAD)" == "$release_commit" ]] || fail \
+  "Local HEAD changed after the release commit. Another agent may have committed; do not publish this release."
+[[ -z "$(git status --porcelain --untracked-files=all)" ]] || fail \
+  "The working tree changed after the release commit. Another agent may be editing it."
+
+echo "==> Push exact release commit and $release_tag atomically"
+git push --atomic origin "$release_commit:refs/heads/main" "refs/tags/$release_tag"
 
 trap - EXIT
 echo "==> Released $release_tag"

@@ -105,6 +105,9 @@ def test_release_command_owns_bump_tests_tag_and_atomic_push():
     assert "uv run python scripts/check-release-integrity.py" in script
     assert "uv run pytest" in script
     assert "./scripts/run-e2e.sh -q" in script
-    assert 'git tag -a "$release_tag"' in script
-    assert 'git push --atomic origin main "$release_tag"' in script
+    assert 'git tag -a "$release_tag" "$release_commit"' in script
+    assert 'git push --atomic origin "$release_commit:refs/heads/main"' in script
     assert "git status --porcelain --untracked-files=all" in script
+    assert "assert_release_base_unchanged" in script
+    assert "Local HEAD changed while release checks were running" in script
+    assert "origin/main changed while release checks were running" in script
