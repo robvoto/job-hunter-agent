@@ -101,7 +101,7 @@ def test_top_utility_bar_renders_version_from_release_metadata(monkeypatch):
 def test_release_command_owns_bump_tests_tag_and_atomic_push():
     script = RELEASE_SCRIPT.read_text(encoding="utf-8")
 
-    assert 'uv version --bump "$mode" --no-sync' in script
+    assert 'uv version --bump "$bump" --no-sync' in script
     assert "uv run python scripts/check-release-integrity.py" in script
     assert "uv run pytest" in script
     assert "./scripts/run-e2e.sh -q" in script
@@ -111,6 +111,3 @@ def test_release_command_owns_bump_tests_tag_and_atomic_push():
     assert "assert_release_base_unchanged" in script
     assert "Local HEAD changed while release checks were running" in script
     assert "origin/main changed while release checks were running" in script
-    assert '[[ "$mode" == "current" ]]' in script
-    assert "publish existing $release_tag" in script
-    assert 'git push --atomic origin "$release_commit:refs/heads/main"' in script

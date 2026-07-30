@@ -18,7 +18,6 @@ Use for every Job Hunter release or version change.
 Never edit the version or create/push a release tag manually. Use:
 
 ```bash
-./scripts/release-jobhunter.sh current
 ./scripts/release-jobhunter.sh patch
 ./scripts/release-jobhunter.sh minor
 ./scripts/release-jobhunter.sh major
@@ -28,7 +27,6 @@ Use `--dry-run` to execute all release gates without changing files or Git histo
 
 ## Release meanings
 
-- `current`: publish the already-declared version when its matching tag does not exist.
 - `patch`: bug fix or correction; `1.5.0 -> 1.5.1`.
 - `minor`: backward-compatible functionality; `1.5.0 -> 1.6.0`.
 - `major`: breaking change; `1.5.0 -> 2.0.0`.
