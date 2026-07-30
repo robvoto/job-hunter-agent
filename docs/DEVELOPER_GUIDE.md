@@ -45,7 +45,7 @@ Primary modules:
 
 Server logging:
 
-- human-readable runtime logging writes curated job/run summaries to `output/server.log`; see `docs/OPERATIONS.md` for the command
+- human-readable runtime logging writes curated job/run summaries to `output/server-human.log`; see `docs/OPERATIONS.md` for the command
 - full technical runtime logging writes raw pipeline/LLM/API detail to `output/server-debug.log`
 - both logs are timestamped; the terminal mirrors the human-readable output
 - `/api/debug/browser-log` is for browser-side JS logs only

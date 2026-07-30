@@ -156,21 +156,9 @@ def test_run_wrapper_forwards_cli_args_to_fastapi_app():
     assert "UV_CACHE_DIR" in run_script
 
 
-def test_run_debug_wrapper_forwards_debug_flag_to_fastapi_app():
-    run_debug_script = Path("run-debug").read_text(encoding="utf-8")
-
-    assert 'exec uv run python -m job_hunter_agent.fastapi_app --debug "$@"' in run_debug_script
-    assert "UV_CACHE_DIR" in run_debug_script
-
-
-def test_run_debug_human_wrapper_tails_server_log_and_disables_console_logger():
-    run_debug_human_script = Path("run-debug-human").read_text(encoding="utf-8")
-
-    assert 'tail -n 0 -F output/server.log &' in run_debug_human_script
-    assert 'JOB_HUNTER_CONSOLE_LOG=off uv run python -m job_hunter_agent.fastapi_app --debug "$@"' in (
-        run_debug_human_script
-    )
-    assert "trap cleanup EXIT INT TERM" in run_debug_human_script
+def test_debug_run_uses_single_run_wrapper():
+    assert not Path("run-debug").exists()
+    assert not Path("run-debug-human").exists()
 
 
 def test_line_logging_stream_respects_embedded_severity(caplog):
@@ -205,7 +193,7 @@ def test_configure_server_logging_keeps_terminal_output_visible(monkeypatch, tmp
     original_stderr = sys.stderr
 
     monkeypatch.setattr(_fa, "OUTPUT_DIR", tmp_path)
-    monkeypatch.setattr(_fa, "SERVER_LOG_PATH", tmp_path / "server.log")
+    monkeypatch.setattr(_fa, "SERVER_HUMAN_LOG_PATH", tmp_path / "server-human.log")
     monkeypatch.setattr(_fa, "SERVER_DEBUG_LOG_PATH", tmp_path / "server-debug.log")
 
     for logger_name in ("", _fa.HUMAN_LOGGER_NAME, "uvicorn", "uvicorn.error", "uvicorn.access"):
@@ -240,7 +228,7 @@ def test_configure_server_logging_can_disable_direct_console_output(monkeypatch,
     original_stderr = sys.stderr
 
     monkeypatch.setattr(_fa, "OUTPUT_DIR", tmp_path)
-    monkeypatch.setattr(_fa, "SERVER_LOG_PATH", tmp_path / "server.log")
+    monkeypatch.setattr(_fa, "SERVER_HUMAN_LOG_PATH", tmp_path / "server-human.log")
     monkeypatch.setattr(_fa, "SERVER_DEBUG_LOG_PATH", tmp_path / "server-debug.log")
     monkeypatch.setenv("JOB_HUNTER_CONSOLE_LOG", "off")
 

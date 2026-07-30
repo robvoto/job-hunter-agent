@@ -57,7 +57,7 @@ from job_hunter_agent.logging_utils import (
     HumanReadableLogFilter,
     install_log_handler_filters,
 )
-from job_hunter_agent.paths import OUTPUT_DIR, SERVER_DEBUG_LOG_PATH, SERVER_LOG_PATH
+from job_hunter_agent.paths import OUTPUT_DIR, SERVER_DEBUG_LOG_PATH, SERVER_HUMAN_LOG_PATH
 from job_hunter_agent.user_context import set_user_id
 from job_hunter_agent.run_control import enable_step_through
 
@@ -218,7 +218,7 @@ def _configure_server_logging() -> None:
                 "class": "logging.FileHandler",
                 "level": "INFO",
                 "formatter": "human",
-                "filename": str(SERVER_LOG_PATH),
+                "filename": str(SERVER_HUMAN_LOG_PATH),
                 "encoding": "utf-8",
             },
             "debug_file": {
@@ -269,8 +269,8 @@ def _configure_server_logging() -> None:
         ):
             handler.addFilter(HumanReadableLogFilter())
             handler.addFilter(ConsoleNoiseFilter())
-        elif isinstance(handler, logging.FileHandler) and getattr(handler, "baseFilename", "").endswith(
-            "server.log"
+        elif isinstance(handler, logging.FileHandler) and getattr(handler, "baseFilename", "") == str(
+            SERVER_HUMAN_LOG_PATH
         ):
             handler.addFilter(HumanReadableLogFilter())
 

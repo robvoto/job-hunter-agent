@@ -209,15 +209,6 @@ Repo-root launcher:
 ./run --debug
 ```
 
-Human-log debug launcher:
-
-```bash
-./run-debug-human
-```
-
-This mirrors `output/server.log` into the terminal while the debug server runs,
-so the shell shows the same human-readable runtime log that is written to disk.
-
 Background-service rule:
 
 - the FastAPI server does not auto-start the scheduled agent loop or the shared Telegram poller
@@ -227,10 +218,11 @@ Background-service rule:
 
 Server logs:
 
-- human-readable runtime output is written to `output/server.log`
+- human-readable runtime output is written to `output/server-human.log`
 - full technical/debug output is written to `output/server-debug.log`
 - both logs are timestamped
-- the terminal mirrors the human-readable server output
+- `./run --debug` writes both logs; the terminal mirrors the same human-readable stream
+- on AWS, use your service manager or `tail -f output/server-human.log` instead of a separate human-log wrapper
 - browser `console.log` is separate from server logs and only matters for JS running in the page
 - debug/audit uncertainty events are appended to `output/uncertainty.jsonl`
 - reviewable runtime warnings are stored in SQLite `system_warnings` and shown in the admin settings page

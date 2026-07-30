@@ -11,7 +11,7 @@ TECHNICAL_LOGGER_NAME = "job_hunter.technical"
 HUMAN_LOG_SEPARATOR = "-" * 80
 
 # Console-only: fragments of raw per-stage pipeline trace that duplicate the
-# human-readable per-job summary block. Still written to server.log at INFO
+# human-readable per-job summary block. Still written to server-human.log at INFO
 # for post-run debugging — only the terminal display is suppressed.
 CONSOLE_SUPPRESSED_FRAGMENTS = (
     "[CAPABILITY_SCORING][BELOW_THRESHOLD]",
@@ -109,7 +109,7 @@ class ConsoleNoiseFilter(logging.Filter):
 
 
 class HumanReadableLogFilter(logging.Filter):
-    """Keep server.log and console focused on human-readable job/run summaries."""
+    """Keep server-human.log and console focused on human-readable job/run summaries."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         msg = record.getMessage()
@@ -169,7 +169,7 @@ def install_log_handler_filters() -> None:
 def setup_cli_logging() -> None:
     """Configure root logger for CLI runs.
 
-    Human-readable output goes to console + ``output/server.log``.
+    Human-readable output goes to console + ``output/server-human.log``.
     Full technical output goes to ``output/server-debug.log``.
 
     Mirrors the FastAPI logging config so CLI and server produce identical output.
@@ -177,12 +177,12 @@ def setup_cli_logging() -> None:
     """
     import logging.config
 
-    from job_hunter_agent.paths import SERVER_DEBUG_LOG_PATH, SERVER_LOG_PATH
+    from job_hunter_agent.paths import SERVER_DEBUG_LOG_PATH, SERVER_HUMAN_LOG_PATH
 
     if logging.getLogger().handlers:
         return
 
-    SERVER_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    SERVER_HUMAN_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     logging.config.dictConfig(
         {
             "version": 1,
@@ -207,7 +207,7 @@ def setup_cli_logging() -> None:
                     "class": "logging.FileHandler",
                     "level": "INFO",
                     "formatter": "human",
-                    "filename": str(SERVER_LOG_PATH),
+                    "filename": str(SERVER_HUMAN_LOG_PATH),
                     "encoding": "utf-8",
                 },
                 "debug_file": {

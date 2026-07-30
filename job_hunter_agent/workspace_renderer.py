@@ -11,6 +11,7 @@ from functools import lru_cache
 from html import escape, unescape
 from string import Template
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote
 
 from job_hunter_agent.capability_matching import build_display_competitive_risks
 from job_hunter_agent.company_normalization import normalize_company_name
@@ -1061,10 +1062,15 @@ def render_job_card(
         is_possible_repost = similar_applied_record is not None
     _record_source = str(record.get("source") or "").lower().strip()
     if linkedin_freshness_is_unknown(record):
-        soft_risk_reasons = dedupe_preserve_order([
-            *soft_risk_reasons,
-            _workspace_label("check_item_labels", "linkedin_freshness_unknown_warning"),
-        ])
+        # LinkedIn listings always carry a posted date; a missing posted_age_days here means
+        # the backfill fetch/parse failed for this job, not that the post has no date. That's
+        # a scrape-side gap worth investigating, not a risk to surface to the user on the card.
+        logger.warning(
+            "[RENDERER] job=%s title=%r LinkedIn posted_age_days missing — freshness backfill "
+            "did not resolve a post date for this listing",
+            record.get("job_key", "<unknown>"),
+            str(record.get("title") or "").strip(),
+        )
     elif linkedin_original_posted_is_unverified(record):
         soft_risk_reasons = dedupe_preserve_order([
             *soft_risk_reasons,
@@ -1447,6 +1453,16 @@ def render_job_card(
         original_posted_display_label(record) if _original_posted_verified else ""
     )
     contract_duration_display = display_contract_duration_label(display_record)
+    normalized_work_type_signature = re.sub(
+        r"[^a-z0-9]+",
+        " ",
+        compact_whitespace(display_work_type_label(display_record)).lower(),
+    ).strip()
+    normalized_contract_duration_signature = re.sub(
+        r"[^a-z0-9]+",
+        " ",
+        compact_whitespace(contract_duration_display).lower(),
+    ).strip()
     meta_items = []
     if _board_posted_display and _original_posted_display:
         meta_items.append(
@@ -1563,7 +1579,6 @@ def render_job_card(
     merged_requirement_order: list[str] = []
     eligibility_coverage_rows: dict[str, dict[str, Any]] = {}
     eligibility_coverage_order: list[str] = []
-    has_requirement_subtitles = False
     capability_level_lookup = _capability_level_lookup(active_profile)
     # When requirement_coverage is available, show only those rows (they are more
     # detailed and LLM-verified). Skip the short job_requirements bullets to avoid
@@ -1603,9 +1618,30 @@ def render_job_card(
             bucket = 2
         return (bucket, requirement)
 
+    def _is_structured_meta_requirement(req_text: str) -> bool:
+        requirement_signature = re.sub(
+            r"[^a-z0-9]+",
+            " ",
+            compact_whitespace(req_text).lower(),
+        ).strip()
+        if not requirement_signature:
+            return False
+        if normalized_work_type_signature and requirement_signature == normalized_work_type_signature:
+            return True
+        if normalized_work_type_signature and normalized_contract_duration_signature:
+            structured_signatures = {
+                f"{normalized_work_type_signature} {normalized_contract_duration_signature}".strip(),
+                f"{normalized_contract_duration_signature} {normalized_work_type_signature}".strip(),
+            }
+            if requirement_signature in structured_signatures:
+                return True
+        return False
+
     def _render_requirement_row_html(row: dict[str, Any]) -> tuple[str, bool]:
         req_text = compact_whitespace(str(row.get("requirement") or ""))
         if not req_text:
+            return "", False
+        if _is_structured_meta_requirement(req_text):
             return "", False
         profile_status = str(row.get("profile_status") or "").strip()
         coverage_status = str(row.get("coverage_status") or "").strip().lower()
@@ -1672,14 +1708,14 @@ def render_job_card(
         detail_parts = []
         if matched_candidate_fact:
             profile_detail = matched_candidate_fact
-            if level_label:
+            if active_debug_mode and level_label:
                 profile_detail = f"{profile_detail} ({level_label})"
             detail_parts.append(profile_detail)
         if matched_text and compact_whitespace(matched_text).lower() != req_text.lower():
             detail_parts.append(f'"{matched_text}"')
         detail_html = (
             f'<span class="req-coverage-detail">{safe_html(" · ".join(detail_parts))}</span>'
-            if active_debug_mode and detail_parts
+            if detail_parts
             else ""
         )
         experience_note_html = ""
@@ -1716,8 +1752,7 @@ def render_job_card(
         add_to_profile_html = ""
         if css_modifier in ("mismatch", "not-shown", "mandatory-not-shown", "unknown"):
             add_to_profile_html = (
-                f'<a class="btn btn-secondary btn-compact-action job-requirement-action req-add-to-profile" href="/settings#section-matrix" '
-                f'data-prefill="{safe_html(req_text)}" '
+                f'<a class="btn btn-secondary btn-compact-action job-requirement-action req-add-to-profile" href="/settings?prefill_capability={quote(req_text)}#section-matrix" '
                 f'title="{safe_html(_workspace_label("workspace_card_labels", "add_to_profile_action_title"))}" target="_blank" rel="noopener">'
                 f'{safe_html(_workspace_label("workspace_card_labels", "add_to_profile_action_label"))}</a>'
             )
@@ -1822,22 +1857,15 @@ def render_job_card(
             row = merged_requirement_rows.get(key)
             if not isinstance(row, dict):
                 continue
-            row_html, has_subtitle = _render_requirement_row_html(row)
+            row_html, _ = _render_requirement_row_html(row)
             if not row_html:
                 continue
-            has_requirement_subtitles = has_requirement_subtitles or has_subtitle
             requirement_items_html += row_html
 
         if requirement_items_html:
-            requirement_hint_html = ""
-            if not active_debug_mode and has_requirement_subtitles:
-                requirement_hint_html = (
-                    f'<p class="job-requirements-hint">{safe_html(_workspace_label("workspace_card_labels", "job_requirements_detail_hint"))}</p>'
-                )
             job_requirements_html = (
                 '<details class="job-insights job-requirements-panel">'
                 f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'job_requirements_summary'))}</summary>"
-                f'{requirement_hint_html}'
                 f'<div class="job-insight-group is-secondary"><ul class="job-requirement-list">{requirement_items_html}</ul></div>'
                 "</details>"
             )

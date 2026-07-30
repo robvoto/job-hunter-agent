@@ -36,14 +36,11 @@ def test_build_capability_naming_guidance_uses_managed_defaults_only():
     assert "skip" not in prompt
 
 
-def test_build_job_requirements_prompt_includes_work_type_guidance():
+def test_build_job_requirements_prompt_excludes_work_type_from_job_requirements():
     prompt = llm_gate.build_job_requirements_prompt()
 
-    assert "Permanent" in prompt
-    assert "Contract" in prompt
-    assert "Full Time Contract / FTC" in prompt
-    assert "Temporary" in prompt
-    assert "Unknown when the work type is unclear" in prompt
+    assert "Do not include work type, contract length" in prompt
+    assert "structured work_type metadata" in prompt
 
 
 def test_fit_review_prompt_excludes_learning_guidance(monkeypatch):
@@ -1321,11 +1318,10 @@ def test_build_requirement_coverage_guidance_includes_key_phrases():
     assert "Do not mark every row mandatory" in guidance
 
 
-def test_build_job_requirements_guidance_includes_work_types():
+def test_build_job_requirements_guidance_excludes_work_types_from_requirements():
     guidance = llm_gate.build_job_requirements_guidance()
-    assert "Permanent" in guidance
-    assert "Full Time Contract / FTC" in guidance
-    assert "Unknown when the work type is unclear" in guidance
+    assert "Do not include work type, contract length" in guidance
+    assert "structured work_type metadata" in guidance
 
 
 def test_build_fit_review_grade_guidance_includes_key_phrase():

@@ -20,7 +20,7 @@ WORKSPACE_RESULTS_FILENAME = "workspace_results.html"
 USERS_DIR = DATA_DIR / "users"
 
 # Server-level output (not per-user)
-SERVER_LOG_PATH = OUTPUT_DIR / "server.log"
+SERVER_HUMAN_LOG_PATH = OUTPUT_DIR / "server-human.log"
 SERVER_DEBUG_LOG_PATH = OUTPUT_DIR / "server-debug.log"
 UNCERTAINTY_LOG_PATH = OUTPUT_DIR / "uncertainty.jsonl"
 DEBUG_SOURCE_PAYLOADS_DIR = REPO_ROOT / "debug" / "source_payloads"

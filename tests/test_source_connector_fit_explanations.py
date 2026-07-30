@@ -1623,7 +1623,7 @@ def test_render_job_card_requirement_coverage_omits_duplicate_matched_text():
     assert f'"{requirement}"' not in html
 
 
-def test_render_job_card_requirement_coverage_hides_evidence_subtitles_in_normal_mode():
+def test_render_job_card_requirement_coverage_shows_evidence_subtitles_in_normal_mode():
     requirement = "Minimum 5 years experience as Business Analyst in digital environment"
     html = workspace_renderer.render_job_card(
         {
@@ -1645,10 +1645,10 @@ def test_render_job_card_requirement_coverage_hides_evidence_subtitles_in_normal
         debug_mode=False,
     )
 
-    assert "job-requirements-hint" in html
-    assert "small grey line under a requirement row" in html
-    assert "req-coverage-detail" not in html
-    assert "business analysis" not in html
+    assert "job-requirements-hint" not in html
+    assert "req-coverage-detail" in html
+    assert "acceptance testing" in html
+    assert "acceptance testing (Strong)" not in html
     assert f'"{requirement}"' not in html
 
 
@@ -1679,7 +1679,7 @@ def test_render_job_card_requirement_coverage_shows_role_duration_note_in_normal
 
     assert "Role history proves 36 months in business analyst against 60 required months" in html
     assert "most recent end year 2024" in html
-    assert "req-coverage-detail" not in html
+    assert "req-coverage-detail" in html
 
 
 def test_render_job_card_requirement_coverage_shows_eligibility_details_in_debug_mode():
@@ -3051,7 +3051,7 @@ def test_render_job_card_fit_breakdown_starts_with_plain_english_summary_from_re
     assert '<span class="job-requirement-text">Agile delivery' in html
     assert '<span class="job-requirement-text">Stakeholder engagement' in html
     assert '<span class="job-requirement-text">User acceptance testing' in html
-    assert "Agile methodologies" not in html
+    assert "Agile methodologies" in html
     assert "SAP certification" not in expected_summary
 
 
@@ -3761,6 +3761,72 @@ def test_contract_duration_meta_renders_for_contract_jobs():
 
     assert "<strong>Work type</strong> Contract" in html
     assert "<strong>Contract term</strong> 12 months" in html
+
+
+def test_contract_duration_requirement_is_suppressed_when_already_shown_in_meta():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-contract-duration-requirement-card",
+            "title": "Scrum Master",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Contract/Temp",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Initial 6 month contract supporting delivery teams.",
+            "fit_highlights": [],
+            "source": "seek",
+            "requirement_coverage": [
+                {
+                    "requirement": "Contract (6 Months)",
+                    "importance": "mandatory",
+                    "status": "not_shown",
+                    "matched_job_text": "Contract (6 Months)",
+                }
+            ],
+        },
+        _contract_only_profile(),
+    )
+
+    assert "<strong>Work type</strong> Contract" in html
+    assert "<strong>Contract term</strong> 6 months" in html
+    assert ">Contract (6 Months)<" not in html
+
+
+def test_add_to_profile_link_carries_capability_prefill_query():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-prefill-link",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Stakeholder management across delivery teams.",
+            "fit_highlights": [],
+            "source": "seek",
+            "requirement_coverage": [
+                {
+                    "requirement": "Stakeholder management",
+                    "importance": "mandatory",
+                    "status": "not_shown",
+                    "matched_job_text": "Stakeholder management",
+                }
+            ],
+        },
+        _capability_profile(),
+    )
+
+    assert "/settings?prefill_capability=Stakeholder%20management#section-matrix" in html
 
 
 def test_contract_duration_meta_stays_hidden_for_non_contract_jobs():

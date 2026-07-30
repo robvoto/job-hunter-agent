@@ -86,6 +86,10 @@ function validateSearchKeywords(keyword) {
   }
 }
 
+function normalizeCapabilityPrefill(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
 let loadedUserSettings = null;
 const SEEK_QUICK_APPLY_ONLY = 'seek_quick_apply_only';
 
@@ -649,13 +653,61 @@ function fillForm(profile) {
   chipEditor.renderGlobalChipEditors();
 }
 
+function consumeCapabilityPrefillFromUrl() {
+  const url = new URL(window.location.href);
+  const prefill = normalizeCapabilityPrefill(url.searchParams.get('prefill_capability') || '');
+  if (!prefill) return false;
+
+  setActiveSettingsSection('section-matrix', { scrollToTop: true });
+  const existingRules = capabilityEditor.collectCapabilityRuleState();
+  const existsAlready = existingRules.some((rule) =>
+    normalizeCapabilityPrefill(rule?.name).toLowerCase() === prefill.toLowerCase()
+  );
+
+  if (!existsAlready) {
+    capabilityEditor.setCapabilityRuleState([
+      ...existingRules,
+      {
+        name: prefill,
+        level: 'working',
+        fit: 'supporting',
+        aliases: [],
+      },
+    ]);
+    markDirty();
+    requestAnimationFrame(() => {
+      const cards = document.querySelectorAll('#capability_matrix_editor [data-capability-index]');
+      const lastCard = cards[cards.length - 1];
+      const nameInput = lastCard?.querySelector('input[data-capability-field="name"]');
+      if (lastCard?.scrollIntoView) {
+        lastCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      nameInput?.focus?.();
+      nameInput?.select?.();
+    });
+    showStatus(`Draft capability added: ${prefill}. Review the level and save when ready.`, 'success', {
+      autoHideMs: 4500,
+    });
+  } else {
+    showStatus(`Capability already exists in your profile: ${prefill}.`, 'success', {
+      autoHideMs: 3500,
+    });
+  }
+
+  url.searchParams.delete('prefill_capability');
+  window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+  return true;
+}
+
 async function loadProfile() {
   const response = await jobHunterFetch('/api/profile');
   if (!response.ok) throw new Error('Could not load profile');
   const profile = await response.json();
   loadedProfile = profile;
   fillForm(profile);
-  showStatus('Profile loaded.', 'success', { autoHideMs: 2600 });
+  if (!consumeCapabilityPrefillFromUrl()) {
+    showStatus('Profile loaded.', 'success', { autoHideMs: 2600 });
+  }
 }
 
 async function loadSourceMaterials() {

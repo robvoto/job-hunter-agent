@@ -888,7 +888,7 @@ def test_pipeline_logs_single_human_block_for_title_rejection(tmp_path, monkeypa
         "https://www.apsjobs.gov.au/s/job-details?title=servicenow-team-member&Id=a05OY00000PWIQ1YAP"
     )
     context = _review_context("APSJOBS")
-    human_log_path = tmp_path / "server.log"
+    human_log_path = tmp_path / "server-human.log"
     debug_log_path = tmp_path / "server-debug.log"
 
     monkeypatch.setattr(

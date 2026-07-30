@@ -8,7 +8,7 @@
     "For job_requirements: extract the job's explicit requirements as concise bullet-style phrases.",
     "Use only visible ad text, prefer the employer's own wording, keep each item short, and do not invent anything.",
     "Capture the requirements the user would want to read before opening the ad.",
-    "If the ad states the work type explicitly, preserve it as one of: Permanent, Contract, Full Time Contract / FTC, Temporary.",
-    "Use Unknown when the work type is unclear."
+    "Do not include work type, contract length, or other structured job metadata as job_requirements when the card already captures them separately.",
+    "If the ad states the work type explicitly, keep it in the structured work_type metadata instead of repeating it as a requirement."
   ]
 }

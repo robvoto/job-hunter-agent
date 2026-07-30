@@ -755,6 +755,17 @@
   justify-self: start;
 }
 
+.req-add-to-profile {
+  color: color-mix(in srgb, var(--accent) 78%, white 22%);
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-surface));
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border-subtle));
+}
+
+.req-add-to-profile:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 24%, var(--bg-surface));
+  color: color-mix(in srgb, var(--accent) 88%, white 12%);
+}
+
 .req-coverage-detail {
   display: block;
   font-size: 0.78rem;
