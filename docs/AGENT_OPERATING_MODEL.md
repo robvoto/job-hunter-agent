@@ -88,6 +88,7 @@ The description is important because agent systems often discover skills from na
 | `onboarding-ui` | Onboarding wizard, upload, reset/resume flow, and search-basics UI. |
 | `preferences` | Candidate preferences and preference-to-filter handoff. |
 | `profile-extraction` | CV/profile extraction and normalization. |
+| `release-management` | Application versions, release preparation, release gates, Git tags, and publishing. |
 | `scoring-ranking` | Fit scoring, ranking, and score explanations. |
 | `scraping` | SEEK/LinkedIn scraping and source data shape. |
 | `signal-registry` | Signal lifecycle, approval, and governance. |

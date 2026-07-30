@@ -63,8 +63,17 @@ Backlog source of truth is the shared Google Sheet. Local backlog markdown files
 | Folder | Owner |
 |---|---|
 | `.skills/*/SKILL.md` | One active agent workflow/domain each. Must include YAML `name` and `description`. |
+| `.skills/release-management/SKILL.md` | Release version ownership, gates, tags, and publishing workflow. |
 | `.skills/*/DETAILS.md` | Longer examples/details loaded only when the parent skill points to them. |
 | `docs/archived-skills/` | Retired skills kept for history only. Not active routing. |
+
+## Release Automation
+
+| File | Owner |
+|---|---|
+| `scripts/release-jobhunter.sh` | Clean-main release orchestration: version bump, tests, commit, annotated tag, and atomic push. |
+| `scripts/check-release-integrity.py` | `pyproject.toml`, `uv.lock`, rendered UI metadata, and Git-tag version validation. |
+| `.github/workflows/release-integrity.yml` | GitHub validation for branch/tag release integrity and tagged-release E2E coverage. |
 
 ## Rules for New Docs
 

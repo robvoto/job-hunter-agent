@@ -51,7 +51,7 @@ from job_hunter_agent.signal_detection import (
     competitive_fit_highlights,
     hard_block_reasons,
 )
-from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order
+from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order, list_to_phrase
 
 LLM_REVIEW_STATE_EVALUATED = "evaluated"
 LLM_REVIEW_STATE_INVALID = "invalid"
@@ -794,15 +794,19 @@ def build_fit_highlights(
             ]
         ]
     )
-    cap_template = str(highlight_labels.get("capability_match_sentence") or "").strip()
-    if "{capability}" not in cap_template or "show" not in cap_template.lower():
-        cap_template = "The ad asks for {capability}, and your profile shows this experience."
-    for _strong, area in matched_profile_areas:
-        label = friendly_capability_label(area)
-        if not label:
-            continue
-        entry = cap_template.format(capability=label)
-        if entry and entry not in highlights:
+    cap_template = str(highlight_labels["capability_match_sentence"])
+    capability_labels = dedupe_preserve_order(
+        [
+            label
+            for label in (
+                friendly_capability_label(area) for _strong, area in matched_profile_areas
+            )
+            if label
+        ]
+    )
+    if capability_labels:
+        entry = cap_template.format(capability=list_to_phrase(capability_labels))
+        if entry:
             highlights.append(entry)
 
     highlights.extend(

@@ -780,6 +780,38 @@ Workspace layer:
 
 ---
 
+# Release Management
+
+`pyproject.toml` is the single application-version source. Do not edit the UI version or create release tags manually.
+
+Use one release command from a clean, synchronized `main` branch:
+
+```bash
+./scripts/release-jobhunter.sh patch
+```
+
+Meaning:
+
+- `patch`: bug fix or correction, for example `1.5.0 -> 1.5.1`.
+- `minor`: backward-compatible functionality, for example `1.5.0 -> 1.6.0`.
+- `major`: breaking change, for example `1.5.0 -> 2.0.0`.
+
+To run every gate without changing files, Git history, tags, or GitHub:
+
+```bash
+./scripts/release-jobhunter.sh patch --dry-run
+```
+
+The release command validates version consistency, runs the full unit suite and non-LLM Playwright suite, commits the version update, creates an annotated tag, and atomically pushes `main` with the tag. After the release succeeds, connect to AWS and run `deploy-jobhunter`.
+
+For a direct metadata diagnosis:
+
+```bash
+uv run python scripts/check-release-integrity.py
+```
+
+---
+
 # Expansion Direction
 
 Operational expansion targets:

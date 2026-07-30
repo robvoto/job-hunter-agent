@@ -134,9 +134,20 @@ def list_to_phrase(items: List[str]) -> str:
 
 
 def _strip_markdown_emphasis(text: str) -> str:
-    """Remove literal Markdown emphasis markers and escape backslashes left over from scraped source text."""
+    """Remove literal Markdown emphasis markers and escape backslashes left over from scraped source text.
 
-    cleaned = re.sub(r"\*{1,3}([^*\n]+?)\*{1,3}", r"\1", text)
+    Source text sometimes has an odd number of ``*`` markers on a line (e.g. a
+    stray bullet marker consumed one side of a pair), which would otherwise
+    make paired matching skip misaligned and leave real ``**bold**`` markers
+    behind later in the string. Strip bold/italic pairs first, then sweep up
+    any markers left over from unbalanced input so none are ever shown.
+    """
+
+    cleaned = re.sub(r"\*\*([^*\n]+?)\*\*", r"\1", text)
+
+    cleaned = re.sub(r"(?<!\*)\*([^*\n]+?)\*(?!\*)", r"\1", cleaned)
+
+    cleaned = re.sub(r"\*+", "", cleaned)
 
     cleaned = re.sub(r"(?<!\w)_{1,3}([^_\n]+?)_{1,3}(?!\w)", r"\1", cleaned)
 

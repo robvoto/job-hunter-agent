@@ -150,6 +150,29 @@ def _mark_onboarding_complete(user_id: str) -> None:
         set_user_id(None)
 
 
+def _reset_fresh_onboarding_user(user_id: str) -> None:
+    """Force the onboarding test user back to a truly fresh pre-onboarding state.
+
+    The same e2e email can be reused across test runs, so simply *not* marking
+    onboarding complete is not enough if a previous run already persisted
+    onboarding-owned profile fields or uploaded source documents.
+    """
+    from job_hunter_agent.source_documents import (
+        DEFAULT_SOURCE_MATERIALS,
+        build_onboarding_reset_patch,
+        save_source_materials,
+    )
+    from job_hunter_agent.user_context import set_user_id
+    from job_hunter_agent.profile_store import patch_profile
+
+    set_user_id(user_id)
+    try:
+        patch_profile(build_onboarding_reset_patch())
+        save_source_materials(DEFAULT_SOURCE_MATERIALS)
+    finally:
+        set_user_id(None)
+
+
 def _session_cookie(email: str, complete_onboarding: bool = True) -> dict:
     from job_hunter_agent.auth import _build_session_cookie_value, get_or_create_user
 
@@ -157,6 +180,8 @@ def _session_cookie(email: str, complete_onboarding: bool = True) -> dict:
     user = get_or_create_user(email, admin_email)
     if complete_onboarding:
         _mark_onboarding_complete(user["user_id"])
+    else:
+        _reset_fresh_onboarding_user(user["user_id"])
     secret = os.environ["JOB_HUNTER_AUTH_SESSION_SECRET"]
     value = _build_session_cookie_value(user, secret)
 
