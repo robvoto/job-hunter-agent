@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextvars
+from datetime import datetime
 import logging
 import re
 
@@ -152,6 +153,27 @@ def render_board_final_block(
         f"BOARD FINAL {source_label}\n"
         f"Seen: {int(seen)} | Read: {int(read)} | Pages: {int(pages)} | "
         f"Kept: {int(kept)} | Rejected: {int(rejected)}\n"
+        f"{HUMAN_LOG_SEPARATOR}"
+    )
+
+
+def render_server_session_start_block(
+    *,
+    started_at: datetime,
+    pid: int,
+    debug_mode: bool,
+    rebuild_on_startup: bool,
+    step_through: bool,
+) -> str:
+    started_at_label = started_at.astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
+    return (
+        f"\n{HUMAN_LOG_SEPARATOR}\n"
+        f"NEW SERVER SESSION STARTED\n"
+        f"Started at       : {started_at_label}\n"
+        f"PID              : {int(pid)}\n"
+        f"Debug mode       : {'ON (--debug)' if debug_mode else 'OFF'}\n"
+        f"Startup rebuild  : {'YES (--rebuild)' if rebuild_on_startup else 'NO'}\n"
+        f"Step-through     : {'ON (--step)' if step_through else 'OFF'}\n"
         f"{HUMAN_LOG_SEPARATOR}"
     )
 

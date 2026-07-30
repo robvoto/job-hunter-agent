@@ -260,6 +260,45 @@ def test_configure_server_logging_can_disable_direct_console_output(monkeypatch,
             logger.filters.clear()
 
 
+def test_server_session_start_banner_is_written_to_both_log_files(monkeypatch, tmp_path):
+    original_stdout = sys.stdout
+    original_stderr = sys.stderr
+
+    human_log_path = tmp_path / "server-human.log"
+    debug_log_path = tmp_path / "server-debug.log"
+    monkeypatch.setattr(_fa, "OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr(_fa, "SERVER_HUMAN_LOG_PATH", human_log_path)
+    monkeypatch.setattr(_fa, "SERVER_DEBUG_LOG_PATH", debug_log_path)
+
+    for logger_name in ("", _fa.HUMAN_LOGGER_NAME, "uvicorn", "uvicorn.error", "uvicorn.access"):
+        logger = logging.getLogger(logger_name)
+        for handler in list(logger.handlers):
+            logger.removeHandler(handler)
+            handler.close()
+        logger.filters.clear()
+
+    try:
+        _fa._configure_server_logging()
+        _fa._log_server_session_start(debug=True, rebuild=True, step=False)
+        logging.shutdown()
+
+        human_log = human_log_path.read_text(encoding="utf-8")
+        debug_log = debug_log_path.read_text(encoding="utf-8")
+
+        assert "NEW SERVER SESSION STARTED" in human_log
+        assert "Started at       :" in human_log
+        assert "Startup rebuild  : YES (--rebuild)" in human_log
+        assert "NEW SERVER SESSION STARTED" in debug_log
+    finally:
+        sys.stdout = original_stdout
+        sys.stderr = original_stderr
+        for logger_name in ("", _fa.HUMAN_LOGGER_NAME, "uvicorn", "uvicorn.error", "uvicorn.access"):
+            logger = logging.getLogger(logger_name)
+            for handler in list(logger.handlers):
+                logger.removeHandler(handler)
+            logger.filters.clear()
+
+
 def test_settings_redirects_to_start_until_onboarding_is_complete(monkeypatch):
     monkeypatch.setattr(_fa, "read_session_user", lambda request: _FAKE_USER)
     monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: False)

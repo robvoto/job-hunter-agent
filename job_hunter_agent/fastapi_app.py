@@ -21,6 +21,7 @@ CORS:
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from datetime import datetime
 import logging
 import logging.config
 import os
@@ -55,7 +56,9 @@ from job_hunter_agent.logging_utils import (
     ConsoleNoiseFilter,
     HUMAN_LOGGER_NAME,
     HumanReadableLogFilter,
+    get_human_logger,
     install_log_handler_filters,
+    render_server_session_start_block,
 )
 from job_hunter_agent.paths import OUTPUT_DIR, SERVER_DEBUG_LOG_PATH, SERVER_HUMAN_LOG_PATH
 from job_hunter_agent.user_context import set_user_id
@@ -277,6 +280,18 @@ def _configure_server_logging() -> None:
     app_logger = human_logger
     sys.stdout = _LineLoggingStream(app_logger, logging.INFO)
     sys.stderr = _LineLoggingStream(app_logger, logging.ERROR)
+
+
+def _log_server_session_start(*, debug: bool, rebuild: bool, step: bool) -> None:
+    get_human_logger().info(
+        render_server_session_start_block(
+            started_at=datetime.now().astimezone(),
+            pid=os.getpid(),
+            debug_mode=debug,
+            rebuild_on_startup=rebuild,
+            step_through=step,
+        )
+    )
 
 
 def _bootstrap_runtime_knowledge() -> None:
@@ -574,6 +589,11 @@ if __name__ == "__main__":
     _configure_server_logging()
     _bootstrap_runtime_knowledge()
     _apply_startup_flags(step=args.step)
+    _log_server_session_start(
+        debug=app_config.DEBUG_MODE,
+        rebuild=args.rebuild,
+        step=args.step,
+    )
 
     from job_hunter_agent import server_helpers as srv
 

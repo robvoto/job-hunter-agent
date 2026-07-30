@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 import logging
 
 from job_hunter_agent import logging_utils
@@ -120,4 +121,22 @@ def test_render_board_final_block_uses_human_summary_layout():
 
     assert "BOARD FINAL APSJOBS" in block
     assert "Seen: 7 | Read: 5 | Pages: 1 | Kept: 2 | Rejected: 5" in block
+    assert block.count(logging_utils.HUMAN_LOG_SEPARATOR) == 2
+
+
+def test_render_server_session_start_block_is_large_and_searchable():
+    block = logging_utils.render_server_session_start_block(
+        started_at=datetime(2026, 7, 30, 11, 45, 0),
+        pid=4321,
+        debug_mode=True,
+        rebuild_on_startup=True,
+        step_through=False,
+    )
+
+    assert "NEW SERVER SESSION STARTED" in block
+    assert "Started at       : 2026-07-30 11:45:00" in block
+    assert "PID              : 4321" in block
+    assert "Debug mode       : ON (--debug)" in block
+    assert "Startup rebuild  : YES (--rebuild)" in block
+    assert "Step-through     : OFF" in block
     assert block.count(logging_utils.HUMAN_LOG_SEPARATOR) == 2
