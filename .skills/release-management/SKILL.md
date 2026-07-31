@@ -13,6 +13,14 @@ Use for every Job Hunter release or version change.
 - `uv.lock`, the rendered header, and the Git tag must match that version.
 - Do not hardcode a separate version in Python, templates, JSON, deployment scripts, or docs.
 
+## Commit vs release
+
+- Do **not** bump the application version on every ordinary commit.
+- Professional default: many commits can happen between releases; the version moves only when preparing a real release from clean `main`.
+- Ordinary feature, fix, refactor, and test commits should leave version files and release tags unchanged.
+- Create the version bump only in the dedicated release commit produced by the release command below.
+- If the team ever wants "every merge to `main` is a release", keep using the release command at merge/release time rather than hand-editing version files in unrelated commits.
+
 ## Required command
 
 Never edit the version or create/push a release tag manually. Use:
