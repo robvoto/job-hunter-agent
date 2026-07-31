@@ -5,6 +5,7 @@ APP_DIR="${JOB_HUNTER_APP_DIR:-/home/ubuntu/job-hunter-agent}"
 ENV_FILE="${JOB_HUNTER_ENV_FILE:-/etc/job-hunter/job-hunter.env}"
 SERVICE="${JOB_HUNTER_SERVICE:-job-hunter}"
 HEALTH_URL="${JOB_HUNTER_HEALTH_URL:-http://127.0.0.1:8765/start}"
+RELEASE_TAG_PATTERN='^v[0-9]+\.[0-9]+\.[0-9]+$'
 
 # Old one-off scripts that used to live on the server but are no longer needed.
 OLD_SERVER_SCRIPTS=(
@@ -16,39 +17,75 @@ OLD_SERVER_SCRIPTS=(
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   cat <<HELP
-Deploy Job Hunter on AWS EC2. Safe to run on every update.
+Deploy an explicit Job Hunter release tag on AWS EC2.
+
+Usage:
+  deploy-jobhunter vX.Y.Z
 
 Steps:
   1. Remove known-old server scripts
-  2. Reset any tracked file edits, pull latest code from GitHub
-  3. Sync Python dependencies (uv)
-  4. Install Playwright Chromium browser + OS system libraries
-  5. Install AWS browser session packages and launcher scripts
-  6. Install repo-managed helper commands into /usr/local/bin
-  7. Install repo-managed systemd service (AWS browser session wrapper)
-  8. Run db_seed --upgrade
-  9. Restart job-hunter.service
- 10. Startup rebuild refreshes saved workspace output
- 11. Wait for health-check
+  2. Fetch and verify the requested GitHub release tag
+  3. Check out the exact tagged commit
+  4. Sync Python dependencies (uv)
+  5. Install Playwright Chromium browser + OS system libraries
+  6. Install AWS browser session packages and launcher scripts
+  7. Install repo-managed helper commands into /usr/local/bin
+  8. Install repo-managed systemd service (AWS browser session wrapper)
+  9. Run db_seed --upgrade
+ 10. Restart job-hunter.service
+ 11. Startup rebuild refreshes saved workspace output
+ 12. Wait for health-check
 HELP
   exit 0
 fi
 
+fail() {
+  echo "DEPLOY BLOCKED: $*" >&2
+  exit 1
+}
+
+RELEASE_TAG="${1:-}"
+[[ -n "$RELEASE_TAG" ]] || fail "Missing release tag. Use: deploy-jobhunter vX.Y.Z"
+shift || true
+[[ $# -eq 0 ]] || fail "Deploy accepts exactly one release tag argument."
+[[ "$RELEASE_TAG" =~ $RELEASE_TAG_PATTERN ]] || fail \
+  "Release tag must use vMAJOR.MINOR.PATCH format; got $RELEASE_TAG"
+
 # uv installs per-user; ensure it's on PATH
 export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
 
-echo "==> Job Hunter deploy"
+echo "==> Job Hunter deploy $RELEASE_TAG"
 
 cd "$APP_DIR"
+
+[[ -z "$(git status --porcelain --untracked-files=all)" ]] || fail \
+  "Working tree is not clean at $APP_DIR. Commit or discard local changes before deploying."
 
 echo "==> Remove old server scripts"
 for f in "${OLD_SERVER_SCRIPTS[@]}"; do
   [[ -f "$f" ]] && rm -f "$f" && echo "  removed: $f" || true
 done
 
-echo "==> Reset local changes and pull"
-git checkout -- . 2>/dev/null || true
-git pull --ff-only
+echo "==> Fetch exact release tag"
+remote_tag_ref="refs/tags/$RELEASE_TAG"
+git ls-remote --tags --refs origin "$remote_tag_ref" | grep -q "$remote_tag_ref" \
+  || fail "Remote tag $RELEASE_TAG does not exist on origin."
+git fetch origin "$remote_tag_ref:$remote_tag_ref"
+
+tag_commit="$(git rev-parse "${RELEASE_TAG}^{commit}")"
+
+echo "==> Check out tagged commit"
+git checkout --detach "$tag_commit"
+
+echo "==> Verify tag matches project version"
+python3 scripts/check-release-integrity.py --expected-version "${RELEASE_TAG#v}" --tag "$RELEASE_TAG" \
+  || fail "Checked-out code does not match release tag $RELEASE_TAG."
+
+deployed_commit="$(git rev-parse HEAD)"
+[[ "$deployed_commit" == "$tag_commit" ]] || fail \
+  "Checked-out commit $deployed_commit does not match tag commit $tag_commit."
+echo "  deploying tag:    $RELEASE_TAG"
+echo "  deploying commit: $deployed_commit"
 
 echo "==> Check uv"
 if ! command -v uv >/dev/null 2>&1; then

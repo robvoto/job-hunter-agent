@@ -402,20 +402,19 @@ The source of truth for code is GitHub. The local PC edits and pushes. EC2 pulls
 
 ## 9. Run the first deploy
 
-`deploy-jobhunter` handles venv, dependencies, Playwright browser + OS libs, service install, and DB seed in one command:
+`deploy-jobhunter` handles venv, dependencies, Playwright browser + OS libs, service install, and DB seed in one command for an explicit release tag:
 
 ```bash
 cd /home/ubuntu/job-hunter-agent
-git pull --ff-only
 sudo bash scripts/ec2/install-helpers.sh
-deploy-jobhunter
+deploy-jobhunter vX.Y.Z
 ```
 
 `install-helpers.sh` is only needed once to put `deploy-jobhunter` on PATH. After that, every future update is just:
 
 ```bash
 use-ubuntu
-deploy-jobhunter
+deploy-jobhunter vX.Y.Z
 ```
 
 ---
@@ -662,10 +661,10 @@ AWS EC2 (deploy):
 
 ```bash
 use-ubuntu
-deploy-jobhunter
+deploy-jobhunter vX.Y.Z
 ```
 
-That's it. `deploy-jobhunter` pulls, syncs deps, updates service, seeds DB, restarts, rebuilds saved workspace output on startup, and health-checks.
+That's it. `deploy-jobhunter` fetches the requested release tag, checks out that exact tagged commit, verifies the tag matches `pyproject.toml`, syncs deps, updates service, seeds DB, restarts, rebuilds saved workspace output on startup, and health-checks.
 
 ---
 
@@ -888,13 +887,13 @@ Every deploy — first install or update — is the same single command:
 
 ```bash
 use-ubuntu
-deploy-jobhunter
+deploy-jobhunter vX.Y.Z
 ```
 
-`deploy-jobhunter` is fully self-healing and safe to run repeatedly. It:
+`deploy-jobhunter` is safe to run repeatedly for the same explicit release tag. It:
 
 1. Removes known old server scripts
-2. Resets any local tracked-file edits, pulls latest code from GitHub
+2. Fetches the requested remote release tag and checks out the exact tagged commit
 3. Installs/updates uv if missing
 4. Syncs Python dependencies (`uv sync --no-dev`)
 5. Installs Playwright Chromium browser binary
@@ -912,7 +911,7 @@ Before calling the environment ready for use, check these in order:
 
 1. Confirm `/var/lib/job-hunter` is mounted on the EBS data disk, not only the root volume.
 2. Confirm `/etc/job-hunter/job-hunter.env` exists, is not committed to git, and keeps the `640` permissions above.
-3. Run `deploy-jobhunter` or `sudo systemctl restart job-hunter` after code or env changes.
+3. Run `deploy-jobhunter vX.Y.Z` or `sudo systemctl restart job-hunter` after code or env changes.
 4. Verify service health with `sudo systemctl status job-hunter --no-pager`, `sudo journalctl -u job-hunter -n 80 --no-pager`, and `curl -I http://127.0.0.1:8765/start`.
 5. Confirm Nginx proxies the public host to `127.0.0.1:8765` and does not expose FastAPI directly.
 6. Confirm browser access uses HTTPS for `jobhunter.robvoto.com`.
@@ -977,7 +976,7 @@ config/global_settings.json
 defaults/user_settings.json
 ```
 
-If code imports a Python package, that package must be declared in `pyproject.toml`. Do not manually install packages on AWS as the permanent solution. Fix `pyproject.toml`, commit, push, then run `deploy-jobhunter`.
+If code imports a Python package, that package must be declared in `pyproject.toml`. Do not manually install packages on AWS as the permanent solution. Fix `pyproject.toml`, cut a release tag, then run `deploy-jobhunter vX.Y.Z`.
 
 ## Version-controlled EC2 helper scripts
 
@@ -990,7 +989,7 @@ scripts/ec2/
 Current helpers:
 
 ```text
-scripts/ec2/deploy-jobhunter.sh        # deploy/update from GitHub and health-check
+scripts/ec2/deploy-jobhunter.sh        # deploy an explicit Git tag and health-check it
 scripts/ec2/jobhunter-status.sh        # inspect service, logs, local health, public health
 scripts/ec2/install-helpers.sh         # install wrappers into /usr/local/bin
 scripts/ec2/enable-https-jobhunter.sh  # enable HTTPS with certbot/nginx for jobhunter.robvoto.com
@@ -1015,7 +1014,7 @@ After installing helpers, normal deployment remains:
 
 ```bash
 use-ubuntu
-deploy-jobhunter
+deploy-jobhunter vX.Y.Z
 ```
 
 `deploy-jobhunter` intentionally waits briefly after restart before checking health because `systemctl` can report `active` before Python has finished importing and binding to port `8765`.
@@ -1222,7 +1221,6 @@ Do not manually copy `locations_au.json` as the permanent fix. Fix repo seed/dep
 
 ```bash
 cd /home/ubuntu/job-hunter-agent
-git pull --ff-only
 sudo bash scripts/ec2/install-helpers.sh
-deploy-jobhunter
+deploy-jobhunter vX.Y.Z
 ```

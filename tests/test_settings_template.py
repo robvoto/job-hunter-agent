@@ -20,6 +20,9 @@ SETTINGS_PAGE_CSS_PATH = (
 )
 THEME_WIDGETS_CSS_PATH = ROOT_DIR / "templates" / "static" / "theme" / "themes.widgets.css"
 SETTINGS_TEMPLATE_PATH = ROOT_DIR / "templates" / "settings.html"
+ONBOARDING_REVIEW_CSS_PATH = (
+    ROOT_DIR / "templates" / "static" / "onboarding" / "onboarding-review.css"
+)
 SETTINGS_SEARCH_PARTIAL_PATH = (
     ROOT_DIR / "templates" / "partials" / "settings" / "standard" / "settings-search.html"
 )
@@ -220,6 +223,15 @@ def test_profile_cv_debug_drawer_avoids_duplicate_visible_heading():
     assert 'data-test-only' not in profile_html
     assert '<label for="cv_text_debug">Captured CV text</label>' not in profile_html
     assert 'id="cv_text_debug" class="is-readonly" aria-label="Captured CV text"' in profile_html
+
+
+def test_onboarding_review_css_documents_final_summary_local_exception():
+    css = ONBOARDING_REVIEW_CSS_PATH.read_text(encoding="utf-8")
+
+    assert (
+        "Local layout exception: final onboarding summary label/value layout, not a reusable visual component."
+        in css
+    )
 
 
 def test_role_history_uses_single_readonly_panel():

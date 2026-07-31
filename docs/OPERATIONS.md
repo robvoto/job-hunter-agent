@@ -788,6 +788,8 @@ Workspace layer:
 
 `pyproject.toml` is the single application-version source. Do not edit the UI version or create release tags manually.
 
+It is normal for `main` to contain ordinary unreleased commits after the latest release tag. Those commits keep the same application version until the next intentional release is cut.
+
 Use one release command from a clean, synchronized `main` branch:
 
 ```bash
@@ -796,9 +798,9 @@ Use one release command from a clean, synchronized `main` branch:
 
 Meaning:
 
-- `patch`: bug fix or correction, for example `1.5.0 -> 1.5.1`.
-- `minor`: backward-compatible functionality, for example `1.5.0 -> 1.6.0`.
-- `major`: breaking change, for example `1.5.0 -> 2.0.0`.
+- `patch`: bug fix or correction, for example `X.Y.Z -> X.Y.(Z+1)`.
+- `minor`: backward-compatible functionality, for example `X.Y.Z -> X.(Y+1).0`.
+- `major`: breaking change, for example `X.Y.Z -> (X+1).0.0`.
 
 To run every gate without changing files, Git history, tags, or GitHub:
 
@@ -806,7 +808,13 @@ To run every gate without changing files, Git history, tags, or GitHub:
 ./scripts/release-jobhunter.sh patch --dry-run
 ```
 
-The release command validates version consistency, runs the full unit suite and non-LLM Playwright suite, commits the version update, creates an annotated tag, and atomically pushes `main` with the tag. After the release succeeds, connect to AWS and run `deploy-jobhunter`.
+The release command validates version consistency, runs the full unit suite and non-LLM Playwright suite, commits the version update, creates an annotated tag, and atomically pushes `main` with the tag. After the release succeeds, connect to AWS and run `deploy-jobhunter vX.Y.Z`.
+
+Production AWS deploys must use an explicit release tag:
+
+```bash
+deploy-jobhunter vX.Y.Z
+```
 
 For a direct metadata diagnosis:
 

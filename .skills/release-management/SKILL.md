@@ -11,12 +11,14 @@ Use for every Job Hunter release or version change.
 
 - `pyproject.toml` `[project].version` is the single application version owner.
 - `uv.lock`, the rendered header, and the Git tag must match that version.
+- Internal managed JSON `version` fields (for example in knowledge/config payloads) are separate schema/content versioning and are **not** the application SemVer.
 - Do not hardcode a separate version in Python, templates, JSON, deployment scripts, or docs.
 
 ## Commit vs release
 
 - Do **not** bump the application version on every ordinary commit.
 - Professional default: many commits can happen between releases; the version moves only when preparing a real release from clean `main`.
+- `main` may legitimately contain unreleased commits after the latest release tag. That is normal as long as the current application version still matches the latest published tag.
 - Ordinary feature, fix, refactor, and test commits should leave version files and release tags unchanged.
 - Create the version bump only in the dedicated release commit produced by the release command below.
 - If the team ever wants "every merge to `main` is a release", keep using the release command at merge/release time rather than hand-editing version files in unrelated commits.
@@ -35,9 +37,9 @@ Use `--dry-run` to execute all release gates without changing files or Git histo
 
 ## Release meanings
 
-- `patch`: bug fix or correction; `1.5.0 -> 1.5.1`.
-- `minor`: backward-compatible functionality; `1.5.0 -> 1.6.0`.
-- `major`: breaking change; `1.5.0 -> 2.0.0`.
+- `patch`: bug fix or correction; `X.Y.Z -> X.Y.(Z+1)`.
+- `minor`: backward-compatible functionality; `X.Y.Z -> X.(Y+1).0`.
+- `major`: breaking change; `(X+1).0.0`.
 
 ## Mandatory gates
 
@@ -57,7 +59,7 @@ Do not skip a failed gate, move an existing release tag, or force-push a release
 
 ## AWS boundary
 
-AWS deploys code after a release is published. Do not edit the displayed version on AWS. Deploy the tagged `main` version through the existing `deploy-jobhunter` command.
+AWS deploys code only after a release tag is published. Production must deploy an explicit release tag, for example `deploy-jobhunter vX.Y.Z`; it must not deploy "whatever main currently is". Do not edit the displayed version on AWS.
 
 ## Validation
 

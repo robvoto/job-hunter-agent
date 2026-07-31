@@ -136,6 +136,7 @@
   margin: 0;
 }
 
+/* Local layout exception: final onboarding summary label/value layout, not a reusable visual component. */
 .wizard-step[data-step="4"] .check-list > div {
   display: grid;
   gap: var(--surface-gap-sm);

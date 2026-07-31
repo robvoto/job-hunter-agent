@@ -15,13 +15,14 @@ Usage:
   ./scripts/release-jobhunter.sh patch --dry-run
 
 Meaning:
-  patch  1.5.0 -> 1.5.1  Bug fix or small correction
-  minor  1.5.0 -> 1.6.0  Backward-compatible functionality
-  major  1.5.0 -> 2.0.0  Breaking change
+  patch  X.Y.Z -> X.Y.(Z+1)  Bug fix or small correction
+  minor  X.Y.Z -> X.(Y+1).0  Backward-compatible functionality
+  major  X.Y.Z -> (X+1).0.0  Breaking change
 
 The real release command:
   - requires a clean local main matching origin/main
   - requires the current pyproject version to match the latest release tag
+  - allows unreleased ordinary commits after the latest tag while version files stay unchanged
   - updates pyproject.toml and uv.lock through `uv version`
   - validates package, lock, UI, and tag version ownership
   - runs the full unit suite and non-LLM Playwright E2E suite
@@ -136,11 +137,19 @@ if ((dry_run)); then
 fi
 
 rollback_version_files=1
+release_tag=""
+release_tag_created=0
 cleanup_on_error() {
   exit_code=$?
-  if ((exit_code != 0 && rollback_version_files)); then
-    echo "==> Release failed before commit; restoring pyproject.toml and uv.lock" >&2
-    git restore -- pyproject.toml uv.lock
+  if ((exit_code != 0)); then
+    if ((release_tag_created)) && [[ -n "$release_tag" ]]; then
+      echo "==> Release failed after tag creation; removing local tag $release_tag" >&2
+      git tag -d "$release_tag" >/dev/null 2>&1 || true
+    fi
+    if ((rollback_version_files)); then
+      echo "==> Release failed before commit; restoring pyproject.toml and uv.lock" >&2
+      git restore -- pyproject.toml uv.lock
+    fi
   fi
   exit "$exit_code"
 }
@@ -173,6 +182,7 @@ rollback_version_files=0
 release_commit="$(git rev-parse HEAD)"
 echo "==> Create annotated tag $release_tag"
 git tag -a "$release_tag" "$release_commit" -m "Job Hunter $release_tag"
+release_tag_created=1
 
 [[ "$(git rev-parse HEAD)" == "$release_commit" ]] || fail \
   "Local HEAD changed after the release commit. Another agent may have committed; do not publish this release."
