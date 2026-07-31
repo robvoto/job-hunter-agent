@@ -847,18 +847,20 @@ def page_settings(request: Request):  # type: ignore[no-untyped-def]
 @router.get(ONBOARDING_DEBUG_ALIAS_PATH)
 def page_onboarding(request: Request):  # type: ignore[no-untyped-def]
 
-    if srv._onboarding_complete() and not srv.DEBUG_MODE:
+    is_rebuild = request.query_params.get("mode") == "rebuild"
+
+    if srv._onboarding_complete() and not srv.DEBUG_MODE and not is_rebuild:
         _log_page_event(request, "onboarding", "blocked: already complete -> redirecting to workspace")
         return RedirectResponse("/", status_code=302)
 
     if ONBOARDING_HTML_PATH.exists():
-        _log_page_event(request, "onboarding", "opened")
+        _log_page_event(request, "onboarding", "opened" if not is_rebuild else "opened (full profile rebuild)")
         html = _render_template_with_locations(
             request,
             ONBOARDING_HTML_PATH,
             onboarding_defaults=srv.DEFAULT_ONBOARDING_SETTINGS,
             global_settings=srv.load_global_settings(),
-            resume_step=srv._onboarding_resume_step(),
+            resume_step=1 if is_rebuild else srv._onboarding_resume_step(),
         )
 
         return html_response(html)

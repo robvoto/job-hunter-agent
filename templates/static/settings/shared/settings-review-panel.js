@@ -436,6 +436,9 @@ const rebuildProfileButton = document.getElementById('rebuild_profile');
 
 if (rebuildProfileButton) {
   rebuildProfileButton.addEventListener('click', () => {
+    if (!window.confirm('This overwrites your current profile with a fresh upload. This cannot be undone. Continue?')) {
+      return;
+    }
     window.location.href = '/start?mode=rebuild';
   });
 }
