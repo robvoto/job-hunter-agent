@@ -16,7 +16,7 @@ from job_hunter_agent import occupation_taxonomy
 logger = logging.getLogger(__name__)
 
 _PIPELINE_LOG_CORE_FIELDS = ("source", "job_key", "title", "company")
-_HUMAN_JOB_SEPARATOR = "═" * 72
+_HUMAN_JOB_SEPARATOR = "=" * 72
 
 # Human-readable translations for internal pipeline reason codes.
 # Codes not listed fall back to the raw code in parentheses.
@@ -283,35 +283,35 @@ def _human_result_summary(record: dict[str, Any], decision: str, reason: str) ->
         score = record.get(RECORD_FIT_SCORE_KEY)
         grade = str(record.get(RECORD_LLM_FIT_GRADE_KEY) or "").strip().upper()
         if score is not None and grade:
-            return f"✓ KEPT — Score {score} | Grade {grade}"
+            return f"KEEP | Score {score} | Grade {grade}"
         if score is not None:
-            return f"✓ KEPT — Score {score}"
+            return f"KEEP | Score {score}"
         if grade:
-            return f"✓ KEPT — Grade {grade}"
-        return "✓ KEPT"
+            return f"KEEP | Grade {grade}"
+        return "KEEP"
 
     summary_map = {
-        "LLM_TITLE_NOT_TARGET": "✗ REJECTED — Title does not match your target roles",
-        "TITLE_NOT_TARGET": "✗ REJECTED — Title does not match your target roles",
-        "TITLE_BAD_KEYWORD": "✗ REJECTED — Title matches a blocked role",
-        "TITLE_EMPTY": "✗ REJECTED — Job title is missing",
-        "ONET_FAR_OCCUPATION": "✗ REJECTED — Title is outside your target role family",
-        "NO_DETAILS": "✗ REJECTED — Job description could not be read",
-        "DETAILS_CHALLENGE_PAGE": "✗ REJECTED — Job description could not be read",
-        "DETAILS_BLOCKED_PAGE": "✗ REJECTED — Job description could not be read",
-        "DETAILS_NAVIGATION_ERROR": "✗ REJECTED — Job description could not be read",
-        "NO_DESCRIPTION_TRUST": "✗ REJECTED — Job description was too weak to review",
-        "CONTENT_REJECT": "✗ REJECTED — Job description failed the content checks",
-        "LLM_REJECT": "✗ REJECTED — Full fit review rejected this role",
-        "DET_REJECT": "✗ REJECTED — Rule review rejected this role",
-        "LLM_ERROR": "✗ REJECTED — Full fit review failed",
-        "LLM_INVALID_REVIEW": "✗ REJECTED — Full fit review returned invalid data",
-        "LLM_UNAVAILABLE": "✗ REJECTED — Full fit review was unavailable",
-        "REVIEW_FAILED_TIMEOUT": "✗ REJECTED — Full fit review timed out",
-        "HARD_BLOCK": "✗ REJECTED — Job has a hard blocker",
+        "LLM_TITLE_NOT_TARGET": "REJECTED - Title does not match your target roles",
+        "TITLE_NOT_TARGET": "REJECTED - Title does not match your target roles",
+        "TITLE_BAD_KEYWORD": "REJECTED - Title matches a blocked role",
+        "TITLE_EMPTY": "REJECTED - Job title is missing",
+        "ONET_FAR_OCCUPATION": "REJECTED - Title is outside your target role family",
+        "NO_DETAILS": "REJECTED - Job description could not be read",
+        "DETAILS_CHALLENGE_PAGE": "REJECTED - Job description could not be read",
+        "DETAILS_BLOCKED_PAGE": "REJECTED - Job description could not be read",
+        "DETAILS_NAVIGATION_ERROR": "REJECTED - Job description could not be read",
+        "NO_DESCRIPTION_TRUST": "REJECTED - Job description was too weak to review",
+        "CONTENT_REJECT": "REJECTED - Job description failed the content checks",
+        "LLM_REJECT": "REJECTED - Full fit review rejected this role",
+        "DET_REJECT": "REJECTED - Rule review rejected this role",
+        "LLM_ERROR": "REJECTED - Full fit review failed",
+        "LLM_INVALID_REVIEW": "REJECTED - Full fit review returned invalid data",
+        "LLM_UNAVAILABLE": "REJECTED - Full fit review was unavailable",
+        "REVIEW_FAILED_TIMEOUT": "REJECTED - Full fit review timed out",
+        "HARD_BLOCK": "REJECTED - Job has a hard blocker",
     }
     base = reason.split(":")[0]
-    return summary_map.get(base, f"✗ REJECTED — {_human_reason_label(reason).capitalize()}")
+    return summary_map.get(base, f"REJECTED - {_human_reason_label(reason).capitalize()}")
 
 
 def _decision_explanation(record: dict[str, Any], reason: str, explanation: str) -> str:

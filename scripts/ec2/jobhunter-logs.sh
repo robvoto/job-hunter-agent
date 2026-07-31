@@ -15,11 +15,40 @@ DEBUG_LOG="$OUTPUT_DIR/server-debug.log"
 FOLLOW=0
 SINCE=""
 UNTIL=""
+FOLLOW_VIEW="human"
+
+usage() {
+  cat <<'EOF'
+Usage: jobhunter-logs [--follow] [--human|--debug|--journal] [--since "..."] [--until "..."]
+
+Defaults:
+  - snapshot mode shows journal + human log + debug log
+  - follow mode tails the human log only
+
+Examples:
+  jobhunter-logs
+  jobhunter-logs --follow
+  jobhunter-logs --follow --debug
+  jobhunter-logs --follow --journal
+EOF
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -f|--follow)
       FOLLOW=1
+      shift
+      ;;
+    --human)
+      FOLLOW_VIEW="human"
+      shift
+      ;;
+    --debug)
+      FOLLOW_VIEW="debug"
+      shift
+      ;;
+    --journal)
+      FOLLOW_VIEW="journal"
       shift
       ;;
     --since)
@@ -30,8 +59,13 @@ while [[ $# -gt 0 ]]; do
       UNTIL="${2:-}"
       shift 2
       ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
     *)
       echo "Unknown argument: $1" >&2
+      usage >&2
       exit 2
       ;;
   esac
@@ -61,16 +95,18 @@ sudo tail -n 200 "$DEBUG_LOG" || true
 
 if [[ "$FOLLOW" -eq 1 ]]; then
   echo
-  echo "==> Following systemd + app logs (Ctrl+C to stop)"
-  tail_pid=""
-  cleanup() {
-    if [[ -n "$tail_pid" ]]; then
-      sudo kill "$tail_pid" >/dev/null 2>&1 || true
-    fi
-  }
-  trap cleanup EXIT INT TERM
-
-  sudo tail -n 0 -F "$HUMAN_LOG" "$DEBUG_LOG" &
-  tail_pid="$!"
-  sudo journalctl -u "$SERVICE" -f
+  case "$FOLLOW_VIEW" in
+    human)
+      echo "==> Following human log only (Ctrl+C to stop)"
+      sudo tail -n 0 -F "$HUMAN_LOG"
+      ;;
+    debug)
+      echo "==> Following debug log only (Ctrl+C to stop)"
+      sudo tail -n 0 -F "$DEBUG_LOG"
+      ;;
+    journal)
+      echo "==> Following systemd journal only (Ctrl+C to stop)"
+      sudo journalctl -u "$SERVICE" -f
+      ;;
+  esac
 fi

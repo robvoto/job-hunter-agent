@@ -19,14 +19,12 @@
   </header>
   <div class="ws-flash-mount" id="ws_flash_mount"></div>
   <div class="job-hunter-wait-mount" id="ws_wait_mount" hidden></div>
-  <div class="ws-run-info-mount" id="ws_run_info_mount"></div>
   <div class="ws-profile-status-mount" id="ws_profile_status_mount" hidden></div>
   <div id="results-mount"></div>
 
   <script>
     const wsFlashMount = document.getElementById('ws_flash_mount');
     const wsWaitMount = document.getElementById('ws_wait_mount');
-    const wsRunInfoMount = document.getElementById('ws_run_info_mount');
     const wsProfileStatusMount = document.getElementById('ws_profile_status_mount');
     const resultsMount = document.getElementById('results-mount');
     const SHARED_UI_LABELS = window.__JOB_HUNTER_SHARED_UI_LABELS__ || {};
@@ -65,12 +63,6 @@
     const ONBOARDING_WELCOME_KEY = scopedOnboardingStorageKey('jobHunter.onboardingWelcome');
     const ONBOARDING_WIZARD_KEY = scopedOnboardingStorageKey('jobHunter.onboardingWizard');
     const ONBOARDING_KEYWORD_SPLIT_RE = /[,\n|/]+/;
-    const RUN_INFO_DISMISSED_KEY = 'jobHunter.runInfoDismissed';
-    const RUN_INFO_TITLE = 'What this means';
-    const RUN_INFO_COPY = [
-      'This search can take a few minutes because Job Hunter checks multiple sources, opens the job details that matter, and scores each match before it appears here.',
-      'Daily automation schedule and notification targets are configured in the Settings screen.',
-    ];
     const RUN_STATUS_POLL_INTERVAL_MS = 3000;
     const RUN_STATUS_MAX_ATTEMPTS = 60;
     const RESULTS_REFRESH_RETRY_DELAY_MS = 250;
@@ -385,64 +377,6 @@
       }
     }
 
-    function runInfoDismissed() {
-      try {
-        return window.localStorage.getItem(RUN_INFO_DISMISSED_KEY) === '1';
-      } catch {
-        return false;
-      }
-    }
-
-    function setRunInfoDismissed(enabled) {
-      try {
-        if (enabled) {
-          window.localStorage.setItem(RUN_INFO_DISMISSED_KEY, '1');
-        } else {
-          window.localStorage.removeItem(RUN_INFO_DISMISSED_KEY);
-        }
-      } catch {
-        // Ignore storage errors in private mode or locked-down environments.
-      }
-    }
-
-    function hideRunInfoPopup() {
-      if (!wsRunInfoMount) {
-        return;
-      }
-      wsRunInfoMount.innerHTML = '';
-    }
-
-    function showRunInfoPopup() {
-      if (!wsRunInfoMount || runInfoDismissed()) {
-        hideRunInfoPopup();
-        return;
-      }
-      wsRunInfoMount.innerHTML = `
-        <div class="ws-run-info-backdrop" aria-hidden="true"></div>
-        <div class="ws-run-info-shell">
-          <section class="ws-run-info-card" role="dialog" aria-modal="true" aria-label="${RUN_INFO_TITLE}">
-            <h2 class="ws-run-info-title">${RUN_INFO_TITLE}</h2>
-            ${RUN_INFO_COPY.map((copy) => `<p class="ws-run-info-copy">${escapeHtml(copy)}</p>`).join('')}
-            <div class="ws-run-info-actions">
-              <button class="btn btn-secondary" id="ws_run_info_stop" type="button">${escapeHtml(SEARCH_STOP_LABEL)}</button>
-              <button class="btn btn-primary" id="ws_run_info_ack" type="button">Got it</button>
-            </div>
-          </section>
-        </div>
-      `;
-      const ackButton = document.getElementById('ws_run_info_ack');
-      const stopButton = document.getElementById('ws_run_info_stop');
-      ackButton?.addEventListener('click', () => {
-        setRunInfoDismissed(true);
-        hideRunInfoPopup();
-      });
-      stopButton?.addEventListener('click', () => {
-        hideRunInfoPopup();
-        stopWorkspaceRun();
-      });
-      ackButton?.focus();
-    }
-
     function ensureSidebarRunButton() {
       if (!resultsMount || resultsMount.querySelector('#ws_sidebar_run_btn')) {
         return;
@@ -547,7 +481,6 @@
           progress: '',
           allowStop: true,
         });
-        showRunInfoPopup();
         pollRunStatusAfterOverlayStart();
       } catch (error) {
         renderWorkspaceWait(null);
@@ -557,7 +490,6 @@
     }
 
     async function stopWorkspaceRun() {
-      hideRunInfoPopup();
       try {
         const response = await jobHunterFetch('/api/run/stop', { method: 'POST' });
         const payload = await response.json().catch(() => ({}));
