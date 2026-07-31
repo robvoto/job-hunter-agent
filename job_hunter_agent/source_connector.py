@@ -52,6 +52,51 @@ LOGIN_REQUIRED_MESSAGE = (
     "from the authenticated session."
 )
 
+
+def _format_role_list(values: object) -> str:
+    if not isinstance(values, list):
+        return "(none)"
+    cleaned = [str(value).strip() for value in values if str(value).strip()]
+    return ", ".join(cleaned) if cleaned else "(none)"
+
+
+def _log_search_plan(context) -> None:
+    from job_hunter_agent.logging_utils import get_human_logger
+    from job_hunter_agent.scrapers.linkedin import build_linkedin_search_targets
+
+    human_logger = get_human_logger()
+    profile = context.profile if isinstance(context.profile, dict) else {}
+    preferred_roles = _format_role_list(profile.get("target_roles"))
+    alternative_roles = _format_role_list(profile.get("also_consider_roles"))
+
+    human_logger.info(
+        "\n%s\nSEARCH PLAN\n"
+        "Preferred roles   : %s\n"
+        "Alternative roles : %s",
+        "=" * CONSOLE_BANNER_WIDTH,
+        preferred_roles,
+        alternative_roles,
+    )
+
+    if "linkedin" in context.enabled_sources:
+        linkedin_targets = build_linkedin_search_targets(context.search_settings, context.profile)
+        human_logger.info("LinkedIn targets   : %d", len(linkedin_targets))
+        if linkedin_targets:
+            for index, target in enumerate(linkedin_targets, start=1):
+                human_logger.info(
+                    "  [%d/%d] term=%r | location=%s | scope=%s | distance=%s | results=%s | hours_old=%s",
+                    index,
+                    len(linkedin_targets),
+                    str(target.get("search_term") or ""),
+                    str(target.get("location") or "(all)"),
+                    str(target.get("scope") or "n/a"),
+                    str(target.get("distance") if target.get("distance") is not None else "n/a"),
+                    str(target.get("results_wanted") or ""),
+                    str(target.get("hours_old") or ""),
+                )
+
+    human_logger.info("%s", "=" * CONSOLE_BANNER_WIDTH)
+
 if has_cli_flag(sys.argv, CLI_FLAG_STEP):
     enable_step_through()
 
@@ -128,6 +173,7 @@ def scrape_jobs_direct(*, trigger_label: str = "manual scrape command") -> str:
         browser_mode,
         context.headless,
     )
+    _log_search_plan(context)
     kept_records, audit_rows, skill_observations = run_enabled_sources(context)
     return finalize_scrape_run(context, kept_records, audit_rows, skill_observations)
 

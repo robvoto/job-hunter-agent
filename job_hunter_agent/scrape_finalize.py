@@ -450,9 +450,11 @@ def finalize_scrape_run(
 ) -> str:
     """Persist scrape outputs and rebuild the workspace HTML."""
 
+    from job_hunter_agent.logging_utils import get_human_logger
     from job_hunter_agent.llm_gate import get_session_cost_usd
     from job_hunter_agent.source_learning import get_llm_truncation_count
 
+    human_logger = get_human_logger()
     set_run_progress("Finalising results\nSource collection complete")
     kept_records = deduplicate_across_sources(kept_records)
 
@@ -584,6 +586,14 @@ def finalize_scrape_run(
         context.dashboard_min_score,
     )
     set_run_progress("Building workspace\nRendering refreshed results")
+
+    visible_current_records = len(workspace_records.get("current_records", []))
+    if kept_records and visible_current_records == 0 and not context.dashboard_debug_mode:
+        human_logger.info(
+            "Shortlist result: 0 visible jobs. %d kept job(s) were hidden because they did not meet the workspace minimum score of %d.",
+            len(kept_records),
+            context.dashboard_min_score,
+        )
 
     workspace_path = get_workspace_results_path()
 

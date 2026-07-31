@@ -311,7 +311,16 @@ class LinkedInScraper(BaseJobScraper):
 
                 logger.info("%s rows=%d", target_tag, len(rows))
 
-                for _, row in rows.iterrows():
+                total_rows = len(rows)
+                for row_index, (_, row) in enumerate(rows.iterrows(), start=1):
+                    set_run_progress(
+                        "\n".join(
+                            [
+                                f"LinkedIn target {target_index}/{total_targets}",
+                                f"Reviewing job {row_index}/{total_rows}",
+                            ]
+                        )
+                    )
                     if run_stop_requested():
                         logger.info("[LinkedIn] stop requested; ending scrape")
                         break
