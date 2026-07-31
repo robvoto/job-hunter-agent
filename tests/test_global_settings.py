@@ -361,6 +361,29 @@ def test_load_global_settings_repairs_missing_managed_limits(tmp_path, monkeypat
     assert repaired["limits"]["search"]["locations_max_selected"]["max"] == 3
 
 
+def test_normalize_global_settings_defaults_source_toggles_when_runtime_seed_is_stale(monkeypatch):
+    monkeypatch.setattr(
+        "job_hunter_agent.settings.global_settings_normalization.DEFAULT_SEARCH_SETTINGS",
+        {
+            "keywords": "",
+            "locations": [],
+            "classification_ids": [],
+            "date_range_days": 3,
+            "seek_max_pages": 3,
+            "sort_newest_first": True,
+            "linkedin_hours_old": 24,
+            "linkedin_results_per_search": 25,
+            "apsjobs_results_per_search": 25,
+        },
+    )
+
+    normalized = normalize_global_settings({"search_settings": {}}, strict_managed=False)
+
+    assert normalized["search_settings"]["seek_enabled"] is True
+    assert normalized["search_settings"]["linkedin_enabled"] is True
+    assert normalized["search_settings"]["apsjobs_enabled"] is True
+
+
 def test_upgrade_global_settings_from_file_preserves_existing_admin_values(
     tmp_path, monkeypatch
 ):

@@ -457,6 +457,10 @@ def _normalize_bool(source: dict[str, Any], key: str, default: bool) -> bool:
     return bool(raw)
 
 
+def _search_setting_default_bool(key: str, default: bool) -> bool:
+    return bool(DEFAULT_SEARCH_SETTINGS.get(key, default))
+
+
 def _normalize_source_document_suffixes(source: dict[str, Any], defaults: list[str]) -> list[str]:
     raw_suffixes = source.get(KEY_SOURCE_DOCUMENT_SUFFIXES, defaults)
     if not isinstance(raw_suffixes, list):
@@ -988,15 +992,17 @@ def normalize_global_settings(
                 normalized_search_limits[KEY_DATE_RANGE_DAYS]["max"],
             ),
             KEY_SEEK_ENABLED: _normalize_bool(
-                search_source, KEY_SEEK_ENABLED, DEFAULT_SEARCH_SETTINGS[KEY_SEEK_ENABLED]
+                search_source, KEY_SEEK_ENABLED, _search_setting_default_bool(KEY_SEEK_ENABLED, True)
             ),
             KEY_LINKEDIN_ENABLED: _normalize_bool(
                 search_source,
                 KEY_LINKEDIN_ENABLED,
-                DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_ENABLED],
+                _search_setting_default_bool(KEY_LINKEDIN_ENABLED, True),
             ),
             KEY_APSJOBS_ENABLED: _normalize_bool(
-                search_source, KEY_APSJOBS_ENABLED, DEFAULT_SEARCH_SETTINGS[KEY_APSJOBS_ENABLED]
+                search_source,
+                KEY_APSJOBS_ENABLED,
+                _search_setting_default_bool(KEY_APSJOBS_ENABLED, True),
             ),
             KEY_SEEK_MAX_PAGES: _require_int(
                 search_source,
