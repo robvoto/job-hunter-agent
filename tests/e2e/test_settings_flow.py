@@ -118,5 +118,11 @@ def test_capability_alias_preview_uses_related_skills_copy(candidate_page):
     card.locator(".cap-alias-summary").click()
     expect(drawer).to_have_attribute("open", "")
     expanded_aliases = drawer.locator(".cap-alias-chips")
-    expect(expanded_aliases).to_contain_text("sprint delivery")
-    expect(expanded_aliases).to_contain_text("agile project management")
+    expect(expanded_aliases.locator(".cap-alias-chip-label")).to_have_text(
+        [
+            "sprint delivery",
+            "backlog refinement",
+            "agile project management",
+            "scrum master",
+        ]
+    )

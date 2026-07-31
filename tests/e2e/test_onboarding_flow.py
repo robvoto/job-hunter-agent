@@ -65,3 +65,61 @@ def test_onboarding_wizard_upload_and_extract_reaches_review_step(
     page.locator('[data-step="2"]').wait_for(state="visible")
     expect(page.locator("#review_target_titles_list")).to_contain_text("Backend Engineer")
     page.locator("#review_capability_cards").wait_for(state="visible")
+
+
+def test_onboarding_review_related_skills_drawer_only_shows_remaining_aliases(
+    fresh_candidate_page, monkeypatch
+):
+    from job_hunter_agent.routes import onboarding_api
+
+    monkeypatch.setattr(
+        onboarding_api,
+        "run_onboarding",
+        lambda materials, search_preferences=None, onboarding_settings=None: {
+            "ok": True,
+            "profile": {
+                "target_roles": ["Backend Engineer"],
+                "also_consider_roles": ["Platform Engineer"],
+                "candidate_capabilities": [
+                    {
+                        "name": "python backend development",
+                        "level": "strong",
+                        "aliases": ["python", "fastapi", "postgresql", "docker"],
+                        "needs_review": False,
+                        "icon_key": "engineering_backend",
+                    }
+                ],
+            },
+            "extraction_counts": {"target_titles": 1, "capabilities": 1},
+            "page_limit_notice": "",
+            "materials": materials,
+        },
+    )
+
+    page = fresh_candidate_page
+    page.goto("/start")
+    page.locator("#primary_cv").set_input_files(
+        files=[
+            {
+                "name": "tiny_cv.txt",
+                "mimeType": "text/plain",
+                "buffer": b"Jane Doe\nSenior Backend Engineer\n",
+            }
+        ]
+    )
+
+    with page.expect_response("**/api/onboarding/import") as response_info:
+        page.locator("#create_profile").click()
+    response = response_info.value
+    assert response.ok, f"onboarding import failed: {response.status} {response.text()}"
+
+    card = page.locator("#review_capability_cards .capability-card").first
+    card.wait_for(state="visible")
+
+    preview = card.locator(".capability-alias-preview")
+    expect(preview.locator(".cap-alias-chip-label")).to_have_text(["python", "fastapi"])
+
+    drawer = card.locator("details.capability-alias-drawer")
+    card.locator(".cap-alias-summary").click()
+    expect(drawer).to_have_attribute("open", "")
+    expect(drawer.locator(".cap-alias-chip-label")).to_have_text(["postgresql", "docker"])

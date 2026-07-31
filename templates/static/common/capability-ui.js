@@ -38,3 +38,12 @@ export function capabilityIconHtml(iconKey, capabilityName = '') {
 }
 
 export const genericCapabilityIconHtml = capabilityIconHtml(genericCapabilityIconKey);
+
+export function splitCapabilityAliasesForDisplay(aliases, previewCount = 2) {
+  const normalizedAliases = Array.isArray(aliases) ? aliases : [];
+  const safePreviewCount = Math.max(0, Number(previewCount) || 0);
+  return {
+    preview: normalizedAliases.slice(0, safePreviewCount),
+    remaining: normalizedAliases.slice(safePreviewCount),
+  };
+}

@@ -5,6 +5,7 @@ export const JobHunterCapabilityEditor = (function () {
   const capabilityLabels = capabilityUi.labels || {};
   const capabilityLevelMeta = capabilityUi.capabilityLevelMeta || {};
   const genericCapabilityIconKey = capabilityUi.genericCapabilityIconKey;
+  const splitCapabilityAliasesForDisplay = capabilityUi.splitCapabilityAliasesForDisplay;
   const capabilityLevels = Array.isArray(capabilityUi.capabilityLevels) && capabilityUi.capabilityLevels.length
     ? capabilityUi.capabilityLevels
     : Object.keys(capabilityLevelMeta);
@@ -238,7 +239,7 @@ export const JobHunterCapabilityEditor = (function () {
           const titleCaseName = rule.name.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
           const aliases = Array.isArray(rule.aliases) ? rule.aliases : [];
           const aliasCount = aliases.length;
-          const previewAliases = aliases.slice(0, 2);
+          const { preview: previewAliases, remaining: remainingAliases } = splitCapabilityAliasesForDisplay(aliases);
           const aliasPreviewHtml = previewAliases.length ? `
             <div class="capability-alias-preview" aria-label="${escapeHtml(capabilityLabels.related_skills_label)}">
               ${previewAliases.map(alias => `
@@ -248,7 +249,7 @@ export const JobHunterCapabilityEditor = (function () {
               `).join('')}
             </div>
           ` : '';
-          const aliasChips = aliases.map(alias => `
+          const aliasChips = remainingAliases.map(alias => `
             <span class="cap-alias-chip" title="${escapeHtml(alias)}">
               <span class="cap-alias-chip-label">${escapeHtml(alias)}</span>
               <button class="cap-alias-chip-remove" type="button" data-remove-capability-alias="${index}" data-capability-alias="${escapeHtml(alias)}" aria-label="${escapeHtml(capabilityLabels.remove_related_skill_aria_label)}" title="${escapeHtml(capabilityLabels.remove_related_skill_aria_label)}">&times;</button>
@@ -257,12 +258,14 @@ export const JobHunterCapabilityEditor = (function () {
           const aliasRowHtml = aliasCount ? `
             <div class="capability-alias-row">
               ${aliasPreviewHtml}
-              <details class="capability-alias-drawer"${expandedCapabilityRows.has(index) ? ' open' : ''}>
-                <summary class="cap-alias-summary">
-                  <span class="capability-summary-label">${escapeHtml(formatLabel(capabilityLabels.related_skills_summary, { count: aliasCount }))}</span>
-                </summary>
-                <div class="cap-alias-chips" aria-label="${escapeHtml(capabilityLabels.related_skills_label)}">${aliasChips}</div>
-              </details>
+              ${remainingAliases.length ? `
+                <details class="capability-alias-drawer"${expandedCapabilityRows.has(index) ? ' open' : ''}>
+                  <summary class="cap-alias-summary">
+                    <span class="capability-summary-label">${escapeHtml(formatLabel(capabilityLabels.related_skills_summary, { count: aliasCount }))}</span>
+                  </summary>
+                  <div class="cap-alias-chips" aria-label="${escapeHtml(capabilityLabels.related_skills_label)}">${aliasChips}</div>
+                </details>
+              ` : ''}
             </div>
           ` : '';
           const meterLevels = ['basic', 'working', 'strong']

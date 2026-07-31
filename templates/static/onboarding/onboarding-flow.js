@@ -72,6 +72,7 @@ const onboardingImportSummaryLabels = window.__JOB_HUNTER_ONBOARDING_IMPORT_SUMM
 const onboardingFlowLabels = window.__JOB_HUNTER_ONBOARDING_FLOW_LABELS__;
 const capabilityLabels = onboardingCapabilityUi.labels;
 const capabilityIconHtml = onboardingCapabilityUi.capabilityIconHtml;
+const splitCapabilityAliasesForDisplay = onboardingCapabilityUi.splitCapabilityAliasesForDisplay;
 if (!onboardingFlowTitleTierLabels) {
   throw new Error('Missing title tier labels.');
 }
@@ -461,7 +462,7 @@ function renderReviewCapabilities() {
   const rowsHtml = visibleRules.length ? visibleRules.map(({ rule, index }) => {
     const titleCaseName = rule.name.toLowerCase().split(' ').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
     const displayName = titleCaseName || onboardingFlowLabels.capability_untitled_label;
-    const previewAliases = rule.aliases.slice(0, 2);
+    const { preview: previewAliases, remaining: remainingAliases } = splitCapabilityAliasesForDisplay(rule.aliases);
     const aliasPreviewHtml = previewAliases.length ? `
       <div class="capability-alias-preview" aria-label="${escapeHtml(capabilityLabels.related_skills_label)}">
         ${previewAliases.map((alias) =>
@@ -473,12 +474,15 @@ function renderReviewCapabilities() {
     ` : '';
     const aliasHtml = (() => {
       if (!rule.aliases.length) return '';
-      const aliasChips = rule.aliases.map((alias) =>
+      const aliasChips = remainingAliases.map((alias) =>
         `<span class="cap-alias-chip" title="${escapeHtml(patternToLabel(alias) || alias)}">
           <span class="cap-alias-chip-label">${escapeHtml(patternToLabel(alias) || alias)}</span>
           <button class="cap-alias-chip-remove" type="button" data-review-remove-capability-alias="${index}" data-review-capability-alias="${escapeHtml(alias)}" aria-label="${escapeHtml(capabilityLabels.remove_related_skill_aria_label)}" title="${escapeHtml(capabilityLabels.remove_related_skill_aria_label)}">&times;</button>
         </span>`
       ).join('');
+      if (!remainingAliases.length) {
+        return '';
+      }
       return `
         <details class="capability-alias-drawer">
           <summary class="cap-alias-summary">
