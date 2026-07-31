@@ -108,6 +108,9 @@ KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT = "supplementary_candidate_profile_c
 
 KEY_LINKEDIN_EASY_APPLY_ONLY = "linkedin_easy_apply_only"
 KEY_SEEK_QUICK_APPLY_ONLY = "seek_quick_apply_only"
+KEY_SEEK_ENABLED = "seek_enabled"
+KEY_LINKEDIN_ENABLED = "linkedin_enabled"
+KEY_APSJOBS_ENABLED = "apsjobs_enabled"
 KEY_SOURCE_DOCUMENT_SUFFIXES = "allowed_suffixes"
 
 KEY_DATE_RANGE_DAYS = "date_range_days"

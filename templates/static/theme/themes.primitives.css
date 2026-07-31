@@ -240,11 +240,13 @@ body.job-hunter-wait-active {
 }
 
 .wait-state__explainer {
-  width: min(100%, 460px);
+  justify-self: center;
+  width: fit-content;
+  max-width: min(100%, 360px);
   margin: 0;
-  border: 1px solid color-mix(in srgb, var(--accent-secondary) 18%, var(--border-subtle));
-  border-radius: var(--control-radius-2xl);
-  background: color-mix(in srgb, var(--accent-secondary) 5%, var(--bg-surface));
+  border: 1px solid color-mix(in srgb, var(--text-muted) 14%, var(--border-subtle));
+  border-radius: var(--control-radius-pill);
+  background: color-mix(in srgb, var(--bg-surface) 92%, var(--bg-muted) 8%);
   text-align: left;
 }
 
@@ -252,14 +254,14 @@ body.job-hunter-wait-active {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--control-space-lg);
-  min-height: var(--control-height-lg);
-  padding: var(--control-pad-block-lg) var(--control-pad-inline-xl);
+  gap: var(--control-space-sm);
+  min-height: var(--control-height-md);
+  padding: 7px 14px;
   list-style: none;
   cursor: pointer;
-  color: var(--text-primary);
-  font-size: 0.92rem;
-  font-weight: 700;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  font-weight: 600;
 }
 
 .wait-state__explainer > summary::-webkit-details-marker {
@@ -269,7 +271,7 @@ body.job-hunter-wait-active {
 .wait-state__explainer > summary::after {
   content: "▾";
   color: var(--accent);
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 700;
   line-height: 1;
   transition: transform 0.18s ease;
@@ -282,19 +284,19 @@ body.job-hunter-wait-active {
 .wait-state__explainer > summary:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
-  border-radius: calc(var(--control-radius-2xl) - 2px);
+  border-radius: calc(var(--control-radius-pill) - 2px);
 }
 
 .wait-state__explainer-body {
   display: grid;
   gap: var(--control-space-sm);
-  padding: 0 var(--control-pad-inline-xl) var(--control-pad-inline-xl);
+  padding: 0 14px 12px;
   color: var(--text-muted);
 }
 
 .wait-state__explainer-copy {
   margin: 0;
-  font-size: var(--help-copy-font-size);
+  font-size: 0.76rem;
   line-height: var(--help-copy-line-height);
 }
 
@@ -303,7 +305,7 @@ body.job-hunter-wait-active {
   padding-left: 18px;
   display: grid;
   gap: var(--control-space-xs);
-  font-size: var(--help-copy-font-size);
+  font-size: 0.76rem;
   line-height: var(--help-copy-line-height);
 }
 

@@ -27,6 +27,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     DEFAULT_SOURCE_DOCUMENT_SETTINGS,
     HISTORY_SETTING_LIMITS,
     KEY_ARCHIVE_STALE_AFTER_DAYS,
+    KEY_APSJOBS_ENABLED,
     KEY_CACHE_SETTINGS,
     KEY_CANDIDATE_APPLICATION_HISTORY,
     KEY_CANDIDATE_APPLICATION_HISTORY_CACHE_MAX_AGE_DAYS,
@@ -50,6 +51,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_JOB_HISTORY_MAX_ENTRIES,
     KEY_LIMITS,
     KEY_LINKEDIN_EASY_APPLY_ONLY,
+    KEY_LINKEDIN_ENABLED,
     KEY_SEEK_QUICK_APPLY_ONLY,
     KEY_LINKEDIN_HOURS_OLD,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
@@ -111,6 +113,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_SALARY_LIMITS,
     KEY_SEARCH_LIMITS,
     KEY_SEARCH_SETTINGS,
+    KEY_SEEK_ENABLED,
     KEY_SEEK_MAX_PAGES,
     KEY_SORT_NEWEST_FIRST,
     KEY_SOURCE_DOCUMENT_SETTINGS,
@@ -983,6 +986,17 @@ def normalize_global_settings(
                 DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS],
                 normalized_search_limits[KEY_DATE_RANGE_DAYS]["min"],
                 normalized_search_limits[KEY_DATE_RANGE_DAYS]["max"],
+            ),
+            KEY_SEEK_ENABLED: _normalize_bool(
+                search_source, KEY_SEEK_ENABLED, DEFAULT_SEARCH_SETTINGS[KEY_SEEK_ENABLED]
+            ),
+            KEY_LINKEDIN_ENABLED: _normalize_bool(
+                search_source,
+                KEY_LINKEDIN_ENABLED,
+                DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_ENABLED],
+            ),
+            KEY_APSJOBS_ENABLED: _normalize_bool(
+                search_source, KEY_APSJOBS_ENABLED, DEFAULT_SEARCH_SETTINGS[KEY_APSJOBS_ENABLED]
             ),
             KEY_SEEK_MAX_PAGES: _require_int(
                 search_source,

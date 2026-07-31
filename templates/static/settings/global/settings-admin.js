@@ -25,6 +25,9 @@ export const JobHunterAdminSettings = (function () {
     highlight_reviewed_signal_count: ['fit_highlights', 'reviewed_signal_count'],
     highlight_max_highlights: ['fit_highlights', 'max_highlights'],
     search_default_date_range_days: ['search_settings', 'date_range_days'],
+    search_default_seek_enabled: ['search_settings', 'seek_enabled'],
+    search_default_linkedin_enabled: ['search_settings', 'linkedin_enabled'],
+    search_default_apsjobs_enabled: ['search_settings', 'apsjobs_enabled'],
     search_default_linkedin_hours_old: ['search_settings', 'linkedin_hours_old'],
     search_default_linkedin_results_per_search: ['search_settings', 'linkedin_results_per_search'],
     search_default_sort_newest_first: ['search_settings', 'sort_newest_first'],
@@ -220,6 +223,9 @@ export const JobHunterAdminSettings = (function () {
     setFieldValue('highlight_max_highlights', fitHl.max_highlights);
 
     setFieldValue('search_default_date_range_days', searchDefaults.date_range_days);
+    setToggleChecked('search_default_seek_enabled', searchDefaults.seek_enabled !== false);
+    setToggleChecked('search_default_linkedin_enabled', searchDefaults.linkedin_enabled !== false);
+    setToggleChecked('search_default_apsjobs_enabled', searchDefaults.apsjobs_enabled !== false);
     setChoiceGroupValue('seek_max_pages', searchDefaults.seek_max_pages);
     setFieldValue('search_default_linkedin_hours_old', searchDefaults.linkedin_hours_old);
     setFieldValue('search_default_linkedin_results_per_search', searchDefaults.linkedin_results_per_search);
@@ -387,6 +393,9 @@ export const JobHunterAdminSettings = (function () {
       },
       search_settings: {
         ...currentSearch,
+        seek_enabled: Boolean(document.getElementById('search_default_seek_enabled')?.checked),
+        linkedin_enabled: Boolean(document.getElementById('search_default_linkedin_enabled')?.checked),
+        apsjobs_enabled: Boolean(document.getElementById('search_default_apsjobs_enabled')?.checked),
         date_range_days: readNumber('search_default_date_range_days', currentSearch.date_range_days),
         seek_max_pages: (() => {
           const value = Number(getChoiceGroupValue('seek_max_pages'));

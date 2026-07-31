@@ -199,6 +199,113 @@ def test_linkedin_backfills_missing_posted_age_from_visible_listing_text(monkeyp
     assert "jobspy fetch done" in caplog.text
 
 
+def test_linkedin_search_targets_include_distinct_profile_roles():
+    scraper = LinkedInScraper(
+        profile={
+            "target_roles": ["Scrum Master"],
+            "also_consider_roles": ["Agile Project Coordinator"],
+            "target_occupation_queries": ["Delivery Manager", "Scrum Master"],
+        },
+        llm_cache={},
+        job_history={},
+        applied_job_keys=set(),
+        hidden_job_keys=set(),
+        run_iso="2026-06-22T09:00:00+10:00",
+    )
+
+    targets = scraper._build_search_targets({"keywords": "scrum master", "locations": ["Sydney"]})
+
+    assert [target["search_term"] for target in targets] == [
+        "scrum master",
+        "Agile Project Coordinator",
+        "Delivery Manager",
+    ]
+    assert all(target["location"] == "Sydney, Australia" for target in targets)
+
+
+def test_linkedin_deduplicates_cards_across_multiple_search_targets(monkeypatch):
+    from job_hunter_agent.scrapers import linkedin as linkedin_module
+
+    class _Rows:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def sort_values(self, **_kwargs):
+            return self
+
+        def iterrows(self):
+            return enumerate(self._rows)
+
+        def __len__(self):
+            return len(self._rows)
+
+    scraper = LinkedInScraper(
+        profile={},
+        llm_cache={},
+        job_history={},
+        applied_job_keys=set(),
+        hidden_job_keys=set(),
+        run_iso="2026-06-22T09:00:00+10:00",
+    )
+
+    monkeypatch.setattr(
+        scraper,
+        "_build_search_targets",
+        lambda _settings: [
+            {
+                "search_term": "scrum master",
+                "location": "Sydney, Australia",
+                "results_wanted": 1,
+                "hours_old": 168,
+                "sort_newest_first": False,
+                "easy_apply": None,
+            },
+            {
+                "search_term": "agile project coordinator",
+                "location": "Sydney, Australia",
+                "results_wanted": 1,
+                "hours_old": 168,
+                "sort_newest_first": False,
+                "easy_apply": None,
+            },
+        ],
+    )
+    monkeypatch.setattr(
+        scraper,
+        "_fetch_jobspy",
+        lambda _target: _Rows(
+            [
+                {
+                    "id": "li-1",
+                    "title": "Scrum Master",
+                    "company": "Example Co",
+                    "location": "Sydney",
+                    "job_url": "https://www.linkedin.com/jobs/view/1",
+                    "description": "Example description",
+                }
+            ]
+        ),
+    )
+    monkeypatch.setattr(scraper, "_detect_closed_job_signals", lambda _record: [])
+    monkeypatch.setattr(
+        linkedin_module,
+        "review_pre_detail_normalized_job",
+        lambda record, _context: ({"decision": "KEEP"}, record, [], True),
+    )
+    monkeypatch.setattr(
+        linkedin_module,
+        "review_post_detail_normalized_job",
+        lambda record, _context, hooks=None: ({"decision": "KEEP"}, record, []),
+    )
+
+    kept_records, audit_rows, skill_observations = scraper.scrape()
+
+    assert len(kept_records) == 1
+    assert kept_records[0]["job_key"] == "linkedin:li-1"
+    assert audit_rows == []
+    assert skill_observations == []
+
+
 def test_linkedin_step_through_pauses_on_rejected_jobs(monkeypatch):
     from job_hunter_agent import job_review_pipeline
     from job_hunter_agent.scrapers import linkedin as linkedin_module

@@ -45,6 +45,9 @@ LINKEDIN_SOURCE_TIMEOUT_SECONDS = 180
 APSJOBS_SOURCE_TIMEOUT_SECONDS = 120
 DEFAULT_SOURCE_TIMEOUT_SECONDS = 120
 SOURCE_HEARTBEAT_SECONDS = 15
+SOURCE_TIMEOUT_GRACE_MIN_SECONDS = 0.25
+SOURCE_TIMEOUT_GRACE_MAX_SECONDS = 10.0
+SOURCE_TIMEOUT_GRACE_FRACTION = 0.1
 SEEK_SOURCE_TIMEOUT_MESSAGE = "SEEK is taking longer than expected; waiting for it to finish."
 LINKEDIN_SOURCE_TIMEOUT_MESSAGE = "LinkedIn is taking longer than expected; waiting for it to finish."
 APSJOBS_SOURCE_TIMEOUT_MESSAGE = "APSJobs is taking longer than expected; waiting for it to finish."
@@ -501,6 +504,15 @@ def _source_timeout_message(source: str) -> str:
     return f"{get_source_display_label(source)} is taking longer than expected; waiting for it to finish."
 
 
+def _source_hard_timeout_seconds(source: str) -> float:
+    soft_timeout = float(_source_timeout_seconds(source))
+    grace = min(
+        SOURCE_TIMEOUT_GRACE_MAX_SECONDS,
+        max(SOURCE_TIMEOUT_GRACE_MIN_SECONDS, soft_timeout * SOURCE_TIMEOUT_GRACE_FRACTION),
+    )
+    return soft_timeout + grace
+
+
 def _log_source_start(source: str, *, execution_mode: str) -> None:
     logger.info(
         format_log_block(
@@ -529,6 +541,10 @@ def _log_source_complete(result: SourceRunResult, *, elapsed_s: float) -> None:
             },
         )
     )
+
+
+def _timed_out_source_result(source: str, message: str) -> SourceRunResult:
+    return SourceRunResult(source=source, error=TimeoutError(message))
 
 
 def _parallel_completion_progress(completed_source: str, pending_sources: Sequence[str]) -> str:
@@ -592,8 +608,12 @@ def _run_sources_in_parallel(
         worker_context = contextvars.copy_context()
         futures[executor.submit(worker_context.run, _run_source_with_scope, source, runner, context)] = source
 
-    deadlines = {
+    warn_deadlines = {
         future: started_at[source] + _source_timeout_seconds(source)
+        for future, source in futures.items()
+    }
+    hard_deadlines = {
+        future: started_at[source] + _source_hard_timeout_seconds(source)
         for future, source in futures.items()
     }
     timeout_messages = {future: _source_timeout_message(source) for future, source in futures.items()}
@@ -607,12 +627,12 @@ def _run_sources_in_parallel(
     try:
         while pending:
             now = time.monotonic()
-            timed_out = [
+            newly_timed_out = [
                 future
                 for future in list(pending)
-                if now >= deadlines[future] and future not in timeout_warned
+                if now >= warn_deadlines[future] and future not in timeout_warned
             ]
-            for future in timed_out:
+            for future in newly_timed_out:
                 source = futures[future]
                 elapsed_s = now - started_at[source]
                 _log_source_timeout_warning(
@@ -621,6 +641,16 @@ def _run_sources_in_parallel(
                     elapsed_s=elapsed_s,
                 )
                 timeout_warned.add(future)
+
+            hard_timed_out = [
+                future
+                for future in list(pending)
+                if now >= hard_deadlines[future]
+            ]
+            for future in hard_timed_out:
+                source = futures[future]
+                pending.remove(future)
+                results_by_source[source] = _timed_out_source_result(source, timeout_messages[future])
 
             for future in list(pending):
                 source = futures[future]
@@ -639,7 +669,9 @@ def _run_sources_in_parallel(
             if not pending:
                 break
 
-            next_deadline = min(deadlines[future] for future in pending)
+            next_deadline = min(
+                min(warn_deadlines[future], hard_deadlines[future]) for future in pending
+            )
             wait_timeout = max(0.0, min(0.1, next_deadline - time.monotonic()))
             done, _ = wait(pending, timeout=wait_timeout, return_when=FIRST_COMPLETED)
             for future in done:
@@ -668,7 +700,7 @@ def _run_sources_in_parallel(
                     )
                     results_by_source[source] = SourceRunResult(source=source, error=exc)
     finally:
-        executor.shutdown(wait=True, cancel_futures=False)
+        executor.shutdown(wait=False, cancel_futures=True)
 
     missing_sources = [source for source in source_order if source not in results_by_source]
     if missing_sources:
@@ -694,6 +726,11 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
     skill_observations: list[dict] = []
 
     enabled_source_order = _enabled_source_order(context)
+
+    if not enabled_source_order:
+        raise RuntimeError(
+            "No search sources are enabled for this run. Enable at least one source in Settings or Global Settings."
+        )
 
     for source in SOURCE_RUNNER_NAMES:
         label = get_source_display_label(source)

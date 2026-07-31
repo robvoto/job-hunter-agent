@@ -87,6 +87,39 @@
               <p class="panel-copy">These settings seed search behaviour for the whole app. They do not replace the live search fields in Search.</p>
             </div>
 
+            <label class="toggle-switch" for="search_default_seek_enabled">
+              <span class="toggle-switch-copy">
+                <span class="toggle-switch-title">SEEK available globally</span>
+              </span>
+              <span class="toggle-switch-control">
+                <input id="search_default_seek_enabled" type="checkbox" role="switch">
+                <span class="toggle-switch-ui"></span>
+              </span>
+            </label>
+            <div class="field-help">Turns SEEK on or off for every user. Candidate Settings can only narrow from this global policy, not override it.</div>
+
+            <label class="toggle-switch" for="search_default_linkedin_enabled">
+              <span class="toggle-switch-copy">
+                <span class="toggle-switch-title">LinkedIn available globally</span>
+              </span>
+              <span class="toggle-switch-control">
+                <input id="search_default_linkedin_enabled" type="checkbox" role="switch">
+                <span class="toggle-switch-ui"></span>
+              </span>
+            </label>
+            <div class="field-help">Turns LinkedIn on or off for every user. Candidate Settings can only narrow from this global policy, not override it.</div>
+
+            <label class="toggle-switch" for="search_default_apsjobs_enabled">
+              <span class="toggle-switch-copy">
+                <span class="toggle-switch-title">APSJobs available globally</span>
+              </span>
+              <span class="toggle-switch-control">
+                <input id="search_default_apsjobs_enabled" type="checkbox" role="switch">
+                <span class="toggle-switch-ui"></span>
+              </span>
+            </label>
+            <div class="field-help">Turns APSJobs on or off for every user. Candidate Settings can only narrow from this global policy, not override it.</div>
+
             <label for="search_default_date_range_days">Default search window (days)</label>
             <input id="search_default_date_range_days" type="number" min="1" max="30" step="1">
             <div class="field-help">How many days back each run looks for new listings by default. Profile search settings override this per run. Valid range: <span id="search_default_date_range_days_bounds"></span>.</div>

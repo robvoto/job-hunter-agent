@@ -33,6 +33,11 @@ from job_hunter_agent.job_types import load_job_type
 from job_hunter_agent.locations import resolve_location
 from job_hunter_agent.logging_utils import format_debug_marker
 from job_hunter_agent.profile_store import get_search_settings
+from job_hunter_agent.profile_store import (
+    KEY_PRIMARY_PATTERNS,
+    KEY_SECONDARY_PATTERNS,
+    KEY_TARGET_OCCUPATION_QUERIES,
+)
 from job_hunter_agent.record_schema import (
     APPLY_METHOD_EASY_APPLY,
     APPLY_METHOD_EXTERNAL_APPLY,
@@ -129,8 +134,39 @@ def classify_linkedin_apply_method(apply_url: str, canonical_url: str) -> str:
     return APPLY_METHOD_UNKNOWN
 
 
-def build_linkedin_search_targets(search_settings: dict) -> List[dict]:
-    keywords = str(search_settings.get("keywords") or "").strip()
+def _ordered_unique_search_terms(search_settings: dict, profile: dict | None = None) -> list[str]:
+    ordered_terms: list[str] = []
+    seen_terms: set[str] = set()
+
+    candidates: list[str] = [str(search_settings.get("keywords") or "").strip()]
+    if isinstance(profile, dict):
+        for key in (
+            KEY_PRIMARY_PATTERNS,
+            KEY_SECONDARY_PATTERNS,
+            KEY_TARGET_OCCUPATION_QUERIES,
+        ):
+            values = profile.get(key) or []
+            if not isinstance(values, list):
+                continue
+            candidates.extend(str(value).strip() for value in values)
+
+    for candidate in candidates:
+        normalized = " ".join(candidate.split()).strip()
+        if not normalized:
+            continue
+        dedupe_key = normalized.lower()
+        if dedupe_key in seen_terms:
+            continue
+        seen_terms.add(dedupe_key)
+        ordered_terms.append(normalized)
+    return ordered_terms
+
+
+def build_linkedin_search_targets(
+    search_settings: dict,
+    profile: dict | None = None,
+) -> List[dict]:
+    search_terms = _ordered_unique_search_terms(search_settings, profile)
     locations = [str(loc).strip() for loc in search_settings.get("locations", []) if str(loc).strip()]
     hours_old = int(
         search_settings.get(
@@ -154,18 +190,19 @@ def build_linkedin_search_targets(search_settings: dict) -> List[dict]:
     for raw_loc in locations:
         location = resolve_location(raw_loc)
         scope = to_linkedin_search_scope(location)
-        targets.append(
-            {
-                "search_term": keywords,
-                "location": scope["location"],
-                "distance": scope["distance"],
-                "scope": scope["scope"],
-                "hours_old": hours_old,
-                "results_wanted": results_wanted,
-                "sort_newest_first": sort_newest_first,
-                "easy_apply": easy_apply,
-            }
-        )
+        for search_term in search_terms:
+            targets.append(
+                {
+                    "search_term": search_term,
+                    "location": scope["location"],
+                    "distance": scope["distance"],
+                    "scope": scope["scope"],
+                    "hours_old": hours_old,
+                    "results_wanted": results_wanted,
+                    "sort_newest_first": sort_newest_first,
+                    "easy_apply": easy_apply,
+                }
+            )
     return targets
 
 
@@ -176,6 +213,7 @@ class LinkedInScraper(BaseJobScraper):
         kept_records: List[dict] = []
         audit_rows: List[dict] = []
         skill_observations: List[dict] = []
+        seen_job_keys: set[str] = set()
 
         search_settings = get_search_settings(self.profile)
         date_range_days = int(
@@ -297,6 +335,12 @@ class LinkedInScraper(BaseJobScraper):
                         record.get(RECORD_URL_KEY),
                         len(record[RECORD_DETAILS_TEXT_KEY]),
                     )
+                    job_key = str(record.get(RECORD_JOB_KEY) or "").strip()
+                    if job_key and job_key in seen_job_keys:
+                        logger.info("%s duplicate job_key=%s across LinkedIn targets; skipping", target_tag, job_key)
+                        continue
+                    if job_key:
+                        seen_job_keys.add(job_key)
 
                     closed_signals = self._detect_closed_job_signals(record)
                     if closed_signals:
@@ -361,7 +405,7 @@ class LinkedInScraper(BaseJobScraper):
         return kept_records, audit_rows, skill_observations
 
     def _build_search_targets(self, search_settings: dict) -> List[dict]:
-        return build_linkedin_search_targets(search_settings)
+        return build_linkedin_search_targets(search_settings, self.profile)
 
     def _build_review_hooks(self) -> ReviewPipelineHooks:
         def _after_description_loaded(current_record: dict, context: ReviewPipelineContext) -> None:

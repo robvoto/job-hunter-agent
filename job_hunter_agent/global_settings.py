@@ -72,6 +72,18 @@ def get_default_country_suffix() -> str:
     return str(load_global_settings()[KEY_DEFAULT_COUNTRY_SUFFIX]).strip()
 
 
+def get_globally_enabled_sources() -> list[str]:
+    search_settings = load_global_settings()[KEY_SEARCH_SETTINGS]
+    enabled_sources: list[str] = []
+    if bool(search_settings[KEY_SEEK_ENABLED]):
+        enabled_sources.append("seek")
+    if bool(search_settings[KEY_LINKEDIN_ENABLED]):
+        enabled_sources.append("linkedin")
+    if bool(search_settings[KEY_APSJOBS_ENABLED]):
+        enabled_sources.append("apsjobs")
+    return enabled_sources
+
+
 def get_llm_max_chars() -> int:
     """Max chars for the combined (title + description) input to fit-review and learning-candidates calls.
 

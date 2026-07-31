@@ -25,6 +25,9 @@ def test_save_global_settings_normalizes_values(isolated_db):
                 "max_highlights": "6",
             },
             "search_settings": {
+                "seek_enabled": "false",
+                "linkedin_enabled": "true",
+                "apsjobs_enabled": "false",
                 "date_range_days": "5",
                 "seek_max_pages": "12",
                 "linkedin_hours_old": "48",
@@ -101,6 +104,9 @@ def test_save_global_settings_normalizes_values(isolated_db):
     assert saved["search_settings"]["date_range_days"] == 5
 
     assert saved["search_settings"]["seek_max_pages"] == 12
+    assert saved["search_settings"]["seek_enabled"] is False
+    assert saved["search_settings"]["linkedin_enabled"] is True
+    assert saved["search_settings"]["apsjobs_enabled"] is False
 
     assert saved["search_settings"][KEY_LINKEDIN_EASY_APPLY_ONLY] is True
 
@@ -255,6 +261,21 @@ def test_load_global_settings_requires_seeded_table(tmp_path, monkeypatch):
         global_settings.GlobalSettingsLoadError, match="global_settings table is empty"
     ):
         global_settings.load_global_settings()
+
+
+def test_get_globally_enabled_sources_respects_admin_source_toggles(isolated_db):
+    global_settings.load_global_settings.cache_clear()
+    global_settings.save_global_settings(
+        {
+            "search_settings": {
+                "seek_enabled": False,
+                "linkedin_enabled": True,
+                "apsjobs_enabled": False,
+            }
+        }
+    )
+
+    assert global_settings.get_globally_enabled_sources() == ["linkedin"]
 
 
 def test_load_global_settings_repairs_missing_managed_limits(tmp_path, monkeypatch):

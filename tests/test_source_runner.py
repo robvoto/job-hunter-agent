@@ -645,6 +645,44 @@ def test_parallel_runner_keeps_results_after_timeout_warning(monkeypatch, caplog
     assert warnings[0]["category"] == "source_timeout"
 
 
+def test_parallel_runner_returns_after_hard_timeout_without_waiting_for_stuck_source(monkeypatch):
+    context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
+    release = threading.Event()
+
+    def stuck_seek(ctx):
+        release.wait(timeout=5)
+        return _seek_result(kept_records=[{"job_key": "seek:late"}])
+
+    def fast_linkedin(ctx):
+        return _li_result(kept_records=[{"job_key": "linkedin:1"}], audit_rows=[{"job_key": "linkedin:1"}])
+
+    monkeypatch.setattr(source_runner, "_run_seek_source", stuck_seek)
+    monkeypatch.setattr(source_runner, "_run_linkedin_source", fast_linkedin)
+    monkeypatch.setattr(source_runner, "SEEK_SOURCE_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr(source_runner, "SOURCE_HEARTBEAT_SECONDS", 60)
+
+    started = time.time()
+    kept, audit, skills = run_enabled_sources(context)
+    elapsed = time.time() - started
+    release.set()
+
+    assert elapsed < 1.0
+    assert [record["job_key"] for record in kept] == ["linkedin:1"]
+    assert [row["job_key"] for row in audit] == ["linkedin:1"]
+    assert skills == []
+
+
+def test_run_enabled_sources_fails_clearly_when_no_sources_are_enabled():
+    context = _make_context([])
+
+    with patch.object(source_runner, "SOURCE_RUNNER_NAMES", dict(source_runner.SOURCE_RUNNER_NAMES)):
+        try:
+            run_enabled_sources(context)
+            raise AssertionError("expected clear no-sources error")
+        except RuntimeError as exc:
+            assert "No search sources are enabled for this run." in str(exc)
+
+
 def test_parallel_runner_updates_progress_to_wait_for_pending_source(monkeypatch):
     context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
     progress_messages: list[str] = []

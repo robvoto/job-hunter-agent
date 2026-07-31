@@ -10,6 +10,7 @@ from typing import Any
 from job_hunter_agent.global_settings import (
     DEFAULT_PLAYWRIGHT_SETTINGS,
     DEFAULT_SEARCH_SETTINGS,
+    get_globally_enabled_sources,
     KEY_DATE_RANGE_DAYS,
     KEY_PLAYWRIGHT_SELECTOR_TIMEOUT,
     KEY_PLAYWRIGHT_VIEWPORT_HEIGHT,
@@ -143,6 +144,12 @@ def build_scrape_run_context(argv: list[str] | None = None) -> ScrapeRunContext:
 
     write_run_attempt(run_started_at)
 
+    globally_enabled_sources = set(get_globally_enabled_sources())
+    profile_enabled_sources = [s.lower().strip() for s in (profile.get("enabled_sources") or [])]
+    enabled_sources = [
+        source for source in profile_enabled_sources if source and source in globally_enabled_sources
+    ]
+
     return ScrapeRunContext(
         profile=profile,
         search_settings=search_settings,
@@ -162,7 +169,7 @@ def build_scrape_run_context(argv: list[str] | None = None) -> ScrapeRunContext:
         previous_run_stats=load_run_stats(),
         llm_cache=load_llm_cache(),
         job_history=load_job_history(),
-        enabled_sources=[s.lower().strip() for s in (profile.get("enabled_sources") or [])],
+        enabled_sources=enabled_sources,
         no_llm_mode=has_cli_flag(active_argv, CLI_FLAG_NO_LLM),
         dashboard_debug_mode=has_cli_flag(active_argv, CLI_FLAG_DEBUG),
         reset_new_to_you=TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING,
