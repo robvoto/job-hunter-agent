@@ -7,6 +7,8 @@ set -euo pipefail
 APP_DIR="${JOB_HUNTER_APP_DIR:-/home/ubuntu/job-hunter-agent}"
 OUTPUT_DIR="${JOB_HUNTER_OUTPUT_DIR:-/var/lib/job-hunter/output}"
 DATA_DIR="${JOB_HUNTER_DATA_DIR:-/var/lib/job-hunter/data}"
+APP_HOST="${JOB_HUNTER_HOST:-127.0.0.1}"
+APP_PORT="${JOB_HUNTER_PORT:-8765}"
 DISPLAY_NUM="${JOB_HUNTER_AWS_BROWSER_DISPLAY_NUM:-99}"
 DISPLAY=":${DISPLAY_NUM}"
 SCREEN="${JOB_HUNTER_AWS_BROWSER_SCREEN:-1400x900x24}"
@@ -69,4 +71,23 @@ if [[ $# -eq 0 ]]; then
   # start so deploy/restart always serves the current renderer output.
   set -- python -m job_hunter_agent.fastapi_app --rebuild
 fi
+
+STARTED_AT="$(date '+%Y-%m-%d %H:%M:%S %Z')"
+printf '\n%s\n' '================================================================================'
+printf '%s\n' 'AWS JOB HUNTER SERVICE STARTING'
+printf 'Started at    : %s\n' "$STARTED_AT"
+printf 'PID           : %s\n' "$$"
+printf 'App dir       : %s\n' "$APP_DIR"
+printf 'Data dir      : %s\n' "$DATA_DIR"
+printf 'Output dir    : %s\n' "$OUTPUT_DIR"
+printf 'Display       : %s (%s)\n' "$DISPLAY" "$SCREEN"
+printf 'App bind      : http://%s:%s\n' "$APP_HOST" "$APP_PORT"
+printf 'noVNC         : http://127.0.0.1:%s\n' "$NOVNC_PORT"
+printf 'VNC           : 127.0.0.1:%s\n' "$VNC_PORT"
+printf 'Launch cmd    :'
+for arg in "$@"; do
+  printf ' %q' "$arg"
+done
+printf '\n%s\n' '================================================================================'
+
 "$@"

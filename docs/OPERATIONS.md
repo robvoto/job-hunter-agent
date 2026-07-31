@@ -222,6 +222,7 @@ Server logs:
 - full technical/debug output is written to `output/server-debug.log`
 - both logs are timestamped
 - every server start writes a large `NEW SERVER SESSION STARTED` banner into both logs, including the local start time, PID, and startup flags
+- on AWS, the EC2 browser-session launcher also prints an `AWS JOB HUNTER SERVICE STARTING` banner directly into `systemd`/`journalctl` before Python starts, so service restarts are obvious even if you are only watching the live service log
 - `./run --debug` writes both logs; the terminal mirrors the same human-readable stream
 - on AWS, use your service manager or `tail -f output/server-human.log` instead of a separate human-log wrapper
 - the AWS service startup path rebuilds saved workspace HTML before serving requests, so `deploy-jobhunter` refreshes rendered workspace output as part of a normal deploy
