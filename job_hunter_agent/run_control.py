@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 import threading
+
+from job_hunter_agent.logging_utils import format_debug_marker
 
 _RUN_STOP_REQUESTED = threading.Event()
 _RUN_PROGRESS_LOCK = threading.Lock()
 _RUN_PROGRESS_TEXT = ""
+logger = logging.getLogger(__name__)
 
 # Manual job-by-job review debug aid, enabled via --step: pauses the scrape loop
 # after every job's human summary is printed so it can be checked against the
@@ -46,10 +50,27 @@ def run_stop_requested() -> bool:
     return _RUN_STOP_REQUESTED.is_set()
 
 
+def _normalise_progress_for_log(text: str) -> str:
+    lines = [line.strip() for line in str(text or "").splitlines() if line.strip()]
+    if not lines:
+        return "(cleared)"
+    return " | ".join(lines)
+
+
 def set_run_progress(text: str) -> None:
     global _RUN_PROGRESS_TEXT
     with _RUN_PROGRESS_LOCK:
-        _RUN_PROGRESS_TEXT = str(text or "").strip()
+        normalized = str(text or "").strip()
+        previous = _RUN_PROGRESS_TEXT
+        _RUN_PROGRESS_TEXT = normalized
+    if normalized == previous:
+        return
+    logger.info(
+        format_debug_marker(
+            "RUN_PROGRESS",
+            {"progress": _normalise_progress_for_log(normalized)},
+        )
+    )
 
 
 def clear_run_progress() -> None:

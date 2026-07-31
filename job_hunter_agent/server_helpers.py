@@ -214,6 +214,7 @@ _SHARED_UI_LABEL_KEYS = (
     "search_wait_why_pacing",
     "search_wait_why_details",
     "search_wait_why_scoring",
+    "search_wait_why_job_run",
     "search_running_title",
     "search_running_copy",
     "search_starting_title",

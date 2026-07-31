@@ -531,6 +531,17 @@ def _log_source_complete(result: SourceRunResult, *, elapsed_s: float) -> None:
     )
 
 
+def _parallel_completion_progress(completed_source: str, pending_sources: Sequence[str]) -> str:
+    completed_label = get_source_display_label(completed_source)
+    if not pending_sources:
+        return f"{completed_label} complete"
+    waiting_labels = [get_source_display_label(source) for source in pending_sources]
+    return (
+        f"Waiting for {list_to_phrase(waiting_labels)}\n"
+        f"{completed_label} complete"
+    )
+
+
 def _enabled_source_order(context: ScrapeRunContext) -> list[str]:
     enabled_sources: list[str] = []
     for source in context.enabled_sources:
@@ -639,6 +650,16 @@ def _run_sources_in_parallel(
                     results_by_source[source] = result
                     elapsed_s = time.monotonic() - started_at[source]
                     _log_source_complete(result, elapsed_s=elapsed_s)
+                    pending_source_set = {futures[pending_future] for pending_future in pending}
+                    remaining_sources = [
+                        pending_source
+                        for pending_source in source_order
+                        if pending_source in pending_source_set
+                    ]
+                    if pending:
+                        set_run_progress(
+                            _parallel_completion_progress(source, remaining_sources)
+                        )
                 except Exception as exc:
                     logger.exception(
                         "[%s] source worker failed after %ds",

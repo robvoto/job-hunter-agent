@@ -13,7 +13,9 @@ set -euo pipefail
 SERVICE_NAME="${JOB_HUNTER_SERVICE:-job-hunter}"
 SINCE="${JOB_HUNTER_DIAG_SINCE:-24 hours ago}"
 GREP_PATTERN="${JOB_HUNTER_DIAG_GREP:-seek|playwright|cloudflare|captcha|human|verification|blocked|timeout|403|429|error|exception|traceback|linkedin}"
-APP_LOG="${JOB_HUNTER_SERVER_LOG:-/var/lib/job-hunter/output/server.log}"
+OUTPUT_DIR="${JOB_HUNTER_OUTPUT_DIR:-/var/lib/job-hunter/output}"
+HUMAN_LOG="${JOB_HUNTER_SERVER_HUMAN_LOG:-$OUTPUT_DIR/server-human.log}"
+DEBUG_LOG="${JOB_HUNTER_SERVER_DEBUG_LOG:-$OUTPUT_DIR/server-debug.log}"
 OUT_DIR="${JOB_HUNTER_DIAG_OUT_DIR:-/home/ubuntu}"
 TS="$(date +"%Y%m%d-%H%M%S")"
 TXT_OUT="$OUT_DIR/jobhunter-diagnostics-$TS.txt"
@@ -43,25 +45,36 @@ mkdir -p "$OUT_DIR"
   run_section "LAST SYSTEMD LOGS: $SERVICE_NAME" journalctl -u "$SERVICE_NAME" --since "$SINCE" --no-pager
 
   echo
-  echo "===== APP FILE LOG: $APP_LOG ====="
-  if [[ -f "$APP_LOG" ]]; then
-    cat "$APP_LOG"
+  echo "===== APP HUMAN LOG: $HUMAN_LOG ====="
+  if [[ -f "$HUMAN_LOG" ]]; then
+    cat "$HUMAN_LOG"
   else
-    echo "app log not found: $APP_LOG"
+    echo "app human log not found: $HUMAN_LOG"
+  fi
+
+  echo
+  echo "===== APP DEBUG LOG: $DEBUG_LOG ====="
+  if [[ -f "$DEBUG_LOG" ]]; then
+    cat "$DEBUG_LOG"
+  else
+    echo "app debug log not found: $DEBUG_LOG"
   fi
 
   echo
   echo "===== FOCUSED MATCHES ====="
   {
     journalctl -u "$SERVICE_NAME" --since "$SINCE" --no-pager || true
-    if [[ -f "$APP_LOG" ]]; then
-      cat "$APP_LOG" || true
+    if [[ -f "$HUMAN_LOG" ]]; then
+      cat "$HUMAN_LOG" || true
+    fi
+    if [[ -f "$DEBUG_LOG" ]]; then
+      cat "$DEBUG_LOG" || true
     fi
   } | grep -Ei "$GREP_PATTERN" -C 5 || true
 
   echo
   echo "===== FILES ====="
-  ls -lh "$TXT_OUT" "$APP_LOG" 2>/dev/null || true
+  ls -lh "$TXT_OUT" "$HUMAN_LOG" "$DEBUG_LOG" 2>/dev/null || true
 } > "$TXT_OUT"
 
 chmod 0644 "$TXT_OUT"

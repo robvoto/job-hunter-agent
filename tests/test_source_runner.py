@@ -645,6 +645,39 @@ def test_parallel_runner_keeps_results_after_timeout_warning(monkeypatch, caplog
     assert warnings[0]["category"] == "source_timeout"
 
 
+def test_parallel_runner_updates_progress_to_wait_for_pending_source(monkeypatch):
+    context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
+    progress_messages: list[str] = []
+    seek_release = threading.Event()
+
+    def fake_progress(message: str) -> None:
+        progress_messages.append(message)
+
+    def slow_seek(ctx):
+        seek_release.wait(timeout=2)
+        return _seek_result(kept_records=[{"job_key": "seek:1"}])
+
+    def fast_linkedin(ctx):
+        return _li_result(kept_records=[{"job_key": "linkedin:1"}])
+
+    monkeypatch.setattr(source_runner, "set_run_progress", fake_progress)
+    monkeypatch.setattr(source_runner, "_run_seek_source", slow_seek)
+    monkeypatch.setattr(source_runner, "_run_linkedin_source", fast_linkedin)
+
+    runner = threading.Thread(target=run_enabled_sources, args=(context,))
+    runner.start()
+
+    deadline = time.time() + 2
+    while time.time() < deadline:
+        if any(message == "Waiting for SEEK\nLinkedIn complete" for message in progress_messages):
+            break
+        time.sleep(0.01)
+    seek_release.set()
+    runner.join(timeout=2)
+
+    assert "Waiting for SEEK\nLinkedIn complete" in progress_messages
+
+
 def test_run_seek_source_records_warning_on_failure(monkeypatch):
     warnings = []
     monkeypatch.setattr(

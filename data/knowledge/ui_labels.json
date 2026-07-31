@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 89,
+  "version": 90,
   "updated_at": "2026-07-30",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -115,6 +115,7 @@
     "search_wait_why_pacing": "It waits for pages, redirects, and verification checks like a normal person would.",
     "search_wait_why_details": "It opens the job details that look relevant so it can read the full ad.",
     "search_wait_why_scoring": "It scores each job before it appears in your workspace.",
+    "search_wait_why_job_run": "This can run as an automated job, so you do not need to watch it live.",
     "search_running_title": "Search in progress",
     "search_running_copy": "Job Hunter is checking sources and ranking matches. This process may take several minutes.",
     "search_starting_title": "Starting search",

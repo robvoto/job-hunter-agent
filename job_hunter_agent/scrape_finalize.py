@@ -28,7 +28,7 @@ from job_hunter_agent.paths import OUTPUT_DIR, get_workspace_results_path
 from job_hunter_agent.posting_utils import parse_timestamp
 from job_hunter_agent.review_insights import build_review_data
 from job_hunter_agent.run_context import ScrapeRunContext
-from job_hunter_agent.run_control import run_stop_requested
+from job_hunter_agent.run_control import run_stop_requested, set_run_progress
 from job_hunter_agent.source_registry import get_source_display_label
 from job_hunter_agent.system_warnings import (
     make_system_warning_fingerprint,
@@ -453,6 +453,7 @@ def finalize_scrape_run(
     from job_hunter_agent.llm_gate import get_session_cost_usd
     from job_hunter_agent.source_learning import get_llm_truncation_count
 
+    set_run_progress("Finalising results\nSource collection complete")
     kept_records = deduplicate_across_sources(kept_records)
 
     pool = _load_workspace_pool()
@@ -538,6 +539,7 @@ def finalize_scrape_run(
         return str(workspace_path)
 
     merged_pool = _merge_into_pool(pool, kept_records)
+    set_run_progress("Saving merged results\nPreparing workspace data")
 
     _save_workspace_pool(merged_pool)
 
@@ -581,6 +583,7 @@ def finalize_scrape_run(
         context.profile,
         context.dashboard_min_score,
     )
+    set_run_progress("Building workspace\nRendering refreshed results")
 
     workspace_path = get_workspace_results_path()
 
@@ -618,6 +621,7 @@ def finalize_scrape_run(
     _record_run_stats_warnings(run_stats)
     write_run_stats(run_stats)
 
+    set_run_progress("Saving run summary\nWriting review data")
     write_review_data(build_review_data(audit_rows, skill_observations, context.profile))
 
     _log_run_summary(run_stats, audit_rows)
