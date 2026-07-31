@@ -816,6 +816,14 @@ Production AWS deploys must use an explicit release tag:
 deploy-jobhunter vX.Y.Z
 ```
 
+For AWS smoke tests or debugging without cutting a release, use the separate non-production helper:
+
+```bash
+deploy-jobhunter-ref <branch-or-sha>
+```
+
+Use `deploy-jobhunter-ref` only for staging/test/debug work. Do not treat it as the normal production deploy path, and do not reuse old production tags to move newer code.
+
 For a direct metadata diagnosis:
 
 ```bash

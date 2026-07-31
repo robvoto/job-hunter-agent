@@ -16,6 +16,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 INTEGRITY_SCRIPT = REPO_ROOT / "scripts" / "check-release-integrity.py"
 RELEASE_SCRIPT = REPO_ROOT / "scripts" / "release-jobhunter.sh"
 DEPLOY_SCRIPT = REPO_ROOT / "scripts" / "ec2" / "deploy-jobhunter.sh"
+DEPLOY_REF_SCRIPT = REPO_ROOT / "scripts" / "ec2" / "deploy-jobhunter-ref.sh"
 RELEASE_SKILL = REPO_ROOT / ".skills" / "release-management" / "SKILL.md"
 
 
@@ -103,6 +104,10 @@ def _write_runtime_release_files(root: Path) -> None:
         DEPLOY_SCRIPT.read_text(encoding="utf-8"),
         encoding="utf-8",
     )
+    (root / "scripts" / "ec2" / "deploy-jobhunter-ref.sh").write_text(
+        DEPLOY_REF_SCRIPT.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
     (root / "job_hunter_agent" / "release_metadata.py").write_text(
         textwrap.dedent(
             """
@@ -127,6 +132,7 @@ def _write_runtime_release_files(root: Path) -> None:
     os.chmod(root / "scripts" / "run-e2e.sh", 0o755)
     os.chmod(root / "scripts" / "release-jobhunter.sh", 0o755)
     os.chmod(root / "scripts" / "ec2" / "deploy-jobhunter.sh", 0o755)
+    os.chmod(root / "scripts" / "ec2" / "deploy-jobhunter-ref.sh", 0o755)
 
 
 def _write_fake_tools(bin_dir: Path) -> None:
@@ -455,6 +461,32 @@ def test_deploy_rejects_untagged_commit_argument(tmp_path):
     assert "vMAJOR.MINOR.PATCH" in result.stderr
 
 
+def test_ref_deploy_rejects_missing_ref_argument(tmp_path):
+    repo = _init_git_repo(tmp_path)
+    env = _repo_env(repo, tmp_path)
+
+    result = _run(["bash", "scripts/ec2/deploy-jobhunter-ref.sh"], cwd=repo, env=env, check=False)
+
+    assert result.returncode != 0
+    assert "Missing ref" in result.stderr
+
+
+def test_ref_deploy_rejects_release_tag_argument(tmp_path):
+    repo = _init_git_repo(tmp_path)
+    _tag_release(repo, "v1.5.1")
+    env = _repo_env(repo, tmp_path)
+
+    result = _run(
+        ["bash", "scripts/ec2/deploy-jobhunter-ref.sh", "v1.5.1"],
+        cwd=repo,
+        env=env,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "production-only" in result.stderr
+
+
 def test_deploy_checks_out_exact_tagged_commit_not_latest_main(tmp_path):
     repo = _init_git_repo(tmp_path)
     tagged_commit = _tag_release(repo, "v1.5.1")
@@ -475,6 +507,45 @@ def test_deploy_checks_out_exact_tagged_commit_not_latest_main(tmp_path):
     assert f"deploying commit: {tagged_commit}" in result.stdout
 
 
+def test_ref_deploy_checks_out_latest_main_without_cutting_release(tmp_path):
+    repo = _init_git_repo(tmp_path)
+    _tag_release(repo, "v1.5.1")
+    latest_main_commit = _ordinary_commit(repo, message="Later main commit")
+    env = _repo_env(repo, tmp_path)
+
+    result = _run(
+        ["bash", "scripts/ec2/deploy-jobhunter-ref.sh", "main"],
+        cwd=repo,
+        env=env,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert _git(repo, "rev-parse", "HEAD").stdout.strip() == latest_main_commit
+    assert "deploying ref:    main" in result.stdout
+    assert "resolved source:  refs/remotes/origin/main" in result.stdout
+    assert _read_project_version(repo) == "1.5.1"
+
+
+def test_ref_deploy_accepts_exact_commit_sha(tmp_path):
+    repo = _init_git_repo(tmp_path)
+    _tag_release(repo, "v1.5.1")
+    latest_main_commit = _ordinary_commit(repo, message="Later main commit")
+    env = _repo_env(repo, tmp_path)
+
+    result = _run(
+        ["bash", "scripts/ec2/deploy-jobhunter-ref.sh", latest_main_commit],
+        cwd=repo,
+        env=env,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert _git(repo, "rev-parse", "HEAD").stdout.strip() == latest_main_commit
+    assert f"deploying ref:    {latest_main_commit}" in result.stdout
+    assert f"deploying commit: {latest_main_commit}" in result.stdout
+
+
 def test_deploy_rejects_tag_version_mismatch(tmp_path):
     repo = _init_git_repo(tmp_path, version="1.5.1")
     _tag_release(repo, "v1.5.2")
@@ -493,22 +564,27 @@ def test_deploy_rejects_tag_version_mismatch(tmp_path):
 
 def test_release_process_has_no_extra_release_modes():
     script = RELEASE_SCRIPT.read_text(encoding="utf-8")
+    ref_deploy_script = DEPLOY_REF_SCRIPT.read_text(encoding="utf-8")
     skill = RELEASE_SKILL.read_text(encoding="utf-8")
 
     assert "patch|minor|major" in script
     assert "Choose patch, minor, or major." in script
     assert "deploy-jobhunter vX.Y.Z" in skill
+    assert "deploy-jobhunter-ref <branch-or-sha>" in skill
     assert "may legitimately contain unreleased commits after the latest release tag" in skill
     assert "separate schema/content versioning" in skill
+    assert "staging/test/debug only" in skill
     assert "current release mode" not in script
     assert "fallback release mode" not in script
     assert "temporary release mode" not in script
     assert "one-time release mode" not in script
+    assert "production-only" in ref_deploy_script
 
 
 def test_release_command_owns_bump_tests_tag_and_atomic_push():
     script = RELEASE_SCRIPT.read_text(encoding="utf-8")
     deploy_script = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+    ref_deploy_script = DEPLOY_REF_SCRIPT.read_text(encoding="utf-8")
 
     assert 'uv version --bump "$bump" --no-sync' in script
     assert "uv run python scripts/check-release-integrity.py" in script
@@ -524,3 +600,7 @@ def test_release_command_owns_bump_tests_tag_and_atomic_push():
     assert "git pull --ff-only" not in deploy_script
     assert 'git fetch origin "$remote_tag_ref:$remote_tag_ref"' in deploy_script
     assert 'python3 scripts/check-release-integrity.py --expected-version "${RELEASE_TAG#v}" --tag "$RELEASE_TAG"' in deploy_script
+    assert "deploy-jobhunter-ref <branch-or-sha>" in ref_deploy_script
+    assert "git fetch --prune origin" in ref_deploy_script
+    assert "python3 scripts/check-release-integrity.py" in ref_deploy_script
+    assert "--expected-version" not in ref_deploy_script

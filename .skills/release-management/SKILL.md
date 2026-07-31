@@ -61,6 +61,17 @@ Do not skip a failed gate, move an existing release tag, or force-push a release
 
 AWS deploys code only after a release tag is published. Production must deploy an explicit release tag, for example `deploy-jobhunter vX.Y.Z`; it must not deploy "whatever main currently is". Do not edit the displayed version on AWS.
 
+For AWS smoke tests or debug sessions that should not create a release, use the separate non-production helper:
+
+```bash
+deploy-jobhunter-ref <branch-or-sha>
+```
+
+Rules:
+- `deploy-jobhunter-ref` is for staging/test/debug only.
+- Never use `deploy-jobhunter-ref` as the normal production deploy path.
+- Never replace or move an existing production tag just to get newer code onto AWS.
+
 ## Validation
 
 For release-tool changes, run:

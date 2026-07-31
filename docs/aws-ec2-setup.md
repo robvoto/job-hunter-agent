@@ -905,6 +905,32 @@ deploy-jobhunter vX.Y.Z
 11. Rebuilds saved workspace output during startup so the rendered page matches the current code
 12. Waits for a successful health-check
 
+## Non-production AWS test deploy command
+
+For AWS smoke tests or debugging that should not cut a release tag, use the separate ref-based helper:
+
+```bash
+use-ubuntu
+deploy-jobhunter-ref <branch-or-sha>
+```
+
+Examples:
+
+```bash
+deploy-jobhunter-ref main
+deploy-jobhunter-ref feature/my-fix
+deploy-jobhunter-ref ef720a7
+```
+
+`deploy-jobhunter-ref` fetches `origin`, resolves the requested branch/ref/commit to an exact commit, checks out detached `HEAD`, validates `pyproject.toml` / `uv.lock` / UI version integrity, then runs the same dependency, seed, restart, and health-check steps as the production deploy helper.
+
+Rules:
+
+1. Use `deploy-jobhunter vX.Y.Z` for production.
+2. Use `deploy-jobhunter-ref <branch-or-sha>` only for staging, smoke tests, or debugging.
+3. Do not move or reuse an existing production tag to get newer code onto AWS.
+4. If a test ref proves good and should become production, cut a normal release tag and deploy that tag.
+
 ## 23. Production checklist
 
 Before calling the environment ready for use, check these in order:
