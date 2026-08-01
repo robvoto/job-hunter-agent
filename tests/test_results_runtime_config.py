@@ -620,6 +620,7 @@ def test_workspace_rebuild_refreshes_llm_totals_from_current_audit_rows(monkeypa
         "load_last_kept_records",
         lambda: [{"job_key": "seek:1"}, {"job_key": "linkedin:1"}],
     )
+    monkeypatch.setattr(workspace_service, "load_saved_workspace_pool", lambda: [])
     monkeypatch.setattr(
         workspace_rebuild_service,
         "write_run_stats",
@@ -654,3 +655,60 @@ def test_workspace_rebuild_refreshes_llm_totals_from_current_audit_rows(monkeypa
     assert captured["render_run_stats"]["llm_total_cost_usd"] == 0.003235
     assert captured["render_run_stats"]["llm_total_input_tokens"] == 2000
     assert captured["render_run_stats"]["llm_total_output_tokens"] == 345
+
+
+def test_workspace_rebuild_renders_saved_workspace_pool_when_present(monkeypatch, tmp_path):
+    captured = {}
+    workspace_path = tmp_path / "workspace_results.html"
+    saved_pool = [{"job_key": "linkedin:saved-1"}, {"job_key": "linkedin:saved-2"}]
+    latest_run_keeps = [{"job_key": "linkedin:audit-1"}]
+
+    monkeypatch.setattr(workspace_rebuild_service, "configure_console_output", lambda: None)
+    monkeypatch.setattr(workspace_rebuild_service, "get_user_id_for_runtime", lambda: "user-1")
+    monkeypatch.setattr(workspace_rebuild_service, "load_profile", lambda: {})
+    monkeypatch.setattr(
+        workspace_rebuild_service,
+        "get_search_settings",
+        lambda profile: {"date_range_days": 7, "sort_newest_first": True},
+    )
+    monkeypatch.setattr(
+        workspace_rebuild_service,
+        "load_run_stats",
+        lambda: {
+            "run_started_at": "2026-07-10T18:28:58+10:00",
+            "run_finished_at": "2026-07-10T18:30:00+10:00",
+            "seek_max_pages": 1,
+        },
+    )
+    monkeypatch.setattr(workspace_rebuild_service, "get_manual_skip_sets", lambda profile: (set(), set()))
+    monkeypatch.setattr(workspace_rebuild_service, "load_job_history", lambda: {})
+    monkeypatch.setattr(
+        workspace_rebuild_service,
+        "load_audit_rows",
+        lambda: [{"source": "linkedin", "search_location": "Sydney", "page": 1, "decision": "KEEP"}],
+    )
+    monkeypatch.setattr(workspace_service, "load_last_kept_records", lambda: latest_run_keeps)
+    monkeypatch.setattr(workspace_service, "load_saved_workspace_pool", lambda: saved_pool)
+    monkeypatch.setattr(workspace_rebuild_service, "write_run_stats", lambda payload: None)
+    monkeypatch.setattr(workspace_rebuild_service, "get_workspace_results_path", lambda: workspace_path)
+
+    def fake_render_html(
+        output_path,
+        kept_records,
+        run_started_at,
+        date_range_days,
+        sort_newest_first,
+        run_stats,
+        job_history,
+        applied_job_keys,
+        hidden_job_keys,
+        reference_time,
+    ):
+        captured["render_kept_records"] = kept_records
+
+    monkeypatch.setattr(workspace_service, "render_html", fake_render_html)
+
+    result = workspace_rebuild_service.rebuild_workspace_results(reason="test rebuild uses pool")
+
+    assert result == str(workspace_path)
+    assert captured["render_kept_records"] == saved_pool

@@ -84,6 +84,8 @@ def rebuild_workspace_results(
     job_history = load_job_history()
 
     kept_records = workspace_service.load_last_kept_records()
+    saved_workspace_records = workspace_service.load_saved_workspace_pool()
+    render_records = saved_workspace_records or kept_records
     audit_rows = load_audit_rows()
 
     if audit_rows:
@@ -99,7 +101,7 @@ def rebuild_workspace_results(
         run_stats = {**run_stats, **refreshed_run_stats}
         write_run_stats(run_stats)
 
-    print(f"  Saved kept records : {len(kept_records)}")
+    print(f"  Saved kept records : {len(render_records)}")
 
     print(f"  Job history records: {len(job_history)}")
 
@@ -113,7 +115,7 @@ def rebuild_workspace_results(
 
     workspace_service.render_html(
         workspace_path,
-        kept_records,
+        render_records,
         run_started_at,
         configured_date_range,
         sort_newest_first,

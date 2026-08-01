@@ -397,6 +397,28 @@ def load_last_kept_records() -> list[dict]:
     )
 
 
+def load_saved_workspace_pool() -> list[dict]:
+    import json as _json
+
+    from job_hunter_agent.database import db_conn
+    from job_hunter_agent.paths import get_active_user_id
+
+    user_id = get_active_user_id()
+
+    with db_conn() as conn:
+        row = conn.execute(
+            "SELECT data FROM workspace_pool WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+
+    if row is None:
+        return []
+
+    data = _json.loads(row["data"])
+
+    return data if isinstance(data, list) else []
+
+
 def build_run_stats(
     audit_rows: list[dict],
     kept_records: list[dict],
