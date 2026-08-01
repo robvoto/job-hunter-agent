@@ -94,6 +94,10 @@ def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
     assert "window.__JOB_HUNTER_SHARED_UI_LABELS__" in html
     assert "/static/onboarding/onboarding-page.css" in html
     assert "/static/onboarding/onboarding-review.css" in html
+    assert 'class="settings-subpanel-head"' in html
+    assert 'class="settings-subpanel-actions"' in html
+    assert 'class="summary-field-list"' in html
+    assert 'class="summary-field__value"' in html
 
 
 def test_onboarding_flow_keyword_helper_is_owned_by_page_module():
@@ -311,9 +315,11 @@ def test_shared_ui_styles_are_centralised():
     assert ".summary-line {" in theme_widgets
     assert ".settings-form-field--summary" not in theme_widgets
     assert ".help {" in theme_widgets
-    assert ".check-card-head h3" not in theme_widgets
-    assert ".check-list dd" not in theme_widgets
+    assert ".summary-card-title {" in theme_widgets
+    assert ".summary-field-list {" in theme_widgets
+    assert ".summary-field__value {" in theme_widgets
     assert 'class="summary-line"' in onboarding_html
+    assert 'class="summary-field-list"' in onboarding_html
     assert 'class="summary-line"' in (
         repo_root / "templates" / "partials" / "settings" / "standard" / "settings-search.html"
     ).read_text(encoding="utf-8")
@@ -322,7 +328,9 @@ def test_shared_ui_styles_are_centralised():
     assert 'class="help"' in settings_learning_html
     assert ".page input," not in onboarding_page_css
     assert ".help {" not in onboarding_page_css
+    assert ".summary-card-title {" not in onboarding_page_css
     assert ".currency-input-wrap input" not in onboarding_review_css
+    assert ".summary-field__value {" not in onboarding_review_css
     assert ".help {" not in settings_page_css
     assert ".currency-input-wrap input" not in settings_page_css
     assert ".nav-item.is-active {" in settings_page_css

@@ -334,63 +334,67 @@
         <section class="wizard-step" data-step="4" hidden>
           <div class="check-grid">
             <section class="check-card">
-              <div class="check-card-head">
-                <h3>__JOB_HUNTER_ONBOARDING_PAGE_DRAFT_PROFILE_LABEL__</h3>
-                <button class="icon-action icon-action--edit" id="edit_draft_profile" type="button" aria-label="Edit draft profile" title="Edit draft profile"><span aria-hidden="true">&#9998;</span></button>
+              <div class="settings-subpanel-head">
+                <h3 class="summary-card-title">__JOB_HUNTER_ONBOARDING_PAGE_DRAFT_PROFILE_LABEL__</h3>
+                <div class="settings-subpanel-actions">
+                  <button class="icon-action icon-action--edit" id="edit_draft_profile" type="button" aria-label="Edit draft profile" title="Edit draft profile"><span aria-hidden="true">&#9998;</span></button>
+                </div>
               </div>
-              <dl class="check-list">
-                <div>
-                  <dt>__JOB_HUNTER_TITLE_TIER_TARGET_ROLES_LABEL__</dt>
-                  <dd id="check_target_titles"></dd>
+              <dl class="summary-field-list">
+                <div class="summary-field">
+                  <dt class="summary-field__label">__JOB_HUNTER_TITLE_TIER_TARGET_ROLES_LABEL__</dt>
+                  <dd class="summary-field__value" id="check_target_titles"></dd>
                 </div>
-                <div>
-                  <dt>__JOB_HUNTER_TITLE_TIER_ALSO_CONSIDER_ROLES_LABEL__</dt>
-                  <dd id="check_secondary_titles"></dd>
+                <div class="summary-field">
+                  <dt class="summary-field__label">__JOB_HUNTER_TITLE_TIER_ALSO_CONSIDER_ROLES_LABEL__</dt>
+                  <dd class="summary-field__value" id="check_secondary_titles"></dd>
                 </div>
-                <div>
-                  <dt id="check_capabilities_label"></dt>
-                  <dd id="check_capabilities"></dd>
+                <div class="summary-field">
+                  <dt class="summary-field__label" id="check_capabilities_label"></dt>
+                  <dd class="summary-field__value" id="check_capabilities"></dd>
                 </div>
               </dl>
             </section>
 
             <section class="check-card">
-              <div class="check-card-head">
-                <h3>__JOB_HUNTER_ONBOARDING_PAGE_SEARCH_BASICS_LABEL__</h3>
-                <button class="icon-action icon-action--edit" id="edit_search_basics" type="button" aria-label="Edit search basics" title="Edit search basics"><span aria-hidden="true">&#9998;</span></button>
+              <div class="settings-subpanel-head">
+                <h3 class="summary-card-title">__JOB_HUNTER_ONBOARDING_PAGE_SEARCH_BASICS_LABEL__</h3>
+                <div class="settings-subpanel-actions">
+                  <button class="icon-action icon-action--edit" id="edit_search_basics" type="button" aria-label="Edit search basics" title="Edit search basics"><span aria-hidden="true">&#9998;</span></button>
+                </div>
               </div>
-              <dl class="check-list">
-                <div>
-                  <dt>__JOB_HUNTER_TITLE_TIER_SEARCH_KEYWORD_LABEL__</dt>
-                  <dd id="check_search_title"></dd>
+              <dl class="summary-field-list">
+                <div class="summary-field">
+                  <dt class="summary-field__label">__JOB_HUNTER_TITLE_TIER_SEARCH_KEYWORD_LABEL__</dt>
+                  <dd class="summary-field__value" id="check_search_title"></dd>
                 </div>
-                <div>
-                  <dt>__JOB_HUNTER_ONBOARDING_PAGE_LOCATIONS_LABEL__</dt>
-                  <dd id="check_locations"></dd>
+                <div class="summary-field">
+                  <dt class="summary-field__label">__JOB_HUNTER_ONBOARDING_PAGE_LOCATIONS_LABEL__</dt>
+                  <dd class="summary-field__value" id="check_locations"></dd>
                 </div>
-                <div>
-                  <dt>__JOB_HUNTER_ONBOARDING_PAGE_WORK_TYPE_LABEL__</dt>
-                  <dd id="check_engagement_type"></dd>
+                <div class="summary-field">
+                  <dt class="summary-field__label">__JOB_HUNTER_ONBOARDING_PAGE_WORK_TYPE_LABEL__</dt>
+                  <dd class="summary-field__value" id="check_engagement_type"></dd>
                 </div>
-                <div>
-                  <dt>__JOB_HUNTER_MIN_CONTRACT_MONTH_LABEL__</dt>
-                  <dd id="check_min_contract_months"></dd>
+                <div class="summary-field">
+                  <dt class="summary-field__label">__JOB_HUNTER_MIN_CONTRACT_MONTH_LABEL__</dt>
+                  <dd class="summary-field__value" id="check_min_contract_months"></dd>
                 </div>
-                <div>
-                  <dt>__JOB_HUNTER_ONBOARDING_PAGE_WORK_MODE_LABEL__</dt>
-                  <dd id="check_work_mode_preference"></dd>
+                <div class="summary-field">
+                  <dt class="summary-field__label">__JOB_HUNTER_ONBOARDING_PAGE_WORK_MODE_LABEL__</dt>
+                  <dd class="summary-field__value" id="check_work_mode_preference"></dd>
                 </div>
-                <div>
-                  <dt>__JOB_HUNTER_ONBOARDING_PAGE_SECTOR_PREFERENCE_LABEL__</dt>
-                  <dd id="check_sector_preference"></dd>
+                <div class="summary-field">
+                  <dt class="summary-field__label">__JOB_HUNTER_ONBOARDING_PAGE_SECTOR_PREFERENCE_LABEL__</dt>
+                  <dd class="summary-field__value" id="check_sector_preference"></dd>
                 </div>
-                <div>
-                  <dt>__JOB_HUNTER_SALARY_MIN_ANNUAL_LABEL__</dt>
-                  <dd id="check_salary_yearly"></dd>
+                <div class="summary-field">
+                  <dt class="summary-field__label">__JOB_HUNTER_SALARY_MIN_ANNUAL_LABEL__</dt>
+                  <dd class="summary-field__value" id="check_salary_yearly"></dd>
                 </div>
-                <div>
-                  <dt>__JOB_HUNTER_SALARY_MIN_DAILY_LABEL__</dt>
-                  <dd id="check_salary_daily"></dd>
+                <div class="summary-field">
+                  <dt class="summary-field__label">__JOB_HUNTER_SALARY_MIN_DAILY_LABEL__</dt>
+                  <dd class="summary-field__value" id="check_salary_daily"></dd>
                 </div>
               </dl>
             </section>

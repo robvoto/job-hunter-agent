@@ -489,18 +489,6 @@ body {
   flex: 1;
 }
 
-.check-list {
-  margin: 14px 0 0;
-}
-
-.check-list dt {
-  color: var(--text-muted);
-  font-size: var(--font-size-md);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
 /* Chip editor layout is centralised in themes.widgets.css. */
 
 /* Location picker */
@@ -577,8 +565,7 @@ body {
   border: 0;
 }
 
-.review-capability-group-head,
-.check-card-head {
+.review-capability-group-head {
   display: flex;
   justify-content: space-between;
   align-items: center;

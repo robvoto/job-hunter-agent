@@ -59,28 +59,6 @@
   min-height: 0;
 }
 
-.check-list {
-  gap: 12px;
-}
-
-.check-list dd:empty::after {
-  content: 'Not provided';
-  color: var(--text-muted);
-}
-
-.check-list .choice-chip,
-.check-list .summary-chip {
-  display: inline-flex;
-  align-items: center;
-  margin: 2px 6px 2px 0;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  color: var(--accent);
-  font-size: var(--font-size-md);
-  font-weight: 600;
-}
-
 .wizard-step[data-step="1"] .workflow-drawer {
   margin: var(--onboarding-step1-workflow-drawer-margin);
 }
@@ -101,75 +79,15 @@
 }
 
 .wizard-step[data-step="4"] .check-grid {
-  gap: 22px;
+  gap: var(--field-stack-gap);
   margin-top: 0;
   align-items: start;
-}
-
-.wizard-step[data-step="4"] .check-card {
-  min-height: 0;
-  height: auto;
-  padding: 22px 24px 20px;
-  border-radius: 18px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 96%, var(--bg-muted)), var(--bg-surface));
-  border-color: color-mix(in srgb, var(--border-subtle) 88%, transparent);
-  box-shadow:
-    0 18px 38px color-mix(in srgb, #000 28%, transparent),
-    0 1px 0 color-mix(in srgb, #fff 5%, transparent) inset;
-}
-
-.wizard-step[data-step="4"] .check-card-head {
-  margin-bottom: 18px;
-}
-
-.wizard-step[data-step="4"] .check-card-head h3 {
-  margin: 0;
-  font-size: var(--font-size-8xl);
-  line-height: 1.2;
-  font-weight: 800;
-  letter-spacing: -0.015em;
-}
-
-.wizard-step[data-step="4"] .check-list {
-  display: grid;
-  gap: var(--field-body-gap);
-  margin: 0;
-}
-
-/* Local layout exception: final onboarding summary label/value layout, not a reusable visual component. */
-.wizard-step[data-step="4"] .check-list > div {
-  display: grid;
-  gap: var(--surface-gap-sm);
-}
-
-.wizard-step[data-step="4"] .check-list dt {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: var(--font-size-sm);
-  line-height: 1.25;
-  font-weight: var(--control-font-weight);
-  letter-spacing: 0;
-  text-transform: none;
-}
-
-.wizard-step[data-step="4"] .check-list dd {
-  margin: 0;
-  color: var(--text-primary);
-  font-size: var(--font-size-7xl);
-  line-height: 1.45;
-  font-weight: var(--field-label-font-weight);
 }
 
 .wizard-step[data-step="4"] .actions {
   margin-top: var(--onboarding-actions-margin-top);
   padding-top: var(--onboarding-actions-padding-top);
   border-top: var(--onboarding-actions-border);
-}
-
-@media (max-width: 900px) {
-  .wizard-step[data-step="4"] .check-card {
-    padding: 20px;
-  }
 }
 
 

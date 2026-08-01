@@ -856,6 +856,49 @@
   margin: 0;
 }
 
+/* Shared summary card heading + label/value list used by onboarding check/setup cards. */
+.summary-card-title {
+  margin: 0;
+  font-size: var(--settings-card-title-font-size);
+  line-height: var(--settings-card-title-line-height);
+  font-weight: var(--text-role-panel-title-font-weight);
+}
+
+.summary-field-list {
+  display: grid;
+  gap: var(--field-body-gap);
+  margin: var(--surface-gap-md) 0 0;
+  padding: 0;
+}
+
+.summary-field {
+  display: grid;
+  gap: var(--field-summary-gap);
+  min-width: 0;
+}
+
+.summary-field__label {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--field-label-font-size);
+  font-weight: var(--field-label-font-weight);
+  line-height: var(--field-label-line-height);
+}
+
+.summary-field__value {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--text-role-body-font-size);
+  font-weight: var(--text-role-status-font-weight);
+  line-height: var(--text-role-body-line-height);
+  word-break: break-word;
+}
+
+.summary-field__value:empty::after {
+  content: "Not provided";
+  color: var(--text-muted);
+}
+
 .settings-section-head > .panel-kicker {
   margin: 0;
 }

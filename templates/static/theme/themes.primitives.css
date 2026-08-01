@@ -241,13 +241,20 @@ body.job-hunter-wait-active {
 
 .wait-state__explainer {
   justify-self: center;
-  width: fit-content;
-  max-width: min(100%, 360px);
+  width: min(100%, 360px);
+  max-width: 100%;
   margin: 0;
+  overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--text-muted) 14%, var(--border-subtle));
-  border-radius: var(--control-radius-pill);
+  border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--bg-surface) 92%, var(--bg-muted) 8%);
   text-align: left;
+}
+
+.wait-state__explainer:not([open]) {
+  width: fit-content;
+  max-width: min(100%, 360px);
+  border-radius: var(--control-radius-pill);
 }
 
 .wait-state__explainer > summary {
@@ -256,7 +263,7 @@ body.job-hunter-wait-active {
   justify-content: space-between;
   gap: var(--control-space-sm);
   min-height: var(--control-height-md);
-  padding: 7px 14px;
+  padding: var(--control-pad-block-lg) var(--surface-pad-inline-sm);
   list-style: none;
   cursor: pointer;
   color: var(--text-muted);
@@ -287,11 +294,20 @@ body.job-hunter-wait-active {
   border-radius: calc(var(--control-radius-pill) - 2px);
 }
 
+.wait-state__explainer[open] > summary:focus-visible {
+  border-radius: calc(var(--radius-md) - 2px);
+}
+
 .wait-state__explainer-body {
   display: grid;
-  gap: var(--control-space-sm);
-  padding: 0 14px 12px;
+  gap: var(--surface-gap-sm);
+  padding: 0 var(--surface-pad-inline-sm) var(--surface-pad-block-sm);
   color: var(--text-muted);
+}
+
+.wait-state__explainer[open] .wait-state__explainer-body {
+  padding-top: var(--surface-pad-block-xs);
+  border-top: 1px solid color-mix(in srgb, var(--text-muted) 12%, var(--border-subtle));
 }
 
 .wait-state__explainer-copy {

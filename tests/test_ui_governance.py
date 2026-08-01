@@ -154,6 +154,11 @@ _CENTRAL_ONLY_COMPONENT_SELECTORS = [
     ".currency-prefix",
     ".settings-subpanel-head",
     ".settings-subpanel-actions",
+    ".summary-card-title",
+    ".summary-field-list",
+    ".summary-field",
+    ".summary-field__label",
+    ".summary-field__value",
 ]
 
 
