@@ -31,7 +31,10 @@ from job_hunter_agent.fit_scoring import (
     occupation_alignment_diagnostics,
     requirement_fit_diagnostics,
 )
-from job_hunter_agent.global_settings import get_default_country_suffix
+from job_hunter_agent.global_settings import (
+    get_default_country_suffix,
+    get_posted_age_badge_threshold_days,
+)
 from job_hunter_agent.history import (
     assess_history_warning_signals,
     viewed_by_user,
@@ -47,6 +50,7 @@ from job_hunter_agent.posting_utils import (
     linkedin_freshness_is_unknown,
     linkedin_original_posted_is_unverified,
     original_posted_display_label,
+    posted_age_badge_threshold,
     posted_display_label,
 )
 from job_hunter_agent.preferences import (
@@ -778,7 +782,27 @@ def _build_checks_before_applying_items(
     for signal in job_quality_signals or []:
         add(compact_whitespace(str(signal.get("evidence") or signal.get("label") or "")))
 
-    return items[:6]
+    return items
+
+
+def _render_posted_age_badge(record: dict) -> str:
+    threshold = posted_age_badge_threshold(
+        record,
+        thresholds=get_posted_age_badge_threshold_days(),
+    )
+    if threshold is None:
+        return ""
+    label_template = Template(
+        _workspace_label("workspace_card_labels", "posted_age_badge_template")
+    )
+    tooltip_template = Template(
+        _workspace_label("workspace_card_labels", "posted_age_badge_tooltip_template")
+    )
+    return render_badge(
+        label_template.substitute(days=threshold),
+        "badge-stale",
+        tooltip_template.substitute(days=threshold),
+    )
 
 
 def score_filter_option_label(threshold: int, scoring_profile: Optional[dict] = None) -> str:
@@ -1190,8 +1214,6 @@ def render_job_card(
                 _workspace_label("workspace_card_labels", "hidden_badge_tooltip"),
             )
         )
-    elif archived:
-        badges.append(render_badge(ARCHIVE_LABEL, "badge-archive", ARCHIVE_BADGE_TOOLTIP))
     if not applied_record and not seen_by_you:
         badges.append(
             render_badge(
@@ -1200,15 +1222,10 @@ def render_job_card(
                 _workspace_label("workspace_card_labels", "new_to_you_badge_tooltip"),
             )
         )
-    if is_stale:
-        badges.append(
-            render_badge(
-                _workspace_label("workspace_card_labels", "stale_badge"),
-                "badge-stale",
-                _workspace_label("workspace_card_labels", "stale_badge_tooltip"),
-            )
-        )
-    elif seen_by_you:
+    posted_age_badge_html = _render_posted_age_badge(record)
+    if posted_age_badge_html:
+        badges.append(posted_age_badge_html)
+    if seen_by_you:
         badges.append(viewed_badge_html())
     badges.append(
         render_badge(source_label, f"badge-source-{source}", f"Sourced from {source_label}.")
@@ -1480,6 +1497,13 @@ def render_job_card(
         meta_items.append(
             f'<span class="job-meta-item"><strong>{safe_html(posted_label)}</strong> {safe_html(str(posted_value))}</span>'
         )
+    else:
+        logger.warning(
+            "[RENDERER] job=%s title=%r source=%s missing posted display; omitting posted meta item",
+            display_record.get("job_key", "<unknown>"),
+            str(display_record.get("title") or "").strip(),
+            source,
+        )
     for label, value, always_show in [
         (_workspace_label("workspace_meta_labels", "location"), display_record.get("location"), False),
         (
@@ -1532,10 +1556,6 @@ def render_job_card(
         context_bits.append(
             f"{_workspace_label('workspace_card_labels', 'hidden_badge')} "
             f"{format_timestamp_label(record.get('last_hidden_at'))}"
-        )
-    elif archived and record.get("last_kept_at"):
-        context_bits.append(
-            f"{ARCHIVE_LABEL} {format_timestamp_label(record.get('last_kept_at'))}"
         )
     context_html = (
         f'<div class="job-context">{safe_html(" | ".join(context_bits))}</div>'
@@ -1705,19 +1725,29 @@ def render_job_card(
                 importance_label_keys.get(importance, "importance_preferred"),
             )
 
-        detail_parts = []
+        detail_html_parts: list[str] = []
         if matched_candidate_fact:
             profile_detail = matched_candidate_fact
             if active_debug_mode and level_label:
                 profile_detail = f"{profile_detail} ({level_label})"
-            detail_parts.append(profile_detail)
-        if matched_text and compact_whitespace(matched_text).lower() != req_text.lower():
-            detail_parts.append(f'"{matched_text}"')
-        detail_html = (
-            f'<span class="req-coverage-detail">{safe_html(" · ".join(detail_parts))}</span>'
-            if detail_parts
-            else ""
-        )
+            detail_html_parts.append(
+                '<span class="req-coverage-detail req-coverage-detail--capability">'
+                f'<span class="req-coverage-tag">{safe_html(_workspace_label("workspace_card_labels", "job_requirements_capability_badge"))}</span>'
+                f'<span class="req-coverage-detail-text">{safe_html(profile_detail)}</span>'
+                "</span>"
+            )
+        if (
+            active_debug_mode
+            and matched_text
+            and compact_whitespace(matched_text).lower() != req_text.lower()
+        ):
+            detail_html_parts.append(
+                '<span class="req-coverage-detail req-coverage-detail--evidence">'
+                f'<span class="req-coverage-tag req-coverage-tag--muted">{safe_html(_workspace_label("workspace_card_labels", "job_requirements_ad_wording_badge"))}</span>'
+                f'<span class="req-coverage-detail-text">"{safe_html(matched_text)}"</span>'
+                "</span>"
+            )
+        detail_html = "".join(detail_html_parts)
         experience_note_html = ""
         if required_experience_months > 0:
             required_years = required_experience_months / 12.0
@@ -1771,7 +1801,7 @@ def render_job_card(
             f"{badges_html}"
             f"</li>"
         )
-        return html, bool(detail_parts)
+        return html, bool(detail_html_parts)
 
     if has_coverage:
         # Coverage path: one row per coverage entry, no job_requirements duplication.

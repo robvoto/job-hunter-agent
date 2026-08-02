@@ -1593,6 +1593,113 @@ def test_posting_channel_badge_uses_strong_company_indicator():
     assert "Source unclear" not in html
 
 
+def test_render_job_card_shows_source_unclear_badge_for_unknown_posting_channel():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-posting-channel-unknown",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Business analysis support across delivery teams.",
+            "fit_highlights": [],
+            "source": "seek",
+            "posting_channel_evidence": {
+                "kind": "unknown",
+                "source": "insufficient_evidence",
+                "trusted_metadata": [],
+                "weak_text_matches": [],
+                "text_evidence": [],
+                "needs_review": False,
+            },
+        },
+        _test_profile(),
+    )
+
+    assert "Source unclear" in html
+
+
+def test_infer_posting_channel_keeps_unknown_without_trusted_linkedin_employer_metadata():
+    channel = role_analysis.infer_posting_channel(
+        {
+            "company": "Hammondcare",
+            "source_metadata": {
+                "platform": "linkedin",
+                "apply_url": "https://www.linkedin.com/jobs/view/4439784341",
+                "apply_domain": "www.linkedin.com",
+                "company_profile_url": "",
+                "company_profile_name": "Hammondcare",
+                "poster_company": "Hammondcare",
+                "hiring_company": "Hammondcare",
+                "ats_source": "www.linkedin.com",
+                "raw_source_fields": {},
+            },
+        },
+        "",
+    )
+
+    assert channel["kind"] == "unknown"
+    assert channel["source"] == "metadata_first"
+    assert channel["needs_review"] is False
+
+
+def test_render_job_card_shows_managed_posted_age_badge():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-posted-age-badge",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "posted_age_days": 7,
+            "full_description": "Business analysis support across delivery teams.",
+            "fit_highlights": [],
+            "source": "seek",
+        },
+        _test_profile(),
+    )
+
+    assert "7+ Days Old" in html
+
+
+def test_render_job_card_omits_posted_meta_when_posted_is_missing():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-posted-missing",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "posted": "",
+            "posted_age_days": None,
+            "full_description": "Business analysis support across delivery teams.",
+            "fit_highlights": [],
+            "source": "seek",
+        },
+        _test_profile(),
+    )
+
+    assert "<strong>Posted</strong>" not in html
+
+
 def test_render_job_card_requirement_coverage_omits_duplicate_matched_text():
     requirement = "Minimum 5 years experience as Business Analyst in digital environment"
     html = workspace_renderer.render_job_card(
@@ -1650,6 +1757,59 @@ def test_render_job_card_requirement_coverage_shows_evidence_subtitles_in_normal
     assert "acceptance testing" in html
     assert "acceptance testing (Strong)" not in html
     assert f'"{requirement}"' not in html
+
+
+def test_render_job_card_requirement_coverage_shows_capability_badge_but_hides_ad_wording_in_normal_mode():
+    html = workspace_renderer.render_job_card(
+        {
+            **_test_profile(),
+            "job_requirements": [],
+            "requirement_coverage": [
+                {
+                    "requirement": "Lead delivery across multiple initiatives",
+                    "importance": "mandatory",
+                    "status": "supported",
+                    "capability_name": "agile delivery",
+                    "matched_job_text": "Lead end-to-end delivery within Agile squads, working across multiple initiatives across data, technology, and change",
+                    "profile_support": [],
+                }
+            ],
+            "source": "seek",
+        },
+        _capability_profile(),
+        debug_mode=False,
+    )
+
+    assert "Capability" in html
+    assert "agile delivery" in html
+    assert "Ad wording" not in html
+    assert "Lead end-to-end delivery within Agile squads" not in html
+
+
+def test_render_job_card_requirement_coverage_shows_ad_wording_in_debug_mode():
+    html = workspace_renderer.render_job_card(
+        {
+            **_test_profile(),
+            "job_requirements": [],
+            "requirement_coverage": [
+                {
+                    "requirement": "Lead delivery across multiple initiatives",
+                    "importance": "mandatory",
+                    "status": "supported",
+                    "capability_name": "agile delivery",
+                    "matched_job_text": "Lead end-to-end delivery within Agile squads, working across multiple initiatives across data, technology, and change",
+                    "profile_support": [],
+                }
+            ],
+            "source": "seek",
+        },
+        _capability_profile(),
+        debug_mode=True,
+    )
+
+    assert "Capability" in html
+    assert "Ad wording" in html
+    assert "Lead end-to-end delivery within Agile squads" in html
 
 
 def test_render_job_card_requirement_coverage_shows_role_duration_note_in_normal_mode():
@@ -1978,6 +2138,53 @@ def test_attention_strip_prefers_description_issue_over_lower_priority_alerts():
     assert "Possible repost of applied job: Business Analyst — Acme — SEEK" in html
     assert "Rejected before: Acme — Business Analyst" in html
     assert "Salary below target." in html
+
+
+def test_checks_before_applying_returns_all_items_without_truncation():
+    items = workspace_renderer._build_checks_before_applying_items(
+        history_warning_signals=[
+            "Potential red flag: Suspicious reposting pattern",
+            "Potential red flag: Repeated role refreshes",
+        ],
+        description_issue=True,
+        is_possible_repost=True,
+        similar_applied_record={
+            "title": "Business Analyst",
+            "company": "Acme",
+            "source": "seek",
+        },
+        candidate_history={
+            "llm_application_status": "rejection",
+            "llm_confidence": "high",
+            "llm_company": "Acme",
+            "llm_role": "Business Analyst",
+        },
+        hard_block_reasons_list=[
+            "Missing mandatory requirement: SAP certification",
+        ],
+        salary_fit_state="below",
+        soft_risk_reasons=[
+            "Freshness may be unreliable — LinkedIn can show a reposted date for external-apply listings, and the original posting date could not be verified."
+        ],
+        job_quality_signals=[
+            {
+                "label": "Broad Ad",
+                "evidence": 'Ad lists both permanent and contract work types ("full time contract") — may be a wide talent-pool search rather than a specific vacancy.',
+            }
+        ],
+    )
+
+    assert items == [
+        "Suspicious reposting pattern.",
+        "Repeated role refreshes.",
+        "Description issue: full job description was not captured clearly.",
+        "Possible repost of applied job: Business Analyst — Acme — SEEK",
+        "Rejected before: Acme — Business Analyst",
+        "Salary below target.",
+        "Missing mandatory requirement: SAP Certification",
+        "Freshness may be unreliable — LinkedIn can show a reposted date for external-apply listings, and the original posting date could not be verified.",
+        'Ad lists both permanent and contract work types ("full time contract") — may be a wide talent-pool search rather than a specific vacancy.',
+    ]
 
 
 def test_candidate_application_history_warnings_stay_in_checks_panel_without_changing_score():
@@ -2419,7 +2626,7 @@ def test_salary_fit_ignores_yearly_package_and_including_super_amounts():
     assert salary_fit_label({"salary": "$130k + super"}, profile) == "listed"
 
 
-def test_render_job_card_formats_bare_contract_salary_with_period_hint():
+def test_render_job_card_keeps_bare_contract_salary_without_invented_period():
     html = workspace_renderer.render_job_card(
         {
             "job_key": "test-salary-period-hint",
@@ -2440,7 +2647,8 @@ def test_render_job_card_formats_bare_contract_salary_with_period_hint():
         _test_profile(),
     )
 
-    assert "Salary</strong> $125/hr" in html
+    assert "Salary</strong> $125" in html
+    assert "Salary</strong> $125/hr" not in html
     assert "Salary</strong> $125 p.a." not in html
 
 

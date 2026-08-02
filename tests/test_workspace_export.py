@@ -150,3 +150,31 @@ def test_workspace_export_badges_use_preserved_posting_channel_classification():
     assert "Source unclear" not in direct_badges
     assert "Agency recruiter" in recruiter_badges
     assert "Source unclear" not in recruiter_badges
+
+
+def test_export_badges_show_source_unclear_for_unknown_channel():
+    record = {
+        "posting_channel_evidence": {
+            "kind": "unknown",
+            "source": "insufficient_evidence",
+            "trusted_metadata": [],
+            "weak_text_matches": [],
+            "text_evidence": [],
+            "needs_review": False,
+        }
+    }
+
+    badges = workspace_export._build_badges(record, "current")
+
+    assert "Source unclear" in badges
+
+
+def test_export_badges_use_managed_posted_age_thresholds():
+    badges = workspace_export._build_badges(
+        {
+            "posted_age_days": 7,
+        },
+        "current",
+    )
+
+    assert "7+ Days Old" in badges

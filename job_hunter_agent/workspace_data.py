@@ -38,6 +38,7 @@ from job_hunter_agent.record_schema import (
     RECORD_SEARCH_LOCATION_KEY,
     RECORD_SEEN_BEFORE_KEY,
     RECORD_SOURCE_KEY,
+    RECORD_SOURCE_METADATA_KEY,
     RECORD_TEASER_KEY,
     RECORD_TIMES_KEPT_KEY,
     RECORD_TIMES_SEEN_KEY,
@@ -67,6 +68,16 @@ def _posting_channel_evidence(entry: dict, snapshot: dict) -> dict:
     if isinstance(value, dict):
         return dict(value)
     value = entry.get(RECORD_POSTING_CHANNEL_EVIDENCE_KEY)
+    if isinstance(value, dict):
+        return dict(value)
+    return {}
+
+
+def _source_metadata(entry: dict, snapshot: dict) -> dict:
+    value = snapshot.get(RECORD_SOURCE_METADATA_KEY)
+    if isinstance(value, dict):
+        return dict(value)
+    value = entry.get(RECORD_SOURCE_METADATA_KEY)
     if isinstance(value, dict):
         return dict(value)
     return {}
@@ -140,6 +151,7 @@ def build_history_workspace_record(
         "hard_block_reasons": snapshot.get("hard_block_reasons") or [],
         RECORD_APPLY_METHOD_KEY: snapshot.get(RECORD_APPLY_METHOD_KEY) or "",
         "job_quality_signals": snapshot.get("job_quality_signals") or [],
+        RECORD_SOURCE_METADATA_KEY: _source_metadata(entry, snapshot),
         RECORD_POSTING_CHANNEL_EVIDENCE_KEY: _posting_channel_evidence(entry, snapshot),
         RECORD_SEEN_BEFORE_KEY: True,
         RECORD_TIMES_VIEWED_KEY: int(entry.get(RECORD_TIMES_VIEWED_KEY, 0) or 0),
@@ -260,6 +272,7 @@ def build_hidden_workspace_record(
         "hard_block_reasons": snapshot.get("hard_block_reasons") or [],
         RECORD_APPLY_METHOD_KEY: snapshot.get(RECORD_APPLY_METHOD_KEY) or "",
         "job_quality_signals": snapshot.get("job_quality_signals") or [],
+        RECORD_SOURCE_METADATA_KEY: _source_metadata(entry, snapshot),
         RECORD_POSTING_CHANNEL_EVIDENCE_KEY: _posting_channel_evidence(entry, snapshot),
         RECORD_SEARCH_LOCATION_KEY: snapshot.get(RECORD_SEARCH_LOCATION_KEY) or "N/A",
         RECORD_SEARCH_KEYWORDS_KEY: snapshot.get(RECORD_SEARCH_KEYWORDS_KEY) or "",
@@ -371,6 +384,7 @@ def build_applied_workspace_record(
         "hard_block_reasons": snapshot.get("hard_block_reasons") or [],
         RECORD_APPLY_METHOD_KEY: snapshot.get(RECORD_APPLY_METHOD_KEY) or "",
         "job_quality_signals": snapshot.get("job_quality_signals") or [],
+        RECORD_SOURCE_METADATA_KEY: _source_metadata(entry, snapshot),
         RECORD_POSTING_CHANNEL_EVIDENCE_KEY: _posting_channel_evidence(entry, snapshot),
         "search_location": snapshot.get("search_location") or "N/A",
         "search_keywords": snapshot.get("search_keywords") or "",

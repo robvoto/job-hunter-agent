@@ -55,6 +55,8 @@ Choose the best matching skill. Combine with reusable skills such as `code-chang
 - Hard rejection is only for explicit blockers backed by approved rules.
 - Weak or uncertain signals are preserved for review, not silently deleted.
 - Learning flows through the signal registry before becoming runtime knowledge.
+- Do not infer salary or pay period from free-text ad prose with deterministic heuristics. Compensation must come from structured source data or another explicitly approved owner; otherwise keep it unknown.
+- Any new heuristic or hardcoded business/display rule is a red flag and requires explicit human approval before implementation.
 
 ## Backlog
 

@@ -327,7 +327,8 @@
     "salary": "Salary",
     "linkedin_listed": "LinkedIn listed",
     "reposted_suffix": "reposted",
-    "originally_posted": "Originally posted"
+    "originally_posted": "Originally posted",
+    "posted_unavailable": "Not captured"
   },
   "reject_reason_human_map_description": "Human-readable labels for deterministic reject reasons.",
   "reject_reason_human_map": {
@@ -410,7 +411,9 @@
     "full_description_summary": "Full job description",
     "job_requirements_summary": "Job Requirements",
     "job_requirements_empty_state": "No requirements were extracted for this job.",
-    "job_requirements_detail_hint": "The hidden subtitle is the small grey line under a requirement row. It shows the matched capability name and the quoted job text, and debug mode turns it back on.",
+    "job_requirements_detail_hint": "The small grey helper line under a requirement row shows the matched capability in normal mode. Debug mode also shows the exact ad wording used for the match.",
+    "job_requirements_capability_badge": "Capability",
+    "job_requirements_ad_wording_badge": "Ad wording",
     "occupation_alignment_row_label": "Job title match",
     "risk_panel_summary": "Checks before applying",
     "clearance_panel_summary": "Clearances",
@@ -463,6 +466,8 @@
     "gap_heading_label": "Needs confirmation",
     "add_to_profile_action_label": "Add to profile",
     "add_to_profile_action_title": "Add this to your capability profile",
+    "posted_age_badge_template": "${days}+ Days Old",
+    "posted_age_badge_tooltip_template": "This ad appears to be at least ${days} days old.",
     "show_more_label": "Show more",
     "show_less_label": "Show less",
     "action_undo_applied_label": "Undo Applied",
@@ -483,7 +488,7 @@
     "hero_title": "Jobs Workspace",
     "potential_jobs_tab": "Potential Jobs",
     "top_level_workspace_views_aria_label": "Top-level workspace views",
-    "archive_label": "Previously Saved Searches",
+    "archive_label": "Saved from earlier run",
     "match_controls_heading": "Match Controls",
     "reset_all_filters_button": "Reset All Filters",
     "sort_label": "Sort",

@@ -20,6 +20,8 @@ See `.skills/scraping/DETAILS.md` for detailed work-mode extraction, source-spec
 - Preserve raw/important job signals where possible.
 - Keep source metadata separate from classification: apply URL/domain, company links, poster identity, ATS hints, work-mode provenance, and description confidence.
 - Prefer board-declared/structured metadata over text inference.
+- Do not infer salary or pay period from free-text ad prose with deterministic heuristics. Compensation must come from structured source fields or another explicitly approved owner.
+- Any new heuristic or hardcoded parsing/classification rule is a red flag and requires explicit human approval before implementation.
 - Use fallback text heuristics only when trusted metadata is unavailable, and preserve provenance/review flags.
 - Keep fallback heuristics data-driven in managed knowledge/config, not hardcoded in scraper code.
 - Normalise job identity consistently for dedup/history.
@@ -51,4 +53,3 @@ Do not rely on stale `output/console.log`.
 - Run the smallest relevant scraper/data-shape test first.
 - Add adjacent validation if source orchestration, identity, work-mode provenance, or filtering boundaries are affected.
 - Record the exact validation command before marking work done.
-

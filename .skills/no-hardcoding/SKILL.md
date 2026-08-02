@@ -11,6 +11,7 @@ Use before adding/changing thresholds, mappings, defaults, labels, scoring value
 Business judgement must not hide in feature code.
 Silent fallbacks are not acceptable. If required data is missing, surface an explicit error or fix the owner.
 Do not mask failures with fallback encoders, fallback parsers, fallback labels, default models, guessed config, alternate fields, broad exception swallowing, or compatibility shims. Stop and expose the failure unless the human explicitly approves the fallback with a stated reason.
+Any new heuristic or hardcoded business/display rule is a red flag and requires explicit human approval before implementation.
 
 ## Forbidden
 - Inline scoring maps, e.g. `{ "strong": 4, "working": 3 }`

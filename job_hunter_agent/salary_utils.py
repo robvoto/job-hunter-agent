@@ -3,7 +3,6 @@
 import re
 
 from job_hunter_agent.io_utils import load_parsing_rules
-from job_hunter_agent.salary import load_salary
 from job_hunter_agent.text_processing import compact_whitespace
 
 
@@ -65,10 +64,11 @@ def salary_display_score(value: str) -> tuple[int, int]:
         return (0, 0)
 
     normalized = text.lower().replace(",", "")
+    explicit_flag = 1 if _salary_explicit_period(text) else 0
 
     amount_count = len(re.findall(r"\$?\d+(?:\.\d+)?\s*k?", normalized))
 
-    return amount_count, len(text)
+    return explicit_flag, amount_count * 1000 + len(text)
 
 
 def preferred_salary_display(*values: str) -> str:
@@ -114,43 +114,16 @@ def salary_includes_super_or_package(value: str) -> bool:
 
 def _salary_explicit_period(text: str) -> str:
     lowered = text.lower()
-    if re.search(r"\b(per\s+hour|hourly|p/h|ph|/hr|/hour)\b", lowered):
+    if re.search(r"(?:\bper\s+hour\b|\bhourly\b|\bp/h\b|\bph\b|/hr\b|/hour\b)", lowered):
         return "hourly"
-    if re.search(r"\b(per\s+day|daily|p\.d\.|day\s+rate)\b|/day", lowered):
+    if re.search(r"(?:\bper\s+day\b|\bdaily\b|\bp\.?/?d\.?\b|\bday\s+rate\b|/day\b|/d\b)", lowered):
         return "daily"
-    if re.search(r"\b(p\.a\.|per\s+annum|annually)\b|/yr\b|/year\b", lowered):
+    if re.search(r"(?:\bp\.a\.|\bper\s+annum\b|\bannually\b|/yr\b|/year\b)", lowered):
         return "annual"
-    if re.search(r"\b(per\s+month|monthly)\b|/mo\b|/month\b", lowered):
+    if re.search(r"(?:\bper\s+month\b|\bmonthly\b|/mo\b|/month\b)", lowered):
         return "monthly"
-    if re.search(r"\b(per\s+week|weekly)\b|/wk\b|/week\b", lowered):
+    if re.search(r"(?:\bper\s+week\b|\bweekly\b|/wk\b|/week\b)", lowered):
         return "weekly"
-    return ""
-
-
-def _salary_implied_period(text: str, work_type: str = "") -> str:
-    salary_text = compact_whitespace(text)
-    if not salary_text or salary_text == "N/A":
-        return ""
-
-    explicit = _salary_explicit_period(salary_text)
-    if explicit:
-        return explicit
-
-    normalized_work_type = compact_whitespace(work_type).lower()
-    is_contract = bool(re.search(r"\bcontract\b|\bftc\b", normalized_work_type))
-    is_permanent = bool(re.search(r"\bpermanent\b|\bfull\s*time\b", normalized_work_type))
-
-    amount_match = re.search(r"\$?\s*(\d+(?:\.\d+)?)\s*k?\b", salary_text.replace(",", ""))
-    if not amount_match:
-        amount_match = re.search(r"(\d+(?:\.\d+)?)", salary_text.replace(",", ""))
-    amount = float(amount_match.group(1)) if amount_match else 0.0
-
-    if is_contract and amount > 0:
-        return "hourly" if amount < 250 else "daily"
-
-    if is_permanent and amount >= 1000:
-        return "annual"
-
     return ""
 
 
@@ -164,12 +137,4 @@ def format_salary_display(value: str, *, work_type: str = "") -> str:
     explicit_period = _salary_explicit_period(text)
     if explicit_period:
         return text
-
-    implied_period = _salary_implied_period(text, work_type)
-    if implied_period:
-        suffix = load_salary().get("interval_suffix", {}).get(implied_period, "")
-        if suffix:
-            separator = "" if suffix.startswith("/") else " "
-            return f"{text}{separator}{suffix}".strip()
-
     return text

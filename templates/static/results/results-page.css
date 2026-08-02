@@ -291,7 +291,7 @@
 .match-tile {
   min-width: 110px;
   margin-left: auto;
-  align-self: center;
+  align-self: flex-start;
   border-radius: 18px;
   padding: 12px 14px 11px;
   text-align: center;
@@ -633,19 +633,18 @@
 .job-requirement-list {
   list-style: none;
   padding-left: 0 !important;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content max-content;
-  column-gap: 8px;
-  row-gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .job-requirement-item {
   display: grid;
-  grid-column: 1 / -1;
-  grid-template-columns: subgrid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
-  row-gap: 8px;
-  padding: 6px 8px;
+  column-gap: 12px;
+  row-gap: 4px;
+  padding: 4px 0;
   border-radius: var(--radius-sm);
 }
 
@@ -673,12 +672,18 @@
 }
 
 .job-requirement-badges {
-  display: contents;
+  grid-column: 2;
+  justify-self: end;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .job-requirement-status {
-  grid-column: 3;
-  justify-self: start;
+  grid-column: auto;
+  justify-self: auto;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -751,31 +756,58 @@
 }
 
 .job-requirement-action {
-  grid-column: 2 / 4;
-  justify-self: start;
+  grid-column: auto;
+  justify-self: auto;
 }
 
 .req-add-to-profile {
-  color: color-mix(in srgb, var(--accent) 78%, white 22%);
-  background: color-mix(in srgb, var(--accent) 16%, var(--bg-surface));
-  border-color: color-mix(in srgb, var(--accent) 38%, var(--border-subtle));
-}
-
-.req-add-to-profile:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 24%, var(--bg-surface));
-  color: color-mix(in srgb, var(--accent) 88%, white 12%);
+  white-space: nowrap;
 }
 
 .req-coverage-detail {
-  display: block;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
   font-size: 0.78rem;
   color: var(--text-muted);
-  margin-top: 2px;
+  margin-top: 4px;
+}
+
+.req-coverage-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: var(--control-radius-pill);
+  border: 1px solid color-mix(in srgb, var(--selection-accent) 22%, var(--border-subtle));
+  background: color-mix(in srgb, var(--selection-accent) 10%, var(--bg-surface));
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+}
+
+.req-coverage-tag--muted {
+  border-color: var(--border-subtle);
+  background: color-mix(in srgb, var(--bg-surface) 82%, transparent);
+  color: var(--text-muted);
+}
+
+.req-coverage-detail-text {
+  min-width: 0;
+}
+
+.job-requirement-note {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
 }
 
 .job-req-importance {
-  grid-column: 2;
-  justify-self: end;
+  grid-column: auto;
+  justify-self: auto;
   display: inline-flex;
   align-items: center;
   font-size: 0.68rem;
@@ -1617,23 +1649,20 @@
   .job-link { font-size: 1.2rem; }
   .job-header-row { flex-direction: column; }
   .match-tile { min-width: 0; width: 100%; }
-  .job-requirement-list { grid-template-columns: 1fr; }
   .job-requirement-item { grid-template-columns: 1fr; }
   .job-requirement-badges {
-    display: grid;
-    grid-template-columns: repeat(2, max-content);
     grid-column: 1;
     justify-self: start;
-    justify-content: start;
-    justify-items: start;
-    column-gap: 6px;
-    row-gap: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: flex-start;
+    gap: 6px;
   }
-  .job-requirement-status { grid-column: auto; }
+  .job-requirement-status,
   .job-req-importance,
   .job-requirement-action {
-    grid-column: auto;
+    grid-column: 1;
     justify-self: start;
   }
-  .req-add-to-profile { grid-column: 1 / -1; }
 }

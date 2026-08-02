@@ -64,37 +64,6 @@ def set_page_param(url: str, page_num: int) -> str:
     return set_query_param(url, "page", page_num)
 
 
-def extract_salary(details_text: str) -> str:
-    """
-    Pull a salary-ish snippet from the job text.
-    (Best-effort: SEEK formats vary)
-    """
-    if not details_text:
-        return ""
-
-    rules = load_parsing_rules()
-    regex_patterns = rules.get("salary_extraction_patterns", [])
-    for pattern in regex_patterns:
-        match = re.search(pattern, details_text, flags=re.IGNORECASE)
-        if match:
-            return match.group(0).strip()
-
-    lines = [line.strip() for line in details_text.splitlines() if line.strip()]
-    for line in lines[:20]:
-        line_lower = line.lower()
-        if len(line) <= 120 and (
-            "salary" in line_lower
-            or "package" in line_lower
-            or "$" in line
-            or "k p.a." in line_lower
-            or "per day" in line_lower
-            or "daily rate" in line_lower
-            or "incl super" in line_lower
-        ):
-            return line
-    return ""
-
-
 _ABSOLUTE_DATE_MONTHS = {
     "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
     "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,

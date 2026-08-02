@@ -10,6 +10,7 @@ import re
 from datetime import date, datetime, timedelta
 from typing import Optional, Set
 
+from job_hunter_agent.global_settings import get_posted_age_badge_threshold_days
 from job_hunter_agent.io_utils import normalize_posted_text
 from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.record_schema import (
@@ -285,3 +286,19 @@ def current_posted_age_days(record: dict, now: Optional[datetime] = None) -> Opt
         print(f"[POSTING_UTILS][WARN] Failed to calculate current_posted_age_days: {exc}")
         return max(raw_age_days, 0.0)
     return max(age_seconds / 86400, 0.0)
+
+
+def posted_age_badge_threshold(
+    record: dict,
+    *,
+    thresholds: Optional[tuple[int, ...]] = None,
+    now: Optional[datetime] = None,
+) -> Optional[int]:
+    age_days = current_posted_age_days(record, now=now)
+    if age_days is None:
+        return None
+    configured = thresholds or get_posted_age_badge_threshold_days()
+    matched = [int(value) for value in configured if age_days >= float(value)]
+    if not matched:
+        return None
+    return max(matched)

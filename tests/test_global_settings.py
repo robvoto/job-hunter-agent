@@ -69,6 +69,7 @@ def test_save_global_settings_normalizes_values(isolated_db):
                 "capability_strength_preset": "recent_focus",
             },
             "history_settings": {
+                "posted_age_badge_threshold_days": ["3", "7", "15"],
                 "job_history_max_entries": "1500",
                 "job_history_max_age_days": "365",
                 "repeated_listing_min_times_seen": "5",
@@ -131,6 +132,7 @@ def test_save_global_settings_normalizes_values(isolated_db):
     assert saved["onboarding_settings"]["signal_cluster_dense_snippet_alias_hits"] == 5
 
     assert saved["history_settings"]["repeated_listing_min_times_seen"] == 5
+    assert saved["history_settings"]["posted_age_badge_threshold_days"] == [3, 7, 15]
 
     assert saved["history_settings"]["job_history_max_entries"] == 1500
 

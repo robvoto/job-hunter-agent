@@ -270,10 +270,15 @@ def _salary_period_hint(salary_text: str) -> str:
 
     lowered = salary_text.lower()
 
-    daily_match = bool(re.search(r"\b(per\s+day|daily|p\.d\.|day\s+rate)\b|/day", lowered))
+    daily_match = bool(
+        re.search(
+            r"(?:\bper\s+day\b|\bdaily\b|\bp\.?/?d\.?\b|\bday\s+rate\b|/day\b|/d\b)",
+            lowered,
+        )
+    )
 
     annual_match = bool(
-        re.search(r"\b(p\.a\.|per\s+annum|annually)\b|/yr\b|/year\b|base\s*\+", lowered)
+        re.search(r"(?:\bp\.a\.|\bper\s+annum\b|\bannually\b|/yr\b|/year\b|base\s*\+)", lowered)
     )
 
     if daily_match and not annual_match:
@@ -361,20 +366,15 @@ def _resolve_salary_comparison(
 
     if not salary_period and _salary_has_non_comparable_period(salary_text):
         return None
-
-    work_type_canon = _canonical_job_type(str(record.get("work_type") or ""))
+    if not salary_period:
+        return None
 
     if salary_period == "daily":
         target_period = "daily"
-
     elif salary_period == "annual":
         target_period = "annual"
-
-    elif work_type_canon == "contract":
-        target_period = "daily"
-
     else:
-        target_period = "annual"
+        return None
 
     active_profile = profile or load_profile()
 

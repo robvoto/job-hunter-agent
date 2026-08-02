@@ -12,7 +12,11 @@ from typing import Any
 from job_hunter_agent.fit_scoring import fit_score_displayed
 from job_hunter_agent.history import viewed_by_user
 from job_hunter_agent.io_utils import load_job_history, load_run_stats
-from job_hunter_agent.posting_utils import get_manual_skip_sets, parse_timestamp
+from job_hunter_agent.posting_utils import (
+    get_manual_skip_sets,
+    parse_timestamp,
+    posted_age_badge_threshold,
+)
 from job_hunter_agent.profile_store import load_profile
 from job_hunter_agent.source_registry import get_source_display_label
 from job_hunter_agent.system_warnings import make_system_warning_fingerprint, record_system_warning
@@ -83,9 +87,9 @@ def _build_badges(record: dict, workspace_state: str) -> list[str]:
     else:
         badges.append("New To You")
 
-    posted_age_days = _safe_int(record.get("posted_age_days"), -1)
-    if posted_age_days >= 15:
-        badges.append("15+ Days Old")
+    posted_age_threshold = posted_age_badge_threshold(record)
+    if posted_age_threshold is not None:
+        badges.append(f"{posted_age_threshold}+ Days Old")
 
     details_status = str(record.get("details_status") or "").strip().lower()
     if details_status and details_status not in {"ok", "n/a"}:
@@ -121,7 +125,7 @@ def _build_badges(record: dict, workspace_state: str) -> list[str]:
         badges.append("Company")
     elif channel_signal.get("needs_review") or channel_evidence:
         badges.append("Likely recruiter")
-    elif channel_kind or channel_source:
+    else:
         badges.append("Source unclear")
 
     duplicate_links = record.get("duplicate_links")

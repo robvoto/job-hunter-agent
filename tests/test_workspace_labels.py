@@ -36,11 +36,11 @@ def test_workspace_archive_and_alert_labels_come_from_ui_labels():
     workspace_page_labels = labels["workspace_page_labels"]
     settings_alerts_labels = labels["settings_alerts_labels"]
 
-    assert workspace_page_labels["archive_label"] == "Previously Saved Searches"
+    assert workspace_page_labels["archive_label"] == "Saved from earlier run"
     assert workspace_page_labels["potential_jobs_empty_state"].startswith(
         "No shortlist matches right now."
     )
-    assert workspace_renderer.ARCHIVE_LABEL == "Previously Saved Searches"
+    assert workspace_renderer.ARCHIVE_LABEL == "Saved from earlier run"
     assert settings_alerts_labels["section_title"] == "Messaging"
     assert settings_alerts_labels["section_copy"] == (
         "Connect Telegram alerts. Admins can also choose the model used for fit decisions."

@@ -101,6 +101,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_SEEK_ASSISTED_VERIFICATION_ENABLED,
     KEY_SESSION_MAX_AGE_DAYS,
     KEY_PREFERENCE_WEIGHTS,
+    KEY_POSTED_AGE_BADGE_THRESHOLD_DAYS,
     KEY_LLM_CACHE_MAX_ENTRIES,
     KEY_REPEATED_LISTING_MIN_SPAN_DAYS,
     KEY_REPEATED_LISTING_MIN_TIMES_SEEN,
@@ -163,6 +164,43 @@ def _normalize_float_map(
     for key, default in defaults.items():
         normalized[key] = _require_float(source, key, float(default), minimum, maximum)
     return normalized
+
+
+def _require_int_list(
+    source: dict[str, Any],
+    key: str,
+    default: list[int],
+    *,
+    minimum: int,
+    maximum: int,
+    min_items: int = 1,
+    max_items: int = 10,
+) -> list[int]:
+    raw = source.get(key, default)
+    if not isinstance(raw, list):
+        raise ValueError(f"global_settings.{key} must be a list, got {type(raw).__name__!r}")
+    if len(raw) < min_items or len(raw) > max_items:
+        raise ValueError(
+            f"global_settings.{key} must contain between {min_items} and {max_items} items"
+        )
+    values: list[int] = []
+    for index, item in enumerate(raw):
+        try:
+            value = int(item)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"global_settings.{key}[{index}] must be an integer, got {item!r}"
+            ) from exc
+        if value < minimum or value > maximum:
+            raise ValueError(
+                f"global_settings.{key}[{index}] must be between {minimum} and {maximum}, got {value}"
+            )
+        values.append(value)
+    if values != sorted(values):
+        raise ValueError(f"global_settings.{key} must be sorted ascending")
+    if len(set(values)) != len(values):
+        raise ValueError(f"global_settings.{key} must not contain duplicates")
+    return values
 
 
 def _normalize_int_bounds(source: dict[str, Any], defaults: dict[str, int]) -> dict[str, int]:
@@ -779,6 +817,15 @@ def normalize_global_settings(
             DEFAULT_HISTORY_SETTINGS[KEY_ARCHIVE_STALE_AFTER_DAYS],
             1,
             365,
+        ),
+        KEY_POSTED_AGE_BADGE_THRESHOLD_DAYS: _require_int_list(
+            history_source,
+            KEY_POSTED_AGE_BADGE_THRESHOLD_DAYS,
+            DEFAULT_HISTORY_SETTINGS[KEY_POSTED_AGE_BADGE_THRESHOLD_DAYS],
+            minimum=1,
+            maximum=365,
+            min_items=1,
+            max_items=6,
         ),
         KEY_HIDDEN_REVIEW_DAYS: _require_int(
             history_source,

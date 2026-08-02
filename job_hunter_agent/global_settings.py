@@ -224,6 +224,11 @@ def get_archive_stale_after_days() -> int:
     return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_ARCHIVE_STALE_AFTER_DAYS])
 
 
+def get_posted_age_badge_threshold_days() -> tuple[int, ...]:
+    values = load_global_settings()[KEY_HISTORY_SETTINGS][KEY_POSTED_AGE_BADGE_THRESHOLD_DAYS]
+    return tuple(int(value) for value in values)
+
+
 def get_hidden_review_days() -> int:
     return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_HIDDEN_REVIEW_DAYS])
 

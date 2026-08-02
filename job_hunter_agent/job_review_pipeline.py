@@ -237,7 +237,6 @@ from job_hunter_agent.text_processing import (
 )
 from job_hunter_agent.runtime_helpers import append_uncertainty_log, build_uncertainty_entry
 from job_hunter_agent.source_registry import get_source_display_label
-from job_hunter_agent.utils import extract_salary
 
 HookFn = Callable[[dict, "ReviewPipelineContext"], None]
 
@@ -897,7 +896,6 @@ def _apply_learning_signal_enrichment(record: dict, details_text: str, profile: 
     record[RECORD_SALARY_KEY] = preferred_salary_display(
         str(record.get(RECORD_SALARY_KEY) or ""),
         str(record.get(RECORD_CARD_SALARY_KEY) or ""),
-        extract_salary(details_text),
     )
     return skill_observations
 
