@@ -39,6 +39,7 @@ Choose the best matching skill. Combine with reusable skills such as `code-chang
 | `.skills/profile-extraction/SKILL.md` | CV/profile extraction and normalization |
 | `.skills/signal-registry/SKILL.md` | Approved learning signal lifecycle |
 | `.skills/preferences/SKILL.md` | Location, contract, government, salary, work mode preferences |
+| `.skills/aws-test-instance/SKILL.md` | AWS Job Hunter test EC2 host facts, SSM/CLI diagnosis, instance-side logs, service restarts, and browser-session runtime issues |
 | `.skills/release-management/SKILL.md` | Application versions, release gates, Git tags, and release publishing |
 | `.skills/dashboard-ui/SKILL.md` | Workspace and settings UI |
 | `.skills/onboarding-ui/SKILL.md` | Onboarding wizard, upload, reset/resume flow |

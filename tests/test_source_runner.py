@@ -645,30 +645,44 @@ def test_parallel_runner_keeps_results_after_timeout_warning(monkeypatch, caplog
     assert warnings[0]["category"] == "source_timeout"
 
 
-def test_parallel_runner_returns_after_hard_timeout_without_waiting_for_stuck_source(monkeypatch):
+def test_parallel_runner_requests_stop_and_keeps_partial_results_after_hard_timeout(monkeypatch):
     context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
-    release = threading.Event()
+    stop_requested = threading.Event()
+    stop_calls: list[bool] = []
 
-    def stuck_seek(ctx):
-        release.wait(timeout=5)
-        return _seek_result(kept_records=[{"job_key": "seek:late"}])
+    def cooperatively_stopping_seek(ctx):
+        deadline = time.time() + 1
+        while time.time() < deadline:
+            if stop_requested.is_set():
+                return _seek_result(
+                    kept_records=[{"job_key": "seek:late"}],
+                    audit_rows=[{"job_key": "seek:late"}],
+                )
+            time.sleep(0.005)
+        raise AssertionError("test source never received stop request")
 
     def fast_linkedin(ctx):
         return _li_result(kept_records=[{"job_key": "linkedin:1"}], audit_rows=[{"job_key": "linkedin:1"}])
 
-    monkeypatch.setattr(source_runner, "_run_seek_source", stuck_seek)
+    monkeypatch.setattr(source_runner, "_run_seek_source", cooperatively_stopping_seek)
     monkeypatch.setattr(source_runner, "_run_linkedin_source", fast_linkedin)
     monkeypatch.setattr(source_runner, "SEEK_SOURCE_TIMEOUT_SECONDS", 0.01)
     monkeypatch.setattr(source_runner, "SOURCE_HEARTBEAT_SECONDS", 60)
+    monkeypatch.setattr(
+        source_runner,
+        "request_run_stop",
+        lambda: stop_calls.append(True) or stop_requested.set(),
+    )
+    monkeypatch.setattr(source_runner, "run_stop_requested", stop_requested.is_set)
 
     started = time.time()
     kept, audit, skills = run_enabled_sources(context)
     elapsed = time.time() - started
-    release.set()
 
     assert elapsed < 1.0
-    assert [record["job_key"] for record in kept] == ["linkedin:1"]
-    assert [row["job_key"] for row in audit] == ["linkedin:1"]
+    assert stop_calls == [True]
+    assert [record["job_key"] for record in kept] == ["seek:late", "linkedin:1"]
+    assert [row["job_key"] for row in audit] == ["seek:late", "linkedin:1"]
     assert skills == []
 
 

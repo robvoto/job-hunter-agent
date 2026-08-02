@@ -63,7 +63,9 @@ Backlog source of truth is the shared Google Sheet. Local backlog markdown files
 | Folder | Owner |
 |---|---|
 | `.skills/*/SKILL.md` | One active agent workflow/domain each. Must include YAML `name` and `description`. |
+| `.skills/aws-test-instance/SKILL.md` | AWS Job Hunter test EC2 instance facts, SSM access workflow, instance-side logs, and host/runtime diagnosis. |
 | `.skills/release-management/SKILL.md` | Release version ownership, gates, tags, and publishing workflow. |
+| `.skills/aws-test-instance/DETAILS.md` | Exact AWS test instance identifiers, app/log paths, SSM commands, and known host-side failure patterns. |
 | `.skills/*/DETAILS.md` | Longer examples/details loaded only when the parent skill points to them. |
 | `docs/archived-skills/` | Retired skills kept for history only. Not active routing. |
 

@@ -12,6 +12,7 @@ from typing import Any, Callable, Sequence
 from job_hunter_agent.run_context import ScrapeRunContext
 from job_hunter_agent.run_control import (
     get_run_progress,
+    request_run_stop,
     run_stop_requested,
     set_run_progress,
     step_through_enabled,
@@ -543,10 +544,6 @@ def _log_source_complete(result: SourceRunResult, *, elapsed_s: float) -> None:
     )
 
 
-def _timed_out_source_result(source: str, message: str) -> SourceRunResult:
-    return SourceRunResult(source=source, error=TimeoutError(message))
-
-
 def _parallel_completion_progress(completed_source: str, pending_sources: Sequence[str]) -> str:
     completed_label = get_source_display_label(completed_source)
     if not pending_sources:
@@ -623,6 +620,7 @@ def _run_sources_in_parallel(
     }
     pending = set(futures)
     results_by_source: dict[str, SourceRunResult] = {}
+    hard_timeout_stop_requested: set[Any] = set()
 
     try:
         while pending:
@@ -649,8 +647,18 @@ def _run_sources_in_parallel(
             ]
             for future in hard_timed_out:
                 source = futures[future]
-                pending.remove(future)
-                results_by_source[source] = _timed_out_source_result(source, timeout_messages[future])
+                if future in hard_timeout_stop_requested:
+                    continue
+                elapsed_s = now - started_at[source]
+                logger.warning(
+                    "[%s][SOURCE_TIMEOUT_STOP_REQUESTED] elapsed_s=%s progress=%r message=%s",
+                    source.upper(),
+                    int(elapsed_s),
+                    get_run_progress() or "(none)",
+                    timeout_messages[future],
+                )
+                request_run_stop()
+                hard_timeout_stop_requested.add(future)
 
             for future in list(pending):
                 source = futures[future]
@@ -669,10 +677,17 @@ def _run_sources_in_parallel(
             if not pending:
                 break
 
-            next_deadline = min(
-                min(warn_deadlines[future], hard_deadlines[future]) for future in pending
-            )
-            wait_timeout = max(0.0, min(0.1, next_deadline - time.monotonic()))
+            next_deadline_candidates: list[float] = []
+            for future in pending:
+                if future not in timeout_warned:
+                    next_deadline_candidates.append(warn_deadlines[future])
+                if future not in hard_timeout_stop_requested:
+                    next_deadline_candidates.append(hard_deadlines[future])
+            if next_deadline_candidates:
+                next_deadline = min(next_deadline_candidates)
+                wait_timeout = max(0.0, min(0.1, next_deadline - time.monotonic()))
+            else:
+                wait_timeout = 0.1
             done, _ = wait(pending, timeout=wait_timeout, return_when=FIRST_COMPLETED)
             for future in done:
                 pending.remove(future)

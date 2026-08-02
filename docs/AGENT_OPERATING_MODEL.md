@@ -76,6 +76,7 @@ The description is important because agent systems often discover skills from na
 | Skill | Purpose |
 |---|---|
 | `ad-learning` | Pending job-ad learning candidates. |
+| `aws-test-instance` | AWS Job Hunter test EC2 instance facts, SSM diagnosis, instance-side logs, and browser-session host issues. |
 | `backlog-management` | Google Sheet backlog rows, JH IDs, priorities, duplicates, implementation state, evidence, and human review flags. |
 | `code-change` | Code/test/runtime implementation workflow, validation, and Definition of Done. |
 | `css-design-system` | CSS, spacing, layout, reusable components, and theme tokens. |
