@@ -1673,7 +1673,12 @@ def test_infer_posting_channel_keeps_unknown_without_trusted_linkedin_employer_m
     assert channel["needs_review"] is False
 
 
-def test_render_job_card_shows_managed_posted_age_badge():
+def test_render_job_card_shows_posted_age_in_metadata(monkeypatch):
+    monkeypatch.setattr(
+        workspace_renderer,
+        "current_posted_age_days",
+        lambda record, now=None: float(record["posted_age_days"]),
+    )
     html = workspace_renderer.render_job_card(
         {
             "job_key": "test-posted-age-badge",
@@ -1687,6 +1692,7 @@ def test_render_job_card_shows_managed_posted_age_badge():
             "work_type": "Full Time",
             "work_mode": "Hybrid",
             "salary": "N/A",
+            "posted": "26 Jul 2026",
             "posted_age_days": 7,
             "full_description": "Business analysis support across delivery teams.",
             "fit_highlights": [],
@@ -1695,7 +1701,8 @@ def test_render_job_card_shows_managed_posted_age_badge():
         _test_profile(),
     )
 
-    assert "7+ Days Old" in html
+    assert 'class="job-posted-age"> · 7 days old</span>' in html
+    assert "badge-stale" not in html
 
 
 def test_render_job_card_omits_posted_meta_when_posted_is_missing():

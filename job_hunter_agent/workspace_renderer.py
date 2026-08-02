@@ -31,10 +31,7 @@ from job_hunter_agent.fit_scoring import (
     occupation_alignment_diagnostics,
     requirement_fit_diagnostics,
 )
-from job_hunter_agent.global_settings import (
-    get_default_country_suffix,
-    get_posted_age_badge_threshold_days,
-)
+from job_hunter_agent.global_settings import get_default_country_suffix
 from job_hunter_agent.history import (
     assess_history_warning_signals,
     viewed_by_user,
@@ -50,7 +47,6 @@ from job_hunter_agent.posting_utils import (
     linkedin_freshness_is_unknown,
     linkedin_original_posted_is_unverified,
     original_posted_display_label,
-    posted_age_badge_threshold,
     posted_display_label,
 )
 from job_hunter_agent.preferences import (
@@ -796,24 +792,23 @@ def _build_checks_before_applying_items(
     return items
 
 
-def _render_posted_age_badge(record: dict) -> str:
-    threshold = posted_age_badge_threshold(
-        record,
-        thresholds=get_posted_age_badge_threshold_days(),
-    )
-    if threshold is None:
+def _render_posted_age_meta(age_days: Optional[float]) -> str:
+    """Render freshness beside the posted date instead of as a separate badge."""
+
+    if age_days is None:
         return ""
-    label_template = Template(
-        _workspace_label("workspace_card_labels", "posted_age_badge_template")
-    )
-    tooltip_template = Template(
-        _workspace_label("workspace_card_labels", "posted_age_badge_tooltip_template")
-    )
-    return render_badge(
-        label_template.substitute(days=threshold),
-        "badge-stale",
-        tooltip_template.substitute(days=threshold),
-    )
+    display_days = max(int(age_days), 0)
+    if display_days == 0:
+        label = _workspace_label("workspace_card_labels", "posted_age_meta_today")
+    elif display_days == 1:
+        label = Template(
+            _workspace_label("workspace_card_labels", "posted_age_meta_singular_template")
+        ).substitute(days=display_days)
+    else:
+        label = Template(
+            _workspace_label("workspace_card_labels", "posted_age_meta_template")
+        ).substitute(days=display_days)
+    return f'<span class="job-posted-age"> · {safe_html(label)}</span>'
 
 
 def score_filter_option_label(threshold: int, scoring_profile: Optional[dict] = None) -> str:
@@ -1236,9 +1231,6 @@ def render_job_card(
                 _workspace_label("workspace_card_labels", "new_to_you_badge_tooltip"),
             )
         )
-    posted_age_badge_html = _render_posted_age_badge(record)
-    if posted_age_badge_html:
-        badges.append(posted_age_badge_html)
     if seen_by_you:
         badges.append(viewed_badge_html())
     badges.append(
@@ -1483,6 +1475,7 @@ def render_job_card(
     _original_posted_display = (
         original_posted_display_label(record) if _original_posted_verified else ""
     )
+    posted_age_meta = _render_posted_age_meta(posted_age_days)
     contract_duration_display = display_contract_duration_label(display_record)
     normalized_work_type_signature = re.sub(
         r"[^a-z0-9]+",
@@ -1497,7 +1490,7 @@ def render_job_card(
     meta_items = []
     if _board_posted_display and _original_posted_display:
         meta_items.append(
-            f'<span class="job-meta-item"><strong>{safe_html(source_label)} {safe_html(_workspace_label("workspace_meta_labels", "reposted_suffix"))}</strong> {safe_html(str(_board_posted_display))}</span>'
+            f'<span class="job-meta-item"><strong>{safe_html(source_label)} {safe_html(_workspace_label("workspace_meta_labels", "reposted_suffix"))}</strong> {safe_html(str(_board_posted_display))}{posted_age_meta}</span>'
         )
         meta_items.append(
             f'<span class="job-meta-item"><strong>{safe_html(_workspace_label("workspace_meta_labels", "originally_posted"))}</strong> {safe_html(str(_original_posted_display))}</span>'
@@ -1509,7 +1502,7 @@ def render_job_card(
             posted_label = _workspace_label("workspace_meta_labels", "linkedin_listed")
             posted_value = board_posted_display_label(record) or posted_display
         meta_items.append(
-            f'<span class="job-meta-item"><strong>{safe_html(posted_label)}</strong> {safe_html(str(posted_value))}</span>'
+            f'<span class="job-meta-item"><strong>{safe_html(posted_label)}</strong> {safe_html(str(posted_value))}{posted_age_meta}</span>'
         )
     else:
         logger.warning(
