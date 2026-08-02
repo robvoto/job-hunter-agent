@@ -66,6 +66,7 @@ def test_fit_review_prompt_excludes_learning_guidance(monkeypatch):
     assert "Do not invent new categories" not in prompt
     assert "requirement_coverage" in prompt
     assert "fit_review.grade" in prompt
+    assert "exact canonical capability or eligibility name" in prompt
     assert "Eligibility matrix:" in prompt
     assert "match_source" not in prompt
     assert "matched_profile_term" not in prompt
@@ -1246,6 +1247,54 @@ def test_normalize_coverage_converts_invalid_capability_match_to_not_shown(monke
         "finance transformation",
         "SAP experience",
     )
+
+
+def test_normalize_coverage_recovers_canonical_capability_from_profile_support():
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "Python experience",
+                "importance": "mandatory",
+                "requirement_type": "capability",
+                "status": "supported",
+                "matched_candidate_fact": "",
+                "matched_job_text": "Python and Django",
+                "profile_support": [
+                    "Experienced backend development with Python and FastAPI"
+                ],
+            }
+        ],
+        valid_capability_names={
+            "backend development": "Backend Development",
+            "server-side development": "Backend Development",
+        },
+    )
+
+    assert result[0]["status"] == "supported"
+    assert result[0]["matched_candidate_fact"] == "Backend Development"
+    assert result[0]["capability_name"] == "Backend Development"
+
+
+def test_normalize_coverage_accepts_profile_capability_aliases():
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "API experience",
+                "importance": "preferred",
+                "requirement_type": "capability",
+                "status": "supported",
+                "matched_candidate_fact": "api development",
+                "profile_support": ["Built REST APIs"],
+            }
+        ],
+        valid_capability_names={
+            "rest api design and development": "Rest Api Design And Development",
+            "api development": "Rest Api Design And Development",
+        },
+    )
+
+    assert result[0]["matched_candidate_fact"] == "Rest Api Design And Development"
+    assert result[0]["capability_name"] == "Rest Api Design And Development"
 
 
 def test_normalize_coverage_marks_invalid_requirement_type_for_review(monkeypatch):

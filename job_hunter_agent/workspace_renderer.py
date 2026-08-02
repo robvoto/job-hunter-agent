@@ -543,13 +543,24 @@ _WORKSPACE_PAGE_LABEL_KEYS = (
     "salary_min_label",
     "date_range_label",
     "last_run_heading",
+    "last_run_cards_seen_label",
+    "last_run_details_checked_label",
+    "last_run_accepted_label",
+    "last_run_rejected_label",
     "last_run_llm_cost_label",
     "last_run_input_tokens_label",
     "last_run_output_tokens_label",
-    "crawler_stats_heading",
-    "crawler_stats_helper",
-    "crawler_stats_cards_seen_label",
-    "crawler_stats_ads_reviewed_label",
+    "workspace_status_heading",
+    "workspace_status_helper",
+    "workspace_visible_label",
+    "workspace_new_label",
+    "workspace_opened_label",
+    "workspace_saved_label",
+    "lifetime_llm_heading",
+    "lifetime_llm_helper",
+    "lifetime_llm_cost_label",
+    "lifetime_input_tokens_label",
+    "lifetime_output_tokens_label",
     "run_efficiency_summary",
     "show_hide_hint",
     "run_efficiency_intro",
@@ -1719,7 +1730,13 @@ def render_job_card(
 
         if coverage_status:
             status_key = coverage_status_label_keys.get(coverage_status)
-            if coverage_status in {"not_shown", "invalid"} and importance == "mandatory":
+            if coverage_status == "not_shown" and importance == "mandatory":
+                status_key = "coverage_status_mandatory_not_shown"
+            elif (
+                coverage_status == "invalid"
+                and importance == "mandatory"
+                and row.get("requirement_type") == "invalid"
+            ):
                 status_key = "coverage_status_mandatory_not_shown"
         else:
             status_key = profile_status_label_keys.get(profile_status)
@@ -1872,6 +1889,7 @@ def render_job_card(
                 target_order.append(key)
             row = target_rows[key]
             row["coverage_status"] = str(item.get("status") or "not_shown").strip().lower()
+            row["requirement_type"] = raw_requirement_type
             row["importance"] = str(item.get("importance") or "preferred").strip().lower()
             row["is_eligibility"] = is_eligibility
             row["classification_review"] = classification_review

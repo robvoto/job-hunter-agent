@@ -382,13 +382,24 @@ def test_rendered_workspace_html_content(tmp_path):
             "salary_min_label": "Salary min",
             "date_range_label": "Date range",
             "last_run_heading": "Last Run",
+            "last_run_cards_seen_label": "Jobs found",
+            "last_run_details_checked_label": "Job details checked",
+            "last_run_accepted_label": "Matches accepted",
+            "last_run_rejected_label": "Rejected",
             "last_run_llm_cost_label": "LLM cost",
             "last_run_input_tokens_label": "Input tokens",
             "last_run_output_tokens_label": "Output tokens",
-            "crawler_stats_heading": "Search stats",
-            "crawler_stats_helper": "Jobs found counts listing cards discovered in the search. Job details checked counts roles the app opened or reviewed in detail. LLM totals reflect the last run.",
-            "crawler_stats_cards_seen_label": "Jobs found",
-            "crawler_stats_ads_reviewed_label": "Job details checked",
+            "workspace_status_heading": "Workspace",
+            "workspace_status_helper": "These counts describe the jobs currently in your workspace.",
+            "workspace_visible_label": "Visible matches",
+            "workspace_new_label": "New to you",
+            "workspace_opened_label": "Opened by you",
+            "workspace_saved_label": "Saved from earlier run",
+            "lifetime_llm_heading": "Total LLM usage",
+            "lifetime_llm_helper": "Total recorded LLM usage.",
+            "lifetime_llm_cost_label": "Total LLM cost",
+            "lifetime_input_tokens_label": "Total input tokens",
+            "lifetime_output_tokens_label": "Total output tokens",
             "run_efficiency_summary": "Run Efficiency",
             "show_hide_hint": "Show / hide",
             "run_efficiency_intro": "Search targets this run: ",
@@ -513,9 +524,9 @@ def test_rendered_workspace_html_content(tmp_path):
             in captured_tools["header_nav_html"]
         )
         assert 'data-workspace-target="potential"' in captured_tools["header_nav_html"]
-        assert "Jobs found counts listing cards discovered in the search." in rendered_html
-        assert "Job details checked counts roles the app opened or reviewed in detail." in rendered_html
-        assert "LLM totals reflect the last run." in rendered_html
+        assert "Jobs found" in rendered_html
+        assert "Job details checked" in rendered_html
+        assert "Total recorded LLM usage." in rendered_html
         assert "LLM cost" in rendered_html
         assert "$0.1234" in rendered_html
         assert "Input tokens" in rendered_html

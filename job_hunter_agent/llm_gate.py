@@ -636,7 +636,7 @@ def build_requirement_coverage_guidance() -> str:
     parts = [
         f"Use at most {get_llm_job_requirements_max_items()} requirement_coverage items.",
         "Classify each requirement as capability or eligibility.",
-        "Use matched_candidate_fact for the exact candidate fact that supports the requirement.",
+        "Use matched_candidate_fact for the exact canonical capability or eligibility name shown in the profile matrix; never put an evidence sentence there.",
         "When the ad states explicit years or months of experience, compare that threshold against the role experience matrix before choosing supported versus partially_supported.",
     ]
     parts.extend(f"- {line}" for line in REQUIREMENT_COVERAGE_DEFAULT_LINES)
@@ -891,6 +891,37 @@ def _build_valid_eligibility_lookup(
     return lookup
 
 
+def _recover_capability_from_profile_support(
+    profile_support: list[str],
+    valid_capability_lookup: dict[str, str] | None,
+) -> str:
+    """Recover a canonical capability when the model put it in evidence text.
+
+    The model must return the canonical name in ``matched_candidate_fact``. This
+    narrow recovery path handles the observed shape where the same canonical name
+    or an approved alias appears in ``profile_support`` instead. It only uses
+    profile-owned names and aliases; it does not invent semantic matches.
+    """
+    if not profile_support or not valid_capability_lookup:
+        return ""
+
+    matches: list[tuple[int, str]] = []
+    for evidence in profile_support:
+        normalized_evidence = compact_whitespace(evidence).lower()
+        if not normalized_evidence:
+            continue
+        for term, canonical in valid_capability_lookup.items():
+            if not term:
+                continue
+            if re.search(rf"(?<!\w){re.escape(term)}(?!\w)", normalized_evidence):
+                matches.append((len(term), canonical))
+
+    if not matches:
+        return ""
+    matches.sort(key=lambda item: (-item[0], item[1].lower()))
+    return matches[0][1]
+
+
 def _record_requirement_coverage_warning(
     *,
     requirement: str,
@@ -1053,6 +1084,23 @@ def normalize_llm_requirement_coverage(
                 profile_support.append(cleaned)
         if not requirement:
             continue
+        if (
+            requirement_type == "capability"
+            and status in {"supported", "partially_supported"}
+            and not capability_name
+        ):
+            recovered_capability = _recover_capability_from_profile_support(
+                profile_support,
+                valid_capability_lookup,
+            )
+            if recovered_capability:
+                capability_name = recovered_capability
+                matched_candidate_fact = recovered_capability
+                logger.info(
+                    "[LLM][COVERAGE] recovered canonical capability=%r from profile_support for requirement=%r",
+                    recovered_capability,
+                    requirement,
+                )
         if status not in _ALLOWED_REQUIREMENT_COVERAGE_STATUSES:
             if importance != "mandatory":
                 continue
@@ -1691,11 +1739,17 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
     valid_eligibility_names: dict[str, str] | None = None
     if fit_review:
         profile = load_profile()
-        valid_capability_names = {
-            str(r.get("name") or "").strip().lower(): str(r.get("name") or "").strip()
-            for r in profile.get(KEY_CANDIDATE_CAPABILITIES, [])
-            if isinstance(r, dict) and str(r.get("name") or "").strip()
-        }
+        valid_capability_names = {}
+        for rule in profile.get(KEY_CANDIDATE_CAPABILITIES, []) or []:
+            if not isinstance(rule, dict):
+                continue
+            canonical = str(rule.get("name") or "").strip()
+            if not canonical:
+                continue
+            for term in [canonical, *(rule.get("aliases") or [])]:
+                normalized_term = str(term or "").strip().lower()
+                if normalized_term:
+                    valid_capability_names[normalized_term] = canonical
         valid_eligibility_names = {}
         for source_key in (KEY_CANDIDATE_ELIGIBILITY, KEY_CANDIDATE_ELIGIBILITY_FACTS):
             for rule in profile.get(source_key, []) or []:
@@ -2024,8 +2078,10 @@ def llm_judge_title(
 
 
 def get_cost_summary() -> dict[str, Any]:
-    """Read llm_costs.jsonl and return totals by purpose - useful for debugging."""
+    """Read the LLM ledger and return per-purpose and lifetime totals."""
     totals: dict[str, dict[str, Any]] = {}
+    grand_input_tokens = 0
+    grand_output_tokens = 0
     try:
         with open(_LLM_COSTS_PATH, encoding="utf-8") as fh:
             for line in fh:
@@ -2037,7 +2093,14 @@ def get_cost_summary() -> dict[str, Any]:
                 totals[p]["tok_in"] += entry.get("tok_in", 0)
                 totals[p]["tok_out"] += entry.get("tok_out", 0)
                 totals[p]["cost_usd"] += entry.get("cost_usd", 0.0)
+                grand_input_tokens += int(entry.get("tok_in", 0) or 0)
+                grand_output_tokens += int(entry.get("tok_out", 0) or 0)
     except FileNotFoundError:
         pass
     grand = sum(v["cost_usd"] for v in totals.values())
-    return {"by_purpose": totals, "grand_total_usd": round(grand, 6)}
+    return {
+        "by_purpose": totals,
+        "grand_total_usd": round(grand, 6),
+        "grand_input_tokens": grand_input_tokens,
+        "grand_output_tokens": grand_output_tokens,
+    }

@@ -30,6 +30,7 @@ from job_hunter_agent.history import (
     viewed_by_user,
 )
 from job_hunter_agent.io_utils import load_audit_rows
+from job_hunter_agent.llm_gate import get_cost_summary
 from job_hunter_agent.job_identity import deduplicate_across_sources, normalize_job_key
 from job_hunter_agent.llm_review_state import has_complete_llm_keep_data
 from job_hunter_agent.match_labels import score_to_match_label
@@ -582,12 +583,24 @@ def render_html(
 
     ws_page_labels = load_workspace_page_labels()
 
-    this_run_cards_html = _render_summary_cards_html(
+    last_run_cards_html = _render_summary_cards_html(
         [
-            (len(shortlist_records), "Matches"),
-            (sum(1 for record in shortlist_records if not viewed_by_user(record)), "New to you"),
-            (sum(1 for record in shortlist_records if viewed_by_user(record)), "Opened by you"),
-            (len(recent_archive_records), ARCHIVE_LABEL),
+            (
+                run_stats.get("cards_seen", 0),
+                ws_page_labels["LABEL_WS_LAST_RUN_CARDS_SEEN_LABEL"],
+            ),
+            (
+                run_stats.get("detail_fetches", 0),
+                ws_page_labels["LABEL_WS_LAST_RUN_DETAILS_CHECKED_LABEL"],
+            ),
+            (
+                run_stats.get("kept_count", 0),
+                ws_page_labels["LABEL_WS_LAST_RUN_ACCEPTED_LABEL"],
+            ),
+            (
+                run_stats.get("rejected_count", 0),
+                ws_page_labels["LABEL_WS_LAST_RUN_REJECTED_LABEL"],
+            ),
             (
                 f"${float(run_stats.get('llm_total_cost_usd', 0.0) or 0.0):.4f}",
                 ws_page_labels["LABEL_WS_LAST_RUN_LLM_COST_LABEL"],
@@ -603,14 +616,42 @@ def render_html(
         ]
     )
 
-    crawler_cards_html = _render_summary_cards_html(
+    workspace_cards_html = _render_summary_cards_html(
         [
-            (run_stats.get("cards_seen", 0), ws_page_labels["LABEL_WS_CRAWLER_STATS_CARDS_SEEN_LABEL"]),
             (
-                run_stats.get("detail_fetches", 0),
-                ws_page_labels["LABEL_WS_CRAWLER_STATS_ADS_REVIEWED_LABEL"],
+                len(shortlist_records),
+                ws_page_labels["LABEL_WS_WORKSPACE_VISIBLE_LABEL"],
             ),
-            (f"{round(float(run_stats.get('keep_rate', 0.0)) * 100, 1)}%", "Keep rate"),
+            (
+                sum(1 for record in shortlist_records if not viewed_by_user(record)),
+                ws_page_labels["LABEL_WS_WORKSPACE_NEW_LABEL"],
+            ),
+            (
+                sum(1 for record in shortlist_records if viewed_by_user(record)),
+                ws_page_labels["LABEL_WS_WORKSPACE_OPENED_LABEL"],
+            ),
+            (
+                len(recent_archive_records) + len(workspace_records["stale_archive_records"]),
+                ws_page_labels["LABEL_WS_WORKSPACE_SAVED_LABEL"],
+            ),
+        ]
+    )
+
+    lifetime_llm_usage = get_cost_summary()
+    lifetime_cards_html = _render_summary_cards_html(
+        [
+            (
+                f"${float(lifetime_llm_usage.get('grand_total_usd', 0.0) or 0.0):.4f}",
+                ws_page_labels["LABEL_WS_LIFETIME_LLM_COST_LABEL"],
+            ),
+            (
+                f"{int(lifetime_llm_usage.get('grand_input_tokens', 0) or 0):,}",
+                ws_page_labels["LABEL_WS_LIFETIME_INPUT_TOKENS_LABEL"],
+            ),
+            (
+                f"{int(lifetime_llm_usage.get('grand_output_tokens', 0) or 0):,}",
+                ws_page_labels["LABEL_WS_LIFETIME_OUTPUT_TOKENS_LABEL"],
+            ),
         ]
     )
 
@@ -710,8 +751,9 @@ def render_html(
             "SALARY_MIN_LABEL": safe_html(salary_min_label),
             "DATE_RANGE_LABEL": safe_html(date_range_label),
             "SCOPE_SAVED_OPTION_HTML": scope_saved_option_html,
-            "THIS_RUN_CARDS_HTML": this_run_cards_html,
-            "CRAWLER_CARDS_HTML": crawler_cards_html,
+            "LAST_RUN_CARDS_HTML": last_run_cards_html,
+            "WORKSPACE_CARDS_HTML": workspace_cards_html,
+            "LIFETIME_LLM_CARDS_HTML": lifetime_cards_html,
             "TARGET_SUMMARIES": safe_html(" | ".join(target_summaries) or "None"),
             "SNAPSHOT_HELPER": safe_html(snapshot_helper),
             "TESTING_MODE_NOTE": safe_html(testing_mode_note),

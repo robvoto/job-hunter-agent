@@ -500,7 +500,7 @@ def finalize_scrape_run(
             or context.run_started_at,
             context.configured_date_range,
             context.sort_newest_first,
-            context.previous_run_stats or {},
+            run_stats,
             context.job_history,
             context.applied_job_keys,
             context.hidden_job_keys,
