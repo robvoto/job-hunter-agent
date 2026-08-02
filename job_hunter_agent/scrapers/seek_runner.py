@@ -970,6 +970,13 @@ def seek_scrape_to_records(
 
     browser_mode = "persistent" if WORKSPACE_DEBUG_MODE else get_playwright_browser_mode()
     use_persistent_browser = browser_mode == "persistent"
+    logger.info(
+        "[SEEK][BROWSER_MODE] mode=%s headless=%s assisted_verification=%s profile_dir=%s",
+        browser_mode,
+        headless,
+        assisted_verification_enabled,
+        str(PLAYWRIGHT_USER_DATA_DIR) if use_persistent_browser else "(ephemeral)",
+    )
 
     try:
         with sync_playwright() as playwright:
