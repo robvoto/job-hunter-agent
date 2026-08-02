@@ -125,6 +125,7 @@ from job_hunter_agent.user_settings import (
 from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
 
 _run_in_progress = False
+_run_started_at: datetime | None = None
 _run_state_lock = threading.Lock()
 _rejection_suggestions_cache: dict[str, dict[str, Any]] = {}
 profile_review_status = _profile_store.profile_review_status
@@ -833,9 +834,11 @@ def get_docs() -> list[dict[str, str]]:
 
 
 def _set_run_in_progress(value: bool) -> None:
-    global _run_in_progress
+    global _run_in_progress, _run_started_at
     with _run_state_lock:
         _run_in_progress = bool(value)
+        if not _run_in_progress:
+            _run_started_at = None
 
 
 def _is_run_in_progress() -> bool:
@@ -844,12 +847,34 @@ def _is_run_in_progress() -> bool:
 
 
 def _try_mark_run_started() -> bool:
-    global _run_in_progress
+    global _run_in_progress, _run_started_at
     with _run_state_lock:
         if _run_in_progress:
             return False
         _run_in_progress = True
+        _run_started_at = datetime.now().astimezone()
         return True
+
+
+def _current_run_elapsed_seconds() -> int | None:
+    with _run_state_lock:
+        if not _run_in_progress or _run_started_at is None:
+            return None
+        started_at = _run_started_at
+    return max(0, int((datetime.now().astimezone() - started_at).total_seconds()))
+
+
+def _format_current_run_elapsed() -> str:
+    elapsed_seconds = _current_run_elapsed_seconds()
+    if elapsed_seconds is None:
+        return ""
+    minutes, seconds = divmod(elapsed_seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes}m {seconds}s"
+    if minutes:
+        return f"{minutes}m {seconds}s"
+    return f"{seconds}s"
 
 
 def _normalize_suggestion_phrase(value: Any) -> str:

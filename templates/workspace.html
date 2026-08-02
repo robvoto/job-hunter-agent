@@ -500,7 +500,7 @@
           title: SEARCH_STOPPING_TITLE,
           copy: SEARCH_STOPPING_COPY,
           subcopy: SEARCH_STOPPING_SUBCOPY,
-          progress: '',
+          progress: payload?.progress || '',
           allowStop: false,
         });
         startRunStatusPolling();
@@ -526,6 +526,7 @@
             title: SEARCH_STOPPING_TITLE,
             copy: SEARCH_STOPPING_COPY,
             subcopy: SEARCH_STOPPING_SUBCOPY,
+            progress: payload?.progress || '',
             allowStop: false,
           });
           window.setTimeout(() => pollRunStatusAfterOverlayStart(attempt + 1), RUN_STATUS_POLL_INTERVAL_MS);

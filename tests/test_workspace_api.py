@@ -444,6 +444,8 @@ def test_run_status_and_stop_endpoint_report_stopping(monkeypatch):
         },
     )
     monkeypatch.setattr(workspace_api.srv, "_is_run_in_progress", lambda: True)
+    monkeypatch.setattr(workspace_api.srv, "_format_current_run_elapsed", lambda: "15s")
+    monkeypatch.setattr(workspace_api.srv, "_current_run_elapsed_seconds", lambda: 15)
     monkeypatch.setattr(workspace_api, "get_run_progress", lambda: "SEEK page 1/3")
     monkeypatch.setattr(workspace_api, "run_stop_requested", lambda: True)
     stop_calls = []
@@ -455,7 +457,9 @@ def test_run_status_and_stop_endpoint_report_stopping(monkeypatch):
     assert status_response.status_code == 200
     assert status_response.json()["status"] == "stopping"
     assert status_response.json()["stop_requested"] is True
-    assert status_response.json()["progress"] == "SEEK page 1/3"
+    assert status_response.json()["progress"] == "SEEK page 1/3\nelapsed 15s"
+    assert status_response.json()["elapsed_seconds"] == 15
+    assert status_response.json()["elapsed_text"] == "15s"
     assert status_response.json()["scheduler"]["active"] is True
     assert status_response.json()["scheduler"]["daily_time_local"] == "18:30"
 
@@ -463,7 +467,9 @@ def test_run_status_and_stop_endpoint_report_stopping(monkeypatch):
     assert stop_response.status_code == 200
     assert stop_response.json()["status"] == "stopping"
     assert stop_response.json()["stop_requested"] is True
-    assert stop_response.json()["progress"] == "SEEK page 1/3"
+    assert stop_response.json()["progress"] == "SEEK page 1/3\nelapsed 15s"
+    assert stop_response.json()["elapsed_seconds"] == 15
+    assert stop_response.json()["elapsed_text"] == "15s"
     assert stop_calls == [True]
 
 

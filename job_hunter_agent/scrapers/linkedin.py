@@ -100,14 +100,24 @@ def _fetch_jobspy_with_timeout(search_params: dict, timeout_seconds: float):
     )
     worker.start()
     send_conn.close()
-    worker.join(timeout_seconds)
-    if worker.is_alive():
-        worker.terminate()
-        worker.join(1.0)
-        recv_conn.close()
-        raise TimeoutError(
-            f"LinkedIn jobspy fetch exceeded {int(timeout_seconds)}s for {search_params['search_term']!r}"
-        )
+    deadline = time.monotonic() + max(float(timeout_seconds), 0.1)
+    while worker.is_alive():
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            worker.terminate()
+            worker.join(1.0)
+            recv_conn.close()
+            raise TimeoutError(
+                f"LinkedIn jobspy fetch exceeded {int(timeout_seconds)}s for {search_params['search_term']!r}"
+            )
+        worker.join(min(0.1, remaining))
+        if worker.is_alive() and run_stop_requested():
+            worker.terminate()
+            worker.join(1.0)
+            recv_conn.close()
+            raise InterruptedError(
+                f"LinkedIn jobspy fetch cancelled due to stop request for {search_params['search_term']!r}"
+            )
     if not recv_conn.poll(1.0):
         recv_conn.close()
         raise RuntimeError(
@@ -340,6 +350,9 @@ class LinkedInScraper(BaseJobScraper):
                         int((time.monotonic() - fetch_started_at) * 1000),
                         "none" if rows is None else len(rows),
                     )
+                except InterruptedError:
+                    logger.info("%s jobspy fetch cancelled due to stop request", target_tag)
+                    break
                 except Exception as exc:
                     logger.warning("%s jobspy call failed: %s: %s", target_tag, type(exc).__name__, exc)
                     continue

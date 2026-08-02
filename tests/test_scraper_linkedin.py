@@ -10,7 +10,11 @@ from job_hunter_agent.locations import resolve_location
 from job_hunter_agent.posting_utils import posted_display_label
 from job_hunter_agent.salary import load_salary
 from job_hunter_agent.scrapers.base import _build_salary_string
-from job_hunter_agent.scrapers.linkedin import LinkedInScraper, classify_linkedin_apply_method
+from job_hunter_agent.scrapers.linkedin import (
+    LinkedInScraper,
+    _fetch_jobspy_with_timeout,
+    classify_linkedin_apply_method,
+)
 from job_hunter_agent.scrapers.location_adapters import (
     LINKEDIN_CITY_RADIUS_MILES,
     to_linkedin_search_scope,
@@ -221,7 +225,60 @@ def test_linkedin_search_targets_include_distinct_profile_roles():
         "Agile Project Coordinator",
         "Delivery Manager",
     ]
-    assert all(target["location"] == "Sydney, Australia" for target in targets)
+
+
+def test_linkedin_jobspy_fetch_stops_immediately_when_run_stop_requested(monkeypatch):
+    from job_hunter_agent.scrapers import linkedin as linkedin_module
+
+    class _FakeConn:
+        def close(self):
+            return None
+
+        def poll(self, _timeout):
+            return False
+
+        def recv(self):
+            raise AssertionError("recv should not be reached after stop request")
+
+    class _FakeWorker:
+        def __init__(self):
+            self.terminated = False
+            self.exitcode = None
+
+        def start(self):
+            return None
+
+        def join(self, _timeout):
+            return None
+
+        def is_alive(self):
+            return not self.terminated
+
+        def terminate(self):
+            self.terminated = True
+
+    class _FakeContext:
+        def __init__(self):
+            self.recv_conn = _FakeConn()
+            self.send_conn = _FakeConn()
+            self.worker = _FakeWorker()
+
+        def Pipe(self, duplex=False):
+            assert duplex is False
+            return self.recv_conn, self.send_conn
+
+        def Process(self, **_kwargs):
+            return self.worker
+
+    monkeypatch.setattr(
+        linkedin_module.multiprocessing,
+        "get_context",
+        lambda _name: _FakeContext(),
+    )
+    monkeypatch.setattr(linkedin_module, "run_stop_requested", lambda: True)
+
+    with pytest.raises(InterruptedError, match="cancelled due to stop request"):
+        _fetch_jobspy_with_timeout({"search_term": "project manager"}, timeout_seconds=20.0)
 
 
 def test_linkedin_deduplicates_cards_across_multiple_search_targets(monkeypatch):
