@@ -320,6 +320,10 @@ def get_description_compaction_min_retention() -> float:
     )
 
 
+def get_linkedin_fetch_timeout_seconds() -> float:
+    return float(load_global_settings()[KEY_SEARCH_SETTINGS][KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS])
+
+
 def get_playwright_headless() -> bool:
     return bool(load_global_settings()["playwright_settings"][KEY_PLAYWRIGHT_HEADLESS])
 

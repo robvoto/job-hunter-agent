@@ -88,6 +88,7 @@ def test_global_settings_page_renders_admin_partial(monkeypatch):
     assert 'id="source_document_allowed_suffixes"' in html
     assert 'id="playwright_browser_mode"' in html
     assert 'id="seek_assisted_verification_enabled"' in html
+    assert 'id="search_default_linkedin_fetch_timeout_seconds"' in html
     assert '<option value="persistent">Persistent</option>' in html
     assert 'href="/aws-browser-session"' in html
     assert "Open AWS browser session instructions" in html

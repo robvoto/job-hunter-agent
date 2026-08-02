@@ -28,6 +28,7 @@ from job_hunter_agent.global_settings import (
     KEY_DATE_RANGE_DAYS,
     KEY_LIMITS,
     KEY_LINKEDIN_EASY_APPLY_ONLY,
+    KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS,
     KEY_LINKEDIN_HOURS_OLD,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
     KEY_LOCATIONS_MAX_SELECTED,
@@ -1000,6 +1001,25 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
             KEY_LINKEDIN_RESULTS_PER_SEARCH
         ]
         print(f"[PROFILE_STORE][WARN] Failed to normalise linkedin_results_per_search: {exc}")
+
+    try:
+        merged[KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS] = max(
+            search_limits[KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS]["min"],
+            min(
+                int(
+                    merged.get(
+                        KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS,
+                        DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS],
+                    )
+                ),
+                search_limits[KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS]["max"],
+            ),
+        )
+    except Exception as exc:
+        merged[KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS] = DEFAULT_SEARCH_SETTINGS[
+            KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS
+        ]
+        print(f"[PROFILE_STORE][WARN] Failed to normalise linkedin_fetch_timeout_seconds: {exc}")
 
     try:
         merged[KEY_APSJOBS_RESULTS_PER_SEARCH] = max(

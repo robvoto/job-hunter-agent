@@ -78,6 +78,7 @@ def test_search_settings_clamp_source_fetch_limits():
             "seek_max_pages": 100,
             "linkedin_hours_old": 999,
             "linkedin_results_per_search": 1,
+            "linkedin_fetch_timeout_seconds": 999,
             KEY_LINKEDIN_EASY_APPLY_ONLY: "false",
         }
     )
@@ -93,6 +94,7 @@ def test_search_settings_clamp_source_fetch_limits():
     )
 
     assert normalized["linkedin_results_per_search"] == 5
+    assert normalized["linkedin_fetch_timeout_seconds"] == 60
 
     assert normalized[KEY_LINKEDIN_EASY_APPLY_ONLY] is False
 
@@ -120,6 +122,7 @@ def test_search_settings_follow_managed_search_limits(monkeypatch):
                     "seek_max_pages": {"min": 1, "max": 12},
                     "linkedin_hours_old": {"min": 1, "max": 72},
                     "linkedin_results_per_search": {"min": 5, "max": 40},
+                    "linkedin_fetch_timeout_seconds": {"min": 5, "max": 30},
                 }
             }
         },
@@ -131,6 +134,7 @@ def test_search_settings_follow_managed_search_limits(monkeypatch):
             "date_range_days": 99,
             "linkedin_hours_old": 999,
             "linkedin_results_per_search": 1,
+            "linkedin_fetch_timeout_seconds": 999,
         }
     )
 
@@ -141,6 +145,7 @@ def test_search_settings_follow_managed_search_limits(monkeypatch):
     assert normalized["linkedin_hours_old"] == 72
 
     assert normalized["linkedin_results_per_search"] == 5
+    assert normalized["linkedin_fetch_timeout_seconds"] == 30
 
 
 def test_default_match_preferences_are_neutral():

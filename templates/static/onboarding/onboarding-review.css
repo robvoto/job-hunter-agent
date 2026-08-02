@@ -79,6 +79,7 @@
 }
 
 .wizard-step[data-step="4"] .check-grid {
+  /* Local layout exception: final onboarding summary label/value layout, not a reusable visual component. */
   gap: var(--field-stack-gap);
   margin-top: 0;
   align-items: start;

@@ -19,9 +19,11 @@ from job_hunter_agent.global_settings import (
     DEFAULT_SEARCH_SETTINGS,
     KEY_DATE_RANGE_DAYS,
     KEY_LINKEDIN_EASY_APPLY_ONLY,
+    KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS,
     KEY_LINKEDIN_HOURS_OLD,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
     KEY_SORT_NEWEST_FIRST,
+    get_linkedin_fetch_timeout_seconds,
 )
 from job_hunter_agent.io_utils import DEBUG_CAPTURE_SOURCE_PAYLOADS, write_source_payload_debug
 from job_hunter_agent.job_review_pipeline import (
@@ -71,7 +73,6 @@ from job_hunter_agent.work_mode_extraction import (
 )
 
 WORKSPACE_DEBUG_MODE = has_cli_flag(sys.argv, CLI_FLAG_DEBUG)
-LINKEDIN_JOBSPY_FETCH_TIMEOUT_SECONDS = 10.0
 
 
 salary_rules = load_salary()
@@ -592,4 +593,11 @@ class LinkedInScraper(BaseJobScraper):
             search_params["distance"] = target["distance"]
         if target.get("easy_apply") is not None:
             search_params["easy_apply"] = target["easy_apply"]
-        return _fetch_jobspy_with_timeout(search_params, LINKEDIN_JOBSPY_FETCH_TIMEOUT_SECONDS)
+        search_settings = get_search_settings(self.profile)
+        timeout_seconds = float(
+            search_settings.get(
+                KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS,
+                get_linkedin_fetch_timeout_seconds(),
+            )
+        )
+        return _fetch_jobspy_with_timeout(search_params, timeout_seconds)

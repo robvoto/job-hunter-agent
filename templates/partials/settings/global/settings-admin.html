@@ -136,6 +136,10 @@
             <input id="search_default_linkedin_results_per_search" type="number" min="5" max="100" step="1">
             <div class="field-help">Default result budget for each LinkedIn search. Valid range: <span id="search_default_linkedin_results_per_search_bounds"></span>.</div>
 
+            <label for="search_default_linkedin_fetch_timeout_seconds">Default LinkedIn fetch timeout (seconds)</label>
+            <input id="search_default_linkedin_fetch_timeout_seconds" type="number" min="5" max="60" step="1">
+            <div class="field-help">Maximum time allowed for one LinkedIn jobspy search before that target is aborted. Valid range: <span id="search_default_linkedin_fetch_timeout_seconds_bounds"></span>.</div>
+
 
             <label class="toggle-switch" for="search_default_sort_newest_first">
               <span class="toggle-switch-copy">
@@ -250,6 +254,11 @@
             <input id="search_limit_linkedin_results_per_search_min" type="number" min="1" max="1000" step="1">
             <label for="search_limit_linkedin_results_per_search_max">LinkedIn results maximum</label>
             <input id="search_limit_linkedin_results_per_search_max" type="number" min="1" max="1000" step="1">
+
+            <label for="search_limit_linkedin_fetch_timeout_seconds_min">LinkedIn fetch timeout minimum (seconds)</label>
+            <input id="search_limit_linkedin_fetch_timeout_seconds_min" type="number" min="1" max="300" step="1">
+            <label for="search_limit_linkedin_fetch_timeout_seconds_max">LinkedIn fetch timeout maximum (seconds)</label>
+            <input id="search_limit_linkedin_fetch_timeout_seconds_max" type="number" min="1" max="300" step="1">
             <div class="field-help">Allowed range for the LinkedIn result budget per search term.</div>
 
             <h3 class="panel-subheading">Salary limits</h3>

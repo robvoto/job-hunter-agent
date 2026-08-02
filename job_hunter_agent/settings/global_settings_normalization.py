@@ -52,6 +52,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_LIMITS,
     KEY_LINKEDIN_EASY_APPLY_ONLY,
     KEY_LINKEDIN_ENABLED,
+    KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS,
     KEY_SEEK_QUICK_APPLY_ONLY,
     KEY_LINKEDIN_HOURS_OLD,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
@@ -1027,6 +1028,13 @@ def normalize_global_settings(
                 DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_RESULTS_PER_SEARCH],
                 normalized_search_limits[KEY_LINKEDIN_RESULTS_PER_SEARCH]["min"],
                 normalized_search_limits[KEY_LINKEDIN_RESULTS_PER_SEARCH]["max"],
+            ),
+            KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS: _require_int(
+                search_source,
+                KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS,
+                DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS],
+                normalized_search_limits[KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS]["min"],
+                normalized_search_limits[KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS]["max"],
             ),
             KEY_SEEK_QUICK_APPLY_ONLY: (
                 None

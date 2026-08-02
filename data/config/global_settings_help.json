@@ -22,6 +22,7 @@
         "sort_newest_first": "When true, workspace/search defaults prefer newer listings first.",
         "linkedin_hours_old": "How fresh LinkedIn listings must be, measured in hours.",
         "linkedin_results_per_search": "Maximum LinkedIn results collected per keyword/location search pair.",
+        "linkedin_fetch_timeout_seconds": "Maximum seconds allowed for each LinkedIn jobspy search request before the scraper aborts that target.",
         "linkedin_easy_apply_only": "Optional LinkedIn Easy Apply filter. Null means do not force either direction.",
         "playwright_viewport_width": "Browser viewport width used by Playwright source connectors.",
         "playwright_viewport_height": "Browser viewport height used by Playwright source connectors.",
@@ -34,7 +35,8 @@
         "date_range_days": "Allowed min/max for the search date window in days.",
         "seek_max_pages": "Allowed min/max for the SEEK page crawl cap.",
         "linkedin_hours_old": "Allowed min/max for LinkedIn listing freshness in hours.",
-        "linkedin_results_per_search": "Allowed min/max for LinkedIn results per search pair."
+        "linkedin_results_per_search": "Allowed min/max for LinkedIn results per search pair.",
+        "linkedin_fetch_timeout_seconds": "Allowed min/max for the per-target LinkedIn fetch timeout in seconds."
       }
     },
     "limits.salary": {

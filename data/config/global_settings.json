@@ -19,6 +19,7 @@
     "sort_newest_first": true,
     "linkedin_hours_old": 24,
     "linkedin_results_per_search": 25,
+    "linkedin_fetch_timeout_seconds": 20,
     "linkedin_easy_apply_only": null,
     "apsjobs_results_per_search": 25,
     "playwright_viewport_width": 1400,
@@ -46,6 +47,10 @@
       "linkedin_results_per_search": {
         "min": 5,
         "max": 100
+      },
+      "linkedin_fetch_timeout_seconds": {
+        "min": 5,
+        "max": 60
       },
       "apsjobs_results_per_search": {
         "min": 5,

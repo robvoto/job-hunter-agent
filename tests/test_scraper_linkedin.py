@@ -487,6 +487,7 @@ def test_fetch_jobspy_with_timeout_uses_timeout_worker(monkeypatch):
 
     captured: dict[str, object] = {}
 
+    monkeypatch.setattr(linkedin_module, "get_linkedin_fetch_timeout_seconds", lambda: 20.0)
     monkeypatch.setattr(
         linkedin_module,
         "_fetch_jobspy_with_timeout",
@@ -515,5 +516,5 @@ def test_fetch_jobspy_with_timeout_uses_timeout_worker(monkeypatch):
         }
     )
 
-    assert captured["timeout_seconds"] == linkedin_module.LINKEDIN_JOBSPY_FETCH_TIMEOUT_SECONDS
+    assert captured["timeout_seconds"] == 20.0
     assert captured["search_params"]["search_term"] == "project manager"
