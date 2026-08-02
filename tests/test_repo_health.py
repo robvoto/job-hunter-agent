@@ -397,12 +397,11 @@ def test_requirement_badges_use_two_column_grid_layout():
         ROOT_DIR / "templates" / "static" / "results" / "results-page.css"
     ).read_text(encoding="utf-8")
 
-    assert ".job-requirement-badges {\n  display: contents;\n}" in results_css
-    assert ".job-requirement-list {\n  list-style: none;\n  padding-left: 0 !important;\n  display: grid;" in results_css
-    assert ".job-requirement-item {\n  display: grid;\n  grid-column: 1 / -1;\n  grid-template-columns: subgrid;" in results_css
+    assert ".job-requirement-list {\n  list-style: none;\n  padding-left: 0 !important;\n  display: flex;" in results_css
+    assert ".job-requirement-item {\n  display: grid;\n  grid-template-columns: minmax(0, 1fr) auto;" in results_css
+    assert ".job-requirement-badges {\n  grid-column: 2;\n  justify-self: end;\n  display: flex;" in results_css
     assert "@media (max-width: 700px) {\n  .job-card { padding: 16px; }" in results_css
-    assert "grid-template-columns: repeat(2, max-content);" in results_css
-    assert ".req-add-to-profile { grid-column: 1 / -1; }" in results_css
+    assert ".job-requirement-item { grid-template-columns: 1fr; }" in results_css
 
 
 def test_capability_strength_controls_use_shared_semantic_tone_classes():

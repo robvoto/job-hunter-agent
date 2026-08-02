@@ -928,7 +928,7 @@ def test_pipeline_logs_single_human_block_for_title_rejection(tmp_path, monkeypa
     human_output = human_log_path.read_text(encoding="utf-8")
     debug_output = debug_log_path.read_text(encoding="utf-8")
 
-    assert human_output.count("═" * 72) == 2
+    assert human_output.count("=" * 72) == 2
     assert human_output.count("ServiceNow Team Member") == 1
     assert human_output.count("Australian Federal Police") == 1
     assert (

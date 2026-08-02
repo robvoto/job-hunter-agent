@@ -348,6 +348,7 @@ def test_scrape_jobs_direct_stops_before_run_when_profile_incomplete(monkeypatch
         "build_scrape_run_context",
         lambda argv: SimpleNamespace(
             search_settings={"keywords": "Business Analyst", "locations": ["Sydney"]},
+            profile={},
             enabled_sources=["seek"],
             configured_seek_max_pages=1,
             configured_date_range=7,
@@ -387,11 +388,12 @@ def test_scrape_jobs_direct_forces_headed_browser_in_persistent_mode(monkeypatch
         "build_scrape_run_context",
         lambda argv: SimpleNamespace(
             search_settings={"keywords": "Business Analyst", "locations": ["Sydney"]},
+            profile={},
             enabled_sources=["seek"],
             configured_seek_max_pages=1,
             configured_date_range=7,
             dashboard_debug_mode=False,
-            no_llm_mode=False,
+            no_llm_mode=True,
             dashboard_min_score=0,
             reset_new_to_you=False,
             headless=True,
@@ -402,6 +404,9 @@ def test_scrape_jobs_direct_forces_headed_browser_in_persistent_mode(monkeypatch
     )
     monkeypatch.setattr(
         "job_hunter_agent.global_settings.get_playwright_browser_mode", lambda: "persistent"
+    )
+    monkeypatch.setattr(
+        source_connector, "ensure_llm_runtime_ready", lambda *, no_llm_mode: None
     )
 
     captured = {}
