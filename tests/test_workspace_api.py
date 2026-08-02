@@ -253,6 +253,35 @@ def test_api_results_html_rebuilds_when_no_error_and_file_missing(monkeypatch, t
     assert "workspace" in response.text
 
 
+def test_api_results_html_rebuilds_when_generated_file_is_stale(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "job_hunter_agent.fastapi_app.read_session_user",
+        lambda request: {"user_id": "test", "email": "test@example.com", "role": "admin"},
+    )
+    workspace_path = tmp_path / "workspace_results.html"
+    workspace_path.write_text("<html><body>old workspace</body></html>", encoding="utf-8")
+    monkeypatch.setattr(workspace_api, "get_workspace_results_path", lambda: workspace_path)
+    monkeypatch.setattr(workspace_api, "load_run_stats", lambda: {})
+    monkeypatch.setattr(workspace_api, "_workspace_results_are_stale", lambda path: True)
+
+    rebuild_calls = []
+
+    def fake_rebuild_workspace_results(*args, **kwargs):
+        rebuild_calls.append((args, kwargs))
+        workspace_path.write_text("<html><body>updated workspace</body></html>", encoding="utf-8")
+
+    monkeypatch.setattr(workspace_api, "rebuild_workspace_results", fake_rebuild_workspace_results)
+
+    client = TestClient(create_app())
+    response = client.get("/api/results-html")
+
+    assert response.status_code == 200
+    assert "updated workspace" in response.text
+    assert rebuild_calls == [
+        ((), {"reason": "workspace renderer changed — refreshing saved HTML"})
+    ]
+
+
 def test_api_results_html_rebuild_excludes_records_without_llm_grade(monkeypatch, tmp_path):
     monkeypatch.setattr(
         "job_hunter_agent.fastapi_app.read_session_user",

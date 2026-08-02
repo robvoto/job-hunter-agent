@@ -1,11 +1,14 @@
 """Route handlers for workspace api."""
 
+from pathlib import Path
+
 from fastapi import APIRouter
 from starlette.responses import Response
 
 from job_hunter_agent import server_helpers as srv
+from job_hunter_agent import workspace_renderer, workspace_service
 from job_hunter_agent.io_utils import load_job_history, load_review_data, load_run_stats
-from job_hunter_agent.paths import get_workspace_results_path
+from job_hunter_agent.paths import RESULTS_TEMPLATE_PATH, UI_LABELS_PATH, get_workspace_results_path
 from job_hunter_agent.routes.responses import json_response
 from job_hunter_agent.run_control import get_run_progress, request_run_stop, run_stop_requested
 from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
@@ -24,6 +27,29 @@ def _progress_with_elapsed(progress: str | None, elapsed_text: str) -> str | Non
     if lines and lines[-1].lower().startswith("elapsed "):
         return progress_text
     return f"{progress_text}\nelapsed {elapsed_value}"
+
+
+def _workspace_render_source_paths() -> tuple[Path, ...]:
+    """Return source files whose changes invalidate a saved workspace snapshot."""
+    return (
+        RESULTS_TEMPLATE_PATH,
+        UI_LABELS_PATH,
+        Path(workspace_renderer.__file__),
+        Path(workspace_service.__file__),
+    )
+
+
+def _workspace_results_are_stale(results_path: Path) -> bool:
+    """Detect generated HTML that predates the renderer or its display inputs."""
+    try:
+        generated_at = results_path.stat().st_mtime_ns
+    except OSError:
+        return True
+
+    return any(
+        source_path.exists() and source_path.stat().st_mtime_ns > generated_at
+        for source_path in _workspace_render_source_paths()
+    )
 
 
 @router.get("/api/results-html")
@@ -46,6 +72,11 @@ def api_results_html():  # type: ignore[no-untyped-def]
 
         except Exception:
             pass
+    elif _workspace_results_are_stale(results_path):
+        try:
+            rebuild_workspace_results(reason="workspace renderer changed — refreshing saved HTML")
+        except Exception as exc:
+            return json_response({"error": f"{type(exc).__name__}: {exc}"}, 500)
 
     try:
         body = results_path.read_bytes()
