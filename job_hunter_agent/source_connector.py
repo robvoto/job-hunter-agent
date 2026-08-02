@@ -51,6 +51,9 @@ LOGIN_REQUIRED_MESSAGE = (
     "No signed-in user is available. Log in to the app and run the scrape "
     "from the authenticated session."
 )
+LLM_RUNTIME_MISSING_PROVIDER_KEY_MESSAGE = (
+    "Search requires LLM review, but no provider key is configured for this runtime."
+)
 
 
 def _format_role_list(values: object) -> str:
@@ -97,6 +100,16 @@ def _log_search_plan(context) -> None:
 
     human_logger.info("%s", "=" * CONSOLE_BANNER_WIDTH)
 
+
+def ensure_llm_runtime_ready(*, no_llm_mode: bool) -> None:
+    if no_llm_mode:
+        return
+    from job_hunter_agent.llm_gate import client  # noqa: PLC0415
+
+    if client is None:
+        logger.warning("[RUN][ABORT] %s", LLM_RUNTIME_MISSING_PROVIDER_KEY_MESSAGE)
+        raise RuntimeError(LLM_RUNTIME_MISSING_PROVIDER_KEY_MESSAGE)
+
 if has_cli_flag(sys.argv, CLI_FLAG_STEP):
     enable_step_through()
 
@@ -118,6 +131,7 @@ def scrape_jobs_direct(*, trigger_label: str = "manual scrape command") -> str:
         # before the next detail fetch starts.
         context.seek_parallel_detail_workers = 1
     require_profile_ready_for_review(load_profile())
+    ensure_llm_runtime_ready(no_llm_mode=context.no_llm_mode)
     reset_session_cost()
     reset_llm_truncation_count()
     search_keywords = str(context.search_settings.get("keywords") or "").strip()

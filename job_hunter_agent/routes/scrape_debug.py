@@ -9,6 +9,7 @@ from fastapi import APIRouter, Body
 from job_hunter_agent import server_helpers as srv
 from job_hunter_agent.routes.responses import json_response
 from job_hunter_agent.run_control import clear_run_stop_request
+from job_hunter_agent.source_connector import ensure_llm_runtime_ready
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -110,6 +111,11 @@ def api_run(body: dict = Body(default_factory=dict)):  # type: ignore[no-untyped
 
     try:
         srv.require_profile_ready_for_review()
+    except Exception as exc:
+        return json_response({"error": str(exc)}, 400)
+
+    try:
+        ensure_llm_runtime_ready(no_llm_mode=False)
     except Exception as exc:
         return json_response({"error": str(exc)}, 400)
 

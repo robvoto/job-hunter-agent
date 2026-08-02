@@ -815,6 +815,44 @@ def test_api_run_rejects_incomplete_profile_before_thread_start(monkeypatch):
     assert thread_started == []
 
 
+def test_api_run_rejects_missing_llm_provider_before_thread_start(monkeypatch):
+    monkeypatch.setattr(scrape_debug.srv, "_onboarding_complete", lambda: True)
+    monkeypatch.setattr(scrape_debug.srv, "require_profile_ready_for_review", lambda: None)
+    monkeypatch.setattr(
+        scrape_debug,
+        "ensure_llm_runtime_ready",
+        lambda *, no_llm_mode: (_ for _ in ()).throw(
+            RuntimeError("Search requires LLM review, but no provider key is configured for this runtime.")
+        ),
+    )
+    monkeypatch.setattr(
+        scrape_debug.srv,
+        "_try_mark_run_started",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("run must not start when llm runtime is unavailable")
+        ),
+    )
+
+    thread_started = []
+
+    class _FailingThread:
+        def __init__(self, *args, **kwargs):
+            thread_started.append(True)
+            raise AssertionError("run thread must not start when llm runtime is unavailable")
+
+    monkeypatch.setattr(scrape_debug.threading, "Thread", _FailingThread)
+
+    response = scrape_debug.api_run({})
+
+    assert response.status_code == 400
+    payload = json.loads(response.body.decode("utf-8"))
+    assert (
+        payload["error"]
+        == "Search requires LLM review, but no provider key is configured for this runtime."
+    )
+    assert thread_started == []
+
+
 def test_validate_required_onboarding_inputs_requires_locations_and_engagement():
     try:
         server_helpers._validate_required_onboarding_inputs(

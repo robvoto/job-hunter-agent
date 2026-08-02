@@ -419,6 +419,52 @@ def test_scrape_jobs_direct_forces_headed_browser_in_persistent_mode(monkeypatch
     assert captured["headless"] is False
 
 
+def test_scrape_jobs_direct_rejects_missing_llm_provider_before_source_run(monkeypatch):
+    monkeypatch.setattr("job_hunter_agent.profile_store.profile_exists", lambda: True)
+    monkeypatch.setattr(source_connector, "get_user_id_for_runtime", lambda: "test-user")
+    monkeypatch.setattr(source_connector, "load_profile", lambda: {"candidate_capabilities": [{}]})
+    monkeypatch.setattr(source_connector, "require_profile_ready_for_review", lambda profile: None)
+    monkeypatch.setattr(
+        source_connector,
+        "build_scrape_run_context",
+        lambda argv: SimpleNamespace(
+            search_settings={"keywords": "Business Analyst", "locations": ["Sydney"]},
+            enabled_sources=["linkedin"],
+            configured_seek_max_pages=1,
+            configured_date_range=7,
+            dashboard_debug_mode=False,
+            no_llm_mode=False,
+            dashboard_min_score=0,
+            reset_new_to_you=False,
+            headless=False,
+        ),
+    )
+    monkeypatch.setattr(
+        source_connector,
+        "ensure_llm_runtime_ready",
+        lambda *, no_llm_mode: (_ for _ in ()).throw(
+            RuntimeError("Search requires LLM review, but no provider key is configured for this runtime.")
+        ),
+    )
+
+    called = []
+
+    def fake_run_enabled_sources(context):
+        called.append(context)
+        raise AssertionError("run_enabled_sources must not be called without llm runtime")
+
+    monkeypatch.setattr(source_connector, "run_enabled_sources", fake_run_enabled_sources)
+
+    with pytest.raises(RuntimeError) as exc:
+        source_connector.scrape_jobs_direct()
+
+    assert (
+        str(exc.value)
+        == "Search requires LLM review, but no provider key is configured for this runtime."
+    )
+    assert called == []
+
+
 def test_run_status_and_stop_endpoint_report_stopping(monkeypatch):
     monkeypatch.setattr(
         "job_hunter_agent.fastapi_app.read_session_user",
