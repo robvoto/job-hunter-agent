@@ -139,6 +139,49 @@ def test_normalize_eligibility_rules_preserves_positive_and_negative_facts():
     assert rules[1]["value"] is False
 
 
+def test_selecting_nv2_implies_holding_nv1_and_baseline():
+    rules = profile_store.normalize_eligibility_rules(
+        [
+            {"name": "Baseline", "value": False, "evidence": []},
+            {"name": "NV1", "value": False, "evidence": []},
+            {"name": "NV2", "value": True, "evidence": []},
+        ]
+    )
+
+    by_name = {rule["name"]: rule["value"] for rule in rules}
+    assert by_name == {"Baseline": True, "NV1": True, "NV2": True}
+
+
+def test_clearance_hierarchy_never_downgrades_an_explicit_true():
+    # Baseline is explicitly held even though nothing higher is held — the
+    # upward-only invariant must never turn a submitted True into False.
+    rules = profile_store.apply_clearance_hierarchy(
+        [
+            {"name": "Baseline", "value": True, "evidence": []},
+            {"name": "NV1", "value": False, "evidence": []},
+            {"name": "NV2", "value": False, "evidence": []},
+        ]
+    )
+
+    by_name = {rule["name"]: rule["value"] for rule in rules}
+    assert by_name == {"Baseline": True, "NV1": False, "NV2": False}
+
+
+def test_clearance_hierarchy_ignores_rows_not_present_in_the_submitted_list():
+    # A caller that only submits PV clearance and an unrelated eligibility fact
+    # must not have Baseline/NV1/NV2 rows invented for it.
+    rules = profile_store.apply_clearance_hierarchy(
+        [
+            {"name": "PV clearance", "value": True, "evidence": []},
+            {"name": "AHPRA registration", "value": False, "evidence": []},
+        ]
+    )
+
+    assert [rule["name"] for rule in rules] == ["PV clearance", "AHPRA registration"]
+    assert rules[0]["value"] is True
+    assert rules[1]["value"] is False
+
+
 def test_capability_level_tokens_and_display_labels_are_standardized():
     labels = load_ui_labels()["level_labels"]
 

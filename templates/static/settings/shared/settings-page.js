@@ -703,7 +703,7 @@ function consumeCapabilityPrefillFromUrl() {
   return true;
 }
 
-function consumeEligibilityPrefillFromUrl() {
+async function consumeEligibilityPrefillFromUrl() {
   const url = new URL(window.location.href);
   const prefill = normalizeCapabilityPrefill(url.searchParams.get('prefill_eligibility') || '');
   if (!prefill) return false;
@@ -714,16 +714,24 @@ function consumeEligibilityPrefillFromUrl() {
     normalizeCapabilityPrefill(fact?.name).toLowerCase() === prefill.toLowerCase()
   );
   if (!existsAlready) {
-    eligibilityEditor.setEligibilityFactState([
-      ...existingFacts,
-      { name: prefill, value: true, aliases: [] },
-    ]);
-    markDirty();
-    showStatus(
-      labelsWithName(window.__JOB_HUNTER_SETTINGS_CLEARANCES_LABELS__.eligibility_prefill_added_message, prefill),
-      'success',
-      { autoHideMs: 4500 },
-    );
+    try {
+      // Same shared save path as the Settings "Add" flow, so this also
+      // triggers the one-time LLM alias suggestion on the backend.
+      const body = await eligibilityEditor.saveEligibilityFact({ name: prefill, value: true });
+      eligibilityEditor.upsertFactFromServer(body.eligibility_fact);
+      markDirty();
+      showStatus(
+        labelsWithName(window.__JOB_HUNTER_SETTINGS_CLEARANCES_LABELS__.eligibility_prefill_added_message, prefill),
+        'success',
+        { autoHideMs: 4500 },
+      );
+    } catch (error) {
+      showStatus(
+        error.serverMessage || window.__JOB_HUNTER_SETTINGS_CLEARANCES_LABELS__.eligibility_add_error_message,
+        'error',
+        { autoHideMs: 4500 },
+      );
+    }
   } else {
     showStatus(
       labelsWithName(window.__JOB_HUNTER_SETTINGS_CLEARANCES_LABELS__.eligibility_prefill_exists_message, prefill),
@@ -746,7 +754,7 @@ async function loadProfile() {
   const profile = await response.json();
   loadedProfile = profile;
   fillForm(profile);
-  if (!consumeCapabilityPrefillFromUrl() && !consumeEligibilityPrefillFromUrl()) {
+  if (!consumeCapabilityPrefillFromUrl() && !(await consumeEligibilityPrefillFromUrl())) {
     showStatus('Profile loaded.', 'success', { autoHideMs: 2600 });
   }
 }

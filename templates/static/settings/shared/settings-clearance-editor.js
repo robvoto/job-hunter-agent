@@ -36,15 +36,17 @@ export const JobHunterClearanceEditor = (function () {
   const preparedOptions = clearanceOptions.map((option) => {
     const value = normalizeText(option?.value);
     const label = normalizeText(option?.label);
+    const rank = Number(option?.rank);
     const aliases = Array.isArray(option?.aliases)
       ? option.aliases.map((alias) => normalizeText(alias)).filter(Boolean)
       : [];
-    if (!value || !label) {
+    if (!value || !label || !Number.isFinite(rank) || rank <= 0) {
       throw new Error('Invalid clearance option.');
     }
     return {
       value,
       label,
+      rank,
       matchKeys: new Set([value, label, ...aliases].map(normalizeLookup).filter(Boolean)),
     };
   });
@@ -107,7 +109,20 @@ export const JobHunterClearanceEditor = (function () {
     return fixedRows;
   }
 
-  function stateLabel(rule) {
+  function isRowImpliedByHigherClearance(index) {
+    // A row is implied (held automatically, not independently editable) whenever
+    // some higher-ranked row is currently held — holding NV2 guarantees Baseline
+    // and NV1, so those lower rows lock until NV2 is turned off again.
+    const rank = preparedOptions[index]?.rank;
+    if (!Number.isFinite(rank)) return false;
+    return clearanceRuleState.some((other, otherIndex) => {
+      const otherRank = preparedOptions[otherIndex]?.rank;
+      return Number.isFinite(otherRank) && otherRank > rank && other.value;
+    });
+  }
+
+  function stateLabel(rule, implied) {
+    if (implied) return labels.implied_state_label;
     return rule.value ? labels.held_state_label : labels.not_held_state_label;
   }
 
@@ -118,19 +133,20 @@ export const JobHunterClearanceEditor = (function () {
     const cardsHtml = clearanceRuleState.map((rule, index) => {
       const toggleId = `clearance_toggle_${index}`;
       const stateId = `${toggleId}_state`;
+      const implied = isRowImpliedByHigherClearance(index);
       return `
         <article class="capability-card clearance-card" data-clearance-index="${index}">
           <div class="capability-card-main clearance-card-main">
             <div class="clearance-card-copy">
               <h4 class="clearance-card-title">${escapeHtml(rule.displayLabel || rule.name)}</h4>
-              <p class="clearance-card-state" id="${stateId}">${escapeHtml(stateLabel(rule))}</p>
+              <p class="clearance-card-state" id="${stateId}">${escapeHtml(stateLabel(rule, implied))}</p>
             </div>
           </div>
           <div class="capability-card-actions clearance-card-actions">
             <label class="toggle-switch toggle-switch--compact" for="${toggleId}">
               <span class="toggle-switch-control">
                 <input id="${toggleId}" type="checkbox" role="switch" data-clearance-field="value"
-                       data-clearance-index="${index}" aria-describedby="${stateId}"${rule.value ? ' checked' : ''}>
+                       data-clearance-index="${index}" aria-describedby="${stateId}"${rule.value ? ' checked' : ''}${implied ? ' disabled' : ''}>
                 <span class="toggle-switch-ui"></span>
               </span>
             </label>
@@ -154,16 +170,36 @@ export const JobHunterClearanceEditor = (function () {
     return cleaned.map(({ name, value, evidence, needs_review }) => ({ name, value, evidence, needs_review }));
   }
 
+  function applyClearanceHierarchyCascade(changedIndex) {
+    // preparedOptions and clearanceRuleState are always built and kept in the same
+    // order (see buildDefaultClearanceRows/mergeClearanceRuleState), so index i in
+    // one lines up with index i in the other.
+    const changedRank = preparedOptions[changedIndex]?.rank;
+    if (!Number.isFinite(changedRank)) return;
+    const heldNow = clearanceRuleState[changedIndex].value;
+    clearanceRuleState.forEach((rule, index) => {
+      const rank = preparedOptions[index]?.rank;
+      if (!Number.isFinite(rank)) return;
+      if (heldNow && rank <= changedRank) {
+        rule.value = true;
+      } else if (!heldNow && rank >= changedRank) {
+        rule.value = false;
+      }
+    });
+  }
+
   function initEventHandlers(markDirty) {
     document.getElementById('clearance_editor')?.addEventListener('change', (event) => {
       const field = event.target.closest('[data-clearance-field="value"]');
-      if (!field) return;
+      if (!field || field.disabled) return;
       const index = Number(field.dataset.clearanceIndex);
       if (!Number.isInteger(index) || !clearanceRuleState[index]) return;
+      if (isRowImpliedByHigherClearance(index)) return;
       clearanceRuleState[index] = {
         ...clearanceRuleState[index],
         value: field.checked,
       };
+      applyClearanceHierarchyCascade(index);
       persistClearanceRuleState();
       renderClearanceRuleEditor();
       markDirty();

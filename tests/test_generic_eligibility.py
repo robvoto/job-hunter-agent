@@ -1,5 +1,7 @@
 """Tests for generic Eligibility facts kept separate from managed Clearances."""
 
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 import job_hunter_agent.fastapi_app as _fa
@@ -11,6 +13,8 @@ from job_hunter_agent.profile_store import (
     KEY_CANDIDATE_ELIGIBILITY_FACTS,
     normalize_full_profile,
 )
+
+_STATIC_DIR = Path(__file__).resolve().parent.parent / "templates" / "static" / "settings" / "shared"
 
 
 def test_generic_facts_normalize_aliases_without_touching_clearances():
@@ -127,3 +131,46 @@ def test_generic_endpoint_does_not_create_managed_clearance_levels(monkeypatch):
 
     assert response.status_code == 400
     assert saved == []
+
+
+def test_settings_add_flow_calls_the_shared_save_endpoint_not_a_local_only_push():
+    # Regression guard: the Settings "Add" button used to push
+    # { name, value: true, aliases: [] } straight into local state, which made
+    # the backend think aliases were explicitly provided and skip LLM
+    # generation entirely. It must now call saveEligibilityFact(), which
+    # POSTs to the shared /api/profile/eligibility endpoint.
+    source = (_STATIC_DIR / "settings-eligibility-editor.js").read_text(encoding="utf-8")
+
+    assert "saveEligibilityFact" in source
+    assert "/api/profile/eligibility" in source
+    assert 'aliases: []' not in source
+
+
+def test_prefill_flow_uses_the_same_shared_save_helper_as_settings_add():
+    # "Add to profile" from job results must go through the exact same
+    # exported helper as the Settings-Add flow, not a second local-only path.
+    source = (_STATIC_DIR / "settings-page.js").read_text(encoding="utf-8")
+    start = source.index("async function consumeEligibilityPrefillFromUrl")
+    end = source.index("\nfunction labelsWithName")
+    prefill_fn_source = source[start:end]
+
+    assert "eligibilityEditor.saveEligibilityFact(" in prefill_fn_source
+    assert "eligibilityEditor.upsertFactFromServer(" in prefill_fn_source
+    assert "aliases: []" not in prefill_fn_source
+
+
+def test_eligibility_editor_uses_its_own_layout_not_the_compact_clearance_card():
+    # The Eligibility editor previously reused .capability-card.clearance-card,
+    # which is a compact layout designed for fixed clearance rows with no
+    # alias/review content. It must now render with its own eligibility-*
+    # classes so aliases and the optional review message have room.
+    js_source = (_STATIC_DIR / "settings-eligibility-editor.js").read_text(encoding="utf-8")
+
+    assert "clearance-card" not in js_source
+    assert "clearance-grid" not in js_source
+    assert "eligibility-card" in js_source
+    assert "eligibility-grid" in js_source
+
+    css_source = (_STATIC_DIR / "settings-page.css").read_text(encoding="utf-8")
+    assert ".eligibility-grid" in css_source
+    assert ".eligibility-card-review" in css_source

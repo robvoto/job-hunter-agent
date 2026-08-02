@@ -637,6 +637,93 @@ def _normalize_eligibility_value(value: Any, *, default: bool = True) -> bool:
     return bool(value)
 
 
+def load_clearance_ui_options() -> list[dict[str, Any]]:
+    rules = load_parsing_rules()
+    config = rules.get("government_discovery_config")
+    if not isinstance(config, dict):
+        raise ValueError("parsing_rules.json must define government_discovery_config")
+    options = config.get("clearance_ui_options")
+    if not isinstance(options, list) or not options:
+        raise ValueError("parsing_rules.json must define government_discovery_config.clearance_ui_options")
+
+    cleaned: list[dict[str, Any]] = []
+    seen_values: set[str] = set()
+    seen_ranks: set[int] = set()
+    for option in options:
+        if not isinstance(option, dict):
+            raise ValueError("clearance_ui_options entries must be objects")
+        value = re.sub(r"\s+", " ", str(option.get("value") or "")).strip()
+        label = re.sub(r"\s+", " ", str(option.get("label") or "")).strip()
+        aliases = option.get("aliases") or []
+        if not value or not label:
+            raise ValueError("clearance_ui_options entries must define non-empty value and label")
+        key = value.casefold()
+        if key in seen_values:
+            raise ValueError(f"Duplicate clearance_ui_options value: {value}")
+        if not isinstance(aliases, list):
+            raise ValueError(f"clearance_ui_options aliases for {value} must be a list")
+        rank = option.get("rank")
+        if not isinstance(rank, int) or isinstance(rank, bool) or rank <= 0:
+            raise ValueError(
+                f"clearance_ui_options entry {value} must define a positive integer rank"
+            )
+        if rank in seen_ranks:
+            raise ValueError(f"Duplicate clearance_ui_options rank: {rank}")
+        seen_values.add(key)
+        seen_ranks.add(rank)
+        cleaned.append(
+            {
+                "value": value,
+                "label": label,
+                "rank": rank,
+                "aliases": [
+                    re.sub(r"\s+", " ", str(alias or "")).strip()
+                    for alias in aliases
+                    if str(alias or "").strip()
+                ],
+            }
+        )
+    return sorted(cleaned, key=lambda item: item["rank"])
+
+
+def apply_clearance_hierarchy(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Enforce that holding a higher managed clearance implies holding every lower one.
+
+    This is a one-directional (upward) invariant: holding NV2 implies Baseline and
+    NV1 are also held, using `rank` from the managed clearance catalogue as the
+    single source of truth for ordering (see docs backlog JH-260 for why TS-PA is
+    intentionally not modelled here yet). It never turns an explicitly-submitted
+    True value to False, so it never silently discards a submitted signal. Turning
+    a lower clearance off and cascading that downward to higher ones is a
+    deliberate user action handled interactively in settings-clearance-editor.js,
+    which knows which toggle the user just changed; a stateless pass over the
+    final rule list cannot recover that intent.
+    """
+    options = load_clearance_ui_options()
+    rank_by_key: dict[str, int] = {}
+    for option in options:
+        for key in (option["value"], option["label"], *option["aliases"]):
+            normalized_key = re.sub(r"\s+", " ", str(key or "")).strip().casefold()
+            if normalized_key:
+                rank_by_key[normalized_key] = option["rank"]
+
+    max_held_rank = 0
+    for rule in rules:
+        rank = rank_by_key.get(str(rule.get("name") or "").strip().casefold())
+        if rank is not None and rule.get("value"):
+            max_held_rank = max(max_held_rank, rank)
+
+    if not max_held_rank:
+        return rules
+
+    for rule in rules:
+        rank = rank_by_key.get(str(rule.get("name") or "").strip().casefold())
+        if rank is not None and rank <= max_held_rank:
+            rule["value"] = True
+
+    return rules
+
+
 def normalize_eligibility_rules(rules: list[dict[str, Any]] | list[str] | None) -> list[dict[str, Any]]:
     """Normalise explicit eligibility facts while preserving original fact casing."""
     cleaned: list[dict[str, Any]] = []
@@ -676,7 +763,7 @@ def normalize_eligibility_rules(rules: list[dict[str, Any]] | list[str] | None) 
             }
         )
 
-    return cleaned
+    return apply_clearance_hierarchy(cleaned)
 
 
 def normalize_role_experience(items: Any) -> list[dict[str, Any]]:

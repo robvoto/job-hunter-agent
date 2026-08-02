@@ -26,6 +26,39 @@ export const JobHunterEligibilityEditor = (function () {
     };
   }
 
+  // Shared save path for both the Settings "Add" flow and the job-results
+  // "Add to profile" prefill flow, so both trigger the same one-time LLM
+  // alias suggestion on the backend (see /api/profile/eligibility).
+  async function saveEligibilityFact(payload) {
+    const response = await window.jobHunterFetch('/api/profile/eligibility', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || body?.error) {
+      const error = new Error(body?.error || 'Could not save eligibility fact.');
+      error.serverMessage = body?.error || '';
+      throw error;
+    }
+    return body;
+  }
+
+  function upsertFactFromServer(serverFact) {
+    const normalized = normalizeFact(serverFact);
+    const index = factState.findIndex(
+      (fact) => fact.name.toLowerCase() === normalized.name.toLowerCase()
+    );
+    if (index === -1) {
+      factState.push(normalized);
+    } else {
+      factState[index] = normalized;
+    }
+    persist();
+    render();
+    return normalized;
+  }
+
   function persist() {
     settingsField('candidate_eligibility_facts').value = JSON.stringify(
       factState.map(({ displayReview, aliases_edited, ...fact }) => fact)
@@ -48,15 +81,21 @@ export const JobHunterEligibilityEditor = (function () {
     if (!container) return;
     const cards = factState.map((fact, index) => {
       const toggleId = `eligibility_toggle_${index}`;
+      const reviewId = `eligibility_review_${index}`;
       return `
-        <article class="capability-card clearance-card" data-eligibility-index="${index}">
-          <div class="capability-card-main clearance-card-main">
-            <div class="clearance-card-copy">
-              <label class="clearance-card-title" for="eligibility_name_${index}">${escapeHtml(labels.eligibility_name_label)}</label>
+        <article class="capability-card eligibility-card" data-eligibility-index="${index}">
+          <div class="capability-card-main eligibility-card-main">
+            <div class="eligibility-card-copy">
+              <label class="eligibility-card-title" for="eligibility_name_${index}">${escapeHtml(labels.eligibility_name_label)}</label>
               <input id="eligibility_name_${index}" class="token-input-field" data-eligibility-field="name" data-eligibility-index="${index}" value="${escapeHtml(fact.name)}">
             </div>
+            <div class="eligibility-card-copy">
+              <label class="eligibility-card-title" for="eligibility_aliases_${index}">${escapeHtml(labels.eligibility_aliases_label)}</label>
+              <input id="eligibility_aliases_${index}" class="token-input-field" data-eligibility-field="aliases" data-eligibility-index="${index}" placeholder="${escapeHtml(labels.eligibility_aliases_placeholder)}" value="${escapeHtml(fact.aliases.join(', '))}">
+            </div>
+            ${fact.needs_review ? `<p class="eligibility-card-review" id="${reviewId}">${escapeHtml(labels.eligibility_aliases_review_label)}</p>` : ''}
           </div>
-          <div class="capability-card-actions clearance-card-actions">
+          <div class="capability-card-actions eligibility-card-actions">
             <label class="toggle-switch toggle-switch--compact" for="${toggleId}">
               <span class="toggle-switch-control">
                 <input id="${toggleId}" type="checkbox" role="switch" data-eligibility-field="value" data-eligibility-index="${index}"${fact.value ? ' checked' : ''}>
@@ -67,7 +106,7 @@ export const JobHunterEligibilityEditor = (function () {
           </div>
         </article>`;
     }).join('');
-    container.innerHTML = cards ? `<div class="capability-grid clearance-grid">${cards}</div>` : `<p class="panel-copy">${escapeHtml(labels.eligibility_empty_text)}</p>`;
+    container.innerHTML = cards ? `<div class="capability-grid eligibility-grid">${cards}</div>` : `<p class="panel-copy">${escapeHtml(labels.eligibility_empty_text)}</p>`;
   }
 
   function setEligibilityFactState(facts) {
@@ -87,24 +126,44 @@ export const JobHunterEligibilityEditor = (function () {
   }
 
   function initEventHandlers(markDirty) {
-    document.getElementById('eligibility_add')?.addEventListener('click', () => {
+    document.getElementById('eligibility_add')?.addEventListener('click', async () => {
       const input = document.getElementById('eligibility_name_add');
+      const addButton = document.getElementById('eligibility_add');
+      const statusEl = document.getElementById('eligibility_add_status');
       const name = normalizeText(input?.value);
+      if (statusEl) statusEl.textContent = '';
       if (!name) return;
-      if (!factState.some((fact) => fact.name.toLowerCase() === name.toLowerCase())) {
-        factState.push(normalizeFact({ name, value: true, aliases: [] }));
-        persist();
-        render();
-        markDirty();
+      if (factState.some((fact) => fact.name.toLowerCase() === name.toLowerCase())) {
+        if (input) input.value = '';
+        return;
       }
-      if (input) input.value = '';
+      if (addButton) addButton.disabled = true;
+      try {
+        const body = await saveEligibilityFact({ name, value: true });
+        upsertFactFromServer(body.eligibility_fact);
+        markDirty();
+        if (input) input.value = '';
+      } catch (error) {
+        if (statusEl) statusEl.textContent = error.serverMessage || labels.eligibility_add_error_message;
+      } finally {
+        if (addButton) addButton.disabled = false;
+      }
     });
     document.getElementById('eligibility_editor')?.addEventListener('input', (event) => {
       const field = event.target.closest('[data-eligibility-field]');
       if (!field) return;
       const index = Number(field.dataset.eligibilityIndex);
       if (!Number.isInteger(index) || !factState[index]) return;
-      if (field.dataset.eligibilityField === 'name') factState[index].name = normalizeText(field.value);
+      if (field.dataset.eligibilityField === 'name') {
+        factState[index].name = normalizeText(field.value);
+      } else if (field.dataset.eligibilityField === 'aliases') {
+        factState[index].aliases = field.value.split(',').map(normalizeText).filter(Boolean);
+        factState[index].aliases_edited = true;
+        if (factState[index].needs_review) {
+          factState[index].needs_review = false;
+          document.getElementById(`eligibility_review_${index}`)?.remove();
+        }
+      }
       persist();
       markDirty();
     });
@@ -130,5 +189,11 @@ export const JobHunterEligibilityEditor = (function () {
     });
   }
 
-  return { setEligibilityFactState, collectEligibilityFactState, initEventHandlers };
+  return {
+    setEligibilityFactState,
+    collectEligibilityFactState,
+    initEventHandlers,
+    saveEligibilityFact,
+    upsertFactFromServer,
+  };
 }());

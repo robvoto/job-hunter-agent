@@ -994,6 +994,38 @@
       gap: 0;
       padding-top: 0;
     }
+    /* Local layout exception: generic eligibility facts edit a canonical name, an aliases
+       list, and an optional review message inline, so they need more horizontal room per
+       row than the compact clearance rows above — use a single full-width column instead
+       of .capability-grid/.clearance-grid's 2-column layout. */
+    .eligibility-grid {
+      grid-template-columns: 1fr;
+      gap: var(--surface-gap-sm);
+    }
+    .eligibility-card-copy {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+    .eligibility-card-title {
+      margin: 0;
+      font-size: var(--text-role-status-font-size);
+      font-weight: var(--text-role-button-font-weight);
+      line-height: 1.2;
+      color: var(--text-muted);
+    }
+    .eligibility-card-review {
+      margin: 0;
+      color: var(--state-warning-text);
+      font-size: var(--text-role-status-font-size);
+      line-height: 1.4;
+    }
+    .eligibility-card-actions {
+      flex-direction: row;
+      align-items: center;
+      gap: var(--surface-gap-sm);
+      padding-top: 0;
+    }
     .role-history-editor {
       margin-top: var(--surface-gap-md);
     }

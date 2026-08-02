@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 95,
+  "version": 96,
   "updated_at": "2026-08-02",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -75,9 +75,11 @@
     "held_state_label": "Held",
     "not_held_state_label": "Not held",
     "unset_state_label": "Not set",
+    "implied_state_label": "Held automatically with a higher clearance",
     "clear_button_label": "Clear",
     "clear_button_aria_label": "Clear clearance status",
     "remove_button_aria_label": "Remove clearance",
+    "eligibility_add_error_message": "Could not save this eligibility fact. Check your connection and try again.",
     "eligibility_settings_title": "Eligibility",
     "eligibility_help_text": "Add specific licences, registrations, qualifications, certifications, citizenship, work rights, or other eligibility facts. Clearances stay in the managed Clearances section above.",
     "eligibility_name_label": "Canonical fact",

@@ -1,7 +1,7 @@
 {
   "kind": "system_config",
   "name": "parsing_rules",
-  "version": 14,
+  "version": 15,
   "stopwords_description": "Common filler words stripped during title parsing and token matching.",
   "stopwords": [
     "a",
@@ -200,6 +200,7 @@
       {
         "value": "Baseline",
         "label": "Baseline",
+        "rank": 1,
         "aliases": [
           "baseline clearance",
           "baseline security clearance"
@@ -208,6 +209,7 @@
       {
         "value": "NV1",
         "label": "NV1",
+        "rank": 2,
         "aliases": [
           "nv 1",
           "negative vetting 1",
@@ -217,6 +219,7 @@
       {
         "value": "NV2",
         "label": "NV2",
+        "rank": 3,
         "aliases": [
           "nv 2",
           "negative vetting 2",
@@ -226,6 +229,7 @@
       {
         "value": "PV clearance",
         "label": "Positive Vetting",
+        "rank": 4,
         "aliases": [
           "pv",
           "positive vetting",
