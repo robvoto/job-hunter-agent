@@ -14,6 +14,11 @@ Use when creating, updating, deduplicating, grooming, or analysing backlog items
 - Read the sheet header row first and update by column name, never by fixed position.
 - Do not add, remove, or rename columns unless explicitly agreed.
 
+## Required skill pairing
+- For every backlog read, search, analysis, or write, load this skill together with the available Google Sheets skill (`google-drive:google-sheets` in the standard runtime).
+- This skill owns Job Hunter backlog rules; the Google Sheets skill owns live spreadsheet metadata, bounded reads, validation checks, precise writes, and post-write verification.
+- When the human provides the backlog URL, go directly to this spreadsheet. Do not search local exports or GitHub issues for JH IDs first.
+
 ## How to read and write the sheet
 
 Use the authorised live Google Sheets tool available in the current runtime. This may be a local MCP Sheets tool, a cloud Sheets connector, or another approved runtime-specific Sheets integration.

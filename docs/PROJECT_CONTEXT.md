@@ -33,7 +33,7 @@ Choose the best matching skill. Combine with reusable skills such as `code-chang
 
 | Skill | Use for |
 |---|---|
-| `.skills/backlog-management/SKILL.md` | Google Sheet backlog rows, state, evidence |
+| `.skills/backlog-management/SKILL.md` + `google-drive:google-sheets` | Google Sheet backlog rows, state, evidence, and live spreadsheet reads/writes |
 | `.skills/job-filtering/SKILL.md` | Deterministic filters, hard blockers, reject reasons |
 | `.skills/scoring-ranking/SKILL.md` | Fit score, ranking, scoring explanations |
 | `.skills/profile-extraction/SKILL.md` | CV/profile extraction and normalization |
