@@ -13,6 +13,7 @@ import sys
 import threading
 import time
 import traceback
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import datetime
 from typing import Any, Dict, List, Set
 from urllib.parse import urlsplit, urlunsplit
@@ -115,6 +116,8 @@ _SEEK_FAILURE_MESSAGES = {
     SEEK_TIMEOUT_NO_CARDS: "SEEK timed out before any job cards appeared.",
     SEEK_UNKNOWN_FAILURE: "SEEK failed before it could load job cards.",
 }
+SEEK_DIAGNOSTIC_SCREENSHOT_TIMEOUT_MS = 2_000
+SEEK_DETAIL_SESSION_CLOSE_TIMEOUT_SECONDS = 2.0
 _SEEK_LIST_PAGE_CHALLENGE_MARKERS = (
     "help us keep seek secure",
     "confirm you are human",
@@ -914,7 +917,13 @@ class _AsyncDetailSession:
     def close(self) -> None:
         """Shut down the browser and stop the background event loop cleanly."""
         close = asyncio.run_coroutine_threadsafe(self._shutdown(), self._loop)
-        close.result(timeout=30)
+        try:
+            close.result(timeout=SEEK_DETAIL_SESSION_CLOSE_TIMEOUT_SECONDS)
+        except FutureTimeoutError:
+            logger.warning(
+                "[SEEK] detail session close timed out after %.1fs; forcing loop shutdown",
+                SEEK_DETAIL_SESSION_CLOSE_TIMEOUT_SECONDS,
+            )
         self._loop.call_soon_threadsafe(self._loop.stop)
         self._thread.join(timeout=10)
 
@@ -1057,12 +1066,20 @@ def seek_scrape_to_records(
                             )
                             snapshot = _seek_list_page_diagnostics(list_page)
                             failure_class = str(snapshot["failure_class"])
-                            try:
-                                screenshot_path = pathlib.Path("output") / "seek_timeout_debug.png"
-                                list_page.screenshot(path=str(screenshot_path), full_page=False)
-                                logger.info("%s screenshot saved to %s", page_tag, screenshot_path)
-                            except Exception as diag_exc:
-                                logger.info("%s diagnostic capture failed: %s", page_tag, diag_exc)
+                            if failure_class not in {
+                                SEEK_BOT_CHALLENGE,
+                                SEEK_HUMAN_VERIFICATION,
+                            }:
+                                try:
+                                    screenshot_path = pathlib.Path("output") / "seek_timeout_debug.png"
+                                    list_page.screenshot(
+                                        path=str(screenshot_path),
+                                        full_page=False,
+                                        timeout=SEEK_DIAGNOSTIC_SCREENSHOT_TIMEOUT_MS,
+                                    )
+                                    logger.info("%s screenshot saved to %s", page_tag, screenshot_path)
+                                except Exception as diag_exc:
+                                    logger.info("%s diagnostic capture failed: %s", page_tag, diag_exc)
                             _handle_seek_list_page_failure(
                                 page_tag,
                                 list_page,

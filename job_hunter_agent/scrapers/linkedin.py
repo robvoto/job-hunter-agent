@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import multiprocessing
 import re
 import time
 from datetime import datetime
@@ -70,10 +71,54 @@ from job_hunter_agent.work_mode_extraction import (
 )
 
 WORKSPACE_DEBUG_MODE = has_cli_flag(sys.argv, CLI_FLAG_DEBUG)
+LINKEDIN_JOBSPY_FETCH_TIMEOUT_SECONDS = 10.0
 
 
 salary_rules = load_salary()
 job_type_rules = load_job_type()
+
+
+def _scrape_linkedin_jobs_worker(search_params: dict, send_conn) -> None:
+    try:
+        from jobspy import scrape_jobs  # noqa: PLC0415
+
+        send_conn.send(("ok", scrape_jobs(**search_params)))
+    except Exception as exc:  # pragma: no cover - exercised through parent helper
+        send_conn.send(("error", (type(exc).__name__, str(exc))))
+    finally:
+        send_conn.close()
+
+
+def _fetch_jobspy_with_timeout(search_params: dict, timeout_seconds: float):
+    ctx = multiprocessing.get_context("spawn")
+    recv_conn, send_conn = ctx.Pipe(duplex=False)
+    worker = ctx.Process(
+        target=_scrape_linkedin_jobs_worker,
+        args=(search_params, send_conn),
+        daemon=True,
+    )
+    worker.start()
+    send_conn.close()
+    worker.join(timeout_seconds)
+    if worker.is_alive():
+        worker.terminate()
+        worker.join(1.0)
+        recv_conn.close()
+        raise TimeoutError(
+            f"LinkedIn jobspy fetch exceeded {int(timeout_seconds)}s for {search_params['search_term']!r}"
+        )
+    if not recv_conn.poll(1.0):
+        recv_conn.close()
+        raise RuntimeError(
+            f"LinkedIn jobspy worker exited without results (exitcode={worker.exitcode})"
+        )
+    status, payload = recv_conn.recv()
+    recv_conn.close()
+    if status == "ok":
+        return payload
+    error_type, error_message = payload
+    error_suffix = f": {error_message}" if str(error_message).strip() else ""
+    raise RuntimeError(f"{error_type}{error_suffix}")
 
 
 def _fetch_job_html(record: dict) -> str:
@@ -250,6 +295,9 @@ class LinkedInScraper(BaseJobScraper):
         )
         try:
             for target_index, target in enumerate(targets, start=1):
+                if run_stop_requested():
+                    logger.info("[LinkedIn] stop requested before target start; ending scrape")
+                    break
                 target_tag = f"[LinkedIn target {target_index}/{total_targets}]"
                 set_run_progress(f"LinkedIn search {target_index}/{total_targets}")
                 logger.info(
@@ -294,6 +342,10 @@ class LinkedInScraper(BaseJobScraper):
                 except Exception as exc:
                     logger.warning("%s jobspy call failed: %s: %s", target_tag, type(exc).__name__, exc)
                     continue
+
+                if run_stop_requested():
+                    logger.info("%s stop requested after jobspy fetch; ending scrape", target_tag)
+                    break
 
                 if rows is None or len(rows) == 0:
                     logger.info("%s no results", target_tag)
@@ -389,6 +441,9 @@ class LinkedInScraper(BaseJobScraper):
 
                     if outcome["decision"] != "KEEP":
                         continue
+                if run_stop_requested():
+                    logger.info("%s stop requested after row review; ending scrape", target_tag)
+                    break
         except Exception as exc:
             raise PartialSourceResultsError(
                 self.source_name,
@@ -523,8 +578,6 @@ class LinkedInScraper(BaseJobScraper):
         return [signal for signal in signals if signal.get("kind") == SIGNAL_KIND_JOB_CLOSED]
 
     def _fetch_jobspy(self, target: dict):
-        from jobspy import scrape_jobs  # noqa: PLC0415
-
         search_params = {
             "site_name": ["linkedin"],
             "search_term": target["search_term"],
@@ -539,4 +592,4 @@ class LinkedInScraper(BaseJobScraper):
             search_params["distance"] = target["distance"]
         if target.get("easy_apply") is not None:
             search_params["easy_apply"] = target["easy_apply"]
-        return scrape_jobs(**search_params)
+        return _fetch_jobspy_with_timeout(search_params, LINKEDIN_JOBSPY_FETCH_TIMEOUT_SECONDS)

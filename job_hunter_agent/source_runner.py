@@ -53,6 +53,11 @@ SEEK_SOURCE_TIMEOUT_MESSAGE = "SEEK is taking longer than expected; waiting for 
 LINKEDIN_SOURCE_TIMEOUT_MESSAGE = "LinkedIn is taking longer than expected; waiting for it to finish."
 APSJOBS_SOURCE_TIMEOUT_MESSAGE = "APSJobs is taking longer than expected; waiting for it to finish."
 
+
+def _exception_message(exc: Exception) -> str:
+    message = str(exc).strip()
+    return message or type(exc).__name__
+
 @dataclass
 class SourceRunResult:
     source: str
@@ -111,12 +116,12 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
                 SEEK_BOT_CHALLENGE,
                 SEEK_TIMEOUT_NO_CARDS,
             } or not headless:
-                set_run_progress(str(exc))
+                set_run_progress(_exception_message(exc))
                 _record_source_warning(
                     source=SOURCE_SEEK,
                     severity="warning",
                     category="source_failure",
-                    message=str(exc),
+                    message=_exception_message(exc),
                     run_id=context.run_iso,
                     context={
                         "failure_class": failure_class,
@@ -127,7 +132,7 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
                         "source_failure",
                         SOURCE_SEEK,
                         failure_class,
-                        str(exc),
+                        _exception_message(exc),
                     ),
                 )
                 raise
@@ -136,12 +141,12 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
                     "[SEEK] Headless SEEK run hit %s but AWS browser session mode is disabled",
                     failure_class,
                 )
-                set_run_progress(str(exc))
+                set_run_progress(_exception_message(exc))
                 _record_source_warning(
                     source=SOURCE_SEEK,
                     severity="warning",
                     category="source_failure",
-                    message=str(exc),
+                    message=_exception_message(exc),
                     run_id=context.run_iso,
                     context={
                         "failure_class": failure_class,
@@ -152,7 +157,7 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
                         "source_failure",
                         SOURCE_SEEK,
                         failure_class,
-                        str(exc),
+                        _exception_message(exc),
                     ),
                 )
                 return SourceRunResult(
@@ -182,12 +187,12 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
                     retry_failure_class,
                     retry_exc,
                 )
-                set_run_progress(str(retry_exc))
+                set_run_progress(_exception_message(retry_exc))
                 _record_source_warning(
                     source=SOURCE_SEEK,
                     severity="warning",
                     category="source_failure",
-                    message=str(retry_exc),
+                    message=_exception_message(retry_exc),
                     run_id=context.run_iso,
                     context={
                         "failure_class": retry_failure_class,
@@ -198,7 +203,7 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
                         "source_failure",
                         SOURCE_SEEK,
                         retry_failure_class,
-                        str(retry_exc),
+                        _exception_message(retry_exc),
                     ),
                 )
                 return SourceRunResult(
@@ -217,12 +222,15 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
         )
     except PartialSourceResultsError as exc:
         logger.exception("[SEEK] scraping failed after partial results")
-        print(f"[SEEK] Scraping failed: {type(exc.original_error).__name__}: {exc.original_error}")
+        print(
+            f"[SEEK] Scraping failed: {type(exc.original_error).__name__}: "
+            f"{_exception_message(exc.original_error)}"
+        )
         _record_source_warning(
             source=SOURCE_SEEK,
             severity="warning",
             category="source_failure",
-            message=str(exc.original_error),
+            message=_exception_message(exc.original_error),
             run_id=context.run_iso,
             context={
                 "error_type": type(exc.original_error).__name__,
@@ -234,7 +242,7 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
                 "source_failure",
                 SOURCE_SEEK,
                 type(exc.original_error).__name__,
-                str(exc.original_error),
+                _exception_message(exc.original_error),
             ),
         )
         return SourceRunResult(
@@ -248,18 +256,23 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
         )
     except Exception as exc:
         logger.exception("[SEEK] scraping failed")
-        print(f"[SEEK] Scraping failed: {type(exc).__name__}: {exc}")
+        print(f"[SEEK] Scraping failed: {type(exc).__name__}: {_exception_message(exc)}")
         _record_source_warning(
             source=SOURCE_SEEK,
             severity="error",
             category="source_failure",
-            message=str(exc),
+            message=_exception_message(exc),
             run_id=context.run_iso,
             context={
                 "error_type": type(exc).__name__,
                 "headless": headless,
             },
-            fingerprint_parts=("source_failure", SOURCE_SEEK, type(exc).__name__, str(exc)),
+            fingerprint_parts=(
+                "source_failure",
+                SOURCE_SEEK,
+                type(exc).__name__,
+                _exception_message(exc),
+            ),
         )
         return SourceRunResult(
             source=SOURCE_SEEK,
@@ -302,13 +315,14 @@ def _run_linkedin_source(context: ScrapeRunContext) -> SourceRunResult:
     except PartialSourceResultsError as exc:
         logger.exception("[LinkedIn] scraping failed after partial results")
         print(
-            f"[LinkedIn] Scraping failed: {type(exc.original_error).__name__}: {exc.original_error}"
+            f"[LinkedIn] Scraping failed: {type(exc.original_error).__name__}: "
+            f"{_exception_message(exc.original_error)}"
         )
         _record_source_warning(
             source=SOURCE_LINKEDIN,
             severity="warning",
             category="source_failure",
-            message=str(exc.original_error),
+            message=_exception_message(exc.original_error),
             run_id=context.run_iso,
             context={
                 "error_type": type(exc.original_error).__name__,
@@ -320,7 +334,7 @@ def _run_linkedin_source(context: ScrapeRunContext) -> SourceRunResult:
                 "source_failure",
                 SOURCE_LINKEDIN,
                 type(exc.original_error).__name__,
-                str(exc.original_error),
+                _exception_message(exc.original_error),
             ),
         )
         return SourceRunResult(
@@ -334,17 +348,22 @@ def _run_linkedin_source(context: ScrapeRunContext) -> SourceRunResult:
         )
     except Exception as exc:
         logger.exception("[LinkedIn] scraping failed")
-        print(f"[LinkedIn] Scraping failed: {type(exc).__name__}: {exc}")
+        print(f"[LinkedIn] Scraping failed: {type(exc).__name__}: {_exception_message(exc)}")
         _record_source_warning(
             source=SOURCE_LINKEDIN,
             severity="error",
             category="source_failure",
-            message=str(exc),
+            message=_exception_message(exc),
             run_id=context.run_iso,
             context={
                 "error_type": type(exc).__name__,
             },
-            fingerprint_parts=("source_failure", SOURCE_LINKEDIN, type(exc).__name__, str(exc)),
+            fingerprint_parts=(
+                "source_failure",
+                SOURCE_LINKEDIN,
+                type(exc).__name__,
+                _exception_message(exc),
+            ),
         )
         return SourceRunResult(
             source=SOURCE_LINKEDIN,

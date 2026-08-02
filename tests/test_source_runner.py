@@ -837,3 +837,32 @@ def test_run_seek_source_preserves_partial_results_on_late_failure(monkeypatch):
     assert [record["job_key"] for record in result.kept_records] == ["seek:1"]
     assert [row["job_key"] for row in result.audit_rows] == ["seek:1"]
     assert result.skill_observations == [{"kind": "note"}]
+
+
+def test_run_seek_source_uses_non_empty_warning_message_for_blank_exception(monkeypatch):
+    context = _make_context([SOURCE_SEEK])
+    context.headless = True
+    context.profile = {"search_settings": {"keywords": "Business Analyst", "locations": ["Sydney"]}}
+    recorded: list[dict] = []
+
+    def fake_seek_scrape_to_records(**kwargs):
+        raise PartialSourceResultsError(
+            SOURCE_SEEK,
+            kept_records=[],
+            audit_rows=[],
+            skill_observations=[],
+            original_error=TimeoutError(),
+        )
+
+    monkeypatch.setattr(source_runner, "seek_scrape_to_records", fake_seek_scrape_to_records)
+    monkeypatch.setattr(
+        source_runner,
+        "record_system_warning",
+        lambda **kwargs: recorded.append(kwargs),
+    )
+
+    result = source_runner._run_seek_source(context)
+
+    assert isinstance(result.error, TimeoutError)
+    assert recorded
+    assert recorded[0]["message"] == "TimeoutError"

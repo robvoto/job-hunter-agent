@@ -1,6 +1,7 @@
 """Tests for scraper linkedin."""
 
 from datetime import date
+from types import SimpleNamespace
 
 import pytest
 
@@ -393,3 +394,126 @@ def test_linkedin_step_through_pauses_on_rejected_jobs(monkeypatch):
     assert audit_rows == []
     assert skill_observations == []
     assert pause_calls == []
+
+
+def test_linkedin_stops_before_starting_next_target_after_stop_request(monkeypatch):
+    from job_hunter_agent.scrapers import linkedin as linkedin_module
+
+    class _Rows:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def sort_values(self, **_kwargs):
+            return self
+
+        def iterrows(self):
+            return enumerate(self._rows)
+
+        def __len__(self):
+            return len(self._rows)
+
+    stop_requested = {"value": False}
+    fetched_terms: list[str] = []
+    scraper = LinkedInScraper(
+        profile={},
+        llm_cache={},
+        job_history={},
+        applied_job_keys=set(),
+        hidden_job_keys=set(),
+        run_iso="2026-06-22T09:00:00+10:00",
+    )
+
+    monkeypatch.setattr(
+        scraper,
+        "_build_search_targets",
+        lambda _settings: [
+            {
+                "search_term": "scrum master",
+                "location": "Sydney, Australia",
+                "results_wanted": 1,
+                "hours_old": 24,
+                "sort_newest_first": False,
+                "easy_apply": None,
+            },
+            {
+                "search_term": "project manager",
+                "location": "Sydney, Australia",
+                "results_wanted": 1,
+                "hours_old": 24,
+                "sort_newest_first": False,
+                "easy_apply": None,
+            },
+        ],
+    )
+
+    def _fake_fetch(target):
+        fetched_terms.append(target["search_term"])
+        return _Rows(
+            [
+                {
+                    "id": "li-1",
+                    "title": "Scrum Master",
+                    "company": "Example Co",
+                    "location": "Sydney",
+                    "job_url": "https://www.linkedin.com/jobs/view/1",
+                    "description": "Example description",
+                }
+            ]
+        )
+
+    monkeypatch.setattr(scraper, "_fetch_jobspy", _fake_fetch)
+    monkeypatch.setattr(scraper, "_detect_closed_job_signals", lambda _record: [])
+    monkeypatch.setattr(linkedin_module, "run_stop_requested", lambda: stop_requested["value"])
+    monkeypatch.setattr(
+        linkedin_module,
+        "review_pre_detail_normalized_job",
+        lambda record, _context: ({"decision": "KEEP"}, record, [], True),
+    )
+
+    def _fake_review(record, _context, hooks=None):
+        stop_requested["value"] = True
+        return {"decision": "KEEP"}, record, []
+
+    monkeypatch.setattr(linkedin_module, "review_post_detail_normalized_job", _fake_review)
+
+    kept_records, _, _ = scraper.scrape()
+
+    assert len(kept_records) == 1
+    assert fetched_terms == ["scrum master"]
+
+
+def test_fetch_jobspy_with_timeout_uses_timeout_worker(monkeypatch):
+    from job_hunter_agent.scrapers import linkedin as linkedin_module
+
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        linkedin_module,
+        "_fetch_jobspy_with_timeout",
+        lambda search_params, timeout_seconds: captured.update(
+            {"search_params": search_params, "timeout_seconds": timeout_seconds}
+        )
+        or SimpleNamespace(),
+    )
+
+    scraper = LinkedInScraper(
+        profile={},
+        llm_cache={},
+        job_history={},
+        applied_job_keys=set(),
+        hidden_job_keys=set(),
+        run_iso="2026-06-22T09:00:00+10:00",
+    )
+    scraper._fetch_jobspy(
+        {
+            "search_term": "project manager",
+            "location": "Sydney, Australia",
+            "distance": 50,
+            "results_wanted": 25,
+            "hours_old": 24,
+            "easy_apply": None,
+        }
+    )
+
+    assert captured["timeout_seconds"] == linkedin_module.LINKEDIN_JOBSPY_FETCH_TIMEOUT_SECONDS
+    assert captured["search_params"]["search_term"] == "project manager"

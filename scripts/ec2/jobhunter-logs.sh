@@ -15,19 +15,20 @@ DEBUG_LOG="$OUTPUT_DIR/server-debug.log"
 FOLLOW=0
 SINCE=""
 UNTIL=""
-FOLLOW_VIEW="human"
+FOLLOW_VIEW="combined"
 
 usage() {
   cat <<'EOF'
-Usage: jobhunter-logs [--follow] [--human|--debug|--journal] [--since "..."] [--until "..."]
+Usage: jobhunter-logs [--follow] [--human|--debug|--journal|--combined] [--since "..."] [--until "..."]
 
 Defaults:
   - snapshot mode shows journal + human log + debug log
-  - follow mode tails the human log only
+  - follow mode tails the combined human + debug app logs
 
 Examples:
   jobhunter-logs
   jobhunter-logs --follow
+  jobhunter-logs --follow --combined
   jobhunter-logs --follow --debug
   jobhunter-logs --follow --journal
 EOF
@@ -49,6 +50,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --journal)
       FOLLOW_VIEW="journal"
+      shift
+      ;;
+    --combined|--all)
+      FOLLOW_VIEW="combined"
       shift
       ;;
     --since)
@@ -96,6 +101,10 @@ sudo tail -n 200 "$DEBUG_LOG" || true
 if [[ "$FOLLOW" -eq 1 ]]; then
   echo
   case "$FOLLOW_VIEW" in
+    combined)
+      echo "==> Following combined app logs (human + debug) (Ctrl+C to stop)"
+      sudo tail -n 0 -F "$HUMAN_LOG" "$DEBUG_LOG"
+      ;;
     human)
       echo "==> Following human log only (Ctrl+C to stop)"
       sudo tail -n 0 -F "$HUMAN_LOG"
