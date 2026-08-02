@@ -12,17 +12,18 @@ Keep always-loaded instructions small and reliable. Agents should load only the 
    - Always-loaded reusable loader only.
    - Project-agnostic and small.
    - Contains purpose, load order, skill selection, and universal rules only.
-   - Must not contain backlog workflow, testing workflow, Definition of Done, runtime paths, startup protocol, product context, Google Sheet details, or domain-specific Job Hunter rules.
+   - Must not contain backlog workflow, testing workflow, Definition of Done, runtime paths, startup protocol, product context, Google Sheet details, domain-specific Job Hunter rules, or agent-specific memory.
 
 2. `docs/PROJECT_CONTEXT.md`
    - Job Hunter-specific context.
    - Owns product goal, runtime truth, repo-root and LangGraph orchestration details, project-specific source hierarchy, project-specific skill routing, non-negotiables, startup/run notes, and a pointer to backlog workflow.
    - Points to `.skills/backlog-management/SKILL.md` for backlog details instead of duplicating the full workflow.
 
-3. Agent adapter files: `CLAUDE.md`
+3. Agent adapter files: `CLAUDE.md` and `.clinerules/*`
    - Thin adapters for a specific agent environment.
-   - Point to `AGENTS.md`, `docs/PROJECT_CONTEXT.md`, and the relevant skill owner.
-   - Must not redefine project rules, commands, architecture, backlog workflow, testing workflow, or Definition of Done.
+   - Point to `AGENTS.md`, `docs/PROJECT_CONTEXT.md`, the relevant skill owner, and any genuinely agent-specific context.
+   - Must not redefine shared project rules, commands, architecture, backlog workflow, testing workflow, or Definition of Done.
+   - Cline-specific durable context lives in `docs/CLINE_MEMORY.md` and is loaded only through `.clinerules/`.
 
 4. `.skills/*/SKILL.md`
    - Compact scoped instructions for one work area.
@@ -133,4 +134,6 @@ Local `docs/backlog/backlog_review.xlsx` is archive/export/reference only unless
 - Backlog workflow lives in `.skills/backlog-management/SKILL.md`.
 - Hardcoding/config/schema/default/fallback ownership lives in `.skills/no-hardcoding/SKILL.md`.
 - Skills use discovery frontmatter (`name` and `description`) so agents can route by skill metadata instead of hardcoded trigger lists in `AGENTS.md`.
-- `CLAUDE.md` is a thin adapter only.
+- `CLAUDE.md` is a thin Claude adapter only.
+- `.clinerules/` is the thin Cline adapter layer.
+- `docs/CLINE_MEMORY.md` is retained for Cline-specific durable context and must not be linked from shared `AGENTS.md`.

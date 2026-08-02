@@ -12,6 +12,8 @@ Use this file to decide where information belongs. Do not create a new markdown 
 |---|---|
 | `README.md` | Project overview, quick start, and links to deeper docs. |
 | `AGENTS.md` | Tiny reusable agent loader only. |
+| `CLAUDE.md` | Thin Claude-specific adapter. |
+| `.clinerules/` | Thin Cline-specific adapter rules. |
 | `docs/INDEX.md` | Canonical documentation routing index. |
 
 ## Core Docs
@@ -19,6 +21,7 @@ Use this file to decide where information belongs. Do not create a new markdown 
 | File | Owner |
 |---|---|
 | `docs/PROJECT_CONTEXT.md` | Job Hunter product context, runtime truth, repo-root path, project-specific skill routing, startup/run notes, backlog pointer. |
+| `docs/CLINE_MEMORY.md` | Cline-specific durable session context; loaded through `.clinerules/`, never through shared `AGENTS.md`. |
 | `docs/AGENT_OPERATING_MODEL.md` | Agent instruction layering, skill discovery, adapter ownership, tool-vs-skill rules, active/archived skill summary. |
 | `docs/ARCHITECTURE.md` | System design, runtime layers, and module ownership. |
 | `docs/PRINCIPLES.md` | Product and decision philosophy. |
@@ -84,5 +87,6 @@ Backlog source of truth is the shared Google Sheet. Local backlog markdown files
 - Prefer updating an existing owner before creating a new doc.
 - Use `docs/runbooks/` for exact live troubleshooting procedures with commands and pass/fail criteria.
 - If a doc is historical, put it under an `archive/` folder or mark it clearly as historical.
-- If a rule tells agents how to act, it usually belongs in `AGENTS.md`, `docs/PROJECT_CONTEXT.md`, or one `.skills/*/SKILL.md`.
+- If a rule tells all agents how to act, it usually belongs in `AGENTS.md`, `docs/PROJECT_CONTEXT.md`, or one `.skills/*/SKILL.md`.
+- Agent-specific session context belongs only in that agent's adapter or memory owner and must not be promoted into shared `AGENTS.md`.
 - If a doc repeats another owner, merge or link instead of duplicating.

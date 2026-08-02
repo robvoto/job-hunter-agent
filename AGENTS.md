@@ -8,16 +8,15 @@ Project-specific context lives in `docs/PROJECT_CONTEXT.md`.
 
 Shared setup/standards pointers live in `docs/STANDARDS_INDEX.md`.
 
-Persistent Cline session memory lives in `docs/CLINE_MEMORY.md`.
+Never add agent-specific memory or session history to this shared loader.
 
 ## Load only what is needed
 
 1. Read this file.
 2. If project context is needed, read `docs/PROJECT_CONTEXT.md`.
-3. Read `docs/CLINE_MEMORY.md` for durable cross-session context (backlog, conventions, recent work).
-4. If changing project setup, docs, AGENTS.md, skills, config, runtime commands, tests, env examples, packaging, templates, AI model/provider defaults, cost logging, approval workflows, or long-running workflows, read `docs/STANDARDS_INDEX.md` first.
-5. Load the relevant skill or smallest necessary combination of skills from `.skills/`. Use one domain skill plus reusable skills such as `code-change`, `no-hardcoding`, or `css-design-system` when the task crosses those boundaries.
-6. Read only linked details, docs, code, or git history needed for the task.
+3. If changing project setup, docs, AGENTS.md, skills, config, runtime commands, tests, env examples, packaging, templates, AI model/provider defaults, cost logging, approval workflows, or long-running workflows, read `docs/STANDARDS_INDEX.md` first.
+4. Load the relevant skill or smallest necessary combination of skills from `.skills/`. Use one domain skill plus reusable skills such as `code-change`, `no-hardcoding`, or `css-design-system` when the task crosses those boundaries.
+5. Read only linked details, docs, code, or git history needed for the task.
 
 Do not read every skill, every doc, or the whole repo.
 
