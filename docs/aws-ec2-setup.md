@@ -523,6 +523,7 @@ Manage:
 
 ```bash
 sudo systemctl restart job-hunter && jobhunter-status
+sudo systemctl restart job-hunter && jobhunter-status --verbose
 sudo systemctl restart job-hunter && jobhunter-status -f   # + live log tail
 ```
 
@@ -1019,7 +1020,7 @@ Current helpers:
 ```text
 scripts/ec2/deploy-jobhunter-release.sh        # deploy an explicit Git tag and health-check it
 scripts/ec2/deploy-jobhunter-latest.sh         # deploy latest main by default or a branch/commit for staging/debug
-scripts/ec2/jobhunter-status.sh        # inspect service, logs, local health, public health
+scripts/ec2/jobhunter-status.sh        # concise health summary, optional verbose/follow logs
 scripts/ec2/install-helpers.sh         # install wrappers into /usr/local/bin
 scripts/ec2/enable-https-jobhunter.sh  # enable HTTPS with certbot/nginx for jobhunter.robvoto.com
 ```

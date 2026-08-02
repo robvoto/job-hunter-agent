@@ -213,6 +213,18 @@ def test_doc_index_points_to_canonical_docs_index():
     assert "`docs/INDEX.md`" in doc_index
 
 
+def test_jobhunter_status_defaults_to_concise_summary():
+    script = (ROOT_DIR / "scripts" / "ec2" / "jobhunter-status.sh").read_text(encoding="utf-8")
+
+    assert 'jobhunter-status --verbose' in script
+    assert 'jobhunter-status --follow' in script
+    assert 'echo "Service: ${SERVICE}.service"' in script
+    assert 'echo "Local:   $(status_line "$HEALTH_URL")"' in script
+    assert 'sudo systemctl status "$SERVICE" --no-pager || true' in script
+    assert 'sudo journalctl -u "$SERVICE" -n 30 --no-pager || true' in script
+    assert 'if [[ "$MODE" == "--verbose" || "$MODE" == "-v" ]]; then' in script
+
+
 def test_integrations_doc_captures_local_override_and_runtime_seed_boundary():
     integrations = (ROOT_DIR / "docs" / "INTEGRATIONS.md").read_text(encoding="utf-8")
 
