@@ -887,7 +887,7 @@ def _record_requirement_coverage_warning(
         matched_job_text,
     )
     record_system_warning(
-        severity="warning",
+        severity="info",
         category="llm_requirement_coverage",
         source="llm_gate",
         message=message,

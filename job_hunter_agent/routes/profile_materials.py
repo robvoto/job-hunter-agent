@@ -17,6 +17,7 @@ from job_hunter_agent.source_documents import (
     save_source_materials,
 )
 from job_hunter_agent.system_warnings import (
+    is_actionable_system_warning,
     list_system_warnings,
     update_system_warning_status,
 )
@@ -192,8 +193,20 @@ def api_admin_system_warnings_get(request: Request):  # type: ignore[no-untyped-
     if not is_admin(request):
         return auth_required_response("/api/admin/system-warnings", False)
     try:
-        warnings = list_system_warnings()
-        return json_response({"warnings": warnings})
+        unresolved_warnings = list_system_warnings()
+        actionable_warnings = [
+            warning for warning in unresolved_warnings if is_actionable_system_warning(warning)
+        ]
+        return json_response(
+            {
+                "warnings": actionable_warnings,
+                "summary": {
+                    "total_unresolved": len(unresolved_warnings),
+                    "visible_actionable": len(actionable_warnings),
+                    "hidden_diagnostics": len(unresolved_warnings) - len(actionable_warnings),
+                },
+            }
+        )
     except Exception as exc:
         return json_response({"error": str(exc)}, 400)
 

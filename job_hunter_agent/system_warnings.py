@@ -14,6 +14,12 @@ from job_hunter_agent.database import db_conn, ensure_system_warnings_schema
 logger = logging.getLogger(__name__)
 
 _SYSTEM_WARNING_STATUSES = {"unresolved", "reviewed", "dismissed"}
+_SYSTEM_WARNING_DIAGNOSTIC_WARNING_CATEGORIES = frozenset(
+    {
+        "job_identity_uncertainty",
+        "llm_requirement_coverage",
+    }
+)
 
 
 def _now_iso() -> str:
@@ -34,6 +40,25 @@ def _warning_row(row) -> dict[str, Any]:
     except Exception as exc:  # pragma: no cover - schema corruption should not be silent
         raise ValueError(f"Invalid warning context_json: {context_json!r}") from exc
     return payload
+
+
+def is_actionable_system_warning(warning: dict[str, Any]) -> bool:
+    """Return whether a warning should appear in the top-level admin alert feed.
+
+    The admin panel is reserved for failures an operator can act on quickly.
+    Low-signal diagnostics still remain stored in SQLite and logs, but do not
+    crowd the actionable warning surface.
+    """
+
+    severity = str(warning.get("severity") or "").strip().lower()
+    category = str(warning.get("category") or "").strip().lower()
+    if severity in {"critical", "error"}:
+        return True
+    if severity == "info":
+        return False
+    if severity == "warning" and category in _SYSTEM_WARNING_DIAGNOSTIC_WARNING_CATEGORIES:
+        return False
+    return severity == "warning"
 
 
 def make_system_warning_fingerprint(*parts: Any) -> str:

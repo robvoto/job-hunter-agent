@@ -1169,7 +1169,7 @@ def test_normalize_coverage_converts_invalid_eligibility_match_to_not_shown(monk
     assert result[0]["eligibility_name"] == ""
     assert result[0]["capability_name"] == ""
     assert warnings
-    assert warnings[0]["severity"] == "warning"
+    assert warnings[0]["severity"] == "info"
     assert warnings[0]["category"] == "llm_requirement_coverage"
     assert warnings[0]["source"] == "llm_gate"
     assert warnings[0]["context"]["reason"] == "invalid_eligibility_match"
@@ -1232,7 +1232,7 @@ def test_normalize_coverage_converts_invalid_capability_match_to_not_shown(monke
     assert result[0]["capability_name"] == ""
     assert result[0]["eligibility_name"] == ""
     assert warnings
-    assert warnings[0]["severity"] == "warning"
+    assert warnings[0]["severity"] == "info"
     assert warnings[0]["category"] == "llm_requirement_coverage"
     assert warnings[0]["source"] == "llm_gate"
     assert warnings[0]["context"]["reason"] == "invalid_capability_match"
@@ -1278,7 +1278,7 @@ def test_normalize_coverage_marks_invalid_requirement_type_for_review(monkeypatc
     assert result[0]["eligibility_name"] == ""
     assert result[0]["capability_name"] == ""
     assert warnings
-    assert warnings[0]["severity"] == "warning"
+    assert warnings[0]["severity"] == "info"
     assert warnings[0]["category"] == "llm_requirement_coverage"
     assert warnings[0]["source"] == "llm_gate"
     assert warnings[0]["context"]["reason"] == "invalid_requirement_type"

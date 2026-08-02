@@ -14,13 +14,13 @@
           <section class="panel system-warnings-panel" id="system_warnings_panel">
             <div class="panel-header">
               <h2>System warnings</h2>
-              <p class="panel-copy">Unresolved runtime warnings from the scrapers, fit scoring, onboarding, and job identity checks. Repeated warnings are deduplicated and stay visible here until reviewed.</p>
+              <p class="panel-copy">Actionable runtime warnings from the scrapers, fit scoring, onboarding, and runtime maintenance flows. Lower-signal diagnostics stay recorded in runtime logs and storage, but are hidden from this panel by default so real breakages stay visible.</p>
             </div>
             <div class="panel-actions system-warnings-toolbar">
               <button id="system_warnings_refresh_button" type="button" class="btn btn-secondary">Refresh warnings</button>
-              <div id="system_warnings_status" class="field-help">Loading unresolved warnings...</div>
+              <div id="system_warnings_status" class="field-help">Loading actionable warnings...</div>
             </div>
-            <div id="system_warnings_empty" class="field-help" hidden>No unresolved system warnings right now.</div>
+            <div id="system_warnings_empty" class="field-help" hidden>No actionable system warnings right now.</div>
             <div id="system_warnings_list" class="system-warnings-list" aria-live="polite"></div>
           </section>
 

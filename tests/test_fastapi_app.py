@@ -556,6 +556,11 @@ def test_admin_system_warnings_api_lists_and_updates(monkeypatch):
     payload = response.json()
     assert payload["warnings"][0]["id"] == 1
     assert payload["warnings"][0]["context"] == {"error_type": "RuntimeError"}
+    assert payload["summary"] == {
+        "total_unresolved": 1,
+        "visible_actionable": 1,
+        "hidden_diagnostics": 0,
+    }
 
     response = client.patch("/api/admin/system-warnings/1", json={"status": "reviewed"})
     assert response.status_code == 200

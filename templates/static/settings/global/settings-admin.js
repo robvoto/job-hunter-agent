@@ -732,7 +732,10 @@ export const JobHunterAdminSettings = (function () {
     if (!response.ok) {
       throw new Error(payload.error || 'Could not load system warnings.');
     }
-    return Array.isArray(payload.warnings) ? payload.warnings : [];
+    return {
+      warnings: Array.isArray(payload.warnings) ? payload.warnings : [],
+      summary: payload && typeof payload.summary === 'object' && payload.summary ? payload.summary : {},
+    };
   }
 
   async function updateSystemWarningStatus(warningId, status) {
@@ -793,15 +796,27 @@ export const JobHunterAdminSettings = (function () {
 
     const refresh = async ({ silent = false } = {}) => {
       if (!silent) {
-        setStatus('Loading unresolved warnings...', 'loading');
+        setStatus('Loading actionable warnings...', 'loading');
       }
       try {
-        const warnings = await fetchSystemWarnings();
+        const payload = await fetchSystemWarnings();
+        const warnings = Array.isArray(payload?.warnings) ? payload.warnings : [];
+        const summary = payload?.summary && typeof payload.summary === 'object' ? payload.summary : {};
+        const hiddenDiagnostics = Number(summary.hidden_diagnostics || 0);
         renderWarnings(warnings);
+        if (warnings.length) {
+          setStatus(
+            hiddenDiagnostics > 0
+              ? `Showing ${warnings.length} actionable warning${warnings.length === 1 ? '' : 's'}. ${hiddenDiagnostics} diagnostic item${hiddenDiagnostics === 1 ? '' : 's'} hidden.`
+              : `${warnings.length} actionable warning${warnings.length === 1 ? '' : 's'}.`,
+            'success',
+          );
+          return;
+        }
         setStatus(
-          warnings.length
-            ? `${warnings.length} unresolved warning${warnings.length === 1 ? '' : 's'}.`
-            : 'No unresolved system warnings.',
+          hiddenDiagnostics > 0
+            ? `No actionable system warnings. ${hiddenDiagnostics} diagnostic item${hiddenDiagnostics === 1 ? '' : 's'} hidden.`
+            : 'No actionable system warnings.',
           'success',
         );
       } catch (error) {

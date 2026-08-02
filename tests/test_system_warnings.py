@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from job_hunter_agent.database import db_conn, init_db
 from job_hunter_agent.system_warnings import (
+    is_actionable_system_warning,
     list_system_warnings,
     record_system_warning,
     update_system_warning_status,
@@ -114,3 +115,46 @@ def test_system_warning_helpers_bootstrap_missing_table(tmp_path):
 
     updated = update_system_warning_status(created["id"], "dismissed", db_path=db)
     assert updated["status"] == "dismissed"
+
+
+def test_actionable_warning_filter_hides_diagnostics(tmp_path):
+    db = tmp_path / "warnings.db"
+    init_db(db)
+
+    record_system_warning(
+        severity="error",
+        category="source_failure",
+        source="seek",
+        message="SEEK failed.",
+        fingerprint="fingerprint-error",
+        db_path=db,
+    )
+    record_system_warning(
+        severity="info",
+        category="preference_uncertainty",
+        source="preferences",
+        message="Preference is unclear.",
+        fingerprint="fingerprint-info",
+        db_path=db,
+    )
+    record_system_warning(
+        severity="warning",
+        category="job_identity_uncertainty",
+        source="annotate_potential_duplicate_links",
+        message="Potential duplicate needs review.",
+        fingerprint="fingerprint-identity",
+        db_path=db,
+    )
+    record_system_warning(
+        severity="warning",
+        category="llm_requirement_coverage",
+        source="llm_gate",
+        message="LLM mapping was downgraded.",
+        fingerprint="fingerprint-llm",
+        db_path=db,
+    )
+
+    warnings = list_system_warnings(db_path=db)
+    actionable = [warning for warning in warnings if is_actionable_system_warning(warning)]
+
+    assert [warning["fingerprint"] for warning in actionable] == ["fingerprint-error"]
