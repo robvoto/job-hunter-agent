@@ -2078,6 +2078,37 @@
   outline-offset: var(--focus-ring-offset);
 }
 
+/* Shared icon-only close/dismiss button for dialogs, overlays, and flash cards. */
+.jh-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-height-lg);
+  height: var(--control-height-lg);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--control-radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--interactive-motion-fast), color var(--interactive-motion-fast);
+}
+
+.jh-icon-button:hover {
+  background: var(--bg-muted);
+  color: var(--text-primary);
+}
+
+.jh-icon-button:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color-subtle);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.jh-icon-button--close {
+  font-size: var(--font-size-9xl);
+}
+
 /* Shared compact typography for review cards, chips, and capability cards. */
 .review-capability-title {
   font-size: var(--font-size-3xl);

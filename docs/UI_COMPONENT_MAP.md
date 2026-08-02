@@ -22,6 +22,7 @@ Quick reference for every interactive widget pattern in settings and onboarding.
 | Select (dropdown) | Standard `<select>`, some server-rendered via a render function | Native/theme form control styling | Page-specific wiring | Field-specific `ui_labels.json` groups | Easy Apply filter, search date window, workspace minimum score, sector preference (onboarding) | None documented |
 | Wait-state explainer disclosure | Shared wait overlay markup in `templates/static/common/wait-state.js` and the workspace inline wait renderer in `templates/workspace.html` | `themes.primitives.css` (`.wait-state__explainer*`) | None beyond the owning wait renderer | `shared_ui_labels` in `ui_labels.json` | Search-in-progress overlays | Reuse the same `<details>` + `<summary>` + explainer body structure; do not create page-local variants for loading-state explanations |
 | Job card | `workspace_renderer.py` (`_render_job_card` et al.) | `:hover` state in `themes.widgets.css` (`.job-card:hover`); base card visual (background/border/padding/radius) in `results-page.css` | `results-page.js` | Job posting data, not `ui_labels.json` | Results/workspace job list | **Documented exception (pre-existing, out of scope for JH-195):** the base `.job-card` rule is fully redefined in `results-page.css`, overriding the base rule of the same name in `themes.widgets.css`. Only the `:hover` state was centralized under JH-195; deduplicating the base rule is a separate, larger change and was not attempted here. |
+| Icon-only close/dismiss button | Explicit `.jh-icon-button` markup on the control (e.g. `<button class="jh-icon-button jh-icon-button--close">`) | `themes.widgets.css` (`.jh-icon-button`, `.jh-icon-button--close`) | None (pure markup + shared CSS) | Caller-supplied `aria-label` | Workspace onboarding Welcome modal close button (`.ws-flash-close`) | Page CSS may add a positioning-only class alongside it (e.g. `.ws-flash-close` for `position: absolute` + offsets) — it must not redeclare size, colour, radius, hover, or focus-visible, which stay central. |
 
 ---
 
@@ -141,6 +142,21 @@ Used for: Enable SEEK, Enable LinkedIn, Sort newest first (admin)
 **JS (settings-utils.js exports):** `getToggleChecked(id)` / `setToggleChecked(id, bool)` / `setToggleStateText(stateId, bool, checkedLabel, uncheckedLabel)`
 
 **Critical:** Never read a toggle's value with `.value === 'true'` — a checkbox `.value` is always `"on"`. Always use `.checked` via `getToggleChecked`.
+
+---
+
+## Icon-only close/dismiss button
+
+Used for: Workspace onboarding Welcome modal close control
+
+**CSS classes:** `jh-icon-button` (base) plus `jh-icon-button--close` (sizes the `&times;` glyph). Both live in `themes.widgets.css`. At least 40x40px (`--control-height-lg`), transparent by default, `--bg-muted` hover fill, `:focus-visible` ring using `--focus-ring-color-subtle`.
+
+**HTML pattern:**
+```html
+<button class="jh-icon-button jh-icon-button--close" type="button" aria-label="Close ...">&times;</button>
+```
+
+A consuming page may add its own positioning class (absolute placement inside a card/dialog) alongside `jh-icon-button`/`jh-icon-button--close`, but that page-local class must only set position/offset/z-index — never size, colour, radius, hover, or focus-visible.
 
 ---
 
