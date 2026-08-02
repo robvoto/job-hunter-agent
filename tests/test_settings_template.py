@@ -35,7 +35,7 @@ SETTINGS_ADMIN_JS_PATH = (
 AWS_BROWSER_SESSION_START_SCRIPT = ROOT_DIR / "scripts" / "ec2" / "start-aws-browser-session.sh"
 AWS_BROWSER_SESSION_INSTALL_SCRIPT = ROOT_DIR / "scripts" / "ec2" / "install-aws-browser-session.sh"
 AWS_BROWSER_SESSION_SMOKE_SCRIPT = ROOT_DIR / "scripts" / "ec2" / "smoke-seek-aws-browser-session.sh"
-AWS_DEPLOY_SCRIPT = ROOT_DIR / "scripts" / "ec2" / "deploy-jobhunter.sh"
+AWS_DEPLOY_SCRIPT = ROOT_DIR / "scripts" / "ec2" / "deploy-jobhunter-release.sh"
 
 
 def test_source_document_suffixes_are_rendered_read_only():

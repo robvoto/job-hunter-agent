@@ -225,7 +225,7 @@ Server logs:
 - on AWS, the EC2 browser-session launcher also prints an `AWS JOB HUNTER SERVICE STARTING` banner directly into `systemd`/`journalctl` before Python starts, so service restarts are obvious even if you are only watching the live service log
 - `./run --debug` writes both logs; the terminal mirrors the same human-readable stream
 - on AWS, `jobhunter-logs` shows `journalctl` plus both app logs, and accepts `--since "YYYY-MM-DD HH:MM:SS"` / `--until "YYYY-MM-DD HH:MM:SS"` when you need the pre-restart window
-- the AWS service startup path rebuilds saved workspace HTML before serving requests, so `deploy-jobhunter` refreshes rendered workspace output as part of a normal deploy
+- the AWS service startup path rebuilds saved workspace HTML before serving requests, so `deploy-jobhunter-release` refreshes rendered workspace output as part of a normal deploy
 - browser `console.log` is separate from server logs and only matters for JS running in the page
 - debug/audit uncertainty events are appended to `output/uncertainty.jsonl`
 - reviewable runtime warnings are stored in SQLite `system_warnings` and shown in the admin settings page
@@ -808,21 +808,22 @@ To run every gate without changing files, Git history, tags, or GitHub:
 ./scripts/release-jobhunter.sh patch --dry-run
 ```
 
-The release command validates version consistency, runs the full unit suite and non-LLM Playwright suite, commits the version update, creates an annotated tag, and atomically pushes `main` with the tag. After the release succeeds, connect to AWS and run `deploy-jobhunter vX.Y.Z`.
+The release command validates version consistency, runs the full unit suite and non-LLM Playwright suite, commits the version update, creates an annotated tag, and atomically pushes `main` with the tag. After the release succeeds, connect to AWS and run `deploy-jobhunter-release vX.Y.Z`.
 
 Production AWS deploys must use an explicit release tag:
 
 ```bash
-deploy-jobhunter vX.Y.Z
+deploy-jobhunter-release vX.Y.Z
 ```
 
 For AWS smoke tests or debugging without cutting a release, use the separate non-production helper:
 
 ```bash
-deploy-jobhunter-ref <branch-or-sha>
+deploy-jobhunter-latest
+deploy-jobhunter-latest <branch-or-sha>
 ```
 
-Use `deploy-jobhunter-ref` only for staging/test/debug work. Do not treat it as the normal production deploy path, and do not reuse old production tags to move newer code.
+Use `deploy-jobhunter-latest` only for staging/test/debug work. With no argument it deploys the latest commit from `main`. Do not treat it as the normal production deploy path, and do not reuse old production tags to move newer code.
 
 For a direct metadata diagnosis:
 

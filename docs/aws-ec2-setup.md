@@ -402,19 +402,19 @@ The source of truth for code is GitHub. The local PC edits and pushes. EC2 pulls
 
 ## 9. Run the first deploy
 
-`deploy-jobhunter` handles venv, dependencies, Playwright browser + OS libs, service install, and DB seed in one command for an explicit release tag:
+`deploy-jobhunter-release` handles venv, dependencies, Playwright browser + OS libs, service install, and DB seed in one command for an explicit release tag:
 
 ```bash
 cd /home/ubuntu/job-hunter-agent
 sudo bash scripts/ec2/install-helpers.sh
-deploy-jobhunter vX.Y.Z
+deploy-jobhunter-release vX.Y.Z
 ```
 
-`install-helpers.sh` is only needed once to put `deploy-jobhunter` on PATH. After that, every future update is just:
+`install-helpers.sh` is only needed once to put `deploy-jobhunter-release` on PATH. After that, every future update is just:
 
 ```bash
 use-ubuntu
-deploy-jobhunter vX.Y.Z
+deploy-jobhunter-release vX.Y.Z
 ```
 
 ---
@@ -472,7 +472,7 @@ sudo tr '\0' '\n' < /proc/$(systemctl show -p MainPID --value job-hunter)/enviro
 
 ## 12. DB seed (manual)
 
-`deploy-jobhunter` runs this automatically. Only run manually for a hard reset:
+`deploy-jobhunter-release` runs this automatically. Only run manually for a hard reset:
 
 ```bash
 # upgrade (safe — preserves approved knowledge)
@@ -493,7 +493,7 @@ export JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/job_hunter.db
 
 ## 13. Systemd service
 
-The repo-managed service file is `scripts/ec2/job-hunter.service`. `deploy-jobhunter` installs it automatically.
+The repo-managed service file is `scripts/ec2/job-hunter.service`. `deploy-jobhunter-release` installs it automatically.
 
 Current service:
 
@@ -540,7 +540,7 @@ Viewport: 1400x900
 Browser access: localhost-only noVNC/VNC
 ```
 
-`deploy-jobhunter` installs and maintains this automatically via `scripts/ec2/install-aws-browser-session.sh`, `scripts/ec2/start-aws-browser-session.sh`, and `scripts/ec2/job-hunter.service`.
+`deploy-jobhunter-release` installs and maintains this automatically via `scripts/ec2/install-aws-browser-session.sh`, `scripts/ec2/start-aws-browser-session.sh`, and `scripts/ec2/job-hunter.service`.
 
 Verify during a scrape:
 
@@ -661,10 +661,10 @@ AWS EC2 (deploy):
 
 ```bash
 use-ubuntu
-deploy-jobhunter vX.Y.Z
+deploy-jobhunter-release vX.Y.Z
 ```
 
-That's it. `deploy-jobhunter` fetches the requested release tag, checks out that exact tagged commit, verifies the tag matches `pyproject.toml`, syncs deps, updates service, seeds DB, restarts, rebuilds saved workspace output on startup, and health-checks.
+That's it. `deploy-jobhunter-release` fetches the requested release tag, checks out that exact tagged commit, verifies the tag matches `pyproject.toml`, syncs deps, updates service, seeds DB, restarts, rebuilds saved workspace output on startup, and health-checks.
 
 ---
 
@@ -887,10 +887,10 @@ Every deploy — first install or update — is the same single command:
 
 ```bash
 use-ubuntu
-deploy-jobhunter vX.Y.Z
+deploy-jobhunter-release vX.Y.Z
 ```
 
-`deploy-jobhunter` is safe to run repeatedly for the same explicit release tag. It:
+`deploy-jobhunter-release` is safe to run repeatedly for the same explicit release tag. It:
 
 1. Removes known old server scripts
 2. Fetches the requested remote release tag and checks out the exact tagged commit
@@ -911,23 +911,25 @@ For AWS smoke tests or debugging that should not cut a release tag, use the sepa
 
 ```bash
 use-ubuntu
-deploy-jobhunter-ref <branch-or-sha>
+deploy-jobhunter-latest
+deploy-jobhunter-latest <branch-or-sha>
 ```
 
 Examples:
 
 ```bash
-deploy-jobhunter-ref main
-deploy-jobhunter-ref feature/my-fix
-deploy-jobhunter-ref ef720a7
+deploy-jobhunter-latest
+deploy-jobhunter-latest main
+deploy-jobhunter-latest feature/my-fix
+deploy-jobhunter-latest ef720a7
 ```
 
-`deploy-jobhunter-ref` fetches `origin`, resolves the requested branch/ref/commit to an exact commit, checks out detached `HEAD`, validates `pyproject.toml` / `uv.lock` / UI version integrity, then runs the same dependency, seed, restart, and health-check steps as the production deploy helper.
+`deploy-jobhunter-latest` fetches `origin`, resolves the requested branch/ref/commit to an exact commit, checks out detached `HEAD`, validates `pyproject.toml` / `uv.lock` / UI version integrity, then runs the same dependency, seed, restart, and health-check steps as the production deploy helper. With no argument it targets the latest commit from `main`.
 
 Rules:
 
-1. Use `deploy-jobhunter vX.Y.Z` for production.
-2. Use `deploy-jobhunter-ref <branch-or-sha>` only for staging, smoke tests, or debugging.
+1. Use `deploy-jobhunter-release vX.Y.Z` for production.
+2. Use `deploy-jobhunter-latest` or `deploy-jobhunter-latest <branch-or-sha>` only for staging, smoke tests, or debugging.
 3. Do not move or reuse an existing production tag to get newer code onto AWS.
 4. If a test ref proves good and should become production, cut a normal release tag and deploy that tag.
 
@@ -937,7 +939,7 @@ Before calling the environment ready for use, check these in order:
 
 1. Confirm `/var/lib/job-hunter` is mounted on the EBS data disk, not only the root volume.
 2. Confirm `/etc/job-hunter/job-hunter.env` exists, is not committed to git, and keeps the `640` permissions above.
-3. Run `deploy-jobhunter vX.Y.Z` or `sudo systemctl restart job-hunter` after code or env changes.
+3. Run `deploy-jobhunter-release vX.Y.Z` or `sudo systemctl restart job-hunter` after code or env changes.
 4. Verify service health with `sudo systemctl status job-hunter --no-pager`, `sudo journalctl -u job-hunter -n 80 --no-pager`, and `curl -I http://127.0.0.1:8765/start`.
 5. Confirm Nginx proxies the public host to `127.0.0.1:8765` and does not expose FastAPI directly.
 6. Confirm browser access uses HTTPS for `jobhunter.robvoto.com`.
@@ -1002,7 +1004,7 @@ config/global_settings.json
 defaults/user_settings.json
 ```
 
-If code imports a Python package, that package must be declared in `pyproject.toml`. Do not manually install packages on AWS as the permanent solution. Fix `pyproject.toml`, cut a release tag, then run `deploy-jobhunter vX.Y.Z`.
+If code imports a Python package, that package must be declared in `pyproject.toml`. Do not manually install packages on AWS as the permanent solution. Fix `pyproject.toml`, cut a release tag, then run `deploy-jobhunter-release vX.Y.Z`.
 
 ## Version-controlled EC2 helper scripts
 
@@ -1015,7 +1017,8 @@ scripts/ec2/
 Current helpers:
 
 ```text
-scripts/ec2/deploy-jobhunter.sh        # deploy an explicit Git tag and health-check it
+scripts/ec2/deploy-jobhunter-release.sh        # deploy an explicit Git tag and health-check it
+scripts/ec2/deploy-jobhunter-latest.sh         # deploy latest main by default or a branch/commit for staging/debug
 scripts/ec2/jobhunter-status.sh        # inspect service, logs, local health, public health
 scripts/ec2/install-helpers.sh         # install wrappers into /usr/local/bin
 scripts/ec2/enable-https-jobhunter.sh  # enable HTTPS with certbot/nginx for jobhunter.robvoto.com
@@ -1031,7 +1034,8 @@ sudo bash scripts/ec2/install-helpers.sh
 Installed commands:
 
 ```text
-/usr/local/bin/deploy-jobhunter
+/usr/local/bin/deploy-jobhunter-release
+/usr/local/bin/deploy-jobhunter-latest
 /usr/local/bin/jobhunter-status
 /usr/local/bin/use-ubuntu
 ```
@@ -1040,10 +1044,10 @@ After installing helpers, normal deployment remains:
 
 ```bash
 use-ubuntu
-deploy-jobhunter vX.Y.Z
+deploy-jobhunter-release vX.Y.Z
 ```
 
-`deploy-jobhunter` intentionally waits briefly after restart before checking health because `systemctl` can report `active` before Python has finished importing and binding to port `8765`.
+`deploy-jobhunter-release` intentionally waits briefly after restart before checking health because `systemctl` can report `active` before Python has finished importing and binding to port `8765`.
 
 ## HTTPS enablement
 
@@ -1216,7 +1220,7 @@ JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/job_hunter.db
 
 These values may not appear in `/etc/job-hunter/job-hunter.env`, because that file mainly holds secrets and public URL settings.
 
-`deploy-jobhunter` must therefore apply the same production runtime path defaults before running:
+`deploy-jobhunter-release` must therefore apply the same production runtime path defaults before running:
 
 ```bash
 python -m job_hunter_agent.db_seed --upgrade
@@ -1239,8 +1243,8 @@ locations_au.json existed in the repo, but not in /var/lib/job-hunter/data/knowl
 Permanent fix:
 
 - `db_seed.py` includes `data/knowledge/locations_au.json` in required runtime file sync.
-- `deploy-jobhunter` exports the production runtime path defaults before seed.
-- `deploy-jobhunter` verifies `/var/lib/job-hunter/data/knowledge/locations_au.json` exists before restarting the service.
+- `deploy-jobhunter-release` exports the production runtime path defaults before seed.
+- `deploy-jobhunter-release` verifies `/var/lib/job-hunter/data/knowledge/locations_au.json` exists before restarting the service.
 - `install-helpers.sh` strips any UTF-8 BOM from installed helper scripts so Ubuntu executes the shebang correctly.
 
 Do not manually copy `locations_au.json` as the permanent fix. Fix repo seed/deploy logic, then run:
@@ -1248,5 +1252,5 @@ Do not manually copy `locations_au.json` as the permanent fix. Fix repo seed/dep
 ```bash
 cd /home/ubuntu/job-hunter-agent
 sudo bash scripts/ec2/install-helpers.sh
-deploy-jobhunter vX.Y.Z
+deploy-jobhunter-release vX.Y.Z
 ```

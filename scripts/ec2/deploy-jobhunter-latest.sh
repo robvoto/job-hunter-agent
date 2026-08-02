@@ -5,9 +5,9 @@ APP_DIR="${JOB_HUNTER_APP_DIR:-/home/ubuntu/job-hunter-agent}"
 ENV_FILE="${JOB_HUNTER_ENV_FILE:-/etc/job-hunter/job-hunter.env}"
 SERVICE="${JOB_HUNTER_SERVICE:-job-hunter}"
 HEALTH_URL="${JOB_HUNTER_HEALTH_URL:-http://127.0.0.1:8765/start}"
+DEFAULT_REF="${JOB_HUNTER_DEPLOY_DEFAULT_REF:-main}"
 RELEASE_TAG_PATTERN='^v[0-9]+\.[0-9]+\.[0-9]+$'
 
-# Old one-off scripts that used to live on the server but are no longer needed.
 OLD_SERVER_SCRIPTS=(
   "$APP_DIR/scripts/ec2/restartServer.sh"
   "$APP_DIR/scripts/ec2/start-ngrok.sh"
@@ -17,44 +17,78 @@ OLD_SERVER_SCRIPTS=(
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   cat <<HELP
-Deploy an explicit Job Hunter release tag on AWS EC2.
+Deploy a non-production Job Hunter branch or commit ref on AWS EC2.
 
 Usage:
-  deploy-jobhunter vX.Y.Z
+  deploy-jobhunter-latest
+  deploy-jobhunter-latest <branch-or-sha>
+
+Examples:
+  deploy-jobhunter-latest
+  deploy-jobhunter-latest main
+  deploy-jobhunter-latest feature/my-fix
+  deploy-jobhunter-latest ef720a7
+
+Notes:
+  - With no argument, this deploys the latest commit from: ${DEFAULT_REF}
+  - This command deploys the latest branch or commit code for staging, smoke tests, and debugging.
+  - Production deploys must use: deploy-jobhunter-release vX.Y.Z
 
 Steps:
   1. Remove known-old server scripts
-  2. Fetch and verify the requested GitHub release tag
-  3. Check out the exact tagged commit
-  4. Sync Python dependencies (uv)
-  5. Install Playwright Chromium browser + OS system libraries
-  6. Install AWS browser session packages and launcher scripts
-  7. Install repo-managed helper commands into /usr/local/bin
-  8. Install repo-managed systemd service (AWS browser session wrapper)
-  9. Run db_seed --upgrade
- 10. Restart job-hunter.service
- 11. Startup rebuild refreshes saved workspace output
+  2. Fetch origin refs
+  3. Resolve the requested branch/ref/commit to an exact commit
+  4. Check out that exact commit in detached HEAD
+  5. Validate pyproject/lock/UI version integrity
+  6. Sync Python dependencies (uv)
+  7. Install Playwright Chromium browser + OS system libraries
+  8. Install AWS browser session packages and helper commands
+  9. Install repo-managed systemd service
+ 10. Run db_seed --upgrade
+ 11. Restart job-hunter.service
  12. Wait for health-check
 HELP
   exit 0
 fi
 
 fail() {
-  echo "DEPLOY BLOCKED: $*" >&2
+  echo "REF DEPLOY BLOCKED: $*" >&2
   exit 1
 }
 
-RELEASE_TAG="${1:-}"
-[[ -n "$RELEASE_TAG" ]] || fail "Missing release tag. Use: deploy-jobhunter vX.Y.Z"
-shift || true
-[[ $# -eq 0 ]] || fail "Deploy accepts exactly one release tag argument."
-[[ "$RELEASE_TAG" =~ $RELEASE_TAG_PATTERN ]] || fail \
-  "Release tag must use vMAJOR.MINOR.PATCH format; got $RELEASE_TAG"
+resolve_ref_commit() {
+  local input="$1"
+  local -a candidates=()
+  local candidate=""
+  local commit=""
 
-# uv installs per-user; ensure it's on PATH
+  if [[ "$input" == origin/* ]]; then
+    candidates+=("refs/remotes/$input")
+  fi
+  candidates+=("refs/remotes/origin/$input" "$input")
+
+  for candidate in "${candidates[@]}"; do
+    commit="$(git rev-parse -q --verify "${candidate}^{commit}" 2>/dev/null || true)"
+    if [[ -n "$commit" ]]; then
+      printf '%s\t%s\n' "$candidate" "$commit"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+DEPLOY_REF="${1:-$DEFAULT_REF}"
+shift || true
+[[ $# -eq 0 ]] || fail \
+  "Latest deploy accepts exactly one branch, remote ref, or commit argument. Example: deploy-jobhunter-latest main"
+[[ ! "$DEPLOY_REF" =~ $RELEASE_TAG_PATTERN ]] || fail \
+  "Release tags are production-only. Use: deploy-jobhunter-release $DEPLOY_REF"
+
 export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
 
-echo "==> Job Hunter deploy $RELEASE_TAG"
+echo "==> Job Hunter latest deploy $DEPLOY_REF"
+echo "==> WARNING: latest deploys are for staging/debug only, not production"
 
 cd "$APP_DIR"
 
@@ -66,25 +100,27 @@ for f in "${OLD_SERVER_SCRIPTS[@]}"; do
   [[ -f "$f" ]] && rm -f "$f" && echo "  removed: $f" || true
 done
 
-echo "==> Fetch exact release tag"
-remote_tag_ref="refs/tags/$RELEASE_TAG"
-git ls-remote --tags --refs origin "$remote_tag_ref" | grep -q "$remote_tag_ref" \
-  || fail "Remote tag $RELEASE_TAG does not exist on origin."
-git fetch origin "$remote_tag_ref:$remote_tag_ref"
+echo "==> Fetch origin refs"
+git fetch --prune origin
 
-tag_commit="$(git rev-parse "${RELEASE_TAG}^{commit}")"
+resolved="$(resolve_ref_commit "$DEPLOY_REF" || true)"
+[[ -n "$resolved" ]] || fail \
+  "Could not resolve '$DEPLOY_REF' from origin refs or local reachable commits."
+resolved_ref="${resolved%%$'\t'*}"
+resolved_commit="${resolved#*$'\t'}"
 
-echo "==> Check out tagged commit"
-git checkout --detach "$tag_commit"
+echo "==> Check out resolved commit"
+git checkout --detach "$resolved_commit"
 
-echo "==> Verify tag matches project version"
-python3 scripts/check-release-integrity.py --expected-version "${RELEASE_TAG#v}" --tag "$RELEASE_TAG" \
-  || fail "Checked-out code does not match release tag $RELEASE_TAG."
+echo "==> Verify internal version integrity"
+python3 scripts/check-release-integrity.py \
+  || fail "Checked-out code has inconsistent project/lock/UI version metadata."
 
 deployed_commit="$(git rev-parse HEAD)"
-[[ "$deployed_commit" == "$tag_commit" ]] || fail \
-  "Checked-out commit $deployed_commit does not match tag commit $tag_commit."
-echo "  deploying tag:    $RELEASE_TAG"
+[[ "$deployed_commit" == "$resolved_commit" ]] || fail \
+  "Checked-out commit $deployed_commit does not match resolved commit $resolved_commit."
+echo "  deploying ref:    $DEPLOY_REF"
+echo "  resolved source:  $resolved_ref"
 echo "  deploying commit: $deployed_commit"
 
 echo "==> Check uv"
