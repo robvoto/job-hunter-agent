@@ -255,45 +255,9 @@
     .settings-form-grid--prompt-templates {
       grid-template-columns: minmax(0, 1fr);
     }
-    /* Local layout exception: contract-duration popover anchoring on the settings page only. */
-    .search-settings-grid .settings-form-field--summary {
-      position: relative;
-    }
     .search-settings-grid #seek_max_pages_choices.choice-strip {
       min-height: var(--control-height-2xl);
       align-items: center;
-    }
-    .search-settings-grid #contract_duration_row {
-      position: absolute;
-      z-index: 2;
-      margin-top: 0;
-    }
-    .search-settings-grid #contract_duration_row::before {
-      content: '';
-      position: absolute;
-      top: -7px;
-      left: 14px;
-      width: 0;
-      height: 0;
-      border-left: 6px solid transparent;
-      border-right: 6px solid transparent;
-      border-bottom: 7px solid var(--border-subtle);
-    }
-    .search-settings-grid #contract_duration_row::after {
-      content: '';
-      position: absolute;
-      top: -5px;
-      left: 14px;
-      width: 0;
-      height: 0;
-      border-left: 6px solid transparent;
-      border-right: 6px solid transparent;
-      border-bottom: 6px solid var(--bg-input, var(--bg-surface));
-    }
-    .contract-duration-label {
-      font-size: var(--text-role-caption-font-size);
-      color: var(--text-muted);
-      white-space: nowrap;
     }
     .search-operations-panel {
       grid-column: 1 / -1;

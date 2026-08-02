@@ -340,11 +340,8 @@ def test_shared_ui_styles_are_centralised():
     assert ".nav-item-admin {" in settings_page_css
     assert "color: var(--text-muted);" in settings_page_css
     assert ".nav-item-optimise" not in settings_page_css
-    assert ".search-settings-grid .settings-form-field--summary" in settings_page_css
     assert "#seek_max_pages_choices.choice-strip" in settings_page_css
     assert "min-height: var(--control-height-2xl);" in settings_page_css
-    assert "#contract_duration_row" in settings_page_css
-    assert "position: absolute;" in settings_page_css
     assert "text-align: center;" in settings_page_css
     assert ".search-source-panel .toggle-switch" in theme_widgets
 
@@ -363,13 +360,13 @@ def test_settings_search_work_type_popup_uses_shared_labels_and_local_layout():
     )
     assert "__JOB_HUNTER_MIN_CONTRACT_MONTH_HELP__" in settings_html
     assert "window.__JOB_HUNTER_ONBOARDING_PAGE_LABELS__" in settings_js
-    assert "positionContractDurationRow" in settings_js
+    assert "positionContractDurationRow" not in settings_js
     assert "updateMinContractMonthState" in settings_js
     assert "work_type_summary_contract_length_label" in settings_js
     assert "summary_any_length_label" in settings_js
 
 
-def test_onboarding_contract_duration_row_floats_and_hides_on_blur():
+def test_onboarding_contract_duration_row_uses_normal_flow():
     repo_root = Path(__file__).resolve().parents[1]
     css_path = repo_root / "templates" / "static" / "onboarding" / "onboarding-page.css"
     page_js_path = repo_root / "templates" / "static" / "onboarding" / "onboarding-page.js"
@@ -378,8 +375,8 @@ def test_onboarding_contract_duration_row_floats_and_hides_on_blur():
     page_js_text = page_js_path.read_text(encoding="utf-8")
     storage_js_text = storage_js_path.read_text(encoding="utf-8")
 
-    assert ".onb-field .contract-duration-row" in css_text
-    assert "position: absolute;" in css_text
+    assert ".onb-field .contract-duration-row" not in css_text
+    assert "positionContractDurationRow" not in page_js_text
     assert "contractRow.hidden = true;" in page_js_text
     assert "minContractMonthsEl.addEventListener('change'" in storage_js_text
 

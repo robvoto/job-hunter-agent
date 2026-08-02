@@ -417,31 +417,6 @@ export function updateContractChipLabel() {
   }
 }
 
-export function positionContractDurationRow() {
-  const contractRow = document.getElementById('contract_duration_row');
-  const contractChip = document.querySelector('input[name="engagement_type"][value="contract"]')?.closest('label');
-  if (!contractRow || !contractChip) return;
-  const parent = contractRow.parentElement;
-  if (parent && getComputedStyle(parent).position === 'static') {
-    parent.style.position = 'relative';
-  }
-  const chipRect = contractChip.getBoundingClientRect();
-  const parentRect = parent ? parent.getBoundingClientRect() : { left: 0, top: 0 };
-  contractRow.style.left = Math.round(chipRect.left - parentRect.left) + 'px';
-  contractRow.style.top = Math.round(chipRect.bottom - parentRect.top + 6) + 'px';
-}
-
-let _contractRowDismissHandler = null;
-
-function _hideContractRow() {
-  const contractRow = document.getElementById('contract_duration_row');
-  if (contractRow) contractRow.hidden = true;
-  if (_contractRowDismissHandler) {
-    document.removeEventListener('mousedown', _contractRowDismissHandler, true);
-    _contractRowDismissHandler = null;
-  }
-}
-
 export function updateMinContractMonthState({ showRow = false } = {}) {
   if (!refs.minContractMonths) return;
   const contractEnabled = getOnboardingEngagementTypeValues().includes('contract');
@@ -449,22 +424,12 @@ export function updateMinContractMonthState({ showRow = false } = {}) {
   const contractRow = document.getElementById('contract_duration_row');
   if (contractRow) {
     if (!contractEnabled) {
-      _hideContractRow();
+      contractRow.hidden = true;
     } else if (showRow) {
       if (!getMinContractMonthValue()) {
         setMinContractMonthValue(getResolvedMinContractMonthValue());
       }
-      positionContractDurationRow();
       contractRow.hidden = false;
-      if (!_contractRowDismissHandler) {
-        _contractRowDismissHandler = (e) => {
-          const contractChip = document.querySelector('input[name="engagement_type"][value="contract"]')?.closest('label');
-          if (!contractRow.contains(e.target) && !contractChip?.contains(e.target)) {
-            _hideContractRow();
-          }
-        };
-        document.addEventListener('mousedown', _contractRowDismissHandler, true);
-      }
     }
   }
   updateContractChipLabel();
