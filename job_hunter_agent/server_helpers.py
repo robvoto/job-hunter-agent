@@ -306,6 +306,19 @@ _SETTINGS_CLEARANCES_LABEL_KEYS = (
     "clear_button_label",
     "clear_button_aria_label",
     "remove_button_aria_label",
+    "eligibility_settings_title",
+    "eligibility_help_text",
+    "eligibility_name_label",
+    "eligibility_name_placeholder",
+    "eligibility_aliases_label",
+    "eligibility_aliases_placeholder",
+    "eligibility_add_button_label",
+    "eligibility_add_button_aria_label",
+    "eligibility_aliases_review_label",
+    "eligibility_empty_text",
+    "eligibility_prefill_added_message",
+    "eligibility_prefill_exists_message",
+    "eligibility_remove_button_label",
 )
 
 _ROLE_HISTORY_LABEL_KEYS = (

@@ -1294,6 +1294,26 @@ def test_normalize_coverage_marks_invalid_requirement_type_for_review(monkeypatc
     )
 
 
+def test_normalize_coverage_preserves_malformed_mandatory_requirement():
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "Must hold an unfamiliar professional registration",
+                "importance": "mandatory",
+                "requirement_type": "credential",
+                "status": "unexpected_status",
+                "matched_candidate_fact": "",
+            }
+        ]
+    )
+
+    assert len(result) == 1
+    assert result[0]["requirement"] == "Must hold an unfamiliar professional registration"
+    assert result[0]["importance"] == "mandatory"
+    assert result[0]["requirement_type"] == "invalid"
+    assert result[0]["status"] == "invalid"
+
+
 # ── managed prompt line loading ───────────────────────────────────────────────
 
 

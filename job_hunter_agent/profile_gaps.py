@@ -52,11 +52,12 @@ def _requirement_matches_eligibility(
     for item in candidate_eligibility:
         if not isinstance(item, dict):
             continue
-        name = str(item.get("name") or "").strip()
-        if not name:
-            continue
-        name_norm = _normalize_for_match(name)
-        if not name_norm or (name_norm not in requirement_norm and requirement_norm not in name_norm):
+        names = [str(item.get("name") or ""), *(item.get("aliases") or [])]
+        if not any(
+            (name_norm := _normalize_for_match(name))
+            and (name_norm in requirement_norm or requirement_norm in name_norm)
+            for name in names
+        ):
             continue
         raw_value = item.get("value", True)
         if isinstance(raw_value, str):
@@ -76,6 +77,7 @@ def classify_requirement_status(
     candidate_capabilities: list[dict],
     must_not_require_skills: list[str],
     candidate_eligibility: list[dict] | None = None,
+    candidate_eligibility_facts: list[dict] | None = None,
     requirement_type: str = "capability",
 ) -> str:
     """
@@ -91,7 +93,10 @@ def classify_requirement_status(
     if normalized_requirement_type not in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES:
         return STATUS_UNKNOWN
     if normalized_requirement_type == "eligibility":
-        return _requirement_matches_eligibility(req_norm, candidate_eligibility or [])
+        return _requirement_matches_eligibility(
+            req_norm,
+            [*(candidate_eligibility or []), *(candidate_eligibility_facts or [])],
+        )
     if _requirement_in_must_not_require(req_norm, must_not_require_skills):
         return STATUS_CONFIRMED_DO_NOT_HAVE
     if any(_requirement_matches_capability(req_norm, cap) for cap in candidate_capabilities):
@@ -104,6 +109,7 @@ def compute_profile_gaps(
     candidate_capabilities: list[dict],
     must_not_require_skills: list[str],
     candidate_eligibility: list[dict] | None = None,
+    candidate_eligibility_facts: list[dict] | None = None,
 ) -> list[dict]:
     """
     Return capability-like requirement_coverage items that still need confirmation.
@@ -135,6 +141,7 @@ def compute_profile_gaps(
                 candidate_capabilities,
                 must_not_require_skills,
                 candidate_eligibility,
+                candidate_eligibility_facts,
                 requirement_type=requirement_type,
             )
             != STATUS_UNKNOWN

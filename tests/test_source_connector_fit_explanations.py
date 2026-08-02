@@ -322,6 +322,29 @@ def test_render_job_card_does_not_create_needs_confirmation_from_raw_job_require
     assert "job-action-rec" not in html
 
 
+def test_render_job_card_keeps_unknown_mandatory_requirement_visible_once():
+    requirement = "Must hold an unfamiliar professional registration"
+    html = workspace_renderer.render_job_card(
+        {
+            "job_requirements": [requirement],
+            "requirement_coverage": [
+                {
+                    "requirement": requirement,
+                    "importance": "mandatory",
+                    "requirement_type": "invalid",
+                    "status": "invalid",
+                }
+            ],
+        },
+        _test_profile(),
+    )
+
+    assert html.count(requirement) == 1
+    assert "No proof in profile" in html
+    assert "Needs classification/review" in html
+    assert "prefill_eligibility=" in html
+
+
 def test_build_ad_learning_signals_registers_pending_capability_signals(monkeypatch):
     monkeypatch.setattr(
         source_learning,

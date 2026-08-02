@@ -19,6 +19,7 @@ APPROVED_DB_KNOWLEDGE_JSON_REL_PATHS: tuple[str, ...] = (
     "hard_blocker_rules.json",
     "job_type.json",
     "llm_capability_naming_defaults.json",
+    "llm_eligibility_alias_defaults.json",
     "llm_fit_review_defaults.json",
     "llm_fit_review_grade_defaults.json",
     "llm_job_requirements_defaults.json",

@@ -1,6 +1,7 @@
 ﻿import { JobHunterChipEditor as chipEditor } from './settings-chip-editor.js';
 import { JobHunterCapabilityEditor as capabilityEditor } from './settings-capability-editor.js';
 import { JobHunterClearanceEditor as clearanceEditor } from './settings-clearance-editor.js';
+import { JobHunterEligibilityEditor as eligibilityEditor } from './settings-eligibility-editor.js';
 import { JobHunterAdminSettings as adminSettings } from '../global/settings-admin.js';
 import { JobHunterAlertsSettings as alertsSettings } from '../standard/settings-alerts.js';
 import * as capabilityUi from '../../common/capability-ui.js';
@@ -582,6 +583,7 @@ function collectProfile() {
     },
     candidate_capabilities: capabilityEditor.collectCapabilityRuleState(),
     candidate_eligibility: clearanceEditor.collectClearanceRuleState(),
+    candidate_eligibility_facts: eligibilityEditor.collectEligibilityFactState(),
     target_roles: toLines(settingsField('target_roles').value),
     also_consider_roles: toLines(settingsField('also_consider_roles').value),
     must_not_require_skills: toLines(settingsField('must_not_require_skills').value),
@@ -642,6 +644,7 @@ function fillForm(profile) {
   document.getElementById('freshness_weight').value = String(profile.preference_weights?.freshness);
   capabilityEditor.setCapabilityRuleState(profile.candidate_capabilities || []);
   clearanceEditor.setClearanceRuleState(profile.candidate_eligibility || []);
+  eligibilityEditor.setEligibilityFactState(profile.candidate_eligibility_facts || []);
   renderCapturedCvText(loadedSourceMaterials);
   renderRoleExperienceReadonly(profile);
   for (const id of ['target_roles', 'also_consider_roles', 'must_not_require_skills']) {
@@ -699,13 +702,50 @@ function consumeCapabilityPrefillFromUrl() {
   return true;
 }
 
+function consumeEligibilityPrefillFromUrl() {
+  const url = new URL(window.location.href);
+  const prefill = normalizeCapabilityPrefill(url.searchParams.get('prefill_eligibility') || '');
+  if (!prefill) return false;
+
+  setActiveSettingsSection('section-matrix', { scrollToTop: true });
+  const existingFacts = eligibilityEditor.collectEligibilityFactState();
+  const existsAlready = existingFacts.some((fact) =>
+    normalizeCapabilityPrefill(fact?.name).toLowerCase() === prefill.toLowerCase()
+  );
+  if (!existsAlready) {
+    eligibilityEditor.setEligibilityFactState([
+      ...existingFacts,
+      { name: prefill, value: true, aliases: [] },
+    ]);
+    markDirty();
+    showStatus(
+      labelsWithName(window.__JOB_HUNTER_SETTINGS_CLEARANCES_LABELS__.eligibility_prefill_added_message, prefill),
+      'success',
+      { autoHideMs: 4500 },
+    );
+  } else {
+    showStatus(
+      labelsWithName(window.__JOB_HUNTER_SETTINGS_CLEARANCES_LABELS__.eligibility_prefill_exists_message, prefill),
+      'success',
+      { autoHideMs: 3500 },
+    );
+  }
+  url.searchParams.delete('prefill_eligibility');
+  window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+  return true;
+}
+
+function labelsWithName(template, name) {
+  return String(template || '').replace('${name}', name);
+}
+
 async function loadProfile() {
   const response = await jobHunterFetch('/api/profile');
   if (!response.ok) throw new Error('Could not load profile');
   const profile = await response.json();
   loadedProfile = profile;
   fillForm(profile);
-  if (!consumeCapabilityPrefillFromUrl()) {
+  if (!consumeCapabilityPrefillFromUrl() && !consumeEligibilityPrefillFromUrl()) {
     showStatus('Profile loaded.', 'success', { autoHideMs: 2600 });
   }
 }
@@ -924,20 +964,6 @@ function updateContractChipLabel() {
   }
 }
 
-function positionContractDurationRow() {
-  const contractRow = document.getElementById('contract_duration_row');
-  const contractChip = document.querySelector('input[name="engagement_type"][value="contract"]')?.closest('label');
-  if (!contractRow || !contractChip) return;
-  const parent = contractRow.parentElement;
-  if (parent && getComputedStyle(parent).position === 'static') {
-    parent.style.position = 'relative';
-  }
-  const chipRect = contractChip.getBoundingClientRect();
-  const parentRect = parent ? parent.getBoundingClientRect() : { left: 0, top: 0 };
-  contractRow.style.left = `${Math.round(chipRect.left - parentRect.left)}px`;
-  contractRow.style.top = `${Math.round(chipRect.bottom - parentRect.top + 6)}px`;
-}
-
 function updateMinContractMonthState({ showRow = false } = {}) {
   const minContractEl = document.getElementById('min_contract_months');
   if (!minContractEl) return;
@@ -952,10 +978,7 @@ function updateMinContractMonthState({ showRow = false } = {}) {
     minContractEl.value = '';
     contractRow.hidden = true;
   } else if (showRow) {
-    positionContractDurationRow();
     contractRow.hidden = false;
-  } else if (!contractRow.hidden) {
-    positionContractDurationRow();
   }
   updateContractChipLabel();
 }
@@ -983,8 +1006,6 @@ function updateSearchPreferenceSummaries() {
 }
 
 document.getElementById('min_contract_months')?.addEventListener('change', () => {
-  const contractRow = document.getElementById('contract_duration_row');
-  if (contractRow) contractRow.hidden = true;
   updateContractChipLabel();
   updateSearchPreferenceSummaries();
 });
@@ -1210,6 +1231,7 @@ activeSaveButton?.addEventListener('click', (event) => {
 chipEditor.initEventHandlers(markDirty);
 capabilityEditor.initEventHandlers(markDirty);
 clearanceEditor.initEventHandlers(markDirty);
+eligibilityEditor.initEventHandlers(markDirty);
 alertsSettings.initEventHandlers();
 
 // -- Init ------------------------------------------------------------------

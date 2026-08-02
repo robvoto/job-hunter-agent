@@ -16,7 +16,11 @@ from job_hunter_agent.profile_gaps import (
     classify_requirement_status,
 )
 from job_hunter_agent.profile_store import CAPABILITY_ICON_GENERIC
-from job_hunter_agent.profile_store import KEY_CANDIDATE_ELIGIBILITY
+from job_hunter_agent.profile_store import (
+    KEY_CANDIDATE_ELIGIBILITY,
+    KEY_CANDIDATE_ELIGIBILITY_FACTS,
+)
+from job_hunter_agent.eligibility_profile import prepare_eligibility_fact
 from job_hunter_agent.record_schema import (
     RECORD_LAST_KEPT_SNAPSHOT_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
@@ -306,6 +310,19 @@ def _profile_gap_eligibility_index(profile: dict) -> dict[str, int]:
     return lookup
 
 
+def _matches_managed_clearance(name: str) -> bool:
+    target = _profile_gap_name_key(name)
+    return any(
+        target in {
+            _profile_gap_name_key(option.get("value")),
+            _profile_gap_name_key(option.get("label")),
+            *(_profile_gap_name_key(alias) for alias in (option.get("aliases") or [])),
+        }
+        for option in srv.load_clearance_ui_options()
+        if isinstance(option, dict)
+    )
+
+
 @router.post("/api/profile-gap")
 def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
     """Record a user response to a 'Needs confirmation' gap on a job card.
@@ -349,6 +366,7 @@ def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
             profile.get("candidate_capabilities") or [],
             profile.get("must_not_require_skills") or [],
             profile.get(KEY_CANDIDATE_ELIGIBILITY) or [],
+            profile.get(KEY_CANDIDATE_ELIGIBILITY_FACTS) or [],
             requirement_type=requirement_type,
         )
 
@@ -356,7 +374,12 @@ def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
             if current_status == STATUS_CONFIRMED_HAVE:
                 return json_response({"ok": True})
             if requirement_type == "eligibility":
-                eligibility = list(profile.get(KEY_CANDIDATE_ELIGIBILITY) or [])
+                eligibility_key = (
+                    KEY_CANDIDATE_ELIGIBILITY
+                    if _matches_managed_clearance(canonical_item_name)
+                    else KEY_CANDIDATE_ELIGIBILITY_FACTS
+                )
+                eligibility = list(profile.get(eligibility_key) or [])
                 lookup = _profile_gap_eligibility_index(profile)
                 normalized_name = _profile_gap_name_key(canonical_item_name)
                 item_value = {
@@ -371,7 +394,16 @@ def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
                     eligibility[lookup[normalized_name]] = item_value
                 else:
                     eligibility.append(item_value)
-                profile[KEY_CANDIDATE_ELIGIBILITY] = eligibility
+                if eligibility_key == KEY_CANDIDATE_ELIGIBILITY_FACTS:
+                    eligibility, _ = prepare_eligibility_fact(
+                        profile.get(KEY_CANDIDATE_ELIGIBILITY_FACTS) or [],
+                        name=canonical_item_name,
+                        value=True,
+                        evidence=[str(canonical_item.get("matched_job_text") or "").strip()]
+                        if str(canonical_item.get("matched_job_text") or "").strip()
+                        else [],
+                    )
+                profile[eligibility_key] = eligibility
             else:
                 if current_status == STATUS_CONFIRMED_DO_NOT_HAVE:
                     raise ValueError("capability_name is already saved as must_not_require_skills")
@@ -392,7 +424,12 @@ def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
             if current_status == STATUS_CONFIRMED_DO_NOT_HAVE:
                 return json_response({"ok": True})
             if requirement_type == "eligibility":
-                eligibility = list(profile.get(KEY_CANDIDATE_ELIGIBILITY) or [])
+                eligibility_key = (
+                    KEY_CANDIDATE_ELIGIBILITY
+                    if _matches_managed_clearance(canonical_item_name)
+                    else KEY_CANDIDATE_ELIGIBILITY_FACTS
+                )
+                eligibility = list(profile.get(eligibility_key) or [])
                 lookup = _profile_gap_eligibility_index(profile)
                 normalized_name = _profile_gap_name_key(canonical_item_name)
                 item_value = {
@@ -407,7 +444,16 @@ def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
                     eligibility[lookup[normalized_name]] = item_value
                 else:
                     eligibility.append(item_value)
-                profile[KEY_CANDIDATE_ELIGIBILITY] = eligibility
+                if eligibility_key == KEY_CANDIDATE_ELIGIBILITY_FACTS:
+                    eligibility, _ = prepare_eligibility_fact(
+                        profile.get(KEY_CANDIDATE_ELIGIBILITY_FACTS) or [],
+                        name=canonical_item_name,
+                        value=False,
+                        evidence=[str(canonical_item.get("matched_job_text") or "").strip()]
+                        if str(canonical_item.get("matched_job_text") or "").strip()
+                        else [],
+                    )
+                profile[eligibility_key] = eligibility
                 srv.save_profile(profile)
             else:
                 if current_status == STATUS_CONFIRMED_HAVE:

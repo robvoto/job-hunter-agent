@@ -16,6 +16,7 @@ from job_hunter_agent.capability_matrix import (
     choose_capability_name,
     derive_job_description_aliases,
 )
+from job_hunter_agent.eligibility_profile import normalize_eligibility_facts
 from job_hunter_agent.global_settings import (
     CAPABILITY_STRENGTH_PRESETS,
     DEFAULT_EVIDENCE_TIER_WEIGHTS,
@@ -163,6 +164,7 @@ KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT = "secondary_candidate_profile_context"
 KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT = "supplementary_candidate_profile_context"
 KEY_CANDIDATE_CAPABILITIES = "candidate_capabilities"
 KEY_CANDIDATE_ELIGIBILITY = "candidate_eligibility"
+KEY_CANDIDATE_ELIGIBILITY_FACTS = "candidate_eligibility_facts"
 KEY_ROLE_EXPERIENCE = "role_experience"
 KEY_SIGNAL_CLUSTERS = "dominant_signal_clusters"
 KEY_MUST_NOT_REQUIRED_SKILLS = "must_not_require_skills"
@@ -181,6 +183,7 @@ MATCHING_RULE_PROFILE_KEYS = frozenset(
     {
         KEY_CANDIDATE_CAPABILITIES,
         KEY_CANDIDATE_ELIGIBILITY,
+        KEY_CANDIDATE_ELIGIBILITY_FACTS,
         KEY_PRIMARY_PATTERNS,
         KEY_SECONDARY_PATTERNS,
         KEY_MUST_NOT_REQUIRED_SKILLS,
@@ -329,6 +332,7 @@ DEFAULT_PROFILE = {
     },
     KEY_CANDIDATE_CAPABILITIES: [],
     KEY_CANDIDATE_ELIGIBILITY: [],
+    KEY_CANDIDATE_ELIGIBILITY_FACTS: [],
     KEY_ROLE_EXPERIENCE: [],
     "dominant_signal_clusters": [],
     "target_roles": [],
@@ -813,6 +817,9 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
     )
     merged[KEY_CANDIDATE_ELIGIBILITY] = normalize_eligibility_rules(
         merged.get(KEY_CANDIDATE_ELIGIBILITY, [])
+    )
+    merged[KEY_CANDIDATE_ELIGIBILITY_FACTS] = normalize_eligibility_facts(
+        merged.get(KEY_CANDIDATE_ELIGIBILITY_FACTS, [])
     )
     merged[KEY_ROLE_EXPERIENCE] = normalize_role_experience(merged.get(KEY_ROLE_EXPERIENCE, []))
     primary_titles, secondary_titles = normalize_title_pattern_lists(

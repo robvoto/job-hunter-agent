@@ -21,6 +21,7 @@ from job_hunter_agent.llm_protocol import (
 )
 from job_hunter_agent.profile_store import (
     KEY_CANDIDATE_ELIGIBILITY,
+    KEY_CANDIDATE_ELIGIBILITY_FACTS,
     KEY_CAPABILITY_LEVEL_WEIGHTS,
     KEY_OCCUPATION_ALIGNMENT,
     KEY_REQUIREMENT_IMPORTANCE_WEIGHTS,
@@ -126,14 +127,18 @@ def _candidate_capability_level_lookup(profile: dict, capability_credits: dict) 
 
 def _candidate_eligibility_lookup(profile: dict) -> dict[str, bool]:
     lookup: dict[str, bool] = {}
-    for item in profile.get(KEY_CANDIDATE_ELIGIBILITY, []) or []:
+    for item in [
+        *(profile.get(KEY_CANDIDATE_ELIGIBILITY, []) or []),
+        *(profile.get(KEY_CANDIDATE_ELIGIBILITY_FACTS, []) or []),
+    ]:
         if not isinstance(item, dict):
             continue
         name = str(item.get("name") or "").strip()
-        key = _normalise_lookup_text(name)
-        if not key:
-            continue
-        lookup[key] = bool(item.get("value", True))
+        names = [name, *(item.get("aliases") or [])]
+        for candidate_name in names:
+            key = _normalise_lookup_text(str(candidate_name or ""))
+            if key:
+                lookup[key] = bool(item.get("value", True))
     return lookup
 
 

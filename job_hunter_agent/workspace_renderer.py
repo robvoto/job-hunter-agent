@@ -1153,6 +1153,7 @@ def render_job_card(
     coverage_rows = raw_coverage if isinstance(raw_coverage, list) else []
     candidate_capabilities = active_profile.get("candidate_capabilities") or []
     must_not_require_skills = active_profile.get("must_not_require_skills") or []
+    candidate_eligibility_facts = active_profile.get("candidate_eligibility_facts") or []
     requirement_statuses = [
         {
             "requirement": item,
@@ -1166,6 +1167,8 @@ def render_job_card(
         coverage_rows,
         candidate_capabilities,
         must_not_require_skills,
+        active_profile.get("candidate_eligibility") or [],
+        candidate_eligibility_facts,
     )
     duplicate_links = record.get(RECORD_DUPLICATE_LINKS_KEY)
     if not isinstance(duplicate_links, list):
@@ -1599,6 +1602,8 @@ def render_job_card(
     merged_requirement_order: list[str] = []
     eligibility_coverage_rows: dict[str, dict[str, Any]] = {}
     eligibility_coverage_order: list[str] = []
+    generic_eligibility_coverage_rows: dict[str, dict[str, Any]] = {}
+    generic_eligibility_coverage_order: list[str] = []
     capability_level_lookup = _capability_level_lookup(active_profile)
     # When requirement_coverage is available, show only those rows (they are more
     # detailed and LLM-verified). Skip the short job_requirements bullets to avoid
@@ -1714,9 +1719,16 @@ def render_job_card(
 
         if coverage_status:
             status_key = coverage_status_label_keys.get(coverage_status)
+            if coverage_status in {"not_shown", "invalid"} and importance == "mandatory":
+                status_key = "coverage_status_mandatory_not_shown"
         else:
             status_key = profile_status_label_keys.get(profile_status)
         status_label = workspace_card_label_group.get(status_key, "") if status_key else ""
+        classification_label = (
+            workspace_card_label_group.get("coverage_status_classification_review", "")
+            if row.get("classification_review")
+            else ""
+        )
 
         importance_label = ""
         if importance:
@@ -1775,16 +1787,29 @@ def render_job_card(
         )
         status_html = (
             f'<span class="job-requirement-status">{safe_html(status_label)}</span>'
-            if status_label
+            f'<span class="job-requirement-status">{safe_html(classification_label)}</span>'
+            if status_label or classification_label
             else ""
         )
 
         add_to_profile_html = ""
-        if css_modifier in ("mismatch", "not-shown", "mandatory-not-shown", "unknown"):
+        if css_modifier in ("mismatch", "not-shown", "mandatory-not-shown", "unknown", "invalid"):
+            is_eligibility = bool(row.get("is_eligibility"))
+            prefill_key = "prefill_eligibility" if is_eligibility else "prefill_capability"
+            action_label_key = (
+                "add_to_eligibility_action_label"
+                if is_eligibility
+                else "add_to_profile_action_label"
+            )
+            action_title_key = (
+                "add_to_eligibility_action_title"
+                if is_eligibility
+                else "add_to_profile_action_title"
+            )
             add_to_profile_html = (
-                f'<a class="btn btn-secondary btn-compact-action job-requirement-action req-add-to-profile" href="/settings?prefill_capability={quote(req_text)}#section-matrix" '
-                f'title="{safe_html(_workspace_label("workspace_card_labels", "add_to_profile_action_title"))}" target="_blank" rel="noopener">'
-                f'{safe_html(_workspace_label("workspace_card_labels", "add_to_profile_action_label"))}</a>'
+                f'<a class="btn btn-secondary btn-compact-action job-requirement-action req-add-to-profile" href="/settings?{prefill_key}={quote(req_text)}#section-matrix" '
+                f'title="{safe_html(_workspace_label("workspace_card_labels", action_title_key))}" target="_blank" rel="noopener">'
+                f'{safe_html(_workspace_label("workspace_card_labels", action_label_key))}</a>'
             )
         badges_html = ""
         if importance_html or status_html or add_to_profile_html:
@@ -1813,11 +1838,34 @@ def render_job_card(
             req_text = compact_whitespace(str(item.get("requirement") or ""))
             if not req_text:
                 continue
-            is_eligibility = (
-                compact_whitespace(str(item.get("requirement_type") or "")).lower() == "eligibility"
+            raw_requirement_type = compact_whitespace(
+                str(item.get("requirement_type") or "")
+            ).lower()
+            is_eligibility = raw_requirement_type in {"eligibility", "invalid"}
+            classification_review = raw_requirement_type not in {"capability", "eligibility"}
+            known_generic_terms = {
+                compact_whitespace(str(fact.get("name") or "")).lower()
+                for fact in (active_profile.get("candidate_eligibility_facts") or [])
+                if isinstance(fact, dict)
+            }
+            known_generic_terms.update(
+                compact_whitespace(str(alias or "")).lower()
+                for fact in (active_profile.get("candidate_eligibility_facts") or [])
+                if isinstance(fact, dict)
+                for alias in (fact.get("aliases") or [])
+            )
+            matched_key = compact_whitespace(
+                str(item.get("matched_candidate_fact") or item.get("eligibility_name") or "")
+            ).lower()
+            is_generic_eligibility = is_eligibility and (
+                classification_review or not matched_key or matched_key in known_generic_terms
             )
             target_rows = eligibility_coverage_rows if is_eligibility else merged_requirement_rows
+            if is_generic_eligibility:
+                target_rows = generic_eligibility_coverage_rows
             target_order = eligibility_coverage_order if is_eligibility else merged_requirement_order
+            if is_generic_eligibility:
+                target_order = generic_eligibility_coverage_order
             key = _requirement_key(req_text)
             if key not in target_rows:
                 target_rows[key] = {"requirement": req_text}
@@ -1825,6 +1873,8 @@ def render_job_card(
             row = target_rows[key]
             row["coverage_status"] = str(item.get("status") or "not_shown").strip().lower()
             row["importance"] = str(item.get("importance") or "preferred").strip().lower()
+            row["is_eligibility"] = is_eligibility
+            row["classification_review"] = classification_review
             row["matched_candidate_fact"] = compact_whitespace(
                 str(item.get("matched_candidate_fact") or item.get("profile_name") or "")
             )
@@ -1969,6 +2019,19 @@ def render_job_card(
         f'<div class="job-insight-group is-secondary"><ul class="job-requirement-list">{clearance_items_html}</ul></div>'
         "</details>"
         if clearance_items_html
+        else ""
+    )
+    eligibility_items_html = "".join(
+        _render_requirement_row_html(generic_eligibility_coverage_rows[key])[0]
+        for key in generic_eligibility_coverage_order
+        if key in generic_eligibility_coverage_rows
+    )
+    eligibility_html = (
+        '<details class="job-insights job-eligibility-panel">'
+        f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'eligibility_panel_summary'))}</summary>"
+        f'<div class="job-insight-group is-secondary"><ul class="job-requirement-list">{eligibility_items_html}</ul></div>'
+        "</details>"
+        if eligibility_items_html
         else ""
     )
 
@@ -2220,6 +2283,7 @@ def render_job_card(
         f'<div class="job-meta">{"".join(meta_items)}</div>'
         f"{risk_html}"
         f"{clearance_html}"
+        f"{eligibility_html}"
         f"{job_requirements_html}"
         f"{llm_review_html}"
         f"{profile_gaps_html}"
