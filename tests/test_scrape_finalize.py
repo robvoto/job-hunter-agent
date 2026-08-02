@@ -616,6 +616,8 @@ def test_print_run_summary_uses_explicit_pages_and_cost_labels(caplog, tmp_path,
             "cards_seen": 7,
             "cards_read": 5,
             "kept_count": 2,
+            "visible_shortlist_count": 0,
+            "below_minimum_score_count": 2,
             "rejected_count": 3,
             "onet_far_rejected": 2,
             "cards_with_flags_count": 1,
@@ -629,7 +631,9 @@ def test_print_run_summary_uses_explicit_pages_and_cost_labels(caplog, tmp_path,
     assert "pages=3" in log_text
     assert "seen=7" in log_text
     assert "read=5" in log_text
-    assert "kept=2" in log_text
+    assert "reviewed_keep_candidates=2" in log_text
+    assert "visible_shortlist=0" in log_text
+    assert "below_minimum_score=2" in log_text
     assert "rejected=3" in log_text
 
     summary_path = tmp_path / "last_run_summary.txt"
@@ -639,6 +643,10 @@ def test_print_run_summary_uses_explicit_pages_and_cost_labels(caplog, tmp_path,
     assert "O*NET rejects: 2" in summary_text
     assert "Total LLM cost: $0.1235" in summary_text
     assert "Jobs seen:  7" in summary_text
+    assert "Reviewed keep candidates: 2" in summary_text
+    assert "Visible shortlist: 0" in summary_text
+    assert "Below minimum score: 2" in summary_text
+    assert "→ kept:" not in summary_text
 
     captured = capsys.readouterr()
     assert "Run complete" in captured.err
@@ -682,7 +690,7 @@ def test_print_run_summary_includes_source_breakdown(caplog, tmp_path, monkeypat
     assert "seen=3" in captured.err
     assert "pages=2" in captured.err
     assert "read=2" in captured.err
-    assert "kept=1" in captured.err
+    assert "reviewed_keep_candidates=1" in captured.err
     assert "Errors:" in captured.err
     assert "No fresh cards were captured in this run." in captured.err
     assert "Warnings:" in captured.err

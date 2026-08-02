@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 94,
+  "version": 95,
   "updated_at": "2026-08-02",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -582,6 +582,12 @@
     "rejection_cancel_button": "Cancel",
     "rejection_admin_tip_prefix": "Need to edit saved rules? ",
     "rejection_admin_tip_link_text": "Open Settings"
+  },
+  "run_summary_labels_description": "Managed labels for terminal and saved scrape-run summaries.",
+  "run_summary_labels": {
+    "reviewed_keep_candidates": "Reviewed keep candidates",
+    "visible_shortlist": "Visible shortlist",
+    "below_minimum_score": "Below minimum score"
   },
   "global_settings_labels_description": "Display labels and help text for the global settings admin panel.",
   "global_settings_labels": {

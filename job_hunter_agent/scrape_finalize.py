@@ -16,6 +16,7 @@ from job_hunter_agent.logging_utils import (
 logger = logging.getLogger(__name__)
 
 from job_hunter_agent.io_utils import (
+    load_ui_labels,
     save_job_history,
     save_llm_cache,
     prune_llm_cache_for_current_profile,
@@ -24,6 +25,7 @@ from job_hunter_agent.io_utils import (
     write_run_stats,
 )
 from job_hunter_agent.job_identity import deduplicate_across_sources
+from job_hunter_agent.llm_review_state import has_complete_llm_keep_data
 from job_hunter_agent.paths import OUTPUT_DIR, get_workspace_results_path
 from job_hunter_agent.posting_utils import parse_timestamp
 from job_hunter_agent.review_insights import build_review_data
@@ -141,6 +143,34 @@ def _format_issue_flag_summary(run_stats: dict) -> str:
     ]
 
     return "\n" + "\n".join(parts)
+
+
+def _run_summary_labels() -> dict[str, str]:
+    labels = load_ui_labels().get("run_summary_labels")
+    if not isinstance(labels, dict):
+        raise ValueError("ui_labels.json is missing run_summary_labels")
+    required = (
+        "reviewed_keep_candidates",
+        "visible_shortlist",
+        "below_minimum_score",
+    )
+    missing = [key for key in required if not str(labels.get(key) or "").strip()]
+    if missing:
+        raise ValueError(
+            f"ui_labels.json is missing run_summary_labels values: {', '.join(missing)}"
+        )
+    return {key: str(labels[key]).strip() for key in required}
+
+
+def _count_below_workspace_minimum(
+    records: list[dict], profile: dict, workspace_minimum_score: int
+) -> int:
+    return sum(
+        1
+        for record in records
+        if has_complete_llm_keep_data(record)
+        if workspace_service.fit_score_displayed(record, profile) < workspace_minimum_score
+    )
 
 
 def _format_workspace_counts(workspace_records: dict[str, list[dict]], minimum_score: int) -> str:
@@ -346,6 +376,8 @@ def _print_run_summary(run_stats: dict) -> None:
     seen = run_stats.get("cards_seen", 0)
     read = run_stats.get("cards_read", run_stats.get("detail_fetches", 0))
     kept = run_stats.get("kept_count", 0)
+    visible_shortlist = run_stats.get("visible_shortlist_count")
+    below_minimum_score = run_stats.get("below_minimum_score_count")
     rejected = run_stats.get("rejected_count", 0)
     flagged = run_stats.get("cards_with_flags_count", 0)
     onet_far_rejected = int(run_stats.get("onet_far_rejected", 0) or 0)
@@ -357,9 +389,12 @@ def _print_run_summary(run_stats: dict) -> None:
     lines = [f"\n{bar}", "  Run complete", f"  Pages read: {pages}"]
     if run_id:
         lines.append(f"  Run ID:     {run_id}")
-    lines.append(
-        f"  Jobs seen:  {seen}  →  descriptions read: {read}  →  kept: {kept}  |  rejected: {rejected}"
-    )
+    lines.append(f"  Jobs seen:  {seen}  →  descriptions read: {read}  |  rejected: {rejected}")
+    if visible_shortlist is not None and below_minimum_score is not None:
+        labels = _run_summary_labels()
+        lines.append(f"  {labels['reviewed_keep_candidates']}: {kept}")
+        lines.append(f"  {labels['visible_shortlist']}: {visible_shortlist}")
+        lines.append(f"  {labels['below_minimum_score']}: {below_minimum_score}")
     lines.append(f"  O*NET rejects: {onet_far_rejected}")
     if source_breakdown:
         lines.append("  Final stats by platform:")
@@ -371,7 +406,7 @@ def _print_run_summary(run_stats: dict) -> None:
             kept_count = item.get("kept", 0)
             rejected_count = item.get("rejected", 0)
             lines.append(
-                f"    - {source_name}: seen={seen_count} read={read_count} pages={pages_count} kept={kept_count} rejected={rejected_count}"
+                f"    - {source_name}: seen={seen_count} read={read_count} pages={pages_count} reviewed_keep_candidates={kept_count} rejected={rejected_count}"
             )
     if flagged:
         lines.append(f"  Flagged:    {flagged}  (review suggestions available)")
@@ -403,12 +438,15 @@ def _print_run_summary(run_stats: dict) -> None:
     RUN_SUMMARY_PATH.parent.mkdir(parents=True, exist_ok=True)
     RUN_SUMMARY_PATH.write_text(summary_text + "\n", encoding="utf-8")
     logger.info(
-        "[RUN_SUMMARY] run_id=%s pages=%s seen=%s read=%s kept=%s rejected=%s summary_path=%s",
+        "[RUN_SUMMARY] run_id=%s pages=%s seen=%s read=%s reviewed_keep_candidates=%s "
+        "visible_shortlist=%s below_minimum_score=%s rejected=%s summary_path=%s",
         run_id or "(none)",
         pages,
         seen,
         read,
         kept,
+        visible_shortlist,
+        below_minimum_score,
         rejected,
         RUN_SUMMARY_PATH,
     )
@@ -588,6 +626,12 @@ def finalize_scrape_run(
     set_run_progress("Building workspace\nRendering refreshed results")
 
     visible_current_records = len(workspace_records.get("current_records", []))
+    run_stats["visible_shortlist_count"] = len(workspace_records.get("shortlist_records", []))
+    run_stats["below_minimum_score_count"] = _count_below_workspace_minimum(
+        kept_records,
+        context.profile,
+        context.dashboard_min_score,
+    )
     if kept_records and visible_current_records == 0 and not context.dashboard_debug_mode:
         human_logger.info(
             "Shortlist result: 0 visible jobs. %d kept job(s) were hidden because they did not meet the workspace minimum score of %d.",
