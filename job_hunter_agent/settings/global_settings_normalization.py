@@ -462,6 +462,14 @@ def _search_setting_default_bool(key: str, default: bool) -> bool:
     return bool(DEFAULT_SEARCH_SETTINGS.get(key, default))
 
 
+def _search_setting_default_int(key: str, default: int) -> int:
+    raw = DEFAULT_SEARCH_SETTINGS.get(key, default)
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return int(default)
+
+
 def _normalize_source_document_suffixes(source: dict[str, Any], defaults: list[str]) -> list[str]:
     raw_suffixes = source.get(KEY_SOURCE_DOCUMENT_SUFFIXES, defaults)
     if not isinstance(raw_suffixes, list):
@@ -1032,7 +1040,7 @@ def normalize_global_settings(
             KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS: _require_int(
                 search_source,
                 KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS,
-                DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS],
+                _search_setting_default_int(KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS, 20),
                 normalized_search_limits[KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS]["min"],
                 normalized_search_limits[KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS]["max"],
             ),
