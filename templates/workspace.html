@@ -571,7 +571,6 @@
         <div class="ws-flash-backdrop" data-onboarding-backdrop></div>
         <div class="ws-flash-shell">
           <section class="ws-flash-card is-visible" role="dialog" aria-modal="true" aria-label="Onboarding summary">
-            <button class="jh-icon-button jh-icon-button--close ws-flash-close" id="ws_flash_dismiss" type="button" aria-label="Close welcome dialog">&times;</button>
             <div class="ws-flash-body">
               <div class="ws-flash-main">
                 <h1 class="ws-flash-title">Welcome</h1>
@@ -580,7 +579,14 @@
                 <div class="ws-flash-footer">Next search: ${nextSearchSummary}</div>
               </div>
               <aside class="ws-flash-side">
-                <h2>Quick start</h2>
+                <div class="ws-flash-side-header">
+                  <h2 class="jh-panel-title">Quick start</h2>
+                  <button class="jh-icon-button jh-icon-button--close ws-flash-close" id="ws_flash_dismiss" type="button" aria-label="Close welcome dialog">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                      <path d="M6 6l12 12M18 6L6 18"></path>
+                    </svg>
+                  </button>
+                </div>
                 <div class="ws-flash-action-list">
                   <button class="btn btn-primary ws-flash-primary" id="ws_flash_run_search" type="button">Run search</button>
                 </div>

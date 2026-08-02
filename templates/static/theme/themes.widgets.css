@@ -2078,13 +2078,21 @@
   outline-offset: var(--focus-ring-offset);
 }
 
+/* Shared compact panel heading used inside cards and side panels. */
+.jh-panel-title {
+  margin: 0;
+  font-size: var(--text-role-panel-title-font-size);
+  font-weight: var(--text-role-panel-title-font-weight);
+  color: var(--text-primary);
+}
+
 /* Shared icon-only close/dismiss button for dialogs, overlays, and flash cards. */
 .jh-icon-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: var(--control-height-lg);
-  height: var(--control-height-lg);
+  width: var(--control-height-md);
+  height: var(--control-height-md);
   padding: 0;
   border: 1px solid transparent;
   border-radius: var(--control-radius-md);
@@ -2105,8 +2113,13 @@
   outline-offset: var(--focus-ring-offset);
 }
 
-.jh-icon-button--close {
-  font-size: var(--font-size-9xl);
+.jh-icon-button--close svg {
+  width: var(--icon-size-md);
+  height: var(--icon-size-md);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
 }
 
 /* Shared compact typography for review cards, chips, and capability cards. */

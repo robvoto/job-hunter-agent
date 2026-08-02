@@ -11,6 +11,8 @@ def _read(*parts: str) -> str:
 def test_welcome_modal_uses_shared_close_button_class():
     workspace_html = _read("templates", "workspace.html")
     assert 'class="jh-icon-button jh-icon-button--close ws-flash-close"' in workspace_html
+    assert '<h2 class="jh-panel-title">Quick start</h2>' in workspace_html
+    assert '<svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">' in workspace_html
 
 
 def test_welcome_modal_close_button_has_dialog_specific_aria_label():
@@ -23,8 +25,8 @@ def test_shared_icon_button_meets_minimum_touch_target():
     match = re.search(r"\.jh-icon-button\s*\{([^}]*)\}", theme_widgets)
     assert match, ".jh-icon-button rule not found in themes.widgets.css"
     body = match.group(1)
-    assert "width: var(--control-height-lg);" in body
-    assert "height: var(--control-height-lg);" in body
+    assert "width: var(--control-height-md);" in body
+    assert "height: var(--control-height-md);" in body
 
 
 def test_shared_icon_button_has_focus_visible_state():

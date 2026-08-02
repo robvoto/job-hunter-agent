@@ -1002,12 +1002,9 @@ body {
   animation: wsFlashCardIn 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* Local layout exception: modal-specific positioning only; visual styling is owned by .jh-icon-button. */
+/* Local layout exception: shared close control participates in the side-panel header layout. */
 .ws-flash-close {
-  position: absolute;
-  top: var(--surface-gap-lg);
-  right: var(--surface-gap-lg);
-  z-index: 1;
+  flex: 0 0 auto;
 }
 
 .ws-flash-body {
@@ -1066,10 +1063,11 @@ body {
   align-content: start;
 }
 
-.ws-flash-side h2 {
-  margin: 0;
-  font-size: 1.02rem;
-  color: var(--text-primary);
+.ws-flash-side-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--surface-gap-sm);
 }
 
 .ws-flash-action-list {
