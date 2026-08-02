@@ -54,8 +54,8 @@ sub_state="$(sudo systemctl show -p SubState --value "$SERVICE" 2>/dev/null || t
 unit_file_state="$(sudo systemctl show -p UnitFileState --value "$SERVICE" 2>/dev/null || true)"
 main_pid="$(sudo systemctl show -p MainPID --value "$SERVICE" 2>/dev/null || true)"
 active_since="$(sudo systemctl show -p ActiveEnterTimestamp --value "$SERVICE" 2>/dev/null || true)"
-release_tag="$(git -C "$APP_DIR" describe --tags --exact-match HEAD 2>/dev/null || true)"
-release_commit="$(git -C "$APP_DIR" rev-parse --short=12 HEAD 2>/dev/null || true)"
+release_tag="$(git -c "safe.directory=$APP_DIR" -C "$APP_DIR" describe --tags --exact-match HEAD 2>/dev/null || true)"
+release_commit="$(git -c "safe.directory=$APP_DIR" -C "$APP_DIR" rev-parse --short=12 HEAD 2>/dev/null || true)"
 
 echo "Service: ${SERVICE}.service"
 echo "Release: ${release_tag:-unreleased}"
