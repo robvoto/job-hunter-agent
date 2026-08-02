@@ -416,6 +416,58 @@ def test_release_creation_bumps_exactly_once(tmp_path):
     assert _git(repo, "describe", "--tags", "--exact-match").stdout.strip() == "v1.5.2"
 
 
+def test_release_can_publish_ahead_only_main_then_cut_patch(tmp_path):
+    repo = _init_git_repo(tmp_path)
+    _tag_release(repo, "v1.5.1")
+    ordinary_head = _ordinary_commit(repo)
+    readme_path = repo / "README.md"
+    readme_path.write_text(
+        readme_path.read_text(encoding="utf-8") + "local ahead commit\n",
+        encoding="utf-8",
+    )
+    _git(repo, "add", "README.md")
+    _git(repo, "commit", "-m", "Local ahead fix")
+    local_ahead_head = _git(repo, "rev-parse", "HEAD").stdout.strip()
+    assert local_ahead_head != ordinary_head
+    env = _repo_env(repo, tmp_path)
+
+    result = _run(
+        ["bash", "scripts/release-jobhunter.sh", "patch", "--publish-main-first"],
+        cwd=repo,
+        env=env,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Publish ahead-only local main before release" in result.stdout
+    assert _read_project_version(repo) == "1.5.2"
+    assert _git(repo, "describe", "--tags", "--exact-match").stdout.strip() == "v1.5.2"
+    assert _git(repo, "rev-parse", "origin/main^").stdout.strip() == local_ahead_head
+
+
+def test_release_dry_run_rejects_publish_main_first_flag(tmp_path):
+    repo = _init_git_repo(tmp_path)
+    _tag_release(repo, "v1.5.1")
+    readme_path = repo / "README.md"
+    readme_path.write_text(
+        readme_path.read_text(encoding="utf-8") + "local ahead commit\n",
+        encoding="utf-8",
+    )
+    _git(repo, "add", "README.md")
+    _git(repo, "commit", "-m", "Local ahead fix")
+    env = _repo_env(repo, tmp_path)
+
+    result = _run(
+        ["bash", "scripts/release-jobhunter.sh", "patch", "--publish-main-first", "--dry-run"],
+        cwd=repo,
+        env=env,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "--publish-main-first cannot be combined with --dry-run" in result.stderr
+
+
 def test_failed_release_push_removes_new_local_tag(tmp_path):
     repo = _init_git_repo(tmp_path)
     origin = tmp_path / "origin.git"

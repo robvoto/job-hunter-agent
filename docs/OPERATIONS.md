@@ -796,6 +796,12 @@ Use one release command from a clean, synchronized `main` branch:
 ./scripts/release-jobhunter.sh patch
 ```
 
+If local `main` is intentionally ahead of `origin/main` and you want one command to publish that commit and immediately cut the next patch release:
+
+```bash
+./scripts/release-jobhunter.sh patch --publish-main-first
+```
+
 Meaning:
 
 - `patch`: bug fix or correction, for example `X.Y.Z -> X.Y.(Z+1)`.

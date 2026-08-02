@@ -29,11 +29,14 @@ Never edit the version or create/push a release tag manually. Use:
 
 ```bash
 ./scripts/release-jobhunter.sh patch
+./scripts/release-jobhunter.sh patch --publish-main-first
 ./scripts/release-jobhunter.sh minor
 ./scripts/release-jobhunter.sh major
 ```
 
 Use `--dry-run` to execute all release gates without changing files or Git history.
+
+`--publish-main-first` is the one-command convenience mode for an ahead-only local `main`: it first pushes the current `main` commit to `origin/main`, then runs the normal release flow. Do not use it when local `main` is behind or diverged.
 
 ## Release meanings
 

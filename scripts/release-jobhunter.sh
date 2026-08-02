@@ -10,6 +10,7 @@ Create a tested Job Hunter release from main.
 
 Usage:
   ./scripts/release-jobhunter.sh patch
+  ./scripts/release-jobhunter.sh patch --publish-main-first
   ./scripts/release-jobhunter.sh minor
   ./scripts/release-jobhunter.sh major
   ./scripts/release-jobhunter.sh patch --dry-run
@@ -21,6 +22,7 @@ Meaning:
 
 The real release command:
   - requires a clean local main matching origin/main
+  - can optionally push an ahead-only local main first with --publish-main-first
   - requires the current pyproject version to match the latest release tag
   - allows unreleased ordinary commits after the latest tag while version files stay unchanged
   - updates pyproject.toml and uv.lock through `uv version`
@@ -44,6 +46,7 @@ require_command() {
 
 bump=""
 dry_run=0
+publish_main_first=0
 
 while (($#)); do
   case "$1" in
@@ -53,6 +56,9 @@ while (($#)); do
       ;;
     --dry-run)
       dry_run=1
+      ;;
+    --publish-main-first)
+      publish_main_first=1
       ;;
     -h|--help)
       usage
@@ -80,8 +86,32 @@ git fetch --tags origin main
 
 local_head="$(git rev-parse HEAD)"
 remote_head="$(git rev-parse origin/main)"
-[[ "$local_head" == "$remote_head" ]] || fail \
-  "Local main does not exactly match origin/main. Pull or push the intended main first."
+if [[ "$local_head" != "$remote_head" ]]; then
+  read -r ahead_count behind_count <<<"$(git rev-list --left-right --count HEAD...origin/main)"
+
+  if ((publish_main_first)); then
+    ((dry_run == 0)) || fail \
+      "--publish-main-first cannot be combined with --dry-run because dry-run must not change GitHub."
+
+    if ((behind_count > 0)); then
+      fail \
+        "Local main is behind or diverged from origin/main. Pull/rebase first, then rerun the release."
+    fi
+    if ((ahead_count <= 0)); then
+      fail \
+        "Local main does not contain releasable commits ahead of origin/main."
+    fi
+
+    echo "==> Publish ahead-only local main before release"
+    git push origin "$local_head:refs/heads/main"
+    git fetch --tags origin main
+    remote_head="$(git rev-parse origin/main)"
+    [[ "$local_head" == "$remote_head" ]] || fail \
+      "Failed to synchronize origin/main to the intended local main commit."
+  else
+    fail "Local main does not exactly match origin/main. Pull or push the intended main first."
+  fi
+fi
 
 current_version="$(uv version --short)"
 latest_tag="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-version:refname | head -n 1)"
