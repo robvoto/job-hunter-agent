@@ -2,6 +2,7 @@
 set -euo pipefail
 
 SERVICE="${JOB_HUNTER_SERVICE:-job-hunter}"
+APP_DIR="${JOB_HUNTER_APP_DIR:-/home/ubuntu/job-hunter-agent}"
 HEALTH_URL="${JOB_HUNTER_HEALTH_URL:-http://127.0.0.1:8765/start}"
 PUBLIC_URL="${JOB_HUNTER_PUBLIC_HEALTH_URL:-https://jobhunter.robvoto.com/start}"
 MODE="${1:-}"
@@ -53,8 +54,12 @@ sub_state="$(sudo systemctl show -p SubState --value "$SERVICE" 2>/dev/null || t
 unit_file_state="$(sudo systemctl show -p UnitFileState --value "$SERVICE" 2>/dev/null || true)"
 main_pid="$(sudo systemctl show -p MainPID --value "$SERVICE" 2>/dev/null || true)"
 active_since="$(sudo systemctl show -p ActiveEnterTimestamp --value "$SERVICE" 2>/dev/null || true)"
+release_tag="$(git -C "$APP_DIR" describe --tags --exact-match HEAD 2>/dev/null || true)"
+release_commit="$(git -C "$APP_DIR" rev-parse --short=12 HEAD 2>/dev/null || true)"
 
 echo "Service: ${SERVICE}.service"
+echo "Release: ${release_tag:-unreleased}"
+echo "Commit:  ${release_commit:-unknown}"
 echo "State:   ${active_state:-unknown}${sub_state:+ ($sub_state)}"
 echo "Enabled: ${unit_file_state:-unknown}"
 echo "PID:     ${main_pid:-unknown}"
