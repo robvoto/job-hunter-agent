@@ -27,10 +27,6 @@ from job_hunter_agent.runtime_helpers import load_repo_dotenv
 load_repo_dotenv()
 
 from job_hunter_agent.database import init_db
-from job_hunter_agent.global_settings import (
-    seed_global_settings_from_file,
-    upgrade_global_settings_from_file,
-)
 from job_hunter_agent.knowledge_store import seed_knowledge_from_dir, upgrade_knowledge_from_dir
 from job_hunter_agent.paths import (
     DATA_DIR,
@@ -58,6 +54,20 @@ def _copy_required_runtime_file(source: Path, target: Path) -> bool:
         return False
     shutil.copy2(source, target)
     return True
+
+
+def seed_global_settings_from_file(*args, **kwargs):
+    """Load settings after runtime-managed files have been synchronized."""
+    from job_hunter_agent.global_settings import seed_global_settings_from_file as seed
+
+    return seed(*args, **kwargs)
+
+
+def upgrade_global_settings_from_file(*args, **kwargs):
+    """Load settings after runtime-managed files have been synchronized."""
+    from job_hunter_agent.global_settings import upgrade_global_settings_from_file as upgrade
+
+    return upgrade(*args, **kwargs)
 
 
 def _copy_required_runtime_tree(source_dir: Path, target_dir: Path, *, relative_paths: tuple[str, ...]) -> list[str]:
