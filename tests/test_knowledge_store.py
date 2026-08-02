@@ -522,7 +522,7 @@ def test_upgrade_fixes_stale_ui_labels_missing_workspace_labels(isolated_db):
             "last_run_heading": "Last Run",
             "last_run_cards_seen_label": "Jobs found",
             "last_run_details_checked_label": "Job details checked",
-            "last_run_accepted_label": "Matches accepted",
+            "last_run_accepted_label": "Accepted",
             "last_run_rejected_label": "Rejected",
             "last_run_llm_cost_label": "LLM cost",
             "last_run_input_tokens_label": "Input tokens",

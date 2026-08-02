@@ -497,8 +497,6 @@ def render_html(
 
     shortlist_records = workspace_records["shortlist_records"]
 
-    recent_archive_records = workspace_records["recent_archive_records"]
-
     applied_records = workspace_records["applied_records"]
 
     hidden_records = workspace_records["hidden_records"]
@@ -612,27 +610,6 @@ def render_html(
             (
                 f"{int(run_stats.get('llm_total_output_tokens', 0) or 0):,}",
                 ws_page_labels["LABEL_WS_LAST_RUN_OUTPUT_TOKENS_LABEL"],
-            ),
-        ]
-    )
-
-    workspace_cards_html = _render_summary_cards_html(
-        [
-            (
-                len(shortlist_records),
-                ws_page_labels["LABEL_WS_WORKSPACE_VISIBLE_LABEL"],
-            ),
-            (
-                sum(1 for record in shortlist_records if not viewed_by_user(record)),
-                ws_page_labels["LABEL_WS_WORKSPACE_NEW_LABEL"],
-            ),
-            (
-                sum(1 for record in shortlist_records if viewed_by_user(record)),
-                ws_page_labels["LABEL_WS_WORKSPACE_OPENED_LABEL"],
-            ),
-            (
-                len(recent_archive_records) + len(workspace_records["stale_archive_records"]),
-                ws_page_labels["LABEL_WS_WORKSPACE_SAVED_LABEL"],
             ),
         ]
     )
@@ -752,7 +729,6 @@ def render_html(
             "DATE_RANGE_LABEL": safe_html(date_range_label),
             "SCOPE_SAVED_OPTION_HTML": scope_saved_option_html,
             "LAST_RUN_CARDS_HTML": last_run_cards_html,
-            "WORKSPACE_CARDS_HTML": workspace_cards_html,
             "LIFETIME_LLM_CARDS_HTML": lifetime_cards_html,
             "TARGET_SUMMARIES": safe_html(" | ".join(target_summaries) or "None"),
             "SNAPSHOT_HELPER": safe_html(snapshot_helper),

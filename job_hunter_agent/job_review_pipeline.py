@@ -282,11 +282,11 @@ def _human_result_summary(record: dict[str, Any], decision: str, reason: str) ->
         score = record.get(RECORD_FIT_SCORE_KEY)
         grade = str(record.get(RECORD_LLM_FIT_GRADE_KEY) or "").strip().upper()
         if score is not None and grade:
-            return f"KEEP | Score {score} | Grade {grade}"
+            return f"KEEP | Score {score} | LLM grade {grade}"
         if score is not None:
             return f"KEEP | Score {score}"
         if grade:
-            return f"KEEP | Grade {grade}"
+            return f"KEEP | LLM grade {grade}"
         return "KEEP"
 
     summary_map = {

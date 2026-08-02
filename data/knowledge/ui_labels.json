@@ -1,8 +1,8 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 93,
-  "updated_at": "2026-07-30",
+  "version": 94,
+  "updated_at": "2026-08-02",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
     "remote_label": "Remote",
@@ -546,7 +546,7 @@
     "last_run_heading": "Last Run",
     "last_run_cards_seen_label": "Jobs found",
     "last_run_details_checked_label": "Job details checked",
-    "last_run_accepted_label": "Matches accepted",
+    "last_run_accepted_label": "Accepted",
     "last_run_rejected_label": "Rejected",
     "last_run_llm_cost_label": "LLM cost",
     "last_run_input_tokens_label": "Input tokens",

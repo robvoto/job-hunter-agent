@@ -48,16 +48,12 @@ export const JobHunterEligibilityEditor = (function () {
     if (!container) return;
     const cards = factState.map((fact, index) => {
       const toggleId = `eligibility_toggle_${index}`;
-      const review = fact.needs_review ? `<p class="clearance-card-state">${escapeHtml(labels.eligibility_aliases_review_label)}</p>` : '';
       return `
         <article class="capability-card clearance-card" data-eligibility-index="${index}">
           <div class="capability-card-main clearance-card-main">
             <div class="clearance-card-copy">
               <label class="clearance-card-title" for="eligibility_name_${index}">${escapeHtml(labels.eligibility_name_label)}</label>
               <input id="eligibility_name_${index}" class="token-input-field" data-eligibility-field="name" data-eligibility-index="${index}" value="${escapeHtml(fact.name)}">
-              <label class="clearance-card-title" for="eligibility_aliases_${index}">${escapeHtml(labels.eligibility_aliases_label)}</label>
-              <input id="eligibility_aliases_${index}" class="token-input-field" data-eligibility-field="aliases" data-eligibility-index="${index}" value="${escapeHtml(fact.aliases.join(', '))}" placeholder="${escapeHtml(labels.eligibility_aliases_placeholder)}">
-              ${review}
             </div>
           </div>
           <div class="capability-card-actions clearance-card-actions">
@@ -109,10 +105,6 @@ export const JobHunterEligibilityEditor = (function () {
       const index = Number(field.dataset.eligibilityIndex);
       if (!Number.isInteger(index) || !factState[index]) return;
       if (field.dataset.eligibilityField === 'name') factState[index].name = normalizeText(field.value);
-      if (field.dataset.eligibilityField === 'aliases') {
-        factState[index].aliases = String(field.value || '').split(',').map(normalizeText).filter(Boolean);
-        factState[index].aliases_edited = true;
-      }
       persist();
       markDirty();
     });
