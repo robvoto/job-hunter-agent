@@ -632,7 +632,7 @@ function fillForm(profile) {
     const _engagementTypeValues = getEngagementTypeValues();
     _minContractEl.disabled = !(_engagementTypeValues.includes('contract') || _engagementTypeValues.includes('full_time_contract'));
   }
-  updateContractChipLabel();
+  syncContractDurationState();
   setCurrencyFieldValue('minimum_salary_yearly', profile.salary_preferences?.minimum_salary_yearly ?? 0);
   setCurrencyFieldValue('minimum_daily_rate', profile.salary_preferences?.minimum_daily_rate ?? 0);
   document.getElementById('fit_weight').value = String(profile.preference_weights?.fit);
@@ -946,41 +946,23 @@ function minContractMonthSummaryText(value) {
   return String(option.textContent).trim();
 }
 
-function updateContractChipLabel() {
-  const chipSpan = document.querySelector('input[name="engagement_type"][value="contract"]')
-    ?.closest('label')?.querySelector('span');
-  if (!chipSpan) return;
-  if (!chipSpan.dataset.baseLabel) {
-    chipSpan.dataset.baseLabel = chipSpan.textContent;
-  }
-  const contractEnabled = getEngagementTypeValues().includes('contract') || getEngagementTypeValues().includes('full_time_contract');
-  const val = document.getElementById('min_contract_months')?.value || '';
-  if (!contractEnabled) {
-    chipSpan.textContent = chipSpan.dataset.baseLabel;
-  } else if (val) {
-    chipSpan.textContent = `${chipSpan.dataset.baseLabel} (${val}+)`;
-  } else {
-    chipSpan.textContent = `${chipSpan.dataset.baseLabel} (all)`;
-  }
-}
-
-function updateMinContractMonthState({ showRow = false } = {}) {
-  const minContractEl = document.getElementById('min_contract_months');
-  if (!minContractEl) return;
-  const contractEnabled = getEngagementTypeValues().includes('contract') || getEngagementTypeValues().includes('full_time_contract');
-  minContractEl.disabled = !contractEnabled;
+function syncContractDurationState() {
   const contractRow = document.getElementById('contract_duration_row');
-  if (!contractRow) {
-    updateContractChipLabel();
-    return;
-  }
-  if (!contractEnabled) {
+  const minContractEl = document.getElementById('min_contract_months');
+  if (!contractRow || !minContractEl) return;
+  const selectedTypes = getEngagementTypeValues();
+  const contractSelected =
+    selectedTypes.includes('contract') ||
+    selectedTypes.includes('full_time_contract');
+
+  contractRow.hidden = !contractSelected;
+  minContractEl.disabled = !contractSelected;
+
+  if (!contractSelected) {
     minContractEl.value = '';
-    contractRow.hidden = true;
-  } else if (showRow) {
-    contractRow.hidden = false;
   }
-  updateContractChipLabel();
+
+  updateSearchPreferenceSummaries();
 }
 
 function updateSearchPreferenceSummaries() {
@@ -1006,7 +988,6 @@ function updateSearchPreferenceSummaries() {
 }
 
 document.getElementById('min_contract_months')?.addEventListener('change', () => {
-  updateContractChipLabel();
   updateSearchPreferenceSummaries();
 });
 
@@ -1016,16 +997,7 @@ document.querySelectorAll('input[name="engagement_type"]').forEach((cb) => {
       const anyChecked = document.querySelectorAll('input[name="engagement_type"]:checked').length > 0;
       if (!anyChecked) cb.checked = true;
     }
-    const selectedEngagementTypes = getEngagementTypeValues();
-    const hasContractDurationWorkType = selectedEngagementTypes.includes('contract') || selectedEngagementTypes.includes('full_time_contract');
-    if (!hasContractDurationWorkType) {
-      updateMinContractMonthState();
-    } else if ((cb.value === 'contract' || cb.value === 'full_time_contract') && cb.checked) {
-      updateMinContractMonthState({ showRow: true });
-    } else {
-      updateMinContractMonthState();
-    }
-    updateSearchPreferenceSummaries();
+    syncContractDurationState();
   });
 });
 
@@ -1240,7 +1212,7 @@ const pageLoads = isAdminPage
   : [loadProfile(), loadUserSettings(), loadSourceMaterials()];
 Promise.all(pageLoads).then(() => {
   initSliders();
-  updateSearchPreferenceSummaries();
+  syncContractDurationState();
   suppressDirtyTracking = false;
   clearDirty();
 }).catch(error => showStatus(error.message, 'error'));

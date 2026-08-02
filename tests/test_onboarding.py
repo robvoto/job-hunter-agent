@@ -346,7 +346,7 @@ def test_shared_ui_styles_are_centralised():
     assert ".search-source-panel .toggle-switch" in theme_widgets
 
 
-def test_settings_search_work_type_popup_uses_shared_labels_and_local_layout():
+def test_settings_contract_duration_uses_shared_component_and_sync():
     repo_root = Path(__file__).resolve().parents[1]
     settings_html = (
         repo_root / "templates" / "partials" / "settings" / "standard" / "settings-search.html"
@@ -354,30 +354,42 @@ def test_settings_search_work_type_popup_uses_shared_labels_and_local_layout():
     settings_js = (
         repo_root / "templates" / "static" / "settings" / "shared" / "settings-page.js"
     ).read_text(encoding="utf-8")
+    theme_widgets = (
+        repo_root / "templates" / "static" / "theme" / "themes.widgets.css"
+    ).read_text(encoding="utf-8")
 
+    assert 'class="conditional-preference-field"' in settings_html
+    assert 'id="contract_duration_row"' in settings_html
     assert settings_html.index('id="contract_duration_row"') < settings_html.index(
         'id="engagement_type_summary"'
     )
     assert "__JOB_HUNTER_MIN_CONTRACT_MONTH_HELP__" in settings_html
     assert "window.__JOB_HUNTER_ONBOARDING_PAGE_LABELS__" in settings_js
-    assert "positionContractDurationRow" not in settings_js
-    assert "updateMinContractMonthState" in settings_js
+    assert "syncContractDurationState" in settings_js
+    assert "updateMinContractMonthState" not in settings_js
+    assert "updateContractChipLabel" not in settings_js
     assert "work_type_summary_contract_length_label" in settings_js
     assert "summary_any_length_label" in settings_js
+    assert ".conditional-preference-field" in theme_widgets
+    assert ".contract-duration-row" not in theme_widgets
 
 
-def test_onboarding_contract_duration_row_uses_normal_flow():
+def test_onboarding_contract_duration_uses_shared_component_and_sync():
     repo_root = Path(__file__).resolve().parents[1]
-    css_path = repo_root / "templates" / "static" / "onboarding" / "onboarding-page.css"
+    onboarding_html = (
+        repo_root / "templates" / "onboarding.html"
+    ).read_text(encoding="utf-8")
     page_js_path = repo_root / "templates" / "static" / "onboarding" / "onboarding-page.js"
     storage_js_path = repo_root / "templates" / "static" / "onboarding" / "onboarding-storage.js"
-    css_text = css_path.read_text(encoding="utf-8")
     page_js_text = page_js_path.read_text(encoding="utf-8")
     storage_js_text = storage_js_path.read_text(encoding="utf-8")
 
-    assert ".onb-field .contract-duration-row" not in css_text
-    assert "positionContractDurationRow" not in page_js_text
-    assert "contractRow.hidden = true;" in page_js_text
+    assert 'class="conditional-preference-field"' in onboarding_html
+    assert 'id="contract_duration_row"' in onboarding_html
+    assert "syncContractDurationState" in page_js_text
+    assert "updateMinContractMonthState" not in page_js_text
+    assert "updateContractChipLabel" not in page_js_text
+    assert "syncContractDurationState" in storage_js_text
     assert "minContractMonthsEl.addEventListener('change'" in storage_js_text
 
 

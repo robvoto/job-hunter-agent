@@ -400,39 +400,23 @@ export function updateSearchPreferenceSummaries() {
   }
 }
 
-export function updateContractChipLabel() {
-  const span = document.querySelector('input[name="engagement_type"][value="contract"]')?.closest('label')?.querySelector('span');
-  if (!span) return;
-  const contractEnabled = getOnboardingEngagementTypeValues().includes('contract');
-  if (!span.dataset.baseLabel) span.dataset.baseLabel = span.textContent;
-  if (!contractEnabled) {
-    span.textContent = span.dataset.baseLabel;
-    return;
-  }
-  const months = String(refs.minContractMonths.value).trim();
-  if (!months) {
-    span.textContent = `${span.dataset.baseLabel} (all)`;
-  } else {
-    span.textContent = `${span.dataset.baseLabel} (${months}+)`;
-  }
-}
-
-export function updateMinContractMonthState({ showRow = false } = {}) {
+export function syncContractDurationState() {
   if (!refs.minContractMonths) return;
-  const contractEnabled = getOnboardingEngagementTypeValues().includes('contract');
-  refs.minContractMonths.disabled = !contractEnabled;
+  const selectedTypes = getOnboardingEngagementTypeValues();
+  const contractSelected =
+    selectedTypes.includes('contract') ||
+    selectedTypes.includes('full_time_contract');
+
   const contractRow = document.getElementById('contract_duration_row');
   if (contractRow) {
-    if (!contractEnabled) {
-      contractRow.hidden = true;
-    } else if (showRow) {
-      if (!getMinContractMonthValue()) {
-        setMinContractMonthValue(getResolvedMinContractMonthValue());
-      }
-      contractRow.hidden = false;
-    }
+    contractRow.hidden = !contractSelected;
   }
-  updateContractChipLabel();
+  refs.minContractMonths.disabled = !contractSelected;
+
+  if (!contractSelected) {
+    refs.minContractMonths.value = '';
+  }
+
   updateSearchPreferenceSummaries();
 }
 
@@ -791,7 +775,7 @@ export function applyProfileDefaults(profile) {
     }
     setMinContractMonthValue(matchPreferences.min_contract_months ?? '');
   }
-  updateMinContractMonthState();
+  syncContractDurationState();
   if (reviewMinimumSalaryYearlyEl && !String(reviewMinimumSalaryYearlyEl.value || '').trim()) {
     if (salaryPreferences.minimum_salary_yearly === undefined || salaryPreferences.minimum_salary_yearly === null) {
       throw new Error('Missing minimum permanent salary.');
@@ -808,7 +792,7 @@ export function applyProfileDefaults(profile) {
     throw new Error('Missing engagement type preferences.');
   }
   setOnboardingEngagementTypeValues(matchPreferences.engagement_type);
-  updateMinContractMonthState();
+  syncContractDurationState();
    if (!Array.isArray(matchPreferences.work_mode_preference)) {
      throw new Error('Missing work mode preferences.');
    }

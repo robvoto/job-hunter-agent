@@ -1027,22 +1027,6 @@
   line-height: 1.2;
 }
 
-.settings-form-field .contract-duration-row {
-  display: flex;
-  align-items: center;
-  gap: var(--control-space-lg);
-}
-
-.settings-form-field .contract-duration-row .jh-select {
-  flex: 1;
-  max-width: 160px;
-  margin: 0;
-}
-
-.onb-field .contract-duration-row {
-  margin-top: var(--field-summary-gap);
-}
-
 .workspace-control-group {
   display: grid;
   gap: var(--surface-gap-sm);
@@ -2015,37 +1999,31 @@
   justify-self: center;
 }
 
-/* Compact inline contract-length selector shown only when Contract is selected. */
-.onb-field .contract-duration-row,
-.settings-form-field .contract-duration-row {
-  position: static;
-  display: inline-flex;
-  align-items: center;
-  width: auto;
-  max-width: 9.5rem;
-  margin-top: 7px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
+/* Shared conditional preference field (e.g. Minimum contract length) shown only
+   when a related work type is selected. Owns label, spacing, control width,
+   background and border. Page CSS may only position the component. */
+.conditional-preference-field {
+  display: grid;
+  gap: var(--field-label-control-gap);
+  margin-top: var(--field-summary-gap);
+  padding: var(--surface-pad-block-md) var(--surface-pad-inline-md);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-muted);
 }
 
-.onb-field .contract-duration-row[hidden],
-.settings-form-field .contract-duration-row[hidden] {
+.conditional-preference-field[hidden] {
   display: none;
 }
 
-.onb-field .contract-duration-row .jh-select,
-.settings-form-field .contract-duration-row .jh-select {
-  width: 9.5rem;
-  min-height: 2.15rem;
-  padding-top: 5px;
-  padding-bottom: 5px;
-  font-size: var(--text-role-body-compact-font-size);
-  border-color: color-mix(in srgb, var(--accent) 48%, var(--border-subtle));
-  background-color: color-mix(in srgb, var(--accent) 9%, var(--bg-surface));
-  color: var(--accent);
-  font-weight: var(--text-role-button-font-weight);
+.conditional-preference-field .field-label-row {
+  margin: 0;
+}
+
+.conditional-preference-field .jh-select {
+  width: 100%;
+  max-width: none;
+  margin: 0;
 }
 
 /* Shared icon-only action button for compact card actions such as edit pencils. */

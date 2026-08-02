@@ -130,7 +130,7 @@ export function restoreWizardState() {
       onboardingSettingsUtils.setSectorPreferenceValues(state.preferSector || []);
       onboardingPage.updateSearchPreferenceSummaries();
       onboardingPage.updateCompensationVisibility();
-      onboardingPage.updateMinContractMonthState();
+      onboardingPage.syncContractDurationState();
     } catch (error) {
       console.warn('Could not restore onboarding search basics state.', error);
     }
@@ -165,7 +165,7 @@ document.querySelectorAll('input[name="prefer_sector"]').forEach((input) => {
 
 if (minContractMonthsEl) {
   minContractMonthsEl.addEventListener('change', () => {
-    onboardingPage.updateMinContractMonthState();
+    onboardingPage.syncContractDurationState();
     onboardingPage.hideStatus();
     saveWizardState();
     scheduleSearchBasicsPersistence();
@@ -179,7 +179,7 @@ document.querySelectorAll('input[name="engagement_type"]').forEach((input) => {
       if (!anyChecked) input.checked = true;
     }
     onboardingPage.hideStatus();
-    onboardingPage.updateMinContractMonthState({ showRow: input.value === 'contract' && input.checked });
+    onboardingPage.syncContractDurationState();
     onboardingPage.updateCompensationVisibility();
     saveWizardState();
     scheduleSearchBasicsPersistence();
