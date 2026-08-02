@@ -796,6 +796,14 @@ Use one release command from a clean, synchronized `main` branch:
 ./scripts/release-jobhunter.sh patch
 ```
 
+Repo-root shortcut:
+
+```bash
+./release
+```
+
+`./release` defaults to `patch --publish-main-first`. It also accepts `minor`, `major`, and `--dry-run`.
+
 If local `main` is intentionally ahead of `origin/main` and you want one command to publish that commit and immediately cut the next patch release:
 
 ```bash

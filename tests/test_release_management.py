@@ -15,6 +15,7 @@ from job_hunter_agent.routes import pages
 REPO_ROOT = Path(__file__).resolve().parents[1]
 INTEGRITY_SCRIPT = REPO_ROOT / "scripts" / "check-release-integrity.py"
 RELEASE_SCRIPT = REPO_ROOT / "scripts" / "release-jobhunter.sh"
+ROOT_RELEASE_WRAPPER = REPO_ROOT / "release"
 DEPLOY_RELEASE_SCRIPT = REPO_ROOT / "scripts" / "ec2" / "deploy-jobhunter-release.sh"
 DEPLOY_LATEST_SCRIPT = REPO_ROOT / "scripts" / "ec2" / "deploy-jobhunter-latest.sh"
 RELEASE_SKILL = REPO_ROOT / ".skills" / "release-management" / "SKILL.md"
@@ -100,6 +101,10 @@ def _write_runtime_release_files(root: Path) -> None:
         RELEASE_SCRIPT.read_text(encoding="utf-8"),
         encoding="utf-8",
     )
+    (root / "release").write_text(
+        ROOT_RELEASE_WRAPPER.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
     (root / "scripts" / "ec2" / "deploy-jobhunter-release.sh").write_text(
         DEPLOY_RELEASE_SCRIPT.read_text(encoding="utf-8"),
         encoding="utf-8",
@@ -131,6 +136,7 @@ def _write_runtime_release_files(root: Path) -> None:
     )
     os.chmod(root / "scripts" / "run-e2e.sh", 0o755)
     os.chmod(root / "scripts" / "release-jobhunter.sh", 0o755)
+    os.chmod(root / "release", 0o755)
     os.chmod(root / "scripts" / "ec2" / "deploy-jobhunter-release.sh", 0o755)
     os.chmod(root / "scripts" / "ec2" / "deploy-jobhunter-latest.sh", 0o755)
 
@@ -620,6 +626,7 @@ def test_deploy_rejects_tag_version_mismatch(tmp_path):
 
 def test_release_process_has_no_extra_release_modes():
     script = RELEASE_SCRIPT.read_text(encoding="utf-8")
+    root_wrapper = ROOT_RELEASE_WRAPPER.read_text(encoding="utf-8")
     latest_script = DEPLOY_LATEST_SCRIPT.read_text(encoding="utf-8")
     skill = RELEASE_SKILL.read_text(encoding="utf-8")
 
@@ -636,6 +643,19 @@ def test_release_process_has_no_extra_release_modes():
     assert "temporary release mode" not in script
     assert "one-time release mode" not in script
     assert "production-only" in latest_script
+    assert './scripts/release-jobhunter.sh patch --publish-main-first' in root_wrapper
+
+
+def test_root_release_wrapper_defaults_to_patch_publish_main_first(tmp_path):
+    repo = _init_git_repo(tmp_path)
+    _tag_release(repo, "v1.5.1")
+    _ordinary_commit(repo)
+    env = _repo_env(repo, tmp_path)
+
+    result = _run(["bash", "./release", "--dry-run"], cwd=repo, env=env, check=False)
+
+    assert result.returncode == 0, result.stderr
+    assert "Planned release: v1.5.1 -> v1.5.2" in result.stdout
 
 
 def test_release_command_owns_bump_tests_tag_and_atomic_push():

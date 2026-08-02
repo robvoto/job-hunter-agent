@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")"
+
+if [[ $# -eq 0 ]]; then
+  exec ./scripts/release-jobhunter.sh patch --publish-main-first
+fi
+
+bump=""
+dry_run=0
+args=()
+
+for arg in "$@"; do
+  case "$arg" in
+    patch|minor|major)
+      [[ -z "$bump" ]] || {
+        echo "Choose only one bump type: patch, minor, or major." >&2
+        exit 2
+      }
+      bump="$arg"
+      args+=("$arg")
+      ;;
+    --dry-run)
+      dry_run=1
+      args+=("$arg")
+      ;;
+    --publish-main-first)
+      args+=("$arg")
+      ;;
+    *)
+      args+=("$arg")
+      ;;
+  esac
+done
+
+if [[ -z "$bump" ]]; then
+  args=("patch" "${args[@]}")
+fi
+
+if ((dry_run == 0)); then
+  has_publish_flag=0
+  for arg in "${args[@]}"; do
+    if [[ "$arg" == "--publish-main-first" ]]; then
+      has_publish_flag=1
+      break
+    fi
+  done
+  if ((has_publish_flag == 0)); then
+    args+=("--publish-main-first")
+  fi
+fi
+
+exec ./scripts/release-jobhunter.sh "${args[@]}"
