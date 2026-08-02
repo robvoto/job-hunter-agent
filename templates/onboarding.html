@@ -273,14 +273,8 @@
                   <div class="field-control-shell">
                     __JOB_HUNTER_ENGAGEMENT_TYPE_CHOICES__
                   </div>
-                  <div id="contract_duration_row" class="conditional-preference-field" hidden>
-                    <div class="field-label-row">
-                      <label for="min_contract_months">__JOB_HUNTER_MIN_CONTRACT_MONTH_LABEL__</label>
-                      <details class="field-info-drawer">
-                        <summary class="field-info" aria-label="Help">i</summary>
-                        <div class="field-info-panel">__JOB_HUNTER_MIN_CONTRACT_MONTH_HELP__</div>
-                      </details>
-                    </div>
+                  <div id="contract_duration_row" class="choice-detail-popover" popover="auto" role="group" aria-labelledby="min_contract_months_label">
+                    <label id="min_contract_months_label" class="choice-detail-popover__label" for="min_contract_months">__JOB_HUNTER_MIN_CONTRACT_MONTH_LABEL__</label>
                     <select id="min_contract_months" class="jh-select" aria-label="__JOB_HUNTER_MIN_CONTRACT_MONTH_LABEL__">
                       <option value="">__JOB_HUNTER_MIN_CONTRACT_MONTH_NONE_LABEL__</option>
                       __JOB_HUNTER_MIN_CONTRACT_MONTH_OPTIONS__

@@ -1761,8 +1761,7 @@ def render_job_card(
                 profile_detail = f"{profile_detail} ({level_label})"
             detail_html_parts.append(
                 '<span class="req-coverage-detail req-coverage-detail--capability">'
-                f'<span class="req-coverage-tag">{safe_html(_workspace_label("workspace_card_labels", "job_requirements_capability_badge"))}</span>'
-                f'<span class="req-coverage-detail-text">{safe_html(profile_detail)}</span>'
+                f'<span class="req-coverage-tag">{safe_html(profile_detail)}</span>'
                 "</span>"
             )
         if (
@@ -1802,11 +1801,10 @@ def render_job_card(
             if importance_label
             else ""
         )
-        status_html = (
-            f'<span class="job-requirement-status">{safe_html(status_label)}</span>'
-            f'<span class="job-requirement-status">{safe_html(classification_label)}</span>'
-            if status_label or classification_label
-            else ""
+        status_html = "".join(
+            f'<span class="job-requirement-status">{safe_html(label)}</span>'
+            for label in (status_label, classification_label)
+            if label
         )
 
         add_to_profile_html = ""

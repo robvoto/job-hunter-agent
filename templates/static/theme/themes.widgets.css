@@ -1999,31 +1999,45 @@
   justify-self: center;
 }
 
-/* Shared conditional preference field (e.g. Minimum contract length) shown only
-   when a related work type is selected. Owns label, spacing, control width,
-   background and border. Page CSS may only position the component. */
-.conditional-preference-field {
+/* Shared lightweight detail popover anchored to a choice-strip option.
+   Native popover="auto" owns outside-click and Escape dismissal; JS only positions it. */
+.choice-detail-popover {
+  --choice-detail-popover-offset: var(--surface-gap-sm);
+  --choice-detail-popover-viewport-padding: var(--surface-gap-sm);
+  position: fixed;
+  inset: auto;
   display: grid;
-  gap: var(--field-label-control-gap);
-  margin-top: var(--field-summary-gap);
-  padding: var(--surface-pad-block-md) var(--surface-pad-inline-md);
+  gap: var(--control-space-xs);
+  width: max-content;
+  max-width: calc(100vw - (2 * var(--choice-detail-popover-viewport-padding)));
+  margin: 0;
+  padding: var(--control-pad-block-md) var(--control-pad-inline-md);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--bg-muted);
+  border-radius: var(--control-radius-md);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-soft);
 }
 
-.conditional-preference-field[hidden] {
+.choice-detail-popover:not(:popover-open) {
   display: none;
 }
 
-.conditional-preference-field .field-label-row {
+.choice-detail-popover__label {
   margin: 0;
+  font-size: var(--text-role-body-compact-font-size);
+  font-weight: var(--text-role-button-font-weight);
+  line-height: var(--field-label-line-height);
 }
 
-.conditional-preference-field .jh-select {
+.choice-detail-popover .jh-select {
   width: 100%;
+  min-height: var(--control-height-sm);
   max-width: none;
   margin: 0;
+  padding: var(--control-pad-block-sm) calc(var(--control-pad-inline-xl) + var(--control-pad-inline-md)) var(--control-pad-block-sm) var(--control-pad-inline-md);
+  border-radius: var(--control-radius-md);
+  font-size: var(--text-role-body-compact-font-size);
 }
 
 /* Shared icon-only action button for compact card actions such as edit pencils. */

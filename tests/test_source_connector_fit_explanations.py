@@ -2,6 +2,7 @@
 
 import json
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
@@ -1782,7 +1783,7 @@ def test_render_job_card_requirement_coverage_shows_evidence_subtitles_in_normal
     assert f'"{requirement}"' not in html
 
 
-def test_render_job_card_requirement_coverage_shows_capability_badge_but_hides_ad_wording_in_normal_mode():
+def test_render_job_card_requirement_coverage_puts_capability_name_inside_badge_in_normal_mode():
     html = workspace_renderer.render_job_card(
         {
             **_test_profile(),
@@ -1803,10 +1804,47 @@ def test_render_job_card_requirement_coverage_shows_capability_badge_but_hides_a
         debug_mode=False,
     )
 
-    assert "Capability" in html
-    assert "agile delivery" in html
+    assert '<span class="req-coverage-tag">agile delivery</span>' in html
+    assert ">Capability<" not in html
+    assert '<span class="req-coverage-detail-text">agile delivery</span>' not in html
+    assert '<span class="job-requirement-status"></span>' not in html
     assert "Ad wording" not in html
     assert "Lead end-to-end delivery within Agile squads" not in html
+
+
+def test_requirement_importance_and_status_badges_share_geometry_and_alignment_css():
+    css = (
+        Path(__file__).resolve().parents[1]
+        / "templates"
+        / "static"
+        / "results"
+        / "results-page.css"
+    ).read_text(encoding="utf-8")
+
+    shared_selector = ".job-requirement-status,\n.job-req-importance {"
+    assert shared_selector in css
+
+    badges_block = css.split(".job-requirement-badges {", 1)[1].split("}", 1)[0]
+    assert "align-items: center;" in badges_block
+    assert "gap: var(--control-space-xs);" in badges_block
+
+    shared_block = css.split(shared_selector, 1)[1].split("}", 1)[0]
+    for declaration in (
+        "font-family: inherit;",
+        "font-size: var(--font-size-2xs);",
+        "font-weight: var(--text-role-status-font-weight);",
+        "line-height: var(--chip-line-height);",
+        "justify-content: center;",
+    ):
+        assert declaration in shared_block
+
+    for selector in (
+        ".job-requirement-status {\n  color:",
+        ".job-req-importance {\n  border-color:",
+    ):
+        local_block = css.split(selector, 1)[1].split("}", 1)[0]
+        for property_name in ("font-size:", "font-weight:", "line-height:", "padding:"):
+            assert property_name not in local_block
 
 
 def test_render_job_card_requirement_coverage_shows_ad_wording_in_debug_mode():
@@ -1830,7 +1868,8 @@ def test_render_job_card_requirement_coverage_shows_ad_wording_in_debug_mode():
         debug_mode=True,
     )
 
-    assert "Capability" in html
+    assert '<span class="req-coverage-tag">agile delivery</span>' in html
+    assert ">Capability<" not in html
     assert "Ad wording" in html
     assert "Lead end-to-end delivery within Agile squads" in html
 

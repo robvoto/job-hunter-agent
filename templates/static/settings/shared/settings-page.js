@@ -7,6 +7,7 @@ import { JobHunterAlertsSettings as alertsSettings } from '../standard/settings-
 import * as capabilityUi from '../../common/capability-ui.js';
 import * as locationUi from '../../common/location-options.js';
 import { createController as createMessageBannerController } from '../../common/message-banner.js';
+import { bindSelectedChoicePopover, createAnchoredPopover } from '../../common/anchored-popover.js';
 import {
   escapeHtml,
   toLines,
@@ -946,22 +947,57 @@ function minContractMonthSummaryText(value) {
   return String(option.textContent).trim();
 }
 
-function syncContractDurationState() {
-  const contractRow = document.getElementById('contract_duration_row');
+const contractDurationRow = document.getElementById('contract_duration_row');
+const contractTypeInput = document.querySelector('input[name="engagement_type"][value="contract"]');
+const contractTypeChip = contractTypeInput?.closest('label');
+const contractDurationPopover = contractDurationRow && contractTypeChip
+  ? createAnchoredPopover({ popover: contractDurationRow, anchor: contractTypeChip })
+  : null;
+if (contractDurationPopover && contractTypeChip && contractTypeInput) {
+  bindSelectedChoicePopover({
+    controller: contractDurationPopover,
+    anchor: contractTypeChip,
+    input: contractTypeInput,
+  });
+}
+const minContractMonthNoneLabel = String(window.__JOB_HUNTER_MIN_CONTRACT_MONTH_NONE_LABEL__ || '').trim();
+if (!minContractMonthNoneLabel) {
+  throw new Error('Missing minimum contract month none label.');
+}
+
+function updateContractChipLabel() {
+  const chipSpan = contractTypeChip?.querySelector('span');
+  if (!chipSpan || !contractTypeInput) return;
+  if (!chipSpan.dataset.baseLabel) {
+    chipSpan.dataset.baseLabel = String(chipSpan.textContent || '').trim();
+  }
+  if (!contractTypeInput.checked) {
+    chipSpan.textContent = chipSpan.dataset.baseLabel;
+    return;
+  }
+  const value = String(document.getElementById('min_contract_months')?.value || '').trim();
+  const detail = value ? `${value}+` : minContractMonthNoneLabel.toLocaleLowerCase();
+  chipSpan.textContent = `${chipSpan.dataset.baseLabel} (${detail})`;
+}
+
+function syncContractDurationState({ showPopover = false } = {}) {
   const minContractEl = document.getElementById('min_contract_months');
-  if (!contractRow || !minContractEl) return;
+  if (!minContractEl) return;
   const selectedTypes = getEngagementTypeValues();
   const contractSelected =
     selectedTypes.includes('contract') ||
     selectedTypes.includes('full_time_contract');
 
-  contractRow.hidden = !contractSelected;
   minContractEl.disabled = !contractSelected;
 
   if (!contractSelected) {
     minContractEl.value = '';
+    contractDurationPopover?.hide();
+  } else if (showPopover) {
+    contractDurationPopover?.show();
   }
 
+  updateContractChipLabel();
   updateSearchPreferenceSummaries();
 }
 
@@ -988,6 +1024,7 @@ function updateSearchPreferenceSummaries() {
 }
 
 document.getElementById('min_contract_months')?.addEventListener('change', () => {
+  updateContractChipLabel();
   updateSearchPreferenceSummaries();
 });
 
@@ -997,7 +1034,7 @@ document.querySelectorAll('input[name="engagement_type"]').forEach((cb) => {
       const anyChecked = document.querySelectorAll('input[name="engagement_type"]:checked').length > 0;
       if (!anyChecked) cb.checked = true;
     }
-    syncContractDurationState();
+    syncContractDurationState({ showPopover: cb.value === 'contract' && cb.checked });
   });
 });
 

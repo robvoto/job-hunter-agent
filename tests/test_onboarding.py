@@ -346,7 +346,7 @@ def test_shared_ui_styles_are_centralised():
     assert ".search-source-panel .toggle-switch" in theme_widgets
 
 
-def test_settings_contract_duration_uses_shared_component_and_sync():
+def test_settings_contract_duration_uses_shared_anchored_popover():
     repo_root = Path(__file__).resolve().parents[1]
     settings_html = (
         repo_root / "templates" / "partials" / "settings" / "standard" / "settings-search.html"
@@ -354,27 +354,34 @@ def test_settings_contract_duration_uses_shared_component_and_sync():
     settings_js = (
         repo_root / "templates" / "static" / "settings" / "shared" / "settings-page.js"
     ).read_text(encoding="utf-8")
+    anchored_popover_js = (
+        repo_root / "templates" / "static" / "common" / "anchored-popover.js"
+    ).read_text(encoding="utf-8")
     theme_widgets = (
         repo_root / "templates" / "static" / "theme" / "themes.widgets.css"
     ).read_text(encoding="utf-8")
 
-    assert 'class="conditional-preference-field"' in settings_html
+    assert 'class="choice-detail-popover"' in settings_html
+    assert 'popover="auto"' in settings_html
     assert 'id="contract_duration_row"' in settings_html
     assert settings_html.index('id="contract_duration_row"') < settings_html.index(
         'id="engagement_type_summary"'
     )
-    assert "__JOB_HUNTER_MIN_CONTRACT_MONTH_HELP__" in settings_html
-    assert "window.__JOB_HUNTER_ONBOARDING_PAGE_LABELS__" in settings_js
-    assert "syncContractDurationState" in settings_js
-    assert "updateMinContractMonthState" not in settings_js
-    assert "updateContractChipLabel" not in settings_js
+    assert "__JOB_HUNTER_MIN_CONTRACT_MONTH_HELP__" not in settings_html
+    assert 'class="choice-detail-popover__label"' in settings_html
+    assert "createAnchoredPopover" in settings_js
+    assert "updateContractChipLabel" in settings_js
+    assert "showPopover: cb.value === 'contract' && cb.checked" in settings_js
     assert "work_type_summary_contract_length_label" in settings_js
     assert "summary_any_length_label" in settings_js
-    assert ".conditional-preference-field" in theme_widgets
-    assert ".contract-duration-row" not in theme_widgets
+    assert ".choice-detail-popover" in theme_widgets
+    assert ":popover-open" in theme_widgets
+    assert "popover.showPopover()" in anchored_popover_js
+    assert "popover.hidePopover()" in anchored_popover_js
+    assert "bindSelectedChoicePopover" in anchored_popover_js
 
 
-def test_onboarding_contract_duration_uses_shared_component_and_sync():
+def test_onboarding_contract_duration_reuses_shared_anchored_popover():
     repo_root = Path(__file__).resolve().parents[1]
     onboarding_html = (
         repo_root / "templates" / "onboarding.html"
@@ -384,12 +391,15 @@ def test_onboarding_contract_duration_uses_shared_component_and_sync():
     page_js_text = page_js_path.read_text(encoding="utf-8")
     storage_js_text = storage_js_path.read_text(encoding="utf-8")
 
-    assert 'class="conditional-preference-field"' in onboarding_html
+    assert 'class="choice-detail-popover"' in onboarding_html
+    assert 'popover="auto"' in onboarding_html
     assert 'id="contract_duration_row"' in onboarding_html
+    assert "__JOB_HUNTER_MIN_CONTRACT_MONTH_HELP__" not in onboarding_html
+    assert 'class="choice-detail-popover__label"' in onboarding_html
+    assert "createAnchoredPopover" in page_js_text
+    assert "updateContractChipLabel" in page_js_text
     assert "syncContractDurationState" in page_js_text
-    assert "updateMinContractMonthState" not in page_js_text
-    assert "updateContractChipLabel" not in page_js_text
-    assert "syncContractDurationState" in storage_js_text
+    assert "showPopover: input.value === 'contract' && input.checked" in storage_js_text
     assert "minContractMonthsEl.addEventListener('change'" in storage_js_text
 
 

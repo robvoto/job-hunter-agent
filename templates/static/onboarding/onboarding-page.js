@@ -3,6 +3,7 @@ import * as onboardingCurrencyUi from '../common/currency-input.js';
 import * as onboardingLocationUi from '../common/location-options.js';
 import * as onboardingCapabilityUi from '../common/capability-ui.js';
 import { createController as createMessageBannerController } from '../common/message-banner.js';
+import { bindSelectedChoicePopover, createAnchoredPopover } from '../common/anchored-popover.js';
 import * as onboardingUpload from './onboarding-upload.js';
 
 const urlParams = new URLSearchParams(window.location.search);
@@ -82,6 +83,19 @@ const salaryLimits = window.__JOB_HUNTER_SALARY_LIMITS__;
 const minContractMonthOptions = window.__JOB_HUNTER_MIN_CONTRACT_MONTH_OPTIONS__;
 const minContractMonthValues = new Set(minContractMonthOptions.map((option) => String(option.value).trim()));
 const minContractMonthNoneLabel = String(window.__JOB_HUNTER_MIN_CONTRACT_MONTH_NONE_LABEL__).trim();
+const contractTypeInput = document.querySelector('input[name="engagement_type"][value="contract"]');
+const contractTypeChip = contractTypeInput?.closest('label');
+const contractDurationRow = document.getElementById('contract_duration_row');
+const contractDurationPopover = contractDurationRow && contractTypeChip
+  ? createAnchoredPopover({ popover: contractDurationRow, anchor: contractTypeChip })
+  : null;
+if (contractDurationPopover && contractTypeChip && contractTypeInput) {
+  bindSelectedChoicePopover({
+    controller: contractDurationPopover,
+    anchor: contractTypeChip,
+    input: contractTypeInput,
+  });
+}
 const onboardingPageTitleTierLabels = window.__JOB_HUNTER_TITLE_TIER_LABELS__;
 const onboardingGlobalSettings = window.__JOB_HUNTER_GLOBAL_SETTINGS__;
 if (!onboardingPageTitleTierLabels) {
@@ -400,23 +414,38 @@ export function updateSearchPreferenceSummaries() {
   }
 }
 
-export function syncContractDurationState() {
+function updateContractChipLabel() {
+  const chipSpan = contractTypeChip?.querySelector('span');
+  if (!chipSpan || !contractTypeInput) return;
+  if (!chipSpan.dataset.baseLabel) {
+    chipSpan.dataset.baseLabel = String(chipSpan.textContent || '').trim();
+  }
+  if (!contractTypeInput.checked) {
+    chipSpan.textContent = chipSpan.dataset.baseLabel;
+    return;
+  }
+  const value = String(refs.minContractMonths?.value || '').trim();
+  const detail = value ? `${value}+` : minContractMonthNoneLabel.toLocaleLowerCase();
+  chipSpan.textContent = `${chipSpan.dataset.baseLabel} (${detail})`;
+}
+
+export function syncContractDurationState({ showPopover = false } = {}) {
   if (!refs.minContractMonths) return;
   const selectedTypes = getOnboardingEngagementTypeValues();
   const contractSelected =
     selectedTypes.includes('contract') ||
     selectedTypes.includes('full_time_contract');
 
-  const contractRow = document.getElementById('contract_duration_row');
-  if (contractRow) {
-    contractRow.hidden = !contractSelected;
-  }
   refs.minContractMonths.disabled = !contractSelected;
 
   if (!contractSelected) {
     refs.minContractMonths.value = '';
+    contractDurationPopover?.hide();
+  } else if (showPopover) {
+    contractDurationPopover?.show();
   }
 
+  updateContractChipLabel();
   updateSearchPreferenceSummaries();
 }
 

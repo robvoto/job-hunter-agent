@@ -8,6 +8,32 @@ import os
 from playwright.sync_api import expect
 
 
+def _seed_contract_preferences(email: str) -> None:
+    from job_hunter_agent.auth import get_or_create_user
+    from job_hunter_agent.profile_store import (
+        ENGAGEMENT_TYPE_DEFAULT_VALUES,
+        KEY_ENGAGEMENT_TYPE,
+        KEY_MATCH_PREFS,
+        patch_profile,
+    )
+    from job_hunter_agent.user_context import set_user_id
+
+    admin_email = os.environ["JOB_HUNTER_ADMIN_EMAIL"]
+    user = get_or_create_user(email, admin_email)
+    set_user_id(user["user_id"])
+    try:
+        patch_profile(
+            {
+                KEY_MATCH_PREFS: {
+                    KEY_ENGAGEMENT_TYPE: ENGAGEMENT_TYPE_DEFAULT_VALUES,
+                    "min_contract_months": None,
+                }
+            }
+        )
+    finally:
+        set_user_id(None)
+
+
 def _seed_candidate_capabilities(email: str, capabilities: list[dict[str, object]]) -> None:
     from job_hunter_agent.auth import get_or_create_user
     from job_hunter_agent.profile_store import KEY_ONBOARDING_COMPLETE, patch_profile
@@ -25,6 +51,41 @@ def _seed_candidate_capabilities(email: str, capabilities: list[dict[str, object
         )
     finally:
         set_user_id(None)
+
+
+def test_contract_length_uses_light_dismiss_popover(candidate_page):
+    _seed_contract_preferences("candidate@e2e.test")
+
+    page = candidate_page
+    page.goto("/settings")
+
+    contract_input = page.locator('input[name="engagement_type"][value="contract"]')
+    contract_chip = page.locator('label.choice-card:has(input[name="engagement_type"][value="contract"])')
+    popover = page.locator("#contract_duration_row")
+
+    expect(contract_input).to_be_checked()
+    expect(contract_chip).to_contain_text("Contract (all)")
+    expect(popover).to_be_hidden()
+
+    contract_chip.click()
+    expect(popover).to_be_visible()
+    expect(contract_input).to_be_checked()
+    expect(popover.locator(".field-info-drawer")).to_have_count(0)
+
+    chip_box = contract_chip.bounding_box()
+    popover_box = popover.bounding_box()
+    field_box = page.locator("#engagement_type_label").locator("xpath=../..").bounding_box()
+    assert chip_box and popover_box and field_box
+    assert popover_box["width"] < field_box["width"] * 0.6
+    assert popover_box["height"] < chip_box["height"] * 3
+    is_below = popover_box["y"] >= chip_box["y"] + chip_box["height"]
+    is_above = popover_box["y"] + popover_box["height"] <= chip_box["y"]
+    assert is_below or is_above
+
+    page.locator("#work_mode_preference_label").click()
+    expect(popover).to_be_hidden()
+    expect(contract_input).to_be_checked()
+    expect(contract_chip).to_contain_text("Contract (all)")
 
 
 def test_settings_toggle_persists_after_reload(candidate_page):

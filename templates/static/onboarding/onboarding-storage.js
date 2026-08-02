@@ -179,7 +179,7 @@ document.querySelectorAll('input[name="engagement_type"]').forEach((input) => {
       if (!anyChecked) input.checked = true;
     }
     onboardingPage.hideStatus();
-    onboardingPage.syncContractDurationState();
+    onboardingPage.syncContractDurationState({ showPopover: input.value === 'contract' && input.checked });
     onboardingPage.updateCompensationVisibility();
     saveWizardState();
     scheduleSearchBasicsPersistence();
