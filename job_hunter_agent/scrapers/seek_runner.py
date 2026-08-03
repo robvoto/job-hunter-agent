@@ -39,6 +39,7 @@ from job_hunter_agent.paths import PLAYWRIGHT_USER_DATA_DIR
 from job_hunter_agent.run_control import (
     run_stop_requested,
     set_run_progress,
+    set_run_progress_state,
     step_through_enabled,
 )
 from job_hunter_agent.runtime_helpers import CLI_FLAG_DEBUG, has_cli_flag
@@ -88,8 +89,6 @@ class BotChallengeDetected(Exception):
 # SEEK's bot detection serves a challenge page instead of job listings in headless mode.
 _BROWSER_ARGS = ["--disable-blink-features=AutomationControlled"]
 _WEBDRIVER_INIT = "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-RUN_PROGRESS_TITLE_SEPARATOR = " @ "
-RUN_PROGRESS_ELAPSED_PREFIX = "elapsed "
 SEEK_HUMAN_VERIFICATION = "SEEK_HUMAN_VERIFICATION"
 SEEK_BOT_CHALLENGE = "SEEK_BOT_CHALLENGE"
 SEEK_TIMEOUT_NO_CARDS = "SEEK_TIMEOUT_NO_CARDS"
@@ -131,13 +130,6 @@ _SEEK_LIST_PAGE_BLOCK_MARKERS = (
     "temporarily unavailable",
     "request unsuccessful",
 )
-
-def _format_seek_elapsed(elapsed_s: float | int | None) -> str:
-    elapsed = max(int(float(elapsed_s or 0)), 0)
-    minutes, seconds = divmod(elapsed, 60)
-    if minutes:
-        return f"{minutes}m {seconds:02d}s"
-    return f"{seconds}s"
 
 
 def _classify_seek_list_page_text(text: str) -> str:
@@ -459,28 +451,28 @@ def _handle_seek_list_page_failure(
     return False
 
 
-def _seek_run_progress(
+
+def _seek_run_progress(page_num: int, total_pages: int) -> str:
+    """Return stable text progress; job detail and elapsed time are separate fields."""
+    return f"SEEK page {page_num}/{total_pages}"
+
+
+def _set_seek_run_progress(
     page_num: int,
     total_pages: int,
-    title: str = "",
-    company: str = "",
-    elapsed_s: float | int | None = None,
-) -> str:
-    progress = f"SEEK page {page_num}/{total_pages}"
-    title_text = str(title or "").strip()
-    company_text = str(company or "").strip()
-    elapsed_text = _format_seek_elapsed(elapsed_s)
-    if title_text and company_text:
-        return (
-            f"{progress}{RUN_PROGRESS_ITEM_SEPARATOR}"
-            f"{title_text}{RUN_PROGRESS_TITLE_SEPARATOR}{company_text}"
-            f"{RUN_PROGRESS_ITEM_SEPARATOR}{RUN_PROGRESS_ELAPSED_PREFIX}{elapsed_text}"
-        )
-    if title_text:
-        return f"{progress}{RUN_PROGRESS_ITEM_SEPARATOR}{title_text}{RUN_PROGRESS_ITEM_SEPARATOR}{RUN_PROGRESS_ELAPSED_PREFIX}{elapsed_text}"
-    if company_text:
-        return f"{progress}{RUN_PROGRESS_ITEM_SEPARATOR}{company_text}{RUN_PROGRESS_ITEM_SEPARATOR}{RUN_PROGRESS_ELAPSED_PREFIX}{elapsed_text}"
-    return f"{progress}{RUN_PROGRESS_ITEM_SEPARATOR}{RUN_PROGRESS_ELAPSED_PREFIX}{elapsed_text}"
+    *,
+    detail: str = "",
+) -> None:
+    """Emit SEEK page progress using already-normalized card detail only."""
+    set_run_progress_state(
+        _seek_run_progress(page_num, total_pages),
+        stage="source_collection",
+        source="seek",
+        headline=f"SEEK page {page_num} of {total_pages}",
+        detail=str(detail or "").strip(),
+        current=page_num,
+        total=total_pages,
+    )
 
 
 def _seek_nested_value(payload: object, key_names: tuple[str, ...]) -> object:
@@ -950,6 +942,11 @@ def seek_scrape_to_records(
     headless: bool,
     assisted_verification_enabled: bool,
 ) -> tuple:
+    """Collect, review and return SEEK records while publishing bounded stage progress.
+
+    Progress must reuse normalized card data and must not add browser calls that
+    could change or break scraping behaviour.
+    """
     audit_rows: List[dict] = []
     kept_records: List[dict] = []
     skill_observations: List[dict] = []
@@ -1141,12 +1138,28 @@ def seek_scrape_to_records(
                                     traceback.format_exc(),
                                 )
 
-                        set_run_progress(
-                            _seek_run_progress(
-                                current_page_num,
-                                configured_seek_max_pages,
-                                elapsed_s=time.monotonic() - target_t0,
-                            )
+                        # Reuse already-extracted card records for progress detail.
+                        # This avoids extra DOM queries that could fail or slow scraping.
+                        first_title = ""
+                        first_company = ""
+                        if card_records:
+                            first_record = card_records[0]
+                            first_title = str(first_record.get(rs.RECORD_TITLE_KEY) or "").strip()
+                            first_company = str(first_record.get(rs.RECORD_COMPANY_KEY) or "").strip()
+
+                        if first_title and first_company:
+                            detail_text = f"{first_title} at {first_company}"
+                        elif first_title:
+                            detail_text = first_title
+                        elif first_company:
+                            detail_text = first_company
+                        else:
+                            detail_text = ""
+
+                        _set_seek_run_progress(
+                            current_page_num,
+                            configured_seek_max_pages,
+                            detail=detail_text,
                         )
 
                         page_has_fresh_card = any(
@@ -1252,7 +1265,14 @@ def seek_scrape_to_records(
                             break
 
                         current_page_num += 1
-                set_run_progress("SEEK complete")
+                set_run_progress_state(
+                    "SEEK complete",
+                    stage="source_collection",
+                    source="seek",
+                    headline="SEEK",
+                    detail="Source collection complete",
+                    determinate=False,
+                )
             finally:
                 detail_session.close()
                 context.close()

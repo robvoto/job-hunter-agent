@@ -359,13 +359,18 @@ def test_workspace_welcome_overlay_is_not_gated_on_cv_text():
     assert "blocking_reason" in html_text
 
 
-def test_workspace_template_includes_stop_search_control():
-    html_path = Path(__file__).resolve().parents[1] / "templates" / "workspace.html"
-    html_text = html_path.read_text(encoding="utf-8")
+def test_workspace_uses_shared_wait_state_and_preserves_stop_control():
+    repo_root = Path(__file__).resolve().parents[1]
+    html_text = (repo_root / "templates" / "workspace.html").read_text(encoding="utf-8")
+    wait_state_js = (
+        repo_root / "templates" / "static" / "common" / "wait-state.js"
+    ).read_text(encoding="utf-8")
 
-    assert "ws_stop_search_btn" in html_text
+    assert "from '/static/common/wait-state.js'" in html_text
+    assert "splitProgressText" not in html_text
+    assert "renderProgressStatusMarkup" not in html_text
+    assert "ws_stop_search_btn" in wait_state_js
     assert "/api/run/stop" in html_text
-    assert "search_stop_label" in html_text
 
 
 def test_scrape_jobs_direct_stops_before_run_when_profile_incomplete(monkeypatch):
@@ -527,6 +532,21 @@ def test_run_status_and_stop_endpoint_report_stopping(monkeypatch):
     monkeypatch.setattr(workspace_api.srv, "_format_current_run_elapsed", lambda: "15s")
     monkeypatch.setattr(workspace_api.srv, "_current_run_elapsed_seconds", lambda: 15)
     monkeypatch.setattr(workspace_api, "get_run_progress", lambda: "SEEK page 1/3")
+    monkeypatch.setattr(
+        workspace_api,
+        "get_run_progress_detail",
+        lambda: {
+            "stage": "source_collection",
+            "source": "seek",
+            "headline": "SEEK page 1 of 3",
+            "detail": "Senior Analyst at Acme",
+            "current": 1,
+            "total": 3,
+            "item_current": None,
+            "item_total": None,
+            "determinate": True,
+        },
+    )
     monkeypatch.setattr(workspace_api, "run_stop_requested", lambda: True)
     stop_calls = []
     monkeypatch.setattr(workspace_api, "request_run_stop", lambda: stop_calls.append(True))
@@ -537,7 +557,9 @@ def test_run_status_and_stop_endpoint_report_stopping(monkeypatch):
     assert status_response.status_code == 200
     assert status_response.json()["status"] == "stopping"
     assert status_response.json()["stop_requested"] is True
-    assert status_response.json()["progress"] == "SEEK page 1/3\nelapsed 15s"
+    assert status_response.json()["progress"] == "SEEK page 1/3"
+    assert status_response.json()["progress_detail"]["source"] == "seek"
+    assert status_response.json()["progress_detail"]["detail"] == "Senior Analyst at Acme"
     assert status_response.json()["elapsed_seconds"] == 15
     assert status_response.json()["elapsed_text"] == "15s"
     assert status_response.json()["scheduler"]["active"] is True
@@ -547,7 +569,8 @@ def test_run_status_and_stop_endpoint_report_stopping(monkeypatch):
     assert stop_response.status_code == 200
     assert stop_response.json()["status"] == "stopping"
     assert stop_response.json()["stop_requested"] is True
-    assert stop_response.json()["progress"] == "SEEK page 1/3\nelapsed 15s"
+    assert stop_response.json()["progress"] == "SEEK page 1/3"
+    assert stop_response.json()["progress_detail"]["source"] == "seek"
     assert stop_response.json()["elapsed_seconds"] == 15
     assert stop_response.json()["elapsed_text"] == "15s"
     assert stop_calls == [True]

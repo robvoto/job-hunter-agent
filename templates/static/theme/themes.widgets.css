@@ -2313,3 +2313,129 @@
 @media (max-width: 640px) {
   .checkbox-list-group--dense .checkbox-list-options { grid-template-columns: 1fr; }
 }
+
+/* Shared structured search progress. The source identity comes from API data;
+   consumers must not infer it from the badge colour or displayed headline. */
+.source-status-badge {
+  display: inline-grid;
+  place-items: center;
+  width: var(--control-height-sm);
+  height: var(--control-height-sm);
+  flex: 0 0 var(--control-height-sm);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-muted);
+  color: var(--text-muted);
+  font-size: var(--text-role-chip-font-size);
+  font-weight: var(--text-role-button-font-weight);
+  line-height: 1;
+}
+
+.source-status-badge svg {
+  width: calc(var(--control-height-sm) / 2);
+  height: calc(var(--control-height-sm) / 2);
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.source-status-badge--linkedin {
+  border-color: var(--brand-linkedin-border);
+  background: var(--brand-linkedin-bg);
+  color: var(--brand-linkedin-text);
+}
+
+.source-status-badge--seek {
+  border-color: var(--brand-seek-border);
+  background: var(--brand-seek-bg);
+  color: var(--brand-seek-text);
+}
+
+.source-status-badge--apsjobs {
+  border-color: var(--state-info-border);
+  background: var(--state-info-bg);
+  color: var(--state-info-text);
+}
+
+.search-progress-source {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--surface-gap-md);
+  width: 100%;
+}
+
+.search-progress-source__copy {
+  min-width: 0;
+  display: grid;
+  gap: var(--control-space-2xs);
+}
+
+.search-progress-source__title,
+.search-progress-source__detail,
+.search-progress-elapsed {
+  margin: 0;
+}
+
+.search-progress-source__title {
+  color: var(--text-primary);
+  font-size: var(--text-role-body-compact-font-size);
+  font-weight: var(--text-role-button-font-weight);
+  line-height: var(--text-role-body-compact-line-height);
+  overflow-wrap: anywhere;
+}
+
+.search-progress-source__detail {
+  color: var(--text-muted);
+  font-size: var(--help-copy-font-size);
+  line-height: var(--help-copy-line-height);
+  overflow-wrap: anywhere;
+}
+
+.jh-progress {
+  position: relative;
+  width: 100%;
+  height: var(--control-space-sm);
+  overflow: hidden;
+  border-radius: var(--control-radius-pill);
+  background: color-mix(in srgb, var(--text-muted) 16%, var(--bg-muted));
+}
+
+.jh-progress__bar {
+  display: block;
+  width: var(--progress-value);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.jh-progress--indeterminate::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  width: 38%;
+  border-radius: inherit;
+  background: var(--accent);
+  animation: jhProgressIndeterminate 1.4s ease-in-out infinite;
+}
+
+.search-progress-elapsed {
+  color: var(--text-muted);
+  font-size: var(--help-copy-font-size);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--help-copy-line-height);
+}
+
+@keyframes jhProgressIndeterminate {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(300%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jh-progress--indeterminate::after {
+    animation: none;
+    inset-inline-start: 31%;
+  }
+}

@@ -10,23 +10,16 @@ from job_hunter_agent import workspace_renderer, workspace_service
 from job_hunter_agent.io_utils import load_job_history, load_review_data, load_run_stats
 from job_hunter_agent.paths import RESULTS_TEMPLATE_PATH, UI_LABELS_PATH, get_workspace_results_path
 from job_hunter_agent.routes.responses import json_response
-from job_hunter_agent.run_control import get_run_progress, request_run_stop, run_stop_requested
+from job_hunter_agent.run_control import (
+    get_run_progress,
+    get_run_progress_detail,
+    request_run_stop,
+    run_stop_requested,
+)
 from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
 
 router = APIRouter()
 
-
-def _progress_with_elapsed(progress: str | None, elapsed_text: str) -> str | None:
-    progress_text = str(progress or "").strip()
-    elapsed_value = str(elapsed_text or "").strip()
-    if not elapsed_value:
-        return progress_text or None
-    if not progress_text:
-        return f"elapsed {elapsed_value}"
-    lines = [line.strip() for line in progress_text.splitlines() if line.strip()]
-    if lines and lines[-1].lower().startswith("elapsed "):
-        return progress_text
-    return f"{progress_text}\nelapsed {elapsed_value}"
 
 
 def _workspace_render_source_paths() -> tuple[Path, ...]:
@@ -110,13 +103,18 @@ def api_run_stats():  # type: ignore[no-untyped-def]
 
 @router.get("/api/run-status")
 def api_run_status():  # type: ignore[no-untyped-def]
+    """Return the current run lifecycle and independently structured progress fields.
 
+    ``progress`` remains human-readable text for logs and simple consumers;
+    ``progress_detail`` and elapsed fields are the canonical UI inputs.
+    """
     last_run = srv._read_last_run_timestamp()
     running = srv._is_run_in_progress()
     stopping = running and run_stop_requested()
     elapsed_text = srv._format_current_run_elapsed()
     elapsed_seconds = srv._current_run_elapsed_seconds()
-    progress = _progress_with_elapsed(get_run_progress(), elapsed_text)
+    progress = get_run_progress()
+    progress_detail = get_run_progress_detail()
     scheduler = srv._read_scheduler_status()
     if running or stopping:
         scheduler["active"] = True
@@ -127,6 +125,7 @@ def api_run_status():  # type: ignore[no-untyped-def]
             "status": "stopping" if stopping else "running" if running else "idle",
             "stop_requested": stopping,
             "progress": progress or None,
+            "progress_detail": progress_detail,
             "elapsed_seconds": elapsed_seconds,
             "elapsed_text": elapsed_text or None,
             "last_run_at": last_run,
@@ -138,15 +137,25 @@ def api_run_status():  # type: ignore[no-untyped-def]
 
 @router.post("/api/run/stop")
 def api_run_stop():  # type: ignore[no-untyped-def]
-
+    """Request a cooperative stop and return the same progress contract as run status."""
     if not srv._is_run_in_progress():
-        return json_response({"ok": True, "status": "idle", "stop_requested": False})
+        return json_response(
+            {
+                "ok": True,
+                "status": "idle",
+                "stop_requested": False,
+                "progress": get_run_progress() or None,
+                "progress_detail": get_run_progress_detail(),
+                "elapsed_seconds": srv._current_run_elapsed_seconds(),
+                "elapsed_text": srv._format_current_run_elapsed() or None,
+            }
+        )
 
     request_run_stop()
     last_run = srv._read_last_run_timestamp()
     elapsed_text = srv._format_current_run_elapsed()
     elapsed_seconds = srv._current_run_elapsed_seconds()
-    progress = _progress_with_elapsed(get_run_progress(), elapsed_text)
+    progress = get_run_progress()
 
     return json_response(
         {
@@ -154,6 +163,7 @@ def api_run_stop():  # type: ignore[no-untyped-def]
             "status": "stopping",
             "stop_requested": True,
             "progress": progress or None,
+            "progress_detail": get_run_progress_detail(),
             "elapsed_seconds": elapsed_seconds,
             "elapsed_text": elapsed_text or None,
             "last_run_at": last_run,

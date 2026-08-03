@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-
+import pytest
 from job_hunter_agent import run_control
 
 
@@ -31,3 +31,227 @@ def test_set_run_progress_skips_duplicate_progress_log(caplog):
     run_control.set_run_progress("Starting SEEK")
 
     assert caplog.records == []
+
+
+def test_set_run_progress_state_stores_and_returns_text():
+    run_control.clear_run_progress()
+    run_control.set_run_progress_state(
+        "SEEK page 1/3",
+        stage="source_collection",
+        source="seek",
+        headline="SEEK page 1 of 3",
+        detail="Scanning job listings",
+        current=1,
+        total=3,
+    )
+    assert run_control.get_run_progress() == "SEEK page 1/3"
+    detail = run_control.get_run_progress_detail()
+    assert detail is not None
+    assert detail["source"] == "seek"
+    assert detail["stage"] == "source_collection"
+    assert detail["current"] == 1
+    assert detail["total"] == 3
+    assert detail["determinate"] is True
+
+
+def test_get_run_progress_detail_returns_defensive_copy():
+    run_control.clear_run_progress()
+    run_control.set_run_progress_state(
+        "LinkedIn target 1/2",
+        stage="source_collection",
+        source="linkedin",
+        current=1,
+        total=2,
+    )
+    detail1 = run_control.get_run_progress_detail()
+    assert detail1 is not None
+    detail1["current"] = 999
+    detail1["source"] = "hacked"
+    detail2 = run_control.get_run_progress_detail()
+    assert detail2["current"] == 1
+    assert detail2["source"] == "linkedin"
+
+
+def test_set_run_progress_state_rejects_invalid_source():
+    run_control.clear_run_progress()
+    with pytest.raises(ValueError, match="Invalid progress source"):
+        run_control.set_run_progress_state(
+            "test",
+            stage="starting",
+            source="invalid_source",
+        )
+
+
+def test_set_run_progress_state_rejects_invalid_stage():
+    run_control.clear_run_progress()
+    with pytest.raises(ValueError, match="Invalid progress stage"):
+        run_control.set_run_progress_state(
+            "test",
+            stage="invalid_stage",
+            source="seek",
+        )
+
+
+def test_set_run_progress_state_rejects_negative_current():
+    run_control.clear_run_progress()
+    with pytest.raises(ValueError, match="must be non-negative"):
+        run_control.set_run_progress_state(
+            "test",
+            stage="source_collection",
+            source="seek",
+            current=-1,
+            total=3,
+        )
+
+
+def test_set_run_progress_state_rejects_negative_total():
+    run_control.clear_run_progress()
+    with pytest.raises(ValueError, match="must be non-negative"):
+        run_control.set_run_progress_state(
+            "test",
+            stage="source_collection",
+            source="seek",
+            current=1,
+            total=-1,
+        )
+
+
+def test_set_run_progress_state_rejects_current_greater_than_total():
+    run_control.clear_run_progress()
+    with pytest.raises(ValueError, match="must not exceed total"):
+        run_control.set_run_progress_state(
+            "test",
+            stage="source_collection",
+            source="seek",
+            current=5,
+            total=3,
+        )
+
+
+def test_set_run_progress_state_requires_item_count_pair():
+    run_control.clear_run_progress()
+    with pytest.raises(ValueError, match="must be supplied together"):
+        run_control.set_run_progress_state(
+            "test",
+            stage="source_collection",
+            source="linkedin",
+            item_current=1,
+        )
+
+
+def test_set_run_progress_state_rejects_determinate_without_valid_totals():
+    run_control.clear_run_progress()
+    with pytest.raises(ValueError, match="determinate=True requires valid current and total"):
+        run_control.set_run_progress_state(
+            "test",
+            stage="source_collection",
+            source="seek",
+            determinate=True,
+        )
+
+
+def test_clear_run_progress_resets_text_and_detail():
+    run_control.clear_run_progress()
+    run_control.set_run_progress_state(
+        "APSJobs complete",
+        stage="source_collection",
+        source="apsjobs",
+        current=1,
+        total=1,
+    )
+    assert run_control.get_run_progress() == "APSJobs complete"
+    assert run_control.get_run_progress_detail() is not None
+    run_control.clear_run_progress()
+    assert run_control.get_run_progress() == ""
+    assert run_control.get_run_progress_detail() is None
+
+
+
+def test_set_run_progress_state_accepts_all_valid_sources():
+    run_control.clear_run_progress()
+    for source in ("seek", "linkedin", "apsjobs", "generic"):
+        run_control.set_run_progress_state(
+            f"Testing {source}",
+            stage="starting",
+            source=source,
+        )
+        detail = run_control.get_run_progress_detail()
+        assert detail["source"] == source
+    run_control.clear_run_progress()
+
+
+def test_set_run_progress_state_accepts_all_valid_stages():
+    run_control.clear_run_progress()
+    for stage in (
+        "starting",
+        "source_collection",
+        "job_detail",
+        "deduplication",
+        "relevance_analysis",
+        "scoring",
+        "saving",
+        "finalising",
+        "verification",
+        "error",
+    ):
+        run_control.set_run_progress_state(
+            f"Testing {stage}",
+            stage=stage,
+            source="seek",
+        )
+        detail = run_control.get_run_progress_detail()
+        assert detail["stage"] == stage
+    run_control.clear_run_progress()
+
+
+
+def test_set_run_progress_state_determinate_false_without_totals():
+    run_control.clear_run_progress()
+    run_control.set_run_progress_state(
+        "Finalising results",
+        stage="finalising",
+        source=None,
+        determinate=False,
+    )
+    detail = run_control.get_run_progress_detail()
+    assert detail["stage"] == "finalising"
+    assert detail["determinate"] is False
+    assert detail["current"] is None
+    assert detail["total"] is None
+    run_control.clear_run_progress()
+
+
+def test_strict_integer_rejects_floats():
+    run_control.clear_run_progress()
+    with pytest.raises(ValueError, match="must be an integer"):
+        run_control.set_run_progress_state(
+            "test",
+            stage="source_collection",
+            source="seek",
+            current=2.0,
+            total=3,
+        )
+
+
+def test_strict_integer_rejects_numeric_strings():
+    run_control.clear_run_progress()
+    with pytest.raises(ValueError, match="must be an integer"):
+        run_control.set_run_progress_state(
+            "test",
+            stage="source_collection",
+            source="seek",
+            current="2",
+            total=3,
+        )
+
+
+def test_strict_integer_rejects_booleans():
+    run_control.clear_run_progress()
+    with pytest.raises(ValueError, match="must be an integer"):
+        run_control.set_run_progress_state(
+            "test",
+            stage="source_collection",
+            source="seek",
+            current=True,
+            total=3,
+        )

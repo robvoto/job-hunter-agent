@@ -433,11 +433,7 @@ def test_upgrade_fixes_stale_ui_labels_missing_shared_labels(isolated_db):
             "add_button_title": "+",
             "search_wait_copy": "Wait",
             "search_wait_why_label": "Why this takes time",
-            "search_wait_why_intro": "Why",
-            "search_wait_why_browser": "Browser",
-            "search_wait_why_pacing": "Pacing",
-            "search_wait_why_details": "Details",
-            "search_wait_why_scoring": "Scoring",
+            "search_wait_why_copy": "Why",
             "search_running_title": "Search in progress",
             "search_running_copy": "Copy",
             "search_starting_title": "Starting search",
@@ -447,7 +443,8 @@ def test_upgrade_fixes_stale_ui_labels_missing_shared_labels(isolated_db):
             "search_running_subcopy": "Copy",
             "search_starting_subcopy": "Copy",
             "search_stop_label": "Stop search",
-            "search_progress_prefix": "Current step:",
+            "search_elapsed_suffix": "elapsed",
+            "search_progress_aria_suffix": "stage progress",
             "search_stopping_title": "Stopping search",
             "search_stopping_copy": "Copy",
             "search_stopping_subcopy": "Copy",
@@ -460,6 +457,7 @@ def test_upgrade_fixes_stale_ui_labels_missing_shared_labels(isolated_db):
 
     html = build_bootstrap_script()
     assert "__JOB_HUNTER_SHARED_UI_LABELS__" in html
+    assert "__JOB_HUNTER_SEARCH_SOURCE_LABELS__" in html
 
 
 def test_upgrade_fixes_stale_ui_labels_missing_workspace_labels(isolated_db):

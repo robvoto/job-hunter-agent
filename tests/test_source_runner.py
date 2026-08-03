@@ -699,11 +699,11 @@ def test_run_enabled_sources_fails_clearly_when_no_sources_are_enabled():
 
 def test_parallel_runner_updates_progress_to_wait_for_pending_source(monkeypatch):
     context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
-    progress_messages: list[str] = []
+    progress_states: list[tuple[str, dict]] = []
     seek_release = threading.Event()
 
-    def fake_progress(message: str) -> None:
-        progress_messages.append(message)
+    def fake_progress_state(message: str, **detail) -> None:
+        progress_states.append((message, detail))
 
     def slow_seek(ctx):
         seek_release.wait(timeout=2)
@@ -712,7 +712,7 @@ def test_parallel_runner_updates_progress_to_wait_for_pending_source(monkeypatch
     def fast_linkedin(ctx):
         return _li_result(kept_records=[{"job_key": "linkedin:1"}])
 
-    monkeypatch.setattr(source_runner, "set_run_progress", fake_progress)
+    monkeypatch.setattr(source_runner, "set_run_progress_state", fake_progress_state)
     monkeypatch.setattr(source_runner, "_run_seek_source", slow_seek)
     monkeypatch.setattr(source_runner, "_run_linkedin_source", fast_linkedin)
 
@@ -721,13 +721,21 @@ def test_parallel_runner_updates_progress_to_wait_for_pending_source(monkeypatch
 
     deadline = time.time() + 2
     while time.time() < deadline:
-        if any(message == "Waiting for SEEK\nLinkedIn complete" for message in progress_messages):
+        if any(message == "Waiting for SEEK\nLinkedIn complete" for message, _ in progress_states):
             break
         time.sleep(0.01)
     seek_release.set()
     runner.join(timeout=2)
 
-    assert "Waiting for SEEK\nLinkedIn complete" in progress_messages
+    waiting_states = [
+        detail
+        for message, detail in progress_states
+        if message == "Waiting for SEEK\nLinkedIn complete"
+    ]
+    assert waiting_states
+    assert waiting_states[-1]["stage"] == "source_collection"
+    assert waiting_states[-1]["source"] == "generic"
+    assert waiting_states[-1]["determinate"] is False
 
 
 def test_run_seek_source_records_warning_on_failure(monkeypatch):

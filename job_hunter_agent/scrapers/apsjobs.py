@@ -39,7 +39,7 @@ from job_hunter_agent.record_schema import (
     RECORD_SALARY_KEY,
     RECORD_TITLE_KEY,
 )
-from job_hunter_agent.run_control import run_stop_requested, set_run_progress
+from job_hunter_agent.run_control import run_stop_requested, set_run_progress, set_run_progress_state
 from job_hunter_agent.scrapers.base import (
     BaseJobScraper,
     _build_initial_source_metadata,
@@ -120,7 +120,6 @@ _APSJOBS_LOCATION_TO_STATE = {
     "wa": "WA",
     "perth": "WA",
 }
-RUN_PROGRESS_ELAPSED_PREFIX = "elapsed "
 
 
 def _first_non_empty(*values: object) -> str:
@@ -210,33 +209,43 @@ def _looks_like_job_link(href: str, text: str) -> bool:
     )
 
 
-def _format_apsjobs_elapsed(elapsed_s: float | int | None) -> str:
-    if elapsed_s is None:
-        return "0s"
-    total_seconds = max(0, int(round(float(elapsed_s))))
-    minutes, seconds = divmod(total_seconds, 60)
-    hours, minutes = divmod(minutes, 60)
-    if hours:
-        return f"{hours}h {minutes}m {seconds}s"
-    if minutes:
-        return f"{minutes}m {seconds}s"
-    return f"{seconds}s"
 
 
 def _format_apsjobs_run_progress(
     target_index: int,
     total_targets: int,
     scanned_titles: list[str] | None = None,
-    elapsed_s: float | int | None = None,
 ) -> str:
-    step = f"APSJobs search {target_index}/{total_targets}"
-    lines = [step]
-    for title in scanned_titles or ():
-        normalized_title = compact_whitespace(title)
-        if normalized_title:
-            lines.append(normalized_title)
-    lines.append(f"{RUN_PROGRESS_ELAPSED_PREFIX}{_format_apsjobs_elapsed(elapsed_s)}")
+    """Return stable text progress without elapsed metadata."""
+    lines = [f"APSJobs search {target_index}/{total_targets}"]
+    lines.extend(
+        title
+        for raw_title in scanned_titles or ()
+        if (title := compact_whitespace(raw_title))
+    )
     return "\n".join(lines)
+
+
+def _set_apsjobs_run_progress(
+    target_index: int,
+    total_targets: int,
+    scanned_titles: list[str] | None = None,
+) -> None:
+    """Emit the current APS Jobs target and latest visible listing title."""
+    normalized_titles = [
+        title
+        for raw_title in scanned_titles or ()
+        if (title := compact_whitespace(raw_title))
+    ]
+    set_run_progress_state(
+        _format_apsjobs_run_progress(target_index, total_targets, normalized_titles),
+        stage="source_collection",
+        source="apsjobs",
+        headline=f"APS Jobs search {target_index} of {total_targets}",
+        detail=normalized_titles[-1] if normalized_titles else "",
+        current=target_index,
+        total=total_targets,
+    )
 
 
 def _collect_candidate_links(page, base_url: str, results_wanted: int) -> list[dict[str, str]]:
@@ -462,6 +471,7 @@ class APSJobsScraper(BaseJobScraper):
     source_name = SOURCE_APSJOBS
 
     def scrape(self) -> tuple:
+        """Run APS Jobs targets and expose only the latest listing as UI detail."""
         kept_records: List[dict] = []
         audit_rows: List[dict] = []
         skill_observations: List[dict] = []
@@ -514,14 +524,7 @@ class APSJobsScraper(BaseJobScraper):
                             break
                         target_tag = f"[APSJobs target {target_index}/{total_targets}]"
                         target_state = _normalize_apsjobs_location_filter(target["location"])
-                        set_run_progress(
-                            _format_apsjobs_run_progress(
-                                target_index,
-                                total_targets,
-                                scanned_titles=scanned_titles,
-                                elapsed_s=monotonic() - started_at,
-                            )
-                        )
+                        _set_apsjobs_run_progress(target_index, total_targets, scanned_titles)
                         logger.info(
                             "\n"
                             "================================================================\n"
@@ -618,14 +621,7 @@ class APSJobsScraper(BaseJobScraper):
                                     break
                                 scanned_title = compact_whitespace(link.get("text") or "") or "APSJobs listing"
                                 scanned_titles.append(scanned_title)
-                                set_run_progress(
-                                    _format_apsjobs_run_progress(
-                                        target_index,
-                                        total_targets,
-                                        scanned_titles=scanned_titles,
-                                        elapsed_s=monotonic() - started_at,
-                                    )
-                                )
+                                _set_apsjobs_run_progress(target_index, total_targets, scanned_titles)
                                 detail_page = context.new_page()
                                 try:
                                     detail_page.goto(link["url"], wait_until="domcontentloaded")
@@ -639,14 +635,7 @@ class APSJobsScraper(BaseJobScraper):
                                     resolved_title = compact_whitespace(payload.get("title") or "")
                                     if resolved_title and resolved_title != scanned_titles[-1]:
                                         scanned_titles[-1] = resolved_title
-                                        set_run_progress(
-                                            _format_apsjobs_run_progress(
-                                                target_index,
-                                                total_targets,
-                                                scanned_titles=scanned_titles,
-                                                elapsed_s=monotonic() - started_at,
-                                            )
-                                        )
+                                        _set_apsjobs_run_progress(target_index, total_targets, scanned_titles)
                                 finally:
                                     detail_page.close()
 
@@ -742,5 +731,12 @@ class APSJobsScraper(BaseJobScraper):
             )
         )
         logger.info("[APSJobs] done | kept=%d audit=%d", len(kept_records), len(audit_rows))
-        set_run_progress("APSJobs complete")
+        set_run_progress_state(
+            "APSJobs complete",
+            stage="source_collection",
+            source="apsjobs",
+            headline="APS Jobs",
+            detail="Source collection complete",
+            determinate=False,
+        )
         return kept_records, audit_rows, skill_observations

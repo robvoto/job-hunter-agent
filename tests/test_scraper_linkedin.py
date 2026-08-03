@@ -575,3 +575,34 @@ def test_fetch_jobspy_with_timeout_uses_timeout_worker(monkeypatch):
 
     assert captured["timeout_seconds"] == 20.0
     assert captured["search_params"]["search_term"] == "project manager"
+
+
+def test_linkedin_progress_producer_emits_target_and_job_counts(monkeypatch):
+    from job_hunter_agent.scrapers import linkedin as linkedin_module
+
+    captured: list[tuple[str, dict]] = []
+    monkeypatch.setattr(
+        linkedin_module,
+        "set_run_progress_state",
+        lambda text, **detail: captured.append((text, detail)),
+    )
+
+    linkedin_module._set_linkedin_run_progress(
+        2,
+        7,
+        row_index=4,
+        total_rows=6,
+    )
+
+    text, detail = captured[-1]
+    assert text == "LinkedIn target 2/7\nReviewing job 4/6"
+    assert detail == {
+        "stage": "source_collection",
+        "source": "linkedin",
+        "headline": "LinkedIn target 2 of 7",
+        "detail": "Reviewing job 4 of 6",
+        "current": 2,
+        "total": 7,
+        "item_current": 4,
+        "item_total": 6,
+    }

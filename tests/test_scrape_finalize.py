@@ -90,6 +90,12 @@ def test_finalize_scrape_run_writes_outputs(monkeypatch, tmp_path, capsys, caplo
     workspace_path = tmp_path / "workspace.html"
 
     calls: list[tuple[str, object]] = []
+    progress_states: list[tuple[str, dict]] = []
+    monkeypatch.setattr(
+        scrape_finalize,
+        "set_run_progress_state",
+        lambda text, **detail: progress_states.append((text, detail)),
+    )
 
     with db_conn() as conn:
         conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", ("test_user",))
@@ -190,6 +196,15 @@ def test_finalize_scrape_run_writes_outputs(monkeypatch, tmp_path, capsys, caplo
     assert "Saved 2 jobs to" in log_text
 
     assert "Saved 1 audit rows to" in log_text
+
+    assert [detail["headline"] for _, detail in progress_states] == [
+        "Finalising results",
+        "Saving merged results",
+        "Building workspace",
+        "Saving run summary",
+    ]
+    assert all(detail["source"] == "generic" for _, detail in progress_states)
+    assert all(detail["determinate"] is False for _, detail in progress_states)
 
 
 def test_finalize_scrape_run_builds_source_breakdown_from_decisions(monkeypatch, tmp_path):

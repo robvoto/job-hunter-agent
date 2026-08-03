@@ -15,6 +15,7 @@ from job_hunter_agent.run_control import (
     request_run_stop,
     run_stop_requested,
     set_run_progress,
+    set_run_progress_state,
     step_through_enabled,
 )
 from job_hunter_agent.source_errors import PartialSourceResultsError
@@ -80,7 +81,13 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
     job_history: dict[str, Any] = dict(context.job_history)
     llm_cache: dict[str, Any] = dict(context.llm_cache)
     try:
-        set_run_progress("Starting SEEK")
+        set_run_progress_state(
+            "Starting SEEK",
+            stage="starting",
+            source="seek",
+            headline="Starting SEEK",
+            determinate=False,
+        )
         search_targets = build_seek_search_targets(
             context.profile, context.configured_date_range, context.sort_newest_first
         )
@@ -292,7 +299,13 @@ def _run_linkedin_source(context: ScrapeRunContext) -> SourceRunResult:
     job_history: dict[str, Any] = dict(context.job_history)
     llm_cache: dict[str, Any] = dict(context.llm_cache)
     try:
-        set_run_progress("Starting LinkedIn")
+        set_run_progress_state(
+            "Starting LinkedIn",
+            stage="starting",
+            source="linkedin",
+            headline="Starting LinkedIn",
+            determinate=False,
+        )
         from job_hunter_agent.scrapers.linkedin import LinkedInScraper  # noqa: PLC0415
 
         li = LinkedInScraper(
@@ -374,10 +387,17 @@ def _run_linkedin_source(context: ScrapeRunContext) -> SourceRunResult:
 
 
 def _run_apsjobs_source(context: ScrapeRunContext) -> SourceRunResult:
+    """Run APS Jobs with isolated mutable state for safe parallel collection."""
     job_history: dict[str, Any] = dict(context.job_history)
     llm_cache: dict[str, Any] = dict(context.llm_cache)
     try:
-        set_run_progress("Starting APSJobs")
+        set_run_progress_state(
+            "Starting APSJobs",
+            stage="starting",
+            source="apsjobs",
+            headline="Starting APS Jobs",
+            determinate=False,
+        )
         scraper = APSJobsScraper(
             profile=context.profile,
             llm_cache=llm_cache,
@@ -723,8 +743,13 @@ def _run_sources_in_parallel(
                         if pending_source in pending_source_set
                     ]
                     if pending:
-                        set_run_progress(
-                            _parallel_completion_progress(source, remaining_sources)
+                        progress_text = _parallel_completion_progress(source, remaining_sources)
+                        set_run_progress_state(
+                            progress_text,
+                            stage="source_collection",
+                            source="generic",
+                            headline=progress_text,
+                            determinate=False,
                         )
                 except Exception as exc:
                     logger.exception(
@@ -790,7 +815,14 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
         parallel_labels = list_to_phrase(
             [get_source_display_label(source) for source in enabled_source_order]
         )
-        set_run_progress(f"{parallel_labels} running in parallel")
+        progress_text = f"{parallel_labels} running in parallel"
+        set_run_progress_state(
+            progress_text,
+            stage="starting",
+            source="generic",
+            headline=progress_text,
+            determinate=False,
+        )
         results = _run_sources_in_parallel(context, enabled_source_order)
     elif enabled_source_order:
         source = enabled_source_order[0]

@@ -30,7 +30,7 @@ from job_hunter_agent.paths import OUTPUT_DIR, get_workspace_results_path
 from job_hunter_agent.posting_utils import parse_timestamp
 from job_hunter_agent.review_insights import build_review_data
 from job_hunter_agent.run_context import ScrapeRunContext
-from job_hunter_agent.run_control import run_stop_requested, set_run_progress
+from job_hunter_agent.run_control import run_stop_requested, set_run_progress_state
 from job_hunter_agent.source_registry import get_source_display_label
 from job_hunter_agent.system_warnings import (
     make_system_warning_fingerprint,
@@ -486,14 +486,22 @@ def finalize_scrape_run(
     audit_rows: list[dict],
     skill_observations: list[dict],
 ) -> str:
-    """Persist scrape outputs and rebuild the workspace HTML."""
+    """Persist outputs, rebuild the workspace, and publish indeterminate internal stages."""
 
     from job_hunter_agent.logging_utils import get_human_logger
     from job_hunter_agent.llm_gate import get_session_cost_usd
     from job_hunter_agent.source_learning import get_llm_truncation_count
 
     human_logger = get_human_logger()
-    set_run_progress("Finalising results\nSource collection complete")
+    # Internal stages have no reliable total, so they remain indeterminate.
+    set_run_progress_state(
+        "Finalising results\nSource collection complete",
+        stage="finalising",
+        source="generic",
+        headline="Finalising results",
+        detail="Source collection complete",
+        determinate=False,
+    )
     kept_records = deduplicate_across_sources(kept_records)
 
     pool = _load_workspace_pool()
@@ -579,7 +587,14 @@ def finalize_scrape_run(
         return str(workspace_path)
 
     merged_pool = _merge_into_pool(pool, kept_records)
-    set_run_progress("Saving merged results\nPreparing workspace data")
+    set_run_progress_state(
+        "Saving merged results\nPreparing workspace data",
+        stage="saving",
+        source="generic",
+        headline="Saving merged results",
+        detail="Preparing workspace data",
+        determinate=False,
+    )
 
     _save_workspace_pool(merged_pool)
 
@@ -623,7 +638,14 @@ def finalize_scrape_run(
         context.profile,
         context.dashboard_min_score,
     )
-    set_run_progress("Building workspace\nRendering refreshed results")
+    set_run_progress_state(
+        "Building workspace\nRendering refreshed results",
+        stage="finalising",
+        source="generic",
+        headline="Building workspace",
+        detail="Rendering refreshed results",
+        determinate=False,
+    )
 
     visible_current_records = len(workspace_records.get("current_records", []))
     run_stats["visible_shortlist_count"] = len(workspace_records.get("shortlist_records", []))
@@ -675,7 +697,14 @@ def finalize_scrape_run(
     _record_run_stats_warnings(run_stats)
     write_run_stats(run_stats)
 
-    set_run_progress("Saving run summary\nWriting review data")
+    set_run_progress_state(
+        "Saving run summary\nWriting review data",
+        stage="saving",
+        source="generic",
+        headline="Saving run summary",
+        detail="Writing review data",
+        determinate=False,
+    )
     write_review_data(build_review_data(audit_rows, skill_observations, context.profile))
 
     _log_run_summary(run_stats, audit_rows)

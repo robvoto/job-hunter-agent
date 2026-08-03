@@ -22,40 +22,31 @@
   <div class="ws-profile-status-mount" id="ws_profile_status_mount" hidden></div>
   <div id="results-mount"></div>
 
-  <script>
+  <script type="module">
+    import {
+      createController,
+      SEARCH_WAIT_COPY,
+      SEARCH_RUNNING_TITLE,
+      SEARCH_RUNNING_COPY,
+      SEARCH_STARTING_TITLE,
+      SEARCH_STARTING_COPY,
+      SEARCH_REFRESHING_TITLE,
+      SEARCH_REFRESHING_COPY,
+      SEARCH_RUNNING_SUBCOPY,
+      SEARCH_STARTING_SUBCOPY,
+      SEARCH_STOPPING_TITLE,
+      SEARCH_STOPPING_COPY,
+      SEARCH_STOPPING_SUBCOPY,
+    } from '/static/common/wait-state.js';
+
     const wsFlashMount = document.getElementById('ws_flash_mount');
     const wsWaitMount = document.getElementById('ws_wait_mount');
     const wsProfileStatusMount = document.getElementById('ws_profile_status_mount');
     const resultsMount = document.getElementById('results-mount');
-    const SHARED_UI_LABELS = window.__JOB_HUNTER_SHARED_UI_LABELS__ || {};
-    const SEARCH_WAIT_COPY = String(SHARED_UI_LABELS.search_wait_copy || '').trim();
-    const SEARCH_WAIT_WHY_LABEL = String(SHARED_UI_LABELS.search_wait_why_label || '').trim();
-    const SEARCH_WAIT_WHY_INTRO = String(SHARED_UI_LABELS.search_wait_why_intro || '').trim();
-    const SEARCH_WAIT_WHY_BROWSER = String(SHARED_UI_LABELS.search_wait_why_browser || '').trim();
-    const SEARCH_WAIT_WHY_PACING = String(SHARED_UI_LABELS.search_wait_why_pacing || '').trim();
-    const SEARCH_WAIT_WHY_DETAILS = String(SHARED_UI_LABELS.search_wait_why_details || '').trim();
-    const SEARCH_WAIT_WHY_SCORING = String(SHARED_UI_LABELS.search_wait_why_scoring || '').trim();
-    const SEARCH_WAIT_WHY_JOB_RUN = String(SHARED_UI_LABELS.search_wait_why_job_run || '').trim();
-    const SEARCH_RUNNING_TITLE = String(SHARED_UI_LABELS.search_running_title || '').trim();
-    const SEARCH_RUNNING_COPY = String(SHARED_UI_LABELS.search_running_copy || '').trim();
-    const SEARCH_STARTING_TITLE = String(SHARED_UI_LABELS.search_starting_title || '').trim();
-    const SEARCH_STARTING_COPY = String(SHARED_UI_LABELS.search_starting_copy || '').trim();
-    const SEARCH_REFRESHING_TITLE = String(SHARED_UI_LABELS.search_refreshing_title || '').trim();
-    const SEARCH_REFRESHING_COPY = String(SHARED_UI_LABELS.search_refreshing_copy || '').trim();
-    const SEARCH_RUNNING_SUBCOPY = String(SHARED_UI_LABELS.search_running_subcopy || '').trim();
-    const SEARCH_STARTING_SUBCOPY = String(SHARED_UI_LABELS.search_starting_subcopy || '').trim();
-    const SEARCH_STOP_LABEL = String(SHARED_UI_LABELS.search_stop_label || '').trim();
-    const SEARCH_PROGRESS_PREFIX = String(SHARED_UI_LABELS.search_progress_prefix || '').trim();
-    const SEARCH_ELAPSED_PREFIX = String(SHARED_UI_LABELS.search_elapsed_prefix || '').trim();
-    const SEARCH_STOPPING_TITLE = String(SHARED_UI_LABELS.search_stopping_title || '').trim();
-    const SEARCH_STOPPING_COPY = String(SHARED_UI_LABELS.search_stopping_copy || '').trim();
-    const SEARCH_STOPPING_SUBCOPY = String(SHARED_UI_LABELS.search_stopping_subcopy || '').trim();
+    const waitUi = createController(wsWaitMount);
     const ONBOARDING_STORAGE_SCOPE = String(window.__JOB_HUNTER_USER_SCOPE__ || '').trim();
     if (!ONBOARDING_STORAGE_SCOPE) {
       throw new Error('Missing account scope.');
-    }
-    if (!SEARCH_WAIT_COPY || !SEARCH_WAIT_WHY_LABEL || !SEARCH_WAIT_WHY_INTRO || !SEARCH_WAIT_WHY_BROWSER || !SEARCH_WAIT_WHY_PACING || !SEARCH_WAIT_WHY_DETAILS || !SEARCH_WAIT_WHY_SCORING || !SEARCH_WAIT_WHY_JOB_RUN || !SEARCH_RUNNING_TITLE || !SEARCH_RUNNING_COPY || !SEARCH_STARTING_TITLE || !SEARCH_STARTING_COPY || !SEARCH_REFRESHING_TITLE || !SEARCH_REFRESHING_COPY || !SEARCH_RUNNING_SUBCOPY || !SEARCH_STARTING_SUBCOPY || !SEARCH_STOP_LABEL || !SEARCH_PROGRESS_PREFIX || !SEARCH_ELAPSED_PREFIX || !SEARCH_STOPPING_TITLE || !SEARCH_STOPPING_COPY || !SEARCH_STOPPING_SUBCOPY) {
-      throw new Error('Missing shared search UI labels.');
     }
     function scopedOnboardingStorageKey(baseKey) {
       return `${baseKey}:${ONBOARDING_STORAGE_SCOPE}`;
@@ -69,7 +60,6 @@
     const RESULTS_REFRESH_MAX_ATTEMPTS = 4;
     const isTestMode = document.body.dataset.testMode === 'true';
     let runStatusPollHandle = null;
-    let workspaceWaitState = null;
     let workspaceProfileStatus = null;
     let workspaceResultsLoadToken = 0;
 
@@ -131,149 +121,12 @@
         .replace(/'/g, '&#39;');
     }
 
-    function splitProgressText(progress) {
-      const text = String(progress || '').trim();
-      if (!text) {
-        return { step: '', activityItems: [], elapsed: '' };
-      }
-      const lines = text
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean);
-      if (lines.length > 1) {
-        let elapsed = '';
-        const lastLine = lines[lines.length - 1] || '';
-        const elapsedMatch = lastLine.match(/^elapsed\s+(.+)$/i);
-        if (elapsedMatch) {
-          elapsed = String(elapsedMatch[1] || '').trim();
-          lines.pop();
-        }
-        return {
-          step: String(lines[0] || '').trim(),
-          activityItems: lines.slice(1),
-          elapsed,
-        };
-      }
-      const segments = text.split(/\s+\|\s+/).map((segment) => segment.trim()).filter(Boolean);
-      if (!segments.length) {
-        return { step: '', activityItems: [], elapsed: '' };
-      }
-      let elapsed = '';
-      const lastSegment = segments[segments.length - 1] || '';
-      const elapsedMatch = lastSegment.match(/^elapsed\s+(.+)$/i);
-      if (elapsedMatch) {
-        elapsed = String(elapsedMatch[1] || '').trim();
-        segments.pop();
-      }
-      return {
-        step: String(segments[0] || '').trim(),
-        activityItems: segments.slice(1),
-        elapsed,
-      };
-    }
-
-    function renderProgressStatusMarkup(progress) {
-      const { step, activityItems, elapsed } = splitProgressText(progress);
-      if (!step && !activityItems.length && !elapsed) {
-        return '';
-      }
-      const reversedItems = activityItems.slice().reverse();
-      return `
-        <div class="wait-state__progress">
-          ${step ? `
-            <p class="wait-state__status wait-state__status--progress">
-              <span class="wait-state__status-label">${escapeHtml(SEARCH_PROGRESS_PREFIX)}</span>
-              <span class="wait-state__status-value">${escapeHtml(step)}</span>
-            </p>
-          ` : ''}
-          ${reversedItems.length ? `
-            <div class="wait-state__activity">
-              <ul class="wait-state__activity-list">
-                ${reversedItems.map((item) => `<li class="wait-state__activity-item">${escapeHtml(item)}</li>`).join('')}
-              </ul>
-            </div>
-          ` : ''}
-          ${elapsed ? `
-            <p class="wait-state__status wait-state__status--elapsed">
-              <span class="wait-state__status-label">${escapeHtml(SEARCH_ELAPSED_PREFIX)}</span>
-              <span class="wait-state__status-value">${escapeHtml(elapsed)}</span>
-            </p>
-          ` : ''}
-        </div>
-      `;
-    }
-
-    function renderSearchWhyMarkup() {
-      return `
-        <details class="wait-state__explainer">
-          <summary class="wait-state__explainer-summary">${escapeHtml(SEARCH_WAIT_WHY_LABEL)}</summary>
-          <div class="wait-state__explainer-body">
-            <p class="wait-state__explainer-copy">${escapeHtml(SEARCH_WAIT_WHY_INTRO)}</p>
-            <ul class="wait-state__explainer-list">
-              <li>${escapeHtml(SEARCH_WAIT_WHY_BROWSER)}</li>
-              <li>${escapeHtml(SEARCH_WAIT_WHY_PACING)}</li>
-              <li>${escapeHtml(SEARCH_WAIT_WHY_DETAILS)}</li>
-              <li>${escapeHtml(SEARCH_WAIT_WHY_SCORING)}</li>
-              <li>${escapeHtml(SEARCH_WAIT_WHY_JOB_RUN)}</li>
-            </ul>
-          </div>
-        </details>
-      `;
-    }
-
     function renderWorkspaceWait(state) {
-      if (!wsWaitMount) {
-        return;
+      if (state) {
+        waitUi.show(state);
+      } else {
+        waitUi.hide();
       }
-      if (!state) {
-        workspaceWaitState = null;
-        wsWaitMount.innerHTML = '';
-        wsWaitMount.hidden = true;
-        document.body.classList.remove('job-hunter-wait-active');
-        return;
-      }
-      const nextState = {
-        title: String(state.title || 'Working').trim() || 'Working',
-        copy: String(state.copy || '').trim(),
-        subcopy: String(state.subcopy || '').trim(),
-        progress: String(state.progress || '').trim(),
-        allowStop: Boolean(state.allowStop),
-      };
-      if (
-        workspaceWaitState
-        && workspaceWaitState.title === nextState.title
-        && workspaceWaitState.copy === nextState.copy
-        && workspaceWaitState.subcopy === nextState.subcopy
-        && workspaceWaitState.progress === nextState.progress
-        && workspaceWaitState.allowStop === nextState.allowStop
-      ) {
-        return;
-      }
-      workspaceWaitState = { ...nextState };
-      const title = escapeHtml(nextState.title);
-      const copy = escapeHtml(nextState.copy);
-      const progress = renderProgressStatusMarkup(nextState.progress);
-      const subcopy = escapeHtml(nextState.subcopy);
-      wsWaitMount.hidden = false;
-      document.body.classList.add('job-hunter-wait-active');
-      wsWaitMount.innerHTML = `
-        <div class="job-hunter-wait-backdrop" aria-hidden="true"></div>
-        <div class="job-hunter-wait-shell">
-          <div class="wait-state" role="status" aria-live="polite">
-            <span class="wait-state__spinner" aria-hidden="true"></span>
-            <p class="wait-state__title">${title}</p>
-            ${copy ? `<p class="wait-state__copy">${copy}</p>` : ''}
-            ${progress}
-            ${nextState.title === SEARCH_RUNNING_TITLE ? renderSearchWhyMarkup() : ''}
-            ${subcopy ? `<p class="wait-state__subcopy">${subcopy}</p>` : ''}
-            ${nextState.allowStop ? `
-              <div class="wait-state__actions">
-                <button class="btn btn-secondary" id="ws_stop_search_btn" type="button">${escapeHtml(SEARCH_STOP_LABEL)}</button>
-              </div>
-            ` : ''}
-          </div>
-        </div>
-      `;
     }
 
     function setOnboardingOverlayVisible(visible) {
@@ -422,6 +275,8 @@
             copy: SEARCH_RUNNING_COPY,
             subcopy: SEARCH_RUNNING_SUBCOPY,
             progress: payload?.progress || '',
+            progressDetail: payload?.progress_detail || null,
+            elapsedText: payload?.elapsed_text || '',
             allowStop: true,
           });
           startRunStatusPolling();
@@ -433,13 +288,15 @@
             copy: SEARCH_STOPPING_COPY,
             subcopy: SEARCH_STOPPING_SUBCOPY,
             progress: payload?.progress || '',
+            progressDetail: payload?.progress_detail || null,
+            elapsedText: payload?.elapsed_text || '',
             allowStop: false,
           });
           startRunStatusPolling();
           return true;
         }
         stopRunStatusPolling();
-        if (workspaceWaitState) {
+        if (waitUi.getState()) {
           renderWorkspaceWait(null);
           await loadResults(String(payload?.last_run_at || '').trim());
         }
@@ -501,6 +358,8 @@
           copy: SEARCH_STOPPING_COPY,
           subcopy: SEARCH_STOPPING_SUBCOPY,
           progress: payload?.progress || '',
+          progressDetail: payload?.progress_detail || null,
+          elapsedText: payload?.elapsed_text || '',
           allowStop: false,
         });
         startRunStatusPolling();
@@ -527,13 +386,15 @@
             copy: SEARCH_STOPPING_COPY,
             subcopy: SEARCH_STOPPING_SUBCOPY,
             progress: payload?.progress || '',
+            progressDetail: payload?.progress_detail || null,
+            elapsedText: payload?.elapsed_text || '',
             allowStop: false,
           });
           window.setTimeout(() => pollRunStatusAfterOverlayStart(attempt + 1), RUN_STATUS_POLL_INTERVAL_MS);
           return;
         }
         renderWorkspaceWait({
-          ...(workspaceWaitState || {}),
+          ...(waitUi.getState() || {}),
           title: SEARCH_REFRESHING_TITLE,
           copy: SEARCH_REFRESHING_COPY,
           progress: '',

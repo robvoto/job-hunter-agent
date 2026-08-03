@@ -1,18 +1,33 @@
 from pathlib import Path
 
 
-def test_wait_state_explainer_uses_compact_closed_state_and_card_open_state():
+def test_wait_state_uses_quiet_disclosure_and_shared_structured_progress():
     repo_root = Path(__file__).resolve().parents[1]
-    css = (
+    primitive_css = (
         repo_root / "templates" / "static" / "theme" / "themes.primitives.css"
     ).read_text(encoding="utf-8")
+    widget_css = (
+        repo_root / "templates" / "static" / "theme" / "themes.widgets.css"
+    ).read_text(encoding="utf-8")
+    wait_state_js = (
+        repo_root / "templates" / "static" / "common" / "wait-state.js"
+    ).read_text(encoding="utf-8")
 
-    assert ".wait-state__explainer {" in css
-    assert "width: min(100%, 360px);" in css
-    assert "border-radius: var(--radius-md);" in css
-    assert ".wait-state__explainer:not([open]) {" in css
-    assert "width: fit-content;" in css
-    assert "border-radius: var(--control-radius-pill);" in css
-    assert ".wait-state__explainer[open] .wait-state__explainer-body {" in css
-    assert "padding-top: var(--surface-pad-block-xs);" in css
-    assert "border-top: 1px solid color-mix(in srgb, var(--text-muted) 12%, var(--border-subtle));" in css
+    assert ".wait-state__explainer > summary {" in primitive_css
+    assert "padding: var(--control-pad-block-sm) 0;" in primitive_css
+    assert ".wait-state__explainer:not([open])" not in primitive_css
+    assert ".wait-state__activity" not in primitive_css
+    assert ".wait-state__status--elapsed" not in primitive_css
+
+    assert ".source-status-badge--linkedin" in widget_css
+    assert ".source-status-badge--seek" in widget_css
+    assert ".source-status-badge--apsjobs" in widget_css
+    assert ".jh-progress--indeterminate::after" in widget_css
+    assert "var(--brand-linkedin-bg)" in widget_css
+    assert "var(--brand-seek-bg)" in widget_css
+
+    assert 'role="progressbar"' in wait_state_js
+    assert "aria-valuenow" in wait_state_js
+    assert "progressDetail" in wait_state_js
+    assert "Current step:" not in wait_state_js
+    assert "wait-state__activity" not in wait_state_js

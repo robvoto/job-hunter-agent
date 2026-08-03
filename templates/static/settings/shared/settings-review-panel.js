@@ -11,6 +11,9 @@ import {
   SEARCH_STARTING_COPY,
   SEARCH_REFRESHING_TITLE,
   SEARCH_REFRESHING_COPY,
+  SEARCH_STOPPING_TITLE,
+  SEARCH_STOPPING_COPY,
+  SEARCH_STOPPING_SUBCOPY,
   RUN_COMPLETE_REDIRECT_DELAY_MS,
 } from '../../common/wait-state.js';
 
@@ -331,10 +334,18 @@ async function syncRunStatus() {
     if (!response.ok) throw new Error('Could not check run status.');
     const payload = await response.json().catch(() => ({}));
     const isRunning = payload?.status === 'running';
-    if (isRunning) {
+    const isStopping = payload?.status === 'stopping';
+    if (isRunning || isStopping) {
       runStatusWasRunning = true;
       startRunStatusPolling();
-      waitUi?.show({ title: SEARCH_RUNNING_TITLE, copy: SEARCH_RUNNING_COPY, subcopy: SEARCH_WAIT_COPY });
+      waitUi?.show({
+        title: isStopping ? SEARCH_STOPPING_TITLE : SEARCH_RUNNING_TITLE,
+        copy: isStopping ? SEARCH_STOPPING_COPY : SEARCH_RUNNING_COPY,
+        subcopy: isStopping ? SEARCH_STOPPING_SUBCOPY : SEARCH_WAIT_COPY,
+        progress: payload?.progress || '',
+        progressDetail: payload?.progress_detail || null,
+        elapsedText: payload?.elapsed_text || '',
+      });
       return;
     }
     stopRunStatusPolling();

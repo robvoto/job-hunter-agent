@@ -210,12 +210,7 @@ _SHARED_UI_LABEL_KEYS = (
     "schedule_section_copy",
     "search_wait_copy",
     "search_wait_why_label",
-    "search_wait_why_intro",
-    "search_wait_why_browser",
-    "search_wait_why_pacing",
-    "search_wait_why_details",
-    "search_wait_why_scoring",
-    "search_wait_why_job_run",
+    "search_wait_why_copy",
     "search_running_title",
     "search_running_copy",
     "search_starting_title",
@@ -225,8 +220,8 @@ _SHARED_UI_LABEL_KEYS = (
     "search_running_subcopy",
     "search_starting_subcopy",
     "search_stop_label",
-    "search_progress_prefix",
-    "search_elapsed_prefix",
+    "search_elapsed_suffix",
+    "search_progress_aria_suffix",
     "search_stopping_title",
     "search_stopping_copy",
     "search_stopping_subcopy",
@@ -259,6 +254,13 @@ _SEARCH_SOURCE_LABEL_KEYS = (
     "linkedin_toggle_help",
     "apsjobs_toggle_label",
     "apsjobs_toggle_help",
+    "seek_display_label",
+    "seek_badge_label",
+    "linkedin_display_label",
+    "linkedin_badge_label",
+    "apsjobs_display_label",
+    "apsjobs_badge_label",
+    "generic_display_label",
 )
 
 _SETTINGS_ALERTS_LABEL_KEYS = (
@@ -954,6 +956,9 @@ def build_bootstrap_script(
     )
     parts.append(
         f"<script>window.__JOB_HUNTER_SHARED_UI_LABELS__ = {json.dumps(load_shared_ui_labels(), ensure_ascii=True)};</script>"
+    )
+    parts.append(
+        f"<script>window.__JOB_HUNTER_SEARCH_SOURCE_LABELS__ = {json.dumps(load_search_source_labels(), ensure_ascii=True)};</script>"
     )
     parts.append(
         f"<script>window.__JOB_HUNTER_SETTINGS_ALERTS_LABELS__ = {json.dumps(load_settings_alerts_labels(), ensure_ascii=True)};</script>"

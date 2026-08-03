@@ -232,31 +232,44 @@ def test_extract_posted_text_and_age_from_visible_listing_text():
     )
 
 
-def test_format_apsjobs_run_progress_lists_scanned_titles_and_elapsed():
+def test_format_apsjobs_run_progress_keeps_elapsed_separate():
     progress = apsjobs_module._format_apsjobs_run_progress(
         1,
         2,
         scanned_titles=["Senior Analyst", "Assistant Director"],
-        elapsed_s=65,
     )
 
     assert progress == (
         "APSJobs search 1/2\n"
         "Senior Analyst\n"
-        "Assistant Director\n"
-        "elapsed 1m 5s"
+        "Assistant Director"
     )
 
 
-def test_format_apsjobs_run_progress_omits_blank_titles():
-    progress = apsjobs_module._format_apsjobs_run_progress(
-        2,
+def test_apsjobs_progress_producer_emits_latest_title(monkeypatch):
+    captured: list[tuple[str, dict]] = []
+    monkeypatch.setattr(
+        apsjobs_module,
+        "set_run_progress_state",
+        lambda text, **detail: captured.append((text, detail)),
+    )
+
+    apsjobs_module._set_apsjobs_run_progress(
+        1,
         3,
-        scanned_titles=["  ", "Policy Officer"],
-        elapsed_s=0,
+        ["Senior Analyst", "Policy Officer"],
     )
 
-    assert progress == "APSJobs search 2/3\nPolicy Officer\nelapsed 0s"
+    text, detail = captured[-1]
+    assert text == "APSJobs search 1/3\nSenior Analyst\nPolicy Officer"
+    assert detail == {
+        "stage": "source_collection",
+        "source": "apsjobs",
+        "headline": "APS Jobs search 1 of 3",
+        "detail": "Policy Officer",
+        "current": 1,
+        "total": 3,
+    }
 
 
 def test_extract_job_payload_uses_visible_text_and_shared_key_logic(monkeypatch):

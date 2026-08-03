@@ -57,6 +57,7 @@ from job_hunter_agent.scrapers.seek_runner import (
     _handle_seek_list_page_failure,
     _log_seek_list_page_diagnostics,
     _seek_run_progress,
+    _set_seek_run_progress,
     _seek_source_metadata,
     _wait_for_seek_bot_challenge_or_manual_verification,
     _wait_for_seek_user_verification,
@@ -508,8 +509,29 @@ def test_seek_list_page_diagnostics_logs_challenge_state(caplog):
     assert "SEEK list page looks like a SEEK bot challenge page" in caplog.text
 
 
-def test_seek_run_progress_includes_title_and_company():
-    assert (
-        _seek_run_progress(1, 3, "Senior Analyst", "Acme", elapsed_s=65)
-        == "SEEK page 1/3 | Senior Analyst @ Acme | elapsed 1m 05s"
+def test_seek_run_progress_keeps_elapsed_and_job_detail_out_of_text():
+    assert _seek_run_progress(1, 3) == "SEEK page 1/3"
+
+
+def test_seek_progress_producer_emits_page_and_normalized_detail(monkeypatch):
+    from job_hunter_agent.scrapers import seek_runner
+
+    captured: list[tuple[str, dict]] = []
+    monkeypatch.setattr(
+        seek_runner,
+        "set_run_progress_state",
+        lambda text, **detail: captured.append((text, detail)),
     )
+
+    _set_seek_run_progress(1, 3, detail="Senior Analyst at Acme")
+
+    text, detail = captured[-1]
+    assert text == "SEEK page 1/3"
+    assert detail == {
+        "stage": "source_collection",
+        "source": "seek",
+        "headline": "SEEK page 1 of 3",
+        "detail": "Senior Analyst at Acme",
+        "current": 1,
+        "total": 3,
+    }

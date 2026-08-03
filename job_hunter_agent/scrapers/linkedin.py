@@ -58,7 +58,7 @@ from job_hunter_agent.record_schema import (
     RECORD_URL_KEY,
     RECORD_WORK_MODE_KEY,
 )
-from job_hunter_agent.run_control import run_stop_requested, set_run_progress
+from job_hunter_agent.run_control import run_stop_requested, set_run_progress_state
 from job_hunter_agent.runtime_helpers import CLI_FLAG_DEBUG, has_cli_flag
 from job_hunter_agent.salary import load_salary
 from job_hunter_agent.scrapers.base import BaseJobScraper, normalize_jobspy_record
@@ -262,10 +262,39 @@ def build_linkedin_search_targets(
     return targets
 
 
+def _set_linkedin_run_progress(
+    target_index: int,
+    total_targets: int,
+    *,
+    row_index: int | None = None,
+    total_rows: int | None = None,
+) -> None:
+    """Emit the structured LinkedIn stage used by the shared wait-state UI."""
+    if (row_index is None) != (total_rows is None):
+        raise ValueError("row_index and total_rows must be supplied together")
+    detail = ""
+    text = f"LinkedIn search {target_index}/{total_targets}"
+    if row_index is not None and total_rows is not None:
+        detail = f"Reviewing job {row_index} of {total_rows}"
+        text = f"LinkedIn target {target_index}/{total_targets}\nReviewing job {row_index}/{total_rows}"
+    set_run_progress_state(
+        text,
+        stage="source_collection",
+        source="linkedin",
+        headline=f"LinkedIn target {target_index} of {total_targets}",
+        detail=detail,
+        current=target_index,
+        total=total_targets,
+        item_current=row_index,
+        item_total=total_rows,
+    )
+
+
 class LinkedInScraper(BaseJobScraper):
     source_name = SOURCE_LINKEDIN
 
     def scrape(self) -> tuple:
+        """Run configured LinkedIn targets and publish target/job stage progress."""
         kept_records: List[dict] = []
         audit_rows: List[dict] = []
         skill_observations: List[dict] = []
@@ -310,7 +339,7 @@ class LinkedInScraper(BaseJobScraper):
                     logger.info("[LinkedIn] stop requested before target start; ending scrape")
                     break
                 target_tag = f"[LinkedIn target {target_index}/{total_targets}]"
-                set_run_progress(f"LinkedIn search {target_index}/{total_targets}")
+                _set_linkedin_run_progress(target_index, total_targets)
                 logger.info(
                     "\n"
                     "================================================================\n"
@@ -379,13 +408,11 @@ class LinkedInScraper(BaseJobScraper):
 
                 total_rows = len(rows)
                 for row_index, (_, row) in enumerate(rows.iterrows(), start=1):
-                    set_run_progress(
-                        "\n".join(
-                            [
-                                f"LinkedIn target {target_index}/{total_targets}",
-                                f"Reviewing job {row_index}/{total_rows}",
-                            ]
-                        )
+                    _set_linkedin_run_progress(
+                        target_index,
+                        total_targets,
+                        row_index=row_index,
+                        total_rows=total_rows,
                     )
                     if run_stop_requested():
                         logger.info("[LinkedIn] stop requested; ending scrape")
@@ -479,7 +506,14 @@ class LinkedInScraper(BaseJobScraper):
             )
         )
         logger.info("[LinkedIn] done | kept=%d audit=%d", len(kept_records), len(audit_rows))
-        set_run_progress("LinkedIn complete")
+        set_run_progress_state(
+            "LinkedIn complete",
+            stage="source_collection",
+            source="linkedin",
+            headline="LinkedIn",
+            detail="Source collection complete",
+            determinate=False,
+        )
         return kept_records, audit_rows, skill_observations
 
     def _build_search_targets(self, search_settings: dict) -> List[dict]:
