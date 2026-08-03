@@ -46,19 +46,13 @@ Cline-specific durable context for this repository. This file is loaded only thr
   - importance and match-status badges share typography, padding, height, and alignment.
 - Do not restore the rejected large persistent contract-length field from commit `29b7812`.
 
-## Current unfinished work
+## Recent completed work
 
-- `JH-279 — Show live run elapsed time and bounded stop completion` is intentionally in progress and currently uncommitted.
-- The partial implementation introduces structured progress state in:
-  - `job_hunter_agent/run_control.py`
-  - `job_hunter_agent/routes/workspace_api.py`
-  - `job_hunter_agent/source_runner.py`
-  - `job_hunter_agent/scrape_finalize.py`
-  - `job_hunter_agent/scrapers/seek_runner.py`
-  - `job_hunter_agent/scrapers/linkedin.py`
-  - `job_hunter_agent/scrapers/apsjobs.py`
-- Do not discard those files. Before continuing, read the live JH-279 row and inspect `git diff -w` to separate semantic changes from line-ending noise.
-- The current slice is incomplete: it still needs the approved UI/screen integration, last-progress timestamp, bounded stop/timeout behaviour, preserved partial results, tests, and live backlog update.
+- `JH-279 — Show live run elapsed time and bounded stop completion` is complete.
+- Commit `d42ab72` added structured source/stage progress, shared source badges, accessible progress visuals, elapsed rendering, and common Workspace/Settings wait-state ownership.
+- The follow-up implementation bounds cooperative stop cleanup, detaches unresponsive source workers from the active run, preserves completed-source results, exposes terminal `stopped`, and retains the final total elapsed time.
+- Late detached workers keep their original scoped stop event and cannot overwrite progress for a later run.
+- No unfinished JH-279 worktree changes should remain after the completion commit and live backlog update.
 
 ## Self-edit restriction
 

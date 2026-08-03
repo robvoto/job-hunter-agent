@@ -103,8 +103,9 @@ from job_hunter_agent.profile_store import (
     validate_search_keywords,
 )
 from job_hunter_agent.run_control import (
-    clear_run_progress,
+    begin_run_progress_scope,
     clear_run_stop_request,
+    end_run_progress_scope,
     run_stop_requested,
 )
 from job_hunter_agent.source_connector import scrape_jobs_direct
@@ -124,8 +125,16 @@ from job_hunter_agent.user_settings import (
 )
 from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
 
+RUN_STATUS_IDLE = "idle"
+RUN_STATUS_RUNNING = "running"
+RUN_STATUS_STOPPING = "stopping"
+RUN_STATUS_STOPPED = "stopped"
+_RUN_TERMINAL_STATUSES = frozenset({RUN_STATUS_IDLE, RUN_STATUS_STOPPED})
+
 _run_in_progress = False
 _run_started_at: datetime | None = None
+_run_last_elapsed_seconds: int | None = None
+_run_terminal_status = RUN_STATUS_IDLE
 _run_state_lock = threading.Lock()
 _rejection_suggestions_cache: dict[str, dict[str, Any]] = {}
 profile_review_status = _profile_store.profile_review_status
@@ -816,6 +825,7 @@ def get_docs() -> list[dict[str, str]]:
 
 
 def _set_run_in_progress(value: bool) -> None:
+    """Compatibility mutator for callers that only own the running flag."""
     global _run_in_progress, _run_started_at
     with _run_state_lock:
         _run_in_progress = bool(value)
@@ -823,26 +833,56 @@ def _set_run_in_progress(value: bool) -> None:
             _run_started_at = None
 
 
+def _finish_run(terminal_status: str) -> None:
+    """Atomically close the active run and retain its final elapsed total."""
+    global _run_in_progress, _run_started_at, _run_last_elapsed_seconds, _run_terminal_status
+    if terminal_status not in _RUN_TERMINAL_STATUSES:
+        raise ValueError(f"Invalid terminal run status: {terminal_status!r}")
+    finished_at = datetime.now().astimezone()
+    with _run_state_lock:
+        if _run_started_at is not None:
+            _run_last_elapsed_seconds = max(
+                0,
+                int((finished_at - _run_started_at).total_seconds()),
+            )
+        _run_in_progress = False
+        _run_started_at = None
+        _run_terminal_status = terminal_status
+
+
 def _is_run_in_progress() -> bool:
     with _run_state_lock:
         return _run_in_progress
 
 
+def _current_run_status() -> str:
+    """Return running, stopping, stopped, or idle from the owned lifecycle state."""
+    with _run_state_lock:
+        running = _run_in_progress
+        terminal_status = _run_terminal_status
+    if running:
+        return RUN_STATUS_STOPPING if run_stop_requested() else RUN_STATUS_RUNNING
+    return terminal_status
+
+
 def _try_mark_run_started() -> bool:
-    global _run_in_progress, _run_started_at
+    global _run_in_progress, _run_started_at, _run_terminal_status
     with _run_state_lock:
         if _run_in_progress:
             return False
         _run_in_progress = True
         _run_started_at = datetime.now().astimezone()
+        _run_terminal_status = RUN_STATUS_IDLE
         return True
 
 
 def _current_run_elapsed_seconds() -> int | None:
+    """Return live elapsed seconds, or the final total after the run ends."""
     with _run_state_lock:
-        if not _run_in_progress or _run_started_at is None:
-            return None
-        started_at = _run_started_at
+        if _run_in_progress and _run_started_at is not None:
+            started_at = _run_started_at
+        else:
+            return _run_last_elapsed_seconds
     return max(0, int((datetime.now().astimezone() - started_at).total_seconds()))
 
 
@@ -1441,6 +1481,8 @@ def _write_run_stats_field(key: str, value: object) -> None:
 
 
 def _run_scrape_job() -> None:
+    """Own one background scrape lifecycle from start through terminal state."""
+    progress_scope = begin_run_progress_scope()
     try:
         scrape_jobs_direct()
         _write_run_stats_field("last_run_error", None)
@@ -1453,9 +1495,10 @@ def _run_scrape_job() -> None:
             print(f"[RUN][ERROR] {msg}")
             _write_run_stats_field("last_run_error", msg)
     finally:
+        stopped = run_stop_requested()
+        _finish_run(RUN_STATUS_STOPPED if stopped else RUN_STATUS_IDLE)
+        end_run_progress_scope(progress_scope)
         clear_run_stop_request()
-        clear_run_progress()
-        _set_run_in_progress(False)
 
 
 def _rebuild_workspace_on_startup() -> None:

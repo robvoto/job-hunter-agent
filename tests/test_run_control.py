@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import contextvars
 import logging
+
 import pytest
+
 from job_hunter_agent import run_control
 
 
@@ -255,3 +258,48 @@ def test_strict_integer_rejects_booleans():
             current=True,
             total=3,
         )
+
+
+def test_detached_worker_keeps_its_scoped_stop_request_after_run_end():
+    scope = run_control.begin_run_progress_scope()
+    try:
+        worker_context = contextvars.copy_context()
+        run_control.request_run_stop()
+        assert worker_context.run(run_control.run_stop_requested) is True
+
+        run_control.end_run_progress_scope(scope)
+        run_control.clear_run_stop_request()
+
+        new_scope = run_control.begin_run_progress_scope()
+        try:
+            assert run_control.run_stop_requested() is False
+            assert worker_context.run(run_control.run_stop_requested) is True
+        finally:
+            run_control.end_run_progress_scope(new_scope)
+    finally:
+        run_control.clear_run_stop_request()
+
+
+def test_detached_worker_cannot_overwrite_new_run_progress():
+    old_scope = run_control.begin_run_progress_scope()
+    old_context = contextvars.copy_context()
+    run_control.end_run_progress_scope(old_scope)
+
+    new_scope = run_control.begin_run_progress_scope()
+    try:
+        run_control.set_run_progress("New run progress")
+        old_context.run(run_control.set_run_progress, "Late old worker progress")
+        assert run_control.get_run_progress() == "New run progress"
+    finally:
+        run_control.end_run_progress_scope(new_scope)
+
+
+def test_second_concurrent_run_scope_is_rejected_without_replacing_active_scope():
+    scope = run_control.begin_run_progress_scope()
+    try:
+        with pytest.raises(RuntimeError, match="already owns the active run-control scope"):
+            contextvars.Context().run(run_control.begin_run_progress_scope)
+        run_control.set_run_progress("Active run still owns progress")
+        assert run_control.get_run_progress() == "Active run still owns progress"
+    finally:
+        run_control.end_run_progress_scope(scope)

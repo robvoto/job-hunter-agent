@@ -544,13 +544,18 @@ def _source_timeout_message(source: str) -> str:
     return f"{get_source_display_label(source)} is taking longer than expected; waiting for it to finish."
 
 
-def _source_hard_timeout_seconds(source: str) -> float:
+def _source_stop_cleanup_seconds(source: str) -> float:
+    """Return the bounded cleanup window after a stop request reaches a source."""
     soft_timeout = float(_source_timeout_seconds(source))
-    grace = min(
+    return min(
         SOURCE_TIMEOUT_GRACE_MAX_SECONDS,
         max(SOURCE_TIMEOUT_GRACE_MIN_SECONDS, soft_timeout * SOURCE_TIMEOUT_GRACE_FRACTION),
     )
-    return soft_timeout + grace
+
+
+def _source_hard_timeout_seconds(source: str) -> float:
+    """Return the absolute source deadline including its cooperative cleanup window."""
+    return float(_source_timeout_seconds(source)) + _source_stop_cleanup_seconds(source)
 
 
 def _log_source_start(source: str, *, execution_mode: str) -> None:
@@ -660,10 +665,23 @@ def _run_sources_in_parallel(
     pending = set(futures)
     results_by_source: dict[str, SourceRunResult] = {}
     hard_timeout_stop_requested: set[Any] = set()
+    stop_deadlines: dict[Any, float] = {}
 
     try:
         while pending:
             now = time.monotonic()
+
+            # A user stop gets a short, source-sized cleanup window. Running
+            # Python threads cannot be killed safely, so late returns are ignored
+            # after this boundary instead of blocking the active run forever.
+            if run_stop_requested():
+                for future in pending:
+                    source = futures[future]
+                    stop_deadlines.setdefault(
+                        future,
+                        now + _source_stop_cleanup_seconds(source),
+                    )
+
             newly_timed_out = [
                 future
                 for future in list(pending)
@@ -682,12 +700,10 @@ def _run_sources_in_parallel(
             hard_timed_out = [
                 future
                 for future in list(pending)
-                if now >= hard_deadlines[future]
+                if now >= hard_deadlines[future] and future not in hard_timeout_stop_requested
             ]
             for future in hard_timed_out:
                 source = futures[future]
-                if future in hard_timeout_stop_requested:
-                    continue
                 elapsed_s = now - started_at[source]
                 logger.warning(
                     "[%s][SOURCE_TIMEOUT_STOP_REQUESTED] elapsed_s=%s progress=%r message=%s",
@@ -698,6 +714,67 @@ def _run_sources_in_parallel(
                 )
                 request_run_stop()
                 hard_timeout_stop_requested.add(future)
+                # Give the timed-out worker one final bounded chance to return
+                # partial results before it is detached from the active run.
+                stop_deadlines[future] = now + _source_stop_cleanup_seconds(source)
+
+            if run_stop_requested():
+                for future in pending:
+                    source = futures[future]
+                    stop_deadlines.setdefault(
+                        future,
+                        now + _source_stop_cleanup_seconds(source),
+                    )
+
+            expired_futures = [
+                future
+                for future in list(pending)
+                if not future.done()
+                and future in stop_deadlines
+                and now >= stop_deadlines[future]
+            ]
+            for future in expired_futures:
+                pending.remove(future)
+                source = futures[future]
+                cleanup_seconds = _source_stop_cleanup_seconds(source)
+                source_label = get_source_display_label(source)
+                message = (
+                    f"{source_label} did not stop within {cleanup_seconds:g}s; "
+                    "continuing with results already collected."
+                )
+                future.cancel()
+                logger.error(
+                    "[%s][SOURCE_STOP_BOUNDED] elapsed_s=%d cleanup_seconds=%s message=%s",
+                    source.upper(),
+                    int(now - started_at[source]),
+                    cleanup_seconds,
+                    message,
+                )
+                _record_source_warning(
+                    source=source,
+                    severity="warning",
+                    category="source_timeout",
+                    message=message,
+                    run_id=context.run_iso,
+                    context={
+                        "elapsed_s": int(now - started_at[source]),
+                        "cleanup_seconds": cleanup_seconds,
+                        "stop_requested": True,
+                    },
+                    fingerprint_parts=("source_stop_bounded", source, message),
+                )
+                results_by_source[source] = SourceRunResult(
+                    source=source,
+                    error=TimeoutError(message),
+                )
+                set_run_progress_state(
+                    message,
+                    stage="error",
+                    source=source,
+                    headline=f"{source_label} stopped after timeout",
+                    detail="Continuing with results collected so far.",
+                    determinate=False,
+                )
 
             for future in list(pending):
                 source = futures[future]
@@ -722,6 +799,8 @@ def _run_sources_in_parallel(
                     next_deadline_candidates.append(warn_deadlines[future])
                 if future not in hard_timeout_stop_requested:
                     next_deadline_candidates.append(hard_deadlines[future])
+                if future in stop_deadlines:
+                    next_deadline_candidates.append(stop_deadlines[future])
             if next_deadline_candidates:
                 next_deadline = min(next_deadline_candidates)
                 wait_timeout = max(0.0, min(0.1, next_deadline - time.monotonic()))

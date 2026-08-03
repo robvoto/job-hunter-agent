@@ -175,3 +175,17 @@ def test_workspace_structured_wait_state_renders_all_sources(candidate_page):
     current_title = page.locator(".wait-state__title").inner_text()
     assert current_title == "Run stopped by request", page.locator("#ws_wait_mount").inner_html()
     assert page.locator("#ws_stop_search_btn").count() == 0
+
+    state["payload"] = {
+        **state["payload"],
+        "status": "stopped",
+        "stop_requested": False,
+        "progress": None,
+        "progress_detail": None,
+        "elapsed_seconds": 90,
+        "elapsed_text": "1m 30s",
+    }
+    final_elapsed = page.get_by_text("1m 30s elapsed")
+    final_elapsed.wait_for(state="visible", timeout=5000)
+    assert page.locator(".wait-state__title").inner_text() == "Run stopped by request"
+    assert final_elapsed.inner_text() == "1m 30s elapsed"

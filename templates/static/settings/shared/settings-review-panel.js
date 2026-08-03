@@ -335,6 +335,7 @@ async function syncRunStatus() {
     const payload = await response.json().catch(() => ({}));
     const isRunning = payload?.status === 'running';
     const isStopping = payload?.status === 'stopping';
+    const isStopped = payload?.status === 'stopped';
     if (isRunning || isStopping) {
       runStatusWasRunning = true;
       startRunStatusPolling();
@@ -346,6 +347,21 @@ async function syncRunStatus() {
         progressDetail: payload?.progress_detail || null,
         elapsedText: payload?.elapsed_text || '',
       });
+      return;
+    }
+    if (isStopped && runStatusWasRunning) {
+      runStatusWasRunning = false;
+      stopRunStatusPolling();
+      waitUi?.show({
+        title: SEARCH_STOPPING_TITLE,
+        copy: SEARCH_STOPPING_COPY,
+        subcopy: SEARCH_STOPPING_SUBCOPY,
+        progress: payload?.progress || '',
+        progressDetail: payload?.progress_detail || null,
+        elapsedText: payload?.elapsed_text || '',
+      });
+      showStatus(SEARCH_REFRESHING_COPY, 'success');
+      window.setTimeout(() => window.location.replace(WORKSPACE_PATH), RUN_COMPLETE_REDIRECT_DELAY_MS);
       return;
     }
     stopRunStatusPolling();

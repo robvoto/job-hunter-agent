@@ -37,6 +37,7 @@
       SEARCH_STOPPING_TITLE,
       SEARCH_STOPPING_COPY,
       SEARCH_STOPPING_SUBCOPY,
+      RUN_COMPLETE_REDIRECT_DELAY_MS,
     } from '/static/common/wait-state.js';
 
     const wsFlashMount = document.getElementById('ws_flash_mount');
@@ -60,6 +61,7 @@
     const RESULTS_REFRESH_MAX_ATTEMPTS = 4;
     const isTestMode = document.body.dataset.testMode === 'true';
     let runStatusPollHandle = null;
+    let runStatusWasActive = false;
     let workspaceProfileStatus = null;
     let workspaceResultsLoadToken = 0;
 
@@ -270,6 +272,7 @@
         }
         const payload = await response.json().catch(() => ({}));
         if (payload?.status === 'running') {
+          runStatusWasActive = true;
           renderWorkspaceWait({
             title: SEARCH_RUNNING_TITLE,
             copy: SEARCH_RUNNING_COPY,
@@ -283,6 +286,7 @@
           return true;
         }
         if (payload?.status === 'stopping') {
+          runStatusWasActive = true;
           renderWorkspaceWait({
             title: SEARCH_STOPPING_TITLE,
             copy: SEARCH_STOPPING_COPY,
@@ -295,7 +299,25 @@
           startRunStatusPolling();
           return true;
         }
+        if (payload?.status === 'stopped' && (runStatusWasActive || waitUi.getState())) {
+          runStatusWasActive = false;
+          stopRunStatusPolling();
+          renderWorkspaceWait({
+            title: SEARCH_STOPPING_TITLE,
+            copy: SEARCH_STOPPING_COPY,
+            subcopy: SEARCH_STOPPING_SUBCOPY,
+            progress: payload?.progress || '',
+            progressDetail: payload?.progress_detail || null,
+            elapsedText: payload?.elapsed_text || '',
+            allowStop: false,
+          });
+          await new Promise((resolve) => window.setTimeout(resolve, RUN_COMPLETE_REDIRECT_DELAY_MS));
+          await loadResults(String(payload?.last_run_at || '').trim());
+          renderWorkspaceWait(null);
+          return false;
+        }
         stopRunStatusPolling();
+        runStatusWasActive = false;
         if (waitUi.getState()) {
           renderWorkspaceWait(null);
           await loadResults(String(payload?.last_run_at || '').trim());
@@ -314,6 +336,7 @@
         window.alert(reason);
         return;
       }
+      runStatusWasActive = true;
       renderWorkspaceWait({
         title: SEARCH_STARTING_TITLE,
         copy: SEARCH_STARTING_COPY,
@@ -393,6 +416,23 @@
           window.setTimeout(() => pollRunStatusAfterOverlayStart(attempt + 1), RUN_STATUS_POLL_INTERVAL_MS);
           return;
         }
+        if (payload?.status === 'stopped') {
+          runStatusWasActive = false;
+          renderWorkspaceWait({
+            title: SEARCH_STOPPING_TITLE,
+            copy: SEARCH_STOPPING_COPY,
+            subcopy: SEARCH_STOPPING_SUBCOPY,
+            progress: payload?.progress || '',
+            progressDetail: payload?.progress_detail || null,
+            elapsedText: payload?.elapsed_text || '',
+            allowStop: false,
+          });
+          await new Promise((resolve) => window.setTimeout(resolve, RUN_COMPLETE_REDIRECT_DELAY_MS));
+          await loadResults(String(payload?.last_run_at || '').trim());
+          renderWorkspaceWait(null);
+          return;
+        }
+        runStatusWasActive = false;
         renderWorkspaceWait({
           ...(waitUi.getState() || {}),
           title: SEARCH_REFRESHING_TITLE,

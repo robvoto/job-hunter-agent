@@ -686,6 +686,61 @@ def test_parallel_runner_requests_stop_and_keeps_partial_results_after_hard_time
     assert skills == []
 
 
+def test_parallel_runner_detaches_unresponsive_source_after_stop_cleanup(monkeypatch):
+    context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
+    stop_requested = threading.Event()
+    hung_started = threading.Event()
+    release_hung_worker = threading.Event()
+    warnings: list[dict] = []
+    result_holder: dict[str, tuple[list[dict], list[dict], list[dict]]] = {}
+
+    def unresponsive_seek(ctx):
+        hung_started.set()
+        release_hung_worker.wait(timeout=2)
+        return _seek_result(kept_records=[{"job_key": "seek:too-late"}])
+
+    def fast_linkedin(ctx):
+        return _li_result(
+            kept_records=[{"job_key": "linkedin:1"}],
+            audit_rows=[{"job_key": "linkedin:1"}],
+        )
+
+    monkeypatch.setattr(source_runner, "_run_seek_source", unresponsive_seek)
+    monkeypatch.setattr(source_runner, "_run_linkedin_source", fast_linkedin)
+    monkeypatch.setattr(source_runner, "run_stop_requested", stop_requested.is_set)
+    monkeypatch.setattr(source_runner, "SEEK_SOURCE_TIMEOUT_SECONDS", 1)
+    monkeypatch.setattr(source_runner, "LINKEDIN_SOURCE_TIMEOUT_SECONDS", 1)
+    monkeypatch.setattr(source_runner, "SOURCE_TIMEOUT_GRACE_MIN_SECONDS", 0.02)
+    monkeypatch.setattr(source_runner, "SOURCE_TIMEOUT_GRACE_MAX_SECONDS", 0.02)
+    monkeypatch.setattr(source_runner, "SOURCE_TIMEOUT_GRACE_FRACTION", 0.0)
+    monkeypatch.setattr(
+        source_runner,
+        "record_system_warning",
+        lambda **kwargs: warnings.append(kwargs) or kwargs,
+    )
+
+    runner = threading.Thread(
+        target=lambda: result_holder.setdefault("result", run_enabled_sources(context)),
+        daemon=True,
+    )
+    runner.start()
+    assert hung_started.wait(timeout=1)
+
+    started = time.monotonic()
+    stop_requested.set()
+    runner.join(timeout=0.5)
+    elapsed = time.monotonic() - started
+    release_hung_worker.set()
+
+    assert not runner.is_alive()
+    assert elapsed < 0.5
+    kept, audit, skills = result_holder["result"]
+    assert [record["job_key"] for record in kept] == ["linkedin:1"]
+    assert [row["job_key"] for row in audit] == ["linkedin:1"]
+    assert skills == []
+    assert any(warning["category"] == "source_timeout" for warning in warnings)
+
+
 def test_run_enabled_sources_fails_clearly_when_no_sources_are_enabled():
     context = _make_context([])
 

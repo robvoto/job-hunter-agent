@@ -371,6 +371,9 @@ def test_workspace_uses_shared_wait_state_and_preserves_stop_control():
     assert "renderProgressStatusMarkup" not in html_text
     assert "ws_stop_search_btn" in wait_state_js
     assert "/api/run/stop" in html_text
+    assert "payload?.status === 'stopped'" in html_text
+    assert "RUN_COMPLETE_REDIRECT_DELAY_MS" in html_text
+    assert "elapsedText: payload?.elapsed_text || ''" in html_text
 
 
 def test_scrape_jobs_direct_stops_before_run_when_profile_incomplete(monkeypatch):
@@ -529,6 +532,11 @@ def test_run_status_and_stop_endpoint_report_stopping(monkeypatch):
         },
     )
     monkeypatch.setattr(workspace_api.srv, "_is_run_in_progress", lambda: True)
+    monkeypatch.setattr(
+        workspace_api.srv,
+        "_current_run_status",
+        lambda: workspace_api.srv.RUN_STATUS_STOPPING,
+    )
     monkeypatch.setattr(workspace_api.srv, "_format_current_run_elapsed", lambda: "15s")
     monkeypatch.setattr(workspace_api.srv, "_current_run_elapsed_seconds", lambda: 15)
     monkeypatch.setattr(workspace_api, "get_run_progress", lambda: "SEEK page 1/3")
@@ -547,7 +555,6 @@ def test_run_status_and_stop_endpoint_report_stopping(monkeypatch):
             "determinate": True,
         },
     )
-    monkeypatch.setattr(workspace_api, "run_stop_requested", lambda: True)
     stop_calls = []
     monkeypatch.setattr(workspace_api, "request_run_stop", lambda: stop_calls.append(True))
 
@@ -574,6 +581,51 @@ def test_run_status_and_stop_endpoint_report_stopping(monkeypatch):
     assert stop_response.json()["elapsed_seconds"] == 15
     assert stop_response.json()["elapsed_text"] == "15s"
     assert stop_calls == [True]
+
+
+def test_run_status_retains_terminal_stopped_state_and_total_elapsed(monkeypatch):
+    monkeypatch.setattr(
+        "job_hunter_agent.fastapi_app.read_session_user",
+        lambda request: {"user_id": "test-user", "email": "test@example.com", "role": "candidate"},
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.fastapi_app.verify_csrf_token", lambda request, token: True
+    )
+    monkeypatch.setattr(
+        workspace_api.srv, "_read_last_run_timestamp", lambda: "2026-08-03T12:00:00+10:00"
+    )
+    monkeypatch.setattr(workspace_api.srv, "_is_run_in_progress", lambda: False)
+    monkeypatch.setattr(
+        workspace_api.srv,
+        "_current_run_status",
+        lambda: workspace_api.srv.RUN_STATUS_STOPPED,
+    )
+    monkeypatch.setattr(workspace_api.srv, "_current_run_elapsed_seconds", lambda: 42)
+    monkeypatch.setattr(workspace_api.srv, "_format_current_run_elapsed", lambda: "42s")
+    monkeypatch.setattr(workspace_api, "get_run_progress", lambda: "")
+    monkeypatch.setattr(workspace_api, "get_run_progress_detail", lambda: None)
+    monkeypatch.setattr(
+        workspace_api.srv,
+        "_read_scheduler_status",
+        lambda: {"active": False, "daily_time_local": None, "next_run_at": None},
+    )
+
+    client = TestClient(create_app())
+
+    status_response = client.get("/api/run-status")
+    assert status_response.status_code == 200
+    assert status_response.json()["status"] == "stopped"
+    assert status_response.json()["stop_requested"] is False
+    assert status_response.json()["elapsed_seconds"] == 42
+    assert status_response.json()["elapsed_text"] == "42s"
+    assert status_response.json()["scheduler"]["active"] is False
+
+    stop_response = client.post("/api/run/stop")
+    assert stop_response.status_code == 200
+    assert stop_response.json()["status"] == "stopped"
+    assert stop_response.json()["stop_requested"] is False
+    assert stop_response.json()["elapsed_seconds"] == 42
+    assert stop_response.json()["elapsed_text"] == "42s"
 
 
 def test_job_history_endpoint_uses_saved_history(monkeypatch):

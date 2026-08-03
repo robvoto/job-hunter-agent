@@ -23,9 +23,12 @@ from job_hunter_agent.profile_store import (
     require_profile_ready_for_review,
 )
 from job_hunter_agent.run_control import (
+    begin_run_progress_scope,
     clear_run_progress,
     clear_run_stop_request,
     enable_step_through,
+    end_run_progress_scope,
+    run_control_scope_active,
     step_through_enabled,
 )
 from job_hunter_agent.runtime_helpers import (
@@ -115,6 +118,18 @@ if has_cli_flag(sys.argv, CLI_FLAG_STEP):
 
 
 def scrape_jobs_direct(*, trigger_label: str = "manual scrape command") -> str:
+    """Run one scrape inside an isolated control scope in every execution mode."""
+    if run_control_scope_active():
+        return _scrape_jobs_direct_scoped(trigger_label=trigger_label)
+
+    progress_scope = begin_run_progress_scope()
+    try:
+        return _scrape_jobs_direct_scoped(trigger_label=trigger_label)
+    finally:
+        end_run_progress_scope(progress_scope)
+
+
+def _scrape_jobs_direct_scoped(*, trigger_label: str) -> str:
     from job_hunter_agent.global_settings import (
         get_playwright_browser_mode,
         get_playwright_headless,

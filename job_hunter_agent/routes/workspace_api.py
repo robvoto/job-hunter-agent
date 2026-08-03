@@ -14,7 +14,6 @@ from job_hunter_agent.run_control import (
     get_run_progress,
     get_run_progress_detail,
     request_run_stop,
-    run_stop_requested,
 )
 from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
 
@@ -109,21 +108,20 @@ def api_run_status():  # type: ignore[no-untyped-def]
     ``progress_detail`` and elapsed fields are the canonical UI inputs.
     """
     last_run = srv._read_last_run_timestamp()
-    running = srv._is_run_in_progress()
-    stopping = running and run_stop_requested()
+    status = srv._current_run_status()
     elapsed_text = srv._format_current_run_elapsed()
     elapsed_seconds = srv._current_run_elapsed_seconds()
     progress = get_run_progress()
     progress_detail = get_run_progress_detail()
     scheduler = srv._read_scheduler_status()
-    if running or stopping:
+    if status in {srv.RUN_STATUS_RUNNING, srv.RUN_STATUS_STOPPING}:
         scheduler["active"] = True
 
     return json_response(
         {
             "ok": True,
-            "status": "stopping" if stopping else "running" if running else "idle",
-            "stop_requested": stopping,
+            "status": status,
+            "stop_requested": status == srv.RUN_STATUS_STOPPING,
             "progress": progress or None,
             "progress_detail": progress_detail,
             "elapsed_seconds": elapsed_seconds,
@@ -142,7 +140,7 @@ def api_run_stop():  # type: ignore[no-untyped-def]
         return json_response(
             {
                 "ok": True,
-                "status": "idle",
+                "status": srv._current_run_status(),
                 "stop_requested": False,
                 "progress": get_run_progress() or None,
                 "progress_detail": get_run_progress_detail(),

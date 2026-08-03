@@ -12,6 +12,7 @@ All public mutators are thread-safe via ``_RUN_PROGRESS_LOCK``.
 
 from __future__ import annotations
 
+import contextvars
 import logging
 import sys
 import threading
@@ -24,6 +25,10 @@ _RUN_STOP_REQUESTED = threading.Event()
 _RUN_PROGRESS_LOCK = threading.Lock()
 _RUN_PROGRESS_TEXT = ""
 _RUN_PROGRESS_DETAIL: ProgressDetail | None = None
+_RUN_PROGRESS_SCOPE = contextvars.ContextVar("job_hunter_run_progress_scope", default=None)
+_RUN_STOP_EVENT_SCOPE = contextvars.ContextVar("job_hunter_run_stop_event", default=None)
+_RUN_ACTIVE_PROGRESS_SCOPE: object | None = None
+_RUN_ACTIVE_STOP_EVENT: threading.Event | None = None
 logger = logging.getLogger(__name__)
 
 # Manual job-by-job review debug aid, enabled via --step: pauses the scrape loop
@@ -93,15 +98,78 @@ def pause_for_step_through(label: str) -> None:
 
 
 def request_run_stop() -> None:
-    _RUN_STOP_REQUESTED.set()
+    """Signal the active run, or the legacy global event when no run is scoped."""
+    with _RUN_PROGRESS_LOCK:
+        active_event = _RUN_ACTIVE_STOP_EVENT
+    if active_event is not None:
+        active_event.set()
+    else:
+        _RUN_STOP_REQUESTED.set()
 
 
 def clear_run_stop_request() -> None:
+    """Clear only currently active/legacy stop events, never detached worker events."""
     _RUN_STOP_REQUESTED.clear()
+    with _RUN_PROGRESS_LOCK:
+        active_event = _RUN_ACTIVE_STOP_EVENT
+    if active_event is not None:
+        active_event.clear()
 
 
 def run_stop_requested() -> bool:
+    scoped_event = _RUN_STOP_EVENT_SCOPE.get()
+    if scoped_event is not None:
+        return scoped_event.is_set()
+    with _RUN_PROGRESS_LOCK:
+        active_event = _RUN_ACTIVE_STOP_EVENT
+    if active_event is not None:
+        return active_event.is_set()
     return _RUN_STOP_REQUESTED.is_set()
+
+
+def run_control_scope_active() -> bool:
+    """Return whether the current execution context already owns run state."""
+    return _RUN_PROGRESS_SCOPE.get() is not None
+
+
+def begin_run_progress_scope() -> object:
+    """Start isolated stop/progress state for one background run.
+
+    Source workers inherit both values through ``contextvars.copy_context()``.
+    A detached late worker therefore keeps its own stop event and cannot resume
+    merely because a later run clears or replaces the active event.
+    """
+    global _RUN_ACTIVE_PROGRESS_SCOPE, _RUN_ACTIVE_STOP_EVENT
+    global _RUN_PROGRESS_TEXT, _RUN_PROGRESS_DETAIL
+
+    scope = object()
+    stop_event = threading.Event()
+    with _RUN_PROGRESS_LOCK:
+        if _RUN_ACTIVE_PROGRESS_SCOPE is not None:
+            raise RuntimeError("Another scrape run already owns the active run-control scope.")
+        _RUN_ACTIVE_PROGRESS_SCOPE = scope
+        _RUN_ACTIVE_STOP_EVENT = stop_event
+        _RUN_PROGRESS_TEXT = ""
+        _RUN_PROGRESS_DETAIL = None
+    _RUN_PROGRESS_SCOPE.set(scope)
+    _RUN_STOP_EVENT_SCOPE.set(stop_event)
+    return scope
+
+
+def end_run_progress_scope(scope: object) -> None:
+    """Close *scope* while leaving detached workers' scoped stop events intact."""
+    global _RUN_ACTIVE_PROGRESS_SCOPE, _RUN_ACTIVE_STOP_EVENT
+    global _RUN_PROGRESS_TEXT, _RUN_PROGRESS_DETAIL
+
+    with _RUN_PROGRESS_LOCK:
+        if _RUN_ACTIVE_PROGRESS_SCOPE is scope:
+            _RUN_ACTIVE_PROGRESS_SCOPE = None
+            _RUN_ACTIVE_STOP_EVENT = None
+            _RUN_PROGRESS_TEXT = ""
+            _RUN_PROGRESS_DETAIL = None
+    if _RUN_PROGRESS_SCOPE.get() is scope:
+        _RUN_PROGRESS_SCOPE.set(None)
+        _RUN_STOP_EVENT_SCOPE.set(None)
 
 
 def _normalise_progress_for_log(text: str) -> str:
@@ -254,7 +322,10 @@ def set_run_progress_state(
     else:
         detail_obj = None
 
+    caller_scope = _RUN_PROGRESS_SCOPE.get()
     with _RUN_PROGRESS_LOCK:
+        if caller_scope is not None and caller_scope is not _RUN_ACTIVE_PROGRESS_SCOPE:
+            return
         previous_text = _RUN_PROGRESS_TEXT
         previous_detail = _RUN_PROGRESS_DETAIL
         _RUN_PROGRESS_TEXT = normalized_text
