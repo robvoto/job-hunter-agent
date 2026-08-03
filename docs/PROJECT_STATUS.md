@@ -6,7 +6,7 @@ This document prevents the README and technical documentation from presenting pl
 
 - Candidate onboarding from `.docx` and plain-text source material.
 - Per-user runtime profile stored in SQLite.
-- SEEK and LinkedIn job collection through configurable source connectors.
+- SEEK, LinkedIn, and APSJobs job collection through configurable source connectors.
 - Job normalisation and canonical source identifiers.
 - Deterministic hard blockers and title checks.
 - Capability, requirement, and eligibility evidence evaluation.
@@ -22,6 +22,7 @@ This document prevents the README and technical documentation from presenting pl
 These capabilities exist but require runtime configuration or an appropriate deployment environment:
 
 - LinkedIn collection depends on its connector dependencies and source availability.
+- APSJobs collection depends on Playwright/browser availability and the source remaining compatible with the connector.
 - Email and Telegram notifications require user-owned delivery settings.
 - HTTPS cookie hardening requires HTTPS termination through the deployment proxy.
 - LLM-assisted review depends on the active deployment's provider configuration and privacy policy.
