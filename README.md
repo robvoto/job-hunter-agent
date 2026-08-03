@@ -22,6 +22,7 @@ Current supported job sources:
 
 - SEEK
 - LinkedIn
+- APSJobs
 
 The connector architecture is designed to support additional sources without moving source-specific behaviour into the scoring layer.
 
@@ -93,9 +94,9 @@ Job collection     User preferences
 ```text
 .
 ├── job_hunter_agent/          # Application, filtering, scoring, and runtime services
-├── scrapers/                  # Source-specific connectors
+│   └── scrapers/              # Source-specific connectors
 ├── templates/                 # Server-rendered UI templates
-├── static/                    # Frontend assets
+│   └── static/                # Frontend assets
 ├── data/                      # Managed defaults and knowledge data
 ├── tests/                     # Unit, integration, and browser tests
 ├── docs/                      # Architecture, operations, user, and integration documentation
@@ -124,4 +125,4 @@ The repository excludes developer profiles, uploaded CV files, per-user runtime 
 
 ## Licence
 
-This is currently a private repository and does not grant an open-source licence. A licence should be selected deliberately before any public source release.
+Licensed under the MIT License. See [`LICENSE`](LICENSE).
