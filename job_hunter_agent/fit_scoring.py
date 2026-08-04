@@ -58,6 +58,48 @@ LLM_REVIEW_STATE_EVALUATED = "evaluated"
 LLM_REVIEW_STATE_INVALID = "invalid"
 LLM_REVIEW_INCOMPLETE_LABEL = "LLM review incomplete"
 
+# Debug audit rows must read the same words as the job card UI (Mandatory/Expected/
+# Preferred/Bonus, In profile/Partial match/etc, Strong/Working/...) instead of
+# title-casing the raw enum values — otherwise the same status shows up as two
+# different phrases depending on which view you're looking at.
+_AUDIT_IMPORTANCE_LABEL_KEYS = {
+    "mandatory": "importance_mandatory",
+    "strongly_preferred": "importance_strongly_preferred",
+    "preferred": "importance_preferred",
+    "nice_to_have": "importance_nice_to_have",
+}
+_AUDIT_STATUS_LABEL_KEYS = {
+    "supported": "coverage_status_supported",
+    "partially_supported": "coverage_status_partially_supported",
+    "mismatch": "coverage_status_mismatch",
+    "invalid": "coverage_status_invalid",
+    # "not_shown" has no badge text in the main UI (redundant there with the
+    # "Needs attention" group heading), but the audit table needs a non-blank
+    # status for every row, so reuse the mandatory-gap wording — it's accurate
+    # regardless of importance.
+    "not_shown": "coverage_status_mandatory_not_shown",
+}
+
+
+def _audit_card_label(key: str) -> str:
+    labels = load_ui_labels().get("workspace_card_labels", {})
+    value = labels.get(key) if isinstance(labels, dict) else None
+    if not value:
+        raise ValueError(f"ui_labels.json is missing workspace_card_labels.{key}")
+    return str(value)
+
+
+def _audit_level_label(candidate_level: str) -> str:
+    if not candidate_level:
+        return "Unresolved"
+    labels = load_ui_labels().get("level_labels", {})
+    value = labels.get(candidate_level) if isinstance(labels, dict) else None
+    if value:
+        return str(value)
+    # Eligibility rows use "confirmed" rather than a graded capability level —
+    # that's not in level_labels, but it's already plain English.
+    return candidate_level.replace("_", " ").title()
+
 
 REQUIREMENT_MAPPING_UNCERTAIN_REASON = "requirement_capability_mapping_uncertain"
 ELIGIBILITY_GATE_NOT_APPLICABLE = "not_applicable"
@@ -433,14 +475,20 @@ def requirement_fit_diagnostics(record: dict, profile: Optional[dict] = None) ->
                 )
         else:
             experience_evidence_label = ""
+        importance_key = str(row["importance"]).strip().lower()
+        status_key = str(row["status"]).strip().lower()
         detailed_rows.append(
             {
                 **row,
-                "importance_label": str(row["importance"]).replace("_", " ").title(),
+                "importance_label": _audit_card_label(
+                    _AUDIT_IMPORTANCE_LABEL_KEYS.get(importance_key, "importance_preferred")
+                ),
                 "requirement_type_label": requirement_type.replace("_", " ").title(),
-                "status_label": str(row["status"]).replace("_", " ").title(),
+                "status_label": _audit_card_label(
+                    _AUDIT_STATUS_LABEL_KEYS.get(status_key, "coverage_status_mismatch")
+                ),
                 "mapping_label": mapping_label,
-                "candidate_level_label": candidate_level or "Unresolved",
+                "candidate_level_label": _audit_level_label(candidate_level),
                 "match_source_label": (
                     match_source.replace("_", " ").title() if match_source else "Unresolved"
                 ),

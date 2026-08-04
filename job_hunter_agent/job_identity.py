@@ -400,6 +400,61 @@ def _log_potential_duplicate(a: dict, b: dict, matched_on: list[str]) -> None:
     )
 
 
+def _log_confirmed_duplicate_merge(
+    kept: dict, merged_away: dict, matched_on: str, matched_value: str
+) -> None:
+    """Log which posting was kept and which was merged away as a confirmed duplicate."""
+
+    detail = (
+        f"Confirmed duplicate on {matched_on} ({matched_value}). "
+        f"Kept: {_record_label(kept)}. Merged away: {_record_label(merged_away)}."
+    )
+
+    append_uncertainty_log(
+        UNCERTAINTY_LOG_PATH,
+        build_uncertainty_entry(
+            reason_code="CONFIRMED_DUPLICATE_MERGED",
+            stage="deduplication",
+            field="job_identity",
+            raw_value=f"{_normalized_job_key(kept)} | {_normalized_job_key(merged_away)}",
+            normalized_value=f"{matched_on}={matched_value}",
+            detail=detail,
+            source="deduplicate_across_sources",
+            job_key=_normalized_job_key(kept),
+            severity="info",
+        ),
+    )
+    record_system_warning(
+        severity="info",
+        category="job_identity_uncertainty",
+        source="deduplicate_across_sources",
+        message=detail,
+        fingerprint=make_system_warning_fingerprint(
+            "job_identity",
+            "confirmed_duplicate_merged",
+            _normalized_job_key(kept),
+            _normalized_job_key(merged_away),
+            matched_on,
+            matched_value,
+        ),
+        job_key=_normalized_job_key(kept),
+        run_id=str(
+            kept.get(RECORD_RUN_STARTED_AT_KEY) or merged_away.get(RECORD_RUN_STARTED_AT_KEY) or ""
+        ),
+        context={
+            "reason_code": "CONFIRMED_DUPLICATE_MERGED",
+            "matched_on": matched_on,
+            "matched_value": matched_value,
+            "kept_job_key": _normalized_job_key(kept),
+            "kept_title": str(kept.get(RECORD_TITLE_KEY) or "").strip(),
+            "kept_source": _source_label(kept),
+            "merged_job_key": _normalized_job_key(merged_away),
+            "merged_title": str(merged_away.get(RECORD_TITLE_KEY) or "").strip(),
+            "merged_source": _source_label(merged_away),
+        },
+    )
+
+
 def _log_dedup_company_missing(a: dict, b: dict, normalized_title: str) -> None:
     """Log when titles match but company is absent — duplicate status is unverifiable."""
 
@@ -586,10 +641,14 @@ def deduplicate_across_sources(records: List[dict]) -> List[dict]:
                     _merge_duplicate_links(_duplicate_links(record), _duplicate_links(kept_record)),
                 )
 
+                _log_confirmed_duplicate_merge(record, kept_record, matched_on, matched_value)
+
                 deduped[duplicate_index] = record
 
             else:
                 _append_duplicate_link(kept_record, record, matched_on, matched_value)
+
+                _log_confirmed_duplicate_merge(kept_record, record, matched_on, matched_value)
 
             continue
 

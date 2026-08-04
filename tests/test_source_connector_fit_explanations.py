@@ -3162,7 +3162,6 @@ def test_render_job_card_debug_audit_shows_evidence_credit_and_decision_conversi
     assert "Calculation" in html
     assert "3 × 1 × 1 = 3 / 3" in html
     assert "Australian citizenship" in html
-    assert "Mismatch" in html
     assert "Domain architecture" in html
     assert "Unresolved mapping" in html
     assert "No profile evidence returned" in html
@@ -3543,7 +3542,7 @@ def test_workspace_renders_requirement_coverage_with_status_classes():
     assert "Bonus" in html  # nice_to_have label
 
 
-def test_workspace_requirement_list_sorts_mandatory_then_preferred_then_other_alphabetically():
+def test_workspace_requirement_list_groups_attention_items_before_matched_items():
     html = workspace_renderer.render_job_card(
         {
             "job_key": "seek:req-order-test",
@@ -3602,11 +3601,14 @@ def test_workspace_requirement_list_sorts_mandatory_then_preferred_then_other_al
         _capability_profile(),
     )
 
+    # Not-yet-matched requirements (mismatch/invalid/not_shown) are grouped first,
+    # each group internally sorted mandatory -> strongly_preferred -> preferred ->
+    # nice_to_have, then alphabetically within a tier.
     assert html.index("PV clearance") < html.index("SAP certification")
-    assert html.index("SAP certification") < html.index("Stakeholder engagement")
+    assert html.index("SAP certification") < html.index("Financial reporting")
+    assert html.index("Financial reporting") < html.index("Stakeholder engagement")
     assert html.index("Stakeholder engagement") < html.index("Agile delivery")
     assert html.index("Agile delivery") < html.index("Reporting")
-    assert html.index("Reporting") < html.index("Financial reporting")
 
 
 def test_repeated_listing_history_adds_candidate_warning():

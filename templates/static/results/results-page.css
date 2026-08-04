@@ -583,6 +583,22 @@
   color: var(--text-muted);
 }
 
+/* Same eyebrow treatment as the sidebar's SORT/FILTERS group labels, so the
+   Needs attention / Matched split reads as a real section break, not just
+   another muted line among the requirement rows. */
+.job-requirement-group-heading {
+  font-size: var(--text-role-overline-font-size);
+  font-weight: var(--text-role-overline-font-weight);
+  letter-spacing: var(--text-role-overline-letter-spacing);
+  text-transform: uppercase;
+}
+
+.job-requirement-group + .job-requirement-group {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+}
+
 .job-insight-group.job-insight-warning strong {
   color: var(--state-error-text);
 }
@@ -728,6 +744,12 @@
   border-color: var(--state-success-border);
   color: var(--state-success-text);
   background: var(--state-success-bg);
+}
+
+/* Same warning-tier row background as --invalid, so mandatory-but-unproven
+   requirements get consistent visual weight regardless of which panel they render in. */
+.job-requirement-item--partially-supported {
+  background: color-mix(in srgb, var(--state-warning-bg) 40%, transparent);
 }
 
 .job-requirement-item--partially-supported .job-requirement-status {

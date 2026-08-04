@@ -182,7 +182,7 @@ def test_requirement_fit_diagnostics_and_formatter_cover_all_status_types():
     lines = fit_scoring.format_requirement_fit_diagnostics_lines(record, profile)
 
     assert "Requirement: Stakeholder workshops" in lines
-    assert "Coverage: Supported" in lines
+    assert "Coverage: In profile" in lines
     assert "Requirement type: Eligibility" in lines
     assert "Mapped to: PV clearance (confirmed)" in lines
     assert "Matched via: Capability Name" in lines

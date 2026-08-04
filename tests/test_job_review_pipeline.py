@@ -1321,11 +1321,11 @@ def test_fit_review_logs_shared_requirement_score_diagnostics(monkeypatch, caplo
     assert "Eligibility gate: Fail | Australian citizenship" in block
     assert "Why: Requirement coverage returned for scoring diagnostics." in block
     assert (
-        "Stakeholder engagement | Mandatory | Capability | Supported | Stakeholder Engagement"
+        "Stakeholder engagement | Mandatory | Capability | In profile | Stakeholder Engagement"
         in block
     )
     assert "Evidence: Led stakeholder workshops." in block
-    assert "Australian citizenship | Preferred | Eligibility | Mismatch" in block
+    assert "Australian citizenship | Preferred | Eligibility | Not in profile" in block
     assert "Final calculation:" in block
 
 

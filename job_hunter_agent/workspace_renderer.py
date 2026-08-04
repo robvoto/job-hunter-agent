@@ -386,13 +386,18 @@ def _render_scoring_audit_html(
         return _workspace_label("scoring_audit_labels", key)
 
     diagnostics = requirement_fit_diagnostics(record, active_profile)
+    # Eligibility/clearance requirements are a pass/fail gate, not part of the
+    # weighted score (their requirement_weight is always 0) — the gate result is
+    # already shown in the decision trace above, so listing them here with a
+    # column of zeros only makes the "what fed the score" table read as wrong.
+    scored_rows = [row for row in diagnostics["rows"] if not row.get("is_eligibility_gate")]
     has_debug_match_details = any(
         row.get("match_source_label") not in {"", "Unresolved"}
         or row.get("matched_profile_term_label") not in {"", "Unresolved"}
-        for row in diagnostics["rows"]
+        for row in scored_rows
     )
     row_html = ""
-    for row in diagnostics["rows"]:
+    for row in scored_rows:
         requirement_weight = f"{float(row['requirement_weight']):g}"
         credit_fraction = f"{float(row['credit_fraction']):g}"
         weighted_credit = f"{float(row['weighted_credit']):g}"
@@ -456,10 +461,12 @@ def _render_scoring_audit_html(
         audit_table += (
             '<div class="job-insight-group is-secondary scoring-audit-summary">'
             "<ul>"
-            f"<li>{safe_html(_audit_label('earned_weighted_credit_prefix'))} {safe_html(earned_weighted_credit)}</li>"
-            f"<li>{safe_html(_audit_label('total_requirement_weight_prefix'))} {safe_html(total_requirement_weight)}</li>"
-            f"<li>{safe_html(_audit_label('calculation_prefix'))} {safe_html(diagnostics['final_calculation_label'])}</li>"
-            f"<li>{safe_html(_audit_label('final_requirement_fit_prefix'))} {safe_html(str(diagnostics['final_requirement_fit']))}%</li>"
+            f"<li>{safe_html(_audit_label('earned_weighted_credit_prefix'))} {safe_html(earned_weighted_credit)}"
+            f" {safe_html(_audit_label('sum_of_weighted_credit_column_suffix'))}</li>"
+            f"<li>{safe_html(_audit_label('total_requirement_weight_prefix'))} {safe_html(total_requirement_weight)}"
+            f" {safe_html(_audit_label('sum_of_requirement_weight_column_suffix'))}</li>"
+            f"<li>{safe_html(_audit_label('calculation_prefix'))} {safe_html(diagnostics['final_calculation_label'])}"
+            f" = {safe_html(str(diagnostics['final_requirement_fit']))}%</li>"
             "</ul>"
             "</div>"
         )
@@ -1632,20 +1639,35 @@ def render_job_card(
         "preferred": "importance_preferred",
         "nice_to_have": "importance_nice_to_have",
     }
+    # Ordering only (not display text) — keeps each importance tier visually
+    # clustered within a requirement group instead of merging preferred tiers.
+    importance_sort_buckets = {
+        "mandatory": 0,
+        "strongly_preferred": 1,
+        "preferred": 2,
+        "nice_to_have": 3,
+    }
+    matched_css_modifiers = {"supported", "confirmed-have"}
+    # Badge suppression only applies to "no evidence found" gaps — the group
+    # heading + add-to-profile action already say that. "confirmed-do-not-have"
+    # is a confirmed negative fact (not merely unproven), so its badge stays.
+    _NOT_FOUND_CSS_MODIFIERS = {
+        "mismatch",
+        "mandatory-not-shown",
+        "not-shown",
+        "unknown",
+    }
 
     def _requirement_key(value: str) -> str:
         return compact_whitespace(value).lower()
 
+    def _importance_bucket(importance: str) -> int:
+        return importance_sort_buckets.get(importance, importance_sort_buckets["preferred"])
+
     def _requirement_sort_key(row: dict[str, Any]) -> tuple[int, str]:
         importance = compact_whitespace(str(row.get("importance") or "")).lower()
         requirement = compact_whitespace(str(row.get("requirement") or "")).lower()
-        if importance == "mandatory":
-            bucket = 0
-        elif importance in {"strongly_preferred", "preferred"}:
-            bucket = 1
-        else:
-            bucket = 2
-        return (bucket, requirement)
+        return (_importance_bucket(importance), requirement)
 
     def _is_structured_meta_requirement(req_text: str) -> bool:
         requirement_signature = re.sub(
@@ -1665,6 +1687,28 @@ def render_job_card(
             if requirement_signature in structured_signatures:
                 return True
         return False
+
+    def _css_modifier_for_row(row: dict[str, Any]) -> str:
+        profile_status = str(row.get("profile_status") or "").strip()
+        coverage_status = str(row.get("coverage_status") or "").strip().lower()
+        importance = str(row.get("importance") or "").strip().lower()
+        if coverage_status == "supported":
+            return "supported"
+        if coverage_status == "partially_supported":
+            return "partially-supported"
+        if coverage_status == "mismatch":
+            return "mismatch"
+        if coverage_status == "invalid":
+            return "invalid"
+        if coverage_status == "not_shown" and importance == "mandatory":
+            return "mandatory-not-shown"
+        if coverage_status == "not_shown":
+            return "not-shown"
+        if profile_status == STATUS_CONFIRMED_HAVE:
+            return "confirmed-have"
+        if profile_status == STATUS_CONFIRMED_DO_NOT_HAVE:
+            return "confirmed-do-not-have"
+        return "unknown"
 
     def _render_requirement_row_html(row: dict[str, Any]) -> tuple[str, bool]:
         req_text = compact_whitespace(str(row.get("requirement") or ""))
@@ -1702,24 +1746,7 @@ def render_job_card(
             row.get("experience_requirement_review_needed")
         )
 
-        if coverage_status == "supported":
-            css_modifier = "supported"
-        elif coverage_status == "partially_supported":
-            css_modifier = "partially-supported"
-        elif coverage_status == "mismatch":
-            css_modifier = "mismatch"
-        elif coverage_status == "invalid":
-            css_modifier = "invalid"
-        elif coverage_status == "not_shown" and importance == "mandatory":
-            css_modifier = "mandatory-not-shown"
-        elif coverage_status == "not_shown":
-            css_modifier = "not-shown"
-        elif profile_status == STATUS_CONFIRMED_HAVE:
-            css_modifier = "confirmed-have"
-        elif profile_status == STATUS_CONFIRMED_DO_NOT_HAVE:
-            css_modifier = "confirmed-do-not-have"
-        else:
-            css_modifier = "unknown"
+        css_modifier = _css_modifier_for_row(row)
 
         if coverage_status:
             status_key = coverage_status_label_keys.get(coverage_status)
@@ -1734,6 +1761,10 @@ def render_job_card(
         else:
             status_key = profile_status_label_keys.get(profile_status)
         status_label = workspace_card_label_group.get(status_key, "") if status_key else ""
+        if css_modifier in _NOT_FOUND_CSS_MODIFIERS:
+            # The "needs attention" group heading and the add-to-profile action already
+            # say this is missing — a status badge repeating that is noise, not signal.
+            status_label = ""
         classification_label = (
             workspace_card_label_group.get("coverage_status_classification_review", "")
             if row.get("classification_review")
@@ -1836,6 +1867,58 @@ def render_job_card(
         )
         return html, bool(detail_html_parts)
 
+    def _render_requirement_group_block(heading_label: str, items_html: str) -> str:
+        if not items_html:
+            return ""
+        return (
+            f'<div class="job-insight-group is-secondary job-requirement-group">'
+            f'<strong class="job-requirement-group-heading">{safe_html(heading_label)}</strong>'
+            f'<ul class="job-requirement-list">{items_html}</ul>'
+            f"</div>"
+        )
+
+    def _render_requirement_sections_html(
+        order: list[str],
+        rows: dict[str, dict[str, Any]],
+        attention_prefix_html: str = "",
+    ) -> str:
+        """Split rows into a 'needs attention' group (surfaced first) and a
+        'matched' group, each internally sorted by importance tier. This keeps
+        Job Requirements, Eligibility, and Clearance panels consistent: gaps are
+        always the first thing a user sees, regardless of which panel."""
+        attention_keys: list[str] = []
+        matched_keys: list[str] = []
+        for key in order:
+            row = rows.get(key)
+            if not isinstance(row, dict):
+                continue
+            if _css_modifier_for_row(row) in matched_css_modifiers:
+                matched_keys.append(key)
+            else:
+                attention_keys.append(key)
+        attention_keys.sort(key=lambda key: _requirement_sort_key(rows[key]))
+        matched_keys.sort(key=lambda key: _requirement_sort_key(rows[key]))
+
+        attention_items_html = attention_prefix_html
+        for key in attention_keys:
+            row_html, _ = _render_requirement_row_html(rows[key])
+            attention_items_html += row_html
+        matched_items_html = ""
+        for key in matched_keys:
+            row_html, _ = _render_requirement_row_html(rows[key])
+            matched_items_html += row_html
+
+        return (
+            _render_requirement_group_block(
+                _workspace_label("workspace_card_labels", "requirement_group_attention_heading"),
+                attention_items_html,
+            )
+            + _render_requirement_group_block(
+                _workspace_label("workspace_card_labels", "requirement_group_matched_heading"),
+                matched_items_html,
+            )
+        )
+
     if has_coverage:
         # Coverage path: one row per coverage entry, no job_requirements duplication.
         # Eligibility requirements (clearance, citizenship, work rights, etc.) get their
@@ -1937,25 +2020,17 @@ def render_job_card(
         )
 
     if requirement_statuses or raw_coverage_is_list or occupation_row_html:
-        requirement_items_html = occupation_row_html
-        sorted_requirement_keys = sorted(
+        requirement_sections_html = _render_requirement_sections_html(
             merged_requirement_order,
-            key=lambda key: _requirement_sort_key(merged_requirement_rows.get(key) or {}),
+            merged_requirement_rows,
+            attention_prefix_html=occupation_row_html,
         )
-        for key in sorted_requirement_keys:
-            row = merged_requirement_rows.get(key)
-            if not isinstance(row, dict):
-                continue
-            row_html, _ = _render_requirement_row_html(row)
-            if not row_html:
-                continue
-            requirement_items_html += row_html
 
-        if requirement_items_html:
+        if requirement_sections_html:
             job_requirements_html = (
                 '<details class="job-insights job-requirements-panel">'
                 f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'job_requirements_summary'))}</summary>"
-                f'<div class="job-insight-group is-secondary"><ul class="job-requirement-list">{requirement_items_html}</ul></div>'
+                f"{requirement_sections_html}"
                 "</details>"
             )
         else:
@@ -2015,32 +2090,26 @@ def render_job_card(
         else ""
     )
 
-    clearance_items_html = ""
-    for key in eligibility_coverage_order:
-        row = eligibility_coverage_rows.get(key)
-        if not isinstance(row, dict):
-            continue
-        row_html, _ = _render_requirement_row_html(row)
-        clearance_items_html += row_html
+    clearance_sections_html = _render_requirement_sections_html(
+        eligibility_coverage_order, eligibility_coverage_rows
+    )
     clearance_html = (
         '<details class="job-insights job-clearance-panel">'
         f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'clearance_panel_summary'))}</summary>"
-        f'<div class="job-insight-group is-secondary"><ul class="job-requirement-list">{clearance_items_html}</ul></div>'
+        f"{clearance_sections_html}"
         "</details>"
-        if clearance_items_html
+        if clearance_sections_html
         else ""
     )
-    eligibility_items_html = "".join(
-        _render_requirement_row_html(generic_eligibility_coverage_rows[key])[0]
-        for key in generic_eligibility_coverage_order
-        if key in generic_eligibility_coverage_rows
+    eligibility_sections_html = _render_requirement_sections_html(
+        generic_eligibility_coverage_order, generic_eligibility_coverage_rows
     )
     eligibility_html = (
         '<details class="job-insights job-eligibility-panel">'
         f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'eligibility_panel_summary'))}</summary>"
-        f'<div class="job-insight-group is-secondary"><ul class="job-requirement-list">{eligibility_items_html}</ul></div>'
+        f"{eligibility_sections_html}"
         "</details>"
-        if eligibility_items_html
+        if eligibility_sections_html
         else ""
     )
 
