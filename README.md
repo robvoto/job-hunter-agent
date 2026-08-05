@@ -1,126 +1,128 @@
 # Job Hunter Agent
 
-Local-first job discovery and fit-evaluation system.
+Job Hunter is a local-first job discovery and fit-evaluation system. It builds a structured candidate profile, collects jobs from configured sources, applies deterministic eligibility and fit rules, explains its decisions, and preserves uncertain cases for human review.
 
-Deployment target:
+## Why this project exists
 
-- AWS EC2 with a small EBS-backed root volume
-- production-style operation, not prototype-only handling
-- keep runtime state and deployment notes aligned with server operation
+Job boards optimise for showing more listings, not for making defensible candidate decisions. The result is duplicated roles, stale advertisements, weak keyword matches, and unexplained recommendations.
 
-The product goal is simple: a user gives the app strong source material about their experience, the app builds a working profile, reviews jobs against that profile, and keeps a meaningful shortlist instead of forcing the user to search manually every day.
+Job Hunter is designed as a strict but fair decision system:
 
-Current implemented job sources:
+- reject only when an explicit rule or blocker is supported;
+- distinguish missing evidence from confirmed mismatch;
+- show why a job was kept, rejected, or marked for review;
+- learn only through approved user feedback;
+- keep candidate data and runtime state under the user's control.
+
+## Current status
+
+Active development with a working web application and AWS deployment path.
+
+Current supported job sources:
 
 - SEEK
 - LinkedIn
+- APSJobs
 
-The architecture is intentionally broader than a single site. SEEK is the current source connector, not the long-term boundary of the product.
+The connector architecture is designed to support additional sources without moving source-specific behaviour into the scoring layer.
 
-## What Works Now
+See [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) for the boundary between implemented, configuration-dependent, and planned capabilities.
 
-- guided onboarding at `http://127.0.0.1:8765/start` (supports `.docx` and plain text)
-- local settings console at `http://127.0.0.1:8765/settings`
-- local workspace at `http://127.0.0.1:8765/workspace`
+## Decision pipeline
 
-## Quick Start
+```text
+Candidate onboarding
+        │
+        ▼
+Structured runtime profile
+        │
+        ├──────────────┐
+        ▼              ▼
+Job collection     User preferences
+        │              │
+        └──────┬───────┘
+               ▼
+     Normalisation and deduplication
+               ▼
+     Deterministic hard blockers
+               ▼
+     Capability and eligibility evidence
+               ▼
+     Constrained fit review and scoring
+               ▼
+     Explained keep / review / reject decision
+               ▼
+     User feedback and approved learning
+```
 
-Do not duplicate setup or runtime commands in this README.
+## Implemented capabilities
 
-- For day-to-day use, follow [docs/USER_GUIDE.md](docs/USER_GUIDE.md).
-- For setup, runtime execution, rebuild flows, flags, diagnostics, recovery, and validation commands, follow [docs/OPERATIONS.md](docs/OPERATIONS.md).
+- guided onboarding from `.docx` or plain-text source material;
+- structured candidate profile stored in SQLite;
+- configurable role, location, work-mode, sector, salary, and source preferences;
+- deterministic hard blockers before probabilistic review;
+- capability, eligibility, and requirement evidence tracking;
+- explainable bounded fit scores;
+- separate potential, applied, and hidden job states;
+- explicit review and approval before learned signals affect behaviour;
+- local workspace, settings, and administration interfaces;
+- daily-agent execution and local digest generation;
+- email and Telegram delivery when configured.
 
-Search design note:
+## Architecture principles
 
-- keep search keywords broad enough to capture relevant roles
-- use title rules, metadata gates, content filters, capability logic, and optional AI review to tighten fit afterward
+- **Deterministic before probabilistic** — hard rules and explicit evidence run before any LLM-assisted review.
+- **No hidden rejection logic** — every negative decision must be traceable.
+- **Profile state is authoritative** — onboarding documents are evidence inputs, not silently retained matching truth.
+- **Uncertainty is preserved** — weak evidence becomes a review signal rather than an invisible rejection.
+- **Learning requires approval** — generated suggestions cannot directly alter filtering.
+- **Local-first privacy** — user profiles, job history, logs, and runtime databases are not packaged or committed.
 
-## Architecture Note: Shell & Fragment
+## Technology
 
-The workspace UI uses a decoupled pattern for performance and maintainability:
-- **templates/workspace.html (the shell)**: The main entry point. It contains the navigation, branding, and JavaScript logic to poll for updates.
-- **templates/results.html (the fragment)**: A template used by the server to render the actual job results.
+- Python 3.12+
+- FastAPI and uvicorn
+- Playwright
+- `python-jobspy`
+- SQLite
+- HTML, CSS, and JavaScript templates
+- `python-docx` and pandas
+- optional OpenAI-assisted review, subject to runtime configuration and privacy rules
 
-When you load the workspace, the shell is served first, and the fragment is fetched and injected dynamically once the data is ready.
+## Repository structure
 
-## Tech Stack
+```text
+.
+├── job_hunter_agent/          # Application, filtering, scoring, and runtime services
+│   └── scrapers/              # Source-specific connectors
+├── templates/                 # Server-rendered UI templates
+│   └── static/                # Frontend assets
+├── data/                      # Managed defaults and knowledge data
+├── tests/                     # Unit, integration, and browser tests
+├── docs/                      # Architecture, operations, user, and integration documentation
+└── installer/                 # Desktop packaging source; generated build output is ignored
+```
 
-- **Core**: Python 3.12+
-- **Automation**: Playwright (SEEK scraping)
-- **Multi-Source**: `python-jobspy` (LinkedIn)
-- **Intelligence**: OpenAI API (GPT-4o / GPT-4o-mini)
-- **Parsing**: `python-docx` and `pandas`
-- **UI**: FastAPI + uvicorn; HTML/JS templates under `templates/` and `static/` (routes in `job_hunter_agent/routes/`)
-- **Environment**: `python-dotenv`
+## Run and operate
 
-Logic and core modules reside in the `job_hunter_agent/` package.
+Setup and runtime commands are maintained in one place to avoid contradictory instructions:
 
-## Important Files
+- [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) — product use and profile concepts
+- [`docs/OPERATIONS.md`](docs/OPERATIONS.md) — setup, execution, recovery, and validation
+- [`docs/DEVELOPER_GUIDE.md`](docs/DEVELOPER_GUIDE.md) — development workflow and repository boundaries
 
-- `job_hunter_agent/profile_store.py`
-  Runtime profile persistence, defaults, and normalization.
+## Documentation
 
-- `job_hunter_agent/database.py`
-  SQLite schema and runtime tables.
+- [`docs/INDEX.md`](docs/INDEX.md)
+- [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md)
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- [`docs/PRINCIPLES.md`](docs/PRINCIPLES.md)
+- [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md)
 
-- `templates/workspace.html`
-  Workspace shell.
+## Data and security
 
-- `templates/results.html`
-  Workspace results fragment.
+The repository excludes developer profiles, uploaded CV files, per-user runtime state, scraped payloads, logs, output, browser profiles, databases, credentials, and installer build artefacts. Network deployment requires the session, CSRF, HTTPS, and reverse-proxy controls documented in the operational guidance.
 
-- `data/users/<user_id>/workspace_results.html`
-  Per-user rendered workspace output.
+## Licence
 
-- `data/config/global_settings.json`
-  Committed global settings seed.
-
-- `data/knowledge/ui_labels.json`
-  Shared UI labels and copy.
-
-## Local-Only State
-
-These are intended to stay local and ignored:
-
-- `.venv/`
-- `data/users/`
-- `data/runtime/`
-- `output/`
-- `debug/`
-
-## Security
-
-By default, the application is configured for local use on `localhost`. If you access the workspace over a network (e.g., binding to `0.0.0.0`), the system enforces `Secure` and `__Host-` prefixed session cookies. **This requires an HTTPS connection** (usually handled via a reverse proxy like Caddy or Nginx) for the session management to function.
-
-## LLM Notes
-
-Desktop v1 ignores `OPENAI_API_KEY` and any other global/provider key source. The rule is:
-
-> No global keys. No shared learning. No upload without consent.
-
-Live LLM review stays disabled until user-owned provider-key support is added.
-
-## Daily Agent Notes
-
-The first daily agent layer is now local-first:
-
-- `job_hunter_agent.agent_runner` runs the current connector, rebuilds the workspace, and creates a compact digest
-- email delivery uses the DB-backed user settings managed by `job_hunter_agent/user_settings.py`
-- Telegram delivery uses the DB-backed user settings managed by `job_hunter_agent/user_settings.py`
-- Telegram messages arrive in the user's private chat with their bot, not from their personal Telegram identity
-- the digest is also written locally to `output/agent_last_summary.txt`
-
-Recommended beta setup is covered in [docs/OPERATIONS.md](docs/OPERATIONS.md).
-
-## Docs
-
-- application code lives in `job_hunter_agent/`
-- tests live in `tests/`
-
-- [docs/INDEX.md](docs/INDEX.md)
-- [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
-- [docs/OPERATIONS.md](docs/OPERATIONS.md)
-- [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)
-- [docs/PRINCIPLES.md](docs/PRINCIPLES.md)
+Licensed under the MIT License. See [`LICENSE`](LICENSE).
