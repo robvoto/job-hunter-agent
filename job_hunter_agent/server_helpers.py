@@ -1524,11 +1524,15 @@ def _rebuild_workspace_on_startup() -> None:
 
 class SettingsHandler:
     @staticmethod
-    def _matching_rules_changed(before: dict, after: dict) -> bool:
-        """True only when a matching rule value actually differs, not merely appears in the patch."""
+    def _changed_matching_rule_keys(before: dict, after: dict) -> list[str]:
         before = before or {}
         after = after or {}
-        return any(before.get(key) != after.get(key) for key in MATCHING_RULE_PROFILE_KEYS)
+        return [key for key in MATCHING_RULE_PROFILE_KEYS if before.get(key) != after.get(key)]
+
+    @classmethod
+    def _matching_rules_changed(cls, before: dict, after: dict) -> bool:
+        """True only when a matching rule value actually differs, not merely appears in the patch."""
+        return bool(cls._changed_matching_rule_keys(before, after))
 
     @staticmethod
     def _normalize_profile_patch_for_save(current: dict, patch: dict) -> dict:

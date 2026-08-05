@@ -1,8 +1,52 @@
 (function() {
-    const API_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
+    // This template is served two ways: injected into the live /workspace page
+    // (same-origin, authenticated session cookie + CSRF token available), and
+    // written to disk as a standalone workspace_results.html snapshot that a
+    // user can double-click and open directly (file:// origin). A file:// page
+    // has no session cookie and any cross-origin fetch to the API gets blocked
+    // by CORS before it reaches the server -- previously this rewrote API calls
+    // to hit http://127.0.0.1:8765 directly, which still failed CORS (no
+    // Access-Control-Allow-Origin for a "null" file:// origin) and surfaced as
+    // an opaque "Failed to fetch" with no trace in the server logs. Static
+    // exports are now read-only: writes are blocked client-side with a message
+    // pointing at the live workspace instead of being attempted at all.
+    const API_BASE_URL = '';
     const REVIEW_API_URL = `${API_BASE_URL}/api/review`;
     const JOB_HISTORY_API_URL = `${API_BASE_URL}/api/job-history`;
     const WORKSPACE_CONTEXT = window.__JOB_HUNTER_WORKSPACE__ || {};
+    const IS_STATIC_EXPORT = window.location.protocol === 'file:';
+    const LIVE_WORKSPACE_URL = String(WORKSPACE_CONTEXT.liveWorkspaceUrl || '').trim();
+    const STATIC_EXPORT_MESSAGE = LIVE_WORKSPACE_URL
+      ? `This is a saved copy of your workspace and can't save changes. Open the live workspace to apply, hide, or block jobs: ${LIVE_WORKSPACE_URL}`
+      : "This is a saved copy of your workspace and can't save changes. Open Job Hunter in your browser to apply, hide, or block jobs.";
+
+    function blockStaticExportWrite(statusEl) {
+      if (!IS_STATIC_EXPORT) {
+        return false;
+      }
+      if (statusEl) {
+        statusEl.textContent = STATIC_EXPORT_MESSAGE;
+      } else {
+        window.alert(STATIC_EXPORT_MESSAGE);
+      }
+      return true;
+    }
+
+    function showStaticExportBanner() {
+      if (!IS_STATIC_EXPORT) {
+        return;
+      }
+      const main = document.querySelector('.page') || document.body;
+      if (!main || document.getElementById('static_export_banner')) {
+        return;
+      }
+      const banner = document.createElement('div');
+      banner.id = 'static_export_banner';
+      banner.className = 'workspace-status-message';
+      banner.setAttribute('role', 'status');
+      banner.textContent = STATIC_EXPORT_MESSAGE;
+      main.insertBefore(banner, main.firstChild);
+    }
     const WORKSPACE_RUN_ID = String(WORKSPACE_CONTEXT.runId || '').trim() || 'workspace';
     const WORKSPACE_FILTERS_KEY = `jobHunter.workspace.filters.${WORKSPACE_RUN_ID}`;
     const WORKSPACE_PAGINATION_KEY = `jobHunter.workspace.pagination.${WORKSPACE_RUN_ID}`;
@@ -370,6 +414,9 @@
     }
 
     function sendViewedBeacon(link) {
+      if (IS_STATIC_EXPORT) {
+        return;
+      }
       const payload = JSON.stringify({
         action: 'viewed',
         job_key: link.dataset.jobKey || '',
@@ -555,6 +602,10 @@
         return;
       }
 
+      if (blockStaticExportWrite(status)) {
+        return;
+      }
+
       const buttons = card.querySelectorAll('button');
       buttons.forEach(item => item.disabled = true);
       status.textContent = reviewSavingMessage(action);
@@ -565,6 +616,12 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestPayload)
         });
+
+        if (response.status === 401) {
+          status.textContent = 'Your session has expired. Reload the page and sign in again to continue.';
+          buttons.forEach(item => item.disabled = false);
+          return;
+        }
 
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
@@ -591,7 +648,15 @@
         }, 700);
       } catch (error) {
         buttons.forEach(item => item.disabled = false);
-        status.textContent = error.message || 'Could not save review action.';
+        if (error instanceof TypeError) {
+          // fetch() only throws TypeError for network-level failures (server
+          // unreachable, offline, CORS block) -- it never throws for HTTP
+          // error statuses, those are handled above. Surface the real cause
+          // instead of the browser's opaque "Failed to fetch".
+          status.textContent = 'Could not reach the Job Hunter server. Check that it is running, then reload this page and try again.';
+        } else {
+          status.textContent = error.message || 'Could not save review action.';
+        }
       }
     }
 
@@ -707,6 +772,7 @@
       });
     }
 
+    showStaticExportBanner();
     loadWorkspaceFilters();
     loadWorkspacePagination();
     setActiveWorkspace((window.location.hash || '#potential').replace('#', ''), false, false);
@@ -1022,6 +1088,9 @@
 
     async function _rejSaveAndContinue() {
       const saveButton = document.getElementById('rejection-btn-save');
+      if (blockStaticExportWrite()) {
+        return;
+      }
       const originalLabel = saveButton.textContent;
       saveButton.disabled = true;
       saveButton.textContent = _rejectionStage === 'block_followup' ? 'Saving...' : 'Saving blockers...';
@@ -1159,6 +1228,7 @@
         return;
       }
       if (!jobKey) return;
+      if (blockStaticExportWrite()) return;
 
       const allBtns = btn.closest('.job-gap-actions')
         ? Array.from(btn.closest('.job-gap-actions').querySelectorAll('button'))

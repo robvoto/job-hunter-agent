@@ -195,9 +195,10 @@ def api_title_block_preview(body: dict = Body(...)):  # type: ignore[no-untyped-
 
 @router.post("/api/review")
 def api_review(body: dict = Body(...)):  # type: ignore[no-untyped-def]
+    action = str(body.get("action", "")).strip().lower()
+    job_key = str(body.get("job_key") or body.get("url") or "").strip()
+    logger.info("api_review entry: action=%s job_key=%s", action, job_key)
     try:
-        action = str(body.get("action", "")).strip().lower()
-        job_key = str(body.get("job_key") or body.get("url") or "").strip()
         url = str(body.get("url") or "").strip()
         title = str(body.get("title") or "").strip()
         company = str(body.get("company") or "").strip()
@@ -226,7 +227,9 @@ def api_review(body: dict = Body(...)):  # type: ignore[no-untyped-def]
         else:
             result = append_review_key(action, job_key, url, title, company, teaser)
     except Exception as exc:
+        logger.exception("api_review failed: action=%s job_key=%s", action, job_key)
         return json_response({"error": str(exc)}, 400)
+    logger.info("api_review success: action=%s job_key=%s", action, job_key)
     return json_response(result)
 
 

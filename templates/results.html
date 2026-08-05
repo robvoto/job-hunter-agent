@@ -163,8 +163,33 @@
       runId: $WORKSPACE_RUN_ID_JSON,
       defaultScoreFilterValue: $DEFAULT_SCORE_FILTER_MIN_JSON,
       viewedBadgeHtml: $VIEWED_BADGE_HTML_JSON,
-      labels: $WORKSPACE_LABELS_JSON
+      labels: $WORKSPACE_LABELS_JSON,
+      liveWorkspaceUrl: $LIVE_WORKSPACE_URL_JSON
 };
+    // Root-relative asset paths below (/static/...) only resolve when this
+    // fragment is fetched and injected into the live /workspace page. Opened
+    // directly as a saved file (file://), those requests 404 against the
+    // filesystem root and results-page.js never loads -- so the write guard
+    // it defines never runs either, leaving review buttons silently dead
+    // instead of visibly read-only. This inline block has no external
+    // dependency and always runs, so it disables writes and explains why
+    // even when every other script on the page has failed to load.
+    if (window.location.protocol === 'file:') {
+      var liveUrl = window.__JOB_HUNTER_WORKSPACE__.liveWorkspaceUrl || '';
+      var staticExportMessage = liveUrl
+        ? "This is a saved copy of your workspace and can't save changes. Open the live workspace to apply, hide, or block jobs: " + liveUrl
+        : "This is a saved copy of your workspace and can't save changes. Open Job Hunter in your browser to apply, hide, or block jobs.";
+      Array.prototype.forEach.call(document.querySelectorAll('button'), function (button) {
+        button.disabled = true;
+      });
+      var banner = document.createElement('div');
+      banner.id = 'static_export_banner';
+      banner.setAttribute('role', 'status');
+      banner.style.cssText = 'padding:12px 16px;margin:0 0 16px;background:#fff3cd;color:#664d03;border:1px solid #ffe69c;border-radius:6px;font-family:sans-serif;font-size:14px;';
+      banner.textContent = staticExportMessage;
+      var main = document.querySelector('.page') || document.body;
+      main.insertBefore(banner, main.firstChild);
+    }
   </script>
     <script src="/static/results/results-page.js" defer></script>
 

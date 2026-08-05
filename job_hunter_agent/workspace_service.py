@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 from job_hunter_agent import workspace_data
 from job_hunter_agent import filters as _filters
-from job_hunter_agent.config import DEBUG_MODE
+from job_hunter_agent.config import DEBUG_MODE, JOB_HUNTER_BASE_URL
 from job_hunter_agent.fit_scoring import fit_score_displayed
 from job_hunter_agent.global_settings import (
     get_archive_stale_after_days,
@@ -741,6 +741,10 @@ def render_html(
             ),
             "VIEWED_BADGE_HTML_JSON": json.dumps(viewed_badge_html()),
             "WORKSPACE_LABELS_JSON": json.dumps(workspace_config_labels),
+            # This file is also saved to disk and can be opened directly (file://),
+            # outside the authenticated /workspace page -- see the static-export
+            # guard in results-page.js. This URL is where that guard sends the user.
+            "LIVE_WORKSPACE_URL_JSON": json.dumps(f"{JOB_HUNTER_BASE_URL}/workspace"),
         }
     )
 

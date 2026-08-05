@@ -114,8 +114,11 @@ def api_profile_patch(body: dict = Body(...)):  # type: ignore[no-untyped-def]
 
         updated = srv.patch_profile(patch)
 
-        if srv.SettingsHandler._matching_rules_changed(current, updated):
-            srv.rebuild_workspace_after_rule_change("profile matching rules saved")
+        changed_rule_keys = srv.SettingsHandler._changed_matching_rule_keys(current, updated)
+        if changed_rule_keys:
+            srv.rebuild_workspace_after_rule_change(
+                f"profile matching rules saved: {', '.join(sorted(changed_rule_keys))}"
+            )
 
     except Exception as exc:
         return json_response({"error": str(exc)}, 400)
