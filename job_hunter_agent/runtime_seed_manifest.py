@@ -31,6 +31,7 @@ APPROVED_DB_KNOWLEDGE_JSON_REL_PATHS: tuple[str, ...] = (
     "match_level_defaults.json",
     "parsing_rules.json",
     "posting_channel_indicators.json",
+    "requirement_classification_terms.json",
     "salary.json",
     "scoring_rules.json",
     "source_registry.json",

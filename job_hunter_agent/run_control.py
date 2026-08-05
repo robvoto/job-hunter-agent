@@ -25,8 +25,12 @@ _RUN_STOP_REQUESTED = threading.Event()
 _RUN_PROGRESS_LOCK = threading.Lock()
 _RUN_PROGRESS_TEXT = ""
 _RUN_PROGRESS_DETAIL: ProgressDetail | None = None
-_RUN_PROGRESS_SCOPE = contextvars.ContextVar("job_hunter_run_progress_scope", default=None)
-_RUN_STOP_EVENT_SCOPE = contextvars.ContextVar("job_hunter_run_stop_event", default=None)
+_RUN_PROGRESS_SCOPE: contextvars.ContextVar[object | None] = contextvars.ContextVar(
+    "job_hunter_run_progress_scope", default=None
+)
+_RUN_STOP_EVENT_SCOPE: contextvars.ContextVar[threading.Event | None] = contextvars.ContextVar(
+    "job_hunter_run_stop_event", default=None
+)
 _RUN_ACTIVE_PROGRESS_SCOPE: object | None = None
 _RUN_ACTIVE_STOP_EVENT: threading.Event | None = None
 logger = logging.getLogger(__name__)

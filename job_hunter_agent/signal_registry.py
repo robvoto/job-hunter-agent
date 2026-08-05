@@ -25,12 +25,16 @@ from job_hunter_agent.parsing_schema import (
     KEY_P_ROUTING_SECONDARY,
     KEY_P_ROUTING_SUPPLEMENTARY,
 )
+from job_hunter_agent.requirement_classification import (
+    upsert_requirement_classification_override,
+)
 from job_hunter_agent.signal_schema import (
     CATEGORY_CAPABILITY_CONCEPT,
     CATEGORY_CV_FARMING_PATTERN,
     CATEGORY_HARD_BLOCKER_PATTERN,
     CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE,
     CATEGORY_PROFILE_SECTION_LABEL,
+    CATEGORY_REQUIREMENT_CLASSIFICATION_REVIEW,
     LEARNING_CATEGORY_KEY,
     LEARNING_CONFIDENCE_KEY,
     LEARNING_CONTEXT_KEY,
@@ -60,6 +64,7 @@ CATEGORY_LABELS = {
     CATEGORY_HARD_BLOCKER_PATTERN: "Hard blocker pattern",
     CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE: "Job type",
     CATEGORY_PROFILE_SECTION_LABEL: "Profile section label",
+    CATEGORY_REQUIREMENT_CLASSIFICATION_REVIEW: "Requirement classification",
 }
 
 CATEGORY_METADATA = {
@@ -115,6 +120,15 @@ CATEGORY_METADATA = {
             "Career History → primary",
             "Older Roles → secondary",
             "Certifications → supplementary",
+        ],
+        "warning": None,
+    },
+    CATEGORY_REQUIREMENT_CLASSIFICATION_REVIEW: {
+        "label": "Requirement classification",
+        "description": "Job requirements where deterministic validation could not confidently confirm whether the requirement is a capability (skills, experience, seniority) or an eligibility gate (citizenship, work rights, clearance, licence, qualification). Approving sets the correct classification for future matching jobs.",
+        "examples": [
+            "5+ years in a security-cleared environment",
+            "current registration required for this specialty",
         ],
         "warning": None,
     },
@@ -650,6 +664,12 @@ def approve_signal(key: str, category: str = "", value: str = "") -> dict[str, A
         value = explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
         suggested = _clean_text_list(record.get(LEARNING_SUGGESTED_VALUES_KEY))
         upsert_profile_section_label(value, suggested[0] if suggested else "primary")
+    elif category_key == CATEGORY_REQUIREMENT_CLASSIFICATION_REVIEW:
+        value = explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
+        suggested = _clean_text_list(record.get(LEARNING_SUGGESTED_VALUES_KEY))
+        upsert_requirement_classification_override(
+            value, suggested[0] if suggested else "capability"
+        )
     else:
         value = explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
         _append_knowledge_entry(_CATEGORY_KNOWLEDGE_PATHS[category_key], value, aliases)

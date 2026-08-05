@@ -377,6 +377,34 @@ def test_requirement_fit_invalid_status_does_not_score_even_with_valid_capabilit
     assert warnings[0]["category"] == "requirement_coverage_uncertainty"
 
 
+def test_requirement_fit_uncertain_classification_does_not_score(tmp_path, monkeypatch):
+    uncertainty_log = tmp_path / "uncertainty.jsonl"
+    monkeypatch.setattr(fit_scoring, "UNCERTAINTY_LOG_PATH", uncertainty_log)
+    warnings = []
+    monkeypatch.setattr(
+        fit_scoring,
+        "record_system_warning",
+        lambda **kwargs: warnings.append(kwargs) or kwargs,
+    )
+    record = _record([
+        {
+            "requirement": "5+ years working in a security clearance environment",
+            "importance": "mandatory",
+            "status": "invalid",
+            "requirement_type": "uncertain",
+            "matched_candidate_fact": "",
+            "llm_proposed_requirement_type": "capability",
+        }
+    ])
+
+    assert fit_scoring.fit_score(record, _profile()) == 0
+    rows = [json.loads(line) for line in uncertainty_log.read_text(encoding="utf-8").splitlines()]
+    assert rows[0]["reason_code"] == "requirement_capability_mapping_uncertain"
+    assert "not marked as supported" in rows[0]["detail"].lower()
+    assert warnings
+    assert warnings[0]["category"] == "requirement_coverage_uncertainty"
+
+
 def _fully_supported_record(**extra):
     return _record(
         [
@@ -482,3 +510,51 @@ def test_occupation_alignment_diagnostics_reports_alignment_reason_adjustment_an
     assert "Reason: Related discipline" in block
     assert "Adjustment: -10" in block
     assert f"= {final_score}" in block
+
+
+def test_role_defining_specialist_gap_caps_generic_high_score():
+    profile = _profile()
+    profile["scoring_rules"] = {
+        "fit_breakdown": {"hard_block_penalty": -100},
+        "role_defining_gap_control": {
+            "min_group_requirements": 2,
+            "uncovered_ratio_threshold": 0.5,
+            "max_score_when_uncovered": 54,
+        },
+    }
+    record = _record([
+        {
+            "requirement": "Stakeholder engagement",
+            "importance": "mandatory",
+            "requirement_type": "capability",
+            "status": "supported",
+            "matched_candidate_fact": "stakeholder engagement",
+        },
+        {
+            "requirement": "ICU clinical experience",
+            "importance": "preferred",
+            "requirement_type": "capability",
+            "status": "not_shown",
+            "role_defining": True,
+            "role_defining_group": "critical care",
+        },
+        {
+            "requirement": "Critical-care patient management",
+            "importance": "preferred",
+            "requirement_type": "capability",
+            "status": "not_shown",
+            "role_defining": True,
+            "role_defining_group": "critical care",
+        },
+    ])
+
+    diagnostics = fit_scoring.requirement_fit_diagnostics(record, profile)
+
+    assert diagnostics["final_requirement_fit"] == 54
+    assert diagnostics["role_defining_caps"] == [{
+        "group": "critical care",
+        "requirements": 2,
+        "uncovered": 2,
+        "uncovered_ratio": 1.0,
+        "score_cap": 54,
+    }]

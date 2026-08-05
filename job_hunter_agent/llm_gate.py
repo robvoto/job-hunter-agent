@@ -20,6 +20,7 @@ from pydantic import AliasChoices, BaseModel, Field, ValidationError
 from job_hunter_agent.config import DEBUG_MODE
 from job_hunter_agent.capability_matrix import derive_job_description_aliases
 from job_hunter_agent.experience_requirements import resolve_role_experience_requirement
+from job_hunter_agent.requirement_classification import classify_requirement_type
 from job_hunter_agent.global_settings import (
     get_llm_fit_review_debug_match_diagnostics_enabled,
     KEY_LLM_PRICING_PER_1M,
@@ -61,6 +62,7 @@ from job_hunter_agent.llm_protocol import (
     LLM_INVALID_COVERAGE_REQUIREMENT_TYPE,
     LLM_INVALID_COVERAGE_STATUS,
     LLM_INVALID_OCCUPATION_ALIGNMENT,
+    LLM_UNCERTAIN_COVERAGE_REQUIREMENT_TYPE,
     LLM_FIT_REVIEW_PROMPT_SHAPE,
     LLM_ELIGIBILITY_ALIAS_PROMPT_SHAPE,
     LLM_JOB_REQUIREMENTS_PROMPT_SHAPE,
@@ -315,6 +317,9 @@ class _LLMRequirementCoverageItem(BaseModel):
     )
     matched_job_text: str = ""
     profile_support: list[str] = Field(default_factory=list)
+    covered_requirement_elements: list[str] = Field(default_factory=list)
+    role_defining: bool = False
+    role_defining_group: str = ""
 
 
 class _LLMRequirementCoverageDebugItem(_LLMRequirementCoverageItem):
@@ -982,6 +987,57 @@ def _normalize_capability_name(
     return valid_capability_names.get(normalized, "")
 
 
+_SEMANTIC_MATCH_STOPWORDS = frozenset({
+    "ability", "and", "are", "as", "at", "be", "been", "being", "by", "can",
+    "candidate", "demonstrated", "experience", "experienced", "for", "from", "have",
+    "having", "in", "including", "knowledge", "of", "on", "or", "required", "role",
+    "skills", "strong", "the", "to", "using", "with", "work", "working", "years",
+})
+
+
+def _semantic_match_tokens(value: str) -> set[str]:
+    """Return profession-neutral content tokens for conservative evidence checks."""
+    tokens = re.findall(r"[a-z0-9]+", compact_whitespace(value).lower())
+    normalized: set[str] = set()
+    for token in tokens:
+        if len(token) < 2 or token in _SEMANTIC_MATCH_STOPWORDS:
+            continue
+        for suffix in ("ments", "ment", "ations", "ation", "ing", "ed", "ies", "s"):
+            if token.endswith(suffix) and len(token) - len(suffix) >= 4:
+                token = token[: -len(suffix)]
+                break
+        normalized.add(token)
+    return normalized
+
+
+def _has_meaningful_requirement_evidence(
+    requirement: str,
+    matched_job_text: str,
+    matched_candidate_fact: str,
+    profile_support: list[str],
+    covered_requirement_elements: list[str],
+) -> bool:
+    """Require evidence for an actual component of the requirement, not broad transferability."""
+    requirement_text = " ".join(part for part in (requirement, matched_job_text) if part)
+    evidence_text = " ".join(
+        part for part in (matched_candidate_fact, *profile_support) if compact_whitespace(part)
+    )
+    requirement_tokens = _semantic_match_tokens(requirement_text)
+    evidence_tokens = _semantic_match_tokens(evidence_text)
+    if not requirement_tokens or not evidence_tokens:
+        return False
+    if requirement_tokens & evidence_tokens:
+        return True
+
+    # The model may identify a narrower covered component, but it must be grounded
+    # in both the requirement wording and candidate evidence.
+    for element in covered_requirement_elements:
+        element_tokens = _semantic_match_tokens(element)
+        if element_tokens and element_tokens <= requirement_tokens and element_tokens & evidence_tokens:
+            return True
+    return False
+
+
 def normalize_llm_requirement_coverage(
     value: Any,
     valid_capability_names: dict[str, str] | None = None,
@@ -1012,6 +1068,9 @@ def normalize_llm_requirement_coverage(
         requirement = _clean_job_requirement_text(
             item.get("requirement") or item.get("job_requirement") or item.get("text")
         )
+        matched_job_text = compact_whitespace(
+            item.get("matched_job_text") or item.get("matched_text")
+        )
         raw_importance = compact_whitespace(item.get("importance")).lower()
         importance = (
             raw_importance if raw_importance in LLM_ALLOWED_COVERAGE_IMPORTANCES else "preferred"
@@ -1023,13 +1082,44 @@ def normalize_llm_requirement_coverage(
         requirement_type_before = raw_requirement_type or "capability"
         status_before = status
         if raw_requirement_type:
-            requirement_type = raw_requirement_type
-            requirement_type_is_valid = requirement_type in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES
-            if not requirement_type_is_valid:
-                requirement_type = LLM_INVALID_COVERAGE_REQUIREMENT_TYPE
+            llm_requirement_type = raw_requirement_type
+            llm_requirement_type_is_valid = (
+                llm_requirement_type in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES
+            )
         else:
-            requirement_type = "capability"
-            requirement_type_is_valid = True
+            llm_requirement_type = "capability"
+            llm_requirement_type_is_valid = True
+
+        if llm_requirement_type_is_valid:
+            # Deterministic validation runs regardless of what the LLM answered —
+            # the LLM's classification is a proposal, not a source of truth.
+            requirement_type = classify_requirement_type(
+                requirement, matched_job_text, llm_requirement_type
+            )
+            requirement_type_is_valid = (
+                requirement_type in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES
+            )
+            if requirement_type != llm_requirement_type:
+                _record_requirement_coverage_warning(
+                    requirement=requirement,
+                    importance=importance,
+                    requirement_type_before=requirement_type_before,
+                    requirement_type_after=requirement_type,
+                    status_before=status_before,
+                    status_after=status,
+                    proposed_matched_candidate_fact="",
+                    proposed_capability_name="",
+                    proposed_eligibility_name="",
+                    matched_job_text=matched_job_text,
+                    reason=(
+                        "deterministic_classification_uncertain"
+                        if requirement_type == LLM_UNCERTAIN_COVERAGE_REQUIREMENT_TYPE
+                        else "deterministic_classification_override"
+                    ),
+                )
+        else:
+            requirement_type = LLM_INVALID_COVERAGE_REQUIREMENT_TYPE
+            requirement_type_is_valid = False
         matched_candidate_fact_raw = item.get("matched_candidate_fact") or item.get("profile_name")
         if not matched_candidate_fact_raw:
             matched_candidate_fact_raw = item.get("capability_name") or item.get("eligibility_name")
@@ -1050,6 +1140,14 @@ def normalize_llm_requirement_coverage(
                 else matched_candidate_fact.lower()
             )
             matched_candidate_fact = capability_name or matched_candidate_fact
+        elif requirement_type == LLM_UNCERTAIN_COVERAGE_REQUIREMENT_TYPE:
+            logger.info(
+                "[LLM][COVERAGE] purpose=fit_review uncertain_requirement_type requirement=%r status=%s importance=%s",
+                requirement,
+                status,
+                importance,
+            )
+            status = LLM_INVALID_COVERAGE_STATUS
         else:
             logger.warning(
                 "[LLM][WARN] purpose=fit_review invalid_requirement_type requirement=%r requirement_type=%r status=%s importance=%s",
@@ -1059,9 +1157,6 @@ def normalize_llm_requirement_coverage(
                 importance,
             )
             status = LLM_INVALID_COVERAGE_STATUS
-        matched_job_text = compact_whitespace(
-            item.get("matched_job_text") or item.get("matched_text")
-        )
         match_source = ""
         matched_profile_term = ""
         if include_debug_match_diagnostics:
@@ -1082,6 +1177,16 @@ def normalize_llm_requirement_coverage(
                     continue
                 seen_support.add(lowered)
                 profile_support.append(cleaned)
+        raw_covered_elements = item.get("covered_requirement_elements") or []
+        if isinstance(raw_covered_elements, str):
+            raw_covered_elements = [raw_covered_elements]
+        covered_requirement_elements = [
+            compact_whitespace(value)
+            for value in raw_covered_elements
+            if compact_whitespace(value)
+        ] if isinstance(raw_covered_elements, list) else []
+        role_defining = bool(item.get("role_defining"))
+        role_defining_group = compact_whitespace(item.get("role_defining_group"))
         if not requirement:
             continue
         if (
@@ -1176,6 +1281,45 @@ def normalize_llm_requirement_coverage(
             matched_candidate_fact = ""
             capability_name = ""
             eligibility_name = ""
+        preliminary_experience_requirement = resolve_role_experience_requirement(
+            requirement,
+            matched_job_text,
+            role_experience,
+        )
+        role_history_proves_requirement = bool(
+            preliminary_experience_requirement
+            and preliminary_experience_requirement.get("matched_role_experience_title")
+        )
+        if (
+            requirement_type == "capability"
+            and status in {"supported", "partially_supported"}
+            and not role_history_proves_requirement
+            and not _has_meaningful_requirement_evidence(
+                requirement,
+                matched_job_text,
+                matched_candidate_fact,
+                profile_support,
+                covered_requirement_elements,
+            )
+        ):
+            _record_requirement_coverage_warning(
+                requirement=requirement,
+                importance=importance,
+                requirement_type_before=requirement_type_before,
+                requirement_type_after=requirement_type,
+                status_before=status_before,
+                status_after="not_shown",
+                proposed_matched_candidate_fact=matched_candidate_fact,
+                proposed_capability_name=capability_name,
+                proposed_eligibility_name=eligibility_name,
+                matched_job_text=matched_job_text,
+                reason="generic_transferable_capability_not_requirement_evidence",
+            )
+            status = "not_shown"
+            matched_candidate_fact = ""
+            capability_name = ""
+            profile_support = []
+            covered_requirement_elements = []
         key = requirement.lower()
         if key in seen:
             continue
@@ -1191,14 +1335,20 @@ def normalize_llm_requirement_coverage(
             "matched_job_text": matched_job_text,
             "profile_support": profile_support,
         }
+        if covered_requirement_elements:
+            normalized_item["covered_requirement_elements"] = covered_requirement_elements
+        if role_defining:
+            normalized_item["role_defining"] = True
+        if role_defining_group:
+            normalized_item["role_defining_group"] = role_defining_group
+        if requirement_type == LLM_UNCERTAIN_COVERAGE_REQUIREMENT_TYPE:
+            # Retained only so the pending-review signal can offer the LLM's
+            # own (unverified) guess as the default suggested classification.
+            normalized_item["llm_proposed_requirement_type"] = llm_requirement_type
         if include_debug_match_diagnostics:
             normalized_item["match_source"] = match_source
             normalized_item["matched_profile_term"] = matched_profile_term
-        experience_requirement = resolve_role_experience_requirement(
-            requirement,
-            matched_job_text,
-            role_experience,
-        )
+        experience_requirement = preliminary_experience_requirement
         if experience_requirement:
             normalized_item.update(experience_requirement)
             if not normalized_item.get("matched_role_experience_title"):

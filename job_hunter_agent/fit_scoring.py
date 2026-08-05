@@ -412,6 +412,13 @@ def requirement_fit_audit_rows(record: dict, profile: Optional[dict] = None) -> 
                 ),
             }
         )
+        if item.get("role_defining"):
+            rows[-1]["role_defining"] = True
+        role_defining_group = compact_whitespace(
+            str(item.get("role_defining_group") or "")
+        ).lower()
+        if role_defining_group:
+            rows[-1]["role_defining_group"] = role_defining_group
     return rows
 
 
@@ -422,7 +429,9 @@ def requirement_fit_diagnostics(record: dict, profile: Optional[dict] = None) ->
     logs cannot drift from the actual calculation.
     """
 
-    rows = requirement_fit_audit_rows(record, profile)
+    active_profile = profile or load_profile()
+    scoring_rules = get_scoring_rules(active_profile)
+    rows = requirement_fit_audit_rows(record, active_profile)
     earned_weighted_credit = sum(float(row["weighted_credit"]) for row in rows)
     total_requirement_weight = sum(float(row["requirement_weight"]) for row in rows)
     final_requirement_fit = (
@@ -430,6 +439,36 @@ def requirement_fit_diagnostics(record: dict, profile: Optional[dict] = None) ->
         if total_requirement_weight > 0
         else 0
     )
+
+    role_gap_rules = scoring_rules.get("role_defining_gap_control", {})
+    if not isinstance(role_gap_rules, dict):
+        role_gap_rules = {}
+    min_group_requirements = int(role_gap_rules.get("min_group_requirements") or 0)
+    uncovered_ratio_threshold = float(role_gap_rules.get("uncovered_ratio_threshold") or 1.0)
+    max_score_when_uncovered = int(role_gap_rules.get("max_score_when_uncovered") or 100)
+    role_groups: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        group = compact_whitespace(str(row.get("role_defining_group") or "")).lower()
+        if row.get("role_defining") and group:
+            role_groups.setdefault(group, []).append(row)
+    role_defining_caps: list[dict[str, Any]] = []
+    for group, group_rows in role_groups.items():
+        if len(group_rows) < min_group_requirements:
+            continue
+        uncovered = [
+            row for row in group_rows
+            if str(row.get("status") or "").lower() not in {"supported", "partially_supported"}
+        ]
+        uncovered_ratio = len(uncovered) / len(group_rows)
+        if uncovered_ratio >= uncovered_ratio_threshold:
+            final_requirement_fit = min(final_requirement_fit, max_score_when_uncovered)
+            role_defining_caps.append({
+                "group": group,
+                "requirements": len(group_rows),
+                "uncovered": len(uncovered),
+                "uncovered_ratio": uncovered_ratio,
+                "score_cap": max_score_when_uncovered,
+            })
 
     detailed_rows: list[dict[str, Any]] = []
     for row in rows:
@@ -514,6 +553,7 @@ def requirement_fit_diagnostics(record: dict, profile: Optional[dict] = None) ->
         "earned_weighted_credit": earned_weighted_credit,
         "total_requirement_weight": total_requirement_weight,
         "final_requirement_fit": final_requirement_fit,
+        "role_defining_caps": role_defining_caps,
         "final_calculation_label": (
             f"{earned_weighted_credit:g} ÷ {total_requirement_weight:g} × 100"
             if total_requirement_weight > 0

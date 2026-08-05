@@ -1343,6 +1343,85 @@ def test_normalize_coverage_marks_invalid_requirement_type_for_review(monkeypatc
     )
 
 
+def test_normalize_coverage_reclassifies_experience_wording_as_capability(monkeypatch):
+    warnings = []
+    monkeypatch.setattr(
+        llm_gate,
+        "record_system_warning",
+        lambda **kwargs: warnings.append(kwargs) or kwargs,
+    )
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "5+ years supporting client outcomes",
+                "importance": "mandatory",
+                "requirement_type": "eligibility",
+                "status": "supported",
+                "matched_candidate_fact": "",
+            }
+        ]
+    )
+
+    assert result[0]["requirement_type"] == "capability"
+    assert warnings
+    assert warnings[0]["context"]["reason"] == "deterministic_classification_override"
+    assert warnings[0]["context"]["requirement_type_before"] == "eligibility"
+    assert warnings[0]["context"]["requirement_type_after"] == "capability"
+
+
+def test_normalize_coverage_reclassifies_security_clearance_as_eligibility(monkeypatch):
+    warnings = []
+    monkeypatch.setattr(
+        llm_gate,
+        "record_system_warning",
+        lambda **kwargs: warnings.append(kwargs) or kwargs,
+    )
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "Ability to obtain Baseline security clearance",
+                "importance": "mandatory",
+                "requirement_type": "capability",
+                "status": "supported",
+                "matched_candidate_fact": "",
+            }
+        ]
+    )
+
+    assert result[0]["requirement_type"] == "eligibility"
+    assert warnings
+    assert warnings[0]["context"]["reason"] == "deterministic_classification_override"
+    assert warnings[0]["context"]["requirement_type_before"] == "capability"
+    assert warnings[0]["context"]["requirement_type_after"] == "eligibility"
+
+
+def test_normalize_coverage_marks_conflicting_classification_uncertain(monkeypatch):
+    warnings = []
+    monkeypatch.setattr(
+        llm_gate,
+        "record_system_warning",
+        lambda **kwargs: warnings.append(kwargs) or kwargs,
+    )
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "5+ years working in a security clearance environment",
+                "importance": "mandatory",
+                "requirement_type": "capability",
+                "status": "supported",
+                "matched_candidate_fact": "",
+            }
+        ]
+    )
+
+    assert result[0]["requirement_type"] == "uncertain"
+    assert result[0]["status"] == "invalid"
+    assert result[0]["llm_proposed_requirement_type"] == "capability"
+    assert warnings
+    assert warnings[0]["context"]["reason"] == "deterministic_classification_uncertain"
+    assert warnings[0]["context"]["requirement_type_after"] == "uncertain"
+
+
 def test_normalize_coverage_preserves_malformed_mandatory_requirement():
     result = llm_gate.normalize_llm_requirement_coverage(
         [
@@ -1496,3 +1575,56 @@ def test_llm_judge_title_returns_none_on_client_exception():
         "Business Analyst", ["senior business analyst"], [], llm_client=_RaisingClient()
     )
     assert result is None
+
+
+def test_requirement_coverage_rejects_broad_transferable_capability_as_partial_evidence():
+    examples = [
+        (
+            "Commercial thinker understanding investment appraisals and ROI",
+            "agile delivery management",
+            ["Led agile delivery across technology projects."],
+        ),
+        (
+            "Experience in banking, financial services or telecommunications",
+            "business analysis",
+            ["Performed business analysis across delivery projects."],
+        ),
+        (
+            "Experience with complaints handling, dispute resolution, fraud or case management",
+            "policy interpretation and translation",
+            ["Translated policy into business rules."],
+        ),
+    ]
+    for requirement, capability, support in examples:
+        result = llm_gate.normalize_llm_requirement_coverage(
+            [{
+                "requirement": requirement,
+                "importance": "preferred",
+                "requirement_type": "capability",
+                "status": "partially_supported",
+                "matched_candidate_fact": capability,
+                "matched_job_text": requirement,
+                "profile_support": support,
+            }],
+            valid_capability_names={capability: capability.title()},
+        )
+        assert result[0]["status"] == "not_shown"
+        assert result[0]["matched_candidate_fact"] == ""
+
+
+def test_requirement_coverage_keeps_partial_match_when_evidence_covers_real_requirement_component():
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [{
+            "requirement": "Experience designing operational workflows and case management processes",
+            "importance": "preferred",
+            "requirement_type": "capability",
+            "status": "partially_supported",
+            "matched_candidate_fact": "process modelling",
+            "matched_job_text": "Experience designing operational workflows and case management processes",
+            "profile_support": ["Designed and modelled operational processes."],
+            "covered_requirement_elements": ["operational processes"],
+        }],
+        valid_capability_names={"process modelling": "Process Modelling"},
+    )
+    assert result[0]["status"] == "partially_supported"
+    assert result[0]["matched_candidate_fact"] == "Process Modelling"

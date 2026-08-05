@@ -24,6 +24,13 @@ from job_hunter_agent.occupation_taxonomy import (
     classify_title,
 )
 from job_hunter_agent.paths import SCORING_RULES_PATH
+from job_hunter_agent.signal_schema import (
+    CATEGORY_REQUIREMENT_CLASSIFICATION_REVIEW,
+    LEARNING_ORIGINAL_TEXTS_KEY,
+    LEARNING_SIGNAL_KEY,
+    LEARNING_SUGGESTED_CATEGORY_KEY,
+    LEARNING_SUGGESTED_VALUES_KEY,
+)
 from job_hunter_agent.record_schema import (
     APPLY_METHOD_EXTERNAL_APPLY,
     RECORD_APPLY_METHOD_KEY,
@@ -349,7 +356,7 @@ def test_apply_source_metadata_to_record_stores_unknown_without_review_when_no_e
     }
 
 
-def test_apply_source_metadata_to_record_then_render_job_card_shows_company_badge():
+def test_apply_source_metadata_to_record_does_not_treat_linkedin_publisher_as_employer():
     record = _render_ready_record("linkedin")
     record["company"] = "Aspen Medical"
     record["source_metadata"] = {
@@ -370,8 +377,8 @@ def test_apply_source_metadata_to_record_then_render_job_card_shows_company_badg
     job_review_pipeline._apply_source_metadata_to_record(record, record[RECORD_DETAILS_TEXT_KEY])
     html = workspace_renderer.render_job_card(record, _review_profile())
 
-    assert "Company" in html
-    assert "Source unclear" not in html
+    assert "Source unclear" in html
+    assert "Direct employer" not in html
 
 
 def test_apply_source_metadata_to_record_then_render_job_card_shows_recruiter_badge():
@@ -1617,3 +1624,56 @@ def test_full_time_12_month_contract_infers_ftc_before_preference_filters(monkey
 
     assert outcome[RECORD_DECISION_KEY] == "KEEP"
     assert updated_record[RECORD_WORK_TYPE_KEY] == "Full Time Contract"
+
+
+def test_build_requirement_classification_review_signals_surfaces_uncertain_items_only():
+    record = {
+        RECORD_REQUIREMENT_COVERAGE_KEY: [
+            {
+                "requirement": "5+ years working in a security clearance environment",
+                "importance": "mandatory",
+                "requirement_type": "uncertain",
+                "status": "invalid",
+                "llm_proposed_requirement_type": "capability",
+            },
+            {
+                "requirement": "Strong stakeholder engagement skills",
+                "importance": "preferred",
+                "requirement_type": "capability",
+                "status": "supported",
+                "matched_candidate_fact": "stakeholder engagement",
+            },
+        ]
+    }
+
+    signals = job_review_pipeline._build_requirement_classification_review_signals(record)
+
+    assert signals == [
+        {
+            LEARNING_SIGNAL_KEY: "5+ years working in a security clearance environment",
+            LEARNING_SUGGESTED_CATEGORY_KEY: CATEGORY_REQUIREMENT_CLASSIFICATION_REVIEW,
+            LEARNING_ORIGINAL_TEXTS_KEY: ["5+ years working in a security clearance environment"],
+            LEARNING_SUGGESTED_VALUES_KEY: ["capability"],
+        }
+    ]
+
+
+def test_build_requirement_classification_review_signals_dedupes_by_requirement_text():
+    record = {
+        RECORD_REQUIREMENT_COVERAGE_KEY: [
+            {
+                "requirement": "5+ years working in a security clearance environment",
+                "requirement_type": "uncertain",
+                "llm_proposed_requirement_type": "eligibility",
+            },
+            {
+                "requirement": "5+ years working in a security clearance environment",
+                "requirement_type": "uncertain",
+                "llm_proposed_requirement_type": "eligibility",
+            },
+        ]
+    }
+
+    signals = job_review_pipeline._build_requirement_classification_review_signals(record)
+
+    assert len(signals) == 1

@@ -211,6 +211,7 @@ from job_hunter_agent.record_schema import (
     RECORD_WORK_MODE_KEY,
     RECORD_WORK_TYPE_KEY,
 )
+from job_hunter_agent.llm_protocol import LLM_UNCERTAIN_COVERAGE_REQUIREMENT_TYPE
 from job_hunter_agent.role_analysis import infer_posting_channel
 from job_hunter_agent.run_control import pause_for_step_through
 from job_hunter_agent.salary_utils import preferred_salary_display
@@ -221,7 +222,14 @@ from job_hunter_agent.signal_detection import (
     extract_skill_observations,
     hard_block_entries,
 )
-from job_hunter_agent.signal_schema import TITLE_REASON_POTENTIAL_MATCH
+from job_hunter_agent.signal_schema import (
+    CATEGORY_REQUIREMENT_CLASSIFICATION_REVIEW,
+    LEARNING_ORIGINAL_TEXTS_KEY,
+    LEARNING_SIGNAL_KEY,
+    LEARNING_SUGGESTED_CATEGORY_KEY,
+    LEARNING_SUGGESTED_VALUES_KEY,
+    TITLE_REASON_POTENTIAL_MATCH,
+)
 from job_hunter_agent.source_learning import (
     build_ad_learning_signals,
     deterministic_review_outcome,
@@ -900,6 +908,38 @@ def _apply_learning_signal_enrichment(record: dict, details_text: str, profile: 
     return skill_observations
 
 
+def _build_requirement_classification_review_signals(record: dict) -> list[dict]:
+    """Surface job requirements the deterministic classifier could not resolve.
+
+    These never contribute to scoring or an "Add eligibility" prompt (see
+    normalize_llm_requirement_coverage / workspace_renderer) — they only
+    become a pending Learning/Needs Review signal so a human can confirm
+    capability vs eligibility.
+    """
+    signals: list[dict] = []
+    seen: set[str] = set()
+    for item in record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or []:
+        if not isinstance(item, dict):
+            continue
+        if item.get("requirement_type") != LLM_UNCERTAIN_COVERAGE_REQUIREMENT_TYPE:
+            continue
+        requirement = str(item.get("requirement") or "").strip()
+        key = requirement.lower()
+        if not requirement or key in seen:
+            continue
+        seen.add(key)
+        proposed_type = str(item.get("llm_proposed_requirement_type") or "capability").strip()
+        signals.append(
+            {
+                LEARNING_SIGNAL_KEY: requirement,
+                LEARNING_SUGGESTED_CATEGORY_KEY: CATEGORY_REQUIREMENT_CLASSIFICATION_REVIEW,
+                LEARNING_ORIGINAL_TEXTS_KEY: [requirement],
+                LEARNING_SUGGESTED_VALUES_KEY: [proposed_type],
+            }
+        )
+    return signals
+
+
 def _apply_preference_result(
     record: dict, profile: dict, context: ReviewPipelineContext
 ) -> tuple[bool, str]:
@@ -1467,6 +1507,7 @@ def review_post_detail_normalized_job(
             merge_pending_learning_signals(
                 record.get("ad_learning_signals") or [],
                 record.get("llm_learning_candidates") or [],
+                _build_requirement_classification_review_signals(record),
             )
         )
         _finalize_job_result(record, context, reason=record[RECORD_REJECT_REASON_KEY])
@@ -1476,6 +1517,7 @@ def review_post_detail_normalized_job(
     pending_signals = merge_pending_learning_signals(
         record.get("ad_learning_signals") or [],
         record.get("llm_learning_candidates") or [],
+        _build_requirement_classification_review_signals(record),
     )
     register_pending_learning_signals(pending_signals)
     record.pop("skill_observations", None)

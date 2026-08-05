@@ -122,7 +122,7 @@ _APSJOBS_LOCATION_TO_STATE = {
 }
 
 
-def _first_non_empty(*values: object) -> str:
+def _first_non_empty(*values: str) -> str:
     for value in values:
         text = compact_whitespace(value)
         if text:
@@ -697,14 +697,15 @@ class APSJobsScraper(BaseJobScraper):
                                 )
                                 if DEBUG_CAPTURE_SOURCE_PAYLOADS:
                                     write_source_payload_debug(
-                                        source=self.source_name,
-                                        job_key=str(record.get(RECORD_JOB_KEY) or ""),
-                                        payload={
+                                        self.source_name,
+                                        str(record.get(RECORD_JOB_KEY) or ""),
+                                        raw_html=payload["details_text"],
+                                        raw_json={
                                             "search_term": target["search_term"],
                                             "location": target["location"],
                                             "page_url": detail_page.url or link["url"],
-                                            "body_text": payload["details_text"],
                                         },
+                                        normalized_record=record,
                                     )
                         finally:
                             page.close()

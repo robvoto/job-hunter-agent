@@ -45,7 +45,8 @@
         "one of our clients",
         "one of our federal government clients",
         "recruiting for",
-        "engaged by"
+        "engaged by",
+        "your new company"
       ],
       "plural_normalisations": {
         "clients": "client",
@@ -53,10 +54,6 @@
       }
     },
     "company_indicators": {
-      "strong_names": [
-        "IT Alliance Australia"
-      ],
-      "strong_domains": [],
       "strong_terms": [
         "recruitment",
         "recruiter",

@@ -1761,9 +1761,13 @@ def render_job_card(
         else:
             status_key = profile_status_label_keys.get(profile_status)
         status_label = workspace_card_label_group.get(status_key, "") if status_key else ""
-        if css_modifier in _NOT_FOUND_CSS_MODIFIERS:
+        is_uncertain_classification = row.get("requirement_type") == "uncertain"
+        if css_modifier in _NOT_FOUND_CSS_MODIFIERS or is_uncertain_classification:
             # The "needs attention" group heading and the add-to-profile action already
             # say this is missing — a status badge repeating that is noise, not signal.
+            # Uncertain-classification rows show the more specific "Needs
+            # classification/review" badge instead (see classification_label below) —
+            # never both a generic status badge and that badge on the same row.
             status_label = ""
         classification_label = (
             workspace_card_label_group.get("coverage_status_classification_review", "")
@@ -1832,7 +1836,13 @@ def render_job_card(
         )
 
         add_to_profile_html = ""
-        if css_modifier in ("mismatch", "not-shown", "mandatory-not-shown", "unknown", "invalid"):
+        if css_modifier in (
+            "mismatch",
+            "not-shown",
+            "mandatory-not-shown",
+            "unknown",
+            "invalid",
+        ) and not is_uncertain_classification:
             is_eligibility = bool(row.get("is_eligibility"))
             prefill_key = "prefill_eligibility" if is_eligibility else "prefill_capability"
             action_label_key = (
@@ -1932,7 +1942,7 @@ def render_job_card(
             raw_requirement_type = compact_whitespace(
                 str(item.get("requirement_type") or "")
             ).lower()
-            is_eligibility = raw_requirement_type in {"eligibility", "invalid"}
+            is_eligibility = raw_requirement_type in {"eligibility", "invalid", "uncertain"}
             classification_review = raw_requirement_type not in {"capability", "eligibility"}
             known_generic_terms = {
                 compact_whitespace(str(fact.get("name") or "")).lower()

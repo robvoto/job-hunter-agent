@@ -285,6 +285,7 @@ export function renderWaitState(mount, state) {
 
   const normalized = normalizeState(state);
   const progressMarkup = renderProgressMarkup(normalized);
+  const wasExplainerOpen = Boolean(mount.querySelector('.wait-state__explainer')?.open);
   mount.hidden = false;
   document.body.classList.add('job-hunter-wait-active');
   mount.innerHTML = `
@@ -305,6 +306,12 @@ export function renderWaitState(mount, state) {
       </section>
     </div>
   `;
+  if (wasExplainerOpen) {
+    const explainer = mount.querySelector('.wait-state__explainer');
+    if (explainer) {
+      explainer.open = true;
+    }
+  }
 }
 
 export function createController(mount) {

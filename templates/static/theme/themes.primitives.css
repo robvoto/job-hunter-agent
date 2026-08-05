@@ -180,7 +180,6 @@ body.job-hunter-wait-active {
   width: min(100%, 32rem);
   margin: 0;
   color: var(--text-muted);
-  text-align: left;
 }
 
 .wait-state__explainer > summary {
@@ -220,6 +219,7 @@ body.job-hunter-wait-active {
 .wait-state__explainer-body {
   padding-top: var(--surface-gap-sm);
   color: var(--text-muted);
+  text-align: left;
 }
 
 .wait-state__explainer-copy {

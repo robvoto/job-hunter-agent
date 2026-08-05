@@ -1,11 +1,11 @@
 {
   "kind": "system_config",
   "name": "scoring_rules",
-  "version": 12,
-  "updated_at": "2026-07-15",
+  "version": 13,
+  "updated_at": "2026-08-04",
   "description": "Central scoring configuration. Controls how different factors contribute to job fit scoring. Must remain transparent and not contain hidden rejection logic.",
   "calibration_notes": {
-    "design": "Narrow requirement-fit scoring. The LLM extracts per-requirement coverage (status, importance, mapped capability/eligibility) from the job description; the score is the weighted percentage of requirement_importance_weights satisfied by candidate capability_level_weights and requirement_status_weights credit, adjusted by requirement_fit_entries. There is no LLM-grade base score or grade band clamping — the requirement fit percentage IS the score before hard-block penalties.",
+    "design": "Narrow requirement-fit scoring. The LLM extracts per-requirement coverage (status, importance, mapped capability/eligibility) from the job description; the score is the weighted percentage of requirement_importance_weights satisfied by candidate capability_level_weights and requirement_status_weights credit, adjusted by requirement_fit_entries. There is no LLM-grade base score or grade band clamping \u2014 the requirement fit percentage IS the score before hard-block penalties.",
     "requirement_importance_weights": "Per-requirement weight by importance (mandatory, strongly_preferred, preferred, nice_to_have) used to compute the weighted percentage of requirements satisfied.",
     "capability_level_weights": "Credit multiplier applied to a requirement's weight based on the candidate's matched capability level (strong, working, basic, low, limited_depth) for that requirement.",
     "requirement_status_weights": "Credit multiplier applied to a requirement's weight based on whether support is direct (`supported`) or partial (`partially_supported`).",
@@ -25,7 +25,7 @@
   "capability_level_weights": {
     "description": "Credit multiplier applied to a requirement's weight based on the candidate's matched capability level for that requirement.",
     "strong": 1.0,
-    "working": 0.70,
+    "working": 0.7,
     "basic": 0.35,
     "low": 0.15,
     "limited_depth": 0.15
@@ -140,5 +140,11 @@
     "min_strong_signals_for_strong_keep": 4,
     "min_strong_signals_for_solid_keep": 3,
     "max_medium_risks_for_solid_keep": 1
+  },
+  "role_defining_gap_control": {
+    "description": "Generic guard against high scores driven by routine duties when the candidate lacks the specialist requirement cluster that defines the role.",
+    "min_group_requirements": 2,
+    "uncovered_ratio_threshold": 0.5,
+    "max_score_when_uncovered": 54
   }
 }

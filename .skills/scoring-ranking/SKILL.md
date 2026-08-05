@@ -15,6 +15,9 @@ Use before editing `fit_scoring.py`, `capability_matching.py`, `signal_detection
 - Producers normalise schema; scoring consumes canonical fields only.
 - Do not bypass hard blockers to increase score.
 - Workspace rendering consumes frozen score fields stored on the record; do not reintroduce live score recomputation there.
+- A valid canonical profile capability name is necessary but not sufficient evidence that a requirement is covered. The mapped capability must prove a substantive element stated in the requirement itself.
+- Broad transferable capabilities must not act as universal partial-match fallbacks. Transferability may be useful context, but it receives zero requirement-fit credit unless the profile proves part of the defining domain, technology, activity, qualification, methodology, or responsibility.
+- When multiple related requirements define the specialist nature of the role, treat them as a role-defining group. Generic occupation duties must not produce a Strong Match while that specialist group is substantially uncovered.
 
 ## Key owners
 - `fit_scoring.py`: assembles score entries and highlights. `fit_score_breakdown()` composes three builder functions: `_requirement_fit_entries` (Requirement Fit %), `build_occupation_alignment_breakdown` (occupation alignment adjustment), `build_risk_breakdown` (hard blockers). Hard blockers appear in the risk section and do not short-circuit the full breakdown. Use `has_hard_blockers()` for downstream exclusion.
@@ -41,6 +44,24 @@ When changing these labels, bump `ui_labels.json` version so `db_seed --upgrade`
 - No renderer-side `fit_score(...)` / `fit_score_breakdown(...)` calls for workspace cards.
 - No `confidence_levels_logged_only` / `confidence_levels_ignored` policy branches in scoring config or code.
 - Run the smallest scoring-related test/check.
+
+## Requirement evidence validation
+
+For every `supported` or `partially_supported` capability mapping:
+
+1. Confirm the mapped capability exists in the candidate profile.
+2. Confirm candidate evidence covers at least one substantive element from the requirement wording.
+3. Do not accept thematic, occupational, or generally transferable similarity as proof.
+4. If only transferable background exists, normalize the requirement to `not_shown`, clear the matched capability, award zero credit, and record the validation reason.
+5. Preserve genuine partial matches where the evidence proves a real component of a compound requirement.
+6. Add a regression test for the reported profession and another unrelated profession/domain when the defect is generic.
+
+Examples of invalid partial mappings:
+- agile delivery management -> investment appraisal / ROI
+- general business analysis -> banking or telecommunications experience
+- policy interpretation -> complaints, fraud, or case-management experience
+
+Examples are diagnostic only. Do not hardcode these phrases as the rule.
 
 ## LLM output validation
 
@@ -70,6 +91,8 @@ There are two separate LLM calls with different schemas. Do not conflate them.
 - Candidates are validated against `llm_gate.ALLOWED_LEARNING_CATEGORIES`, derived from `signal_schema.VALID_SIGNAL_CATEGORIES`; removed legacy categories must not be reintroduced
 
 **Consequence for `requirement_coverage` in scoring:**
+- `covered_requirement_elements` identifies the exact substantive requirement fragments supported by candidate evidence; it is evidence metadata, not a score chosen by the LLM.
+- `role_defining` and `role_defining_group` identify specialist clusters that distinguish the actual role from routine occupation duties. Numeric caps/thresholds remain server-owned in `scoring_rules.json`.
 - `fit_scoring.py` is a consumer only - it reads stored LLM output from the record, never calls the LLM
 - `requirement_coverage` entries are typed. Use `requirement_type="capability"` for skill coverage and `requirement_type="eligibility"` for explicit facts like clearances or work rights.
 - `requirement_coverage` entries with `supported`/`partially_supported` status that lack the matching profile fact name are skipped (logged at WARNING)

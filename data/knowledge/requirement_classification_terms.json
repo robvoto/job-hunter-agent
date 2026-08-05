@@ -1,0 +1,88 @@
+{
+  "kind": "system_config",
+  "name": "requirement_classification_terms",
+  "version": 1,
+  "updated_at": "2026-08-04",
+  "description": "Deterministic keyword terms used to validate the LLM's capability/eligibility classification for job requirements. A requirement whose text matches one of these terms is strong evidence of a legal or formal entry gate (eligibility), regardless of what the LLM returned. Grouped by subtype for maintainability only — the classifier treats any match as eligibility evidence.",
+  "eligibility_terms": {
+    "citizenship": [
+      "citizen",
+      "citizenship",
+      "australian citizen",
+      "nz citizen",
+      "new zealand citizen"
+    ],
+    "work_rights": [
+      "work rights",
+      "working rights",
+      "right to work",
+      "rights to work",
+      "visa sponsorship",
+      "sponsor a visa",
+      "permanent residency",
+      "permanent resident",
+      "unrestricted work rights",
+      "eligibility to work"
+    ],
+    "clearance": [
+      "security clearance",
+      "baseline clearance",
+      "nv1 clearance",
+      "nv1",
+      "nv2 clearance",
+      "nv2",
+      "positive vetting",
+      "pv clearance",
+      "defence clearance",
+      "agsva",
+      "clearance sponsorship",
+      "obtain a clearance",
+      "obtain a baseline",
+      "obtain baseline",
+      "hold a clearance",
+      "clearance required",
+      "top secret clearance",
+      "protected security clearance"
+    ],
+    "licence": [
+      "licence",
+      "license",
+      "driver's licence",
+      "drivers licence",
+      "driving licence",
+      "working with children check",
+      "wwcc",
+      "white card",
+      "forklift licence"
+    ],
+    "registration": [
+      "registration",
+      "registered nurse",
+      "ahpra",
+      "professional registration",
+      "teacher registration",
+      "registered with"
+    ],
+    "qualification": [
+      "tertiary qualification",
+      "formal qualification",
+      "relevant qualification",
+      "bachelor degree",
+      "bachelor's degree",
+      "master's degree",
+      "masters degree",
+      "postgraduate qualification",
+      "recognised qualification"
+    ],
+    "certification": [
+      "certification",
+      "certified",
+      "cert iv",
+      "certificate iv",
+      "certificate in",
+      "pmp certified",
+      "prince2 certified",
+      "professional certification"
+    ]
+  }
+}

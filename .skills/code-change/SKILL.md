@@ -51,6 +51,22 @@ Owners:
 - `description_trust.py`: full-description confidence.
 - `role_analysis.py`: role text bundles and context helpers.
 
+## Incorrect-output diagnosis
+
+Use this workflow when the user reports a wrong classification, score, badge, state, or generated explanation:
+
+1. Capture the exact incorrect output and identify the concrete record/job key.
+2. Inspect the persisted record and the relevant human/debug logs before proposing a fix.
+3. Trace the value through producer/extractor, LLM response if applicable, normalizer/validator, scoring or business-rule consumer, persistence, and renderer.
+4. Identify the first point where the value became wrong. Do not patch the final UI when the source data is already wrong.
+5. State the root defect in one plain-English sentence before editing.
+6. Fix the generic contract or rule, not the reported phrase/company/job alone.
+7. Search for superseded configuration, lists, helpers, tests, or branches and remove them when the new design makes them obsolete.
+8. Add a regression test for the reported case and an unrelated case when the rule is intended to be reusable.
+9. Run targeted tests plus adjacent tests for every downstream owner touched.
+
+Do not create a new project skill for a single diagnosis pattern when this workflow belongs in the general code-change process.
+
 ## Runtime diagnosis
 - Human operations log: `output/server.log`. Check it first for the curated per-job/per-board summary.
 - Full debug log: `output/server-debug.log`. Use it for raw LLM/API/pipeline detail, interleaved worker activity, and machine-oriented diagnosis.

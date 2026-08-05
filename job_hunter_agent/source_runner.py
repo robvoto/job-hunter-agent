@@ -7,7 +7,7 @@ import logging
 import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Sequence, cast
 
 from job_hunter_agent.run_context import ScrapeRunContext
 from job_hunter_agent.run_control import (
@@ -80,6 +80,7 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
     """
     job_history: dict[str, Any] = dict(context.job_history)
     llm_cache: dict[str, Any] = dict(context.llm_cache)
+    headless = bool(getattr(context, "headless", False))
     try:
         set_run_progress_state(
             "Starting SEEK",
@@ -91,14 +92,13 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
         search_targets = build_seek_search_targets(
             context.profile, context.configured_date_range, context.sort_newest_first
         )
-        headless = bool(getattr(context, "headless", False))
         assisted_verification_enabled = (
             get_seek_assisted_verification_enabled() or context.dashboard_debug_mode
         )
         if assisted_verification_enabled:
             logger.warning("[SEEK] %s", SEEK_ASSISTED_BROWSER_SESSION_ENABLED)
             set_run_progress(SEEK_ASSISTED_BROWSER_SESSION_ENABLED)
-        _seek_kwargs = dict(
+        _seek_kwargs: dict[str, Any] = dict(
             profile=context.profile,
             search_targets=search_targets,
             job_history=job_history,
@@ -619,7 +619,7 @@ def _get_source_runner(source: str) -> Callable[[ScrapeRunContext], SourceRunRes
     runner = globals().get(runner_name)
     if not callable(runner):
         raise RuntimeError(f"Source runner {runner_name!r} is not available")
-    return runner
+    return cast(Callable[[ScrapeRunContext], SourceRunResult], runner)
 
 
 def _run_source_with_scope(

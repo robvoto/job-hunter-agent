@@ -2,7 +2,7 @@
 
 Private reference doc. Not committed to the repo.
 
-Last checked against code: 2026-07-15.
+Last checked against code: 2026-08-04.
 
 ---
 
@@ -64,6 +64,10 @@ mismatch = 0
 ```
 
 If the LLM marks a requirement as covered but the mapped capability or eligibility fact cannot be resolved in the candidate profile, the score does not get inflated. The code writes a structured uncertainty event to `output/uncertainty.jsonl` and records a reviewable warning in the `system_warnings` table.
+
+A resolved capability name is not enough by itself. Post-LLM validation also requires candidate evidence to cover a substantive element of the requirement wording. Broad transferable relationships are normalized to `not_shown` and receive zero credit. For genuine partial matches, `covered_requirement_elements` records which exact part of the requirement is supported.
+
+Requirements that collectively define the specialist nature of a role may be marked with `role_defining=true` and a shared `role_defining_group`. When a configured proportion of that group is uncovered, `role_defining_gap_control` in `data/knowledge/scoring_rules.json` caps the Requirement Fit score so routine generic duties cannot create a misleading Strong Match. The LLM identifies the group; server-side managed scoring rules own the threshold and numeric cap.
 
 ### Occupation alignment adjustment
 
@@ -172,7 +176,7 @@ flowchart TD
 | Title and occupation filtering | Job title, profile target roles, target occupation queries | `filters.py`, `occupation_taxonomy.py`, `docs/OCCUPATION_TAXONOMY_RATIONALE.md` | Title reason, O*NET near/far/uncertain signal | Approved hard blockers may stop the job before LLM. Uncertain signals continue. |
 | Description preparation | Full description, structured scraper metadata | `description_compactor.py`, `description_trust.py`, config/rules governance | `fit_source_text`, description trust metadata | Unsafe compaction is skipped explicitly; full description remains preserved. |
 | Review outcome | Title/content signals and fit source text | `llm_gate.py`, `source_learning.py` deterministic shortcut | `llm_fit_grade`, requirement coverage, rationale fields | LLM call may be avoided only by explicit deterministic reject rules. Deterministic keep candidates still require full LLM requirement coverage before any final KEEP is saved. |
-| Requirement coverage | Extracted job requirements, candidate capabilities | `llm_gate.py`, capability knowledge/profile modules | Supported / partially supported / not shown / mismatch coverage | Coverage is the source of truth for Requirement Fit %. Unsupported mappings are logged and also recorded as admin warnings. |
+| Requirement coverage | Extracted job requirements, candidate capabilities and profile evidence | `llm_gate.py`, capability knowledge/profile modules | Supported / partially supported / not shown / mismatch coverage, covered requirement elements, optional role-defining group | Coverage is the source of truth for Requirement Fit %. Capability-name validity and semantic evidence are both required. Broad transferable matches are downgraded to `not_shown`; unsupported mappings are logged and recorded as admin warnings. |
 | Frozen scoring | Reviewed job record with requirement coverage | `fit_scoring.py` | Frozen Requirement Fit % and score breakdown | No title, salary, location, freshness, easy apply, viewed status, LLM grade points, or grade-band clamp. Hard blockers remain visible and can force score to zero. |
 | Display scoring | Frozen Requirement Fit % | `fit_scoring.py`, UI consumers | Displayed score and ordering | Recency is handled separately from fit score and should not be treated as fit evidence. |
 | Human review and learning | User keep/skip/apply/reject decisions | Review history, learning modules, backlog if needed | Future profile/rule improvements | Learning must not silently become hidden scoring logic. |
@@ -281,7 +285,7 @@ Allowed coverage statuses:
 | Status | Meaning |
 |---|---|
 | supported | Requirement directly supported by a known profile capability or eligibility fact. Must include the matching profile fact name. |
-| partially_supported | Partial or indirect support. Must include the matching profile fact name. |
+| partially_supported | Candidate evidence proves a meaningful component of the actual requirement, but not the whole requirement. A broadly transferable capability alone is not partial support. Must include the matching profile fact name. |
 | not_shown | No candidate evidence found. |
 | mismatch | Explicit conflict. |
 

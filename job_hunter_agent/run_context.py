@@ -83,6 +83,8 @@ class ScrapeRunContext:
 
     reset_new_to_you: bool
 
+    headless: bool = False
+
 
 def build_scrape_run_context(argv: list[str] | None = None) -> ScrapeRunContext:
 

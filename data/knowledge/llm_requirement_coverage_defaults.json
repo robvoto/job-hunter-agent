@@ -1,19 +1,27 @@
 {
   "kind": "system_config",
   "name": "llm_requirement_coverage_defaults",
-  "version": 3,
-  "updated_at": "2026-07-09",
+  "version": 5,
+  "updated_at": "2026-08-04",
   "description": "Managed default guidance for LLM requirement coverage decomposition behaviour.",
   "lines": [
-    "For requirement_coverage: semantically decompose the job ad into atomic requirements — one skill, qualification, experience, or constraint per item.",
+    "For requirement_coverage: semantically decompose the job ad into atomic requirements \u2014 one skill, qualification, experience, or constraint per item.",
     "Do not put a whole sentence as a single item; split compound sentences into their atomic parts.",
     "For each atomic requirement: assign the weakest accurate importance. Use mandatory only when the ad explicitly says required, must, essential, or similar hard-block language. Use strongly_preferred for clearly expected but non-blocking items, preferred for desirable items, and nice_to_have for optional or bonus items. Do not mark every row mandatory.",
-    "Store the original job-ad sentence in matched_job_text for traceability — do not match the whole sentence directly to a capability.",
-    "Classify each supported or partially_supported requirement as either capability or eligibility.",
+    "Store the original job-ad sentence in matched_job_text for traceability \u2014 do not match the whole sentence directly to a capability.",
+    "Classify each supported or partially_supported requirement as either capability or eligibility. A deterministic check runs after your answer and may correct it, so classify carefully rather than defaulting to one value.",
+    "capability covers skills, responsibilities, knowledge, domain experience, seniority, and years or duration of experience \u2014 e.g. '5+ years supporting client outcomes' is capability, not eligibility.",
+    "eligibility covers legal or formal entry gates only: citizenship, work rights, security clearances, licences, registrations, formal qualifications, and certifications \u2014 e.g. 'ability to obtain a Baseline security clearance' is eligibility.",
+    "A requirement that states a duration or years of experience in a field, tool, or role is capability even if the field itself sounds formal (e.g. years of experience in a regulated industry is still capability, not eligibility).",
     "Link capability requirements to the exact profile capability name and eligibility requirements to the exact profile eligibility fact.",
     "Use matched_candidate_fact for the matched profile fact and keep capability_name / eligibility_name aligned with the requirement_type.",
     "Leave matched_candidate_fact empty only for not_shown or mismatch items.",
     "Keep each requirement_coverage item compact: short phrases only for requirement, matched_job_text, matched_candidate_fact, and profile_support.",
-    "Prefer the most important atomic requirements when the ad is long."
+    "Prefer the most important atomic requirements when the ad is long.",
+    "Do not mark a requirement supported or partially_supported merely because the candidate has a broadly transferable capability. Transferability is not requirement evidence.",
+    "A supported or partially_supported match must prove at least one substantive element stated in the requirement itself. Return those exact job-requirement fragments in covered_requirement_elements.",
+    "If the profile only shows a broad parent capability but does not show the defining domain, technology, activity, qualification, methodology, or responsibility, use not_shown and leave matched_candidate_fact empty.",
+    "Examples of invalid partial matches: agile delivery does not prove investment appraisal or ROI; general business analysis does not prove banking experience; policy interpretation does not prove complaints, fraud, or case-management experience.",
+    "Set role_defining=true when a requirement or related group distinguishes the actual specialist nature of the role from generic duties of the occupation. Use the same short role_defining_group label for related specialist requirements. Do not mark routine generic duties as role-defining."
   ]
 }

@@ -11,6 +11,11 @@ LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES = frozenset({"capability", "eligibility"}
 LLM_ALLOWED_COVERAGE_MATCH_SOURCES = frozenset({"capability_name", "related_skill", "eligibility"})
 LLM_INVALID_COVERAGE_REQUIREMENT_TYPE = "invalid"
 LLM_INVALID_COVERAGE_STATUS = "invalid"
+# Deterministic post-LLM validation could not confidently resolve capability vs
+# eligibility (e.g. conflicting signals). Deliberately kept outside
+# LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES so scoring/gap/gate consumers already
+# treat it as unresolved without extra type-specific handling.
+LLM_UNCERTAIN_COVERAGE_REQUIREMENT_TYPE = "uncertain"
 
 LLM_ALLOWED_OCCUPATION_ALIGNMENTS = frozenset({"same", "adjacent", "different"})
 LLM_INVALID_OCCUPATION_ALIGNMENT = "invalid"
@@ -21,7 +26,7 @@ LLM_FIT_REVIEW_PROMPT_SHAPE = (
     '"job_requirements":["..."],'
     '"requirement_coverage":[{"requirement":"...","importance":"mandatory|strongly_preferred|preferred|nice_to_have",'
     '"requirement_type":"capability|eligibility","status":"supported|partially_supported|not_shown|mismatch",'
-    '"matched_candidate_fact":"...","matched_job_text":"...","profile_support":["..."]}],'
+    '"matched_candidate_fact":"...","matched_job_text":"...","profile_support":["..."],"covered_requirement_elements":["..."],"role_defining":true|false,"role_defining_group":"..."}],'
     '"debug_reason":"..."}'
 )
 LLM_FIT_REVIEW_DEBUG_PROMPT_SHAPE = (
@@ -31,7 +36,7 @@ LLM_FIT_REVIEW_DEBUG_PROMPT_SHAPE = (
     '"requirement_coverage":[{"requirement":"...","importance":"mandatory|strongly_preferred|preferred|nice_to_have",'
     '"requirement_type":"capability|eligibility","status":"supported|partially_supported|not_shown|mismatch",'
     '"matched_candidate_fact":"...","match_source":"capability_name|related_skill|eligibility",'
-    '"matched_profile_term":"...","matched_job_text":"...","profile_support":["..."]}],'
+    '"matched_profile_term":"...","matched_job_text":"...","profile_support":["..."],"covered_requirement_elements":["..."],"role_defining":true|false,"role_defining_group":"..."}],'
     '"debug_reason":"..."}'
 )
 LLM_PROMPT_DEBUG_REASON_INTRO = (

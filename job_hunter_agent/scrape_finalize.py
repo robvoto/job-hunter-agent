@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from typing import TypedDict
 
-from job_hunter_agent import workspace_service
+from job_hunter_agent import workspace_data, workspace_service
 from job_hunter_agent.config import DEBUG_MODE
 from job_hunter_agent.logging_utils import (
     format_log_block,
@@ -249,11 +250,20 @@ def _derive_run_summary_metrics(audit_rows: list[dict]) -> dict[str, int | dict[
     }
 
 
+class _SourceMetrics(TypedDict):
+    source: str
+    seen: int
+    read: int
+    pages: set[tuple[str, int]]
+    kept: int
+    rejected: int
+
+
 def _build_source_breakdown(
     enabled_sources: list[str] | tuple[str, ...] | None,
     audit_rows: list[dict],
 ) -> list[dict[str, int | str]]:
-    source_metrics: dict[str, dict[str, object]] = {}
+    source_metrics: dict[str, _SourceMetrics] = {}
 
     for source in enabled_sources or []:
         source_key = str(source or "").strip().lower()
@@ -538,7 +548,7 @@ def finalize_scrape_run(
             get_workspace_results_path(),
             pool
             if pool
-            else workspace_service.load_last_kept_records(
+            else workspace_data.load_last_kept_records(
                 context.previous_audit_rows,
                 deduplicate_across_sources_fn=deduplicate_across_sources,
             ),

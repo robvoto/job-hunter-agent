@@ -15,7 +15,7 @@ import time
 import traceback
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import datetime
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Set, cast
 from urllib.parse import urlsplit, urlunsplit
 
 logger = logging.getLogger(__name__)
@@ -209,7 +209,7 @@ def _log_seek_list_page_diagnostics(
     page_title = str(snapshot["title"])
     page_url_actual = str(snapshot["url"])
     body_text = str(snapshot["body_text"])
-    selector_count = int(snapshot["selector_count"])
+    selector_count = cast(int, snapshot["selector_count"])
     page_status = str(snapshot["page_status"])
     failure_class = str(snapshot["failure_class"])
     logger.info(
@@ -643,7 +643,7 @@ def build_seek_card_record(
         work_mode_needs_review=card_meta["work_mode_needs_review"],
         work_type=card_meta["work_type"],
         salary_str="",
-        url=full_url,
+        url=full_url or "",
         teaser=card_meta["teaser"],
         details_text="",
         details_length=0,
@@ -1163,8 +1163,8 @@ def seek_scrape_to_records(
                         )
 
                         page_has_fresh_card = any(
-                            r.get(rs.RECORD_POSTED_AGE_DAYS_KEY) is None
-                            or r.get(rs.RECORD_POSTED_AGE_DAYS_KEY) <= configured_date_range
+                            (age := r.get(rs.RECORD_POSTED_AGE_DAYS_KEY)) is None
+                            or age <= configured_date_range
                             for r in card_records
                         )
 

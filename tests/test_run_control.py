@@ -71,6 +71,7 @@ def test_get_run_progress_detail_returns_defensive_copy():
     detail1["current"] = 999
     detail1["source"] = "hacked"
     detail2 = run_control.get_run_progress_detail()
+    assert detail2 is not None
     assert detail2["current"] == 1
     assert detail2["source"] == "linkedin"
 
@@ -179,6 +180,7 @@ def test_set_run_progress_state_accepts_all_valid_sources():
             source=source,
         )
         detail = run_control.get_run_progress_detail()
+        assert detail is not None
         assert detail["source"] == source
     run_control.clear_run_progress()
 
@@ -203,6 +205,7 @@ def test_set_run_progress_state_accepts_all_valid_stages():
             source="seek",
         )
         detail = run_control.get_run_progress_detail()
+        assert detail is not None
         assert detail["stage"] == stage
     run_control.clear_run_progress()
 
@@ -217,6 +220,7 @@ def test_set_run_progress_state_determinate_false_without_totals():
         determinate=False,
     )
     detail = run_control.get_run_progress_detail()
+    assert detail is not None
     assert detail["stage"] == "finalising"
     assert detail["determinate"] is False
     assert detail["current"] is None
@@ -231,7 +235,7 @@ def test_strict_integer_rejects_floats():
             "test",
             stage="source_collection",
             source="seek",
-            current=2.0,
+            current=2.0,  # type: ignore[arg-type]
             total=3,
         )
 
@@ -243,7 +247,7 @@ def test_strict_integer_rejects_numeric_strings():
             "test",
             stage="source_collection",
             source="seek",
-            current="2",
+            current="2",  # type: ignore[arg-type]
             total=3,
         )
 

@@ -177,7 +177,7 @@ def test_infer_posting_channel_uses_trusted_metadata_before_text():
     assert "job_url_direct" in channel["trusted_metadata"]
 
 
-def test_infer_posting_channel_treats_linkedin_company_profile_with_hiring_company_as_direct_employer():
+def test_infer_posting_channel_does_not_treat_linkedin_publisher_profile_as_employer_proof():
     channel = role_analysis.infer_posting_channel(
         {
             "company": "Aspen Medical",
@@ -199,10 +199,34 @@ def test_infer_posting_channel_treats_linkedin_company_profile_with_hiring_compa
         "",
     )
 
-    assert channel["kind"] == "direct_employer"
+    assert channel["kind"] == "unknown"
     assert channel["source"] == "metadata_first"
     assert channel["needs_review"] is False
     assert "company profile link = https://au.linkedin.com/company/aspen-medical-pty-ltd" in channel["trusted_metadata"]
+
+
+def test_infer_posting_channel_uses_ad_relationship_for_hays_without_company_list():
+    channel = role_analysis.infer_posting_channel(
+        {
+            "company": "Hays",
+            "source_metadata": {
+                "platform": "linkedin",
+                "apply_url": "https://www.linkedin.com/jobs/view/4445491073",
+                "apply_domain": "www.linkedin.com",
+                "company_profile_url": "https://uk.linkedin.com/company/hays",
+                "company_profile_name": "Hays",
+                "poster_company": "Hays",
+                "hiring_company": "Hays",
+                "raw_source_fields": {},
+            },
+        },
+        "Your new company. This federal government agency is seeking an experienced Senior Business Analyst.",
+    )
+
+    assert channel["kind"] == "agency_or_recruiter"
+    assert channel["source"] == "text_window_classifier"
+    assert channel["needs_review"] is True
+    assert "your new company" in channel["text_evidence"]
 
 
 @pytest.mark.parametrize(
@@ -254,10 +278,10 @@ def test_infer_posting_channel_does_not_flag_direct_employer_phrases(details_tex
     assert channel["needs_review"] is False
 
 
-def test_infer_posting_channel_uses_company_indicator_for_known_recruiter():
+def test_infer_posting_channel_uses_generic_recruitment_term_in_advertiser_name():
     channel = role_analysis.infer_posting_channel(
         {
-            "company": "IT Alliance Australia",
+            "company": "Acme Recruitment",
             "source_metadata": {"platform": "seek", "raw_source_fields": {}},
         },
         "",
@@ -344,6 +368,31 @@ def test_render_job_card_keeps_unknown_mandatory_requirement_visible_once():
     assert "No proof in profile" in html
     assert "Needs classification/review" in html
     assert "prefill_eligibility=" in html
+
+
+def test_render_job_card_shows_single_badge_for_uncertain_classification_and_no_add_action():
+    requirement = "5+ years working in a security clearance environment"
+    html = workspace_renderer.render_job_card(
+        {
+            "job_requirements": [requirement],
+            "requirement_coverage": [
+                {
+                    "requirement": requirement,
+                    "importance": "mandatory",
+                    "requirement_type": "uncertain",
+                    "status": "invalid",
+                    "llm_proposed_requirement_type": "capability",
+                }
+            ],
+        },
+        _test_profile(),
+    )
+
+    assert html.count(requirement) == 1
+    assert html.count("Needs classification/review") == 1
+    assert "No proof in profile" not in html
+    assert "prefill_eligibility=" not in html
+    assert "prefill_capability=" not in html
 
 
 def test_build_ad_learning_signals_registers_pending_capability_signals(monkeypatch):
@@ -1583,10 +1632,10 @@ def test_posting_channel_badge_uses_token_classifier_review_class():
     assert "badge-sector-government" not in html
 
 
-def test_posting_channel_badge_uses_strong_company_indicator():
+def test_posting_channel_badge_uses_generic_recruitment_term():
     channel = role_analysis.infer_posting_channel(
         {
-            "company": "IT Alliance Australia",
+            "company": "Acme Recruitment",
             "source_metadata": {"platform": "seek", "raw_source_fields": {}},
         },
         "",
@@ -1595,7 +1644,7 @@ def test_posting_channel_badge_uses_strong_company_indicator():
         {
             "job_key": "test-posting-channel-company-indicator",
             "title": "Business Analyst",
-            "company": "IT Alliance Australia",
+            "company": "Acme Recruitment",
             "url": "https://example.com/job",
             "title_reason": "OK",
             "content_reason": "OK",

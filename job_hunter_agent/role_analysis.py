@@ -233,16 +233,6 @@ def _posting_channel_company_evidence(record: dict) -> tuple[list[str], bool]:
     if not isinstance(company_rules, dict):
         return [], False
 
-    exact_names = {
-        compact_whitespace(str(value or "")).lower()
-        for value in company_rules.get("strong_names", [])
-        if compact_whitespace(str(value or ""))
-    }
-    exact_domains = {
-        compact_whitespace(str(value or "")).lower().removeprefix("www.")
-        for value in company_rules.get("strong_domains", [])
-        if compact_whitespace(str(value or ""))
-    }
     strong_terms = _posting_channel_phrase_entries(company_rules.get("strong_terms", []))
     weak_terms = _posting_channel_phrase_entries(company_rules.get("weak_terms", []))
 
@@ -274,9 +264,6 @@ def _posting_channel_company_evidence(record: dict) -> tuple[list[str], bool]:
         return cleaned
 
     for name in candidate_names:
-        normalized_name = compact_whitespace(name).lower()
-        if normalized_name in exact_names:
-            return [f"company name = {name}"], False
         name_tokens = _posting_channel_tokens(name, _posting_channel_plural_map())
         if any(_contains_token_sequence(name_tokens, phrase_tokens) for _, phrase_tokens in strong_terms):
             return [f"company name = {name}"], False
@@ -287,8 +274,6 @@ def _posting_channel_company_evidence(record: dict) -> tuple[list[str], bool]:
         normalized_domain = _normalize_domain(domain)
         if not normalized_domain:
             continue
-        if normalized_domain in exact_domains:
-            return [f"apply domain = {normalized_domain}"], False
         domain_tokens = _posting_channel_tokens(normalized_domain, _posting_channel_plural_map())
         if any(_contains_token_sequence(domain_tokens, phrase_tokens) for _, phrase_tokens in strong_terms):
             return [f"apply domain = {normalized_domain}"], False
@@ -359,38 +344,6 @@ def _collect_trusted_posting_channel_metadata(record: dict) -> tuple[list[str], 
     return trusted_metadata, trusted_recruiter, trusted_employer
 
 
-def _is_linkedin_company_profile_url(value: str) -> bool:
-    cleaned = compact_whitespace(value).lower()
-    if not cleaned:
-        return False
-    parsed = urlparse(cleaned)
-    host = (parsed.netloc or "").removeprefix("www.")
-    path = parsed.path or ""
-    return host.endswith("linkedin.com") and "/company/" in path
-
-
-def _has_trusted_linkedin_employer_metadata(record: dict) -> bool:
-    metadata = _source_metadata(record)
-    if compact_whitespace(metadata.get("platform") or "").lower() != "linkedin":
-        return False
-
-    profile_url = compact_whitespace(metadata.get("company_profile_url") or "")
-    if not _is_linkedin_company_profile_url(profile_url):
-        return False
-
-    record_company = compact_whitespace(record.get("company") or "").lower()
-    hiring_company = compact_whitespace(metadata.get("hiring_company") or "").lower()
-    if not record_company or hiring_company != record_company:
-        return False
-
-    for field in ("company_profile_name", "poster_company"):
-        value = compact_whitespace(metadata.get(field) or "").lower()
-        if value and value != record_company:
-            return False
-
-    return True
-
-
 def infer_posting_channel(record: dict, details_text: str) -> dict[str, Any]:
     metadata_context = _source_metadata(record)
     trusted_metadata, trusted_recruiter, trusted_employer = (
@@ -412,17 +365,19 @@ def infer_posting_channel(record: dict, details_text: str) -> dict[str, Any]:
             "needs_review": False,
         }
 
-    if trusted_employer:
+    # Relationship language in the advertisement overrides publisher metadata.
+    # Source profiles identify who posted the ad, not necessarily the employing organisation.
+    if text_evidence:
         return {
-            "kind": "direct_employer",
-            "source": "metadata_first",
+            "kind": "agency_or_recruiter",
+            "source": "text_window_classifier",
             "trusted_metadata": trusted_metadata,
             "weak_text_matches": weak_text_matches,
             "text_evidence": weak_text_matches,
-            "needs_review": False,
+            "needs_review": True,
         }
 
-    if _has_trusted_linkedin_employer_metadata(record) and not company_needs_review:
+    if trusted_employer:
         return {
             "kind": "direct_employer",
             "source": "metadata_first",
@@ -440,16 +395,6 @@ def infer_posting_channel(record: dict, details_text: str) -> dict[str, Any]:
             "weak_text_matches": weak_text_matches,
             "text_evidence": weak_text_matches,
             "needs_review": company_needs_review,
-        }
-
-    if text_evidence:
-        return {
-            "kind": "agency_or_recruiter",
-            "source": "text_window_classifier",
-            "trusted_metadata": trusted_metadata,
-            "weak_text_matches": weak_text_matches,
-            "text_evidence": weak_text_matches,
-            "needs_review": True,
         }
 
     return {
