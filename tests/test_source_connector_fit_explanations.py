@@ -1353,7 +1353,11 @@ def test_job_card_shows_easy_apply_badge():
         _test_profile(),
     )
 
-    assert 'class="badge badge-apply-method" title="Apply directly on the job board with one click." aria-label="Apply directly on the job board with one click.">Easy Apply<' in html
+    assert (
+        'class="badge badge-source-linkedin" title="Sourced from LinkedIn. Apply directly on the job board with one click." '
+        'aria-label="Sourced from LinkedIn. Apply directly on the job board with one click.">LinkedIn · Easy Apply<'
+        in html
+    )
     assert 'data-apply-method="easy_apply"' in html
 
 
@@ -1379,7 +1383,9 @@ def test_job_card_shows_quick_apply_badge():
         _test_profile(),
     )
 
-    assert "Quick Apply" in html
+    assert 'class="badge badge-source-seek"' in html
+    assert "SEEK · Quick Apply" in html
+    assert html.count('class="badge badge-source-seek"') == 1
 
 
 def test_job_card_omits_apply_method_badge_when_unknown():
@@ -3485,7 +3491,28 @@ def test_posted_filter_options_show_explicit_day_windows():
     assert "Posted today (1)" in options_html
     assert "Last 3 days (2)" in options_html
     assert "Last 7 days (3)" in options_html
-    assert "Last 14 days (3)" in options_html
+    # Last 14/30 days would repeat the same count as Last 7 days (no jobs
+    # older than 4 days in this fixture), so they're omitted as redundant.
+    assert "Last 14 days" not in options_html
+    assert "Last 30 days" not in options_html
+
+
+def test_posted_filter_options_omit_windows_that_repeat_the_same_count():
+    options_html = workspace_renderer.render_posted_filter_options(
+        [
+            {"posted_age_days": 0.25},
+            {"posted_age_days": 0.5},
+        ]
+    )
+
+    assert "Any posted date (2)" in options_html
+    assert "Posted today (2)" in options_html
+    # Every job is already captured by "Posted today", so every wider
+    # window would show the same count (2) and is left out entirely.
+    assert "Last 3 days" not in options_html
+    assert "Last 7 days" not in options_html
+    assert "Last 14 days" not in options_html
+    assert "Last 30 days" not in options_html
     # assert "Last 30 days (3)" in options_html
 
 

@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 99,
+  "version": 100,
   "updated_at": "2026-08-03",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -464,6 +464,9 @@
     "apply_method_easy_apply_tooltip": "Apply directly on the job board with one click.",
     "apply_method_quick_apply_badge": "Quick Apply",
     "apply_method_quick_apply_tooltip": "Apply directly on the job board without leaving the site.",
+    "source_badge_tooltip": "Sourced from {source}.",
+    "source_badge_with_apply_method_label": "{source} · {apply_method}",
+    "source_badge_with_apply_method_tooltip": "Sourced from {source}. {apply_tooltip}",
     "applied_badge": "Applied",
     "applied_badge_tooltip": "You already applied for this role.",
     "hidden_badge": "Hidden",

@@ -72,7 +72,6 @@
 .badge-source-linkedin { background: var(--brand-linkedin-bg); color: var(--brand-linkedin-text); border: 1px solid var(--brand-linkedin-border); }
 .badge-source-apsjobs { background: var(--state-info-bg); color: var(--state-info-text); border: 1px solid var(--state-info-border); }
 .badge-source-neutral { background: var(--state-success-bg); color: var(--state-success-text); }
-.badge-apply-method { background: var(--state-success-bg); color: var(--state-success-text); border: 1px solid var(--state-success-border); }
 .badge-sector-public { background: var(--state-neutral-bg); color: var(--state-neutral-text); }
 .badge-fit-high { background: var(--state-success-bg); color: var(--state-success-text); }
 .badge-fit-medium { background: var(--state-warning-bg); color: var(--state-warning-text); }

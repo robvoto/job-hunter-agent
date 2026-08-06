@@ -891,6 +891,7 @@ def posted_filter_option_label(threshold: int) -> str:
 
 def render_posted_filter_options(records: List[dict], now: Optional[datetime] = None) -> str:
     options = [f'<option value="all" selected>Any posted date ({len(records)})</option>']
+    previous_count = -1
     for threshold in [1, 3, 7, 14, 30]:
         count = sum(
             1
@@ -898,10 +899,16 @@ def render_posted_filter_options(records: List[dict], now: Optional[datetime] = 
             if (age_days := current_posted_age_days(record, now)) is not None
             and age_days <= threshold
         )
+        if count == previous_count:
+            # A wider window that captures no additional jobs is a duplicate
+            # of the narrower option already shown — offering it just repeats
+            # the same count and implies a distinction that doesn't exist.
+            continue
         options.append(
             f'<option value="{threshold}">'
             f"{safe_html(posted_filter_option_label(threshold))} ({count})</option>"
         )
+        previous_count = count
     return "".join(options)
 
 
@@ -1242,34 +1249,29 @@ def render_job_card(
         )
     if seen_by_you:
         badges.append(viewed_badge_html())
-    badges.append(
-        render_badge(source_label, f"badge-source-{source}", f"Sourced from {source_label}.")
-    )
     apply_method = str(record.get(RECORD_APPLY_METHOD_KEY) or "").strip()
     if apply_method == APPLY_METHOD_EASY_APPLY:
-        badges.append(
-            render_badge(
-                _workspace_label(
-                    "workspace_card_labels", "apply_method_easy_apply_badge"),
-                "badge-apply-method",
-                _workspace_label(
-                    "workspace_card_labels",
-                    "apply_method_easy_apply_tooltip",
-                ),
-            )
-        )
+        apply_method_label = _workspace_label("workspace_card_labels", "apply_method_easy_apply_badge")
+        apply_method_tooltip = _workspace_label("workspace_card_labels", "apply_method_easy_apply_tooltip")
     elif apply_method == APPLY_METHOD_QUICK_APPLY:
-        badges.append(
-            render_badge(
-                _workspace_label(
-                    "workspace_card_labels", "apply_method_quick_apply_badge"),
-                "badge-apply-method",
-                _workspace_label(
-                    "workspace_card_labels",
-                    "apply_method_quick_apply_tooltip",
-                ),
-            )
+        apply_method_label = _workspace_label("workspace_card_labels", "apply_method_quick_apply_badge")
+        apply_method_tooltip = _workspace_label("workspace_card_labels", "apply_method_quick_apply_tooltip")
+    else:
+        apply_method_label = ""
+        apply_method_tooltip = ""
+    if apply_method_label:
+        source_badge_label = _workspace_label(
+            "workspace_card_labels", "source_badge_with_apply_method_label"
+        ).format(source=source_label, apply_method=apply_method_label)
+        source_badge_tooltip = _workspace_label(
+            "workspace_card_labels", "source_badge_with_apply_method_tooltip"
+        ).format(source=source_label, apply_tooltip=apply_method_tooltip)
+    else:
+        source_badge_label = source_label
+        source_badge_tooltip = _workspace_label("workspace_card_labels", "source_badge_tooltip").format(
+            source=source_label
         )
+    badges.append(render_badge(source_badge_label, f"badge-source-{source}", source_badge_tooltip))
     channel_kind = channel_signal.get("kind", "unknown")
     channel_source = str(channel_signal.get("source") or "").strip().lower()
     channel_evidence = [
