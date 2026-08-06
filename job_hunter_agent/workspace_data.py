@@ -443,8 +443,6 @@ def build_workspace_record_sets(
     ],
     build_applied_records_fn: Callable[[set[str], dict[str, dict], datetime], list[dict]],
     build_hidden_records_fn: Callable[[set[str], dict[str, dict], datetime], list[dict]],
-    debug_mode: bool = False,
-    audit_rows: list[dict] | None = None,
 ) -> dict[str, list[dict]]:
 
     _score_cache: dict[str, int] = {}
@@ -497,30 +495,6 @@ def build_workspace_record_sets(
         )
 
     current_records = sorted(curated_kept_records, key=_rank_by_fit)
-
-    if debug_mode and audit_rows:
-        current_keys = {
-            normalize_job_key_fn(str(record.get("job_key") or ""))
-            for record in current_records
-            if normalize_job_key_fn(str(record.get("job_key") or ""))
-        }
-
-        debug_records: list[dict] = []
-
-        for row in audit_rows:
-            if str(row.get("decision") or "").upper() != "REJECT":
-                continue
-
-            job_key = normalize_job_key_fn(str(row.get("job_key") or ""))
-
-            if not job_key or job_key in current_keys:
-                continue
-
-            debug_records.append(dict(row))
-
-            current_keys.add(job_key)
-
-        current_records = sorted([*current_records, *debug_records], key=_rank_by_fit)
 
     current_run_keys = {
         normalize_job_key_fn(str(record.get("job_key") or ""))

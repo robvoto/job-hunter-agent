@@ -332,8 +332,6 @@ def test_api_results_html_rebuild_excludes_records_without_llm_grade(monkeypatch
                 datetime(2026, 5, 26, 14, 24, 2),
                 scoring_profile=profile,
                 workspace_min_score=0,
-                debug_mode=False,
-                audit_rows=[],
             )
         workspace_path.write_text("<html><body>workspace</body></html>", encoding="utf-8")
 

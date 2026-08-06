@@ -213,7 +213,6 @@ def _latest_summary_context() -> tuple[dict, dict, dict[str, list[dict]], list[d
         run_reference,
         profile,
         get_workspace_minimum_score(profile),
-        debug_mode=False,
     )
     current_records = list(workspace_records.get("current_records", []))
     return profile, run_stats, workspace_records, current_records

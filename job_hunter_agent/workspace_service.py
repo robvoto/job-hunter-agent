@@ -341,23 +341,13 @@ def build_workspace_record_sets(
     reference_time: datetime,
     scoring_profile: Optional[dict] = None,
     workspace_min_score: Optional[int] = None,
-    debug_mode: bool = WORKSPACE_DEBUG_MODE,
-    audit_rows: Optional[list[dict]] = None,
 ) -> dict[str, list[dict]]:
 
     profile = scoring_profile or load_profile()
 
     is_workspace_eligible_fn = is_workspace_eligible
 
-    if debug_mode:
-        def is_workspace_eligible_fn(
-            record: dict,
-            current_profile: Optional[dict] = None,
-            workspace_min_score: Optional[int] = None,
-        ) -> bool:
-            return True
-
-    elif workspace_min_score is not None:
+    if workspace_min_score is not None:
         active_workspace_min_score = int(workspace_min_score)
 
         def is_workspace_eligible_fn(
@@ -385,8 +375,6 @@ def build_workspace_record_sets(
         build_archive_records_fn=build_archive_records,
         build_applied_records_fn=build_applied_records,
         build_hidden_records_fn=build_hidden_records,
-        debug_mode=debug_mode,
-        audit_rows=audit_rows,
     )
 
 
@@ -460,7 +448,6 @@ def render_html(
     applied_job_keys: set[str],
     hidden_job_keys: set[str],
     workspace_reference_at: Optional[datetime] = None,
-    audit_rows: Optional[list[dict]] = None,
     debug_mode: bool = WORKSPACE_DEBUG_MODE,
     workspace_records: Optional[dict[str, list[dict]]] = None,
 ) -> None:
@@ -473,11 +460,6 @@ def render_html(
 
     active_debug_mode = bool(debug_mode)
 
-    active_audit_rows = audit_rows
-
-    if active_debug_mode and active_audit_rows is None:
-        active_audit_rows = load_audit_rows()
-
     kept_records = _enrich_records_with_candidate_application_history(kept_records)
 
     if workspace_records is None:
@@ -489,8 +471,6 @@ def render_html(
             reference_time,
             scoring_profile,
             workspace_min_score,
-            debug_mode=active_debug_mode,
-            audit_rows=active_audit_rows,
         )
 
     history_clusters = build_history_cluster_index(job_history)

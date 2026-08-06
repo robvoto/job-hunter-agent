@@ -113,11 +113,11 @@ Setup and runtime commands are maintained in one place to avoid contradictory in
 
 ## Documentation
 
-- [`docs/INDEX.md`](docs/INDEX.md)
+- [docs/INDEX.md](docs/INDEX.md)
 - [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md)
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - [`docs/PRINCIPLES.md`](docs/PRINCIPLES.md)
-- [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md)
+- [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)
 
 ## Data and security
 

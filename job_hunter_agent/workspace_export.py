@@ -337,7 +337,6 @@ def export_workspace_jobs(*, mode: str = "merge") -> dict[str, Any]:
         reference_time,
         profile,
         get_workspace_minimum_score(),
-        debug_mode=False,
     )
 
     export_dir = get_workspace_export_dir()

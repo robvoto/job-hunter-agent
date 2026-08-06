@@ -561,7 +561,6 @@ def finalize_scrape_run(
             context.applied_job_keys,
             context.hidden_job_keys,
             datetime.now().astimezone(),
-            context.previous_audit_rows,
             context.dashboard_debug_mode,
         )
 
@@ -684,7 +683,6 @@ def finalize_scrape_run(
         context.applied_job_keys,
         context.hidden_job_keys,
         context.run_started_at,
-        audit_rows,
         context.dashboard_debug_mode,
         workspace_records=workspace_records,
     )
