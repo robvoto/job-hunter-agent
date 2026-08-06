@@ -1483,6 +1483,47 @@
   line-height: 1;
 }
 
+/* Shared immediate-apply filter choice. Matches the standard control geometry. */
+.jh-filter-choice-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--control-space-sm);
+}
+
+.jh-filter-choice {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--control-height-lg);
+  padding: var(--control-pad-block-2xl) var(--control-pad-inline-lg);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--control-radius-lg);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--control-font-size);
+  font-weight: var(--control-font-weight);
+  line-height: var(--control-line-height);
+  cursor: pointer;
+  transition: border-color 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
+}
+
+.jh-filter-choice:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-muted);
+}
+
+.jh-filter-choice[aria-pressed="true"] {
+  border-color: var(--selection-accent);
+  background: color-mix(in srgb, var(--selection-accent) 12%, var(--bg-surface));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--selection-accent) 20%, transparent);
+}
+
+.jh-filter-choice:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
 /* Shared native select control. Apply explicitly to standard app selects. */
 .jh-select {
   display: block;

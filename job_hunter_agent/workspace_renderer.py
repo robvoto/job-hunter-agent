@@ -514,6 +514,13 @@ _WORKSPACE_PAGE_LABEL_KEYS = (
     "sort_option_highest_salary",
     "jobs_per_page_label",
     "filters_label",
+    "quick_filters_label",
+    "quick_filter_new_to_you",
+    "quick_filter_direct_employer",
+    "quick_filter_easy_apply",
+    "more_filters_label",
+    "job_boards_label",
+    "job_boards_all_label",
     "show_label",
     "show_option_all_potential",
     "show_option_matches_last_run",
@@ -921,6 +928,23 @@ def render_work_type_filter_options() -> str:
             continue
         options.append(f'<option value="{safe_html(value)}">{safe_html(label)}</option>')
     return "".join(options)
+
+
+def render_job_board_filter_choices() -> str:
+    """Render workspace board choices from the managed source registry."""
+    from job_hunter_agent.source_registry import load_source_registry
+
+    labels = load_source_registry()["source_display_labels"]
+    choices = [
+        '<button class="jh-filter-choice" type="button" data-source-filter="all" aria-pressed="true">'
+        f'{safe_html(_workspace_label("workspace_page_labels", "job_boards_all_label"))}</button>'
+    ]
+    for source, label in labels.items():
+        choices.append(
+            f'<button class="jh-filter-choice" type="button" data-source-filter="{safe_html(source)}" '
+            f'aria-pressed="false">{safe_html(label)}</button>'
+        )
+    return "".join(choices)
 
 
 def render_page_size_options() -> str:
@@ -1841,19 +1865,14 @@ def render_job_card(
                 f'title="{safe_html(_workspace_label("workspace_card_labels", action_title_key))}" target="_blank" rel="noopener">'
                 f'{safe_html(_workspace_label("workspace_card_labels", action_label_key))}</a>'
             )
-        badges_html = ""
-        if importance_html or status_html or add_to_profile_html:
-            badges_html = (
-                f'<div class="job-requirement-badges">'
-                f"{importance_html}"
-                f"{status_html}"
-                f"{add_to_profile_html}"
-                f"</div>"
-            )
         html = (
             f'<li class="job-requirement-item job-requirement-item--{safe_html(css_modifier)}">'
-            f'<span class="job-requirement-text">{safe_html(req_text)}{detail_html}{experience_note_html}</span>'
-            f"{badges_html}"
+            f'<span class="job-requirement-text">'
+            f'<span class="job-requirement-title-line">'
+            f'{safe_html(req_text)}{importance_html}{status_html}{add_to_profile_html}'
+            f'</span>'
+            f'{detail_html}{experience_note_html}'
+            f"</span>"
             f"</li>"
         )
         return html, bool(detail_html_parts)
@@ -2332,7 +2351,7 @@ def render_job_card(
     title_block_panel_id = f"{card_dom_id}-title-block"
 
     return (
-        f'<article id="{safe_html(card_dom_id)}" class="{safe_html(card_classes)}" data-fit-score="{fit_points}" data-posted-age="{posted_age_days if posted_age_days is not None else 9999}" data-salary-sort="{salary_value}" data-salary-fit="{safe_html(salary_fit_state)}" data-work-mode="{safe_html(work_mode.lower())}" data-work-type="{safe_html(display_work_type_label(record).lower())}" data-viewed="{1 if seen_by_you else 0}" data-record-kind="{record_kind}" data-fit-label="{safe_html(fit_label.lower())}" data-title-search="{safe_html((record.get("title") or "").lower())}" data-company-search="{safe_html(company_display.lower())}" data-source="{safe_html(source)}" data-apply-method="{safe_html(apply_method or "unknown")}">'
+        f'<article id="{safe_html(card_dom_id)}" class="{safe_html(card_classes)}" data-fit-score="{fit_points}" data-posted-age="{posted_age_days if posted_age_days is not None else 9999}" data-salary-sort="{salary_value}" data-salary-fit="{safe_html(salary_fit_state)}" data-work-mode="{safe_html(work_mode.lower())}" data-work-type="{safe_html(display_work_type_label(record).lower())}" data-viewed="{1 if seen_by_you else 0}" data-record-kind="{record_kind}" data-fit-label="{safe_html(fit_label.lower())}" data-title-search="{safe_html((record.get("title") or "").lower())}" data-company-search="{safe_html(company_display.lower())}" data-source="{safe_html(source)}" data-posting-channel="{safe_html(channel_kind)}" data-apply-method="{safe_html(apply_method or "unknown")}">'
         f'<div class="job-badges">{"".join(badges)}</div>'
         '<div class="job-header-row">'
         '<div class="job-header-copy">'

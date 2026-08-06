@@ -677,13 +677,17 @@
 }
 
 .job-requirement-item {
+  display: block;
+  padding: 4px 0;
+  border-radius: var(--radius-sm);
+}
+
+.job-requirement-item--has-action {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   column-gap: 12px;
   row-gap: 4px;
-  padding: 4px 0;
-  border-radius: var(--radius-sm);
 }
 
 .job-requirement-item--confirmed-have {
@@ -707,6 +711,13 @@
 .job-requirement-text {
   grid-column: 1;
   min-width: 0;
+}
+
+.job-requirement-title-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--control-space-xs);
 }
 
 .job-requirement-badges {
@@ -813,6 +824,11 @@
 }
 
 .req-add-to-profile {
+  min-height: 0;
+  padding: calc(var(--control-pad-block-sm) / 2) var(--control-space-xs);
+  border-radius: var(--control-radius-pill);
+  font-size: var(--font-size-2xs);
+  line-height: var(--chip-line-height);
   white-space: nowrap;
 }
 
@@ -1462,6 +1478,7 @@
   color: var(--accent);
 }
 
+
 .block-confirm .mini-button {
   min-height: 32px;
   padding: var(--block-confirm-control-pad-block) var(--block-confirm-control-pad-inline);
@@ -1634,19 +1651,15 @@
   .job-header-row { flex-direction: column; }
   .match-tile { min-width: 0; width: 100%; }
   .job-requirement-item { grid-template-columns: 1fr; }
+  .job-requirement-text {
+    grid-column: 1;
+    min-width: 0;
+  }
   .job-requirement-badges {
     grid-column: 1;
     justify-self: start;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-start;
     align-items: flex-start;
+    justify-content: flex-start;
     gap: 6px;
-  }
-  .job-requirement-status,
-  .job-req-importance,
-  .job-requirement-action {
-    grid-column: 1;
-    justify-self: start;
   }
 }

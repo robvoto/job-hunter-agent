@@ -67,6 +67,7 @@ from job_hunter_agent.workspace_renderer import (
     render_section,
     render_workspace_tabs_html,
     render_work_type_filter_options,
+    render_job_board_filter_choices,
 )
 
 WORKSPACE_DEBUG_MODE = DEBUG_MODE
@@ -492,6 +493,7 @@ def render_html(
     posted_filter_options_html = render_posted_filter_options(potential_records, reference_time)
 
     work_type_filter_options_html = render_work_type_filter_options()
+    job_board_filter_choices_html = render_job_board_filter_choices()
 
     shortlist_count = len(shortlist_records)
 
@@ -669,6 +671,7 @@ def render_html(
             "POSTED_FILTER_OPTIONS_HTML": posted_filter_options_html,
             "SCORE_FILTER_OPTIONS_HTML": score_filter_options_html,
             "WORK_TYPE_FILTER_OPTIONS_HTML": work_type_filter_options_html,
+            "JOB_BOARD_FILTER_CHOICES_HTML": job_board_filter_choices_html,
             "CURRENT_SECTION_HTML": render_section(
                 "Job Results",
                 shortlist_records,

@@ -24,6 +24,21 @@
                 </label>
               </div>
             </div>
+            <div class="workspace-control-group workspace-control-group--quick-filters">
+              <h3 class="workspace-control-group-title">$LABEL_WS_QUICK_FILTERS_LABEL</h3>
+              <div class="workspace-quick-filters" id="workspace_quick_filters">
+                <button class="jh-filter-choice" type="button" data-quick-filter="new" aria-pressed="false">$LABEL_WS_QUICK_FILTER_NEW_TO_YOU</button>
+                <button class="jh-filter-choice" type="button" data-quick-filter="direct" aria-pressed="false">$LABEL_WS_QUICK_FILTER_DIRECT_EMPLOYER</button>
+                <button class="jh-filter-choice" type="button" data-quick-filter="easy" aria-pressed="false">$LABEL_WS_QUICK_FILTER_EASY_APPLY</button>
+              </div>
+            </div>
+            <div class="workspace-control-group workspace-control-group--boards">
+              <h3 class="workspace-control-group-title">$LABEL_WS_JOB_BOARDS_LABEL</h3>
+              <div class="workspace-board-filter" id="workspace_board_filter">
+                <button class="jh-filter-choice workspace-more-filters-trigger" id="workspace_more_filters" type="button" aria-expanded="false" aria-controls="workspace_more_filter_content">$LABEL_WS_MORE_FILTERS_LABEL</button>
+                <div class="jh-filter-choice-group workspace-board-filter__choices" id="workspace_more_filter_content">$JOB_BOARD_FILTER_CHOICES_HTML</div>
+              </div>
+            </div>
             <div class="workspace-control-group workspace-control-group--filters">
               <h3 class="workspace-control-group-title">$LABEL_WS_FILTERS_LABEL</h3>
               <div class="workspace-control-grid workspace-control-grid--filters">

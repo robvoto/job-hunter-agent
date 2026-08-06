@@ -426,6 +426,7 @@ body {
 }
 
 .workspace-controls-panel {
+  container-type: inline-size;
   display: grid;
   gap: var(--surface-gap-md);
 }
@@ -434,7 +435,32 @@ body {
   margin-bottom: 0;
 }
 
-/* Workspace tabs intentionally use a flat nav strip instead of shared button chrome. */
+.workspace-quick-filters,
+.workspace-board-filter__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--control-space-sm);
+}
+
+.workspace-more-filters-trigger {
+  display: none;
+}
+
+@container (max-width: 68rem) {
+  .workspace-more-filters-trigger {
+    display: inline-flex;
+  }
+
+  .workspace-board-filter__choices {
+    display: none;
+    margin-top: var(--control-space-sm);
+  }
+
+  .workspace-board-filter__choices.is-open {
+    display: flex;
+  }
+}
+
 .scope-tabs {
   display: flex;
   align-items: flex-end;

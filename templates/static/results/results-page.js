@@ -60,6 +60,10 @@
     const workModeFilter = document.getElementById('work_mode_filter');
     const sectorFilter = document.getElementById('sector_filter');
     const scoreFilter = document.getElementById('score_filter');
+    const quickFilterButtons = Array.from(document.querySelectorAll('[data-quick-filter]'));
+    const moreFiltersButton = document.getElementById('workspace_more_filters');
+    const moreFiltersContent = document.getElementById('workspace_more_filter_content');
+    const sourceFilterButtons = Array.from(document.querySelectorAll('[data-source-filter]'));
     const DEFAULT_SCORE_FILTER_VALUE = WORKSPACE_CONTEXT.defaultScoreFilterValue || 55;
     const resetFiltersButton = document.getElementById('reset_workspace_filters');
     const resultsHelper = document.getElementById('results_helper');
@@ -154,6 +158,8 @@
         workMode: workModeFilter?.value,
         sector: sectorFilter?.value,
         score: scoreFilter?.value,
+        quick: Object.fromEntries(quickFilterButtons.map(button => [button.dataset.quickFilter, button.getAttribute('aria-pressed') === 'true'])),
+        sources: sourceFilterButtons.filter(button => button.dataset.sourceFilter !== 'all' && button.getAttribute('aria-pressed') === 'true').map(button => button.dataset.sourceFilter),
       };
       try {
         window.localStorage.setItem(WORKSPACE_FILTERS_KEY, JSON.stringify(filters));
@@ -184,6 +190,18 @@
         setSelectValueIfAvailable(workModeFilter, filters.workMode);
         setSelectValueIfAvailable(sectorFilter, filters.sector);
         setSelectValueIfAvailable(scoreFilter, filters.score);
+        if (Array.isArray(filters.sources) && filters.sources.length) {
+          for (const button of sourceFilterButtons) {
+            const source = button.dataset.sourceFilter;
+            button.setAttribute('aria-pressed', source !== 'all' && filters.sources.includes(source) ? 'true' : 'false');
+          }
+          sourceFilterButtons.find(button => button.dataset.sourceFilter === 'all')?.setAttribute('aria-pressed', 'false');
+        }
+        if (filters.quick && typeof filters.quick === 'object') {
+          for (const button of quickFilterButtons) {
+            button.setAttribute('aria-pressed', filters.quick[button.dataset.quickFilter] ? 'true' : 'false');
+          }
+        }
       } catch (e) {}
     }
 
@@ -220,6 +238,12 @@
       if (sectorFilter) sectorFilter.value = 'all';
       if (scoreFilter) {
         setSelectValueIfAvailable(scoreFilter, DEFAULT_SCORE_FILTER_VALUE);
+      }
+      for (const button of quickFilterButtons) {
+        button.setAttribute('aria-pressed', 'false');
+      }
+      for (const button of sourceFilterButtons) {
+        button.setAttribute('aria-pressed', button.dataset.sourceFilter === 'all' ? 'true' : 'false');
       }
       try {
         window.localStorage.removeItem(WORKSPACE_FILTERS_KEY);
@@ -296,6 +320,9 @@
       const cardSector = (card.dataset.roleSector || 'unknown').toLowerCase();
       const cardScore = Number(card.dataset.fitScore || 0);
       const postedAge = Number(card.dataset.postedAge || 9999);
+      const cardSource = (card.dataset.source || '').toLowerCase();
+      const cardPostingChannel = (card.dataset.postingChannel || 'unknown').toLowerCase();
+      const cardApplyMethod = (card.dataset.applyMethod || 'unknown').toLowerCase();
 
       if (filters.scopeMode === 'current' && cardScope !== 'current') return false;
       if (filters.scopeMode === 'saved' && cardScope !== 'saved') return false;
@@ -307,6 +334,10 @@
       if (filters.sector === 'public' && cardSector !== 'public') return false;
       if (filters.sector === 'private' && cardSector === 'public') return false;
       if (filters.scoreMode !== 'all' && cardScore < Number(filters.scoreMode)) return false;
+      if (filters.quickNew && viewed) return false;
+      if (filters.quickDirect && cardPostingChannel !== 'direct_employer') return false;
+      if (filters.sources?.length && !filters.sources.includes(cardSource)) return false;
+      if (filters.quickEasy && !['easy_apply', 'quick_apply'].includes(cardApplyMethod)) return false;
       return true;
     }
 
@@ -331,6 +362,10 @@
         workMode: workModeFilter?.value || 'all',
         sector: sectorFilter?.value || 'all',
         scoreMode: scoreFilter?.value || 'all',
+        quickNew: document.querySelector('[data-quick-filter="new"]')?.getAttribute('aria-pressed') === 'true',
+        quickDirect: document.querySelector('[data-quick-filter="direct"]')?.getAttribute('aria-pressed') === 'true',
+        sources: sourceFilterButtons.filter(button => button.dataset.sourceFilter !== 'all' && button.getAttribute('aria-pressed') === 'true').map(button => button.dataset.sourceFilter),
+        quickEasy: document.querySelector('[data-quick-filter="easy"]')?.getAttribute('aria-pressed') === 'true',
       };
       const activeWorkspace = getActiveWorkspace();
 
@@ -795,6 +830,36 @@
         applyWorkspaceControls();
       });
     }
+    for (const button of quickFilterButtons) {
+      button.addEventListener('click', () => {
+        button.setAttribute('aria-pressed', button.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+        resetPagination();
+        saveWorkspaceFilters();
+        applyWorkspaceControls();
+      });
+    }
+    for (const button of sourceFilterButtons) {
+      button.addEventListener('click', () => {
+        const source = button.dataset.sourceFilter;
+        if (source === 'all') {
+          for (const candidate of sourceFilterButtons) {
+            candidate.setAttribute('aria-pressed', candidate.dataset.sourceFilter === 'all' ? 'true' : 'false');
+          }
+        } else {
+          button.setAttribute('aria-pressed', button.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+          const selected = sourceFilterButtons.filter(candidate => candidate.dataset.sourceFilter !== 'all' && candidate.getAttribute('aria-pressed') === 'true');
+          sourceFilterButtons.find(candidate => candidate.dataset.sourceFilter === 'all')?.setAttribute('aria-pressed', selected.length ? 'false' : 'true');
+        }
+        resetPagination();
+        saveWorkspaceFilters();
+        applyWorkspaceControls();
+      });
+    }
+    moreFiltersButton?.addEventListener('click', () => {
+      const expanded = moreFiltersButton.getAttribute('aria-expanded') === 'true';
+      moreFiltersButton.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+      moreFiltersContent?.classList.toggle('is-open', !expanded);
+    });
 
     showStaticExportBanner();
     loadWorkspaceFilters();
