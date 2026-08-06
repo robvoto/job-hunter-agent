@@ -425,6 +425,19 @@
   box-shadow: var(--shadow-soft);
 }
 
+/* Capability strength is a set of separate compact choices, not one fused
+   segmented control. Work-mode and preference strips keep their existing layout. */
+.capability-strength-strip.choice-strip {
+  width: max-content;
+  max-width: 100%;
+  gap: 8px;
+  flex-wrap: wrap;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+  box-shadow: none;
+}
+
 /* Shared chip selector styling — applies to all choice-card variants */
 
 .choice-strip > .choice-card--work-mode,
@@ -449,10 +462,13 @@
 
 /* Layout variants */
 .choice-strip > .choice-card--work-mode { flex: 1; }
-.choice-strip > .choice-card--strength  { flex: 0 0 auto; min-width: 86px; }
+.choice-strip > .choice-card--strength  { flex: 0 0 auto; min-width: 74px; }
 
 .choice-strip > .choice-card--strength {
   position: relative;
+  min-height: 36px;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 

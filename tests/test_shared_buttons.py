@@ -46,3 +46,25 @@ def test_special_cta_buttons_are_not_migrated_to_shared_application_button():
     assert 'class="btn btn-primary" id="ws_sidebar_run_btn"' in workspace
     assert 'class="btn btn-primary" id="continue_to_search_basics"' in onboarding
     assert 'class="btn btn-primary" id="confirm_review"' in onboarding
+
+
+def test_compact_actions_are_rectangular_and_strength_choices_are_separate():
+    primitives = (
+        ROOT_DIR / "templates" / "static" / "theme" / "themes.primitives.css"
+    ).read_text(encoding="utf-8-sig")
+    widgets = (
+        ROOT_DIR / "templates" / "static" / "theme" / "themes.widgets.css"
+    ).read_text(encoding="utf-8-sig")
+
+    compact_block = primitives.split(".jh-button--compact {", 1)[1].split("}", 1)[0]
+    assert "min-height: 32px;" in compact_block
+    assert "padding: 6px 12px;" in compact_block
+    assert "border-radius: var(--radius-sm);" in compact_block
+    assert ".capability-strength-strip.choice-strip {" in widgets
+    assert "gap: 8px;" in widgets
+    assert "border: 0;" in widgets
+    assert "overflow: visible;" in widgets
+    strength_block = widgets.rsplit(".choice-strip > .choice-card--strength {", 1)[1].split("}", 1)[0]
+    assert "min-height: 36px;" in strength_block
+    assert "padding: 6px 14px;" in strength_block
+    assert "border-radius: var(--radius-sm);" in strength_block

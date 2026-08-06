@@ -94,7 +94,7 @@ textarea {
 .btn-compact-action {
   min-height: var(--control-height-sm);
   padding: var(--control-pad-block-sm) var(--control-pad-inline-md);
-  border-radius: var(--control-radius-lg);
+  border-radius: var(--radius-sm);
   font-size: var(--font-size-sm);
   line-height: 1.1;
   gap: var(--control-space-2xs);
@@ -174,9 +174,9 @@ textarea {
 }
 
 .jh-button--compact {
-  min-height: var(--control-height-sm);
-  padding: var(--control-pad-block-sm) var(--control-pad-inline-md);
-  border-radius: var(--control-radius-lg);
+  min-height: 32px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
   font-size: var(--font-size-sm);
   line-height: 1.1;
   gap: var(--control-space-2xs);
@@ -194,20 +194,20 @@ textarea {
 }
 
 .jh-button--secondary {
-  background: color-mix(in srgb, var(--accent) 12%, var(--bg-surface));
-  color: color-mix(in srgb, var(--accent) 86%, var(--text-primary));
-  border-color: color-mix(in srgb, var(--accent) 30%, var(--border-subtle));
+  background: color-mix(in srgb, var(--state-info-bg) 82%, var(--bg-surface));
+  color: color-mix(in srgb, var(--state-info-text) 92%, var(--text-primary));
+  border-color: color-mix(in srgb, var(--state-info-border) 78%, var(--border-subtle));
 }
 
 .jh-button--secondary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 18%, var(--bg-surface));
-  border-color: color-mix(in srgb, var(--accent) 48%, var(--border-subtle));
+  background: color-mix(in srgb, var(--state-info-bg) 96%, var(--bg-surface));
+  border-color: var(--state-info-border);
 }
 
 .jh-button--danger {
-  background: color-mix(in srgb, var(--state-error-bg) 78%, var(--bg-surface));
+  background: color-mix(in srgb, var(--state-error-bg) 92%, var(--bg-surface));
   color: var(--state-error-text);
-  border-color: color-mix(in srgb, var(--state-error-border) 74%, transparent);
+  border-color: color-mix(in srgb, var(--state-error-border) 88%, transparent);
 }
 
 .jh-button--danger:hover:not(:disabled) {
