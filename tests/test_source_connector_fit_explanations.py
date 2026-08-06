@@ -1631,7 +1631,7 @@ def test_posting_channel_badge_uses_token_classifier_review_class():
     assert ">Recruiter<" not in html
     assert "Job Requirements" in html
     assert "Strong stakeholder engagement and communication skills" in html
-    assert "In profile" in html
+    assert "In profile" not in html
     assert "Not in profile" in html
     assert "job-requirement-item--confirmed-have" in html
     assert "job-requirement-item--confirmed-do-not-have" in html

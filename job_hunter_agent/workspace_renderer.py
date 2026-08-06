@@ -1766,12 +1766,14 @@ def render_job_card(
             status_key = profile_status_label_keys.get(profile_status)
         status_label = workspace_card_label_group.get(status_key, "") if status_key else ""
         is_uncertain_classification = row.get("requirement_type") == "uncertain"
-        if css_modifier in _NOT_FOUND_CSS_MODIFIERS or is_uncertain_classification:
-            # The "needs attention" group heading and the add-to-profile action already
-            # say this is missing — a status badge repeating that is noise, not signal.
-            # Uncertain-classification rows show the more specific "Needs
-            # classification/review" badge instead (see classification_label below) —
-            # never both a generic status badge and that badge on the same row.
+        if (
+            css_modifier in _NOT_FOUND_CSS_MODIFIERS
+            or css_modifier in matched_css_modifiers
+            or is_uncertain_classification
+        ):
+            # Group placement already communicates generic matched/missing state.
+            # Keep only row-level labels that add information, such as partial match,
+            # confirmed negative, classification review, importance, or evidence.
             status_label = ""
         classification_label = (
             workspace_card_label_group.get("coverage_status_classification_review", "")
