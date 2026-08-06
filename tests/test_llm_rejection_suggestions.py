@@ -347,6 +347,7 @@ def test_normalize_llm_review_payload_fit_review_shape():
         "debug_reason": "",
         "occupation_alignment": llm_gate.LLM_INVALID_OCCUPATION_ALIGNMENT,
         "occupation_alignment_reason": "",
+        "posting_channel": {"kind": llm_gate.LLM_INVALID_POSTING_CHANNEL_KIND, "confident": False, "evidence": ""},
         "requirement_coverage": [
             {
                 "requirement": "Strong stakeholder engagement",
@@ -395,6 +396,7 @@ def test_request_learning_payload_uses_fit_review_only_schema(monkeypatch):
         "debug_reason": "",
         "occupation_alignment": llm_gate.LLM_INVALID_OCCUPATION_ALIGNMENT,
         "occupation_alignment_reason": "",
+        "posting_channel": {"kind": llm_gate.LLM_INVALID_POSTING_CHANNEL_KIND, "confident": False, "evidence": ""},
         "requirement_coverage": [
                 {
                     "requirement": "Stakeholder engagement",

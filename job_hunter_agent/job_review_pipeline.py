@@ -808,13 +808,13 @@ def _apply_detail_payload_to_record(
     return True, "OK"
 
 
-def _apply_source_metadata_to_record(record: dict, details_text: str) -> None:
-    channel_signal = infer_posting_channel(record, details_text)
+def _apply_source_metadata_to_record(record: dict, llm_posting_channel: dict | None) -> None:
+    channel_signal = infer_posting_channel(record, llm_posting_channel)
     record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY] = {
         "kind": str(channel_signal.get("kind") or "unknown"),
         "source": str(channel_signal.get("source") or ""),
         "trusted_metadata": list(channel_signal.get("trusted_metadata") or []),
-        "weak_text_matches": list(channel_signal.get("weak_text_matches") or []),
+        "text_evidence": list(channel_signal.get("text_evidence") or []),
         "needs_review": bool(channel_signal.get("needs_review")),
     }
 
@@ -989,6 +989,7 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
     llm_cost_usd = None
     llm_input_tokens = None
     llm_output_tokens = None
+    llm_posting_channel = None
 
     if deterministic_review is not None and deterministic_review["decision"] == "REJECT":
         review = deterministic_review
@@ -1028,6 +1029,7 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
             payload.get("occupation_alignment_reason") or ""
         )
         debug_reason = str(payload.get("debug_reason") or "")
+        llm_posting_channel = payload.get("posting_channel")
         llm_cost_raw = payload.get("llm_cost_usd")
         llm_cost_usd = None if llm_cost_raw in (None, "") else float(llm_cost_raw)
         llm_input_raw = payload.get(RECORD_LLM_INPUT_TOKENS_KEY)
@@ -1094,6 +1096,7 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         RECORD_REQUIREMENT_COVERAGE_KEY: record[RECORD_REQUIREMENT_COVERAGE_KEY],
         RECORD_OCCUPATION_ALIGNMENT_KEY: record[RECORD_OCCUPATION_ALIGNMENT_KEY],
         RECORD_OCCUPATION_ALIGNMENT_REASON_KEY: record[RECORD_OCCUPATION_ALIGNMENT_REASON_KEY],
+        "posting_channel": llm_posting_channel,
         RECORD_LLM_ELAPSED_MS_KEY: llm_elapsed_ms,
         RECORD_LLM_COST_USD_KEY: llm_cost_usd,
         RECORD_LLM_INPUT_TOKENS_KEY: llm_input_tokens,
@@ -1365,7 +1368,6 @@ def review_post_detail_normalized_job(
         _finalize_job_result(record, context, reason=reason)
         return _build_outcome(record), record, skill_observations
 
-    _apply_source_metadata_to_record(record, details_text)
     _apply_work_type_inference(record, details_text)
     _call_hook(hooks, "before_common_review", record, context)
     _call_hook(hooks, "after_description_loaded", record, context)
@@ -1503,6 +1505,7 @@ def review_post_detail_normalized_job(
 
     record.update(fit_eval)
     record[RECORD_JOB_REQUIREMENTS_KEY] = record.get(RECORD_JOB_REQUIREMENTS_KEY) or []
+    _apply_source_metadata_to_record(record, record.pop("posting_channel", None))
 
     if record[RECORD_DECISION_KEY] == "REJECT":
         record[RECORD_REJECT_REASON_KEY] = (

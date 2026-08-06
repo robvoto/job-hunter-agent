@@ -168,7 +168,7 @@ def test_infer_posting_channel_uses_trusted_metadata_before_text():
                 },
             }
         },
-        "",
+        None,
     )
 
     assert channel["kind"] == "direct_employer"
@@ -196,16 +196,16 @@ def test_infer_posting_channel_does_not_treat_linkedin_publisher_profile_as_empl
                 },
             },
         },
-        "",
+        None,
     )
 
     assert channel["kind"] == "unknown"
-    assert channel["source"] == "metadata_first"
+    assert channel["source"] == "insufficient_evidence"
     assert channel["needs_review"] is False
     assert "company profile link = https://au.linkedin.com/company/aspen-medical-pty-ltd" in channel["trusted_metadata"]
 
 
-def test_infer_posting_channel_uses_ad_relationship_for_hays_without_company_list():
+def test_infer_posting_channel_uses_llm_signal_when_no_trusted_metadata():
     channel = role_analysis.infer_posting_channel(
         {
             "company": "Hays",
@@ -220,76 +220,57 @@ def test_infer_posting_channel_uses_ad_relationship_for_hays_without_company_lis
                 "raw_source_fields": {},
             },
         },
-        "Your new company. This federal government agency is seeking an experienced Senior Business Analyst.",
+        {
+            "kind": "agency_or_recruiter",
+            "confident": True,
+            "evidence": "this federal government agency is seeking",
+        },
     )
 
     assert channel["kind"] == "agency_or_recruiter"
-    assert channel["source"] == "text_window_classifier"
-    assert channel["needs_review"] is True
-    assert "your new company" in channel["text_evidence"]
+    assert channel["source"] == "llm_classifier"
+    assert channel["needs_review"] is False
+    assert "this federal government agency is seeking" in channel["text_evidence"]
 
 
-@pytest.mark.parametrize(
-    "details_text, expected_phrase",
-    [
-        (
-            "One of our Federal Government Clients is seeking a Senior Business Analyst.",
-            "one of our federal government clients",
-        ),
-        ("Our client is seeking a Business Analyst.", "our client"),
-        ("Our clients are looking for experienced Business Analysts.", "our client"),
-        ("We are recruiting for a Federal Government client.", "recruiting for"),
-        ("This role is advertised on behalf of our client.", "on behalf of"),
-        ("About the client: the client is seeking a Product Owner.", "about the client"),
-    ],
-)
-def test_infer_posting_channel_detects_recruiter_copy_without_regex(details_text, expected_phrase):
+def test_infer_posting_channel_marks_needs_review_when_llm_not_confident():
     channel = role_analysis.infer_posting_channel(
         {"source_metadata": {"platform": "seek", "raw_source_fields": {}}},
-        details_text,
+        {
+            "kind": "agency_or_recruiter",
+            "confident": False,
+            "evidence": "our client is seeking a business analyst",
+        },
     )
 
     assert channel["kind"] == "agency_or_recruiter"
-    assert channel["source"] == "text_window_classifier"
+    assert channel["source"] == "llm_classifier"
     assert channel["needs_review"] is True
-    assert expected_phrase in " | ".join(channel["weak_text_matches"])
-    assert channel["text_evidence"] == channel["weak_text_matches"]
+    assert "our client is seeking a business analyst" in channel["text_evidence"]
 
 
-@pytest.mark.parametrize(
-    "details_text",
-    [
-        "Department of Finance is seeking a Senior Business Analyst.",
-        "Fraser Coast Council is seeking a Business Analyst.",
-        "Queensland Health is seeking a Business Analyst.",
-        "Join our team as a Business Analyst.",
-        "We are seeking a Business Analyst.",
-        "We help our clients deliver transformation projects.",
-    ],
-)
-def test_infer_posting_channel_does_not_flag_direct_employer_phrases(details_text):
+def test_infer_posting_channel_falls_back_to_unknown_without_trusted_metadata_or_llm_signal():
     channel = role_analysis.infer_posting_channel(
         {"source_metadata": {"platform": "seek", "raw_source_fields": {}}},
-        details_text,
+        None,
     )
 
     assert channel["kind"] == "unknown"
-    assert channel["source"] == "metadata_first"
+    assert channel["source"] == "insufficient_evidence"
     assert channel["needs_review"] is False
 
 
-def test_infer_posting_channel_uses_generic_recruitment_term_in_advertiser_name():
+def test_infer_posting_channel_ignores_company_name_alone_without_llm_signal():
     channel = role_analysis.infer_posting_channel(
         {
             "company": "Acme Recruitment",
             "source_metadata": {"platform": "seek", "raw_source_fields": {}},
         },
-        "",
+        None,
     )
 
-    assert channel["kind"] == "agency_or_recruiter"
-    assert channel["source"] == "company_or_domain_indicator"
-    assert channel["needs_review"] is False
+    assert channel["kind"] == "unknown"
+    assert channel["source"] == "insufficient_evidence"
 
 
 def test_score_to_match_label_uses_central_match_band_mapping():
@@ -1587,11 +1568,14 @@ def test_render_job_card_hides_browser_interstitial_summary_text():
     assert 'data-job-teaser=""' in html
 
 
-def test_posting_channel_badge_uses_token_classifier_review_class():
+def test_posting_channel_badge_uses_llm_classifier_review_class():
     channel = role_analysis.infer_posting_channel(
         {"company": "Acme", "source_metadata": {"platform": "seek", "raw_source_fields": {}}},
-        "Our client is seeking a business analyst. Contact our recruitment team for details. "
-        * 20,
+        {
+            "kind": "agency_or_recruiter",
+            "confident": False,
+            "evidence": "our client is seeking a business analyst",
+        },
     )
     html = workspace_renderer.render_job_card(
         {
@@ -1638,13 +1622,17 @@ def test_posting_channel_badge_uses_token_classifier_review_class():
     assert "badge-sector-government" not in html
 
 
-def test_posting_channel_badge_uses_generic_recruitment_term():
+def test_posting_channel_badge_uses_confident_llm_classification():
     channel = role_analysis.infer_posting_channel(
         {
             "company": "Acme Recruitment",
             "source_metadata": {"platform": "seek", "raw_source_fields": {}},
         },
-        "",
+        {
+            "kind": "agency_or_recruiter",
+            "confident": True,
+            "evidence": "on behalf of a leading government agency",
+        },
     )
     html = workspace_renderer.render_job_card(
         {
@@ -1693,7 +1681,6 @@ def test_render_job_card_shows_source_unclear_badge_for_unknown_posting_channel(
                 "kind": "unknown",
                 "source": "insufficient_evidence",
                 "trusted_metadata": [],
-                "weak_text_matches": [],
                 "text_evidence": [],
                 "needs_review": False,
             },
@@ -1720,11 +1707,11 @@ def test_infer_posting_channel_keeps_unknown_without_trusted_linkedin_employer_m
                 "raw_source_fields": {},
             },
         },
-        "",
+        None,
     )
 
     assert channel["kind"] == "unknown"
-    assert channel["source"] == "metadata_first"
+    assert channel["source"] == "insufficient_evidence"
     assert channel["needs_review"] is False
 
 
@@ -2859,7 +2846,7 @@ def test_workspace_record_sets_rank_current_records_by_score_before_age(monkeypa
     ]
 
 
-def test_workspace_record_sets_debug_mode_includes_low_score_and_rejected_rows(monkeypatch):
+def test_workspace_record_sets_never_include_rejected_rows(monkeypatch):
     monkeypatch.setattr(
         workspace_service, "fit_score_displayed", lambda record, profile=None: int(record["score"])
     )
@@ -2885,22 +2872,8 @@ def test_workspace_record_sets_debug_mode_includes_low_score_and_rejected_rows(m
             "decision": "KEEP",
         },
     ]
-    audit_rows = [
-        {
-            "job_key": "filtered-role",
-            "score": 5,
-            "posted_age_days": 0.3,
-            "times_viewed": 0,
-            "decision": "REJECT",
-            "reject_reason": "TITLE_NOT_TARGET",
-            "title_reason": "TITLE_NOT_TARGET",
-            "content_reason": "OK",
-            "title": "Filtered Role",
-            "company": "Acme",
-        }
-    ]
 
-    normal_records = workspace_service.build_workspace_record_sets(
+    workspace_records = workspace_service.build_workspace_record_sets(
         records,
         job_history={},
         applied_job_keys=set(),
@@ -2908,34 +2881,9 @@ def test_workspace_record_sets_debug_mode_includes_low_score_and_rejected_rows(m
         reference_time=datetime(2026, 4, 21),
         scoring_profile={"match_levels": []},
         workspace_min_score=55,
-        debug_mode=False,
-        audit_rows=audit_rows,
-    )
-    debug_records = workspace_service.build_workspace_record_sets(
-        records,
-        job_history={},
-        applied_job_keys=set(),
-        hidden_job_keys=set(),
-        reference_time=datetime(2026, 4, 21),
-        scoring_profile={"match_levels": []},
-        workspace_min_score=55,
-        debug_mode=True,
-        audit_rows=audit_rows,
     )
 
-    assert [record["job_key"] for record in normal_records["current_records"]] == ["fresh-high"]
-    assert [record["job_key"] for record in debug_records["current_records"]] == [
-        "fresh-high",
-        "fresh-low",
-        "filtered-role",
-    ]
-    filtered_record = next(
-        record
-        for record in debug_records["current_records"]
-        if record["job_key"] == "filtered-role"
-    )
-    assert filtered_record["reject_reason"] == "TITLE_NOT_TARGET"
-    assert filtered_record["decision"] == "REJECT"
+    assert [record["job_key"] for record in workspace_records["current_records"]] == ["fresh-high"]
 
 
 def test_is_workspace_eligible_uses_saved_workspace_minimum_score(monkeypatch):
@@ -3471,7 +3419,6 @@ def test_workspace_record_sets_exclude_kept_jobs_without_complete_llm_data(monke
         hidden_job_keys=set(),
         reference_time=datetime(2026, 4, 21),
         scoring_profile={"match_levels": []},
-        debug_mode=False,
     )
 
     assert [record["job_key"] for record in workspace_records["current_records"]] == [

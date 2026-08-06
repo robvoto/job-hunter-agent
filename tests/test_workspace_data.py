@@ -24,7 +24,7 @@ _SNAPSHOT = {
         "kind": "direct_employer",
         "source": "metadata_first",
         "trusted_metadata": ["company profile link = https://example.test/company/acme"],
-        "weak_text_matches": [],
+        "text_evidence": [],
         "needs_review": False,
     },
     RECORD_SOURCE_METADATA_KEY: {
@@ -112,7 +112,6 @@ def test_build_history_workspace_record_preserves_unknown_posting_channel_from_s
             "kind": "unknown",
             "source": "insufficient_evidence",
             "trusted_metadata": [],
-            "weak_text_matches": [],
             "text_evidence": [],
             "needs_review": False,
         },

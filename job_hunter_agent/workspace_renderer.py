@@ -1273,33 +1273,8 @@ def render_job_card(
         )
     badges.append(render_badge(source_badge_label, f"badge-source-{source}", source_badge_tooltip))
     channel_kind = channel_signal.get("kind", "unknown")
-    channel_source = str(channel_signal.get("source") or "").strip().lower()
-    channel_evidence = [
-        str(item).strip()
-        for item in (
-            channel_signal.get("text_evidence")
-            or channel_signal.get("weak_text_matches")
-            or []
-        )
-        if str(item).strip()
-    ]
-    has_channel_evidence = bool(channel_evidence)
     if channel_kind == "agency_or_recruiter":
-        if channel_source in {"metadata_first", "company_or_domain_indicator"} and not channel_signal.get("needs_review"):
-            badges.append(
-                render_badge(
-                    _workspace_label(
-                        "workspace_card_labels",
-                        "posting_channel_agency_recruiter_badge",
-                    ),
-                    "badge-source-neutral",
-                    _workspace_label(
-                        "workspace_card_labels",
-                        "posting_channel_agency_recruiter_tooltip",
-                    ),
-                )
-            )
-        else:
+        if channel_signal.get("needs_review"):
             badges.append(
                 render_badge(
                     _workspace_label(
@@ -1313,26 +1288,26 @@ def render_job_card(
                     ),
                 )
             )
+        else:
+            badges.append(
+                render_badge(
+                    _workspace_label(
+                        "workspace_card_labels",
+                        "posting_channel_agency_recruiter_badge",
+                    ),
+                    "badge-source-neutral",
+                    _workspace_label(
+                        "workspace_card_labels",
+                        "posting_channel_agency_recruiter_tooltip",
+                    ),
+                )
+            )
     elif channel_kind == "direct_employer":
         badges.append(
             render_badge(
                 _workspace_label("workspace_card_labels", "posting_channel_direct_employer_badge"),
                 "badge-source-neutral",
                 _workspace_label("workspace_card_labels", "posting_channel_direct_employer_tooltip"),
-            )
-        )
-    elif channel_signal.get("needs_review") or has_channel_evidence:
-        badges.append(
-            render_badge(
-                _workspace_label(
-                    "workspace_card_labels",
-                    "posting_channel_likely_recruiter_badge",
-                ),
-                "badge-warning",
-                _workspace_label(
-                    "workspace_card_labels",
-                    "posting_channel_likely_recruiter_tooltip",
-                ),
             )
         )
     else:

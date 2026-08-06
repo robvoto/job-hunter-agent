@@ -140,13 +140,13 @@ def test_workspace_export_badges_use_preserved_posting_channel_classification():
         },
     }
 
-    job_review_pipeline._apply_source_metadata_to_record(direct_record, "")
-    job_review_pipeline._apply_source_metadata_to_record(recruiter_record, "")
+    job_review_pipeline._apply_source_metadata_to_record(direct_record, None)
+    job_review_pipeline._apply_source_metadata_to_record(recruiter_record, None)
 
     direct_badges = workspace_export._build_badges(direct_record, "current")
     recruiter_badges = workspace_export._build_badges(recruiter_record, "current")
 
-    assert "Company" in direct_badges
+    assert "Direct employer" in direct_badges
     assert "Source unclear" not in direct_badges
     assert "Agency recruiter" in recruiter_badges
     assert "Source unclear" not in recruiter_badges
@@ -158,7 +158,6 @@ def test_export_badges_show_source_unclear_for_unknown_channel():
             "kind": "unknown",
             "source": "insufficient_evidence",
             "trusted_metadata": [],
-            "weak_text_matches": [],
             "text_evidence": [],
             "needs_review": False,
         }

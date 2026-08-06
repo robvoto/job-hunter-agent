@@ -269,7 +269,7 @@ def test_apply_source_metadata_to_record_preserves_direct_employer_kind():
         },
     }
 
-    job_review_pipeline._apply_source_metadata_to_record(record, "")
+    job_review_pipeline._apply_source_metadata_to_record(record, None)
 
     channel = record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY]
     assert channel["kind"] == "direct_employer"
@@ -279,7 +279,7 @@ def test_apply_source_metadata_to_record_preserves_direct_employer_kind():
     assert "company_url_direct" in channel["trusted_metadata"]
     assert "apply domain = jobs.lever.co" in channel["trusted_metadata"]
     assert "company profile link = https://acme.com.au" in channel["trusted_metadata"]
-    assert channel["weak_text_matches"] == []
+    assert channel["text_evidence"] == []
 
 
 def test_apply_source_metadata_to_record_preserves_agency_recruiter_kind():
@@ -298,14 +298,13 @@ def test_apply_source_metadata_to_record_preserves_agency_recruiter_kind():
         },
     }
 
-    job_review_pipeline._apply_source_metadata_to_record(record, "")
+    job_review_pipeline._apply_source_metadata_to_record(record, None)
 
     channel = record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY]
     assert channel["kind"] == "agency_or_recruiter"
     assert channel["source"] == "metadata_first"
     assert channel["needs_review"] is False
     assert "seekPostingSourceCode" in channel["trusted_metadata"]
-    assert "company name = Recruiter Co" in channel["weak_text_matches"]
 
 
 def test_apply_source_metadata_to_record_stores_review_signal_shape(monkeypatch):
@@ -313,22 +312,24 @@ def test_apply_source_metadata_to_record_stores_review_signal_shape(monkeypatch)
     monkeypatch.setattr(
         job_review_pipeline,
         "infer_posting_channel",
-        lambda record, details_text: {
+        lambda record, llm_posting_channel: {
             "kind": "unknown",
             "source": "",
             "trusted_metadata": [],
-            "weak_text_matches": ["our client"],
+            "text_evidence": ["our client"],
             "needs_review": True,
         },
     )
 
-    job_review_pipeline._apply_source_metadata_to_record(record, "Our client is seeking a BA.")
+    job_review_pipeline._apply_source_metadata_to_record(
+        record, {"kind": "unknown", "confident": False, "evidence": "our client"}
+    )
 
     assert record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY] == {
         "kind": "unknown",
         "source": "",
         "trusted_metadata": [],
-        "weak_text_matches": ["our client"],
+        "text_evidence": ["our client"],
         "needs_review": True,
     }
 
@@ -338,22 +339,22 @@ def test_apply_source_metadata_to_record_stores_unknown_without_review_when_no_e
     monkeypatch.setattr(
         job_review_pipeline,
         "infer_posting_channel",
-        lambda record, details_text: {
+        lambda record, llm_posting_channel: {
             "kind": "unknown",
             "source": "",
             "trusted_metadata": [],
-            "weak_text_matches": [],
+            "text_evidence": [],
             "needs_review": False,
         },
     )
 
-    job_review_pipeline._apply_source_metadata_to_record(record, "")
+    job_review_pipeline._apply_source_metadata_to_record(record, None)
 
     assert record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY] == {
         "kind": "unknown",
         "source": "",
         "trusted_metadata": [],
-        "weak_text_matches": [],
+        "text_evidence": [],
         "needs_review": False,
     }
 
@@ -376,7 +377,7 @@ def test_apply_source_metadata_to_record_does_not_treat_linkedin_publisher_as_em
         },
     }
 
-    job_review_pipeline._apply_source_metadata_to_record(record, record[RECORD_DETAILS_TEXT_KEY])
+    job_review_pipeline._apply_source_metadata_to_record(record, None)
     html = workspace_renderer.render_job_card(record, _review_profile())
 
     assert "Source unclear" in html
@@ -400,25 +401,23 @@ def test_apply_source_metadata_to_record_then_render_job_card_shows_recruiter_ba
         },
     }
 
-    job_review_pipeline._apply_source_metadata_to_record(record, record[RECORD_DETAILS_TEXT_KEY])
+    job_review_pipeline._apply_source_metadata_to_record(record, None)
     html = workspace_renderer.render_job_card(record, _review_profile())
 
     assert "Agency recruiter" in html
     assert "Source unclear" not in html
 
 
-def test_apply_source_metadata_to_record_then_render_job_card_shows_likely_recruiter_for_text_evidence():
+def test_apply_source_metadata_to_record_then_render_job_card_shows_likely_recruiter_for_llm_signal():
     record = _render_ready_record("seek")
-    details_text = (
-        "Our client is seeking a business analyst. Contact our recruitment team for details. "
-        * 5
-    )
+    llm_posting_channel = {
+        "kind": "agency_or_recruiter",
+        "confident": False,
+        "evidence": "our client is seeking a business analyst",
+    }
 
-    job_review_pipeline._apply_source_metadata_to_record(record, details_text)
-    html = workspace_renderer.render_job_card(
-        {**record, "full_description": details_text},
-        _review_profile(),
-    )
+    job_review_pipeline._apply_source_metadata_to_record(record, llm_posting_channel)
+    html = workspace_renderer.render_job_card(record, _review_profile())
 
     assert "Likely recruiter" in html
     assert "Source unclear" not in html

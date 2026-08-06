@@ -57,11 +57,13 @@ from job_hunter_agent.llm_protocol import (
     LLM_ALLOWED_DECISIONS,
     LLM_ALLOWED_GRADES,
     LLM_ALLOWED_OCCUPATION_ALIGNMENTS,
+    LLM_ALLOWED_POSTING_CHANNEL_KINDS,
     LLM_FIT_REVIEW_DEBUG_PROMPT_SHAPE,
     LLM_ALLOWED_TITLE_JUDGMENT_VERDICTS,
     LLM_INVALID_COVERAGE_REQUIREMENT_TYPE,
     LLM_INVALID_COVERAGE_STATUS,
     LLM_INVALID_OCCUPATION_ALIGNMENT,
+    LLM_INVALID_POSTING_CHANNEL_KIND,
     LLM_UNCERTAIN_COVERAGE_REQUIREMENT_TYPE,
     LLM_FIT_REVIEW_PROMPT_SHAPE,
     LLM_ELIGIBILITY_ALIAS_PROMPT_SHAPE,
@@ -83,6 +85,7 @@ from job_hunter_agent.llm_protocol import (
     LLM_PROMPT_MATCH_PREFERENCES_HEADER,
     LLM_PROMPT_NO_FIT_DECISION_REQUIRED,
     LLM_PROMPT_OCCUPATION_ALIGNMENT_INTRO,
+    LLM_PROMPT_POSTING_CHANNEL_INTRO,
     LLM_PROMPT_ROLE_EXPERIENCE_HEADER,
     LLM_PROMPT_SYSTEM_REVIEW_INTRO,
     LLM_PROMPT_TARGET_ROLES_HEADER,
@@ -341,10 +344,17 @@ class _LLMReviewPayload(BaseModel):
     learning_candidates: list[_LLMLearningCandidate] = Field(default_factory=list)
 
 
+class _LLMPostingChannel(BaseModel):
+    kind: str = "unknown"
+    confident: bool = False
+    evidence: str = ""
+
+
 class _LLMFitReviewPayload(BaseModel):
     fit_review: _LLMReviewDecision
     occupation_alignment: str = ""
     occupation_alignment_reason: str = ""
+    posting_channel: _LLMPostingChannel = Field(default_factory=_LLMPostingChannel)
     debug_reason: str = ""
     requirement_coverage: list[_LLMRequirementCoverageItem] = Field(default_factory=list)
     job_requirements: list[str] = Field(default_factory=list)
@@ -354,6 +364,7 @@ class _LLMFitReviewDebugPayload(BaseModel):
     fit_review: _LLMReviewDecision
     occupation_alignment: str = ""
     occupation_alignment_reason: str = ""
+    posting_channel: _LLMPostingChannel = Field(default_factory=_LLMPostingChannel)
     debug_reason: str = ""
     requirement_coverage: list[_LLMRequirementCoverageDebugItem] = Field(default_factory=list)
     job_requirements: list[str] = Field(default_factory=list)
@@ -439,6 +450,7 @@ REJECTION_SUGGESTIONS_DEFAULT_LINES = _load_managed_prompt_lines(
 REQUIREMENT_COVERAGE_DEFAULT_LINES = _load_managed_prompt_lines("llm_requirement_coverage_defaults")
 FIT_REVIEW_GRADE_DEFAULT_LINES = _load_managed_prompt_lines("llm_fit_review_grade_defaults")
 OCCUPATION_ALIGNMENT_DEFAULT_LINES = _load_managed_prompt_lines("llm_occupation_alignment_defaults")
+POSTING_CHANNEL_DEFAULT_LINES = _load_managed_prompt_lines("llm_posting_channel_defaults")
 
 
 def llm_is_enabled() -> bool:
@@ -672,6 +684,15 @@ def build_occupation_alignment_guidance() -> str:
         f"occupation_alignment must be one of: {', '.join(sorted(LLM_ALLOWED_OCCUPATION_ALIGNMENTS))}.",
     ]
     parts.extend(f"- {line}" for line in OCCUPATION_ALIGNMENT_DEFAULT_LINES)
+    return "\n".join(parts)
+
+
+def build_posting_channel_guidance() -> str:
+    parts = [
+        LLM_PROMPT_POSTING_CHANNEL_INTRO,
+        f"posting_channel.kind must be one of: {', '.join(sorted(LLM_ALLOWED_POSTING_CHANNEL_KINDS))}.",
+    ]
+    parts.extend(f"- {line}" for line in POSTING_CHANNEL_DEFAULT_LINES)
     return "\n".join(parts)
 
 
@@ -1514,6 +1535,29 @@ def _normalize_llm_occupation_alignment(value: Any) -> str:
     return LLM_INVALID_OCCUPATION_ALIGNMENT
 
 
+def _normalize_llm_posting_channel(value: Any) -> dict[str, Any]:
+    """Normalize the LLM's posting_channel classification to a validated dict.
+
+    An invalid or missing kind degrades to LLM_INVALID_POSTING_CHANNEL_KIND rather than
+    raising — posting channel never blocks a KEEP, it only drives the source badge shown
+    in the workspace UI.
+    """
+    payload = value if isinstance(value, dict) else {}
+    kind = compact_whitespace(payload.get("kind")).lower()
+    if kind not in LLM_ALLOWED_POSTING_CHANNEL_KINDS:
+        if kind:
+            logger.warning(
+                "[LLM][WARN] purpose=fit_review invalid_posting_channel_kind kind=%r",
+                payload.get("kind"),
+            )
+        kind = LLM_INVALID_POSTING_CHANNEL_KIND
+    return {
+        "kind": kind,
+        "confident": bool(payload.get("confident")),
+        "evidence": _normalize_llm_review_text(payload.get("evidence"), max_chars=200),
+    }
+
+
 def _require_complete_keep_requirement_coverage(
     fit_review: dict[str, str], requirement_coverage: list[dict[str, Any]]
 ) -> None:
@@ -1608,6 +1652,7 @@ def normalize_llm_review_payload(
                 "occupation_alignment_reason": _normalize_llm_review_text(
                     value.get("occupation_alignment_reason"), max_chars=300
                 ),
+                "posting_channel": _normalize_llm_posting_channel(value.get("posting_channel")),
                 "debug_reason": _normalize_llm_review_text(
                     value.get("debug_reason"), max_chars=300
                 ),
@@ -1853,6 +1898,7 @@ def _build_learning_prompt(job_description_text: str, *, fit_review: bool) -> st
                 build_requirement_coverage_debug_guidance() if debug_match_diagnostics else "",
                 build_fit_review_grade_guidance(),
                 build_occupation_alignment_guidance(),
+                build_posting_channel_guidance(),
                 build_job_requirements_guidance(),
                 f"Use at most {get_llm_job_requirements_max_items()} job_requirements.",
             ]

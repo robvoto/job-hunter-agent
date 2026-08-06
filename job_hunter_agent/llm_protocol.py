@@ -20,9 +20,18 @@ LLM_UNCERTAIN_COVERAGE_REQUIREMENT_TYPE = "uncertain"
 LLM_ALLOWED_OCCUPATION_ALIGNMENTS = frozenset({"same", "adjacent", "different"})
 LLM_INVALID_OCCUPATION_ALIGNMENT = "invalid"
 
+LLM_ALLOWED_POSTING_CHANNEL_KINDS = frozenset({"agency_or_recruiter", "direct_employer", "unknown"})
+LLM_INVALID_POSTING_CHANNEL_KIND = "invalid"
+LLM_PROMPT_POSTING_CHANNEL_INTRO = (
+    "For posting_channel: classify whether this ad was posted by the direct employer or by a "
+    "recruitment/staffing agency on behalf of a client, based on the ad's own wording rather than "
+    "the poster's company name alone."
+)
+
 LLM_FIT_REVIEW_PROMPT_SHAPE = (
     '{"fit_review":{"decision":"KEEP|REJECT|MAYBE","grade":"EXCELLENT|STRONG|SOLID|WEAK|POOR|MISMATCH"},'
     '"occupation_alignment":"same|adjacent|different","occupation_alignment_reason":"...",'
+    '"posting_channel":{"kind":"agency_or_recruiter|direct_employer|unknown","confident":true|false,"evidence":"..."},'
     '"job_requirements":["..."],'
     '"requirement_coverage":[{"requirement":"...","importance":"mandatory|strongly_preferred|preferred|nice_to_have",'
     '"requirement_type":"capability|eligibility","status":"supported|partially_supported|not_shown|mismatch",'
@@ -32,6 +41,7 @@ LLM_FIT_REVIEW_PROMPT_SHAPE = (
 LLM_FIT_REVIEW_DEBUG_PROMPT_SHAPE = (
     '{"fit_review":{"decision":"KEEP|REJECT|MAYBE","grade":"EXCELLENT|STRONG|SOLID|WEAK|POOR|MISMATCH"},'
     '"occupation_alignment":"same|adjacent|different","occupation_alignment_reason":"...",'
+    '"posting_channel":{"kind":"agency_or_recruiter|direct_employer|unknown","confident":true|false,"evidence":"..."},'
     '"job_requirements":["..."],'
     '"requirement_coverage":[{"requirement":"...","importance":"mandatory|strongly_preferred|preferred|nice_to_have",'
     '"requirement_type":"capability|eligibility","status":"supported|partially_supported|not_shown|mismatch",'

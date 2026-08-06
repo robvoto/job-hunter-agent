@@ -210,6 +210,7 @@ def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
         "fit_review": {"decision": "KEEP", "grade": "SOLID"},
         "occupation_alignment": llm_gate.LLM_INVALID_OCCUPATION_ALIGNMENT,
         "occupation_alignment_reason": "",
+        "posting_channel": {"kind": llm_gate.LLM_INVALID_POSTING_CHANNEL_KIND, "confident": False, "evidence": ""},
         "debug_reason": "",
         "requirement_coverage": [
             {

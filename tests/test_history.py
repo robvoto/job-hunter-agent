@@ -94,7 +94,7 @@ def test_update_job_history_persists_posting_channel_and_source_metadata_in_snap
             "kind": "direct_employer",
             "source": "metadata_first",
             "trusted_metadata": ["company profile link = https://linkedin.com/company/acme"],
-            "weak_text_matches": [],
+            "text_evidence": [],
             "needs_review": False,
         },
         RECORD_SOURCE_METADATA_KEY: {
@@ -122,7 +122,7 @@ def test_apply_kept_job_reuse_restores_posting_channel_and_source_metadata():
             "kind": "agency_or_recruiter",
             "source": "metadata_first",
             "trusted_metadata": ["seekPostingSourceCode"],
-            "weak_text_matches": ["company name = Recruiter Co"],
+            "text_evidence": [],
             "needs_review": False,
         },
         RECORD_SOURCE_METADATA_KEY: {
