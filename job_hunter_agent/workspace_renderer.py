@@ -1900,19 +1900,28 @@ def render_job_card(
         'matched' group, each internally sorted by importance tier. This keeps
         Job Requirements, Eligibility, and Clearance panels consistent: gaps are
         always the first thing a user sees, regardless of which panel."""
+        partial_keys: list[str] = []
         attention_keys: list[str] = []
         matched_keys: list[str] = []
         for key in order:
             row = rows.get(key)
             if not isinstance(row, dict):
                 continue
-            if _css_modifier_for_row(row) in matched_css_modifiers:
+            modifier = _css_modifier_for_row(row)
+            if modifier in matched_css_modifiers:
                 matched_keys.append(key)
+            elif modifier == "partially-supported":
+                partial_keys.append(key)
             else:
                 attention_keys.append(key)
+        partial_keys.sort(key=lambda key: _requirement_sort_key(rows[key]))
         attention_keys.sort(key=lambda key: _requirement_sort_key(rows[key]))
         matched_keys.sort(key=lambda key: _requirement_sort_key(rows[key]))
 
+        partial_items_html = ""
+        for key in partial_keys:
+            row_html, _ = _render_requirement_row_html(rows[key])
+            partial_items_html += row_html
         attention_items_html = attention_prefix_html
         for key in attention_keys:
             row_html, _ = _render_requirement_row_html(rows[key])
@@ -1924,6 +1933,10 @@ def render_job_card(
 
         return (
             _render_requirement_group_block(
+                _workspace_label("workspace_card_labels", "requirement_group_partial_heading"),
+                partial_items_html,
+            )
+            + _render_requirement_group_block(
                 _workspace_label("workspace_card_labels", "requirement_group_attention_heading"),
                 attention_items_html,
             )

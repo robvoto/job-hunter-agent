@@ -1964,6 +1964,8 @@ def test_render_job_card_requirement_coverage_shows_role_duration_note_in_normal
     assert "Role history proves 36 months in business analyst against 60 required months" in html
     assert "most recent end year 2024" in html
     assert "req-coverage-detail" in html
+    assert "Partial matches" in html
+    assert "Needs attention" not in html
 
 
 def test_render_job_card_requirement_coverage_shows_eligibility_details_in_debug_mode():

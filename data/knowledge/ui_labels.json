@@ -440,6 +440,7 @@
     "debug_filtered_out_summary": "Filtered out",
     "partial_support_risk_suffix": "is only partially supported by your profile",
     "requirement_coverage_summary": "Requirement coverage",
+    "requirement_group_partial_heading": "Partial matches",
     "requirement_group_attention_heading": "Needs attention",
     "requirement_group_matched_heading": "Matched",
     "coverage_status_supported": "In profile",
