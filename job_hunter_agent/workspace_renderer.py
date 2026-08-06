@@ -23,7 +23,7 @@ from job_hunter_agent.description_trust import (
     get_trusted_full_description,
     get_trusted_sources,
 )
-from job_hunter_agent.filters import normalize_title_block_phrase
+from job_hunter_agent.filters import suggest_title_block_phrase
 from job_hunter_agent.fit_scoring import (
     build_fit_highlights,
     eligibility_gate_diagnostics,
@@ -1222,7 +1222,9 @@ def render_job_card(
     potential_duplicate_links = record.get(RECORD_POTENTIAL_DUPLICATE_LINKS_KEY)
     if not isinstance(potential_duplicate_links, list):
         potential_duplicate_links = []
-    block_title_hint = safe_html(normalize_title_block_phrase(str(record.get("title") or "")))
+    block_title_hint = safe_html(
+        suggest_title_block_phrase(str(record.get("title") or ""), active_profile)
+    )
     similar_applied_title = safe_html(str((similar_applied_record or {}).get("title") or ""))
     similar_applied_company = safe_html(str((similar_applied_record or {}).get("company") or "").strip())
     similar_applied_source = str((similar_applied_record or {}).get("source") or "").lower().strip()

@@ -121,6 +121,72 @@ def normalize_title_block_phrase(value: str) -> str:
     return " ".join(tokens[:3])
 
 
+_TITLE_QUALIFIER_NOISE = frozenset(
+    {
+        "senior", "sr", "junior", "jr", "lead", "principal", "head",
+        "digital", "technology", "tech", "contract", "permanent",
+        "full", "time", "part", "remote", "hybrid",
+    }
+)
+
+
+def suggest_title_block_phrase(
+    title: str, profile: dict[str, Any] | None = None
+) -> str:
+    """Suggest a conservative distinguishing qualifier for manual title blocking."""
+
+    raw_title = str(title or "").strip()
+    if not raw_title:
+        return ""
+
+    analysis = analyze_title_filters(raw_title, profile)
+    matched_pattern = normalize_title_block_phrase(str(analysis.get("matched_pattern") or ""))
+
+    def usable(candidate: str) -> str:
+        normalized = normalize_title_block_phrase(candidate)
+        if not normalized or normalized == matched_pattern:
+            return ""
+        tokens = [token for token in normalized.split() if token not in _TITLE_QUALIFIER_NOISE]
+        if not tokens:
+            return ""
+        result = " ".join(tokens[:3])
+        if matched_pattern and result == matched_pattern:
+            return ""
+        return result
+
+    for candidate in reversed(re.findall(r"\(([^()]*)\)", raw_title)):
+        suggestion = usable(candidate)
+        if suggestion:
+            return suggestion
+
+    segments = [
+        part.strip()
+        for part in re.split(r"\s*(?:\||:|\u2013|\u2014)\s*", raw_title)
+        if part.strip()
+    ]
+    if len(segments) > 1:
+        for candidate in reversed(segments):
+            normalized_candidate = normalize_title_block_phrase(candidate)
+            if matched_pattern and matched_pattern in normalized_candidate:
+                continue
+            suggestion = usable(candidate)
+            if suggestion:
+                return suggestion
+
+    normalized_title = normalize_title_block_phrase(raw_title)
+    if matched_pattern:
+        residual = re.sub(
+            rf"(?<!\w){re.escape(matched_pattern)}(?!\w)", " ", normalized_title
+        )
+        residual_tokens = [
+            token for token in residual.split() if token not in _TITLE_QUALIFIER_NOISE
+        ]
+        if 1 <= len(residual_tokens) <= 3:
+            return " ".join(residual_tokens)
+
+    return ""
+
+
 def build_title_block_rule(phrase: str) -> dict[str, str]:
     normalized = normalize_title_block_phrase(phrase)
     if not normalized:
