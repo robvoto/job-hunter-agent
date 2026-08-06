@@ -689,11 +689,16 @@ def build_capability_naming_guidance() -> str:
     return "\n".join(parts)
 
 
+# Bump when the fit-review response shape changes so stale cache entries
+# (missing new fields) are treated as misses and re-reviewed by the LLM.
+LLM_CACHE_SCHEMA_VERSION = 2
+
+
 def build_llm_cache_key(job_description_text: str) -> str:
     desc_hash = hashlib.sha256(
         str(job_description_text or "").encode("utf-8", errors="ignore")
     ).hexdigest()
-    return f"{_profile_fingerprint()}:{desc_hash}"
+    return f"v{LLM_CACHE_SCHEMA_VERSION}:{_profile_fingerprint()}:{desc_hash}"
 
 
 def _require_fit_review(value: Any) -> Dict[str, str]:
