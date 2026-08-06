@@ -645,45 +645,31 @@ def test_parallel_runner_keeps_results_after_timeout_warning(monkeypatch, caplog
     assert warnings[0]["category"] == "source_timeout"
 
 
-def test_parallel_runner_requests_stop_and_keeps_partial_results_after_hard_timeout(monkeypatch):
+def test_parallel_runner_does_not_kill_active_source_after_timeout_warning(monkeypatch, caplog):
     context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
-    stop_requested = threading.Event()
-    stop_calls: list[bool] = []
-
-    def cooperatively_stopping_seek(ctx):
-        deadline = time.time() + 1
-        while time.time() < deadline:
-            if stop_requested.is_set():
-                return _seek_result(
-                    kept_records=[{"job_key": "seek:late"}],
-                    audit_rows=[{"job_key": "seek:late"}],
-                )
-            time.sleep(0.005)
-        raise AssertionError("test source never received stop request")
+    def slow_seek(ctx):
+        time.sleep(0.05)
+        return _seek_result(
+            kept_records=[{"job_key": "seek:late"}],
+            audit_rows=[{"job_key": "seek:late"}],
+        )
 
     def fast_linkedin(ctx):
-        return _li_result(kept_records=[{"job_key": "linkedin:1"}], audit_rows=[{"job_key": "linkedin:1"}])
+        return _li_result(
+            kept_records=[{"job_key": "linkedin:1"}],
+            audit_rows=[{"job_key": "linkedin:1"}],
+        )
 
-    monkeypatch.setattr(source_runner, "_run_seek_source", cooperatively_stopping_seek)
+    monkeypatch.setattr(source_runner, "_run_seek_source", slow_seek)
     monkeypatch.setattr(source_runner, "_run_linkedin_source", fast_linkedin)
     monkeypatch.setattr(source_runner, "SEEK_SOURCE_TIMEOUT_SECONDS", 0.01)
     monkeypatch.setattr(source_runner, "SOURCE_HEARTBEAT_SECONDS", 60)
-    monkeypatch.setattr(
-        source_runner,
-        "request_run_stop",
-        lambda: stop_calls.append(True) or stop_requested.set(),
-    )
-    monkeypatch.setattr(source_runner, "run_stop_requested", stop_requested.is_set)
-
-    started = time.time()
     kept, audit, skills = run_enabled_sources(context)
-    elapsed = time.time() - started
 
-    assert elapsed < 1.0
-    assert stop_calls == [True]
     assert [record["job_key"] for record in kept] == ["seek:late", "linkedin:1"]
     assert [row["job_key"] for row in audit] == ["seek:late", "linkedin:1"]
     assert skills == []
+    assert "[SOURCE_TIMEOUT]" in caplog.text
 
 
 def test_parallel_runner_detaches_unresponsive_source_after_stop_cleanup(monkeypatch):

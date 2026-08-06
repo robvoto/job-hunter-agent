@@ -12,7 +12,6 @@ from typing import Any, Callable, Sequence, cast
 from job_hunter_agent.run_context import ScrapeRunContext
 from job_hunter_agent.run_control import (
     get_run_progress,
-    request_run_stop,
     run_stop_requested,
     set_run_progress,
     set_run_progress_state,
@@ -553,11 +552,6 @@ def _source_stop_cleanup_seconds(source: str) -> float:
     )
 
 
-def _source_hard_timeout_seconds(source: str) -> float:
-    """Return the absolute source deadline including its cooperative cleanup window."""
-    return float(_source_timeout_seconds(source)) + _source_stop_cleanup_seconds(source)
-
-
 def _log_source_start(source: str, *, execution_mode: str) -> None:
     logger.info(
         format_log_block(
@@ -653,10 +647,6 @@ def _run_sources_in_parallel(
         future: started_at[source] + _source_timeout_seconds(source)
         for future, source in futures.items()
     }
-    hard_deadlines = {
-        future: started_at[source] + _source_hard_timeout_seconds(source)
-        for future, source in futures.items()
-    }
     timeout_messages = {future: _source_timeout_message(source) for future, source in futures.items()}
     timeout_warned: set[Any] = set()
     next_heartbeat_at = {
@@ -664,16 +654,15 @@ def _run_sources_in_parallel(
     }
     pending = set(futures)
     results_by_source: dict[str, SourceRunResult] = {}
-    hard_timeout_stop_requested: set[Any] = set()
     stop_deadlines: dict[Any, float] = {}
 
     try:
         while pending:
             now = time.monotonic()
 
-            # A user stop gets a short, source-sized cleanup window. Running
-            # Python threads cannot be killed safely, so late returns are ignored
-            # after this boundary instead of blocking the active run forever.
+            # Only an explicit user stop gets a bounded cleanup window. A source
+            # timeout is informational: active searches may legitimately exceed it,
+            # and discarding their in-flight results would corrupt the run outcome.
             if run_stop_requested():
                 for future in pending:
                     source = futures[future]
@@ -696,27 +685,6 @@ def _run_sources_in_parallel(
                     elapsed_s=elapsed_s,
                 )
                 timeout_warned.add(future)
-
-            hard_timed_out = [
-                future
-                for future in list(pending)
-                if now >= hard_deadlines[future] and future not in hard_timeout_stop_requested
-            ]
-            for future in hard_timed_out:
-                source = futures[future]
-                elapsed_s = now - started_at[source]
-                logger.warning(
-                    "[%s][SOURCE_TIMEOUT_STOP_REQUESTED] elapsed_s=%s progress=%r message=%s",
-                    source.upper(),
-                    int(elapsed_s),
-                    get_run_progress() or "(none)",
-                    timeout_messages[future],
-                )
-                request_run_stop()
-                hard_timeout_stop_requested.add(future)
-                # Give the timed-out worker one final bounded chance to return
-                # partial results before it is detached from the active run.
-                stop_deadlines[future] = now + _source_stop_cleanup_seconds(source)
 
             if run_stop_requested():
                 for future in pending:
@@ -797,8 +765,6 @@ def _run_sources_in_parallel(
             for future in pending:
                 if future not in timeout_warned:
                     next_deadline_candidates.append(warn_deadlines[future])
-                if future not in hard_timeout_stop_requested:
-                    next_deadline_candidates.append(hard_deadlines[future])
                 if future in stop_deadlines:
                     next_deadline_candidates.append(stop_deadlines[future])
             if next_deadline_candidates:
