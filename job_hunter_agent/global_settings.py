@@ -9,6 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from job_hunter_agent.logging_utils import get_human_logger
 from job_hunter_agent.paths import GLOBAL_SETTINGS_PATH, RUNTIME_DIR
 from job_hunter_agent.settings.global_settings_defaults import *  # noqa: F401,F403
 from job_hunter_agent.settings.global_settings_normalization import normalize_global_settings
@@ -485,7 +486,7 @@ def save_global_settings(settings: dict[str, Any]) -> dict[str, Any]:
     _db_save(normalized)
     load_global_settings.cache_clear()
     log_settings_change(
-        logger,
+        get_human_logger(),
         scope="GLOBAL_SETTINGS",
         before=current_normalized,
         after=normalized,

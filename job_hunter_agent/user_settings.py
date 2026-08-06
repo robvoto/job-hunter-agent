@@ -13,6 +13,7 @@ import json
 import logging
 from typing import Any
 
+from job_hunter_agent.logging_utils import get_human_logger
 from job_hunter_agent.match_labels import MATCH_LEVELS
 from job_hunter_agent.paths import DEFAULT_USER_SETTINGS_PATH
 from job_hunter_agent.runtime_helpers import log_settings_change
@@ -237,7 +238,7 @@ def save_user_settings(user_id: str | None, payload: Any) -> dict[str, Any]:
             (uid, json.dumps(normalized, ensure_ascii=False)),
         )
     log_settings_change(
-        logger,
+        get_human_logger(),
         scope="USER_SETTINGS",
         before=current,
         after=normalized,
