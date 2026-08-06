@@ -294,6 +294,7 @@ def resolve_llm_review_payload(
     record: dict,
     llm_cache: dict,
     *,
+    profile: dict | None = None,
     learning_only: bool = False,
 ) -> dict[str, Any]:
 
@@ -336,7 +337,7 @@ def resolve_llm_review_payload(
     cached = (
         normalize_llm_review_payload(
             llm_cache.get(llm_fp),
-            role_experience=load_profile().get(KEY_ROLE_EXPERIENCE, []),
+            role_experience=(profile or load_profile()).get(KEY_ROLE_EXPERIENCE, []),
         )
         if llm_fp in llm_cache
         else None

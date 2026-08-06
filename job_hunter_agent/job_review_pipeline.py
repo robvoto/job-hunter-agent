@@ -1010,7 +1010,7 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
             )
         _pipeline_log("LLM_CALL_START", record, call="fit_review")
         _t0 = time.monotonic()
-        payload = resolve_llm_review_payload(record, llm_cache)
+        payload = resolve_llm_review_payload(record, llm_cache, profile=profile)
         llm_elapsed_ms = int((time.monotonic() - _t0) * 1000)
         _pipeline_log(
             "LLM_CALL_DONE",

@@ -204,7 +204,9 @@ def _patch_llm_review_path(monkeypatch, payload):
         lambda record, profile, fit_highlights, missing_profile_support, soft_risk_reasons, missing_clearance_support=None: None,
     )
     monkeypatch.setattr(
-        job_review_pipeline, "resolve_llm_review_payload", lambda record, llm_cache: payload
+        job_review_pipeline,
+        "resolve_llm_review_payload",
+        lambda record, llm_cache, profile=None: payload,
     )
     monkeypatch.setattr(
         job_review_pipeline, "register_pending_learning_signals", lambda signals: None
@@ -1538,7 +1540,7 @@ def test_llm_missing_provider_key_is_reported_as_unavailable(caplog, monkeypatch
     monkeypatch.setattr(
         job_review_pipeline,
         "resolve_llm_review_payload",
-        lambda record, llm_cache: (_ for _ in ()).throw(
+        lambda record, llm_cache, profile=None: (_ for _ in ()).throw(
             RuntimeError("LLM review requested but no provider key is configured")
         ),
     )
