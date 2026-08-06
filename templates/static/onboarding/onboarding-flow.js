@@ -533,9 +533,9 @@ function renderReviewCapabilities() {
       <div class="review-capability-toolbar-main">
         <span class="review-capability-toolbar-copy">${escapeHtml(formatLabel(onboardingFlowLabels.capability_selected_copy, { count: selectedVisibleCount }))}</span>
         <div class="review-capability-bulk-actions">
-          <button class="btn btn-secondary btn-compact-action" type="button" data-review-select-visible="true">${escapeHtml(onboardingFlowLabels.capability_select_shown_label)}</button>
-          <button class="btn btn-secondary btn-compact-action" type="button" data-review-clear-selection="true"${bulkDisabled}>${escapeHtml(onboardingFlowLabels.capability_clear_selection_label)}</button>
-          <button class="btn btn-secondary btn-compact-action" type="button" data-review-bulk-action="remove"${bulkDisabled}>${escapeHtml(onboardingFlowLabels.capability_remove_selected_label)}</button>
+          <button class="jh-button jh-button--secondary jh-button--compact" type="button" data-review-select-visible="true">${escapeHtml(onboardingFlowLabels.capability_select_shown_label)}</button>
+          <button class="jh-button jh-button--secondary jh-button--compact" type="button" data-review-clear-selection="true"${bulkDisabled}>${escapeHtml(onboardingFlowLabels.capability_clear_selection_label)}</button>
+          <button class="jh-button jh-button--danger jh-button--compact" type="button" data-review-bulk-action="remove"${bulkDisabled}>${escapeHtml(onboardingFlowLabels.capability_remove_selected_label)}</button>
         </div>
       </div>
     </div>

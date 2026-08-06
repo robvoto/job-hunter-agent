@@ -98,6 +98,31 @@ page CSS (settings-page.css, onboarding-page.css)
 
 ---
 
+## Shared application button
+
+**Owner:** `templates/static/theme/themes.primitives.css`
+
+Use `jh-button` for ordinary application actions. Every button must combine the base class with exactly one semantic variant; add the compact modifier only when the control belongs inside a card, row, or bulk-action toolbar.
+
+| Purpose | Required classes | Examples |
+|---|---|---|
+| Primary action | `jh-button jh-button--primary` | Confirm, Apply/Applied, positive confirmation |
+| Secondary action | `jh-button jh-button--secondary` | Telegram connection, refresh, dismiss, Hide |
+| Danger/rejection action | `jh-button jh-button--danger` | Not For Me, Remove selected, Full Rebuild |
+| Neutral action | `jh-button jh-button--neutral` | Decide later or low-emphasis reversible action |
+| Compact size | add `jh-button--compact` | Job-card actions, bulk edit, requirement actions |
+
+Example:
+
+```html
+<button class="jh-button jh-button--secondary">Check Connection</button>
+<button class="jh-button jh-button--danger jh-button--compact">Not For Me</button>
+```
+
+Do not use `jh-button` for Run Search, onboarding footer navigation, tabs, pagination, account-menu actions, or icon-only controls. Those are separate components. Page styles may position or group a `jh-button`, but must not redefine its colour, border, radius, typography, hover, focus, active, or disabled states.
+
+The existing `.btn*`, `.primary`, `.secondary`, `.mini-button`, and semantic `gap-btn--*` visual systems are legacy. Do not use them for new ordinary application actions. `btn-add` remains the shared add-control component and `jh-icon-button` remains the shared icon-only component.
+
 ## Choice strip (styled toggle buttons)
 
 Used for: Work mode, Engagement type, Sector preference (settings)

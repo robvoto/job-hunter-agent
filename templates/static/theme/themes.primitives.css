@@ -115,6 +115,135 @@ textarea {
   border-color: var(--state-error-border);
 }
 
+/* --------------------------------------------------------------------------
+   Shared application button component
+
+   Use this for ordinary application actions. Compose one semantic variant and
+   optionally one size modifier:
+     jh-button jh-button--primary
+     jh-button jh-button--secondary
+     jh-button jh-button--danger
+     jh-button jh-button--neutral
+     jh-button jh-button--compact <semantic variant>
+
+   Do not use for Run Search, onboarding footer navigation, tabs, pagination,
+   account menus, or icon-only controls. Those have separate interaction roles.
+   Page CSS may control layout only; visual states belong here.
+   -------------------------------------------------------------------------- */
+.jh-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--button-gap);
+  min-height: var(--control-height-lg);
+  padding: var(--button-pad-block) var(--button-pad-inline);
+  border: var(--button-border-width) solid transparent;
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: var(--button-font-size);
+  font-weight: var(--button-font-weight);
+  line-height: 1.15;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: var(--shadow-soft);
+  transition: var(--button-transition);
+}
+
+.jh-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.jh-button:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+}
+
+.jh-button:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.jh-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.jh-button[hidden] {
+  display: none;
+}
+
+.jh-button--compact {
+  min-height: var(--control-height-sm);
+  padding: var(--control-pad-block-sm) var(--control-pad-inline-md);
+  border-radius: var(--control-radius-lg);
+  font-size: var(--font-size-sm);
+  line-height: 1.1;
+  gap: var(--control-space-2xs);
+  box-shadow: none;
+}
+
+.jh-button--primary {
+  background: var(--accent);
+  color: var(--button-text);
+  border-color: var(--accent);
+}
+
+.jh-button--primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.jh-button--secondary {
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-surface));
+  color: color-mix(in srgb, var(--accent) 86%, var(--text-primary));
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border-subtle));
+}
+
+.jh-button--secondary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg-surface));
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--border-subtle));
+}
+
+.jh-button--danger {
+  background: color-mix(in srgb, var(--state-error-bg) 78%, var(--bg-surface));
+  color: var(--state-error-text);
+  border-color: color-mix(in srgb, var(--state-error-border) 74%, transparent);
+}
+
+.jh-button--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--state-error-bg) 92%, var(--bg-surface));
+  border-color: var(--state-error-border);
+}
+
+.jh-button--neutral {
+  background: var(--bg-muted);
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--text-muted) 28%, var(--border-subtle));
+}
+
+.jh-button--neutral:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text-primary) 10%, var(--bg-muted));
+}
+
+/* Results keeps .gap-btn as a JavaScript hook. These combined selectors outrank
+   the legacy page-local .gap-btn geometry without moving behaviour ownership. */
+.gap-btn.jh-button {
+  min-height: var(--control-height-sm);
+  padding: var(--control-pad-block-sm) var(--control-pad-inline-md);
+  border-radius: var(--control-radius-lg);
+  font-size: var(--font-size-sm);
+  font-weight: var(--button-font-weight);
+  transition: var(--button-transition);
+}
+
+.gap-btn.jh-button--primary { border-color: var(--accent); }
+.gap-btn.jh-button--danger {
+  border-color: color-mix(in srgb, var(--state-error-border) 74%, transparent);
+}
+.gap-btn.jh-button--neutral {
+  border-color: color-mix(in srgb, var(--text-muted) 28%, var(--border-subtle));
+}
+
 @keyframes waitSpin {
   to { transform: rotate(360deg); }
 }

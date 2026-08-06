@@ -1837,7 +1837,7 @@ def render_job_card(
                 else "add_to_profile_action_title"
             )
             add_to_profile_html = (
-                f'<a class="btn btn-secondary btn-compact-action job-requirement-action req-add-to-profile" href="/settings?{prefill_key}={quote(req_text)}#section-matrix" '
+                f'<a class="jh-button jh-button--secondary jh-button--compact job-requirement-action req-add-to-profile" href="/settings?{prefill_key}={quote(req_text)}#section-matrix" '
                 f'title="{safe_html(_workspace_label("workspace_card_labels", action_title_key))}" target="_blank" rel="noopener">'
                 f'{safe_html(_workspace_label("workspace_card_labels", action_label_key))}</a>'
             )
@@ -2059,9 +2059,9 @@ def render_job_card(
                 f'<div class="job-gap-item">'
                 f'<span class="job-gap-requirement">{safe_html(gap_requirement)}</span>'
                 f'<div class="job-gap-actions">'
-                f'<button class="gap-btn gap-btn--have" data-requirement="{safe_html(gap_requirement)}" data-action="confirm_have">{gap_confirm_have_label}</button>'
-                f'<button class="gap-btn gap-btn--not-have" data-requirement="{safe_html(gap_requirement)}" data-action="confirm_do_not_have">{gap_confirm_not_have_label}</button>'
-                f'<button class="gap-btn gap-btn--later" data-requirement="{safe_html(gap_requirement)}" data-action="decide_later">{gap_decide_later_label}</button>'
+                f'<button class="gap-btn jh-button jh-button--primary jh-button--compact" data-requirement="{safe_html(gap_requirement)}" data-action="confirm_have">{gap_confirm_have_label}</button>'
+                f'<button class="gap-btn jh-button jh-button--danger jh-button--compact" data-requirement="{safe_html(gap_requirement)}" data-action="confirm_do_not_have">{gap_confirm_not_have_label}</button>'
+                f'<button class="gap-btn jh-button jh-button--neutral jh-button--compact" data-requirement="{safe_html(gap_requirement)}" data-action="decide_later">{gap_decide_later_label}</button>'
                 f"</div>"
                 f"</div>"
             )
@@ -2287,7 +2287,7 @@ def render_job_card(
     if applied_record:
         actions_html = (
             '<div class="job-actions">'
-            f'<button class="review-button review-undo btn btn-primary btn-compact-action review-button--selected" type="button" data-review-action="unapply" {button_data_attrs}>'
+            f'<button class="review-button review-undo jh-button jh-button--primary jh-button--compact review-button--selected" type="button" data-review-action="unapply" {button_data_attrs}>'
             f'{safe_html(_workspace_label("workspace_card_labels", "action_undo_applied_label"))}</button>'
             '<span class="review-status" aria-live="polite"></span>'
             "</div>"
@@ -2295,7 +2295,7 @@ def render_job_card(
     elif hidden_record:
         actions_html = (
             '<div class="job-actions">'
-            f'<button class="review-button review-undo btn btn-secondary btn-compact-action" type="button" data-review-action="unhide" {button_data_attrs}>'
+            f'<button class="review-button review-undo jh-button jh-button--secondary jh-button--compact" type="button" data-review-action="unhide" {button_data_attrs}>'
             f'{safe_html(_workspace_label("workspace_card_labels", "action_unhide_label"))}</button>'
             '<span class="review-status" aria-live="polite"></span>'
             "</div>"
@@ -2303,12 +2303,12 @@ def render_job_card(
     elif not applied_record:
         actions_html = (
             '<div class="job-actions">'
-            f'<button class="review-button review-applied btn btn-primary btn-compact-action" type="button" data-review-action="applied" {button_data_attrs}>'
+            f'<button class="review-button review-applied jh-button jh-button--primary jh-button--compact" type="button" data-review-action="applied" {button_data_attrs}>'
             f'{safe_html(_workspace_label("workspace_card_labels", "applied_badge"))}</button>'
-            f'<button class="review-button review-not-for-me btn btn-danger btn-compact-action" type="button" data-review-action="not_for_me" {button_data_attrs} '
+            f'<button class="review-button review-not-for-me jh-button jh-button--danger jh-button--compact" type="button" data-review-action="not_for_me" {button_data_attrs} '
             f'title="{safe_html(_workspace_label("workspace_card_labels", "action_not_for_me_tooltip"))}">'
             f'{safe_html(_workspace_label("workspace_card_labels", "action_not_for_me_label"))}</button>'
-            f'<button class="review-button review-hide btn btn-secondary btn-compact-action" type="button" data-review-action="hidden" {button_data_attrs} '
+            f'<button class="review-button review-hide jh-button jh-button--secondary jh-button--compact" type="button" data-review-action="hidden" {button_data_attrs} '
             f'title="{safe_html(_workspace_label("workspace_card_labels", "action_hide_tooltip"))}">'
             f'{safe_html(_workspace_label("workspace_card_labels", "action_hide_label"))}</button>'
             '<span class="review-status" aria-live="polite"></span>'
@@ -2347,8 +2347,8 @@ def render_job_card(
             '<p class="block-impact" data-block-impact></p>'
             f'<p class="block-confirm-sub">{safe_html(_workspace_label("workspace_card_labels", "title_block_strong_filter_copy"))}</p>'
             '<div class="block-confirm-actions">'
-            f'<button class="mini-button mini-button-primary" type="button" data-confirm-block disabled>{safe_html(_workspace_label("workspace_card_labels", "action_block_matching_titles_label"))}</button>'
-            f'<button class="mini-button" type="button" data-cancel-block>{safe_html(_workspace_label("workspace_card_labels", "action_cancel_label"))}</button>'
+            f'<button class="jh-button jh-button--primary jh-button--compact" type="button" data-confirm-block disabled>{safe_html(_workspace_label("workspace_card_labels", "action_block_matching_titles_label"))}</button>'
+            f'<button class="jh-button jh-button--secondary jh-button--compact" type="button" data-cancel-block>{safe_html(_workspace_label("workspace_card_labels", "action_cancel_label"))}</button>'
             "</div>"
             "</div>"
             '<span class="block-status" aria-live="polite"></span>'

@@ -102,7 +102,7 @@ export const JobHunterEligibilityEditor = (function () {
                 <span class="toggle-switch-ui"></span>
               </span>
             </label>
-            <button class="btn btn-secondary btn-compact-action" type="button" data-eligibility-field="remove" data-eligibility-index="${index}">${escapeHtml(labels.eligibility_remove_button_label)}</button>
+            <button class="jh-button jh-button--danger jh-button--compact" type="button" data-eligibility-field="remove" data-eligibility-index="${index}">${escapeHtml(labels.eligibility_remove_button_label)}</button>
           </div>
         </article>`;
     }).join('');

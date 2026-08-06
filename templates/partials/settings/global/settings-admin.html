@@ -7,7 +7,7 @@
               <h2>Knowledge Sync</h2>
               <p class="panel-copy">Use this to sync approved learning between your desktop app and AWS. The app reads your local database automatically, updates AWS, and brings the merged learning back into your local copy.</p>
             </div>
-            <button id="knowledge_sync_button" type="button" class="btn btn-secondary">Sync knowledge with AWS</button>
+            <button id="knowledge_sync_button" type="button" class="jh-button jh-button--secondary">Sync knowledge with AWS</button>
             <div id="knowledge_sync_status" class="field-help">Click once. The app will sync your local approved knowledge with AWS automatically.</div>
           </section>
 
@@ -17,7 +17,7 @@
               <p class="panel-copy">Actionable runtime warnings from the scrapers, fit scoring, onboarding, and runtime maintenance flows. Lower-signal diagnostics stay recorded in runtime logs and storage, but are hidden from this panel by default so real breakages stay visible.</p>
             </div>
             <div class="panel-actions system-warnings-toolbar">
-              <button id="system_warnings_refresh_button" type="button" class="btn btn-secondary">Refresh warnings</button>
+              <button id="system_warnings_refresh_button" type="button" class="jh-button jh-button--secondary">Refresh warnings</button>
               <div id="system_warnings_status" class="field-help">Loading actionable warnings...</div>
             </div>
             <div id="system_warnings_empty" class="field-help" hidden>No actionable system warnings right now.</div>
@@ -29,7 +29,7 @@
               <h2>Scraper validation</h2>
               <p class="panel-copy">Run a manual source-configuration health check for SEEK, LinkedIn, and APSJobs. This validates the current scraper URLs, selectors, and key extraction assumptions and records a system warning if anything looks broken.</p>
             </div>
-            <button id="scraper_validation_button" type="button" class="btn btn-secondary">Run scraper validation</button>
+            <button id="scraper_validation_button" type="button" class="jh-button jh-button--secondary">Run scraper validation</button>
             <div id="scraper_validation_status" class="field-help">Checks current source configuration assumptions and reports a success summary or warning details.</div>
             <div id="scraper_validation_results" class="field-help" aria-live="polite"></div>
           </section>
@@ -39,7 +39,7 @@
               <h2>Rejection History</h2>
               <p class="panel-copy">Imports your personal job rejection history from the configured Google Sheet. Cards for companies that previously rejected you will show a "Rejected before" badge. Requires the sheet to be shared as <em>Anyone with the link can view</em>.</p>
             </div>
-            <button id="rejection_history_sync_button" type="button" class="btn btn-secondary">Sync rejection history</button>
+            <button id="rejection_history_sync_button" type="button" class="jh-button jh-button--secondary">Sync rejection history</button>
             <div id="rejection_history_sync_status" class="field-help">Click once. Fetches the latest rows from your Job_Rejections sheet and updates the local store.</div>
           </section>
 
@@ -48,9 +48,9 @@
               <h2>Runtime Maintenance</h2>
               <p class="panel-copy">Use these admin actions to clear transient runtime data without resetting the full app. Cache clearing affects shared runtime caches. Search-state clearing affects only the current signed-in user.</p>
             </div>
-            <button id="clear_runtime_caches_button" type="button" class="btn btn-secondary">Clear runtime caches</button>
+            <button id="clear_runtime_caches_button" type="button" class="jh-button jh-button--secondary">Clear runtime caches</button>
             <div id="clear_runtime_caches_status" class="field-help">Clears shared runtime cache files and the occupation-title lookup cache.</div>
-            <button id="clear_current_user_search_state_button" type="button" class="btn btn-secondary">Clear current user search state</button>
+            <button id="clear_current_user_search_state_button" type="button" class="jh-button jh-button--secondary">Clear current user search state</button>
             <div id="clear_current_user_search_state_status" class="field-help">Clears this user&apos;s saved job history, workspace results, applied jobs, hidden jobs, and current search-state records.</div>
           </section>
 
@@ -201,7 +201,7 @@
                 <h2>AWS browser session</h2>
                 <p class="panel-copy">Open the admin-only browser session page when SEEK pauses for human verification. The EC2 browser is exposed through a localhost-only noVNC/VNC tunnel.</p>
               </div>
-              <a class="btn btn-secondary" href="/aws-browser-session">Open AWS browser session instructions</a>
+              <a class="jh-button jh-button--secondary" href="/aws-browser-session">Open AWS browser session instructions</a>
               <div class="field-help">Use this from an admin session only. The browser stays on AWS; you connect through a secure tunnel to the instance.</div>
             </section>
 

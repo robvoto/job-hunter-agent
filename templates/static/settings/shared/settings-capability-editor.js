@@ -141,12 +141,12 @@ export const JobHunterCapabilityEditor = (function () {
     const actions = document.getElementById('capability_matrix_actions');
     if (!actions) return;
     const bulkActions = capabilityBulkEditMode ? `
-      <button class="btn btn-secondary btn-compact-action" type="button" data-select-visible-capabilities="true"${visibleCapabilityRowIndices.length ? '' : ' disabled'}>${escapeHtml(capabilityLabels.settings_select_shown_label)}</button>
-      <button class="btn btn-secondary btn-compact-action" type="button" data-clear-capability-selection="true"${selectedCount ? '' : ' disabled'}>${escapeHtml(capabilityLabels.settings_clear_selection_label)}</button>
-      <button class="btn btn-secondary btn-compact-action" type="button" data-remove-selected-capabilities="true"${selectedCount ? '' : ' disabled'}>${escapeHtml(capabilityLabels.settings_remove_selected_label)}</button>
-      <button class="btn btn-secondary btn-compact-action" type="button" data-exit-capability-bulk-edit="true">${escapeHtml(capabilityLabels.settings_done_editing_label)}</button>
+      <button class="jh-button jh-button--secondary jh-button--compact" type="button" data-select-visible-capabilities="true"${visibleCapabilityRowIndices.length ? '' : ' disabled'}>${escapeHtml(capabilityLabels.settings_select_shown_label)}</button>
+      <button class="jh-button jh-button--secondary jh-button--compact" type="button" data-clear-capability-selection="true"${selectedCount ? '' : ' disabled'}>${escapeHtml(capabilityLabels.settings_clear_selection_label)}</button>
+      <button class="jh-button jh-button--danger jh-button--compact" type="button" data-remove-selected-capabilities="true"${selectedCount ? '' : ' disabled'}>${escapeHtml(capabilityLabels.settings_remove_selected_label)}</button>
+      <button class="jh-button jh-button--secondary jh-button--compact" type="button" data-exit-capability-bulk-edit="true">${escapeHtml(capabilityLabels.settings_done_editing_label)}</button>
     ` : `
-      <button class="btn btn-secondary btn-compact-action" type="button" data-enter-capability-bulk-edit="true">${escapeHtml(capabilityLabels.settings_edit_multiple_label)}</button>
+      <button class="jh-button jh-button--secondary jh-button--compact" type="button" data-enter-capability-bulk-edit="true">${escapeHtml(capabilityLabels.settings_edit_multiple_label)}</button>
     `;
     actions.innerHTML = `
       <button class="btn-add" id="add_capability_rule" type="button" aria-label="${escapeHtml(capabilityLabels.add_button_aria_label)}" title="${escapeHtml(capabilityLabels.add_button_aria_label)}">+</button>
