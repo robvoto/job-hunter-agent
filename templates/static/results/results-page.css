@@ -203,37 +203,6 @@
   gap: 10px;
 }
 
-[data-theme="dark-professional"] .review-button.workspace-action-button {
-  box-shadow: none;
-}
-
-[data-theme="dark-professional"] .workspace-action-button--primary {
-  background: transparent;
-  color: color-mix(in srgb, var(--accent) 92%, var(--text-primary));
-  box-shadow: none;
-}
-
-[data-theme="dark-professional"] .workspace-action-button--primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-}
-
-[data-theme="dark-professional"] .workspace-action-button--danger {
-  background: transparent;
-}
-
-[data-theme="dark-professional"] .workspace-action-button--danger:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--state-error-bg) 54%, transparent);
-}
-
-[data-theme="dark-professional"] .workspace-action-button--neutral {
-  color: var(--text-muted);
-}
-
-[data-theme="dark-professional"] .workspace-action-button--neutral:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--text-primary) 8%, transparent);
-  color: var(--text-primary);
-}
-
 .job-header-row {
   display: flex;
   align-items: flex-start;
@@ -924,66 +893,13 @@
   margin: var(--surface-gap-sm) 0 0;
 }
 
-.review-button.workspace-action-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: var(--control-space-xs);
-  min-height: 0;
-  padding: var(--control-space-2xs) var(--control-space-xs);
-  border-radius: var(--radius-sm);
-  font: inherit;
-  font-weight: 700;
-  font-size: var(--font-size-sm);
-  line-height: 1.2;
-  cursor: pointer;
-  border: 0;
-  text-decoration: none;
-  transition:
-    background-color var(--interactive-motion-fast),
-    color var(--interactive-motion-fast),
-    opacity var(--interactive-motion-fast);
-  white-space: nowrap;
-  user-select: none;
-  box-shadow: none;
-}
-
-.review-button.workspace-action-button:hover:not(:disabled) { transform: none; opacity: 1; }
-.review-button.workspace-action-button:active:not(:disabled) { transform: none; opacity: 0.9; }
-.review-button.workspace-action-button:focus-visible,
+/* Job-card review actions (Applied/Not For Me/Hide/Undo) use the shared
+   .btn / .btn-primary / .btn-secondary / .btn-danger / .btn-compact-action
+   component (themes.primitives.css) for visuals — no page-local button
+   styling here. */
 .title-block-btn:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
-}
-
-.workspace-action-button--primary {
-  background: transparent;
-  color: var(--accent);
-}
-
-.workspace-action-button--primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  color: var(--accent);
-}
-
-.workspace-action-button--danger {
-  background: transparent;
-  color: var(--state-error-text);
-}
-
-.workspace-action-button--danger:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--state-error-bg) 58%, transparent);
-  color: var(--state-error-text);
-}
-
-.workspace-action-button--neutral {
-  background: transparent;
-  color: var(--text-muted);
-}
-
-.workspace-action-button--neutral:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
-  color: var(--text-primary);
 }
 
 .rejection-overlay {
@@ -1274,20 +1190,15 @@
   background: color-mix(in srgb, var(--selection-accent) 18%, var(--bg-chip-subtle));
 }
 
-.workspace-action-button--selected {
-  box-shadow: none;
-}
-
-.workspace-action-button--selected::before {
+/* Marks the "Undo" action on an already-Applied card with a checkmark. */
+.review-button--selected::before {
   content: "\2713";
   font-size: 0.86em;
   line-height: 1;
 }
 
-.review-button.workspace-action-button[disabled] {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
+/* .btn:disabled (themes.primitives.css) already covers opacity/cursor. */
+.review-button[disabled] {
   pointer-events: none;
 }
 

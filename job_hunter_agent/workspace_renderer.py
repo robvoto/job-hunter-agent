@@ -2297,7 +2297,7 @@ def render_job_card(
     if applied_record:
         actions_html = (
             '<div class="job-actions">'
-            f'<button class="review-button review-undo workspace-action-button workspace-action-button--primary workspace-action-button--selected" type="button" data-review-action="unapply" {button_data_attrs}>'
+            f'<button class="review-button review-undo btn btn-primary btn-compact-action review-button--selected" type="button" data-review-action="unapply" {button_data_attrs}>'
             f'{safe_html(_workspace_label("workspace_card_labels", "action_undo_applied_label"))}</button>'
             '<span class="review-status" aria-live="polite"></span>'
             "</div>"
@@ -2305,7 +2305,7 @@ def render_job_card(
     elif hidden_record:
         actions_html = (
             '<div class="job-actions">'
-            f'<button class="review-button review-undo workspace-action-button workspace-action-button--neutral" type="button" data-review-action="unhide" {button_data_attrs}>'
+            f'<button class="review-button review-undo btn btn-secondary btn-compact-action" type="button" data-review-action="unhide" {button_data_attrs}>'
             f'{safe_html(_workspace_label("workspace_card_labels", "action_unhide_label"))}</button>'
             '<span class="review-status" aria-live="polite"></span>'
             "</div>"
@@ -2313,12 +2313,12 @@ def render_job_card(
     elif not applied_record:
         actions_html = (
             '<div class="job-actions">'
-            f'<button class="review-button review-applied workspace-action-button workspace-action-button--primary" type="button" data-review-action="applied" {button_data_attrs}>'
+            f'<button class="review-button review-applied btn btn-primary btn-compact-action" type="button" data-review-action="applied" {button_data_attrs}>'
             f'{safe_html(_workspace_label("workspace_card_labels", "applied_badge"))}</button>'
-            f'<button class="review-button review-not-for-me workspace-action-button workspace-action-button--danger" type="button" data-review-action="not_for_me" {button_data_attrs} '
+            f'<button class="review-button review-not-for-me btn btn-danger btn-compact-action" type="button" data-review-action="not_for_me" {button_data_attrs} '
             f'title="{safe_html(_workspace_label("workspace_card_labels", "action_not_for_me_tooltip"))}">'
             f'{safe_html(_workspace_label("workspace_card_labels", "action_not_for_me_label"))}</button>'
-            f'<button class="review-button review-hide workspace-action-button workspace-action-button--neutral" type="button" data-review-action="hidden" {button_data_attrs} '
+            f'<button class="review-button review-hide btn btn-secondary btn-compact-action" type="button" data-review-action="hidden" {button_data_attrs} '
             f'title="{safe_html(_workspace_label("workspace_card_labels", "action_hide_tooltip"))}">'
             f'{safe_html(_workspace_label("workspace_card_labels", "action_hide_label"))}</button>'
             '<span class="review-status" aria-live="polite"></span>'

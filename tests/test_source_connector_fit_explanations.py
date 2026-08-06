@@ -2091,15 +2091,15 @@ def test_workspace_review_buttons_and_title_block_keep_semantic_hooks():
     )
 
     assert (
-        'class="review-button review-applied workspace-action-button workspace-action-button--primary" '
+        'class="review-button review-applied btn btn-primary btn-compact-action" '
         'type="button" data-review-action="applied"'
     ) in html
     assert (
-        'class="review-button review-not-for-me workspace-action-button workspace-action-button--danger" '
+        'class="review-button review-not-for-me btn btn-danger btn-compact-action" '
         'type="button" data-review-action="not_for_me"'
     ) in html
     assert (
-        'class="review-button review-hide workspace-action-button workspace-action-button--neutral" '
+        'class="review-button review-hide btn btn-secondary btn-compact-action" '
         'type="button" data-review-action="hidden"'
     ) in html
     assert (
