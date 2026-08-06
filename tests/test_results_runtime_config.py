@@ -520,8 +520,9 @@ def test_rendered_workspace_html_content(tmp_path):
         assert "Mandatory requirements and stronger evidence carry more weight." in rendered_html
         assert "Easy or Quick Apply help you review jobs, but they do not prove fit." in rendered_html
         assert (
-            '<button class="scope-tab is-active" type="button" data-workspace-target="potential">Potential Jobs (0)</button>'
-            in captured_tools["header_nav_html"]
+            '<button class="scope-tab is-active" type="button" '
+            'data-workspace-target="potential" data-tab-label="Potential Jobs">'
+            "Potential Jobs (0)</button>" in captured_tools["header_nav_html"]
         )
         assert 'data-workspace-target="potential"' in captured_tools["header_nav_html"]
         assert "Jobs found" in rendered_html

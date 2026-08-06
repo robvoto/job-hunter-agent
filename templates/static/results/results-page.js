@@ -285,40 +285,62 @@
       saveWorkspacePagination();
     }
 
+    function cardMatchesPotentialFilters(card, filters) {
+      const cardScope = card.dataset.recordKind || 'current';
+      if (!['current', 'saved'].includes(cardScope)) return false;
+      if (card.dataset.reviewDismissed === '1') return false;
+
+      const viewed = card.dataset.viewed === '1';
+      const cardWorkType = (card.dataset.workType || '').toLowerCase();
+      const cardWorkMode = (card.dataset.workMode || '').toLowerCase();
+      const cardSector = (card.dataset.roleSector || 'unknown').toLowerCase();
+      const cardScore = Number(card.dataset.fitScore || 0);
+      const postedAge = Number(card.dataset.postedAge || 9999);
+
+      if (filters.scopeMode === 'current' && cardScope !== 'current') return false;
+      if (filters.scopeMode === 'saved' && cardScope !== 'saved') return false;
+      if (filters.scopeMode === 'unseen' && viewed) return false;
+      if (filters.scopeMode === 'viewed' && !viewed) return false;
+      if (filters.postedLimit !== 'all' && postedAge > Number(filters.postedLimit)) return false;
+      if (filters.workTypeValues && !filters.workTypeValues.includes(cardWorkType)) return false;
+      if (filters.workMode !== 'all' && cardWorkMode !== filters.workMode) return false;
+      if (filters.sector === 'public' && cardSector !== 'public') return false;
+      if (filters.sector === 'private' && cardSector === 'public') return false;
+      if (filters.scoreMode !== 'all' && cardScore < Number(filters.scoreMode)) return false;
+      return true;
+    }
+
+    function updatePotentialTabCount(filters) {
+      const potentialTab = workspaceTabs.find(tab => tab.dataset.workspaceTarget === 'potential');
+      const baseLabel = potentialTab?.dataset.tabLabel;
+      if (!potentialTab || !baseLabel) return;
+
+      const potentialPanel = document.querySelector('.workspace-panel[data-workspace-panel="potential"]');
+      const cards = potentialPanel ? Array.from(potentialPanel.querySelectorAll('.job-card')) : [];
+      const count = cards.filter(card => cardMatchesPotentialFilters(card, filters)).length;
+      potentialTab.textContent = `${baseLabel} (${count})`;
+    }
+
     function applyWorkspaceControls() {
       const sortMode = sortSelect?.value || 'fit';
-      const scopeMode = scopeFilter?.value || 'all';
-      const postedLimit = postedFilter?.value || 'all';
       const workType = workTypeFilter?.value || 'all';
-      const workTypeValues = workType !== 'all' ? workType.split('|') : null;
-      const workMode = workModeFilter?.value || 'all';
-      const sector = sectorFilter?.value || 'all';
-      const scoreMode = scoreFilter?.value || 'all';
+      const filters = {
+        scopeMode: scopeFilter?.value || 'all',
+        postedLimit: postedFilter?.value || 'all',
+        workTypeValues: workType !== 'all' ? workType.split('|') : null,
+        workMode: workModeFilter?.value || 'all',
+        sector: sectorFilter?.value || 'all',
+        scoreMode: scoreFilter?.value || 'all',
+      };
       const activeWorkspace = getActiveWorkspace();
 
       for (const card of getVisibleCards()) {
         const cardScope = card.dataset.recordKind || 'current';
-        const viewed = card.dataset.viewed === '1';
-        const cardWorkType = (card.dataset.workType || '').toLowerCase();
-        const cardWorkMode = (card.dataset.workMode || '').toLowerCase();
-        const cardSector = (card.dataset.roleSector || 'unknown').toLowerCase();
-        const cardScore = Number(card.dataset.fitScore || 0);
-        const postedAge = Number(card.dataset.postedAge || 9999);
 
         let visible = true;
         if (card.dataset.reviewDismissed === '1') visible = false;
         if (activeWorkspace === 'potential') {
-          if (!['current', 'saved'].includes(cardScope)) visible = false;
-          if (scopeMode === 'current' && cardScope !== 'current') visible = false;
-          if (scopeMode === 'saved' && cardScope !== 'saved') visible = false;
-          if (scopeMode === 'unseen' && viewed) visible = false;
-          if (scopeMode === 'viewed' && !viewed) visible = false;
-          if (postedLimit !== 'all' && postedAge > Number(postedLimit)) visible = false;
-          if (workTypeValues && !workTypeValues.includes(cardWorkType)) visible = false;
-          if (workMode !== 'all' && cardWorkMode !== workMode) visible = false;
-          if (sector === 'public' && cardSector !== 'public') visible = false;
-          if (sector === 'private' && cardSector === 'public') visible = false;
-          if (scoreMode !== 'all' && cardScore < Number(scoreMode)) visible = false;
+          visible = cardMatchesPotentialFilters(card, filters);
         } else if (activeWorkspace === 'applied') {
           if (cardScope !== 'applied') visible = false;
         } else if (activeWorkspace === 'hidden') {
@@ -327,6 +349,8 @@
 
         card.dataset.matchesFilters = visible ? '1' : '0';
       }
+
+      updatePotentialTabCount(filters);
 
       for (const grid of Array.from(document.querySelectorAll('.job-grid'))) {
         const cards = Array.from(grid.querySelectorAll('.job-card'));

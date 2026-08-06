@@ -955,9 +955,11 @@ def render_workspace_tabs_html(
     buttons = []
     for target, label, count in tabs:
         active_class = " is-active" if active_target == target else ""
+        safe_label = safe_html(label)
         buttons.append(
-            f'<button class="scope-tab{active_class}" type="button" data-workspace-target="{target}">'
-            f"{safe_html(label)} ({count})"
+            f'<button class="scope-tab{active_class}" type="button" '
+            f'data-workspace-target="{target}" data-tab-label="{safe_label}">'
+            f"{safe_label} ({count})"
             "</button>"
         )
     aria_label = safe_html(_workspace_label("workspace_page_labels", "top_level_workspace_views_aria_label"))
