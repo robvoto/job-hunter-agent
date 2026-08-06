@@ -127,23 +127,52 @@ The existing `.btn*`, `.primary`, `.secondary`, `.mini-button`, and semantic `ga
 
 **Owner:** `templates/static/theme/themes.widgets.css`
 
-Use `jh-choice-group` for the group and `jh-choice` for every checkbox, radio, or pressed button that behaves as a selectable option. This includes Work type, Work mode, Sector preference, Quick filters, and Strong/Working/Basic.
+Use `jh-choice-group` for the group and `jh-choice` for every checkbox/radio/button that behaves as a selectable option. This includes Work type, Work mode, Sector preference, Quick filters, and Strong/Working/Basic.
 
-All choices share height, padding, radius, spacing, typography, hover, focus, and selected-state geometry. Semantic classes may change colour only. Existing classes such as `choice-card--work-mode`, `choice-card--strength`, and `workspace-quick-filter` are compatibility or JavaScript hooks and must not own dimensions.
+All choices share the same height, padding, radius, spacing, typography, hover, focus, and selected-state geometry. Semantic classes may change colour only. Existing classes such as `choice-card--work-mode`, `choice-card--strength`, and `workspace-quick-filter` are compatibility/behaviour hooks and must not own dimensions.
 
-`render_choice_strip()` emits the shared classes automatically. Quick filters retain their existing JavaScript hook and are adopted by the shared CSS contract.
+```html
+<div class="jh-choice-group" role="group">
+  <button class="jh-choice" aria-pressed="false">New to you</button>
+</div>
+```
+
+Server-rendered choice strips add these classes automatically through `render_choice_strip()`.
 
 ## Shared metadata badge
 
 **Owner:** `templates/static/theme/themes.widgets.css`
 
-Use `jh-badge` for non-interactive metadata such as New To You, SEEK, Direct employer, Mandatory, Expected, Partial match, and profile evidence. All badges share geometry; semantic and source classes change colour only. Clickable actions must use `jh-button`, never `jh-badge`.
+Use `jh-badge` for non-interactive metadata such as New To You, SEEK, Direct employer, Mandatory, Expected, Partial match, and profile evidence. All badges share geometry; semantic/source classes change colour only. A clickable action must use `jh-button`, never `jh-badge`.
 
-## Compatibility hooks
+```html
+<span class="jh-badge badge-source-seek">SEEK</span>
+```
 
-- `choice-card--work-mode`, `choice-card--strength`, and `workspace-quick-filter`: behaviour or semantic-colour hooks only.
-- `badge`, `job-requirement-status`, `job-req-importance`, and `req-coverage-tag`: context or semantic-colour hooks only.
-- `title-block-btn`: behaviour/layout hook only; Hide similar titles uses `jh-button`.
+## Choice strip compatibility hooks
+
+Used for: Work mode, Engagement type, Sector preference, strength selection, and quick filters.
+
+**Compatibility classes:** `choice-card--work-mode`, `choice-card--strength`, and `workspace-quick-filter`. Do not add visual dimensions to these classes.
+
+**Server render:**
+```python
+render_choice_strip(name=..., options=[{"value":..., "label":...}], selected_values=..., input_type="checkbox"|"radio", group_id=..., label_id=..., card_class="choice-card--work-mode")
+```
+
+**Specific helpers:**
+| Control | Render function | Template token |
+|---|---|---|
+| Engagement type | `render_engagement_type_choices()` | `__JOB_HUNTER_ENGAGEMENT_TYPE_CHOICES__` |
+| Work mode | `render_work_mode_preference_choices()` | `__JOB_HUNTER_WORK_MODE_PREFERENCE_CHOICES__` |
+| Sector (settings) | `render_sector_preference_choices()` | `__JOB_HUNTER_SECTOR_PREFERENCE_CHOICES__` |
+
+**JS (settings-utils.js exports):**
+- `getEngagementTypeValues()` / `setEngagementTypeValues(value)`
+- `getWorkModePreferenceValues()` / `setWorkModePreferenceValues(values)`
+- `getSectorPreferenceValues()` / `setSectorPreferenceValues(value)`
+
+---
 
 ## Toggle switch
 

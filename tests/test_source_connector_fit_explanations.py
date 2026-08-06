@@ -627,8 +627,8 @@ def test_render_job_card_includes_expandable_full_description_when_trusted_text_
 
     assert 'class="job-summary-expand"' in html
     assert 'class="job-summary-toggle"' in html
-    assert "Show more" in html
-    assert "Show less" in html
+    assert "Show more" in html  # screen-reader label remains
+    assert "Show less" in html  # screen-reader label remains
     assert 'class="job-full-description-body"' in html
     assert 'class="job-full-description-reading"' in html
     assert html.count('class="job-full-description"') >= 2

@@ -392,16 +392,17 @@ def test_results_panel_styles_use_shared_outer_panel_and_inset_job_cards():
     assert "border-bottom:" not in body
 
 
-def test_requirement_badges_use_two_column_grid_layout():
+def test_requirement_badges_stay_visually_attached_to_requirement_text():
     results_css = (
         ROOT_DIR / "templates" / "static" / "results" / "results-page.css"
     ).read_text(encoding="utf-8")
 
     assert ".job-requirement-list {\n  list-style: none;\n  padding-left: 0 !important;\n  display: flex;" in results_css
-    assert ".job-requirement-item {\n  display: grid;\n  grid-template-columns: minmax(0, 1fr) auto;" in results_css
-    assert ".job-requirement-badges {\n  grid-column: 2;\n  justify-self: end;\n  display: flex;" in results_css
-    assert "@media (max-width: 700px) {\n  .job-card { padding: 16px; }" in results_css
-    assert ".job-requirement-item { grid-template-columns: 1fr; }" in results_css
+    assert ".job-requirement-item {\n  display: flex;" in results_css
+    assert "flex-wrap: wrap;" in results_css
+    assert ".job-requirement-badges {\n  display: flex;" in results_css
+    assert "justify-self: end;" not in results_css
+    assert ".job-requirement-text {\n    flex-basis: 100%;" in results_css
 
 
 def test_capability_strength_controls_use_shared_semantic_tone_classes():

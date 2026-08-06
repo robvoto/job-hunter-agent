@@ -135,6 +135,7 @@ def test_analyze_title_filters_with_no_roles_still_returns_title_not_target(monk
     assert result["ok"] is False
     assert result["reason"] == "TITLE_NOT_TARGET"
 
+
 def test_suggest_title_block_phrase_prefers_parenthetical_qualifier():
     profile = {
         "target_roles": ["business analyst"],
@@ -184,4 +185,3 @@ def test_title_block_rule_matches_whole_word_in_title_only():
     assert blocked["reason"] == "TITLE_BAD_KEYWORD:salesforce"
     assert allowed["ok"] is True
     assert not_partial["ok"] is True
-
