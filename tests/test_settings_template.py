@@ -343,9 +343,9 @@ def test_settings_search_section_uses_shared_choice_strip_widget(monkeypatch):
 
     assert "settings-form-field--span-2" not in html
 
-    assert 'class="choice-strip"' in html
+    assert 'class="choice-strip jh-choice-group"' in html
 
-    assert 'class="choice-card choice-card--work-mode"' in html
+    assert 'class="choice-card jh-choice choice-card--work-mode"' in html
     assert 'name="work_mode_preference" value="remote" checked' in html
     assert 'name="work_mode_preference" value="hybrid" checked' in html
     assert 'name="work_mode_preference" value="onsite" checked' in html
@@ -374,7 +374,7 @@ def test_settings_search_section_uses_shared_choice_strip_widget(monkeypatch):
 
     assert 'id="prefer_sector_choices"' in html
 
-    assert 'class="choice-card choice-card--work-mode"' in html
+    assert 'class="choice-card jh-choice choice-card--work-mode"' in html
 
     assert 'select id="sector_preference"' not in html
 

@@ -20,7 +20,7 @@ def test_results_page_uses_runtime_workspace_config():
     assert 'class="rejection-panel-actions"' in results_html
     assert 'class="block-admin-tip"' in results_html
     assert 'id="reset_workspace_filters"' in results_html
-    assert 'class="btn btn-secondary btn-compact-action workspace-text-action workspace-text-action--reset"' in results_html
+    assert 'class="jh-button jh-button--neutral jh-button--compact workspace-text-action workspace-text-action--reset"' in results_html
     assert 'class="workspace-text-action__icon"' in results_html
     assert 'class="ws-hero-panel"' not in results_html
     assert 'class="ws-hero-title"' not in results_html

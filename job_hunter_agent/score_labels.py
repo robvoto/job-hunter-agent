@@ -47,7 +47,7 @@ def score_to_tone_class(score: int, profile: Optional[dict] = None) -> str:
 def render_badge(label: str, class_name: str, explanation: str) -> str:
 
     return (
-        f'<span class="badge {safe_html(class_name)}" title="{safe_html(explanation)}" '
+        f'<span class="badge jh-badge {safe_html(class_name)}" title="{safe_html(explanation)}" '
         f'aria-label="{safe_html(explanation)}">{safe_html(label)}</span>'
     )
 

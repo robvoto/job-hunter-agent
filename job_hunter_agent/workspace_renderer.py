@@ -1770,7 +1770,7 @@ def render_job_card(
                 profile_detail = f"{profile_detail} ({level_label})"
             detail_html_parts.append(
                 '<span class="req-coverage-detail req-coverage-detail--capability">'
-                f'<span class="req-coverage-tag">{safe_html(profile_detail)}</span>'
+                f'<span class="req-coverage-tag jh-badge">{safe_html(profile_detail)}</span>'
                 "</span>"
             )
         if (
@@ -1780,7 +1780,7 @@ def render_job_card(
         ):
             detail_html_parts.append(
                 '<span class="req-coverage-detail req-coverage-detail--evidence">'
-                f'<span class="req-coverage-tag req-coverage-tag--muted">{safe_html(_workspace_label("workspace_card_labels", "job_requirements_ad_wording_badge"))}</span>'
+                f'<span class="req-coverage-tag jh-badge req-coverage-tag--muted">{safe_html(_workspace_label("workspace_card_labels", "job_requirements_ad_wording_badge"))}</span>'
                 f'<span class="req-coverage-detail-text">"{safe_html(matched_text)}"</span>'
                 "</span>"
             )
@@ -1806,12 +1806,12 @@ def render_job_card(
                 f'<span class="job-requirement-note">{safe_html(experience_note)}</span>'
             )
         importance_html = (
-            f'<span class="job-req-importance job-req-importance--{safe_html(importance.replace("_", "-"))}">{safe_html(importance_label)}</span>'
+            f'<span class="job-req-importance jh-badge job-req-importance--{safe_html(importance.replace("_", "-"))}">{safe_html(importance_label)}</span>'
             if importance_label
             else ""
         )
         status_html = "".join(
-            f'<span class="job-requirement-status">{safe_html(label)}</span>'
+            f'<span class="job-requirement-status jh-badge">{safe_html(label)}</span>'
             for label in (status_label, classification_label)
             if label
         )
@@ -2331,7 +2331,7 @@ def render_job_card(
         '<div class="job-title-row">'
         f'<a class="job-link" href="{url}" target="_blank" rel="noopener noreferrer" data-job-key="{job_key}" data-job-url="{url}" data-job-title="{title}">{title}</a>'
         + (
-            f'<button class="title-block-btn chip-button" type="button" data-review-action="block_similar" {button_data_attrs} aria-expanded="false" aria-controls="{safe_html(title_block_panel_id)}" title="{safe_html(_workspace_label("workspace_card_labels", "title_block_button_tooltip"))}">{safe_html(_workspace_label("workspace_card_labels", "title_block_button_label"))}</button>'
+            f'<button class="title-block-btn jh-button jh-button--neutral jh-button--compact" type="button" data-review-action="block_similar" {button_data_attrs} aria-expanded="false" aria-controls="{safe_html(title_block_panel_id)}" title="{safe_html(_workspace_label("workspace_card_labels", "title_block_button_tooltip"))}">{safe_html(_workspace_label("workspace_card_labels", "title_block_button_label"))}</button>'
             f'<div id="{safe_html(title_block_panel_id)}" class="block-confirm" data-block-confirm hidden>'
             f'<p class="block-confirm-copy">{safe_html(_workspace_label("workspace_card_labels", "title_block_prompt_copy"))}</p>'
             '<details class="block-confirm-help">'

@@ -1113,10 +1113,10 @@ def render_choice_strip(
             else ""
         )
         rendered_options.append(
-            f'<label class="choice-card {escape(card_class)}"><input type="{escape(input_type)}" name="{escape(name)}" value="{escape(value)}"{checked}><span>{escape(item["label"])}</span></label>'
+            f'<label class="choice-card jh-choice {escape(card_class)}"><input type="{escape(input_type)}" name="{escape(name)}" value="{escape(value)}"{checked}><span>{escape(item["label"])}</span></label>'
         )
     role = "radiogroup" if input_type == "radio" else "group"
-    return f'<div id="{escape(group_id)}" class="choice-strip" role="{role}" aria-labelledby="{escape(label_id)}">{"".join(rendered_options)}</div>'
+    return f'<div id="{escape(group_id)}" class="choice-strip jh-choice-group" role="{role}" aria-labelledby="{escape(label_id)}">{"".join(rendered_options)}</div>'
 
 
 def render_engagement_type_choices(*, name: str, selected_values: object) -> str:

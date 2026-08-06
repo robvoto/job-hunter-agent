@@ -719,8 +719,8 @@ export const JobHunterAdminSettings = (function () {
         </div>
         ${systemWarningContextHtml(context)}
         <div class="system-warning-actions">
-          <button type="button" class="btn btn-secondary" data-system-warning-action="review" data-warning-id="${escapeHtml(String(warning?.id || ''))}">Review</button>
-          <button type="button" class="btn btn-secondary" data-system-warning-action="dismiss" data-warning-id="${escapeHtml(String(warning?.id || ''))}">Dismiss</button>
+          <button type="button" class="jh-button jh-button--secondary jh-button--compact" data-system-warning-action="review" data-warning-id="${escapeHtml(String(warning?.id || ''))}">Review</button>
+          <button type="button" class="jh-button jh-button--neutral jh-button--compact" data-system-warning-action="dismiss" data-warning-id="${escapeHtml(String(warning?.id || ''))}">Dismiss</button>
         </div>
       </article>
     `;

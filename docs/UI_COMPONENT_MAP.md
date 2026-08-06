@@ -123,30 +123,27 @@ Do not use `jh-button` for Run Search, onboarding footer navigation, tabs, pagin
 
 The existing `.btn*`, `.primary`, `.secondary`, `.mini-button`, and semantic `gap-btn--*` visual systems are legacy. Do not use them for new ordinary application actions. `btn-add` remains the shared add-control component and `jh-icon-button` remains the shared icon-only component.
 
-## Choice strip (styled toggle buttons)
+## Shared selectable choice
 
-Used for: Work mode, Engagement type, Sector preference (settings)
+**Owner:** `templates/static/theme/themes.widgets.css`
 
-**CSS class:** `choice-card--work-mode` — applies orange-on-dark button styling. This is the only styled card class. Do not invent new ones.
+Use `jh-choice-group` for the group and `jh-choice` for every checkbox, radio, or pressed button that behaves as a selectable option. This includes Work type, Work mode, Sector preference, Quick filters, and Strong/Working/Basic.
 
-**Server render:**
-```python
-render_choice_strip(name=..., options=[{"value":..., "label":...}], selected_values=..., input_type="checkbox"|"radio", group_id=..., label_id=..., card_class="choice-card--work-mode")
-```
+All choices share height, padding, radius, spacing, typography, hover, focus, and selected-state geometry. Semantic classes may change colour only. Existing classes such as `choice-card--work-mode`, `choice-card--strength`, and `workspace-quick-filter` are compatibility or JavaScript hooks and must not own dimensions.
 
-**Specific helpers:**
-| Control | Render function | Template token |
-|---|---|---|
-| Engagement type | `render_engagement_type_choices()` | `__JOB_HUNTER_ENGAGEMENT_TYPE_CHOICES__` |
-| Work mode | `render_work_mode_preference_choices()` | `__JOB_HUNTER_WORK_MODE_PREFERENCE_CHOICES__` |
-| Sector (settings) | `render_sector_preference_choices()` | `__JOB_HUNTER_SECTOR_PREFERENCE_CHOICES__` |
+`render_choice_strip()` emits the shared classes automatically. Quick filters retain their existing JavaScript hook and are adopted by the shared CSS contract.
 
-**JS (settings-utils.js exports):**
-- `getEngagementTypeValues()` / `setEngagementTypeValues(value)`
-- `getWorkModePreferenceValues()` / `setWorkModePreferenceValues(values)`
-- `getSectorPreferenceValues()` / `setSectorPreferenceValues(value)`
+## Shared metadata badge
 
----
+**Owner:** `templates/static/theme/themes.widgets.css`
+
+Use `jh-badge` for non-interactive metadata such as New To You, SEEK, Direct employer, Mandatory, Expected, Partial match, and profile evidence. All badges share geometry; semantic and source classes change colour only. Clickable actions must use `jh-button`, never `jh-badge`.
+
+## Compatibility hooks
+
+- `choice-card--work-mode`, `choice-card--strength`, and `workspace-quick-filter`: behaviour or semantic-colour hooks only.
+- `badge`, `job-requirement-status`, `job-req-importance`, and `req-coverage-tag`: context or semantic-colour hooks only.
+- `title-block-btn`: behaviour/layout hook only; Hide similar titles uses `jh-button`.
 
 ## Toggle switch
 

@@ -105,3 +105,57 @@ def test_settings_actions_use_compact_shared_buttons_without_inline_sizing():
     assert "min-height: 40px;" not in settings_css.split(
         ".alerts-shell .telegram-connect-actions > button", 1
     )[1].split("}", 1)[0]
+
+
+def test_choice_badge_and_action_families_are_reused_across_screens():
+    widgets = (
+        ROOT_DIR / "templates" / "static" / "theme" / "themes.widgets.css"
+    ).read_text(encoding="utf-8-sig")
+    helpers = (ROOT_DIR / "job_hunter_agent" / "server_helpers.py").read_text(encoding="utf-8")
+    results = (ROOT_DIR / "templates" / "results.html").read_text(encoding="utf-8")
+    review_panel = (
+        ROOT_DIR / "templates" / "static" / "settings" / "shared" / "settings-review-panel.js"
+    ).read_text(encoding="utf-8")
+    score_labels = (ROOT_DIR / "job_hunter_agent" / "score_labels.py").read_text(encoding="utf-8")
+    renderer = (ROOT_DIR / "job_hunter_agent" / "workspace_renderer.py").read_text(encoding="utf-8")
+
+    assert ".jh-choice-group {" in widgets
+    assert ".jh-choice {" in widgets
+    assert ".jh-badge {" in widgets
+    assert 'choice-card jh-choice {escape(card_class)}' in helpers
+    assert 'choice-strip jh-choice-group' in helpers
+    assert '.workspace-controls .workspace-quick-filter {' in widgets
+    assert 'choice-card jh-choice choice-card--strength' in review_panel
+    assert 'badge jh-badge {safe_html(class_name)}' in score_labels
+    assert 'job-requirement-status jh-badge' in renderer
+    assert 'title-block-btn jh-button jh-button--neutral jh-button--compact' in renderer
+
+
+def test_shared_choice_geometry_is_single_and_compact():
+    widgets = (
+        ROOT_DIR / "templates" / "static" / "theme" / "themes.widgets.css"
+    ).read_text(encoding="utf-8-sig")
+    block = widgets.split(".jh-choice {", 1)[1].split("}", 1)[0]
+    assert "min-height: 1.9rem;" in block
+    assert "padding: 4px 11px;" in block
+    assert "border-radius: var(--control-radius-md);" in block
+
+
+def test_ordinary_actions_do_not_use_legacy_visual_classes():
+    files = [
+        ROOT_DIR / "templates" / "results.html",
+        ROOT_DIR / "templates" / "settings.html",
+        ROOT_DIR / "templates" / "global-settings.html",
+        ROOT_DIR / "templates" / "static" / "settings" / "shared" / "settings-review-panel.js",
+        ROOT_DIR / "templates" / "static" / "settings" / "global" / "settings-admin.js",
+        ROOT_DIR / "templates" / "static" / "common" / "wait-state.js",
+    ]
+    combined = "\n".join(path.read_text(encoding="utf-8-sig") for path in files)
+
+    assert 'class="secondary add-phrase-exclusion-btn"' not in combined
+    assert 'class="secondary dismiss-rule-card-btn"' not in combined
+    assert 'class="btn btn-secondary" data-system-warning-action' not in combined
+    assert 'class="btn btn-secondary" id="ws_stop_search_btn"' not in combined
+    assert 'style="font-size:0.9rem;padding:8px 16px;' not in combined
+    assert 'jh-button jh-button--danger jh-button--compact add-phrase-exclusion-btn' in combined
+    assert 'jh-button jh-button--neutral jh-button--compact dismiss-rule-card-btn' in combined

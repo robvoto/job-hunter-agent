@@ -83,7 +83,7 @@ function reviewStrengthChoicesMarkup(selectedValue, groupName) {
     const inputId = `${groupName}_${level}`;
     const checked = level === selectedValue ? ' checked' : '';
     return `
-      <label class="choice-card choice-card--strength ${escapeHtml(meta.tone || '')}" for="${inputId}">
+      <label class="choice-card jh-choice choice-card--strength ${escapeHtml(meta.tone || '')}" for="${inputId}">
         <input id="${inputId}" type="radio" name="${groupName}" value="${escapeHtml(level)}"${checked} aria-label="${escapeHtml(meta.label)}">
         <span>${escapeHtml(meta.label)}</span>
       </label>
@@ -143,11 +143,11 @@ function renderRuleCard(item) {
       ${suggestionExamplesMarkup(item.samples || [], 'No sample roles saved for this suggestion yet.')}
       ${(item.reason || '').startsWith('DESC_CAPABILITY_LOW') ? `
       <div class="card-actions" style="margin-top:10px;">
-        <button class="secondary add-phrase-exclusion-btn" data-reason="${escapeHtml(item.reason || '')}" style="font-size:0.9rem;padding:8px 16px;border-color:var(--state-error-border);color:var(--state-error-text);background:var(--state-error-bg);">Add to exclusions</button>
+        <button class="jh-button jh-button--danger jh-button--compact add-phrase-exclusion-btn" data-reason="${escapeHtml(item.reason || '')}">Add to exclusions</button>
       </div>` : ''}
       ${(item.reason || '').startsWith(RULE_REASON_TITLE_BAD_KEYWORD) ? `
       <div class="card-actions" style="margin-top:10px;">
-        <button class="secondary dismiss-rule-card-btn" style="font-size:0.9rem;padding:8px 16px;">Dismiss</button>
+        <button class="jh-button jh-button--neutral jh-button--compact dismiss-rule-card-btn">Dismiss</button>
       </div>` : ''}
     </div>`;
 }
@@ -206,7 +206,7 @@ function renderRequirementCard(item) {
         <span class="suggestion-chip">Count: ${escapeHtml(String(item.count || 0))}</span>
       </div>
       <label>${escapeHtml(capabilityUi.reviewStrengthPromptLabel)}</label>
-      <div class="choice-strip capability-strength-strip review-strength-strip" role="radiogroup" aria-label="${escapeHtml(capabilityUi.reviewStrengthPromptLabel)}" data-skill="${escapeHtml(item.skill || '')}" data-aliases="${escapeHtml(JSON.stringify(aliases))}">
+      <div class="choice-strip jh-choice-group capability-strength-strip review-strength-strip" role="radiogroup" aria-label="${escapeHtml(capabilityUi.reviewStrengthPromptLabel)}" data-skill="${escapeHtml(item.skill || '')}" data-aliases="${escapeHtml(JSON.stringify(aliases))}">
         ${reviewStrengthChoicesMarkup(item.recommended_choice || '', choiceGroupName)}
       </div>
       <details class="review-choice-guide">
@@ -251,7 +251,7 @@ function renderSuggestedTuning(reviewData) {
         <p>Seen in ${escapeHtml(String(item.count || 0))} kept role(s).</p>
         <div class="suggestion-meta"><span class="suggestion-chip">Suggested: ${escapeHtml(item.recommended_label || 'Review')}</span></div>
         <label>${escapeHtml(capabilityUi.reviewStrengthPromptLabel)}</label>
-        <div class="choice-strip capability-strength-strip review-strength-strip" role="radiogroup" aria-label="${escapeHtml(capabilityUi.reviewStrengthPromptLabel)}" data-skill="${escapeHtml(item.skill || '')}">
+        <div class="choice-strip jh-choice-group capability-strength-strip review-strength-strip" role="radiogroup" aria-label="${escapeHtml(capabilityUi.reviewStrengthPromptLabel)}" data-skill="${escapeHtml(item.skill || '')}">
           ${reviewStrengthChoicesMarkup(item.recommended_choice || '', `skill-choice-${index}`)}
         </div>
         <details class="review-choice-guide">

@@ -1335,7 +1335,7 @@ def test_job_card_shows_easy_apply_badge():
     )
 
     assert (
-        'class="badge badge-source-linkedin" title="Sourced from LinkedIn. Apply directly on the job board with one click." '
+        'class="badge jh-badge badge-source-linkedin" title="Sourced from LinkedIn. Apply directly on the job board with one click." '
         'aria-label="Sourced from LinkedIn. Apply directly on the job board with one click.">LinkedIn · Easy Apply<'
         in html
     )
@@ -1364,9 +1364,9 @@ def test_job_card_shows_quick_apply_badge():
         _test_profile(),
     )
 
-    assert 'class="badge badge-source-seek"' in html
+    assert 'class="badge jh-badge badge-source-seek"' in html
     assert "SEEK · Quick Apply" in html
-    assert html.count('class="badge badge-source-seek"') == 1
+    assert html.count('class="badge jh-badge badge-source-seek"') == 1
 
 
 def test_job_card_omits_apply_method_badge_when_unknown():
@@ -1853,7 +1853,7 @@ def test_render_job_card_requirement_coverage_puts_capability_name_inside_badge_
         debug_mode=False,
     )
 
-    assert '<span class="req-coverage-tag">agile delivery</span>' in html
+    assert '<span class="req-coverage-tag jh-badge">agile delivery</span>' in html
     assert ">Capability<" not in html
     assert '<span class="req-coverage-detail-text">agile delivery</span>' not in html
     assert '<span class="job-requirement-status"></span>' not in html
@@ -1917,7 +1917,7 @@ def test_render_job_card_requirement_coverage_shows_ad_wording_in_debug_mode():
         debug_mode=True,
     )
 
-    assert '<span class="req-coverage-tag">agile delivery</span>' in html
+    assert '<span class="req-coverage-tag jh-badge">agile delivery</span>' in html
     assert ">Capability<" not in html
     assert "Ad wording" in html
     assert "Lead end-to-end delivery within Agile squads" in html
@@ -2092,7 +2092,7 @@ def test_workspace_review_buttons_and_title_block_keep_semantic_hooks():
         'type="button" data-review-action="hidden"'
     ) in html
     assert (
-        'class="title-block-btn chip-button" '
+        'class="title-block-btn jh-button jh-button--neutral jh-button--compact" '
         'type="button" data-review-action="block_similar"'
     ) in html
     assert ">Hide similar titles<" in html

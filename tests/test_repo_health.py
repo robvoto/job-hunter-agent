@@ -423,7 +423,7 @@ def test_capability_strength_controls_use_shared_semantic_tone_classes():
     assert ".capability-strength-meter.strength-strong" in settings_css
     assert ".capability-strength-meter.strength-working" in settings_css
     assert ".capability-strength-meter.strength-basic" in settings_css
-    assert "choice-card choice-card--strength ${escapeHtml(meta.tone || '')}" in review_panel_js
+    assert "choice-card jh-choice choice-card--strength ${escapeHtml(meta.tone || '')}" in review_panel_js
     assert ".choice-strip > .choice-card--strength.strength-strong" in theme_widgets
     assert ".choice-strip > .choice-card--strength.strength-working" in theme_widgets
     assert ".choice-strip > .choice-card--strength.strength-basic" in theme_widgets

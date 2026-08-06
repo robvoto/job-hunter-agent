@@ -300,7 +300,7 @@ export function renderWaitState(mount, state) {
         ${normalized.subcopy ? `<p class="wait-state__subcopy">${escapeHtml(normalized.subcopy)}</p>` : ''}
         ${normalized.allowStop ? `
           <div class="wait-state__actions">
-            <button class="btn btn-secondary" id="ws_stop_search_btn" type="button">${escapeHtml(SEARCH_STOP_LABEL)}</button>
+            <button class="jh-button jh-button--secondary" id="ws_stop_search_btn" type="button">${escapeHtml(SEARCH_STOP_LABEL)}</button>
           </div>
         ` : ''}
       </section>
