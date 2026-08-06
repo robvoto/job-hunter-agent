@@ -222,7 +222,7 @@ function renderRequirementCard(item) {
         <div class="review-examples-body">${suggestionExamplesMarkup(item.examples || [], 'No example roles saved for this requirement yet.')}</div>
       </details>
       <div class="card-actions" style="margin-top:10px;">
-        <button class="primary confirm-skill-btn" data-skill="${escapeHtml(item.skill || '')}" data-aliases="${escapeHtml(JSON.stringify(aliases))}" style="font-size:0.9rem;padding:8px 16px;">Confirm</button>
+        <button class="jh-button jh-button--primary jh-button--compact confirm-skill-btn" data-skill="${escapeHtml(item.skill || '')}" data-aliases="${escapeHtml(JSON.stringify(aliases))}">Confirm</button>
       </div>
     </div>
   `;
@@ -263,8 +263,8 @@ function renderSuggestedTuning(reviewData) {
           <div class="review-examples-body">${suggestionExamplesMarkup(item.examples || [], 'No example roles saved for this capability yet.')}</div>
         </details>
         <div class="card-actions" style="margin-top:10px;">
-          <button class="primary confirm-skill-btn" data-skill="${escapeHtml(item.skill || '')}" style="font-size:0.9rem;padding:8px 16px;">Confirm</button>
-          <button class="secondary decline-skill-btn" data-skill="${escapeHtml(item.skill || '')}" style="font-size:0.9rem;padding:8px 16px;">${escapeHtml(DECLINE_CAPABILITY_LABEL)}</button>
+          <button class="jh-button jh-button--primary jh-button--compact confirm-skill-btn" data-skill="${escapeHtml(item.skill || '')}">Confirm</button>
+          <button class="jh-button jh-button--secondary jh-button--compact decline-skill-btn" data-skill="${escapeHtml(item.skill || '')}">${escapeHtml(DECLINE_CAPABILITY_LABEL)}</button>
         </div>
       </div>
     `,

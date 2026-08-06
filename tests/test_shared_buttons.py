@@ -34,7 +34,7 @@ def test_shared_application_button_contract_is_documented_and_used():
     assert "## Shared application button" in component_map
     assert "review-applied jh-button jh-button--primary jh-button--compact" in renderer
     assert "review-not-for-me jh-button jh-button--danger jh-button--compact" in renderer
-    assert 'class="jh-button jh-button--secondary" id="open_telegram_connect"' in alerts
+    assert 'class="jh-button jh-button--secondary jh-button--compact" id="open_telegram_connect"' in alerts
 
 
 def test_special_cta_buttons_are_not_migrated_to_shared_application_button():
@@ -68,3 +68,40 @@ def test_compact_actions_are_rectangular_and_strength_choices_are_separate():
     assert "min-height: 36px;" in strength_block
     assert "padding: 6px 14px;" in strength_block
     assert "border-radius: var(--radius-sm);" in strength_block
+
+
+def test_settings_actions_use_compact_shared_buttons_without_inline_sizing():
+    alerts = (
+        ROOT_DIR
+        / "templates"
+        / "partials"
+        / "settings"
+        / "standard"
+        / "settings-alerts.html"
+    ).read_text(encoding="utf-8")
+    review_panel = (
+        ROOT_DIR
+        / "templates"
+        / "static"
+        / "settings"
+        / "shared"
+        / "settings-review-panel.js"
+    ).read_text(encoding="utf-8")
+    settings_css = (
+        ROOT_DIR
+        / "templates"
+        / "static"
+        / "settings"
+        / "shared"
+        / "settings-page.css"
+    ).read_text(encoding="utf-8")
+
+    assert 'jh-button--secondary jh-button--compact" id="open_telegram_connect"' in alerts
+    assert 'jh-button--secondary jh-button--compact" id="send_telegram_test"' in alerts
+    assert "jh-button--primary jh-button--compact confirm-skill-btn" in review_panel
+    assert "jh-button--secondary jh-button--compact decline-skill-btn" in review_panel
+    assert 'class="primary confirm-skill-btn"' not in review_panel
+    assert 'class="secondary decline-skill-btn"' not in review_panel
+    assert "min-height: 40px;" not in settings_css.split(
+        ".alerts-shell .telegram-connect-actions > button", 1
+    )[1].split("}", 1)[0]

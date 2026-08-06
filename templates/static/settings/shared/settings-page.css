@@ -706,11 +706,7 @@
     }
     .alerts-shell .telegram-connect-actions > button,
     .alerts-shell .panel-actions > button {
-      padding: 8px 14px;
-      font-size: var(--text-role-button-font-size);
       font-weight: var(--text-role-button-font-weight);
-      line-height: 1.15;
-      min-height: 40px;
     }
     .panel-kicker {
       display: inline-block;
