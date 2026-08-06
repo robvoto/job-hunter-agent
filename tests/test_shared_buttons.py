@@ -128,7 +128,7 @@ def test_choice_badge_and_action_families_are_reused_across_screens():
     assert 'choice-card jh-choice choice-card--strength' in review_panel
     assert 'badge jh-badge {safe_html(class_name)}' in score_labels
     assert 'job-requirement-status jh-badge' in renderer
-    assert 'title-block-btn jh-button jh-button--neutral jh-button--compact' in renderer
+    assert 'title-block-btn jh-button jh-button--neutral jh-button--micro' in renderer
 
 
 def test_shared_choice_geometry_is_single_and_compact():
@@ -159,3 +159,20 @@ def test_ordinary_actions_do_not_use_legacy_visual_classes():
     assert 'style="font-size:0.9rem;padding:8px 16px;' not in combined
     assert 'jh-button jh-button--danger jh-button--compact add-phrase-exclusion-btn' in combined
     assert 'jh-button jh-button--neutral jh-button--compact dismiss-rule-card-btn' in combined
+
+
+def test_micro_utility_action_is_smaller_than_compact_actions():
+    primitives = (
+        ROOT_DIR / "templates" / "static" / "theme" / "themes.primitives.css"
+    ).read_text(encoding="utf-8-sig")
+    widgets = (
+        ROOT_DIR / "templates" / "static" / "theme" / "themes.widgets.css"
+    ).read_text(encoding="utf-8-sig")
+    renderer = (ROOT_DIR / "job_hunter_agent" / "workspace_renderer.py").read_text(encoding="utf-8")
+
+    block = primitives.split(".jh-button--micro {", 1)[1].split("}", 1)[0]
+    assert "min-height: 27px;" in block
+    assert "padding: 3px 8px;" in block
+    assert "font-size: 0.74rem;" in block
+    assert "title-block-btn jh-button jh-button--neutral jh-button--micro" in renderer
+    assert ".title-block-btn.jh-button {" not in widgets

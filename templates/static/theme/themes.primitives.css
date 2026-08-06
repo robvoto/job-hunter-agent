@@ -183,6 +183,17 @@ textarea {
   box-shadow: none;
 }
 
+/* Low-emphasis utility actions used inline with headings or metadata. */
+.jh-button--micro {
+  min-height: 27px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 0.74rem;
+  line-height: 1.1;
+  gap: var(--control-space-2xs);
+  box-shadow: none;
+}
+
 .jh-button--primary {
   background: var(--accent);
   color: var(--button-text);

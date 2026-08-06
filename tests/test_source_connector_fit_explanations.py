@@ -2092,7 +2092,7 @@ def test_workspace_review_buttons_and_title_block_keep_semantic_hooks():
         'type="button" data-review-action="hidden"'
     ) in html
     assert (
-        'class="title-block-btn jh-button jh-button--neutral jh-button--compact" '
+        'class="title-block-btn jh-button jh-button--neutral jh-button--micro" '
         'type="button" data-review-action="block_similar"'
     ) in html
     assert ">Hide similar titles<" in html

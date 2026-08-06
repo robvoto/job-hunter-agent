@@ -531,16 +531,6 @@
   white-space: nowrap;
 }
 
-/* Action exceptions that retain page hooks but use the shared button geometry. */
-.title-block-btn.jh-button {
-  min-height: 32px;
-  padding: 6px 12px;
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-sm);
-  font-weight: var(--button-font-weight);
-  line-height: 1.1;
-}
-
 /* Shared chip selector styling — applies to all choice-card variants */
 
 .choice-strip > .choice-card--work-mode,
