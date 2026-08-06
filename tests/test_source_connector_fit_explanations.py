@@ -1826,13 +1826,13 @@ def test_render_job_card_requirement_coverage_shows_evidence_subtitles_in_normal
     )
 
     assert "job-requirements-hint" not in html
-    assert "req-coverage-detail" in html
-    assert "acceptance testing" in html
+    assert "req-coverage-detail" not in html
+    assert "acceptance testing" not in html
     assert "acceptance testing (Strong)" not in html
     assert f'"{requirement}"' not in html
 
 
-def test_render_job_card_requirement_coverage_puts_capability_name_inside_badge_in_normal_mode():
+def test_render_job_card_requirement_coverage_hides_capability_badge_in_normal_mode():
     html = workspace_renderer.render_job_card(
         {
             **_test_profile(),
@@ -1853,7 +1853,7 @@ def test_render_job_card_requirement_coverage_puts_capability_name_inside_badge_
         debug_mode=False,
     )
 
-    assert '<span class="req-coverage-tag jh-badge">agile delivery</span>' in html
+    assert '<span class="req-coverage-tag jh-badge">agile delivery</span>' not in html
     assert ">Capability<" not in html
     assert '<span class="req-coverage-detail-text">agile delivery</span>' not in html
     assert '<span class="job-requirement-status"></span>' not in html
@@ -1950,7 +1950,7 @@ def test_render_job_card_requirement_coverage_shows_role_duration_note_in_normal
 
     assert "Role history proves 36 months in business analyst against 60 required months" in html
     assert "most recent end year 2024" in html
-    assert "req-coverage-detail" in html
+    assert "req-coverage-detail" not in html
     assert "Partial matches" in html
     assert "Needs attention" not in html
 
@@ -3329,10 +3329,10 @@ def test_render_job_card_fit_breakdown_starts_with_plain_english_summary_from_re
 
     assert "Why this is a good fit" not in html
     assert expected_summary not in html
-    assert '<span class="job-requirement-text">Agile delivery' in html
-    assert '<span class="job-requirement-text">Stakeholder engagement' in html
-    assert '<span class="job-requirement-text">User acceptance testing' in html
-    assert "Agile methodologies" in html
+    assert '<span class="job-requirement-title-line">Agile delivery' in html
+    assert '<span class="job-requirement-title-line">Stakeholder engagement' in html
+    assert '<span class="job-requirement-title-line">User acceptance testing' in html
+    assert "Agile methodologies" not in html
     assert "SAP certification" not in expected_summary
 
 
@@ -3556,7 +3556,7 @@ def test_workspace_renders_requirement_coverage_with_status_classes():
     assert "job-coverage-panel" not in html
     assert "Job Requirements" in html
     assert "job-req-importance" in html
-    assert "job-requirement-badges" in html
+    assert "job-requirement-badges" not in html
     assert "job-req-importance--mandatory" in html
     assert "job-req-importance--strongly-preferred" in html
     assert "job-req-importance--preferred" in html
@@ -4521,9 +4521,9 @@ def test_render_job_card_fit_breakdown_starts_with_plain_english_summary_from_re
     assert "Stakeholder engagement — partly shown in profile" not in html
     assert "User acceptance testing — shown in profile" not in html
     assert "This role looks like a good fit because" not in html
-    assert '<span class="job-requirement-text">Agile delivery' in html
-    assert '<span class="job-requirement-text">Stakeholder engagement' in html
-    assert '<span class="job-requirement-text">User acceptance testing' in html
+    assert '<span class="job-requirement-title-line">Agile delivery' in html
+    assert '<span class="job-requirement-title-line">Stakeholder engagement' in html
+    assert '<span class="job-requirement-title-line">User acceptance testing' in html
     assert "Agile methodologies" not in html
     assert "Base fit" not in html
 

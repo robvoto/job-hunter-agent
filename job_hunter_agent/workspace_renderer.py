@@ -1788,9 +1788,9 @@ def render_job_card(
             )
 
         detail_html_parts: list[str] = []
-        if matched_candidate_fact:
+        if active_debug_mode and matched_candidate_fact:
             profile_detail = matched_candidate_fact
-            if active_debug_mode and level_label:
+            if level_label:
                 profile_detail = f"{profile_detail} ({level_label})"
             detail_html_parts.append(
                 '<span class="req-coverage-detail req-coverage-detail--capability">'
