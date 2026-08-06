@@ -352,7 +352,7 @@ def set_run_progress_state(
             and detail_obj.total is not None
         ):
             log_parts["pct"] = round(detail_obj.current / detail_obj.total * 100, 1)
-    logger.info(format_debug_marker("RUN_PROGRESS", log_parts))
+    logger.debug(format_debug_marker("RUN_PROGRESS", log_parts))
 
 
 def set_run_progress(text: str) -> None:

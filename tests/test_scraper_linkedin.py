@@ -1,6 +1,7 @@
 """Tests for scraper linkedin."""
 
 from datetime import date
+import logging
 from types import SimpleNamespace
 
 import pytest
@@ -191,7 +192,7 @@ def test_linkedin_backfills_missing_posted_age_from_visible_listing_text(monkeyp
     )
     monkeypatch.setattr(linkedin_module, "load_job_type", lambda: {})
     monkeypatch.setattr(linkedin_module, "load_salary", lambda: {})
-    caplog.set_level("INFO")
+    caplog.set_level(logging.DEBUG, logger="job_hunter_agent.scrapers.linkedin")
 
     kept_records, audit_rows, skill_observations = scraper.scrape()
 

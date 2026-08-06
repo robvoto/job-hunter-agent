@@ -10,8 +10,7 @@ set -euo pipefail
 
 SERVICE="${JOB_HUNTER_SERVICE:-job-hunter}"
 OUTPUT_DIR="${JOB_HUNTER_OUTPUT_DIR:-/var/lib/job-hunter/output}"
-HUMAN_LOG="$OUTPUT_DIR/server-human.log"
-DEBUG_LOG="$OUTPUT_DIR/server-debug.log"
+APP_LOG="$OUTPUT_DIR/server.log"
 FOLLOW=0
 SINCE=""
 UNTIL=""
@@ -19,17 +18,17 @@ FOLLOW_VIEW="combined"
 
 usage() {
   cat <<'EOF'
-Usage: jobhunter-logs [--follow] [--human|--debug|--journal|--combined] [--since "..."] [--until "..."]
+Usage: jobhunter-logs [--follow] [--app|--journal|--combined] [--since "..."] [--until "..."]
 
 Defaults:
-  - snapshot mode shows journal + human log + debug log
-  - follow mode tails the combined human + debug app logs
+  - snapshot mode shows journal + app log
+  - follow mode tails journal + app log together
 
 Examples:
   jobhunter-logs
   jobhunter-logs --follow
   jobhunter-logs --follow --combined
-  jobhunter-logs --follow --debug
+  jobhunter-logs --follow --app
   jobhunter-logs --follow --journal
 EOF
 }
@@ -40,12 +39,8 @@ while [[ $# -gt 0 ]]; do
       FOLLOW=1
       shift
       ;;
-    --human)
-      FOLLOW_VIEW="human"
-      shift
-      ;;
-    --debug)
-      FOLLOW_VIEW="debug"
+    --app)
+      FOLLOW_VIEW="app"
       shift
       ;;
     --journal)
@@ -91,27 +86,19 @@ fi
 "${journal_cmd[@]}" || true
 
 echo
-printf '==> App human log: %s\n' "$HUMAN_LOG"
-sudo tail -n 200 "$HUMAN_LOG" || true
-
-echo
-printf '==> App debug log: %s\n' "$DEBUG_LOG"
-sudo tail -n 200 "$DEBUG_LOG" || true
+printf '==> App log: %s\n' "$APP_LOG"
+sudo tail -n 200 "$APP_LOG" || true
 
 if [[ "$FOLLOW" -eq 1 ]]; then
   echo
   case "$FOLLOW_VIEW" in
     combined)
-      echo "==> Following combined app logs (human + debug) (Ctrl+C to stop)"
-      sudo tail -n 0 -F "$HUMAN_LOG" "$DEBUG_LOG"
+      echo "==> Following app log (Ctrl+C to stop)"
+      sudo tail -n 0 -F "$APP_LOG"
       ;;
-    human)
-      echo "==> Following human log only (Ctrl+C to stop)"
-      sudo tail -n 0 -F "$HUMAN_LOG"
-      ;;
-    debug)
-      echo "==> Following debug log only (Ctrl+C to stop)"
-      sudo tail -n 0 -F "$DEBUG_LOG"
+    app)
+      echo "==> Following app log (Ctrl+C to stop)"
+      sudo tail -n 0 -F "$APP_LOG"
       ;;
     journal)
       echo "==> Following systemd journal only (Ctrl+C to stop)"

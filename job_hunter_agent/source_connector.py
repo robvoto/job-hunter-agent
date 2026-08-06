@@ -67,15 +67,13 @@ def _format_role_list(values: object) -> str:
 
 
 def _log_search_plan(context) -> None:
-    from job_hunter_agent.logging_utils import get_human_logger
     from job_hunter_agent.scrapers.linkedin import build_linkedin_search_targets
 
-    human_logger = get_human_logger()
     profile = context.profile if isinstance(context.profile, dict) else {}
     preferred_roles = _format_role_list(profile.get("target_roles"))
     alternative_roles = _format_role_list(profile.get("also_consider_roles"))
 
-    human_logger.info(
+    logger.info(
         "\n%s\nSEARCH PLAN\n"
         "Preferred roles   : %s\n"
         "Alternative roles : %s",
@@ -86,10 +84,10 @@ def _log_search_plan(context) -> None:
 
     if "linkedin" in context.enabled_sources:
         linkedin_targets = build_linkedin_search_targets(context.search_settings, context.profile)
-        human_logger.info("LinkedIn targets   : %d", len(linkedin_targets))
+        logger.info("LinkedIn targets   : %d", len(linkedin_targets))
         if linkedin_targets:
             for index, target in enumerate(linkedin_targets, start=1):
-                human_logger.info(
+                logger.info(
                     "  [%d/%d] term=%r | location=%s | scope=%s | distance=%s | results=%s | hours_old=%s",
                     index,
                     len(linkedin_targets),
@@ -101,7 +99,7 @@ def _log_search_plan(context) -> None:
                     str(target.get("hours_old") or ""),
                 )
 
-    human_logger.info("%s", "=" * CONSOLE_BANNER_WIDTH)
+    logger.info("%s", "=" * CONSOLE_BANNER_WIDTH)
 
 
 def ensure_llm_runtime_ready(*, no_llm_mode: bool) -> None:
@@ -208,9 +206,10 @@ def _scrape_jobs_direct_scoped(*, trigger_label: str) -> str:
 
 
 if __name__ == "__main__":
-    from job_hunter_agent.logging_utils import setup_cli_logging
+    from job_hunter_agent.config import DEBUG_MODE
+    from job_hunter_agent.logging_utils import setup_logging
 
-    setup_cli_logging()
+    setup_logging(debug=DEBUG_MODE)
     from job_hunter_agent.database import init_db
     from job_hunter_agent.global_settings import seed_global_settings_from_file
     from job_hunter_agent.knowledge_store import upgrade_knowledge_from_dir

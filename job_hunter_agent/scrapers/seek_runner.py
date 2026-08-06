@@ -186,7 +186,7 @@ def _seek_list_page_diagnostics(list_page) -> dict[str, object]:
         selector_count = list_page.locator(SELECTOR_CARDS).count()
     except Exception as count_exc:
         selector_count = -1
-        logger.info("[SEEK] card selector count unavailable: %s", count_exc)
+        logger.debug("[SEEK] card selector count unavailable: %s", count_exc)
 
     page_status = _classify_seek_list_page_text(body_text)
     failure_class = _classify_seek_list_page_failure(page_title, body_text, selector_count)
@@ -214,7 +214,7 @@ def _log_seek_list_page_diagnostics(
     selector_count = cast(int, snapshot["selector_count"])
     page_status = str(snapshot["page_status"])
     failure_class = str(snapshot["failure_class"])
-    logger.info(
+    logger.debug(
         "%s title=%r actual_url=%s card_selector_count=%s body_status=%s failure_class=%s body_len=%d "
         "selector_timeout_ms=%d body_snippet=%r",
         page_tag,
@@ -227,7 +227,7 @@ def _log_seek_list_page_diagnostics(
         selector_timeout,
         body_text,
     )
-    logger.info("%s wait_for_selector failed with %s", page_tag, type(exc).__name__)
+    logger.debug("%s wait_for_selector failed with %s", page_tag, type(exc).__name__)
     if page_status == "challenge_page":
         logger.warning("%s SEEK list page looks like a SEEK bot challenge page", page_tag)
     elif page_status == "blocked_page":
@@ -282,7 +282,7 @@ def _wait_for_seek_bot_challenge_or_manual_verification(
     # Cloudflare's "Just a moment..." challenge runs JS and auto-resolves in a few seconds.
     # Wait for the title to change before deciding human intervention is required.
     if "just a moment" in lowered:
-        logger.info(
+        logger.debug(
             "[SEEK][BOT_CHALLENGE_DETECTED] %s title=%r — Cloudflare JS challenge; waiting up to %dms for auto-resolve",
             page_tag,
             page_title,
@@ -307,7 +307,7 @@ def _wait_for_seek_bot_challenge_or_manual_verification(
                 )
                 return False
         except Exception:
-            logger.info(
+            logger.debug(
                 "[SEEK][BOT_CHALLENGE_WAIT] %s Cloudflare auto-resolve timed out; checking for human verification",
                 page_tag,
             )
@@ -381,7 +381,7 @@ def _handle_seek_list_page_failure(
                 list_page, page_tag, playwright_selector_timeout
             )
             if page_recovered:
-                logger.info(
+                logger.debug(
                     "[SEEK][HUMAN_VERIFICATION_RESOLVED] %s continuing scrape after manual verification",
                     page_tag,
                 )
@@ -432,7 +432,7 @@ def _handle_seek_list_page_failure(
             failure_class=SEEK_BOT_CHALLENGE,
         ) from exc
     if failure_class == SEEK_TIMEOUT_NO_CARDS:
-        logger.info(
+        logger.debug(
             "[SEEK][TIMEOUT_NO_CARDS] %s title=%r status=%s cards=%s",
             page_tag,
             page_title,
@@ -820,7 +820,7 @@ async def _fetch_seek_job_detail_async(record: dict, page) -> dict:
     job_key = str(record.get(rs.RECORD_JOB_KEY) or "unknown")
     title = str(record.get(rs.RECORD_TITLE_KEY) or "")
     company = str(record.get(rs.RECORD_COMPANY_KEY) or "")
-    logger.info(
+    logger.debug(
         "[PIPELINE][DETAIL_FETCH_START] source=SEEK job_key=%s title=%r company=%r url=%r",
         job_key,
         title,
@@ -832,7 +832,7 @@ async def _fetch_seek_job_detail_async(record: dict, page) -> dict:
     details_text = str(details_payload.get("text") or "")
     details_status = str(details_payload.get("status") or ("ok" if details_text else "empty"))
     _fetch_ms = int((time.monotonic() - _t0) * 1000)
-    logger.info(
+    logger.debug(
         "[PIPELINE][DETAIL_FETCH_DONE] source=SEEK job_key=%s title=%r company=%r status=%r elapsed_ms=%d text_len=%d",
         job_key,
         title,
@@ -1071,7 +1071,7 @@ def seek_scrape_to_records(
 
     browser_mode = "persistent" if WORKSPACE_DEBUG_MODE else get_playwright_browser_mode()
     use_persistent_browser = browser_mode == "persistent"
-    logger.info(
+    logger.debug(
         "[SEEK][BROWSER_MODE] mode=%s headless=%s assisted_verification=%s profile_dir=%s",
         browser_mode,
         headless,
@@ -1111,7 +1111,7 @@ def seek_scrape_to_records(
                 total_targets = len(search_targets)
                 for target_index, search_target in enumerate(search_targets, start=1):
                     if run_stop_requested():
-                        logger.info("[SEEK] stop requested; ending scrape")
+                        logger.debug("[SEEK] stop requested; ending scrape")
                         break
                     base_search_url = search_target["url"]
                     search_location = search_target["location"]
@@ -1120,7 +1120,7 @@ def seek_scrape_to_records(
                     current_page_num = 1
                     target_t0 = time.monotonic()
 
-                    logger.info(
+                    logger.debug(
                         "\n"
                         "================================================================\n"
                         "  STARTING SEEK TARGET %d/%d\n"
@@ -1140,7 +1140,7 @@ def seek_scrape_to_records(
                     while current_page_num <= configured_seek_max_pages:
                         page_tag = f"[SEEK p{current_page_num}/{configured_seek_max_pages}]"
                         if run_stop_requested():
-                            logger.info("%s stop requested; ending scrape", page_tag)
+                            logger.debug("%s stop requested; ending scrape", page_tag)
                             break
                         page_url = (
                             set_page_param(base_search_url, current_page_num)
@@ -1148,7 +1148,7 @@ def seek_scrape_to_records(
                             else base_search_url
                         )
 
-                        logger.info("%s url=%s", page_tag, page_url)
+                        logger.debug("%s url=%s", page_tag, page_url)
 
                         stop_target = False
                         try:
@@ -1185,9 +1185,9 @@ def seek_scrape_to_records(
                                         full_page=False,
                                         timeout=SEEK_DIAGNOSTIC_SCREENSHOT_TIMEOUT_MS,
                                     )
-                                    logger.info("%s screenshot saved to %s", page_tag, screenshot_path)
+                                    logger.debug("%s screenshot saved to %s", page_tag, screenshot_path)
                                 except Exception as diag_exc:
-                                    logger.info("%s diagnostic capture failed: %s", page_tag, diag_exc)
+                                    logger.debug("%s diagnostic capture failed: %s", page_tag, diag_exc)
                             _handle_seek_list_page_failure(
                                 page_tag,
                                 list_page,
@@ -1206,10 +1206,10 @@ def seek_scrape_to_records(
                             break
 
                         job_cards = list_page.query_selector_all(SELECTOR_CARDS)
-                        logger.info("%s cards=%d", page_tag, len(job_cards))
+                        logger.debug("%s cards=%d", page_tag, len(job_cards))
 
                         if len(job_cards) == 0:
-                            logger.info("%s no cards found; stopping target", page_tag)
+                            logger.debug("%s no cards found; stopping target", page_tag)
                             break
 
                         filter_state = extract_seek_filter_panel_state(list_page)
@@ -1219,7 +1219,7 @@ def seek_scrape_to_records(
                         target_closed = False
                         for card in job_cards:
                             if run_stop_requested():
-                                logger.info("%s stop requested; finishing current page", page_tag)
+                                logger.debug("%s stop requested; finishing current page", page_tag)
                                 break
                             try:
                                 record = build_seek_card_record(
@@ -1303,7 +1303,7 @@ def seek_scrape_to_records(
                                 if _job_decision == "KEEP":
                                     skill_observations.extend(record_skill_observations)
                                     kept_records.append(record)
-                                    logger.info(
+                                    logger.debug(
                                         "%s KEPT %s @ %s | %s",
                                         page_tag,
                                         title,
@@ -1342,7 +1342,7 @@ def seek_scrape_to_records(
                                 if _job_decision == "KEEP":
                                     skill_observations.extend(record_skill_observations)
                                     kept_records.append(record)
-                                    logger.info(
+                                    logger.debug(
                                         "%s KEPT %s @ %s | %s",
                                         page_tag,
                                         title,
@@ -1354,7 +1354,7 @@ def seek_scrape_to_records(
                             break
 
                         if not page_has_fresh_card:
-                            logger.info(
+                            logger.debug(
                                 "%s all cards were older than %d day(s); stopping target",
                                 page_tag,
                                 configured_date_range,

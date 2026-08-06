@@ -23,7 +23,6 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from datetime import datetime
 import logging
-import logging.config
 import os
 import re
 import sys
@@ -52,15 +51,7 @@ from job_hunter_agent.config import (
     ONBOARDING_DEBUG_ALIAS_PATH,
     ONBOARDING_PATH,
 )
-from job_hunter_agent.logging_utils import (
-    ConsoleNoiseFilter,
-    HUMAN_LOGGER_NAME,
-    HumanReadableLogFilter,
-    get_human_logger,
-    install_log_handler_filters,
-    render_server_session_start_block,
-)
-from job_hunter_agent.paths import OUTPUT_DIR, SERVER_DEBUG_LOG_PATH, SERVER_HUMAN_LOG_PATH
+from job_hunter_agent.logging_utils import render_server_session_start_block, setup_logging
 from job_hunter_agent.user_context import set_user_id
 from job_hunter_agent.run_control import enable_step_through
 
@@ -156,11 +147,6 @@ _SUPPRESSED_ACCESS_PATHS = frozenset(
 )
 
 
-def _console_logging_enabled() -> bool:
-    raw_value = str(os.environ.get("JOB_HUNTER_CONSOLE_LOG", "on")).strip().lower()
-    return raw_value not in {"0", "off", "false", "no"}
-
-
 def _explicit_env_flag(name: str) -> bool:
     """Parse a boolean env var strictly so bad deploy values fail fast."""
     raw_value = str(os.environ.get(name, "")).strip()
@@ -190,100 +176,15 @@ class _AccessLogFilter(logging.Filter):
 
 
 def _configure_server_logging() -> None:
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    console_enabled = _console_logging_enabled()
-    human_logger_handlers = ["human_file", "debug_file"]
-    uvicorn_error_handlers = ["human_file", "debug_file"]
-    if console_enabled:
-        human_logger_handlers.insert(0, "human_console")
-        uvicorn_error_handlers.insert(0, "human_console")
+    setup_logging(debug=app_config.DEBUG_MODE)
+    logging.getLogger("uvicorn.access").addFilter(_AccessLogFilter())
 
-    logging_config = {
-        "version": 1,
-        "disable_existing_loggers": False,
-        "formatters": {
-            "human": {
-                "format": "%(message)s",
-            },
-            "standard": {
-                "format": "%(asctime)s %(levelname)s %(name)s: %(source_scope_prefix)s%(message)s",
-                "datefmt": "%Y-%m-%d %H:%M:%S",
-            },
-        },
-        "handlers": {
-            "human_console": {
-                "class": "logging.StreamHandler",
-                "level": "INFO",
-                "formatter": "human",
-                "stream": "ext://sys.__stdout__",
-            },
-            "human_file": {
-                "class": "logging.FileHandler",
-                "level": "INFO",
-                "formatter": "human",
-                "filename": str(SERVER_HUMAN_LOG_PATH),
-                "encoding": "utf-8",
-            },
-            "debug_file": {
-                "class": "logging.FileHandler",
-                "level": "INFO",
-                "formatter": "standard",
-                "filename": str(SERVER_DEBUG_LOG_PATH),
-                "encoding": "utf-8",
-            },
-        },
-        "root": {
-            "level": "INFO",
-            "handlers": ["debug_file"],
-        },
-        "loggers": {
-            HUMAN_LOGGER_NAME: {
-                "level": "INFO",
-                "handlers": human_logger_handlers,
-                "propagate": False,
-            },
-            "uvicorn": {
-                "level": "INFO",
-                "handlers": ["debug_file"],
-                "propagate": False,
-            },
-            "uvicorn.error": {
-                "level": "INFO",
-                "handlers": uvicorn_error_handlers,
-                "propagate": False,
-            },
-            "uvicorn.access": {
-                "level": "INFO",
-                "handlers": ["debug_file"],
-                "propagate": False,
-            },
-        },
-    }
-    logging.config.dictConfig(logging_config)
-    install_log_handler_filters()
-
-    access_filter = _AccessLogFilter()
-    logging.getLogger("uvicorn.access").addFilter(access_filter)
-
-    human_logger = logging.getLogger(HUMAN_LOGGER_NAME)
-    for handler in human_logger.handlers:
-        if console_enabled and isinstance(handler, logging.StreamHandler) and not isinstance(
-            handler, logging.FileHandler
-        ):
-            handler.addFilter(HumanReadableLogFilter())
-            handler.addFilter(ConsoleNoiseFilter())
-        elif isinstance(handler, logging.FileHandler) and getattr(handler, "baseFilename", "") == str(
-            SERVER_HUMAN_LOG_PATH
-        ):
-            handler.addFilter(HumanReadableLogFilter())
-
-    app_logger = human_logger
-    sys.stdout = _LineLoggingStream(app_logger, logging.INFO)
-    sys.stderr = _LineLoggingStream(app_logger, logging.ERROR)
+    sys.stdout = _LineLoggingStream(_logger, logging.INFO)
+    sys.stderr = _LineLoggingStream(_logger, logging.ERROR)
 
 
 def _log_server_session_start(*, debug: bool, rebuild: bool, step: bool) -> None:
-    get_human_logger().info(
+    _logger.info(
         render_server_session_start_block(
             started_at=datetime.now().astimezone(),
             pid=os.getpid(),

@@ -192,11 +192,9 @@ def test_configure_server_logging_keeps_terminal_output_visible(monkeypatch, tmp
     original_stdout = sys.stdout
     original_stderr = sys.stderr
 
-    monkeypatch.setattr(_fa, "OUTPUT_DIR", tmp_path)
-    monkeypatch.setattr(_fa, "SERVER_HUMAN_LOG_PATH", tmp_path / "server-human.log")
-    monkeypatch.setattr(_fa, "SERVER_DEBUG_LOG_PATH", tmp_path / "server-debug.log")
+    monkeypatch.setattr("job_hunter_agent.paths.SERVER_LOG_PATH", tmp_path / "server.log")
 
-    for logger_name in ("", _fa.HUMAN_LOGGER_NAME, "uvicorn", "uvicorn.error", "uvicorn.access"):
+    for logger_name in ("", "uvicorn", "uvicorn.error", "uvicorn.access"):
         logger = logging.getLogger(logger_name)
         for handler in list(logger.handlers):
             logger.removeHandler(handler)
@@ -207,70 +205,30 @@ def test_configure_server_logging_keeps_terminal_output_visible(monkeypatch, tmp
         _fa._configure_server_logging()
 
         assert isinstance(sys.stdout, _fa._LineLoggingStream)
-        assert sys.stdout._logger.name == _fa.HUMAN_LOGGER_NAME
+        assert sys.stdout._logger.name == "job_hunter_agent.fastapi_app"
         assert any(
             isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler)
-            for handler in logging.getLogger("uvicorn.error").handlers
+            for handler in logging.getLogger().handlers
         )
     finally:
         sys.stdout = original_stdout
         sys.stderr = original_stderr
         logging.shutdown()
-        for logger_name in ("", _fa.HUMAN_LOGGER_NAME, "uvicorn", "uvicorn.error", "uvicorn.access"):
+        for logger_name in ("", "uvicorn", "uvicorn.error", "uvicorn.access"):
             logger = logging.getLogger(logger_name)
             for handler in list(logger.handlers):
                 logger.removeHandler(handler)
             logger.filters.clear()
 
 
-def test_configure_server_logging_can_disable_direct_console_output(monkeypatch, tmp_path):
+def test_server_session_start_banner_is_written_to_log_file(monkeypatch, tmp_path):
     original_stdout = sys.stdout
     original_stderr = sys.stderr
 
-    monkeypatch.setattr(_fa, "OUTPUT_DIR", tmp_path)
-    monkeypatch.setattr(_fa, "SERVER_HUMAN_LOG_PATH", tmp_path / "server-human.log")
-    monkeypatch.setattr(_fa, "SERVER_DEBUG_LOG_PATH", tmp_path / "server-debug.log")
-    monkeypatch.setenv("JOB_HUNTER_CONSOLE_LOG", "off")
+    log_path = tmp_path / "server.log"
+    monkeypatch.setattr("job_hunter_agent.paths.SERVER_LOG_PATH", log_path)
 
-    for logger_name in ("", _fa.HUMAN_LOGGER_NAME, "uvicorn", "uvicorn.error", "uvicorn.access"):
-        logger = logging.getLogger(logger_name)
-        for handler in list(logger.handlers):
-            logger.removeHandler(handler)
-            handler.close()
-        logger.filters.clear()
-
-    try:
-        _fa._configure_server_logging()
-
-        assert isinstance(sys.stdout, _fa._LineLoggingStream)
-        assert sys.stdout._logger.name == _fa.HUMAN_LOGGER_NAME
-        assert not any(
-            isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler)
-            for handler in logging.getLogger(_fa.HUMAN_LOGGER_NAME).handlers
-        )
-    finally:
-        sys.stdout = original_stdout
-        sys.stderr = original_stderr
-        monkeypatch.delenv("JOB_HUNTER_CONSOLE_LOG", raising=False)
-        logging.shutdown()
-        for logger_name in ("", _fa.HUMAN_LOGGER_NAME, "uvicorn", "uvicorn.error", "uvicorn.access"):
-            logger = logging.getLogger(logger_name)
-            for handler in list(logger.handlers):
-                logger.removeHandler(handler)
-            logger.filters.clear()
-
-
-def test_server_session_start_banner_is_written_to_both_log_files(monkeypatch, tmp_path):
-    original_stdout = sys.stdout
-    original_stderr = sys.stderr
-
-    human_log_path = tmp_path / "server-human.log"
-    debug_log_path = tmp_path / "server-debug.log"
-    monkeypatch.setattr(_fa, "OUTPUT_DIR", tmp_path)
-    monkeypatch.setattr(_fa, "SERVER_HUMAN_LOG_PATH", human_log_path)
-    monkeypatch.setattr(_fa, "SERVER_DEBUG_LOG_PATH", debug_log_path)
-
-    for logger_name in ("", _fa.HUMAN_LOGGER_NAME, "uvicorn", "uvicorn.error", "uvicorn.access"):
+    for logger_name in ("", "uvicorn", "uvicorn.error", "uvicorn.access"):
         logger = logging.getLogger(logger_name)
         for handler in list(logger.handlers):
             logger.removeHandler(handler)
@@ -282,17 +240,15 @@ def test_server_session_start_banner_is_written_to_both_log_files(monkeypatch, t
         _fa._log_server_session_start(debug=True, rebuild=True, step=False)
         logging.shutdown()
 
-        human_log = human_log_path.read_text(encoding="utf-8")
-        debug_log = debug_log_path.read_text(encoding="utf-8")
+        log_content = log_path.read_text(encoding="utf-8")
 
-        assert "NEW SERVER SESSION STARTED" in human_log
-        assert "Started at       :" in human_log
-        assert "Startup rebuild  : YES (--rebuild)" in human_log
-        assert "NEW SERVER SESSION STARTED" in debug_log
+        assert "NEW SERVER SESSION STARTED" in log_content
+        assert "Started at       :" in log_content
+        assert "Startup rebuild  : YES (--rebuild)" in log_content
     finally:
         sys.stdout = original_stdout
         sys.stderr = original_stderr
-        for logger_name in ("", _fa.HUMAN_LOGGER_NAME, "uvicorn", "uvicorn.error", "uvicorn.access"):
+        for logger_name in ("", "uvicorn", "uvicorn.error", "uvicorn.access"):
             logger = logging.getLogger(logger_name)
             for handler in list(logger.handlers):
                 logger.removeHandler(handler)
@@ -311,13 +267,11 @@ def test_settings_redirects_to_start_until_onboarding_is_complete(monkeypatch):
 
 
 def test_onboarding_page_logs_human_activity(monkeypatch, caplog):
-    page_logger = logging.getLogger("test.pages.human")
-    monkeypatch.setattr(_pages, "_human_logger", page_logger)
     monkeypatch.setattr(_fa, "read_session_user", lambda request: _FAKE_USER)
     monkeypatch.setattr(_pages, "read_session_user", lambda request: _FAKE_USER)
     monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: False)
 
-    caplog.set_level(logging.INFO, logger="test.pages.human")
+    caplog.set_level(logging.INFO, logger="job_hunter_agent.routes.pages")
     client = TestClient(create_app())
     response = client.get("/start")
 
@@ -329,11 +283,9 @@ def test_onboarding_page_logs_human_activity(monkeypatch, caplog):
 
 
 def test_login_page_logs_human_activity(monkeypatch, caplog):
-    auth_logger = logging.getLogger("test.auth.human")
-    monkeypatch.setattr(_auth_google, "_human_logger", auth_logger)
     monkeypatch.setattr(_auth_google, "read_session_user", lambda request: None)
 
-    caplog.set_level(logging.INFO, logger="test.auth.human")
+    caplog.set_level(logging.INFO, logger="job_hunter_agent.routes.auth_google")
     client = TestClient(create_app())
     response = client.get("/login")
 
@@ -665,11 +617,9 @@ def test_logout_redirects_to_login_and_clears_session_cookie():
 
 
 def test_logout_logs_human_activity(monkeypatch, caplog):
-    auth_logger = logging.getLogger("test.auth.human")
-    monkeypatch.setattr(_auth_google, "_human_logger", auth_logger)
     monkeypatch.setattr(_auth_google, "read_session_user", lambda request: _FAKE_USER)
 
-    caplog.set_level(logging.INFO, logger="test.auth.human")
+    caplog.set_level(logging.INFO, logger="job_hunter_agent.routes.auth_google")
     client = TestClient(create_app())
     response = client.post("/logout", follow_redirects=False)
 

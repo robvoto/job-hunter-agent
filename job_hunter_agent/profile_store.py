@@ -43,7 +43,6 @@ from job_hunter_agent.global_settings import (
     KEY_ONBOARDING_SETTINGS as GLOBAL_KEY_ONBOARDING_SETTINGS,
 )
 from job_hunter_agent.io_utils import load_parsing_rules, load_ui_labels
-from job_hunter_agent.logging_utils import get_human_logger
 from job_hunter_agent.match_labels import MATCH_LEVELS, normalize_match_levels
 from job_hunter_agent.parsing_schema import (
     KEY_P_ROUTING,
@@ -1020,7 +1019,7 @@ def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
             (user_id, json.dumps(persisted, ensure_ascii=False)),
         )
     log_settings_change(
-        get_human_logger(),
+        logger,
         scope="PROFILE_SETTINGS",
         before=current,
         after=normalized,

@@ -2,7 +2,6 @@
 
 import json
 import logging
-from contextlib import contextmanager
 
 from job_hunter_agent import (
     job_review_pipeline,
@@ -229,27 +228,6 @@ def _patch_llm_review_path(monkeypatch, payload):
     monkeypatch.setattr(
         job_review_pipeline, "build_role_summary", lambda record, details_text, profile: "summary"
     )
-
-
-@contextmanager
-def _attached_file_handler(logger_name: str, path, *, propagate: bool | None = None):
-    logger = logging.getLogger(logger_name)
-    handler = logging.FileHandler(path, encoding="utf-8")
-    handler.setLevel(logging.INFO)
-    handler.setFormatter(logging.Formatter("%(message)s"))
-    old_level = logger.level
-    old_propagate = logger.propagate
-    logger.setLevel(logging.INFO)
-    if propagate is not None:
-        logger.propagate = propagate
-    logger.addHandler(handler)
-    try:
-        yield
-    finally:
-        logger.removeHandler(handler)
-        handler.close()
-        logger.setLevel(old_level)
-        logger.propagate = old_propagate
 
 
 def test_apply_source_metadata_to_record_preserves_direct_employer_kind():
@@ -914,7 +892,10 @@ def test_llm_title_judgment_unavailable_falls_through_safely(monkeypatch):
     assert RECORD_LLM_TITLE_JUDGMENT_KEY not in updated_record
 
 
-def test_pipeline_logs_single_human_block_for_title_rejection(tmp_path, monkeypatch):
+def test_pipeline_logs_curated_summary_at_info_and_trace_at_debug(tmp_path, monkeypatch):
+    """INFO-level output holds only the curated per-job summary; the raw pipeline
+    trace (title gate, ONET/LLM judgment markers) only shows up once the level is
+    lowered to DEBUG — this is what `--debug` controls in production."""
     record = _base_record("apsjobs", "apsjobs_detail_page", "card")
     record[RECORD_JOB_KEY] = "apsjobs:a05oy00000pwiq1yap"
     record[RECORD_TITLE_KEY] = "ServiceNow Team Member"
@@ -923,8 +904,8 @@ def test_pipeline_logs_single_human_block_for_title_rejection(tmp_path, monkeypa
         "https://www.apsjobs.gov.au/s/job-details?title=servicenow-team-member&Id=a05OY00000PWIQ1YAP"
     )
     context = _review_context("APSJOBS")
-    human_log_path = tmp_path / "server-human.log"
-    debug_log_path = tmp_path / "server-debug.log"
+    info_log_path = tmp_path / "info.log"
+    debug_log_path = tmp_path / "debug.log"
 
     monkeypatch.setattr(
         job_review_pipeline,
@@ -954,38 +935,49 @@ def test_pipeline_logs_single_human_block_for_title_rejection(tmp_path, monkeypa
     )
     monkeypatch.setattr(job_review_pipeline, "get_source_display_label", lambda source: "APSJobs")
 
-    with (
-        _attached_file_handler("job_hunter.human", human_log_path, propagate=False),
-        _attached_file_handler("job_hunter_agent.job_review_pipeline", debug_log_path),
-    ):
-        review_pre_detail_normalized_job(record, context)
+    pipeline_logger = logging.getLogger("job_hunter_agent.job_review_pipeline")
+    old_level = pipeline_logger.level
+    pipeline_logger.setLevel(logging.DEBUG)
 
-    human_output = human_log_path.read_text(encoding="utf-8")
+    info_handler = logging.FileHandler(info_log_path, encoding="utf-8")
+    info_handler.setLevel(logging.INFO)
+    info_handler.setFormatter(logging.Formatter("%(message)s"))
+
+    debug_handler = logging.FileHandler(debug_log_path, encoding="utf-8")
+    debug_handler.setLevel(logging.DEBUG)
+    debug_handler.setFormatter(logging.Formatter("%(message)s"))
+
+    pipeline_logger.addHandler(info_handler)
+    pipeline_logger.addHandler(debug_handler)
+    try:
+        review_pre_detail_normalized_job(record, context)
+    finally:
+        pipeline_logger.removeHandler(info_handler)
+        pipeline_logger.removeHandler(debug_handler)
+        info_handler.close()
+        debug_handler.close()
+        pipeline_logger.setLevel(old_level)
+
+    info_output = info_log_path.read_text(encoding="utf-8")
     debug_output = debug_log_path.read_text(encoding="utf-8")
 
-    assert human_output.count("=" * 72) == 2
-    assert human_output.count("ServiceNow Team Member") == 1
-    assert human_output.count("Australian Federal Police") == 1
+    assert info_output.count("=" * 72) == 2
+    assert info_output.count("ServiceNow Team Member") == 1
+    assert info_output.count("Australian Federal Police") == 1
     assert (
-        human_output.count(
+        info_output.count(
             "https://www.apsjobs.gov.au/s/job-details?title=servicenow-team-member&Id=a05OY00000PWIQ1YAP"
         )
         == 1
     )
-    assert human_output.count("REJECTED") == 1
-    normalized_human_output = " ".join(human_output.split())
+    assert info_output.count("REJECTED") == 1
+    normalized_info_output = " ".join(info_output.split())
     assert (
         "The title suggests a general ServiceNow platform role rather than a Business Analyst, Scrum Master or consulting role."
-        in normalized_human_output
+        in normalized_info_output
     )
-    assert "needs title review" not in human_output
-    assert "TITLE_NOT_TARGET" not in human_output
-    assert "LLM_TITLE_NOT_TARGET" not in human_output
-    assert "apsjobs:a05oy00000pwiq1yap" not in human_output
-    assert "[APSJOBS] [APSJOBS]" not in human_output
-    assert "BOARD" not in human_output
-    assert "TARGET" not in human_output
-    assert "Description fetched" not in human_output
+    assert "PIPELINE][TITLE_GATE" not in info_output
+    assert "PIPELINE][LLM_TITLE_JUDGMENT" not in info_output
 
     assert "PIPELINE][TITLE_GATE" in debug_output
     assert "LLM_TITLE_NOT_TARGET" in debug_output
@@ -1003,7 +995,7 @@ def test_explicit_title_reject_rule_logs_immediate_title_reject(monkeypatch, cap
         lambda title, profile: {"ok": False, "reason": "TITLE_BAD_KEYWORD:sap"},
     )
 
-    with caplog.at_level(logging.INFO, logger="job_hunter_agent.job_review_pipeline"):
+    with caplog.at_level(logging.DEBUG, logger="job_hunter_agent.job_review_pipeline"):
         outcome, updated_record, _, should_fetch = review_pre_detail_normalized_job(record, context)
 
     assert should_fetch is False
@@ -1223,7 +1215,7 @@ def test_deterministic_keep_candidate_requires_full_llm_review(monkeypatch, capl
 
     record = _base_record("seek", "seek_detail", "card")
 
-    with caplog.at_level(logging.INFO):
+    with caplog.at_level(logging.DEBUG):
         outcome, updated_record, _ = review_post_detail_normalized_job(
             record, _review_context("SEEK")
         )
@@ -1347,7 +1339,7 @@ def test_fit_review_logs_shared_requirement_score_diagnostics(monkeypatch, caplo
     _patch_llm_review_path(monkeypatch, payload)
 
     record = _base_record("seek", "seek_detail", "card")
-    with caplog.at_level(logging.INFO, logger="job_hunter_agent.job_review_pipeline"):
+    with caplog.at_level(logging.DEBUG, logger="job_hunter_agent.job_review_pipeline"):
         review_post_detail_normalized_job(record, _review_context("SEEK"))
 
     messages = [entry.message for entry in caplog.records]
@@ -1390,7 +1382,7 @@ def test_fit_review_logs_role_duration_requirement_diagnostics(monkeypatch, capl
     _patch_llm_review_path(monkeypatch, payload)
 
     record = _base_record("seek", "seek_detail", "card")
-    with caplog.at_level(logging.INFO, logger="job_hunter_agent.job_review_pipeline"):
+    with caplog.at_level(logging.DEBUG, logger="job_hunter_agent.job_review_pipeline"):
         review_post_detail_normalized_job(record, _review_context("SEEK"))
 
     messages = [entry.message for entry in caplog.records]
@@ -1420,7 +1412,7 @@ def test_onet_decision_log_emitted_for_title_not_target(caplog, monkeypatch):
         ),
     )
 
-    with caplog.at_level(logging.INFO, logger="job_hunter_agent.job_review_pipeline"):
+    with caplog.at_level(logging.DEBUG, logger="job_hunter_agent.job_review_pipeline"):
         review_pre_detail_normalized_job(record, context)
 
     messages = [r.message for r in caplog.records]

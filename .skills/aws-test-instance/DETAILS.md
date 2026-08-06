@@ -32,8 +32,6 @@ Use this file only when the task needs exact AWS host facts or repeatable CLI co
 ## Instance-side logs
 
 Primary files:
-- `/var/lib/job-hunter/output/server-debug.log`
-- `/var/lib/job-hunter/output/server-human.log`
 - `/var/lib/job-hunter/output/server.log`
 - `/var/lib/job-hunter/output/last_run_summary.txt`
 - `/var/lib/job-hunter/output/uncertainty.jsonl`
@@ -106,7 +104,7 @@ cmd_id=$(aws ssm send-command \
   --instance-ids i-055b97e901418d3ad \
   --document-name AWS-RunShellScript \
   --comment "Read Job Hunter logs" \
-  --parameters commands='["tail -n 120 /var/lib/job-hunter/output/server-debug.log || true","echo","tail -n 80 /var/lib/job-hunter/output/server-human.log || true","echo","cat /var/lib/job-hunter/output/last_run_summary.txt || true"]' \
+  --parameters commands='["tail -n 150 /var/lib/job-hunter/output/server.log || true","echo","cat /var/lib/job-hunter/output/last_run_summary.txt || true"]' \
   --region ap-southeast-2 \
   --query 'Command.CommandId' \
   --output text)
@@ -145,10 +143,9 @@ aws ssm get-command-invocation \
 
 Check in this order:
 1. `last_run_summary.txt`
-2. `server-human.log`
-3. `server-debug.log`
-4. `systemctl status job-hunter`
-5. EC2 console output if the app seems to have restarted
+2. `server.log`
+3. `systemctl status job-hunter`
+4. EC2 console output if the app seems to have restarted
 
 ### Known host-side failure already observed
 

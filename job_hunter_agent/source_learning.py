@@ -97,7 +97,7 @@ def deterministic_review_outcome(
 
     def _log(rule: str, decision: str, grade: str) -> dict:
 
-        logger.info(
+        logger.debug(
             format_log_block(
                 "det-review",
                 {
@@ -345,7 +345,7 @@ def resolve_llm_review_payload(
 
     if cached:
         if learning_only and cached.get("learning_candidates"):
-            logger.info(
+            logger.debug(
                 "[REVIEW][PAYLOAD] source=%s job_key=%s title=%r company=%r mode=%s cache=HIT",
                 source,
                 job_key,
@@ -357,7 +357,7 @@ def resolve_llm_review_payload(
             return {**cached, "payload_source": "cache"}
 
         if not learning_only and cached.get("fit_review"):
-            logger.info(
+            logger.debug(
                 "[REVIEW][PAYLOAD] source=%s job_key=%s title=%r company=%r mode=%s cache=HIT",
                 source,
                 job_key,
@@ -371,7 +371,7 @@ def resolve_llm_review_payload(
     if not llm_is_enabled():
         raise RuntimeError("LLM review requested but no provider key is configured")
 
-    logger.info(
+    logger.debug(
         "[REVIEW][PAYLOAD] source=%s job_key=%s title=%r company=%r mode=%s cache=MISS"
         " description_chars_fetched=%d description_chars_sent_to_llm=%d truncation_applied=%s",
         source,

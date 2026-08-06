@@ -499,7 +499,7 @@ def test_onet_classify_log_emitted(tmp_db, caplog):
     """A structured ONET_TITLE_CLASSIFY log line must be written for every classification."""
     import logging
 
-    with caplog.at_level(logging.INFO, logger="job_hunter_agent.occupation_taxonomy"):
+    with caplog.at_level(logging.DEBUG, logger="job_hunter_agent.occupation_taxonomy"):
         classify_title(
             "Senior Software Engineer - Java daily rates up to $1100!",
             _SOFTWARE_PROFILE,
@@ -578,7 +578,7 @@ def test_multicode_embedded_phrase_all_inside_target_returns_near(tmp_db):
 def test_onet_classify_logs_fresh_and_cached_lookups(tmp_db, caplog):
     import logging
 
-    with caplog.at_level(logging.INFO, logger="job_hunter_agent.occupation_taxonomy"):
+    with caplog.at_level(logging.DEBUG, logger="job_hunter_agent.occupation_taxonomy"):
         classify_title("business analyst", _ANALYST_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
         classify_title("business analyst", _ANALYST_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
 

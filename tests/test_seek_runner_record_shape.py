@@ -494,7 +494,7 @@ def test_seek_list_page_diagnostics_logs_challenge_state(caplog):
         card_count=0,
     )
 
-    with caplog.at_level(logging.INFO, logger="job_hunter_agent.scrapers.seek_runner"):
+    with caplog.at_level(logging.DEBUG, logger="job_hunter_agent.scrapers.seek_runner"):
         status = _log_seek_list_page_diagnostics(
             "[SEEK p1/3]",
             page,

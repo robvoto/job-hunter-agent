@@ -1,6 +1,7 @@
 """Route handlers for pages."""
 
 import json
+import logging
 from html import escape as _html_escape
 from pathlib import Path
 
@@ -50,12 +51,12 @@ from job_hunter_agent.profile_store import (
 )
 from job_hunter_agent.routes.responses import html_response
 from job_hunter_agent.user_context import get_user_id_for_runtime
-from job_hunter_agent.logging_utils import get_human_logger
 
 router = APIRouter()
 
+logger = logging.getLogger(__name__)
+
 JOB_HUNTER_LOGO_SRC = "/static/assets/job_hunter_img.png"
-_human_logger = get_human_logger()
 
 
 def _describe_session_user(request: Request) -> str:
@@ -75,7 +76,7 @@ def _log_page_event(request: Request, page_label: str, message: str | None = Non
     detail = f"PAGE | {page_label} | user={_describe_session_user(request)}"
     if message:
         detail = f"{detail} | {message}"
-    _human_logger.info(detail)
+    logger.info(detail)
 
 
 def _build_top_utility_bar_html(

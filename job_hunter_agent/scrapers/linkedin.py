@@ -307,7 +307,7 @@ class LinkedInScraper(BaseJobScraper):
         )
         targets = self._build_search_targets(search_settings)
         if not targets:
-            logger.info("[LinkedIn] no search targets configured; skipping")
+            logger.debug("[LinkedIn] no search targets configured; skipping")
             return kept_records, audit_rows, skill_observations
 
         review_context = ReviewPipelineContext(
@@ -323,7 +323,7 @@ class LinkedInScraper(BaseJobScraper):
         )
 
         total_targets = len(targets)
-        logger.info(
+        logger.debug(
             format_debug_marker(
                 "BOARD_START",
                 {
@@ -336,11 +336,11 @@ class LinkedInScraper(BaseJobScraper):
         try:
             for target_index, target in enumerate(targets, start=1):
                 if run_stop_requested():
-                    logger.info("[LinkedIn] stop requested before target start; ending scrape")
+                    logger.debug("[LinkedIn] stop requested before target start; ending scrape")
                     break
                 target_tag = f"[LinkedIn target {target_index}/{total_targets}]"
                 _set_linkedin_run_progress(target_index, total_targets)
-                logger.info(
+                logger.debug(
                     "\n"
                     "================================================================\n"
                     "  STARTING LINKEDIN TARGET %d/%d\n"
@@ -360,7 +360,7 @@ class LinkedInScraper(BaseJobScraper):
                 )
                 try:
                     fetch_started_at = time.monotonic()
-                    logger.info(
+                    logger.debug(
                         "%s jobspy fetch start | search_term=%r | location=%r | distance=%s | scope=%s | results_wanted=%d | hours_old=%d | easy_apply=%r | sort_newest_first=%s",
                         target_tag,
                         target["search_term"] or "(unset)",
@@ -373,25 +373,25 @@ class LinkedInScraper(BaseJobScraper):
                         target["sort_newest_first"],
                     )
                     rows = self._fetch_jobspy(target)
-                    logger.info(
+                    logger.debug(
                         "%s jobspy fetch done | elapsed_ms=%d | rows=%s",
                         target_tag,
                         int((time.monotonic() - fetch_started_at) * 1000),
                         "none" if rows is None else len(rows),
                     )
                 except InterruptedError:
-                    logger.info("%s jobspy fetch cancelled due to stop request", target_tag)
+                    logger.debug("%s jobspy fetch cancelled due to stop request", target_tag)
                     break
                 except Exception as exc:
                     logger.warning("%s jobspy call failed: %s: %s", target_tag, type(exc).__name__, exc)
                     continue
 
                 if run_stop_requested():
-                    logger.info("%s stop requested after jobspy fetch; ending scrape", target_tag)
+                    logger.debug("%s stop requested after jobspy fetch; ending scrape", target_tag)
                     break
 
                 if rows is None or len(rows) == 0:
-                    logger.info("%s no results", target_tag)
+                    logger.debug("%s no results", target_tag)
                     continue
 
                 if target.get("sort_newest_first"):
@@ -404,7 +404,7 @@ class LinkedInScraper(BaseJobScraper):
                     except Exception:
                         pass
 
-                logger.info("%s rows=%d", target_tag, len(rows))
+                logger.debug("%s rows=%d", target_tag, len(rows))
 
                 total_rows = len(rows)
                 for row_index, (_, row) in enumerate(rows.iterrows(), start=1):
@@ -415,7 +415,7 @@ class LinkedInScraper(BaseJobScraper):
                         total_rows=total_rows,
                     )
                     if run_stop_requested():
-                        logger.info("[LinkedIn] stop requested; ending scrape")
+                        logger.debug("[LinkedIn] stop requested; ending scrape")
                         break
                     record = normalize_jobspy_record(
                         row,
@@ -429,7 +429,7 @@ class LinkedInScraper(BaseJobScraper):
                     _backfill_linkedin_posted_age(record, self.run_iso)
                     record[RECORD_DESCRIPTION_SOURCE_KEY] = "linkedin_full_description"
                     record[RECORD_DETAILS_TEXT_KEY] = str(record.get(RECORD_DETAILS_TEXT_KEY) or "")
-                    logger.info(
+                    logger.debug(
                         "[PIPELINE][CARD_NORMALIZED] source=LINKEDIN job_key=%s title=%r company=%r url=%r description_chars=%d",
                         record.get(RECORD_JOB_KEY),
                         record.get(RECORD_TITLE_KEY),
@@ -439,7 +439,7 @@ class LinkedInScraper(BaseJobScraper):
                     )
                     job_key = str(record.get(RECORD_JOB_KEY) or "").strip()
                     if job_key and job_key in seen_job_keys:
-                        logger.info("%s duplicate job_key=%s across LinkedIn targets; skipping", target_tag, job_key)
+                        logger.debug("%s duplicate job_key=%s across LinkedIn targets; skipping", target_tag, job_key)
                         continue
                     if job_key:
                         seen_job_keys.add(job_key)
@@ -447,7 +447,7 @@ class LinkedInScraper(BaseJobScraper):
                     closed_signals = self._detect_closed_job_signals(record)
                     if closed_signals:
                         record[RECORD_JOB_QUALITY_SIGNALS_KEY] = closed_signals
-                        logger.info(
+                        logger.debug(
                             "%s closed listing detected; will reject before detail review",
                             target_tag,
                         )
@@ -469,7 +469,7 @@ class LinkedInScraper(BaseJobScraper):
                     if outcome["decision"] == "KEEP":
                         skill_observations.extend(record_skill_observations)
                         kept_records.append(record)
-                        logger.info(
+                        logger.debug(
                             "%s KEPT %s @ %s | %s | %s | %s | %s",
                             target_tag,
                             record.get(RECORD_TITLE_KEY),
@@ -483,7 +483,7 @@ class LinkedInScraper(BaseJobScraper):
                     if outcome["decision"] != "KEEP":
                         continue
                 if run_stop_requested():
-                    logger.info("%s stop requested after row review; ending scrape", target_tag)
+                    logger.debug("%s stop requested after row review; ending scrape", target_tag)
                     break
         except Exception as exc:
             raise PartialSourceResultsError(
@@ -494,7 +494,7 @@ class LinkedInScraper(BaseJobScraper):
                 original_error=exc,
             ) from exc
 
-        logger.info(
+        logger.debug(
             format_debug_marker(
                 "BOARD_END",
                 {

@@ -205,25 +205,15 @@ def _log_llm_call(resp: Any, purpose: str, model: str) -> None:
         session_usd=_session_cost_usd,
     )
     append_llm_cost_log(_LLM_COSTS_PATH, entry)
-    if DEBUG_MODE:
-        logger.info(
-            "[LLM][COST] purpose=%s model=%s input_tokens=%d output_tokens=%d call_cost_usd=%.6f session_cost_usd=%.6f",
-            purpose,
-            model,
-            tok_in,
-            tok_out,
-            cost,
-            _session_cost_usd,
-        )
-    else:
-        logger.info(
-            "[LLM] %-30s  $%.4f  (%d in + %d out tokens)  session: $%.4f",
-            purpose,
-            cost,
-            tok_in,
-            tok_out,
-            _session_cost_usd,
-        )
+    logger.debug(
+        "[LLM][COST] purpose=%s model=%s input_tokens=%d output_tokens=%d call_cost_usd=%.6f session_cost_usd=%.6f",
+        purpose,
+        model,
+        tok_in,
+        tok_out,
+        cost,
+        _session_cost_usd,
+    )
 
 
 def _llm_usage_summary(resp: Any, model: str) -> dict[str, Any]:
@@ -287,7 +277,7 @@ def _log_llm_model_once() -> str:
     global _llm_model_logged
     model = get_llm_model()
     if not _llm_model_logged:
-        logger.info("[LLM][MODEL] using model=%s (source=user settings)", model)
+        logger.debug("[LLM][MODEL] using model=%s (source=user settings)", model)
         _llm_model_logged = True
     return model
 
@@ -1135,7 +1125,7 @@ def normalize_llm_requirement_coverage(
             )
             matched_candidate_fact = capability_name or matched_candidate_fact
         elif requirement_type == LLM_UNCERTAIN_COVERAGE_REQUIREMENT_TYPE:
-            logger.info(
+            logger.debug(
                 "[LLM][COVERAGE] purpose=fit_review uncertain_requirement_type requirement=%r status=%s importance=%s",
                 requirement,
                 status,
@@ -1195,7 +1185,7 @@ def normalize_llm_requirement_coverage(
             if recovered_capability:
                 capability_name = recovered_capability
                 matched_candidate_fact = recovered_capability
-                logger.info(
+                logger.debug(
                     "[LLM][COVERAGE] recovered canonical capability=%r from profile_support for requirement=%r",
                     recovered_capability,
                     requirement,
@@ -1594,7 +1584,7 @@ def normalize_llm_review_payload(
                 _key = f"{_item.get('importance', 'preferred')}.{_item.get('status', 'not_shown')}"
                 _imp_status[_key] = _imp_status.get(_key, 0) + 1
             _imp_status_str = " ".join(f"{k}={v}" for k, v in sorted(_imp_status.items()))
-            logger.info(
+            logger.debug(
                 "[LLM][COVERAGE] purpose=fit_review grade_used=%s derived_grade=%s model_grade=%s"
                 " coverage_source=%s total=%d breakdown=[%s] capabilities=%s",
                 grade_to_use,
@@ -1690,7 +1680,7 @@ def llm_suggest_rejection_blockers(job_description_text: str, llm_client: Any = 
         model = _log_llm_model_once()
         _desc_limit = get_llm_job_description_max_chars()
         _desc_truncated = description[:_desc_limit]
-        logger.info(
+        logger.debug(
             "[LLM][REQUEST] purpose=rejection_suggestions model=%s description_chars_fetched=%d"
             " description_chars_sent_to_llm=%d truncation_applied=%s max_output_tokens=%d",
             model,
@@ -1718,11 +1708,11 @@ def llm_suggest_rejection_blockers(job_description_text: str, llm_client: Any = 
     suggestions = normalize_rejection_blocker_suggestions(getattr(resp, "output_text", ""))
     raw_output = str(getattr(resp, "output_text", "") or "").strip()
     if raw_output:
-        logger.info(
+        logger.debug(
             "[LLM][RESULT] purpose=rejection_suggestions raw=%r",
             raw_output[: get_llm_raw_output_log_max_chars()],
         )
-    logger.info("[LLM][RESULT] purpose=rejection_suggestions normalized=%s", suggestions)
+    logger.debug("[LLM][RESULT] purpose=rejection_suggestions normalized=%s", suggestions)
     if not suggestions and str(getattr(resp, "output_text", "") or "").strip():
         logger.warning(
             "[LLM][WARN] purpose=rejection_suggestions output_could_not_be_normalized=%r",
@@ -1760,7 +1750,7 @@ def name_capability_clusters(clusters: list[dict[str, Any]], llm_client: Any = N
 
     try:
         _model = get_llm_model()
-        logger.info(
+        logger.debug(
             "[LLM][REQUEST] purpose=capability_naming model=%s input_clusters=%d max_output_tokens=%d",
             _model,
             len(payload),
@@ -1902,7 +1892,7 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
         try:
             # job_description_text is already truncated by the caller
             # (source_learning.resolve_llm_review_payload). Log its length directly.
-            logger.info(
+            logger.debug(
                 "[LLM][REQUEST] purpose=%s model=%s input_chars=%d max_output_tokens=%d attempt=%d/%d",
                 purpose,
                 model,
@@ -1999,7 +1989,7 @@ def llm_extract_job_requirements(job_description_text: str, llm_client: Any = No
         model = _log_llm_model_once()
         _desc_limit = get_llm_job_description_max_chars()
         _desc_truncated = description[:_desc_limit]
-        logger.info(
+        logger.debug(
             "[LLM][REQUEST] purpose=job_requirements model=%s description_chars_fetched=%d"
             " description_chars_sent_to_llm=%d truncation_applied=%s max_output_tokens=%d",
             model,
@@ -2027,7 +2017,7 @@ def llm_extract_job_requirements(job_description_text: str, llm_client: Any = No
         return []
     raw_output = str(getattr(resp, "output_text", "") or "").strip()
     if raw_output:
-        logger.info(
+        logger.debug(
             "[LLM][RESULT] purpose=job_requirements raw=%r",
             raw_output[: get_llm_raw_output_log_max_chars()],
         )
@@ -2068,7 +2058,7 @@ def llm_classify_section_label(label: str, llm_client: Any = None) -> dict[str, 
 
     try:
         model = _log_llm_model_once()
-        logger.info(
+        logger.debug(
             "[LLM][REQUEST] purpose=section_label_classification model=%s input_chars=%d max_output_tokens=%d",
             model,
             len(label),
@@ -2103,7 +2093,7 @@ def llm_classify_section_label(label: str, llm_client: Any = None) -> dict[str, 
         logger.warning("[LLM][WARN] purpose=section_label_classification invalid_bucket=%r", bucket)
         return None
 
-    logger.info(
+    logger.debug(
         "[LLM][RESULT] purpose=section_label_classification label=%r bucket=%s confident=%s",
         label,
         bucket,
@@ -2151,7 +2141,7 @@ def llm_judge_title(
     max_output_tokens = get_llm_title_judgment_max_output_tokens()
     try:
         model = _log_llm_model_once()
-        logger.info(
+        logger.debug(
             "[LLM][REQUEST] purpose=title_judgment model=%s input_chars=%d max_output_tokens=%d",
             model,
             len(title),
@@ -2186,7 +2176,7 @@ def llm_judge_title(
         logger.warning("[LLM][WARN] purpose=title_judgment invalid_verdict=%r", verdict)
         return None
 
-    logger.info(
+    logger.debug(
         "[LLM][RESULT] purpose=title_judgment title=%r verdict=%s reason=%r",
         title,
         verdict,

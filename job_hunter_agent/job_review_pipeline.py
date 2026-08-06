@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any, Callable
 
-from job_hunter_agent.config import DEBUG_MODE
 from job_hunter_agent import occupation_taxonomy
 
 logger = logging.getLogger(__name__)
@@ -425,7 +424,7 @@ def _pipeline_log(stage: str, record: dict, source_name: str = "", **kwargs: Any
         _job_start_times[job_key] = time.monotonic()
         _job_start_costs[job_key] = get_session_cost_usd()
         src = source.upper() if source else "?"
-        logger.info(
+        logger.debug(
             format_debug_marker(
                 "JOB_START",
                 {
@@ -440,7 +439,7 @@ def _pipeline_log(stage: str, record: dict, source_name: str = "", **kwargs: Any
         return
 
     if stage == "TITLE_GATE":
-        logger.info(
+        logger.debug(
             format_log_block(
                 "PIPELINE][TITLE_GATE",
                 {
@@ -457,7 +456,7 @@ def _pipeline_log(stage: str, record: dict, source_name: str = "", **kwargs: Any
         return
 
     if stage == "CARD_GATE":
-        logger.info(
+        logger.debug(
             format_log_block(
                 "PIPELINE][CARD_GATE",
                 {
@@ -476,13 +475,11 @@ def _pipeline_log(stage: str, record: dict, source_name: str = "", **kwargs: Any
     if stage == "FINAL_DECISION":
         start_time = _job_start_times.get(job_key)
         total_job_ms = int((time.monotonic() - start_time) * 1000) if start_time is not None else 0
-        from job_hunter_agent.logging_utils import get_human_logger
-
         elapsed = _elapsed(job_key) if start_time is not None else ""
         llm_cost = _job_cost(job_key) if start_time is not None else ""
         if llm_cost == "$0.000000":
             llm_cost = ""
-        get_human_logger().info(
+        logger.info(
             render_human_job_result(
                 record,
                 decision=decision,
@@ -495,7 +492,7 @@ def _pipeline_log(stage: str, record: dict, source_name: str = "", **kwargs: Any
             )
         )
         pause_for_step_through(f"{title} @ {company} ({source}) — {decision or reason}")
-        logger.info(
+        logger.debug(
             format_log_block(
                 "PIPELINE][FINAL_DECISION",
                 {
@@ -508,7 +505,7 @@ def _pipeline_log(stage: str, record: dict, source_name: str = "", **kwargs: Any
                 },
             )
         )
-        logger.info(
+        logger.debug(
             format_debug_marker(
                 "JOB_END",
                 {
@@ -527,7 +524,7 @@ def _pipeline_log(stage: str, record: dict, source_name: str = "", **kwargs: Any
         call = str(kwargs.get("call") or "")
         elapsed_ms = int(kwargs.get("elapsed_ms") or 0)
         payload_source = str(kwargs.get("payload_source") or "llm")
-        logger.info(
+        logger.debug(
             format_log_block(
                 "PIPELINE][LLM_CALL_DONE",
                 {
@@ -546,21 +543,20 @@ def _pipeline_log(stage: str, record: dict, source_name: str = "", **kwargs: Any
         return
 
     # ── Debug-only: show raw stage data for anything else ─────────────────────
-    if DEBUG_MODE:
-        fields: dict[str, Any] = {
-            "source": source,
-            "job_key": job_key,
-            "title": title,
-            "company": company,
-        }
-        fields.update(kwargs)
-        label_width = max(len(k) for k in fields) if fields else 0
-        lines = [f"  [DEBUG][{stage}]"]
-        for label in _PIPELINE_LOG_CORE_FIELDS:
-            lines.append(f"    {label.ljust(label_width)}  {fields[label]}")
-        for label, value in kwargs.items():
-            lines.append(f"    {label.ljust(label_width)}  {value}")
-        logger.info("\n".join(lines))
+    fields: dict[str, Any] = {
+        "source": source,
+        "job_key": job_key,
+        "title": title,
+        "company": company,
+    }
+    fields.update(kwargs)
+    label_width = max(len(k) for k in fields) if fields else 0
+    lines = [f"  [DEBUG][{stage}]"]
+    for label in _PIPELINE_LOG_CORE_FIELDS:
+        lines.append(f"    {label.ljust(label_width)}  {fields[label]}")
+    for label, value in kwargs.items():
+        lines.append(f"    {label.ljust(label_width)}  {value}")
+    logger.debug("\n".join(lines))
 
 
 def _elapsed(job_key: str) -> str:
@@ -764,7 +760,7 @@ def _freeze_fit_score_fields(record: dict, profile: dict) -> None:
     record[RECORD_FIT_SCORE_BREAKDOWN_KEY] = breakdown
     record[RECORD_FIT_LABEL_KEY] = score_to_match_label(fit_points, get_match_levels(profile))
     record[RECORD_FIT_TONE_CLASS_KEY] = score_to_tone_class(fit_points, profile)
-    logger.info(format_occupation_alignment_diagnostics_block(record, fit_points, profile))
+    logger.debug(format_occupation_alignment_diagnostics_block(record, fit_points, profile))
 
 
 def _apply_detail_payload_to_record(
@@ -785,7 +781,7 @@ def _apply_detail_payload_to_record(
     record[RECORD_FIT_SOURCE_TEXT_KEY] = compacted
     record[RECORD_DESCRIPTION_COMPACTION_KEY] = compaction_meta
     if compaction_meta["applied"]:
-        logger.info(
+        logger.debug(
             "[COMPACTION] job=%s original=%d compacted=%d removed=%s",
             record.get(RECORD_JOB_KEY, "<unknown>"),
             compaction_meta["original_char_count"],
@@ -793,7 +789,7 @@ def _apply_detail_payload_to_record(
             compaction_meta["removed_section_labels"],
         )
     elif compaction_meta.get("skip_reason"):
-        logger.info(
+        logger.debug(
             "[COMPACTION][SKIPPED] job=%s status=%s skip_reason=%s removed_candidates=%s",
             record.get(RECORD_JOB_KEY, "<unknown>"),
             compaction_meta.get("compaction_status", ""),
@@ -841,7 +837,7 @@ def _apply_work_type_inference(record: dict, details_text: str) -> None:
     record["work_type_inference_original"] = original
     record["work_type_inference_rule"] = result["rule_id"]
     record["work_type_inference_evidence"] = result["evidence"]
-    logger.info(
+    logger.debug(
         format_log_block(
             "WORK_TYPE][INFERENCE",
             {
@@ -999,7 +995,7 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         source = "rule"
     else:
         if deterministic_review is not None:
-            logger.info(
+            logger.debug(
                 format_log_block(
                     "PIPELINE][DET_KEEP_CANDIDATE",
                     {
@@ -1057,7 +1053,7 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
             capability_name = str(item.get("capability_name") or "").strip()
             if capability_name and status in {"supported", "partially_supported"}:
                 credited_capabilities.append(capability_name)
-        logger.info(
+        logger.debug(
             format_log_block(
                 "fit-review",
                 {
@@ -1079,7 +1075,7 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
                 },
             )
         )
-        logger.info(
+        logger.debug(
             format_requirement_fit_diagnostics_block(
                 record,
                 profile,
@@ -1181,7 +1177,7 @@ def review_pre_detail_normalized_job(
                 "reason": onet.reason,
             }
             _onet_outcome = "REJECT" if onet.result == RESULT_FAR else "FETCH_DETAILS"
-            logger.info(
+            logger.debug(
                 format_log_block(
                     "PIPELINE][ONET_DECISION",
                     {
@@ -1232,7 +1228,7 @@ def review_pre_detail_normalized_job(
             _title_judgment_elapsed_ms = int((time.monotonic() - _title_judgment_t0) * 1000)
             if title_judgment is not None:
                 record[RECORD_LLM_TITLE_JUDGMENT_KEY] = title_judgment
-            logger.info(
+            logger.debug(
                 format_log_block(
                     "PIPELINE][LLM_TITLE_JUDGMENT",
                     {

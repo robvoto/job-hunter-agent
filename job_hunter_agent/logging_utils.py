@@ -5,57 +5,8 @@ from __future__ import annotations
 import contextvars
 from datetime import datetime
 import logging
-import re
 
-HUMAN_LOGGER_NAME = "job_hunter.human"
-TECHNICAL_LOGGER_NAME = "job_hunter.technical"
-HUMAN_LOG_SEPARATOR = "-" * 80
-
-# Console-only: fragments of raw per-stage pipeline trace that duplicate the
-# human-readable per-job summary block. Still written to server-human.log at INFO
-# for post-run debugging — only the terminal display is suppressed.
-CONSOLE_SUPPRESSED_FRAGMENTS = (
-    "[CAPABILITY_SCORING][BELOW_THRESHOLD]",
-    "PIPELINE][ONET_TITLE_CLASSIFY",
-    "PIPELINE][ONET_DECISION",
-    "PIPELINE][LLM_TITLE_JUDGMENT",
-    "PIPELINE][DETAIL_FETCH_START",
-    "PIPELINE][DETAIL_FETCH_DONE",
-    "PIPELINE][FINAL_DECISION",
-    "WORK_TYPE][INFERENCE",
-    "[REVIEW][PAYLOAD]",
-    "[LLM][MODEL]",
-    "[LLM][REQUEST]",
-    "[CAPABILITY_SUPPORT]",
-)
-
-HUMAN_LOG_SUPPRESSED_FRAGMENTS = CONSOLE_SUPPRESSED_FRAGMENTS + (
-    "[DEBUG_LOG][",
-    " title: ",
-    "✗ REJECTED — title filtered out",
-    "✗ REJECTED before reading —",
-    " llm fit_review: elapsed=",
-    "HTTP Request: POST https://api.openai.com",
-    "HTTP Request: GET https://api.openai.com",
-    "[LLM][COST]",
-    "[LLM][RESULT]",
-    "[LLM][CACHE]",
-    "[LLM][WARN]",
-    "[LLM][FAIL]",
-    "[DEBUG][",
-    "[RUN_SUMMARY]",
-    "[RUN][SOURCE_FINAL_STATS",
-    "[Pool]",
-    "Saved ",
-    "workspace_visible=",
-    "The previous workspace state was preserved.",
-    "Workspace results preserved at",
-)
-
-_DUPLICATE_JOB_RESULT_RE = re.compile(
-    r"^\[[^\]]+\]\s+(REJECTED\s+\(|KEPT\s+).+",
-    re.IGNORECASE,
-)
+LOG_BLOCK_SEPARATOR = "-" * 80
 
 _LOG_SOURCE_SCOPE: contextvars.ContextVar[str] = contextvars.ContextVar(
     "job_hunter_log_source_scope",
@@ -97,30 +48,6 @@ class SourceScopeFilter(logging.Filter):
         return True
 
 
-class ConsoleNoiseFilter(logging.Filter):
-    """Console-only filter: hides verbose per-stage pipeline trace.
-
-    These lines are still written to the file log at INFO level for post-run
-    analysis. Only the terminal display is suppressed.
-    """
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        msg = record.getMessage()
-        return not any(fragment in msg for fragment in CONSOLE_SUPPRESSED_FRAGMENTS)
-
-
-class HumanReadableLogFilter(logging.Filter):
-    """Keep server-human.log and console focused on human-readable job/run summaries."""
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        msg = record.getMessage()
-        if any(fragment in msg for fragment in HUMAN_LOG_SUPPRESSED_FRAGMENTS):
-            return False
-        if _DUPLICATE_JOB_RESULT_RE.match(msg.strip()):
-            return False
-        return True
-
-
 def format_log_block(title: str, fields: dict[str, object]) -> str:
     if not fields:
         return f"[{title}]"
@@ -132,7 +59,7 @@ def format_log_block(title: str, fields: dict[str, object]) -> str:
 
 
 def format_debug_marker(marker: str, fields: dict[str, object]) -> str:
-    """Structured debug-only marker for server-debug.log."""
+    """Structured debug-only marker for the server log."""
 
     normalized_marker = str(marker or "").strip().upper() or "EVENT"
     return format_log_block(f"DEBUG_LOG][{normalized_marker}", fields)
@@ -149,11 +76,11 @@ def render_board_final_block(
 ) -> str:
     source_label = str(source_name or "UNKNOWN").strip().upper() or "UNKNOWN"
     return (
-        f"\n{HUMAN_LOG_SEPARATOR}\n"
+        f"\n{LOG_BLOCK_SEPARATOR}\n"
         f"BOARD FINAL {source_label}\n"
         f"Seen: {int(seen)} | Read: {int(read)} | Pages: {int(pages)} | "
         f"Kept: {int(kept)} | Rejected: {int(rejected)}\n"
-        f"{HUMAN_LOG_SEPARATOR}"
+        f"{LOG_BLOCK_SEPARATOR}"
     )
 
 
@@ -167,19 +94,15 @@ def render_server_session_start_block(
 ) -> str:
     started_at_label = started_at.astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
     return (
-        f"\n{HUMAN_LOG_SEPARATOR}\n"
+        f"\n{LOG_BLOCK_SEPARATOR}\n"
         f"NEW SERVER SESSION STARTED\n"
         f"Started at       : {started_at_label}\n"
         f"PID              : {int(pid)}\n"
         f"Debug mode       : {'ON (--debug)' if debug_mode else 'OFF'}\n"
         f"Startup rebuild  : {'YES (--rebuild)' if rebuild_on_startup else 'NO'}\n"
         f"Step-through     : {'ON (--step)' if step_through else 'OFF'}\n"
-        f"{HUMAN_LOG_SEPARATOR}"
+        f"{LOG_BLOCK_SEPARATOR}"
     )
-
-
-def get_human_logger() -> logging.Logger:
-    return logging.getLogger(HUMAN_LOGGER_NAME)
 
 
 def install_log_handler_filters() -> None:
@@ -188,68 +111,57 @@ def install_log_handler_filters() -> None:
         handler.addFilter(SourceScopeFilter())
 
 
-def setup_cli_logging() -> None:
-    """Configure root logger for CLI runs.
+def setup_logging(*, debug: bool = False) -> None:
+    """Configure the root logger: one console handler + one file handler.
 
-    Human-readable output goes to console + ``output/server-human.log``.
-    Full technical output goes to ``output/server-debug.log``.
+    Output goes to the console and ``output/server.log``. At the default INFO
+    level this shows curated, human-facing lines (per-job results, run
+    summaries, session banners, settings/auth changes). Passing ``debug=True``
+    raises the level to DEBUG, adding detailed trace (LLM calls, pipeline
+    stage-by-stage detail, scraper card-by-card detail).
 
-    Mirrors the FastAPI logging config so CLI and server produce identical output.
-    No-op when handlers are already configured (e.g. running inside the server).
+    No-op if handlers are already configured (e.g. running inside tests).
     """
     import logging.config
 
-    from job_hunter_agent.paths import SERVER_DEBUG_LOG_PATH, SERVER_HUMAN_LOG_PATH
+    from job_hunter_agent.paths import SERVER_LOG_PATH
 
     if logging.getLogger().handlers:
         return
 
-    SERVER_HUMAN_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    SERVER_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    level = "DEBUG" if debug else "INFO"
     logging.config.dictConfig(
         {
             "version": 1,
             "disable_existing_loggers": False,
             "formatters": {
-                "human": {
-                    "format": "%(message)s",
+                "console": {
+                    "format": "%(source_scope_prefix)s%(message)s",
                 },
-                "standard": {
+                "file": {
                     "format": "%(asctime)s %(levelname)s %(name)s: %(source_scope_prefix)s%(message)s",
                     "datefmt": "%Y-%m-%d %H:%M:%S",
                 },
             },
             "handlers": {
-                "human_console": {
+                "console": {
                     "class": "logging.StreamHandler",
-                    "level": "INFO",
-                    "formatter": "human",
-                    "stream": "ext://sys.stdout",
+                    "level": level,
+                    "formatter": "console",
+                    "stream": "ext://sys.__stdout__",
                 },
-                "human_file": {
+                "file": {
                     "class": "logging.FileHandler",
-                    "level": "INFO",
-                    "formatter": "human",
-                    "filename": str(SERVER_HUMAN_LOG_PATH),
-                    "encoding": "utf-8",
-                },
-                "debug_file": {
-                    "class": "logging.FileHandler",
-                    "level": "INFO",
-                    "formatter": "standard",
-                    "filename": str(SERVER_DEBUG_LOG_PATH),
+                    "level": level,
+                    "formatter": "file",
+                    "filename": str(SERVER_LOG_PATH),
                     "encoding": "utf-8",
                 },
             },
             "root": {
-                "level": "INFO",
-                "handlers": ["debug_file"],
-            },
-            "loggers": {
-                HUMAN_LOGGER_NAME: {
-                    "level": "INFO",
-                    "handlers": ["human_console", "human_file"],
-                    "propagate": False,
-                },
+                "level": level,
+                "handlers": ["console", "file"],
             },
         }
     )

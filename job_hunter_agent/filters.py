@@ -161,7 +161,7 @@ def suggest_title_block_phrase(
 
     segments = [
         part.strip()
-        for part in re.split(r"\s*(?:\||:|\u2013|\u2014)\s*", raw_title)
+        for part in re.split(r"\s*(?:\||:|–|—)\s*", raw_title)
         if part.strip()
     ]
     if len(segments) > 1:

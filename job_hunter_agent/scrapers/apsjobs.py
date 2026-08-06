@@ -480,7 +480,7 @@ class APSJobsScraper(BaseJobScraper):
         search_settings = get_search_settings(self.profile)
         keywords, targets = build_apsjobs_search_targets(search_settings)
         if not keywords:
-            logger.info("[APSJobs] no search keywords configured; skipping")
+            logger.debug("[APSJobs] no search keywords configured; skipping")
             return kept_records, audit_rows, skill_observations
 
         review_context = ReviewPipelineContext(
@@ -500,7 +500,7 @@ class APSJobsScraper(BaseJobScraper):
 
         PLAYWRIGHT_USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
         total_targets = len(targets)
-        logger.info(
+        logger.debug(
             format_debug_marker(
                 "BOARD_START",
                 {
@@ -525,7 +525,7 @@ class APSJobsScraper(BaseJobScraper):
                         target_tag = f"[APSJobs target {target_index}/{total_targets}]"
                         target_state = _normalize_apsjobs_location_filter(target["location"])
                         _set_apsjobs_run_progress(target_index, total_targets, scanned_titles)
-                        logger.info(
+                        logger.debug(
                             "\n"
                             "================================================================\n"
                             "  STARTING APSJOBS TARGET %d/%d\n"
@@ -573,7 +573,7 @@ class APSJobsScraper(BaseJobScraper):
                                         f"{type(exc).__name__}: {exc}"
                                     ) from exc
                             elif target["location"]:
-                                logger.info(
+                                logger.debug(
                                     "%s APSJobs has state-only location filtering; no state mapping for %r",
                                     target_tag,
                                     target["location"],
@@ -592,7 +592,7 @@ class APSJobsScraper(BaseJobScraper):
                                 ) from exc
 
                             page.wait_for_timeout(5000)
-                            logger.info(
+                            logger.debug(
                                 "%s applied search_term=%r state_filter=%s final_url=%s",
                                 target_tag,
                                 target["search_term"],
@@ -606,16 +606,16 @@ class APSJobsScraper(BaseJobScraper):
                             candidate_links = _collect_candidate_links(
                                 page, page.url or APSJOBS_JOB_SEARCH_URL, int(target["results_wanted"])
                             )
-                            logger.info(
+                            logger.debug(
                                 "%s candidate collection url=%s",
                                 target_tag,
                                 page.url or APSJOBS_JOB_SEARCH_URL,
                             )
                             if not candidate_links:
-                                logger.info("%s no candidate links found", target_tag)
+                                logger.debug("%s no candidate links found", target_tag)
                                 continue
 
-                            logger.info("%s candidate_links=%d", target_tag, len(candidate_links))
+                            logger.debug("%s candidate_links=%d", target_tag, len(candidate_links))
                             for link in candidate_links:
                                 if run_stop_requested():
                                     break
@@ -686,7 +686,7 @@ class APSJobsScraper(BaseJobScraper):
 
                                 skill_observations.extend(record_skill_observations)
                                 kept_records.append(record)
-                                logger.info(
+                                logger.debug(
                                     "%s KEPT %s @ %s | %s | %s | %s",
                                     target_tag,
                                     record.get(RECORD_TITLE_KEY),
@@ -720,7 +720,7 @@ class APSJobsScraper(BaseJobScraper):
                 original_error=exc,
             ) from exc
 
-        logger.info(
+        logger.debug(
             format_debug_marker(
                 "BOARD_END",
                 {

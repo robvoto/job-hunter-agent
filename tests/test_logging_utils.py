@@ -5,7 +5,34 @@ from __future__ import annotations
 from datetime import datetime
 import logging
 
+import pytest
+
 from job_hunter_agent import logging_utils
+
+
+@pytest.fixture
+def bare_root_logger():
+    """Strip the root logger's handlers for the test body (call phase).
+
+    pytest's own logging plugin re-attaches a capture handler at the start of
+    each test's call phase, after fixture setup runs — so handlers must be
+    cleared from within the test body itself, not from fixture setup code.
+    """
+    root = logging.getLogger()
+    restore: list[logging.Handler] = []
+
+    def _clear() -> None:
+        restore.extend(root.handlers)
+        for handler in list(root.handlers):
+            root.removeHandler(handler)
+
+    original_level = root.level
+    yield _clear
+    for handler in list(root.handlers):
+        root.removeHandler(handler)
+    for handler in restore:
+        root.addHandler(handler)
+    root.setLevel(original_level)
 
 
 def test_source_scope_filter_adds_prefix_when_scope_is_bound():
@@ -52,52 +79,6 @@ def test_source_scope_filter_avoids_duplicate_prefix_for_already_tagged_message(
     assert record.source_scope_prefix == ""
 
 
-def test_human_readable_log_filter_suppresses_debug_and_duplicate_result_lines():
-    human_filter = logging_utils.HumanReadableLogFilter()
-
-    debug_record = logging.LogRecord(
-        name="job_hunter_agent.test",
-        level=logging.INFO,
-        pathname=__file__,
-        lineno=1,
-        msg="[LLM][COST] purpose=fit_review",
-        args=(),
-        exc_info=None,
-    )
-    duplicate_record = logging.LogRecord(
-        name="job_hunter_agent.test",
-        level=logging.INFO,
-        pathname=__file__,
-        lineno=1,
-        msg="[APSJOBS] REJECTED (llm title) [LLM_TITLE_NOT_TARGET] Example role",
-        args=(),
-        exc_info=None,
-    )
-    human_record = logging.LogRecord(
-        name="job_hunter_agent.test",
-        level=logging.INFO,
-        pathname=__file__,
-        lineno=1,
-        msg="JOB   Senior Business Analyst @ Example Co",
-        args=(),
-        exc_info=None,
-    )
-    title_stage_record = logging.LogRecord(
-        name="job_hunter_agent.test",
-        level=logging.INFO,
-        pathname=__file__,
-        lineno=1,
-        msg="[APSJOBS]   [APSJOBS] title: title not in your target roles — needs title review",
-        args=(),
-        exc_info=None,
-    )
-
-    assert human_filter.filter(debug_record) is False
-    assert human_filter.filter(duplicate_record) is False
-    assert human_filter.filter(title_stage_record) is False
-    assert human_filter.filter(human_record) is True
-
-
 def test_format_debug_marker_uses_debug_log_prefix():
     marker = logging_utils.format_debug_marker(
         "job_start",
@@ -121,7 +102,7 @@ def test_render_board_final_block_uses_human_summary_layout():
 
     assert "BOARD FINAL APSJOBS" in block
     assert "Seen: 7 | Read: 5 | Pages: 1 | Kept: 2 | Rejected: 5" in block
-    assert block.count(logging_utils.HUMAN_LOG_SEPARATOR) == 2
+    assert block.count(logging_utils.LOG_BLOCK_SEPARATOR) == 2
 
 
 def test_render_server_session_start_block_is_large_and_searchable():
@@ -139,4 +120,60 @@ def test_render_server_session_start_block_is_large_and_searchable():
     assert "Debug mode       : ON (--debug)" in block
     assert "Startup rebuild  : YES (--rebuild)" in block
     assert "Step-through     : OFF" in block
-    assert block.count(logging_utils.HUMAN_LOG_SEPARATOR) == 2
+    assert block.count(logging_utils.LOG_BLOCK_SEPARATOR) == 2
+
+
+def test_setup_logging_writes_single_file_at_info_level_by_default(
+    bare_root_logger, monkeypatch, tmp_path
+):
+    log_path = tmp_path / "server.log"
+    monkeypatch.setattr("job_hunter_agent.paths.SERVER_LOG_PATH", log_path)
+
+    bare_root_logger()
+    logging_utils.setup_logging(debug=False)
+
+    logger = logging.getLogger("job_hunter_agent.some_module")
+    logger.info("curated info line")
+    logger.debug("verbose debug line")
+
+    for handler in logging.getLogger().handlers:
+        handler.flush()
+
+    content = log_path.read_text(encoding="utf-8")
+    assert "curated info line" in content
+    assert "verbose debug line" not in content
+    assert logging.getLogger().level == logging.INFO
+
+
+def test_setup_logging_debug_true_shows_debug_lines(bare_root_logger, monkeypatch, tmp_path):
+    log_path = tmp_path / "server.log"
+    monkeypatch.setattr("job_hunter_agent.paths.SERVER_LOG_PATH", log_path)
+
+    bare_root_logger()
+    logging_utils.setup_logging(debug=True)
+
+    logger = logging.getLogger("job_hunter_agent.some_module")
+    logger.debug("verbose debug line")
+
+    for handler in logging.getLogger().handlers:
+        handler.flush()
+
+    content = log_path.read_text(encoding="utf-8")
+    assert "verbose debug line" in content
+    assert logging.getLogger().level == logging.DEBUG
+
+
+def test_setup_logging_is_noop_when_handlers_already_configured(
+    bare_root_logger, monkeypatch, tmp_path
+):
+    log_path = tmp_path / "server.log"
+    monkeypatch.setattr("job_hunter_agent.paths.SERVER_LOG_PATH", log_path)
+
+    bare_root_logger()
+    sentinel_handler = logging.NullHandler()
+    logging.getLogger().addHandler(sentinel_handler)
+
+    logging_utils.setup_logging(debug=True)
+
+    assert logging.getLogger().handlers == [sentinel_handler]
+    assert not log_path.exists()

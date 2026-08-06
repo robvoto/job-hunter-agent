@@ -87,7 +87,7 @@ The adjustment is applied after Requirement Fit % and before the final 0–100 c
 final_score = clamp(requirement_fit + occupation_adjustment, 0, 100)
 ```
 
-Alignment, reason, adjustment, and the final calculation are logged in `server-human.log` and shown in the "Debug: LLM fit review" panel via `occupation_alignment_diagnostics()` / `format_occupation_alignment_diagnostics_block()` in `fit_scoring.py`.
+Alignment, reason, adjustment, and the final calculation are logged in `server.log` at DEBUG level (`./run --debug`) and shown in the "Debug: LLM fit review" panel via `occupation_alignment_diagnostics()` / `format_occupation_alignment_diagnostics_block()` in `fit_scoring.py`.
 
 The main scoring consumer is:
 
@@ -255,7 +255,7 @@ Salary, location, freshness, Easy Apply / Quick Apply, viewed status, and action
 |---|---|
 | `occupation_alignment` (`same`/`adjacent`/`different`) | LLM-classified; adjustment value (`0`/`-10`/`-20`) is looked up server-side from `scoring_rules.json`, never chosen by the LLM. |
 | Missing or invalid classification | Degrades to a "needs review" state with a zero adjustment. Never rejects the job. |
-| Reason, adjustment, and final calculation | Logged in `server-human.log` and shown in the "Debug: LLM fit review" panel. |
+| Reason, adjustment, and final calculation | Logged in `server.log` at DEBUG level and shown in the "Debug: LLM fit review" panel. |
 
 ### 5. Frozen/display score
 

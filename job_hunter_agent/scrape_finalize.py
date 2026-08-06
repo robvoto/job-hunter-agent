@@ -10,7 +10,6 @@ from job_hunter_agent import workspace_data, workspace_service
 from job_hunter_agent.config import DEBUG_MODE
 from job_hunter_agent.logging_utils import (
     format_log_block,
-    get_human_logger,
     render_board_final_block,
 )
 
@@ -320,10 +319,9 @@ def _build_source_breakdown(
 
 def _log_source_final_stats(run_stats: dict) -> None:
     source_breakdown = run_stats.get("source_breakdown") or []
-    human_logger = get_human_logger()
     for item in source_breakdown:
         source_name = str(item.get("source") or "UNKNOWN").strip().upper()
-        human_logger.info(
+        logger.info(
             render_board_final_block(
                 source_name,
                 seen=int(item.get("seen", 0) or 0),
@@ -347,7 +345,7 @@ def _log_run_summary(run_stats: dict, audit_rows: list[dict]) -> None:
     except Exception:
         pass
 
-    logger.info(
+    logger.debug(
         format_log_block(
             "PIPELINE][RUN_SUMMARY",
             {
@@ -498,11 +496,9 @@ def finalize_scrape_run(
 ) -> str:
     """Persist outputs, rebuild the workspace, and publish indeterminate internal stages."""
 
-    from job_hunter_agent.logging_utils import get_human_logger
     from job_hunter_agent.llm_gate import get_session_cost_usd
     from job_hunter_agent.source_learning import get_llm_truncation_count
 
-    human_logger = get_human_logger()
     # Internal stages have no reliable total, so they remain indeterminate.
     set_run_progress_state(
         "Finalising results\nSource collection complete",
@@ -568,7 +564,7 @@ def finalize_scrape_run(
             context.llm_cache
         )
         if pruned_llm_cache_count:
-            logger.info(
+            logger.debug(
                 "[LLM][CACHE] pruned %d stale cache entries for the active profile fingerprint",
                 pruned_llm_cache_count,
             )
@@ -609,7 +605,7 @@ def finalize_scrape_run(
 
     new_count = len(merged_pool) - len(pool)
 
-    logger.info(
+    logger.debug(
         "[Pool] %d existing + %d new = %d total records", len(pool), new_count, len(merged_pool)
     )
 
@@ -664,7 +660,7 @@ def finalize_scrape_run(
         context.dashboard_min_score,
     )
     if kept_records and visible_current_records == 0 and not context.dashboard_debug_mode:
-        human_logger.info(
+        logger.info(
             "Shortlist result: 0 visible jobs. %d kept job(s) were hidden because they did not meet the workspace minimum score of %d.",
             len(kept_records),
             context.dashboard_min_score,
@@ -691,7 +687,7 @@ def finalize_scrape_run(
         context.llm_cache
     )
     if pruned_llm_cache_count:
-        logger.info(
+        logger.debug(
             "[LLM][CACHE] pruned %d stale cache entries for the active profile fingerprint",
             pruned_llm_cache_count,
         )

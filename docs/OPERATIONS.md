@@ -218,20 +218,19 @@ Background-service rule:
 
 Server logs:
 
-- human-readable runtime output is written to `output/server-human.log`
-- full technical/debug output is written to `output/server-debug.log`
-- both logs are timestamped
-- every server start writes a large `NEW SERVER SESSION STARTED` banner into both logs, including the local start time, PID, and startup flags
+- all runtime output is written to `output/server.log`, timestamped
+- `./run` shows curated INFO-level lines (per-job results, run summaries, session banners, settings/auth changes); `./run --debug` raises the level to DEBUG and adds detailed trace (LLM calls, pipeline stage detail, scraper card detail) to the same file
+- the terminal mirrors the same stream that's written to the file
+- every server start writes a large `NEW SERVER SESSION STARTED` banner into the log, including the local start time, PID, and startup flags
 - on AWS, the EC2 browser-session launcher also prints an `AWS JOB HUNTER SERVICE STARTING` banner directly into `systemd`/`journalctl` before Python starts, so service restarts are obvious even if you are only watching the live service log
-- `./run --debug` writes both logs; the terminal mirrors the same human-readable stream
-- on AWS, `jobhunter-logs` shows `journalctl` plus both app logs, accepts `--since "YYYY-MM-DD HH:MM:SS"` / `--until "YYYY-MM-DD HH:MM:SS"` when you need the pre-restart window, and `jobhunter-logs --follow` now tails the combined human + debug app logs by default
+- on AWS, `jobhunter-logs` shows `journalctl` plus the app log, accepts `--since "YYYY-MM-DD HH:MM:SS"` / `--until "YYYY-MM-DD HH:MM:SS"` when you need the pre-restart window, and `jobhunter-logs --follow` tails the app log by default
 - the AWS service startup path rebuilds saved workspace HTML before serving requests, so `deploy-jobhunter-release` refreshes rendered workspace output as part of a normal deploy
 - browser `console.log` is separate from server logs and only matters for JS running in the page
 - debug/audit uncertainty events are appended to `output/uncertainty.jsonl`
 - reviewable runtime warnings are stored in SQLite `system_warnings` and shown in the admin settings page
 - to emit one, call `job_hunter_agent.runtime_helpers.build_uncertainty_entry()` then `append_uncertainty_log()` with `job_hunter_agent.paths.UNCERTAINTY_LOG_PATH`
 - keep `reason_code` stable so the file stays queryable across agents and future runs
-- run-progress updates are also written into `output/server-debug.log` as `RUN_PROGRESS` markers, so a stuck overlay can be matched to the backend timeline after the fact
+- run-progress updates are also written into `output/server.log` (at DEBUG level, under `./run --debug`) as `RUN_PROGRESS` markers, so a stuck overlay can be matched to the backend timeline after the fact
 
 Run summary semantics:
 

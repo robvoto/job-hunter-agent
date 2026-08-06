@@ -739,14 +739,10 @@ def test_print_run_summary_file_and_stderr_use_single_visible_summary_block(
     assert caplog.text.count("Run complete") == 0
 
 
-def test_log_source_final_stats_emits_one_block_per_source(monkeypatch):
-    messages: list[str] = []
+def test_log_source_final_stats_emits_one_block_per_source(caplog):
+    import logging as _logging
 
-    class _FakeHumanLogger:
-        def info(self, message: str) -> None:
-            messages.append(str(message))
-
-    monkeypatch.setattr(scrape_finalize, "get_human_logger", lambda: _FakeHumanLogger())
+    caplog.set_level(_logging.INFO, logger="job_hunter_agent.scrape_finalize")
 
     scrape_finalize._log_source_final_stats(
         {
@@ -764,6 +760,7 @@ def test_log_source_final_stats_emits_one_block_per_source(monkeypatch):
         }
     )
 
+    messages = [record.getMessage() for record in caplog.records]
     assert len(messages) == 2
     assert "BOARD FINAL SEEK" in messages[0]
     assert "BOARD FINAL LINKEDIN" in messages[1]

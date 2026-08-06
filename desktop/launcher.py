@@ -97,9 +97,10 @@ def _set_env_defaults() -> None:
 # env vars at module import time.
 _set_env_defaults()
 
-from job_hunter_agent.logging_utils import setup_cli_logging
+from job_hunter_agent.config import DEBUG_MODE
+from job_hunter_agent.logging_utils import setup_logging
 
-setup_cli_logging()
+setup_logging(debug=DEBUG_MODE)
 
 import PIL.Image
 import PIL.ImageDraw

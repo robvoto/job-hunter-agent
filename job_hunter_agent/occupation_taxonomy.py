@@ -337,7 +337,7 @@ def _log_classification(
 ) -> None:
     from job_hunter_agent.logging_utils import format_log_block
 
-    logger.info(
+    logger.debug(
         format_log_block(
             "PIPELINE][ONET_TITLE_CLASSIFY",
             {
