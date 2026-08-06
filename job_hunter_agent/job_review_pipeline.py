@@ -656,8 +656,11 @@ def _defer_keep_reuse_until_post_detail(record: dict) -> bool:
 
 
 def _should_check_external_posting_date(record: dict) -> bool:
+    # SEEK blocks fetch_external_html's unauthenticated request with a 403 every time
+    # (no browser session/cookies), so the check can never succeed for SEEK records.
+    # Bridged off here on purpose until it's rerouted through an authenticated fetch.
     return (
-        _source_key(record) in {"linkedin", "seek"}
+        _source_key(record) == "linkedin"
         and str(record.get(RECORD_APPLY_METHOD_KEY) or "").strip().lower() == APPLY_METHOD_EXTERNAL_APPLY
     )
 
