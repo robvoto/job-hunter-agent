@@ -13,7 +13,7 @@ import sys
 import threading
 import time
 import traceback
-from concurrent.futures import TimeoutError as FutureTimeoutError
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, TimeoutError as FutureTimeoutError, wait
 from datetime import datetime
 from typing import Any, Dict, List, Set, cast
 from urllib.parse import urlsplit, urlunsplit
@@ -117,6 +117,7 @@ _SEEK_FAILURE_MESSAGES = {
 }
 SEEK_DIAGNOSTIC_SCREENSHOT_TIMEOUT_MS = 2_000
 SEEK_DETAIL_SESSION_CLOSE_TIMEOUT_SECONDS = 2.0
+SEEK_JOB_WAIT_TIMEOUT_SECONDS = 30.0
 _SEEK_LIST_PAGE_CHALLENGE_MARKERS = (
     "help us keep seek secure",
     "confirm you are human",
@@ -714,6 +715,96 @@ def _review_seek_job_detail(
     return review_post_detail_normalized_job(record, review_context, hooks=hooks)
 
 
+def _review_pre_detail_batch(
+    card_records: list[dict],
+    review_context: ReviewPipelineContext,
+    max_workers: int,
+) -> tuple[list[tuple[int, tuple]], list[tuple[int, dict]]]:
+    """Review title gates concurrently so one slow role cannot block later roles."""
+    if not card_records:
+        return [], []
+
+    executor = ThreadPoolExecutor(max_workers=max(1, max_workers))
+    started_at: dict[int, float] = {}
+    started_lock = threading.Lock()
+
+    def _run_one(index: int, record: dict):
+        with started_lock:
+            started_at[index] = time.monotonic()
+        return review_pre_detail_normalized_job(record, review_context)
+
+    futures = {
+        executor.submit(_run_one, index, record): (index, record)
+        for index, record in enumerate(card_records)
+    }
+    pending = set(futures)
+    pre_decided: list[tuple[int, tuple]] = []
+    needs_detail: list[tuple[int, dict]] = []
+
+    try:
+        while pending:
+            now = time.monotonic()
+            expired = []
+            for future in pending:
+                index, _ = futures[future]
+                with started_lock:
+                    job_started_at = started_at.get(index)
+                if (
+                    job_started_at is not None
+                    and now - job_started_at >= SEEK_JOB_WAIT_TIMEOUT_SECONDS
+                    and not future.done()
+                ):
+                    expired.append(future)
+            for future in expired:
+                pending.remove(future)
+                index, record = futures[future]
+                future.cancel()
+                record[rs.RECORD_DECISION_KEY] = "REJECT"
+                record[rs.RECORD_REJECT_REASON_KEY] = "SEEK_JOB_TIMEOUT"
+                finalize_record(
+                    review_context.job_history,
+                    review_context.audit_rows,
+                    record,
+                    review_context.run_iso,
+                )
+                pre_decided.append(
+                    (
+                        index,
+                        (
+                            {"decision": "REJECT", "reject_reason": "SEEK_JOB_TIMEOUT"},
+                            record,
+                            [],
+                            SEEK_JOB_WAIT_TIMEOUT_SECONDS,
+                        ),
+                    )
+                )
+                logger.warning(
+                    "[SEEK][JOB_TIMEOUT] job_key=%s title=%r timeout_seconds=%s; continuing with other roles",
+                    str(record.get(rs.RECORD_JOB_KEY) or ""),
+                    str(record.get(rs.RECORD_TITLE_KEY) or ""),
+                    SEEK_JOB_WAIT_TIMEOUT_SECONDS,
+                )
+
+            if not pending:
+                break
+
+            done, _ = wait(pending, timeout=0.1, return_when=FIRST_COMPLETED)
+            for future in done:
+                pending.remove(future)
+                index, _ = futures[future]
+                pre_outcome, record, skill_observations, should_fetch_details = future.result()
+                if pre_outcome["decision"] != "KEEP" or not should_fetch_details:
+                    pre_decided.append((index, (pre_outcome, record, skill_observations, 0.0)))
+                else:
+                    needs_detail.append((index, record))
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+
+    pre_decided.sort(key=lambda item: item[0])
+    needs_detail.sort(key=lambda item: item[0])
+    return pre_decided, needs_detail
+
+
 async def _fetch_seek_job_detail_async(record: dict, page) -> dict:
     """Async Playwright fetch — mirrors _fetch_seek_job_detail but uses an async page.
 
@@ -1207,17 +1298,13 @@ def seek_scrape_to_records(
                                         "SEEN_BEFORE" if record.get("seen_before") else "NEW",
                                     )
                         else:
-                            # Phase 2: pre-detail checks (fast, no network)
-                            pre_decided: list[tuple[int, tuple]] = []
-                            needs_detail: list[tuple[int, dict]] = []
-                            for i, record in enumerate(card_records):
-                                pre_outcome, record, _, should_fetch_details = (
-                                    review_pre_detail_normalized_job(record, review_context)
-                                )
-                                if pre_outcome["decision"] != "KEEP" or not should_fetch_details:
-                                    pre_decided.append((i, (pre_outcome, record, [], 0.0)))
-                                else:
-                                    needs_detail.append((i, record))
+                            # Phase 2: title/O*NET/LLM checks run concurrently. A slow role
+                            # cannot hold every later role behind it.
+                            pre_decided, needs_detail = _review_pre_detail_batch(
+                                card_records,
+                                review_context,
+                                n_detail_workers,
+                            )
 
                             # batch_results: card_index -> (outcome, record, skill_obs, elapsed_s)
                             batch_results: dict[int, tuple] = {i: res for i, res in pre_decided}
