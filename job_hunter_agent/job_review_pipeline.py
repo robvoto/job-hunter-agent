@@ -820,13 +820,17 @@ def _apply_source_metadata_to_record(record: dict, details_text: str) -> None:
 
 
 def _apply_work_type_inference(record: dict, details_text: str) -> None:
-    """Refine work_type using description evidence after the description has been fetched.
+    """Refine work_type using title/description evidence after the description has been fetched.
 
     Only applies when the card-declared work type is in the trigger list (e.g. 'Full time').
     The inference rules and contract-signal keywords live in data/knowledge/job_type.json.
+    Title is included because contract/fixed-term signals are often stated only in the
+    title (e.g. "... - Fixed Term to June 2027") and never repeated in the body text.
     """
     original = str(record.get(RECORD_WORK_TYPE_KEY) or "").strip()
-    result = infer_work_type_from_description(original, details_text)
+    title = str(record.get(RECORD_TITLE_KEY) or "").strip()
+    signal_text = f"{title}\n{details_text}" if title else details_text
+    result = infer_work_type_from_description(original, signal_text)
     if result is None:
         return
     record[RECORD_WORK_TYPE_KEY] = result["inferred_type"]

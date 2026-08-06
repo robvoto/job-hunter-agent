@@ -422,6 +422,30 @@ def test_apply_source_metadata_to_record_then_render_job_card_shows_likely_recru
     assert "Source unclear" not in html
 
 
+def test_apply_work_type_inference_reads_contract_signal_from_title_not_just_description():
+    # Reproduces a live case: SEEK tagged the ad "Permanent" in its structured field, and
+    # the only "Fixed Term" evidence is in the title — the description body never repeats it.
+    record = _base_record("seek", "jobAdDetails", "card")
+    record[RECORD_TITLE_KEY] = "Senior Business Analyst -Fixed Term to June 2027"
+    record[RECORD_WORK_TYPE_KEY] = "Permanent"
+    details_text = "Great analyst opportunity working with stakeholders across the business."
+
+    job_review_pipeline._apply_work_type_inference(record, details_text)
+
+    assert record[RECORD_WORK_TYPE_KEY] == "Full Time Contract"
+    assert record["work_type_inference_evidence"] == "fixed term"
+
+
+def test_apply_work_type_inference_permanent_with_no_signal_stays_permanent():
+    record = _base_record("seek", "jobAdDetails", "card")
+    record[RECORD_WORK_TYPE_KEY] = "Permanent"
+    details_text = "Great analyst opportunity working with stakeholders across the business."
+
+    job_review_pipeline._apply_work_type_inference(record, details_text)
+
+    assert record[RECORD_WORK_TYPE_KEY] == "Permanent"
+
+
 def test_review_outcome_is_source_neutral_for_equivalent_normalized_jobs(monkeypatch):
     payload = _keep_review_payload(
         requirement="Delivery governance",

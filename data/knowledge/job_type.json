@@ -68,7 +68,7 @@
       {
         "id": "full_time_to_permanent_or_contract",
         "enabled": true,
-        "trigger_work_types": ["Full time"],
+        "trigger_work_types": ["Full time", "Permanent"],
         "no_signal_infers": "Permanent",
         "contract_signal_infers": "Full Time Contract",
         "contract_signal_keywords": [

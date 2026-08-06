@@ -8,7 +8,7 @@ _RULES = [
     {
         "id": "full_time_to_permanent_or_contract",
         "enabled": True,
-        "trigger_work_types": ["Full time"],
+        "trigger_work_types": ["Full time", "Permanent"],
         "no_signal_infers": "Permanent",
         "contract_signal_infers": "Full Time Contract",
         "contract_signal_keywords": [
@@ -87,6 +87,24 @@ def test_keyword_matching_is_case_insensitive():
     result = infer_work_type_from_description("Full time", desc, _rules=_RULES)
     assert result is not None
     assert result["inferred_type"] == "Full Time Contract"
+
+
+# ── Permanent trigger (source tagged the ad "Permanent" but text says otherwise) ──
+
+
+def test_permanent_no_contract_signal_stays_permanent():
+    desc = "This is a great business analyst opportunity. You will work with stakeholders."
+    result = infer_work_type_from_description("Permanent", desc, _rules=_RULES)
+    assert result is not None
+    assert result["inferred_type"] == "Permanent"
+
+
+def test_permanent_fixed_term_signal_infers_full_time_contract():
+    desc = "Senior Business Analyst -Fixed Term to June 2027\nGreat stakeholder role."
+    result = infer_work_type_from_description("Permanent", desc, _rules=_RULES)
+    assert result is not None
+    assert result["inferred_type"] == "Full Time Contract"
+    assert result["evidence"] == "fixed term"
 
 
 # ── non-trigger work types → no inference ─────────────────────────────────────
