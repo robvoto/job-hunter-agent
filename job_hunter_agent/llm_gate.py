@@ -18,7 +18,6 @@ from openai import APIStatusError, APITimeoutError, OpenAI
 from pydantic import AliasChoices, BaseModel, Field, ValidationError
 
 from job_hunter_agent.config import DEBUG_MODE
-from job_hunter_agent.capability_matrix import derive_job_description_aliases
 from job_hunter_agent.experience_requirements import resolve_role_experience_requirement
 from job_hunter_agent.requirement_classification import classify_requirement_type
 from job_hunter_agent.global_settings import (
@@ -66,7 +65,6 @@ from job_hunter_agent.llm_protocol import (
     LLM_INVALID_POSTING_CHANNEL_KIND,
     LLM_UNCERTAIN_COVERAGE_REQUIREMENT_TYPE,
     LLM_FIT_REVIEW_PROMPT_SHAPE,
-    LLM_ELIGIBILITY_ALIAS_PROMPT_SHAPE,
     LLM_JOB_REQUIREMENTS_PROMPT_SHAPE,
     LLM_LEARNING_ONLY_PROMPT_SHAPE,
     LLM_PROMPT_CAPABILITY_LEVELS_HEADER,
@@ -334,11 +332,6 @@ class _LLMJobRequirementsPayload(BaseModel):
     job_requirements: list[str] = Field(default_factory=list)
 
 
-class _LLMEligibilityAliasPayload(BaseModel):
-    aliases: list[str] = Field(default_factory=list)
-    subtype: str = ""
-
-
 class _LLMReviewPayload(BaseModel):
     fit_review: _LLMReviewDecision | None = None
     learning_candidates: list[_LLMLearningCandidate] = Field(default_factory=list)
@@ -441,7 +434,6 @@ def _load_managed_prompt_lines(key: str) -> tuple[str, ...]:
 
 FIT_REVIEW_DEFAULT_LINES = _load_managed_prompt_lines("llm_fit_review_defaults")
 CAPABILITY_NAMING_DEFAULT_LINES = _load_managed_prompt_lines("llm_capability_naming_defaults")
-ELIGIBILITY_ALIAS_DEFAULT_LINES = _load_managed_prompt_lines("llm_eligibility_alias_defaults")
 JOB_REQUIREMENTS_DEFAULT_LINES = _load_managed_prompt_lines("llm_job_requirements_defaults")
 LEARNING_DEFAULT_LINES = _load_managed_prompt_lines("llm_learning_defaults")
 REJECTION_SUGGESTIONS_DEFAULT_LINES = _load_managed_prompt_lines(
@@ -520,12 +512,6 @@ def build_profile_prompt_context() -> str:
             if not name:
                 continue
             value = "true" if bool(rule.get("value", True)) else "false"
-            aliases = rule.get("aliases") or []
-            alias_text = ", ".join(
-                str(alias).strip()
-                for alias in aliases[: get_llm_capability_rule_aliases_max_items()]
-                if str(alias).strip()
-            ) if isinstance(aliases, list) else ""
             evidence = rule.get("evidence") or []
             evidence_text = ""
             if isinstance(evidence, list):
@@ -535,8 +521,6 @@ def build_profile_prompt_context() -> str:
                     if str(item).strip()
                 )
             label = f"- {name}: {value}"
-            if alias_text:
-                label += f" ({alias_text})"
             if evidence_text:
                 label += f" [{evidence_text}]"
             parts.append(label)
@@ -713,17 +697,6 @@ def build_capability_naming_guidance() -> str:
     parts.extend(f"- {line}" for line in CAPABILITY_NAMING_DEFAULT_LINES)
     parts.extend(["", LLM_PROMPT_CLUSTERS_HEADER])
     return "\n".join(parts)
-
-
-def build_eligibility_alias_guidance() -> str:
-    return "\n".join(
-        [
-            LLM_PROMPT_JSON_ONLY,
-            "You are normalizing one user-provided eligibility fact for deterministic matching.",
-            *[f"- {line}" for line in ELIGIBILITY_ALIAS_DEFAULT_LINES],
-            f"Return exactly this shape: {LLM_ELIGIBILITY_ALIAS_PROMPT_SHAPE}",
-        ]
-    )
 
 
 def build_llm_cache_key(job_description_text: str) -> str:
@@ -1758,56 +1731,6 @@ def llm_suggest_rejection_blockers(job_description_text: str, llm_client: Any = 
     return suggestions
 
 
-def suggest_eligibility_aliases(name: str, llm_client: Any = None) -> dict[str, Any]:
-    """Suggest aliases once when a generic eligibility fact is created or edited."""
-
-    canonical = compact_whitespace(name)
-    if not canonical:
-        raise ValueError("Eligibility name is required")
-    active_client = llm_client or client
-    if active_client is None:
-        return {"aliases": [], "subtype": "", "status": "unavailable"}
-
-    try:
-        model = get_llm_model()
-        response = active_client.responses.parse(
-            model=model,
-            input=[
-                {
-                    "role": "user",
-                    "content": build_eligibility_alias_guidance()
-                    + f"\nCanonical eligibility fact: {canonical}",
-                }
-            ],
-            text_format=_LLMEligibilityAliasPayload,
-            max_output_tokens=get_llm_capability_naming_max_output_tokens(),
-        )
-        _log_llm_call(response, "eligibility_alias_generation", model)
-        parsed = getattr(response, "output_parsed", None)
-        payload = parsed.model_dump() if parsed is not None else {}
-        aliases = derive_job_description_aliases(
-            canonical,
-            payload.get("aliases") if isinstance(payload, dict) else [],
-            max_aliases=get_llm_capability_naming_aliases_max_items(),
-        )
-        subtype = compact_whitespace(payload.get("subtype") if isinstance(payload, dict) else "")
-        return {
-            "aliases": aliases,
-            "subtype": subtype,
-            "status": "generated",
-            "needs_review": bool(aliases),
-            "aliases_auto_generated": bool(aliases),
-        }
-    except Exception as exc:
-        logger.error("[LLM][FAIL] purpose=eligibility_alias_generation error=%s", exc)
-        return {
-            "aliases": [],
-            "subtype": "",
-            "status": "failed",
-            "needs_review": True,
-        }
-
-
 def name_capability_clusters(clusters: list[dict[str, Any]], llm_client: Any = None) -> list[str]:
     """Use the LLM only to label pre-selected deterministic capability clusters."""
     active_client = llm_client or client
@@ -1954,10 +1877,9 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
                 canonical = str(rule.get("name") or "").strip()
                 if not canonical:
                     continue
-                for term in [canonical, *(rule.get("aliases") or [])]:
-                    normalized_term = str(term or "").strip().lower()
-                    if normalized_term:
-                        valid_eligibility_names[normalized_term] = canonical
+                normalized_term = canonical.lower()
+                if normalized_term:
+                    valid_eligibility_names[normalized_term] = canonical
         role_experience = profile.get(KEY_ROLE_EXPERIENCE, [])
         if not valid_capability_names:
             raise ValueError(

@@ -1010,12 +1010,6 @@
       line-height: 1.2;
       color: var(--text-muted);
     }
-    .eligibility-card-review {
-      margin: 0;
-      color: var(--state-warning-text);
-      font-size: var(--text-role-status-font-size);
-      line-height: 1.4;
-    }
     .eligibility-card-actions {
       flex-direction: row;
       align-items: center;

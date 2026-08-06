@@ -176,11 +176,9 @@ def _candidate_eligibility_lookup(profile: dict) -> dict[str, bool]:
         if not isinstance(item, dict):
             continue
         name = str(item.get("name") or "").strip()
-        names = [name, *(item.get("aliases") or [])]
-        for candidate_name in names:
-            key = _normalise_lookup_text(str(candidate_name or ""))
-            if key:
-                lookup[key] = bool(item.get("value", True))
+        key = _normalise_lookup_text(name)
+        if key:
+            lookup[key] = bool(item.get("value", True))
     return lookup
 
 

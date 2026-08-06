@@ -65,7 +65,6 @@ LLM_LEARNING_ONLY_PROMPT_SHAPE = (
 )
 
 LLM_JOB_REQUIREMENTS_PROMPT_SHAPE = '{"job_requirements":["..."]}'
-LLM_ELIGIBILITY_ALIAS_PROMPT_SHAPE = '{"aliases":["..."],"subtype":"licence|registration|qualification|certification|citizenship|work_rights|other|"}'
 
 
 LLM_PROMPT_CAPABILITY_LEVELS_HEADER = "Capability matrix:"

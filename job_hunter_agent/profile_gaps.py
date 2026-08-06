@@ -52,12 +52,8 @@ def _requirement_matches_eligibility(
     for item in candidate_eligibility:
         if not isinstance(item, dict):
             continue
-        names = [str(item.get("name") or ""), *(item.get("aliases") or [])]
-        if not any(
-            (name_norm := _normalize_for_match(name))
-            and (name_norm in requirement_norm or requirement_norm in name_norm)
-            for name in names
-        ):
+        name_norm = _normalize_for_match(str(item.get("name") or ""))
+        if not name_norm or not (name_norm in requirement_norm or requirement_norm in name_norm):
             continue
         raw_value = item.get("value", True)
         if isinstance(raw_value, str):

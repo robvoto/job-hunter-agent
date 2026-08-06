@@ -714,9 +714,9 @@ async function consumeEligibilityPrefillFromUrl() {
     normalizeCapabilityPrefill(fact?.name).toLowerCase() === prefill.toLowerCase()
   );
   if (!existsAlready) {
+    showStatus(window.__JOB_HUNTER_SETTINGS_CLEARANCES_LABELS__.eligibility_add_loading_message, 'loading');
     try {
-      // Same shared save path as the Settings "Add" flow, so this also
-      // triggers the one-time LLM alias suggestion on the backend.
+      // Same shared save path as the Settings "Add" flow.
       const body = await eligibilityEditor.saveEligibilityFact({ name: prefill, value: true });
       eligibilityEditor.upsertFactFromServer(body.eligibility_fact);
       markDirty();

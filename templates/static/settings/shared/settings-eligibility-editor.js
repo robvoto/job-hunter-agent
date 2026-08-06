@@ -10,25 +10,22 @@ export const JobHunterEligibilityEditor = (function () {
     return String(value || '').replace(/\s+/g, ' ').trim();
   }
 
+  function showAddStatus(element, message, kind) {
+    if (!element) return;
+    element.textContent = message;
+    element.className = message ? `field-help inline-status ${kind}` : 'field-help';
+  }
+
   function normalizeFact(fact) {
-    const aliases = Array.isArray(fact?.aliases)
-      ? fact.aliases.map(normalizeText).filter(Boolean)
-      : [];
     return {
       name: normalizeText(fact?.name || ''),
       value: fact?.value !== false,
-      aliases,
-      subtype: normalizeText(fact?.subtype || ''),
       evidence: Array.isArray(fact?.evidence) ? fact.evidence : [],
-      needs_review: Boolean(fact?.needs_review),
-      aliases_auto_generated: Boolean(fact?.aliases_auto_generated),
-      aliases_edited: Boolean(fact?.aliases_edited),
     };
   }
 
   // Shared save path for both the Settings "Add" flow and the job-results
-  // "Add to profile" prefill flow, so both trigger the same one-time LLM
-  // alias suggestion on the backend (see /api/profile/eligibility).
+  // "Add to profile" prefill flow (see /api/profile/eligibility).
   async function saveEligibilityFact(payload) {
     const response = await window.jobHunterFetch('/api/profile/eligibility', {
       method: 'POST',
@@ -60,9 +57,7 @@ export const JobHunterEligibilityEditor = (function () {
   }
 
   function persist() {
-    settingsField('candidate_eligibility_facts').value = JSON.stringify(
-      factState.map(({ displayReview, aliases_edited, ...fact }) => fact)
-    );
+    settingsField('candidate_eligibility_facts').value = JSON.stringify(factState);
   }
 
   function render() {
@@ -81,7 +76,6 @@ export const JobHunterEligibilityEditor = (function () {
     if (!container) return;
     const cards = factState.map((fact, index) => {
       const toggleId = `eligibility_toggle_${index}`;
-      const reviewId = `eligibility_review_${index}`;
       return `
         <article class="capability-card eligibility-card" data-eligibility-index="${index}">
           <div class="capability-card-main eligibility-card-main">
@@ -89,11 +83,6 @@ export const JobHunterEligibilityEditor = (function () {
               <label class="eligibility-card-title" for="eligibility_name_${index}">${escapeHtml(labels.eligibility_name_label)}</label>
               <input id="eligibility_name_${index}" class="token-input-field" data-eligibility-field="name" data-eligibility-index="${index}" value="${escapeHtml(fact.name)}">
             </div>
-            <div class="eligibility-card-copy">
-              <label class="eligibility-card-title" for="eligibility_aliases_${index}">${escapeHtml(labels.eligibility_aliases_label)}</label>
-              <input id="eligibility_aliases_${index}" class="token-input-field" data-eligibility-field="aliases" data-eligibility-index="${index}" placeholder="${escapeHtml(labels.eligibility_aliases_placeholder)}" value="${escapeHtml(fact.aliases.join(', '))}">
-            </div>
-            ${fact.needs_review ? `<p class="eligibility-card-review" id="${reviewId}">${escapeHtml(labels.eligibility_aliases_review_label)}</p>` : ''}
           </div>
           <div class="capability-card-actions eligibility-card-actions">
             <label class="toggle-switch toggle-switch--compact" for="${toggleId}">
@@ -118,11 +107,7 @@ export const JobHunterEligibilityEditor = (function () {
   function collectEligibilityFactState() {
     factState = factState.map(normalizeFact).filter((fact) => fact.name);
     persist();
-    return factState.map(({ displayReview, aliases_edited, ...fact }) => {
-      const output = { ...fact };
-      if (!output.aliases.length && !aliases_edited) delete output.aliases;
-      return output;
-    });
+    return factState;
   }
 
   function initEventHandlers(markDirty) {
@@ -131,20 +116,22 @@ export const JobHunterEligibilityEditor = (function () {
       const addButton = document.getElementById('eligibility_add');
       const statusEl = document.getElementById('eligibility_add_status');
       const name = normalizeText(input?.value);
-      if (statusEl) statusEl.textContent = '';
+      showAddStatus(statusEl, '', '');
       if (!name) return;
       if (factState.some((fact) => fact.name.toLowerCase() === name.toLowerCase())) {
         if (input) input.value = '';
         return;
       }
       if (addButton) addButton.disabled = true;
+      showAddStatus(statusEl, labels.eligibility_add_loading_message, 'loading');
       try {
         const body = await saveEligibilityFact({ name, value: true });
         upsertFactFromServer(body.eligibility_fact);
         markDirty();
         if (input) input.value = '';
+        showAddStatus(statusEl, '', '');
       } catch (error) {
-        if (statusEl) statusEl.textContent = error.serverMessage || labels.eligibility_add_error_message;
+        showAddStatus(statusEl, error.serverMessage || labels.eligibility_add_error_message, 'error');
       } finally {
         if (addButton) addButton.disabled = false;
       }
@@ -156,13 +143,6 @@ export const JobHunterEligibilityEditor = (function () {
       if (!Number.isInteger(index) || !factState[index]) return;
       if (field.dataset.eligibilityField === 'name') {
         factState[index].name = normalizeText(field.value);
-      } else if (field.dataset.eligibilityField === 'aliases') {
-        factState[index].aliases = field.value.split(',').map(normalizeText).filter(Boolean);
-        factState[index].aliases_edited = true;
-        if (factState[index].needs_review) {
-          factState[index].needs_review = false;
-          document.getElementById(`eligibility_review_${index}`)?.remove();
-        }
       }
       persist();
       markDirty();
