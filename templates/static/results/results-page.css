@@ -399,14 +399,11 @@
 
 .job-summary-toggle {
   display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  margin-left: 8px;
+  align-items: center;
+  justify-content: center;
+  margin-left: 5px;
   vertical-align: baseline;
-  white-space: nowrap;
   color: var(--accent);
-  font-size: 0.94rem;
-  font-weight: 700;
 }
 
 .job-summary-toggle-icon::before {
@@ -418,6 +415,19 @@
 
 .job-summary-expand[open] .job-summary-toggle-icon::before {
   content: "▴";
+}
+
+.job-summary-toggle-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 .job-summary-toggle-label--open {
@@ -555,10 +565,48 @@
    Needs attention / Matched split reads as a real section break, not just
    another muted line among the requirement rows. */
 .job-requirement-group-heading {
-  font-size: var(--text-role-overline-font-size);
-  font-weight: var(--text-role-overline-font-weight);
-  letter-spacing: var(--text-role-overline-letter-spacing);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
   text-transform: uppercase;
+}
+
+.job-requirement-group-heading::before {
+  content: "";
+  width: 3px;
+  height: 1.15em;
+  border-radius: 999px;
+  background: var(--border-strong);
+}
+
+.job-requirement-group--partial .job-requirement-group-heading {
+  color: var(--state-warning-text);
+}
+
+.job-requirement-group--partial .job-requirement-group-heading::before {
+  background: var(--state-warning-border);
+}
+
+.job-requirement-group--attention .job-requirement-group-heading {
+  color: color-mix(in srgb, var(--state-error-text) 72%, var(--state-warning-text));
+}
+
+.job-requirement-group--attention .job-requirement-group-heading::before {
+  background: color-mix(in srgb, var(--state-error-border) 72%, var(--state-warning-border));
+}
+
+.job-requirement-group--matched .job-requirement-group-heading {
+  color: var(--state-success-text);
+}
+
+.job-requirement-group--matched .job-requirement-group-heading::before {
+  background: var(--state-success-border);
 }
 
 .job-requirement-group + .job-requirement-group {

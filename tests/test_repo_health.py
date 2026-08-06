@@ -641,3 +641,16 @@ def test_active_module_import_cycles_are_known_and_allowlisted():
         f"Allowed: {sorted(allowed_cycles)}\n"
         f"Found: {sorted(cycles)}"
     )
+
+
+def test_requirement_group_headings_and_summary_disclosure_have_clear_hierarchy():
+    results_css = (
+        ROOT_DIR / "templates" / "static" / "results" / "results-page.css"
+    ).read_text(encoding="utf-8")
+
+    assert ".job-requirement-group--partial .job-requirement-group-heading" in results_css
+    assert ".job-requirement-group--attention .job-requirement-group-heading" in results_css
+    assert ".job-requirement-group--matched .job-requirement-group-heading" in results_css
+    assert ".job-requirement-group-heading::before" in results_css
+    assert ".job-summary-toggle-label {" in results_css
+    assert "clip-path: inset(50%);" in results_css

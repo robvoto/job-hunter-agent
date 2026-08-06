@@ -4526,3 +4526,11 @@ def test_render_job_card_fit_breakdown_starts_with_plain_english_summary_from_re
     assert '<span class="job-requirement-text">User acceptance testing' in html
     assert "Agile methodologies" not in html
     assert "Base fit" not in html
+
+
+def test_requirement_group_headings_have_semantic_tone_hooks():
+    source = Path(workspace_renderer.__file__).read_text(encoding="utf-8")
+    assert 'job-requirement-group--{safe_html(tone)}' in source
+    assert '"partial"' in source
+    assert '"attention"' in source
+    assert '"matched"' in source

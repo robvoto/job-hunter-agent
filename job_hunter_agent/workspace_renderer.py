@@ -1567,8 +1567,8 @@ def render_job_card(
             '<details class="job-summary-expand">'
             '<summary class="job-summary">'
             f'<span class="job-summary-text">{safe_html(role_summary)}</span>'
-            '<span class="job-summary-toggle" aria-hidden="true">'
-            '<span class="job-summary-toggle-icon"></span>'
+            '<span class="job-summary-toggle">'
+            '<span class="job-summary-toggle-icon" aria-hidden="true"></span>'
             f'<span class="job-summary-toggle-label job-summary-toggle-label--closed">{safe_html(_workspace_label("workspace_card_labels", "show_more_label"))}</span>'
             f'<span class="job-summary-toggle-label job-summary-toggle-label--open">{safe_html(_workspace_label("workspace_card_labels", "show_less_label"))}</span>'
             '</span>'
@@ -1858,11 +1858,16 @@ def render_job_card(
         )
         return html, bool(detail_html_parts)
 
-    def _render_requirement_group_block(heading_label: str, items_html: str) -> str:
+    def _render_requirement_group_block(
+        heading_label: str,
+        items_html: str,
+        tone: str,
+    ) -> str:
         if not items_html:
             return ""
         return (
-            f'<div class="job-insight-group is-secondary job-requirement-group">'
+            f'<div class="job-insight-group is-secondary job-requirement-group '
+            f'job-requirement-group--{safe_html(tone)}">'
             f'<strong class="job-requirement-group-heading">{safe_html(heading_label)}</strong>'
             f'<ul class="job-requirement-list">{items_html}</ul>'
             f"</div>"
@@ -1912,14 +1917,17 @@ def render_job_card(
             _render_requirement_group_block(
                 _workspace_label("workspace_card_labels", "requirement_group_partial_heading"),
                 partial_items_html,
+                "partial",
             )
             + _render_requirement_group_block(
                 _workspace_label("workspace_card_labels", "requirement_group_attention_heading"),
                 attention_items_html,
+                "attention",
             )
             + _render_requirement_group_block(
                 _workspace_label("workspace_card_labels", "requirement_group_matched_heading"),
                 matched_items_html,
+                "matched",
             )
         )
 
