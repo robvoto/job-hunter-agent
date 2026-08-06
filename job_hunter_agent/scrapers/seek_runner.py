@@ -6,6 +6,7 @@ Purpose: orchestrate the SEEK Playwright flow, detail review, and record finaliz
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import logging
 import pathlib
 import re
@@ -733,8 +734,13 @@ def _review_pre_detail_batch(
             started_at[index] = time.monotonic()
         return review_pre_detail_normalized_job(record, review_context)
 
+    # ThreadPoolExecutor workers don't inherit the caller's contextvars (e.g. the
+    # signed-in user id), so per-user resource lookups inside the review pipeline
+    # would fail without running each task in a copy of the caller's context. Each
+    # submission gets its own copy since a Context can't run concurrently on two
+    # threads at once.
     futures = {
-        executor.submit(_run_one, index, record): (index, record)
+        executor.submit(contextvars.copy_context().run, _run_one, index, record): (index, record)
         for index, record in enumerate(card_records)
     }
     pending = set(futures)
@@ -969,8 +975,15 @@ class _AsyncDetailSession:
     ) -> None:
         self._n_workers = n_workers
         self._loop = asyncio.new_event_loop()
+        # This thread doesn't inherit the caller's contextvars (e.g. the signed-in
+        # user id), so per-user resource lookups inside review work scheduled on
+        # this loop would fail without running it in a copy of the caller's context.
+        loop_context = contextvars.copy_context()
         self._thread = threading.Thread(
-            target=self._loop.run_forever, daemon=True, name="seek-detail-loop"
+            target=loop_context.run,
+            args=(self._loop.run_forever,),
+            daemon=True,
+            name="seek-detail-loop",
         )
         self._thread.start()
         init = asyncio.run_coroutine_threadsafe(

@@ -263,7 +263,10 @@ def passes_title_filters(title: str) -> Tuple[bool, str]:
 
 
 def passes_content_filters(
-    details_text: str, card_location: str = "", title_reason: str = ""
+    details_text: str,
+    card_location: str = "",
+    title_reason: str = "",
+    profile: dict | None = None,
 ) -> Tuple[bool, str]:
     """
     Description-based filtering.
@@ -272,7 +275,7 @@ def passes_content_filters(
     if not details_text:
         return False, "DESC_EMPTY"
 
-    profile = load_profile()
+    profile = profile or load_profile()
     description_lower = details_text.lower()
     for rule in profile.get("reject_description_phrase_rules", []):
         phrase = (rule.get("phrase") or "").strip().lower()
@@ -312,8 +315,9 @@ def passes_quick_card_filters(
     work_mode: str = "",
     work_type: str = "",
     salary: str = "",
+    profile: dict | None = None,
 ) -> Tuple[bool, str]:
-    profile = load_profile()
+    profile = profile or load_profile()
     teaser_lower = (teaser or "").strip().lower()
     title_context = "\n".join(
         part

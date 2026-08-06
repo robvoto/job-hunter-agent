@@ -858,7 +858,7 @@ def _apply_content_filter_result(
     record: dict, details_text: str, profile: dict, title_reason: str
 ) -> tuple[bool, str]:
     ok_desc, desc_reason = passes_content_filters(
-        details_text, record[RECORD_LOCATION_KEY], title_reason
+        details_text, record[RECORD_LOCATION_KEY], title_reason, profile=profile
     )
     if not ok_desc:
         if desc_reason.startswith("DESC_HARD_BLOCK_RULE"):
@@ -1313,6 +1313,7 @@ def review_pre_detail_normalized_job(
         work_mode=record.get(RECORD_WORK_MODE_KEY) or "",
         work_type=record.get(RECORD_WORK_TYPE_KEY) or "",
         salary=record.get(RECORD_CARD_SALARY_KEY) or record.get(RECORD_SALARY_KEY) or "",
+        profile=profile,
     )
     _pipeline_log(
         "CARD_GATE",

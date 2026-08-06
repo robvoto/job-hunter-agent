@@ -184,7 +184,7 @@ def _patch_llm_review_path(monkeypatch, payload):
     monkeypatch.setattr(
         job_review_pipeline,
         "passes_content_filters",
-        lambda details_text, card_location, title_reason: (True, "OK"),
+        lambda details_text, card_location, title_reason, profile=None: (True, "OK"),
     )
     monkeypatch.setattr(job_review_pipeline, "find_hard_block_matches", lambda text, terms=None: [])
     monkeypatch.setattr(
@@ -558,7 +558,10 @@ def test_hard_block_rejection_registers_learning_signal(monkeypatch):
     monkeypatch.setattr(
         job_review_pipeline,
         "passes_content_filters",
-        lambda details_text, card_location, title_reason: (False, "DESC_HARD_BLOCK_RULE:sap"),
+        lambda details_text, card_location, title_reason, profile=None: (
+            False,
+            "DESC_HARD_BLOCK_RULE:sap",
+        ),
     )
     monkeypatch.setattr(
         job_review_pipeline,
@@ -1442,7 +1445,7 @@ def test_llm_call_error_log_emitted_with_structured_fields(caplog, monkeypatch):
     monkeypatch.setattr(
         job_review_pipeline,
         "passes_content_filters",
-        lambda details_text, card_location, title_reason: (True, "OK"),
+        lambda details_text, card_location, title_reason, profile=None: (True, "OK"),
     )
     monkeypatch.setattr(job_review_pipeline, "find_hard_block_matches", lambda text, terms=None: [])
     monkeypatch.setattr(
@@ -1520,7 +1523,7 @@ def test_llm_missing_provider_key_is_reported_as_unavailable(caplog, monkeypatch
     monkeypatch.setattr(
         job_review_pipeline,
         "passes_content_filters",
-        lambda details_text, card_location, title_reason: (True, "OK"),
+        lambda details_text, card_location, title_reason, profile=None: (True, "OK"),
     )
     monkeypatch.setattr(job_review_pipeline, "find_hard_block_matches", lambda text, terms=None: [])
     monkeypatch.setattr(
