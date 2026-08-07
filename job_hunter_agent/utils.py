@@ -7,6 +7,7 @@ scraped job text based on parsing rules.
 """
 
 import copy
+import logging
 import re
 from datetime import date
 from html import escape
@@ -14,6 +15,8 @@ from typing import Any, Optional
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from job_hunter_agent.io_utils import load_parsing_rules
+
+logger = logging.getLogger(__name__)
 
 
 def safe_html(text: str) -> str:
@@ -36,7 +39,7 @@ def coerce_int(value: Any, default: int, minimum: int, maximum: int) -> int:
         resolved = int(value)
     except Exception as exc:
         resolved = default
-        print(f"[UTILS][WARN] Failed to coerce {value!r} to int, using default {default}: {exc}")
+        logger.warning("Failed to coerce %r to int, using default %s: %s", value, default, exc)
     return max(minimum, min(maximum, resolved))
 
 
@@ -109,9 +112,7 @@ def parse_seek_posted_age_days(
                 try:
                     return float(days)
                 except Exception as exc:
-                    print(
-                        f"[UTILS][WARN] Failed to parse seek age days from label '{label}': {exc}"
-                    )
+                    logger.warning("Failed to parse seek age days from label '%s': %s", label, exc)
                     return None
 
     pattern = str(rules.get("relative_text_pattern") or "").strip()
@@ -128,8 +129,8 @@ def parse_seek_posted_age_days(
         try:
             return float(amount) * float(unit_days[unit])
         except Exception as exc:
-            print(
-                f"[UTILS][WARN] Failed to calculate seek age days from relative text '{posted_text}': {exc}"
+            logger.warning(
+                "Failed to calculate seek age days from relative text '%s': %s", posted_text, exc
             )
             return None
 

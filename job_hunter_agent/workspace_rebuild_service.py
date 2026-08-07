@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 
 from job_hunter_agent import workspace_service
@@ -21,6 +22,8 @@ from job_hunter_agent.paths import get_workspace_results_path
 from job_hunter_agent.posting_utils import get_manual_skip_sets, parse_timestamp
 from job_hunter_agent.profile_store import get_search_settings, load_profile
 from job_hunter_agent.user_context import get_user_id_for_runtime
+
+logger = logging.getLogger(__name__)
 
 
 def rebuild_workspace_results(
@@ -73,10 +76,13 @@ def rebuild_workspace_results(
         run_stats = {**run_stats, **refreshed_run_stats}
         write_run_stats(run_stats)
 
-    print(
-        f"[WORKSPACE REBUILD] {reason} "
-        f"(records={len(render_records)}, history={len(job_history)}, "
-        f"applied={len(applied_job_keys)}, hidden={len(hidden_job_keys)})"
+    logger.info(
+        "Workspace rebuild: %s (records=%d, history=%d, applied=%d, hidden=%d)",
+        reason,
+        len(render_records),
+        len(job_history),
+        len(applied_job_keys),
+        len(hidden_job_keys),
     )
 
     workspace_path = get_workspace_results_path()
@@ -94,6 +100,6 @@ def rebuild_workspace_results(
         reference_time,
     )
 
-    print(f"Workspace results rebuilt at {workspace_path}")
+    logger.info("Workspace results rebuilt at %s", workspace_path)
 
     return str(workspace_path)

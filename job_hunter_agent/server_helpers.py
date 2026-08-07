@@ -9,6 +9,7 @@ to ensure consistency and maintainability.
 
 import hashlib
 import json
+import logging
 import re
 import shutil
 import threading
@@ -124,6 +125,8 @@ from job_hunter_agent.user_settings import (
     list_user_setting_user_ids,
 )
 from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
+
+logger = logging.getLogger(__name__)
 
 RUN_STATUS_IDLE = "idle"
 RUN_STATUS_RUNNING = "running"
@@ -719,7 +722,7 @@ def clear_current_user_search_state(*, preserve_profile: bool = True) -> dict[st
     try:
         output_path.unlink(missing_ok=True)
     except Exception as exc:
-        print(f"[SERVER_HELPERS][WARN] Failed to remove workspace results {output_path}: {exc}")
+        logger.warning("Failed to remove workspace results %s: %s", output_path, exc)
 
     return {
         "ok": True,
@@ -1320,7 +1323,7 @@ def _read_last_run_timestamp() -> str | None:
         state = load_agent_state()
         return str(state.get("last_agent_run_at") or "").strip() or None
     except Exception as exc:
-        print(f"[SERVER_HELPERS][WARN] Failed to read last run timestamp: {exc}")
+        logger.warning("Failed to read last run timestamp: %s", exc)
         return None
 
 
@@ -1475,7 +1478,7 @@ def _write_run_stats_field(key: str, value: object) -> None:
         payload[key] = value
         write_run_stats(payload)
     except Exception as write_exc:
-        print(f"[RUN][WARN] Could not write run_stats.{key}: {write_exc}")
+        logger.warning("Could not write run_stats.%s: %s", key, write_exc)
 
 
 def _run_scrape_job() -> None:
@@ -1486,11 +1489,11 @@ def _run_scrape_job() -> None:
         _write_run_stats_field("last_run_error", None)
     except Exception as exc:
         if run_stop_requested():
-            print("[RUN][INFO] Scrape run stopped by request; preserving partial results.")
+            logger.info("Scrape run stopped by request; preserving partial results.")
             _write_run_stats_field("last_run_error", None)
         else:
             msg = f"{type(exc).__name__}: {exc}"
-            print(f"[RUN][ERROR] {msg}")
+            logger.error("Scrape run failed: %s", msg)
             _write_run_stats_field("last_run_error", msg)
     finally:
         stopped = run_stop_requested()
@@ -1512,9 +1515,11 @@ def _rebuild_workspace_on_startup() -> None:
                 continue
             rebuild_workspace_results(reason="server startup rebuild")
         except Exception as exc:
-            print(
-                f"[WORKSPACE][WARN] Could not rebuild on startup for {user_id}: "
-                f"{type(exc).__name__}: {exc}"
+            logger.warning(
+                "Could not rebuild workspace on startup for %s: %s: %s",
+                user_id,
+                type(exc).__name__,
+                exc,
             )
         finally:
             set_user_id(None)
@@ -1550,7 +1555,7 @@ class SettingsHandler:
             try:
                 user_entries = list(USERS_DIR.iterdir())
             except OSError as _enum_err:
-                print(f"[RESET][WARN] Could not enumerate {USERS_DIR}: {_enum_err}")
+                logger.warning("Could not enumerate %s: %s", USERS_DIR, _enum_err)
                 user_entries = []
             for user_dir in user_entries:
                 try:
@@ -1559,9 +1564,7 @@ class SettingsHandler:
                     else:
                         user_dir.unlink(missing_ok=True)
                 except Exception as exc:
-                    print(
-                        f"[SERVER_HELPERS][WARN] Failed to remove user directory {user_dir}: {exc}"
-                    )
+                    logger.warning("Failed to remove user directory %s: %s", user_dir, exc)
                     continue
 
         save_profile(DEFAULT_PROFILE)

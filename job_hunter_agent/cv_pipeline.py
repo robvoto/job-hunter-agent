@@ -22,6 +22,7 @@ Layers:
   LLM - rename top cluster seeds only
 """
 
+import logging
 import re
 from collections import defaultdict
 from typing import Any
@@ -51,6 +52,8 @@ from job_hunter_agent.profile_store import (
     KEY_SIGNAL_CLUSTERS,
     normalize_onboarding_settings,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _stopwords() -> set[str]:
@@ -435,7 +438,7 @@ def _rename_top_clusters(
         if not labels:
             return candidates
     except Exception as exc:
-        print(f"[CV_PIPELINE] LLM enrichment failed: {exc}")
+        logger.warning("CV pipeline LLM enrichment failed: %s", exc)
         return candidates
 
     renamed_top: list[dict[str, Any]] = []

@@ -479,18 +479,11 @@ def _pipeline_log(stage: str, record: dict, source_name: str = "", **kwargs: Any
         llm_cost = _job_cost(job_key) if start_time is not None else ""
         if llm_cost == "$0.000000":
             llm_cost = ""
-        logger.info(
-            render_human_job_result(
-                record,
-                decision=decision,
-                reason=reason,
-                explanation=str(kwargs.get("explanation") or ""),
-                grade=str(kwargs.get("grade") or ""),
-                score=kwargs.get("score"),
-                elapsed=elapsed,
-                llm_cost=llm_cost,
-            )
-        )
+        # Stashed on the record (same convention as the other _obs_* fields) so
+        # scrape_finalize can render the per-job human report at run end without
+        # re-deriving per-job timing/cost from the now-discarded tracking dicts.
+        record["_obs_elapsed"] = elapsed
+        record["_obs_llm_cost"] = llm_cost
         pause_for_step_through(f"{title} @ {company} ({source}) — {decision or reason}")
         logger.debug(
             format_log_block(

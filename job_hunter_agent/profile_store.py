@@ -404,7 +404,7 @@ def normalize_onboarding_settings(settings: dict[str, Any] | None) -> dict[str, 
         global_onboarding = load_global_settings()[GLOBAL_KEY_ONBOARDING_SETTINGS]
     except Exception as exc:
         global_onboarding = {}
-        print(f"[PROFILE_STORE][WARN] Failed to load global onboarding settings: {exc}")
+        logger.warning("Failed to load global onboarding settings: %s", exc)
     global_presets = (
         global_onboarding.get(KEY_CAPABILITY_STRENGTH_PRESETS) or CAPABILITY_STRENGTH_PRESETS
     )
@@ -548,7 +548,7 @@ def normalize_capability_rules(
         )
     except Exception as exc:
         alias_limit = int(DEFAULT_ONBOARDING_SETTINGS[KEY_CAPABILITY_ALIAS_LIMIT])
-        print(f"[PROFILE_STORE][WARN] Failed to normalise capability alias limit: {exc}")
+        logger.warning("Failed to normalise capability alias limit: %s", exc)
 
     for rule in rules or []:
         if not isinstance(rule, dict):
@@ -1047,7 +1047,7 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
         )
     except Exception as exc:
         merged[KEY_DATE_RANGE_DAYS] = DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS]
-        print(f"[PROFILE_STORE][WARN] Failed to normalise date_range_days: {exc}")
+        logger.warning("Failed to normalise date_range_days: %s", exc)
 
     try:
         merged[KEY_SEEK_MAX_PAGES] = max(
@@ -1059,7 +1059,7 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
         )
     except Exception as exc:
         merged[KEY_SEEK_MAX_PAGES] = DEFAULT_SEARCH_SETTINGS[KEY_SEEK_MAX_PAGES]
-        print(f"[PROFILE_STORE][WARN] Failed to normalise seek_max_pages: {exc}")
+        logger.warning("Failed to normalise seek_max_pages: %s", exc)
 
     try:
         merged[KEY_LINKEDIN_HOURS_OLD] = max(
@@ -1075,7 +1075,7 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
         )
     except Exception as exc:
         merged[KEY_LINKEDIN_HOURS_OLD] = DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD]
-        print(f"[PROFILE_STORE][WARN] Failed to normalise linkedin_hours_old: {exc}")
+        logger.warning("Failed to normalise linkedin_hours_old: %s", exc)
 
     try:
         merged[KEY_LINKEDIN_RESULTS_PER_SEARCH] = max(
@@ -1094,7 +1094,7 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
         merged[KEY_LINKEDIN_RESULTS_PER_SEARCH] = DEFAULT_SEARCH_SETTINGS[
             KEY_LINKEDIN_RESULTS_PER_SEARCH
         ]
-        print(f"[PROFILE_STORE][WARN] Failed to normalise linkedin_results_per_search: {exc}")
+        logger.warning("Failed to normalise linkedin_results_per_search: %s", exc)
 
     try:
         merged[KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS] = max(
@@ -1113,7 +1113,7 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
         merged[KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS] = DEFAULT_SEARCH_SETTINGS[
             KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS
         ]
-        print(f"[PROFILE_STORE][WARN] Failed to normalise linkedin_fetch_timeout_seconds: {exc}")
+        logger.warning("Failed to normalise linkedin_fetch_timeout_seconds: %s", exc)
 
     try:
         merged[KEY_APSJOBS_RESULTS_PER_SEARCH] = max(
@@ -1132,7 +1132,7 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
         merged[KEY_APSJOBS_RESULTS_PER_SEARCH] = DEFAULT_SEARCH_SETTINGS[
             KEY_APSJOBS_RESULTS_PER_SEARCH
         ]
-        print(f"[PROFILE_STORE][WARN] Failed to normalise apsjobs_results_per_search: {exc}")
+        logger.warning("Failed to normalise apsjobs_results_per_search: %s", exc)
 
     merged[KEY_SORT_NEWEST_FIRST] = bool(merged.get(KEY_SORT_NEWEST_FIRST, True))
     merged["keywords"] = str(merged.get("keywords") or "").strip()
@@ -1203,7 +1203,7 @@ def normalize_salary_preferences(payload: dict[str, Any] | None) -> dict[str, in
         )
     except Exception as exc:
         minimum_salary_yearly = 0
-        print(f"[PROFILE_STORE][WARN] Failed to parse minimum_salary_yearly: {exc}")
+        logger.warning("Failed to parse minimum_salary_yearly: %s", exc)
     minimum_salary_yearly = (
         min(minimum_salary_yearly, yearly_cap) if yearly_cap > 0 else minimum_salary_yearly
     )
@@ -1213,7 +1213,7 @@ def normalize_salary_preferences(payload: dict[str, Any] | None) -> dict[str, in
         )
     except Exception as exc:
         minimum_daily_rate = 0
-        print(f"[PROFILE_STORE][WARN] Failed to parse minimum_daily_rate: {exc}")
+        logger.warning("Failed to parse minimum_daily_rate: %s", exc)
     minimum_daily_rate = min(minimum_daily_rate, daily_cap) if daily_cap > 0 else minimum_daily_rate
     return {
         "minimum_salary_yearly": minimum_salary_yearly,
@@ -1229,7 +1229,7 @@ def normalize_preference_weights(payload: dict[str, Any] | None) -> dict[str, fl
             value = float(source.get(key, default) or default)
         except Exception as exc:
             value = default
-            print(f"[PROFILE_STORE][WARN] Failed to normalise weight for {key}: {exc}")
+            logger.warning("Failed to normalise weight for %s: %s", key, exc)
         normalized[key] = max(min(value, 2.0), 0.0)
     return normalized
 
@@ -1260,7 +1260,7 @@ def normalize_scoring_rules(payload: dict[str, Any] | None) -> dict[str, Any]:
             try:
                 return int(incoming_value)
             except Exception as exc:
-                print(f"[PROFILE_STORE][WARN] Failed to merge int value: {exc}")
+                logger.warning("Failed to merge int value: %s", exc)
                 return int(default_value)
         if isinstance(default_value, float):
             if incoming_value is None or incoming_value == "":
@@ -1268,7 +1268,7 @@ def normalize_scoring_rules(payload: dict[str, Any] | None) -> dict[str, Any]:
             try:
                 return float(incoming_value)
             except Exception as exc:
-                print(f"[PROFILE_STORE][WARN] Failed to merge float value: {exc}")
+                logger.warning("Failed to merge float value: %s", exc)
                 return float(default_value)
         return copy.deepcopy(default_value if incoming_value in (None, "") else incoming_value)
 
@@ -1416,7 +1416,7 @@ def normalize_candidate_profile_tier_weights(payload: dict[str, Any] | None) -> 
             value = float(source.get(key, default) or default)
         except Exception as exc:
             value = default
-            print(f"[PROFILE_STORE][WARN] Failed to normalise tier weight for {key}: {exc}")
+            logger.warning("Failed to normalise tier weight for %s: %s", key, exc)
         normalized[key] = max(min(value, 1.0), 0.0)
     return normalized
 

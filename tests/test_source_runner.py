@@ -480,20 +480,20 @@ def test_seek_assisted_verification_sets_browser_session_enabled_message(monkeyp
     assert result.kept_records == [{"job_key": "seek:1"}]
 
 
-def test_linkedin_scraper_exception_is_caught_and_printed(monkeypatch, capsys):
-    """Verify _run_linkedin_source catches scraper exceptions and prints them."""
+def test_linkedin_scraper_exception_is_caught_and_logged(monkeypatch, caplog):
+    """Verify _run_linkedin_source catches scraper exceptions and logs them."""
     context = _make_context([SOURCE_LINKEDIN])
 
     def _boom(ctx):
         raise RuntimeError("connection refused")
 
-    with patch("job_hunter_agent.scrapers.linkedin.LinkedInScraper") as mock_li:
-        mock_li.side_effect = RuntimeError("connection refused")
-        result = source_runner._run_linkedin_source(context)
+    with caplog.at_level("ERROR"):
+        with patch("job_hunter_agent.scrapers.linkedin.LinkedInScraper") as mock_li:
+            mock_li.side_effect = RuntimeError("connection refused")
+            result = source_runner._run_linkedin_source(context)
 
     assert result.error is not None
-    out = capsys.readouterr().out
-    assert "[LinkedIn] Scraping failed" in out
+    assert "[LinkedIn] scraping failed" in caplog.text
 
 
 # ---------------------------------------------------------------------------

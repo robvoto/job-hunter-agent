@@ -58,7 +58,7 @@ def api_rejection_suggestions(job_id: str = Query("")):  # type: ignore[no-untyp
                     suggestions,
                 )
             )
-        print(f"[LLM][REJECTION_SUGGESTIONS][CACHE_HIT] job_id={job_id} suggestions={suggestions}")
+        logger.debug("Rejection suggestions cache hit: job_id=%s suggestions=%s", job_id, suggestions)
     else:
         suggestions = srv.llm_suggest_rejection_blockers(description)
         approval_tokens = srv.SettingsHandler._issue_rejection_suggestion_approval_tokens(

@@ -28,7 +28,6 @@ logger = logging.getLogger(__name__)
 from pydantic import BaseModel, ConfigDict, Field
 
 from job_hunter_agent.logging_utils import format_log_block
-from job_hunter_agent.paths import OUTPUT_DIR
 from job_hunter_agent.profile_store import (
     DEFAULT_ONBOARDING_SETTINGS,
     KEY_ALIASES,
@@ -77,8 +76,6 @@ from job_hunter_agent.signal_schema import (
     SOURCE_CV_PARSING,
 )
 
-CAP_DEBUG_LOG = OUTPUT_DIR / "capability_debug.log"
-
 # Internal result key
 KEY_CAPABILITIES = "capabilities"
 
@@ -91,24 +88,6 @@ _CURRENT_YEAR = datetime.now().year
 
 def _cap_log(msg: str) -> None:
     logger.info("%s", msg)
-    try:
-        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        with CAP_DEBUG_LOG.open("a", encoding="utf-8") as fh:
-            fh.write(msg + "\n")
-    except Exception as exc:
-        logger.warning("[CAP_LOG ERROR] could not write capability_debug.log: %s", exc)
-
-
-def clear_capability_debug_log() -> None:
-    try:
-        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        CAP_DEBUG_LOG.write_text(
-            f"# capability_debug.log — onboarding run {datetime.now().isoformat()}Z\n",
-            encoding="utf-8",
-        )
-        logger.info("[CAP_LOG] capability_debug.log reset at %s", CAP_DEBUG_LOG)
-    except Exception as exc:
-        logger.warning("[CAP_LOG ERROR] could not reset capability_debug.log: %s", exc)
 
 
 _BULLET_PREFIX_RE = re.compile(r"^[\-*•–—]+\s*")

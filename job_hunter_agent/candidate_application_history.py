@@ -9,6 +9,7 @@ import csv
 import hashlib
 import io
 import json as _json
+import logging
 from datetime import datetime, timezone
 
 import requests
@@ -42,6 +43,8 @@ from job_hunter_agent.paths import (
     get_candidate_application_history_path,
 )
 from job_hunter_agent.text_processing import compact_whitespace
+
+logger = logging.getLogger(__name__)
 
 _SHEET_CSV_URL = (
     "https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={tab_name}"
@@ -226,7 +229,7 @@ def extract_job_rejection_with_llm(row: dict) -> dict:
         )
         _log_llm_call(resp, "rejection_email_extraction", model)
     except Exception as exc:
-        print(f"[LLM][REJECTION_EMAIL_EXTRACTION][ERROR] {exc}")
+        logger.error("Rejection email extraction failed: %s", exc)
         return dict(_LLM_EXTRACTION_DEGRADED)
 
     raw = str(getattr(resp, "output_text", "") or "").strip()
@@ -237,7 +240,7 @@ def extract_job_rejection_with_llm(row: dict) -> dict:
         parsed = _json.loads(_strip_json_fence(raw))
         return _validate_llm_extraction(parsed)
     except Exception as exc:
-        print(f"[LLM][REJECTION_EMAIL_EXTRACTION][PARSE_ERROR] {exc} | raw={raw[:200]}")
+        logger.error("Rejection email extraction parse failed: %s | raw=%s", exc, raw[:200])
         return dict(_LLM_EXTRACTION_DEGRADED)
 
 
@@ -719,7 +722,7 @@ def _candidate_history_import_sheet_rows() -> tuple[list[dict], dict]:
 def import_candidate_rejections_from_sheet() -> dict:
     imported_rows, summary = _candidate_history_import_sheet_rows()
     if not summary["enabled"]:
-        print("[candidate_application_history] disabled")
+        logger.debug("Candidate application history import skipped: disabled")
         return summary | {
             "records_added": 0,
             "records_updated": 0,
@@ -774,7 +777,7 @@ def load_candidate_job_rejection_history() -> list[dict]:
     import command to refresh the local store from the configured sheet.
     """
     if not is_candidate_application_history_enabled():
-        print("[candidate_application_history] disabled")
+        logger.debug("Candidate application history load skipped: disabled")
         return []
 
     store_rows = load_candidate_application_history()
@@ -785,11 +788,11 @@ def load_candidate_job_rejection_history() -> list[dict]:
             runtime_rows.append(_candidate_history_store_entry_to_runtime(row))
         except Exception as exc:
             invalid_count += 1
-            print(f"[candidate_application_history] invalid store row skipped: {exc}")
+            logger.warning("Invalid candidate application history store row skipped: %s", exc)
 
-    print(f"[candidate_application_history] local store rows loaded: {len(runtime_rows)}")
+    logger.debug("Candidate application history local store rows loaded: %d", len(runtime_rows))
     if invalid_count:
-        print(f"[candidate_application_history] invalid store rows skipped: {invalid_count}")
+        logger.warning("Candidate application history invalid store rows skipped: %d", invalid_count)
     return runtime_rows
 
 

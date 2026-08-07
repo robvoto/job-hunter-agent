@@ -68,12 +68,12 @@ def api_lookup_location_by_geolocation(body: dict = Body(...)):  # type: ignore[
         longitude = float(body.get("longitude"))
         if not (-90 <= latitude <= 90) or not (-180 <= longitude <= 180):
             raise ValueError("Invalid coordinates")
-        print(f"[GEOLOCATION] coords received: lat={latitude:.4f} lon={longitude:.4f}")
+        logger.debug("Geolocation coords received: lat=%.4f lon=%.4f", latitude, longitude)
         nearest_location = find_nearest_location(latitude, longitude)
-        print(f"[GEOLOCATION] resolved to: {nearest_location!r}")
+        logger.debug("Geolocation resolved to: %r", nearest_location)
         return json_response({"location": nearest_location, "ok": True})
     except Exception as exc:
-        print(f"[GEOLOCATION] WARNING: lookup failed: {exc}")
+        logger.warning("Geolocation lookup failed: %s", exc)
         return json_response({"error": str(exc), "ok": False}, 400)
 
 

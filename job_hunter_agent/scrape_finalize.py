@@ -25,9 +25,17 @@ from job_hunter_agent.io_utils import (
     write_run_stats,
 )
 from job_hunter_agent.job_identity import deduplicate_across_sources
+from job_hunter_agent.job_review_pipeline import render_human_job_result
 from job_hunter_agent.llm_review_state import has_complete_llm_keep_data
 from job_hunter_agent.paths import OUTPUT_DIR, get_workspace_results_path
 from job_hunter_agent.posting_utils import parse_timestamp
+from job_hunter_agent.record_schema import (
+    RECORD_DECISION_EXPLANATION_KEY,
+    RECORD_DECISION_KEY,
+    RECORD_FIT_SCORE_KEY,
+    RECORD_LLM_FIT_GRADE_KEY,
+    RECORD_REJECT_REASON_KEY,
+)
 from job_hunter_agent.review_insights import build_review_data
 from job_hunter_agent.run_context import ScrapeRunContext
 from job_hunter_agent.run_control import run_stop_requested, set_run_progress_state
@@ -38,7 +46,7 @@ from job_hunter_agent.system_warnings import (
 )
 
 NO_FRESH_CARDS_ERROR = "No fresh cards were captured in this run."
-RUN_SUMMARY_PATH = OUTPUT_DIR / "last_run_summary.txt"
+RUN_SUMMARY_PATH = OUTPUT_DIR / "last_run_report.log"
 
 
 def _load_workspace_pool() -> list[dict]:
@@ -370,7 +378,26 @@ def _log_run_summary(run_stats: dict, audit_rows: list[dict]) -> None:
     )
 
 
-def _print_run_summary(run_stats: dict) -> None:
+def _render_per_job_report(audit_rows: list[dict]) -> str:
+    if not audit_rows:
+        return ""
+    blocks = [
+        render_human_job_result(
+            record,
+            decision=str(record.get(RECORD_DECISION_KEY) or ""),
+            reason=str(record.get(RECORD_REJECT_REASON_KEY) or ""),
+            explanation=str(record.get(RECORD_DECISION_EXPLANATION_KEY) or ""),
+            grade=str(record.get(RECORD_LLM_FIT_GRADE_KEY) or ""),
+            score=record.get(RECORD_FIT_SCORE_KEY),
+            elapsed=str(record.get("_obs_elapsed") or ""),
+            llm_cost=str(record.get("_obs_llm_cost") or ""),
+        )
+        for record in audit_rows
+    ]
+    return "Jobs this run:\n\n" + "\n\n".join(blocks)
+
+
+def _print_run_summary(run_stats: dict, audit_rows: list[dict] | None = None) -> None:
     import sys
     
     run_id = str(run_stats.get("last_run_attempt_at") or "").strip()
@@ -443,8 +470,12 @@ def _print_run_summary(run_stats: dict) -> None:
         )
     lines.append(bar)
     summary_text = "\n".join(lines)
+
+    per_job_text = _render_per_job_report(audit_rows or [])
+    report_text = f"{summary_text}\n\n{per_job_text}" if per_job_text else summary_text
+
     RUN_SUMMARY_PATH.parent.mkdir(parents=True, exist_ok=True)
-    RUN_SUMMARY_PATH.write_text(summary_text + "\n", encoding="utf-8")
+    RUN_SUMMARY_PATH.write_text(report_text + "\n", encoding="utf-8")
     logger.info(
         "[RUN_SUMMARY] run_id=%s pages=%s seen=%s read=%s reviewed_keep_candidates=%s "
         "visible_shortlist=%s below_minimum_score=%s rejected=%s summary_path=%s",
@@ -713,7 +744,7 @@ def finalize_scrape_run(
 
     _log_run_summary(run_stats, audit_rows)
     _log_source_final_stats(run_stats)
-    _print_run_summary(run_stats)
+    _print_run_summary(run_stats, audit_rows)
 
     if no_fresh_cards:
         logger.error("[RUN][ERROR] %s", NO_FRESH_CARDS_ERROR)

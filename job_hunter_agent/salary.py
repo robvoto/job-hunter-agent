@@ -1,8 +1,11 @@
 """Helpers for salary-related knowledge and parsing rules."""
 
 import json
+import logging
 
 from job_hunter_agent.paths import KNOWLEDGE_DIR
+
+logger = logging.getLogger(__name__)
 
 _SALARY_PATH = KNOWLEDGE_DIR / "salary.json"
 
@@ -19,7 +22,7 @@ def load_salary() -> dict[str, object]:
             with open(_SALARY_PATH, encoding="utf-8") as f:
                 _cached_rules = json.load(f)
         except Exception as exc:
-            print(f"[SALARY][ERROR] Failed to load salary rules from {_SALARY_PATH}: {exc}")
+            logger.error("Failed to load salary rules from %s: %s", _SALARY_PATH, exc)
             _cached_rules = {}
     cached_rules = _cached_rules
     if cached_rules is None:

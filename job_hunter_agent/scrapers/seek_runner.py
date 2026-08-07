@@ -8,7 +8,6 @@ from __future__ import annotations
 import asyncio
 import contextvars
 import logging
-import pathlib
 import re
 import sys
 import threading
@@ -116,7 +115,6 @@ _SEEK_FAILURE_MESSAGES = {
     SEEK_TIMEOUT_NO_CARDS: "SEEK timed out before any job cards appeared.",
     SEEK_UNKNOWN_FAILURE: "SEEK failed before it could load job cards.",
 }
-SEEK_DIAGNOSTIC_SCREENSHOT_TIMEOUT_MS = 2_000
 SEEK_DETAIL_SESSION_CLOSE_TIMEOUT_SECONDS = 2.0
 SEEK_JOB_WAIT_TIMEOUT_SECONDS = 30.0
 _SEEK_LIST_PAGE_CHALLENGE_MARKERS = (
@@ -1174,20 +1172,6 @@ def seek_scrape_to_records(
                             )
                             snapshot = _seek_list_page_diagnostics(list_page)
                             failure_class = str(snapshot["failure_class"])
-                            if failure_class not in {
-                                SEEK_BOT_CHALLENGE,
-                                SEEK_HUMAN_VERIFICATION,
-                            }:
-                                try:
-                                    screenshot_path = pathlib.Path("output") / "seek_timeout_debug.png"
-                                    list_page.screenshot(
-                                        path=str(screenshot_path),
-                                        full_page=False,
-                                        timeout=SEEK_DIAGNOSTIC_SCREENSHOT_TIMEOUT_MS,
-                                    )
-                                    logger.debug("%s screenshot saved to %s", page_tag, screenshot_path)
-                                except Exception as diag_exc:
-                                    logger.debug("%s diagnostic capture failed: %s", page_tag, diag_exc)
                             _handle_seek_list_page_failure(
                                 page_tag,
                                 list_page,

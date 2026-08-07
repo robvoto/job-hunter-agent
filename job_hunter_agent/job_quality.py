@@ -7,6 +7,7 @@ signals without making the final rejection decision.
 from __future__ import annotations
 
 import json
+import logging
 import re
 from datetime import date, datetime
 from html.parser import HTMLParser
@@ -20,6 +21,8 @@ from job_hunter_agent.paths import (
 )
 from job_hunter_agent.signal_schema import CATEGORY_CV_FARMING_PATTERN
 from job_hunter_agent.text_processing import compact_whitespace
+
+logger = logging.getLogger(__name__)
 
 SIGNAL_KIND_DATE_MISMATCH = "date_mismatch"
 SIGNAL_KIND_JOB_CLOSED = "job_closed"
@@ -200,7 +203,7 @@ def fetch_external_html(url: str) -> str:
         with urlopen(req, timeout=20) as resp:
             return resp.read().decode("utf-8", errors="replace")
     except (URLError, TimeoutError, ValueError, OSError) as exc:
-        print(f"[JOB_QUALITY][WARN] Failed to fetch external HTML from {url}: {exc}")
+        logger.warning("Failed to fetch external HTML from %s: %s", url, exc)
         return ""
 
 

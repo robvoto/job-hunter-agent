@@ -296,7 +296,7 @@ def test_finalize_scrape_run_preserves_previous_workspace_when_no_audit_rows(
     context.previous_run_stats = {"run_started_at": "2026-05-15T08:12:40"}
 
     workspace_path = tmp_path / "workspace.html"
-    summary_path = tmp_path / "last_run_summary.txt"
+    summary_path = tmp_path / "last_run_report.log"
 
     calls: list[tuple[str, object]] = []
 
@@ -622,7 +622,7 @@ def test_print_run_summary_uses_explicit_pages_and_cost_labels(caplog, tmp_path,
     import logging as _logging
 
     caplog.set_level(_logging.INFO)
-    monkeypatch.setattr(scrape_finalize, "RUN_SUMMARY_PATH", tmp_path / "last_run_summary.txt")
+    monkeypatch.setattr(scrape_finalize, "RUN_SUMMARY_PATH", tmp_path / "last_run_report.log")
 
     scrape_finalize._print_run_summary(
         {
@@ -651,7 +651,7 @@ def test_print_run_summary_uses_explicit_pages_and_cost_labels(caplog, tmp_path,
     assert "below_minimum_score=2" in log_text
     assert "rejected=3" in log_text
 
-    summary_path = tmp_path / "last_run_summary.txt"
+    summary_path = tmp_path / "last_run_report.log"
     assert summary_path.exists()
     summary_text = summary_path.read_text(encoding="utf-8")
     assert "Run ID:     2026-05-16T08:12:40+00:00" in summary_text
@@ -673,7 +673,7 @@ def test_print_run_summary_includes_source_breakdown(caplog, tmp_path, monkeypat
     import logging as _logging
 
     caplog.set_level(_logging.INFO)
-    monkeypatch.setattr(scrape_finalize, "RUN_SUMMARY_PATH", tmp_path / "last_run_summary.txt")
+    monkeypatch.setattr(scrape_finalize, "RUN_SUMMARY_PATH", tmp_path / "last_run_report.log")
 
     scrape_finalize._print_run_summary(
         {
@@ -718,7 +718,7 @@ def test_print_run_summary_file_and_stderr_use_single_visible_summary_block(
     import logging as _logging
 
     caplog.set_level(_logging.INFO)
-    monkeypatch.setattr(scrape_finalize, "RUN_SUMMARY_PATH", tmp_path / "last_run_summary.txt")
+    monkeypatch.setattr(scrape_finalize, "RUN_SUMMARY_PATH", tmp_path / "last_run_report.log")
 
     scrape_finalize._print_run_summary(
         {
@@ -737,6 +737,62 @@ def test_print_run_summary_file_and_stderr_use_single_visible_summary_block(
     captured = capsys.readouterr()
     assert captured.err.count("Run complete") == 1
     assert caplog.text.count("Run complete") == 0
+
+
+def test_print_run_summary_writes_per_job_report_to_file_only(caplog, tmp_path, monkeypatch, capsys):
+    import logging as _logging
+
+    caplog.set_level(_logging.INFO)
+    report_path = tmp_path / "last_run_report.log"
+    monkeypatch.setattr(scrape_finalize, "RUN_SUMMARY_PATH", report_path)
+
+    audit_rows = [
+        {
+            "title": "Senior Data Analyst",
+            "company": "Acme Corp",
+            "source": "seek",
+            "url": "https://seek.example/job/1",
+            "decision": "KEEP",
+            RECORD_FIT_SCORE_KEY: 82,
+            "llm_fit_grade": "A",
+        },
+        {
+            "title": "Junior Welder",
+            "company": "Beta Pty Ltd",
+            "source": "linkedin",
+            "url": "https://linkedin.example/job/2",
+            "decision": "REJECT",
+            "reject_reason": "TITLE_NOT_TARGET",
+        },
+    ]
+
+    scrape_finalize._print_run_summary(
+        {
+            "last_run_attempt_at": "2026-05-16T08:12:40+00:00",
+            "page_count": 1,
+            "cards_seen": 2,
+            "cards_read": 2,
+            "kept_count": 1,
+            "rejected_count": 1,
+            "cards_with_flags_count": 0,
+            "llm_total_cost_usd": 0.0,
+            "llm_truncation_count": 0,
+        },
+        audit_rows,
+    )
+
+    report_text = report_path.read_text(encoding="utf-8")
+    assert "Jobs this run:" in report_text
+    assert "Senior Data Analyst" in report_text
+    assert "Acme Corp" in report_text
+    assert "https://seek.example/job/1" in report_text
+    assert "Junior Welder" in report_text
+    assert "https://linkedin.example/job/2" in report_text
+
+    captured = capsys.readouterr()
+    assert "Senior Data Analyst" not in captured.err
+    assert "Jobs this run:" not in captured.err
+    assert "Senior Data Analyst" not in caplog.text
 
 
 def test_log_source_final_stats_emits_one_block_per_source(caplog):

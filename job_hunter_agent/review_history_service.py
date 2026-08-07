@@ -6,7 +6,6 @@ jobs) and retrieves job descriptions from history or cached search results to su
 consistent review signals across sessions.
 """
 
-import json
 import re
 from datetime import datetime
 from typing import Any
@@ -17,7 +16,6 @@ from job_hunter_agent.filters import (
 )
 from job_hunter_agent.io_utils import load_job_history, save_job_history
 from job_hunter_agent.job_identity import normalize_job_key
-from job_hunter_agent.paths import OUTPUT_DIR
 from job_hunter_agent.profile_store import load_profile, save_profile
 from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
@@ -69,20 +67,6 @@ def get_job_description(job_id: str) -> str:
         if desc:
             return desc
 
-    seek_path = OUTPUT_DIR / "seek_results.json"
-    if seek_path.exists():
-        try:
-            rows = json.loads(seek_path.read_text(encoding="utf-8"))
-            if isinstance(rows, list):
-                for row in rows:
-                    if normalize_job_key(str(row.get(RECORD_JOB_KEY) or "")) == normalized_key:
-                        return (
-                            row.get(RECORD_FULL_DESCRIPTION_KEY)
-                            or row.get(RECORD_FIT_SOURCE_TEXT_KEY)
-                            or ""
-                        )
-        except Exception as exc:
-            print(f"[REVIEW_HISTORY][WARN] Failed to read job description from seek_results: {exc}")
     return ""
 
 

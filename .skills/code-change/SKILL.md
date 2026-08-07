@@ -68,7 +68,8 @@ Use this workflow when the user reports a wrong classification, score, badge, st
 Do not create a new project skill for a single diagnosis pattern when this workflow belongs in the general code-change process.
 
 ## Runtime diagnosis
-- Server log: `output/server.log`. `./run` writes curated INFO-level per-job/per-board summaries; `./run --debug` raises it to DEBUG in the same file, adding raw LLM/API/pipeline detail and interleaved worker activity.
+- Server log: `output/server.log`. `./run` writes curated INFO-level per-board summaries; `./run --debug` raises it to DEBUG in the same file, adding raw LLM/API/pipeline detail and interleaved worker activity.
+- Per-job report: `output/last_run_report.log`. Overwritten at the end of every run with the aggregate run summary plus a clean human-readable block (title, company, source, decision, why, URL, time, LLM cost) for every job processed that run — read/rejected/kept. Not duplicated into `server.log`.
 - Find the last relevant log line before a hang/error, then read the code that runs next.
 - Geolocation lookup (`/api/onboarding/lookup-location-by-geolocation`) is a separate network call and can appear to delay extraction.
 - **Dependency version regressions**: if a 3rd-party call fails with `unexpected keyword argument` or similar, check `git log -- uv.lock` and diff the old vs new version before touching calling code. The lock may have resolved to a lower version than the one the code was written against. Fix the version constraint; do not rewrite calling code to work around the wrong version.

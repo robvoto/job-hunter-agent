@@ -1,5 +1,6 @@
 """Route handlers for workspace api."""
 
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter
@@ -16,6 +17,8 @@ from job_hunter_agent.run_control import (
     request_run_stop,
 )
 from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -54,7 +57,7 @@ def api_results_html():  # type: ignore[no-untyped-def]
     last_error = str((run_stats or {}).get("last_run_error") or "").strip()
 
     if last_error:
-        print(f"[WORKSPACE][WARN] Last run error: {last_error}")
+        logger.warning("Last run error: %s", last_error)
 
         return json_response({"error": last_error}, 503)
 

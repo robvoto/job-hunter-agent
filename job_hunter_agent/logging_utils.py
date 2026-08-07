@@ -8,6 +8,9 @@ import logging
 
 LOG_BLOCK_SEPARATOR = "-" * 80
 
+SERVER_LOG_MAX_BYTES = 10 * 1024 * 1024
+SERVER_LOG_BACKUP_COUNT = 5
+
 _LOG_SOURCE_SCOPE: contextvars.ContextVar[str] = contextvars.ContextVar(
     "job_hunter_log_source_scope",
     default="",
@@ -152,11 +155,13 @@ def setup_logging(*, debug: bool = False) -> None:
                     "stream": "ext://sys.__stdout__",
                 },
                 "file": {
-                    "class": "logging.FileHandler",
+                    "class": "logging.handlers.RotatingFileHandler",
                     "level": level,
                     "formatter": "file",
                     "filename": str(SERVER_LOG_PATH),
                     "encoding": "utf-8",
+                    "maxBytes": SERVER_LOG_MAX_BYTES,
+                    "backupCount": SERVER_LOG_BACKUP_COUNT,
                 },
             },
             "root": {

@@ -155,7 +155,7 @@ def test_status_command_reads_only_local_store(monkeypatch, tmp_path, capsys):
     assert "[candidate_application_history] records_total: 1" in output
 
 
-def test_load_candidate_history_skips_invalid_store_rows(monkeypatch, tmp_path, capsys):
+def test_load_candidate_history_skips_invalid_store_rows(monkeypatch, tmp_path, caplog):
     store_path, _ = _set_history_paths(monkeypatch, tmp_path)
     store_path.write_text(
         json.dumps(
@@ -201,9 +201,9 @@ def test_load_candidate_history_skips_invalid_store_rows(monkeypatch, tmp_path, 
         encoding="utf-8",
     )
 
-    rows = cah.load_candidate_job_rejection_history()
+    with caplog.at_level("WARNING"):
+        rows = cah.load_candidate_job_rejection_history()
 
-    output = capsys.readouterr().out
     assert len(rows) == 1
     assert rows[0]["llm_company"] == "Acme"
-    assert "invalid store rows skipped: 1" in output
+    assert "invalid store rows skipped: 1" in caplog.text

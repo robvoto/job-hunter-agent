@@ -128,7 +128,7 @@ def test_choice_badge_and_action_families_are_reused_across_screens():
     assert 'choice-card jh-choice choice-card--strength' in review_panel
     assert 'badge jh-badge {safe_html(class_name)}' in score_labels
     assert 'job-requirement-status jh-badge' in renderer
-    assert 'title-block-btn jh-button jh-button--neutral jh-button--micro' in renderer
+    assert 'title-block-btn workspace-text-action workspace-text-action--muted' in renderer
 
 
 def test_shared_choice_geometry_is_single_and_compact():
@@ -174,5 +174,5 @@ def test_micro_utility_action_is_smaller_than_compact_actions():
     assert "min-height: 27px;" in block
     assert "padding: 3px 8px;" in block
     assert "font-size: 0.74rem;" in block
-    assert "title-block-btn jh-button jh-button--neutral jh-button--micro" in renderer
+    assert "title-block-btn workspace-text-action workspace-text-action--muted" in renderer
     assert ".title-block-btn.jh-button {" not in widgets

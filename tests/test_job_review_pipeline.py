@@ -892,10 +892,16 @@ def test_llm_title_judgment_unavailable_falls_through_safely(monkeypatch):
     assert RECORD_LLM_TITLE_JUDGMENT_KEY not in updated_record
 
 
-def test_pipeline_logs_curated_summary_at_info_and_trace_at_debug(tmp_path, monkeypatch):
-    """INFO-level output holds only the curated per-job summary; the raw pipeline
-    trace (title gate, ONET/LLM judgment markers) only shows up once the level is
-    lowered to DEBUG — this is what `--debug` controls in production."""
+def test_pipeline_leaves_info_clear_and_stashes_curated_summary_for_the_report(
+    tmp_path, monkeypatch
+):
+    """The pipeline logger no longer writes a curated per-job block at INFO — that
+    block now only lives in output/last_run_report.log, built once at run end by
+    scrape_finalize from the audit rows. INFO stays clear and the raw pipeline
+    trace (title gate, ONET/LLM judgment markers) only shows up at DEBUG — this is
+    what `--debug` controls in production. The record is stashed with the elapsed/
+    cost fields the end-of-run report needs, and render_human_job_result produces
+    the same curated block scrape_finalize will write for this job."""
     record = _base_record("apsjobs", "apsjobs_detail_page", "card")
     record[RECORD_JOB_KEY] = "apsjobs:a05oy00000pwiq1yap"
     record[RECORD_TITLE_KEY] = "ServiceNow Team Member"
@@ -961,28 +967,39 @@ def test_pipeline_logs_curated_summary_at_info_and_trace_at_debug(tmp_path, monk
     info_output = info_log_path.read_text(encoding="utf-8")
     debug_output = debug_log_path.read_text(encoding="utf-8")
 
-    assert info_output.count("=" * 72) == 2
-    assert info_output.count("ServiceNow Team Member") == 1
-    assert info_output.count("Australian Federal Police") == 1
-    assert (
-        info_output.count(
-            "https://www.apsjobs.gov.au/s/job-details?title=servicenow-team-member&Id=a05OY00000PWIQ1YAP"
-        )
-        == 1
-    )
-    assert info_output.count("REJECTED") == 1
-    normalized_info_output = " ".join(info_output.split())
-    assert (
-        "The title suggests a general ServiceNow platform role rather than a Business Analyst, Scrum Master or consulting role."
-        in normalized_info_output
-    )
-    assert "PIPELINE][TITLE_GATE" not in info_output
-    assert "PIPELINE][LLM_TITLE_JUDGMENT" not in info_output
+    assert info_output == ""
 
     assert "PIPELINE][TITLE_GATE" in debug_output
     assert "LLM_TITLE_NOT_TARGET" in debug_output
     assert "apsjobs:a05oy00000pwiq1yap" in debug_output
     assert "PIPELINE][LLM_TITLE_JUDGMENT" in debug_output
+
+    # The end-of-run report (output/last_run_report.log) is built from audit_rows
+    # after the run, not logged live — the record must carry what it needs.
+    assert record["_obs_elapsed"] != ""
+    assert record[RECORD_REJECT_REASON_KEY] == "LLM_TITLE_NOT_TARGET"
+
+    report_block = job_review_pipeline.render_human_job_result(
+        record,
+        decision=str(record.get(RECORD_DECISION_KEY) or ""),
+        reason=str(record.get(RECORD_REJECT_REASON_KEY) or ""),
+        explanation=str(record.get(RECORD_DECISION_EXPLANATION_KEY) or ""),
+        elapsed=record["_obs_elapsed"],
+        llm_cost=record["_obs_llm_cost"],
+    )
+    assert report_block.count("=" * 72) == 2
+    assert "ServiceNow Team Member" in report_block
+    assert "Australian Federal Police" in report_block
+    assert (
+        "https://www.apsjobs.gov.au/s/job-details?title=servicenow-team-member&Id=a05OY00000PWIQ1YAP"
+        in report_block
+    )
+    assert "REJECTED" in report_block
+    normalized_report_block = " ".join(report_block.split())
+    assert (
+        "The title suggests a general ServiceNow platform role rather than a Business Analyst, Scrum Master or consulting role."
+        in normalized_report_block
+    )
 
 
 def test_explicit_title_reject_rule_logs_immediate_title_reject(monkeypatch, caplog):

@@ -585,7 +585,7 @@
   background: var(--border-strong);
 }
 
-.job-requirement-group--partial .job-requirement-group-heading {
+.job-requirement-group--partial strong.job-requirement-group-heading {
   color: var(--state-warning-text);
 }
 
@@ -593,7 +593,7 @@
   background: var(--state-warning-border);
 }
 
-.job-requirement-group--attention .job-requirement-group-heading {
+.job-requirement-group--attention strong.job-requirement-group-heading {
   color: color-mix(in srgb, var(--state-error-text) 72%, var(--state-warning-text));
 }
 
@@ -601,7 +601,7 @@
   background: color-mix(in srgb, var(--state-error-border) 72%, var(--state-warning-border));
 }
 
-.job-requirement-group--matched .job-requirement-group-heading {
+.job-requirement-group--matched strong.job-requirement-group-heading {
   color: var(--state-success-text);
 }
 
@@ -825,11 +825,16 @@
 
 .req-add-to-profile {
   min-height: 0;
-  padding: calc(var(--control-pad-block-sm) / 2) var(--control-space-xs);
-  border-radius: var(--control-radius-pill);
-  font-size: var(--font-size-2xs);
-  line-height: var(--chip-line-height);
+  padding: 1px var(--control-space-2xs);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  line-height: 1.2;
   white-space: nowrap;
+}
+
+.req-add-to-profile .workspace-text-action__icon {
+  font-size: 0.92em;
+  font-weight: 800;
 }
 
 .req-coverage-detail {
@@ -1237,21 +1242,11 @@
   max-width: 100%;
   margin-left: 0;
   vertical-align: baseline;
-  gap: var(--control-space-xs);
-  padding: 5px 10px;
-  font-size: var(--text-role-chip-font-size);
-  font-weight: var(--text-role-chip-font-weight);
-  line-height: var(--chip-line-height);
   white-space: nowrap;
 }
 
 .title-block-btn[hidden] {
   display: none;
-}
-
-.title-block-btn:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--selection-accent) 32%, var(--border-chip-subtle));
-  background: color-mix(in srgb, var(--selection-accent) 18%, var(--bg-chip-subtle));
 }
 
 /* Marks the "Undo" action on an already-Applied card with a checkmark. */

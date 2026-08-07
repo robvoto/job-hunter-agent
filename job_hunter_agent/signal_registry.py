@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from datetime import datetime, timezone
 from typing import Any
@@ -57,6 +58,8 @@ from job_hunter_agent.signal_schema import (
     VALID_SIGNAL_CATEGORIES,
 )
 from job_hunter_agent.text_processing import compact_whitespace
+
+logger = logging.getLogger(__name__)
 
 CATEGORY_LABELS = {
     CATEGORY_CAPABILITY_CONCEPT: "Capability",
@@ -624,7 +627,7 @@ def upsert_profile_section_label(word: str, bucket: str) -> None:
     labels.append(word)
     payload["version"] = int(payload.get("version", 0)) + 1
     set_knowledge("parsing_rules", payload)
-    print(f"[PROFILE_SECTION_LABEL] Auto-added '{word}' to {list_key}")
+    logger.info("Auto-added profile section label '%s' to %s", word, list_key)
 
 
 def approve_signal(key: str, category: str = "", value: str = "") -> dict[str, Any] | None:

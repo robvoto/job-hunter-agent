@@ -228,10 +228,6 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
         )
     except PartialSourceResultsError as exc:
         logger.exception("[SEEK] scraping failed after partial results")
-        print(
-            f"[SEEK] Scraping failed: {type(exc.original_error).__name__}: "
-            f"{_exception_message(exc.original_error)}"
-        )
         _record_source_warning(
             source=SOURCE_SEEK,
             severity="warning",
@@ -262,7 +258,6 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
         )
     except Exception as exc:
         logger.exception("[SEEK] scraping failed")
-        print(f"[SEEK] Scraping failed: {type(exc).__name__}: {_exception_message(exc)}")
         _record_source_warning(
             source=SOURCE_SEEK,
             severity="error",
@@ -326,10 +321,6 @@ def _run_linkedin_source(context: ScrapeRunContext) -> SourceRunResult:
         )
     except PartialSourceResultsError as exc:
         logger.exception("[LinkedIn] scraping failed after partial results")
-        print(
-            f"[LinkedIn] Scraping failed: {type(exc.original_error).__name__}: "
-            f"{_exception_message(exc.original_error)}"
-        )
         _record_source_warning(
             source=SOURCE_LINKEDIN,
             severity="warning",
@@ -360,7 +351,6 @@ def _run_linkedin_source(context: ScrapeRunContext) -> SourceRunResult:
         )
     except Exception as exc:
         logger.exception("[LinkedIn] scraping failed")
-        print(f"[LinkedIn] Scraping failed: {type(exc).__name__}: {_exception_message(exc)}")
         _record_source_warning(
             source=SOURCE_LINKEDIN,
             severity="error",
@@ -415,8 +405,10 @@ def _run_apsjobs_source(context: ScrapeRunContext) -> SourceRunResult:
             _llm_cache_snapshot=llm_cache,
         )
     except PartialSourceResultsError as exc:
-        print(
-            f"[APSJobs] Scraping failed: {type(exc.original_error).__name__}: {exc.original_error}"
+        logger.warning(
+            "[APSJobs] scraping failed after partial results: %s: %s",
+            type(exc.original_error).__name__,
+            exc.original_error,
         )
         _record_source_warning(
             source=SOURCE_APSJOBS,
@@ -447,7 +439,7 @@ def _run_apsjobs_source(context: ScrapeRunContext) -> SourceRunResult:
             _llm_cache_snapshot=llm_cache,
         )
     except Exception as exc:
-        print(f"[APSJobs] Scraping failed: {type(exc).__name__}: {exc}")
+        logger.exception("[APSJobs] scraping failed")
         _record_source_warning(
             source=SOURCE_APSJOBS,
             severity="error",
@@ -838,10 +830,10 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
 
     for source in SOURCE_RUNNER_NAMES:
         label = get_source_display_label(source)
-        print(
-            f"[{label}] enabled"
-            if source in enabled_source_order
-            else f"[{label}] disabled in enabled_sources; skipping"
+        logger.info(
+            "[%s] %s",
+            label,
+            "enabled" if source in enabled_source_order else "disabled in enabled_sources; skipping",
         )
 
     if run_stop_requested():

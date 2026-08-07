@@ -33,7 +33,7 @@ Use this file only when the task needs exact AWS host facts or repeatable CLI co
 
 Primary files:
 - `/var/lib/job-hunter/output/server.log`
-- `/var/lib/job-hunter/output/last_run_summary.txt`
+- `/var/lib/job-hunter/output/last_run_report.log`
 - `/var/lib/job-hunter/output/uncertainty.jsonl`
 
 Browser-session helper logs:
@@ -104,7 +104,7 @@ cmd_id=$(aws ssm send-command \
   --instance-ids i-055b97e901418d3ad \
   --document-name AWS-RunShellScript \
   --comment "Read Job Hunter logs" \
-  --parameters commands='["tail -n 150 /var/lib/job-hunter/output/server.log || true","echo","cat /var/lib/job-hunter/output/last_run_summary.txt || true"]' \
+  --parameters commands='["tail -n 150 /var/lib/job-hunter/output/server.log || true","echo","cat /var/lib/job-hunter/output/last_run_report.log || true"]' \
   --region ap-southeast-2 \
   --query 'Command.CommandId' \
   --output text)
@@ -142,7 +142,7 @@ aws ssm get-command-invocation \
 ### If a run says "No fresh cards were captured"
 
 Check in this order:
-1. `last_run_summary.txt`
+1. `last_run_report.log`
 2. `server.log`
 3. `systemctl status job-hunter`
 4. EC2 console output if the app seems to have restarted

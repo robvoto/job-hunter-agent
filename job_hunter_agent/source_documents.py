@@ -26,7 +26,6 @@ from job_hunter_agent.paths import (
 from job_hunter_agent.profile_learning import (
     build_role_history_patch,
     build_learning_patch,
-    clear_capability_debug_log,
     repair_text,
 )
 from job_hunter_agent.profile_store import (
@@ -104,17 +103,14 @@ def _format_duration_months(total_months: int) -> str:
 
 def _print_role_history_summary(role_experience: list[dict[str, Any]]) -> None:
     rows = [row for row in role_experience if isinstance(row, dict)]
-    print(
-        "[ONBOARDING] Captured role history: "
-        + _format_count(len(rows), "role family", "role families")
+    logger.debug(
+        "Captured role history: %s", _format_count(len(rows), "role family", "role families")
     )
     for row in rows:
         title = str(row.get("normalized_title") or "").strip() or "untitled role"
         total_months = int(row.get("total_duration_months") or 0)
         most_recent_end_year = int(row.get("most_recent_end_year") or 0)
-        line = (
-            f"[ONBOARDING]   - {title}: {_format_duration_months(total_months)} total"
-        )
+        line = f"  - {title}: {_format_duration_months(total_months)} total"
         if most_recent_end_year > 0:
             line += f", most recent end year {most_recent_end_year}"
         raw_variants = row.get("title_variants") or []
@@ -132,7 +128,7 @@ def _print_role_history_summary(role_experience: list[dict[str, Any]]) -> None:
                 )
             if variant_parts:
                 line += f" | variants: {', '.join(variant_parts)}"
-        print(line)
+        logger.debug(line)
 
 
 def _normalize_uploaded_filename(filename: str) -> str:
@@ -217,7 +213,7 @@ def load_source_materials(create_if_missing: bool = False) -> dict[str, Any]:
         try:
             return normalize_source_materials(json.loads(row["data"]))
         except Exception as exc:
-            print(f"[SOURCE_DOCUMENTS][WARN] Failed to load source materials from DB: {exc}")
+            logger.warning("Failed to load source materials from DB: %s", exc)
     return dict(DEFAULT_SOURCE_MATERIALS)
 
 
@@ -279,10 +275,10 @@ def persist_uploaded_source_pack(
             else:
                 content = repair_text(raw_bytes.decode("utf-8", errors="ignore"))
         except Exception as exc:
-            print(f"[SOURCE_DOCUMENTS][WARN] Failed to extract text from {filename}: {exc}")
+            logger.warning("Failed to extract text from %s: %s", filename, exc)
             continue
         if not content.strip():
-            print(f"[SOURCE_DOCUMENTS][WARN] No text extracted from {filename}")
+            logger.warning("No text extracted from %s", filename)
             continue
         profile_sources.append({"label": label, "filename": filename, "content": content})
 
@@ -314,9 +310,9 @@ def clear_onboarding_runtime_outputs() -> None:
     for label, fn in [("review_data", clear_review_data), ("run_stats", clear_run_stats)]:
         try:
             fn()
-            print(f"[ONBOARDING] {label} reset")
+            logger.debug("Onboarding reset: %s", label)
         except Exception as exc:
-            print(f"[ONBOARDING] Could not reset {label}: {exc}")
+            logger.warning("Onboarding could not reset %s: %s", label, exc)
 
 
 def _norm_term(text: str) -> str:
@@ -388,9 +384,6 @@ def run_onboarding(
             page_limit_notice = (
                 f"CV was truncated to approximately {cv_max_pages} page(s) for processing."
             )
-            print(
-                f"[ONBOARDING] CV truncated to {cv_max_chars} chars ({cv_max_pages} pages) for {label}"
-            )
             logger.info(
                 format_log_block(
                     "ONBOARDING_SOURCE_READ",
@@ -410,9 +403,6 @@ def run_onboarding(
                 raw_chars,
                 approx_pages,
             )
-        print(
-            f"[ONBOARDING] CV source read: {label} chars read={raw_chars} approx pages={approx_pages}"
-        )
         imported_sources.append(
             {"label": label, "filename": source.get("filename", ""), "characters": len(text)}
         )
@@ -427,10 +417,6 @@ def run_onboarding(
         )
 
     combined_text = "\n\n".join(combined_sections).strip()
-    print(
-        f"[ONBOARDING] Extraction input: chars read={len(combined_text)} approx pages="
-        f"{max(1, (len(combined_text) + cv_chars_per_page - 1) // cv_chars_per_page)}"
-    )
     logger.info(
         "[ONBOARDING][SOURCE_READ] combined_chars=%s combined_approx_pages=%s page_limit_notice=%s",
         len(combined_text),
@@ -449,7 +435,6 @@ def run_onboarding(
     # --- Reset persisted onboarding-owned fields before fresh extraction starts ---
     patch_profile(build_onboarding_reset_patch(active_onboarding_settings))
     clear_onboarding_runtime_outputs()
-    clear_capability_debug_log()
 
     # --- Build a fresh onboarding patch from clean defaults ---
     patch = build_onboarding_reset_patch(active_onboarding_settings)
@@ -496,9 +481,10 @@ def run_onboarding(
     patch["search_settings"] = search_settings
     patch["match_preferences"] = match_preferences
 
-    print(
-        f"[TITLE_PATTERNS] LLM extracted {len(patch.get(KEY_PRIMARY_PATTERNS) or [])} target "
-        f"and {len(patch.get(KEY_SECONDARY_PATTERNS) or [])} secondary title(s)"
+    logger.info(
+        "LLM extracted %d target and %d secondary title(s)",
+        len(patch.get(KEY_PRIMARY_PATTERNS) or []),
+        len(patch.get(KEY_SECONDARY_PATTERNS) or []),
     )
 
     profile = patch_profile(patch)

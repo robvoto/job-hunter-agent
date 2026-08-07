@@ -31,7 +31,6 @@ def test_run_onboarding_uses_llm_titles_without_parser(monkeypatch):
     )
     monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
     monkeypatch.setattr(source_documents, "clear_onboarding_runtime_outputs", lambda: None)
-    monkeypatch.setattr(source_documents, "clear_capability_debug_log", lambda: None)
 
     def fake_extract_from_cv(text, lookback_years, alias_limit):
         captured["text"] = text
@@ -157,7 +156,6 @@ def test_run_onboarding_fails_when_llm_omits_required_fields(monkeypatch, fixtur
     )
     monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
     monkeypatch.setattr(source_documents, "clear_onboarding_runtime_outputs", lambda: None)
-    monkeypatch.setattr(source_documents, "clear_capability_debug_log", lambda: None)
     monkeypatch.setattr(
         profile_learning,
         "_llm_extract_from_cv",

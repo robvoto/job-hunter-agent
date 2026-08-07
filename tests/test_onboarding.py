@@ -659,7 +659,7 @@ def test_api_onboarding_confirm_saves_work_mode_preference(monkeypatch):
 def test_run_onboarding_logs_read_summary(monkeypatch, capsys, caplog, tmp_path):
     import logging as _logging
 
-    caplog.set_level(_logging.INFO)
+    caplog.set_level(_logging.DEBUG)
     fixture = {
         "capabilities": [
             {
@@ -706,7 +706,6 @@ def test_run_onboarding_logs_read_summary(monkeypatch, capsys, caplog, tmp_path)
         },
     )
     monkeypatch.setattr(source_documents, "clear_onboarding_runtime_outputs", lambda: None)
-    monkeypatch.setattr(source_documents, "clear_capability_debug_log", lambda: None)
 
     result = source_documents.run_onboarding(
         {"profile_sources": [{"label": "Primary CV", "filename": "cv.txt", "content": "A" * 5000}]},
@@ -727,12 +726,12 @@ def test_run_onboarding_logs_read_summary(monkeypatch, capsys, caplog, tmp_path)
     log_text = caplog.text
     combined = output + log_text
     assert result["ok"] is True
-    assert "[ONBOARDING] Extraction input" in combined
-    assert "chars read" in combined
-    assert "approx pages" in combined
-    assert "[ONBOARDING] CV source read" in combined
+    assert "[ONBOARDING][SOURCE_READ] combined_chars=" in combined
+    assert "read_chars=" in combined
+    assert "approx_pages=" in combined
+    assert "[ONBOARDING][SOURCE_READ] Primary CV" in combined
     assert "[ONBOARDING][LLM_CALL_DONE] purpose=cv_extraction" in combined
-    assert "[ONBOARDING] Captured role history:" in combined
+    assert "Captured role history:" in combined
     assert "business analyst: 5 years total" in combined
     assert "variants: ba (1 year), business analyst (2 years), senior ba (2 years)" in combined
     assert "occupation_query_count=1" in combined
