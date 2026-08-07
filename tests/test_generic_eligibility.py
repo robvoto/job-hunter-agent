@@ -108,17 +108,21 @@ def test_settings_add_flow_calls_the_shared_save_endpoint_not_a_local_only_push(
     assert 'aliases: []' not in source
 
 
-def test_prefill_flow_uses_the_same_shared_save_helper_as_settings_add():
-    # "Add to profile" from job results must go through the exact same
-    # exported helper as the Settings-Add flow, not a second local-only path.
+def test_prefill_flow_adds_an_editable_draft_not_an_eager_save():
+    # "Add to profile" from job results carries the full ad requirement
+    # sentence, which is not a concise eligibility fact name. It must land as
+    # a local, editable draft (same pattern as consumeCapabilityPrefillFromUrl)
+    # so the user can shorten it before it is ever persisted — not save it
+    # verbatim to the server immediately.
     source = (_STATIC_DIR / "settings-page.js").read_text(encoding="utf-8")
-    start = source.index("async function consumeEligibilityPrefillFromUrl")
+    start = source.index("function consumeEligibilityPrefillFromUrl")
     end = source.index("\nfunction labelsWithName")
     prefill_fn_source = source[start:end]
 
-    assert "eligibilityEditor.saveEligibilityFact(" in prefill_fn_source
-    assert "eligibilityEditor.upsertFactFromServer(" in prefill_fn_source
-    assert "aliases: []" not in prefill_fn_source
+    assert "eligibilityEditor.setEligibilityFactState(" in prefill_fn_source
+    assert "eligibilityEditor.saveEligibilityFact(" not in prefill_fn_source
+    assert "nameInput?.focus?.()" in prefill_fn_source
+    assert "nameInput?.select?.()" in prefill_fn_source
 
 
 def test_eligibility_editor_uses_its_own_layout_not_the_compact_clearance_card():

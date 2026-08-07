@@ -703,7 +703,7 @@ function consumeCapabilityPrefillFromUrl() {
   return true;
 }
 
-async function consumeEligibilityPrefillFromUrl() {
+function consumeEligibilityPrefillFromUrl() {
   const url = new URL(window.location.href);
   const prefill = normalizeCapabilityPrefill(url.searchParams.get('prefill_eligibility') || '');
   if (!prefill) return false;
@@ -714,24 +714,26 @@ async function consumeEligibilityPrefillFromUrl() {
     normalizeCapabilityPrefill(fact?.name).toLowerCase() === prefill.toLowerCase()
   );
   if (!existsAlready) {
-    showStatus(window.__JOB_HUNTER_SETTINGS_CLEARANCES_LABELS__.eligibility_add_loading_message, 'loading');
-    try {
-      // Same shared save path as the Settings "Add" flow.
-      const body = await eligibilityEditor.saveEligibilityFact({ name: prefill, value: true });
-      eligibilityEditor.upsertFactFromServer(body.eligibility_fact);
-      markDirty();
-      showStatus(
-        labelsWithName(window.__JOB_HUNTER_SETTINGS_CLEARANCES_LABELS__.eligibility_prefill_added_message, prefill),
-        'success',
-        { autoHideMs: 4500 },
-      );
-    } catch (error) {
-      showStatus(
-        error.serverMessage || window.__JOB_HUNTER_SETTINGS_CLEARANCES_LABELS__.eligibility_add_error_message,
-        'error',
-        { autoHideMs: 4500 },
-      );
-    }
+    // Job ad wording (e.g. a full requirement sentence) is only a starting point —
+    // add as a local draft so the user can shorten it to a concise fact name
+    // before it is ever saved, same pattern as consumeCapabilityPrefillFromUrl.
+    eligibilityEditor.setEligibilityFactState([...existingFacts, { name: prefill, value: true, evidence: [] }]);
+    markDirty();
+    requestAnimationFrame(() => {
+      const cards = document.querySelectorAll('#eligibility_editor [data-eligibility-index]');
+      const lastCard = cards[cards.length - 1];
+      const nameInput = lastCard?.querySelector('input[data-eligibility-field="name"]');
+      if (lastCard?.scrollIntoView) {
+        lastCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      nameInput?.focus?.();
+      nameInput?.select?.();
+    });
+    showStatus(
+      labelsWithName(window.__JOB_HUNTER_SETTINGS_CLEARANCES_LABELS__.eligibility_prefill_added_message, prefill),
+      'success',
+      { autoHideMs: 4500 },
+    );
   } else {
     showStatus(
       labelsWithName(window.__JOB_HUNTER_SETTINGS_CLEARANCES_LABELS__.eligibility_prefill_exists_message, prefill),

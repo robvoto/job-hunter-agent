@@ -1,8 +1,8 @@
 {
   "kind": "system_config",
   "name": "llm_requirement_coverage_defaults",
-  "version": 5,
-  "updated_at": "2026-08-04",
+  "version": 7,
+  "updated_at": "2026-08-07",
   "description": "Managed default guidance for LLM requirement coverage decomposition behaviour.",
   "lines": [
     "For requirement_coverage: semantically decompose the job ad into atomic requirements \u2014 one skill, qualification, experience, or constraint per item.",
@@ -12,6 +12,8 @@
     "Classify each supported or partially_supported requirement as either capability or eligibility. A deterministic check runs after your answer and may correct it, so classify carefully rather than defaulting to one value.",
     "capability covers skills, responsibilities, knowledge, domain experience, seniority, and years or duration of experience \u2014 e.g. '5+ years supporting client outcomes' is capability, not eligibility.",
     "eligibility covers legal or formal entry gates only: citizenship, work rights, security clearances, licences, registrations, formal qualifications, and certifications \u2014 e.g. 'ability to obtain a Baseline security clearance' is eligibility.",
+    "When an ad states two or more distinct eligibility conditions joined together (e.g. 'hold a security clearance and be an Australian citizen'), emit one requirement_coverage item per condition, each matched independently to its own profile eligibility fact \u2014 do not merge them into a single item that needs one combined fact to match.",
+    "A citizenship, permanent residency, or existing work-rights/visa eligibility fact in the profile satisfies a requirement worded as work authorisation, work rights, or the right to work in that country \u2014 match it to that fact instead of leaving matched_candidate_fact empty just because the wording differs.",
     "A requirement that states a duration or years of experience in a field, tool, or role is capability even if the field itself sounds formal (e.g. years of experience in a regulated industry is still capability, not eligibility).",
     "Link capability requirements to the exact profile capability name and eligibility requirements to the exact profile eligibility fact.",
     "Use matched_candidate_fact for the matched profile fact and keep capability_name / eligibility_name aligned with the requirement_type.",

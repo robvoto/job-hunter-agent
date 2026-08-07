@@ -1,8 +1,8 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 101,
-  "updated_at": "2026-08-06",
+  "version": 102,
+  "updated_at": "2026-08-07",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
     "remote_label": "Remote",
@@ -83,7 +83,7 @@
     "eligibility_add_loading_message": "Adding eligibility fact...",
     "eligibility_settings_title": "Eligibility",
     "eligibility_help_text": "Add specific licences, registrations, qualifications, certifications, citizenship, work rights, or other eligibility facts. Clearances stay in the managed Clearances section above.",
-    "eligibility_name_label": "Canonical fact",
+    "eligibility_name_label": "Fact name",
     "eligibility_name_placeholder": "e.g. AHPRA registration, Australian citizenship, working with children check, security clearance eligibility",
     "eligibility_add_button_label": "Add eligibility",
     "eligibility_add_button_aria_label": "Add eligibility fact",
