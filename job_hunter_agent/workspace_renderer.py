@@ -1843,7 +1843,8 @@ def render_job_card(
         )
 
         add_to_profile_html = ""
-        if css_modifier in (
+        canonical_requirement = compact_whitespace(str(row.get("canonical_requirement") or ""))
+        if canonical_requirement and css_modifier in (
             "mismatch",
             "not-shown",
             "mandatory-not-shown",
@@ -1863,7 +1864,7 @@ def render_job_card(
                 else "add_to_profile_action_title"
             )
             add_to_profile_html = (
-                f'<a class="workspace-text-action job-requirement-action req-add-to-profile" href="/settings?{prefill_key}={quote(req_text)}#section-matrix" '
+                f'<a class="workspace-text-action job-requirement-action req-add-to-profile" href="/settings?{prefill_key}={quote(canonical_requirement)}#section-matrix" '
                 f'title="{safe_html(_workspace_label("workspace_card_labels", action_title_key))}" target="_blank" rel="noopener">'
                 '<span class="workspace-text-action__icon" aria-hidden="true">+</span>'
                 f'<span>{safe_html(_workspace_label("workspace_card_labels", action_label_key))}</span></a>'
@@ -1998,6 +1999,7 @@ def render_job_card(
             row = target_rows[key]
             row["coverage_status"] = str(item.get("status") or "not_shown").strip().lower()
             row["requirement_type"] = raw_requirement_type
+            row["canonical_requirement"] = compact_whitespace(str(item.get("canonical_requirement") or ""))
             row["importance"] = str(item.get("importance") or "preferred").strip().lower()
             row["is_eligibility"] = is_eligibility
             row["classification_review"] = classification_review

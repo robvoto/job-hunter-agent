@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 import logging
+from datetime import datetime
 
 import pytest
 
@@ -143,6 +143,68 @@ def test_setup_logging_writes_single_file_at_info_level_by_default(
     assert "curated info line" in content
     assert "verbose debug line" not in content
     assert logging.getLogger().level == logging.INFO
+
+
+def test_setup_logging_suppresses_transport_chatter_by_default(
+    bare_root_logger, monkeypatch, tmp_path
+):
+    log_path = tmp_path / "server.log"
+    monkeypatch.setattr("job_hunter_agent.paths.SERVER_LOG_PATH", log_path)
+
+    transport_loggers = {
+        "httpcore": logging.getLogger("httpcore"),
+        "httpx": logging.getLogger("httpx"),
+    }
+    original_levels = {name: logger.level for name, logger in transport_loggers.items()}
+
+    try:
+        bare_root_logger()
+        logging_utils.setup_logging(debug=False)
+
+        transport_loggers["httpcore"].debug("TLS transport detail")
+        transport_loggers["httpx"].info("HTTP Request: POST ... 200 OK")
+        transport_loggers["httpx"].warning("HTTP transport warning")
+
+        for handler in logging.getLogger().handlers:
+            handler.flush()
+
+        content = log_path.read_text(encoding="utf-8")
+        assert "TLS transport detail" not in content
+        assert "HTTP Request: POST ... 200 OK" not in content
+        assert "HTTP transport warning" in content
+    finally:
+        for name, logger in transport_loggers.items():
+            logger.setLevel(original_levels[name])
+
+
+def test_setup_logging_debug_enables_transport_diagnostics(
+    bare_root_logger, monkeypatch, tmp_path
+):
+    log_path = tmp_path / "server.log"
+    monkeypatch.setattr("job_hunter_agent.paths.SERVER_LOG_PATH", log_path)
+
+    transport_loggers = {
+        "httpcore": logging.getLogger("httpcore"),
+        "httpx": logging.getLogger("httpx"),
+    }
+    original_levels = {name: logger.level for name, logger in transport_loggers.items()}
+
+    try:
+        bare_root_logger()
+        logging_utils.setup_logging(debug=True)
+
+        transport_loggers["httpcore"].debug("TLS transport detail")
+        transport_loggers["httpx"].info("HTTP Request: POST ... 200 OK")
+
+        for handler in logging.getLogger().handlers:
+            handler.flush()
+
+        content = log_path.read_text(encoding="utf-8")
+        assert "TLS transport detail" in content
+        assert "HTTP Request: POST ... 200 OK" in content
+    finally:
+        for name, logger in transport_loggers.items():
+            logger.setLevel(original_levels[name])
 
 
 def test_setup_logging_debug_true_shows_debug_lines(bare_root_logger, monkeypatch, tmp_path):

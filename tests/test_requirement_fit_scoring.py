@@ -189,7 +189,7 @@ def test_requirement_fit_diagnostics_and_formatter_cover_all_status_types():
     assert "Matched via: Related Skill" in lines
     assert "Matched term: sql analysis" in lines
     assert "Calculation: Eligibility gate only — no points added" in lines
-    assert "Eligibility gate: Fail" in lines
+    assert "Eligibility gate: Pass" in lines
     assert "Mapped to: Unresolved mapping" in lines
     assert "Calculation: 3 × 0.7 × 0.5 = 1.05 / 3 (35%)" in lines
     assert "Profile evidence used: No profile evidence returned" in lines
@@ -308,6 +308,64 @@ def test_requirement_fit_false_eligibility_counts_as_mismatch(tmp_path, monkeypa
     assert "mismatch 1" in breakdown
     assert "needs review" not in breakdown
     assert not uncertainty_log.exists()
+
+
+def test_preferred_eligibility_does_not_gate_job():
+    record = _record([
+        {
+            "requirement": "CBAP certification is desirable",
+            "canonical_requirement": "CBAP",
+            "importance": "preferred",
+            "status": "mismatch",
+            "requirement_type": "eligibility",
+        }
+    ])
+    profile = {
+        "candidate_capabilities": [],
+        "candidate_eligibility_facts": [{"name": "CBAP", "value": False}],
+    }
+
+    gate = fit_scoring.eligibility_gate_diagnostics(record, profile)
+    assert gate["status"] == fit_scoring.ELIGIBILITY_GATE_NOT_APPLICABLE
+
+
+def test_mandatory_canonical_eligibility_uses_profile_truth_when_llm_says_not_shown():
+    record = _record([
+        {
+            "requirement": "NV2 Security Clearance Required",
+            "canonical_requirement": "NV2",
+            "importance": "mandatory",
+            "status": "not_shown",
+            "requirement_type": "eligibility",
+        }
+    ])
+    profile = {
+        "candidate_capabilities": [],
+        "candidate_eligibility": [{"name": "NV2", "value": False}],
+    }
+
+    gate = fit_scoring.eligibility_gate_diagnostics(record, profile)
+    assert gate["status"] == fit_scoring.ELIGIBILITY_GATE_FAIL
+    assert gate["reason"] == "NV2 Security Clearance Required"
+
+
+def test_mandatory_canonical_eligibility_passes_when_profile_confirms_it():
+    record = _record([
+        {
+            "requirement": "Australian Citizenship is Mandatory",
+            "canonical_requirement": "Australian Citizenship",
+            "importance": "mandatory",
+            "status": "not_shown",
+            "requirement_type": "eligibility",
+        }
+    ])
+    profile = {
+        "candidate_capabilities": [],
+        "candidate_eligibility_facts": [{"name": "Australian Citizenship", "value": True}],
+    }
+
+    gate = fit_scoring.eligibility_gate_diagnostics(record, profile)
+    assert gate["status"] == fit_scoring.ELIGIBILITY_GATE_PASS
 
 
 def test_requirement_fit_invalid_requirement_type_logs_uncertainty(tmp_path, monkeypatch):

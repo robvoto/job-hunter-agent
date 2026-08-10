@@ -100,6 +100,7 @@ from job_hunter_agent.system_warnings import (
 )
 
 # Import at module level to allow monkeypatching in tests
+from job_hunter_agent.profile_item_names import canonical_profile_item_name
 from job_hunter_agent.profile_store import (
     KEY_CANDIDATE_CAPABILITIES,
     KEY_CANDIDATE_ELIGIBILITY,
@@ -301,6 +302,7 @@ class _LLMRequirementCoverageItem(BaseModel):
     requirement: str
     importance: str = "preferred"
     requirement_type: str = "capability"
+    canonical_requirement: str = ""
     status: str
     matched_candidate_fact: str = Field(
         default="",
@@ -1109,6 +1111,7 @@ def normalize_llm_requirement_coverage(
         else:
             requirement_type = LLM_INVALID_COVERAGE_REQUIREMENT_TYPE
             requirement_type_is_valid = False
+        canonical_requirement = canonical_profile_item_name(item.get("canonical_requirement"))
         matched_candidate_fact_raw = item.get("matched_candidate_fact") or item.get("profile_name")
         if not matched_candidate_fact_raw:
             matched_candidate_fact_raw = item.get("capability_name") or item.get("eligibility_name")
@@ -1317,6 +1320,7 @@ def normalize_llm_requirement_coverage(
             "requirement": requirement,
             "importance": importance,
             "requirement_type": requirement_type,
+            "canonical_requirement": canonical_requirement,
             "status": status,
             "matched_candidate_fact": matched_candidate_fact,
             "capability_name": capability_name,

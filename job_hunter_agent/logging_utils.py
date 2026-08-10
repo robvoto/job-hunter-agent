@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import contextvars
-from datetime import datetime
 import logging
+from datetime import datetime
 
 LOG_BLOCK_SEPARATOR = "-" * 80
 
 SERVER_LOG_MAX_BYTES = 10 * 1024 * 1024
 SERVER_LOG_BACKUP_COUNT = 5
+
+_TRANSPORT_LOGGERS = {
+    "httpcore": (logging.WARNING, logging.DEBUG),
+    "httpx": (logging.WARNING, logging.INFO),
+}
 
 _LOG_SOURCE_SCOPE: contextvars.ContextVar[str] = contextvars.ContextVar(
     "job_hunter_log_source_scope",
@@ -114,6 +119,13 @@ def install_log_handler_filters() -> None:
         handler.addFilter(SourceScopeFilter())
 
 
+def _configure_transport_logging(*, debug: bool) -> None:
+    """Keep dependency transport traces out of normal operational logs."""
+
+    for logger_name, (normal_level, debug_level) in _TRANSPORT_LOGGERS.items():
+        logging.getLogger(logger_name).setLevel(debug_level if debug else normal_level)
+
+
 def setup_logging(*, debug: bool = False) -> None:
     """Configure the root logger: one console handler + one file handler.
 
@@ -170,4 +182,5 @@ def setup_logging(*, debug: bool = False) -> None:
             },
         }
     )
+    _configure_transport_logging(debug=debug)
     install_log_handler_filters()

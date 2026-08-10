@@ -1,11 +1,14 @@
 {
   "kind": "system_config",
   "name": "llm_requirement_coverage_defaults",
-  "version": 7,
-  "updated_at": "2026-08-07",
+  "version": 8,
+  "updated_at": "2026-08-10",
   "description": "Managed default guidance for LLM requirement coverage decomposition behaviour.",
   "lines": [
     "For requirement_coverage: semantically decompose the job ad into atomic requirements \u2014 one skill, qualification, experience, or constraint per item.",
+    "For every requirement_coverage item, return canonical_requirement as one short reusable concept name suitable for a candidate profile, separate from the job-ad wording. Examples: \"NV2\", \"Australian Citizenship\", \"CBAP\", \"Java\".",
+    "canonical_requirement must name one concept only. Never copy requirement prose such as \"NV2 Security Clearance Required\" or compound alternatives such as \"CBAP, Agile BA, or equivalent certifications are desirable\" into canonical_requirement.",
+    "If one ad sentence contains multiple independently testable concepts, emit separate requirement_coverage items rather than one combined canonical_requirement.",
     "Do not put a whole sentence as a single item; split compound sentences into their atomic parts.",
     "For each atomic requirement: assign the weakest accurate importance. Use mandatory only when the ad explicitly says required, must, essential, or similar hard-block language. Use strongly_preferred for clearly expected but non-blocking items, preferred for desirable items, and nice_to_have for optional or bonus items. Do not mark every row mandatory.",
     "Store the original job-ad sentence in matched_job_text for traceability \u2014 do not match the whole sentence directly to a capability.",

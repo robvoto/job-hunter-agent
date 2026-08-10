@@ -1084,6 +1084,59 @@ def test_external_apply_unverified_original_date_does_not_reject(monkeypatch):
     assert updated_record[RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY] is None
 
 
+def test_mandatory_eligibility_rejects_llm_keep_when_profile_fact_is_false(monkeypatch):
+    record = _base_record("seek", "jobAdDetails", "card")
+    record[RECORD_TITLE_REASON_KEY] = "OK"
+    context = _review_context("SEEK")
+    context.profile["candidate_eligibility"] = [{"name": "NV2", "value": False}]
+    payload = _keep_review_payload(requirement="NV2 Security Clearance Required")
+    payload["requirement_coverage"] = [
+        {
+            "requirement": "NV2 Security Clearance Required",
+            "canonical_requirement": "NV2",
+            "importance": "mandatory",
+            "requirement_type": "eligibility",
+            "status": "not_shown",
+            "matched_candidate_fact": "",
+            "matched_job_text": "NV2 Security Clearance Required",
+            "profile_support": [],
+        }
+    ]
+    _patch_llm_review_path(monkeypatch, payload)
+
+    outcome, updated_record, _ = review_post_detail_normalized_job(record, context)
+
+    assert outcome[RECORD_DECISION_KEY] == "REJECT"
+    assert updated_record[RECORD_REJECT_REASON_KEY] == "MANDATORY_ELIGIBILITY_FAILED"
+    assert updated_record[RECORD_DECISION_EXPLANATION_KEY] == "NV2 Security Clearance Required"
+
+
+def test_preferred_eligibility_does_not_reject_llm_keep(monkeypatch):
+    record = _base_record("seek", "jobAdDetails", "card")
+    record[RECORD_TITLE_REASON_KEY] = "OK"
+    context = _review_context("SEEK")
+    context.profile["candidate_eligibility_facts"] = [{"name": "CBAP", "value": False}]
+    payload = _keep_review_payload(requirement="CBAP certification is desirable")
+    payload["requirement_coverage"] = [
+        {
+            "requirement": "CBAP certification is desirable",
+            "canonical_requirement": "CBAP",
+            "importance": "preferred",
+            "requirement_type": "eligibility",
+            "status": "mismatch",
+            "matched_candidate_fact": "",
+            "matched_job_text": "CBAP certification is desirable",
+            "profile_support": [],
+        }
+    ]
+    _patch_llm_review_path(monkeypatch, payload)
+
+    outcome, updated_record, _ = review_post_detail_normalized_job(record, context)
+
+    assert outcome[RECORD_DECISION_KEY] == "KEEP"
+    assert updated_record.get(RECORD_REJECT_REASON_KEY) is None
+
+
 def test_job_cost_preserves_micro_cost_precision(monkeypatch):
     job_key = "seek-job-micro-cost"
     job_review_pipeline._job_start_costs[job_key] = 1.0
@@ -1362,7 +1415,7 @@ def test_fit_review_logs_shared_requirement_score_diagnostics(monkeypatch, caplo
     messages = [entry.message for entry in caplog.records]
     block = next(message for message in messages if "Requirement scoring" in message)
     assert "Outcome: KEEP | Grade: STRONG" in block
-    assert "Eligibility gate: Fail | Australian citizenship" in block
+    assert "Eligibility gate: Not applicable | No mandatory eligibility requirements were returned." in block
     assert "Why: Requirement coverage returned for scoring diagnostics." in block
     assert (
         "Stakeholder engagement | Mandatory | Capability | In profile | Stakeholder Engagement"

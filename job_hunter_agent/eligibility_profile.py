@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from job_hunter_agent.profile_item_names import canonical_profile_item_name
 from job_hunter_agent.text_processing import compact_whitespace
 
 KEY_NAME = "name"
@@ -64,7 +65,7 @@ def prepare_eligibility_fact(
     """Return an updated fact list and the fact that was added or updated."""
 
     facts = normalize_eligibility_facts(existing_facts)
-    canonical_name = compact_whitespace(name)
+    canonical_name = canonical_profile_item_name(name)
     if not canonical_name:
         raise ValueError("Eligibility name is required")
 

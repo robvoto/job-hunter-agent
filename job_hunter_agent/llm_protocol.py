@@ -34,7 +34,7 @@ LLM_FIT_REVIEW_PROMPT_SHAPE = (
     '"posting_channel":{"kind":"agency_or_recruiter|direct_employer|unknown","confident":true|false,"evidence":"..."},'
     '"job_requirements":["..."],'
     '"requirement_coverage":[{"requirement":"...","importance":"mandatory|strongly_preferred|preferred|nice_to_have",'
-    '"requirement_type":"capability|eligibility","status":"supported|partially_supported|not_shown|mismatch",'
+    '"requirement_type":"capability|eligibility","canonical_requirement":"...","status":"supported|partially_supported|not_shown|mismatch",'
     '"matched_candidate_fact":"...","matched_job_text":"...","profile_support":["..."],"covered_requirement_elements":["..."],"role_defining":true|false,"role_defining_group":"..."}],'
     '"debug_reason":"..."}'
 )
@@ -44,7 +44,7 @@ LLM_FIT_REVIEW_DEBUG_PROMPT_SHAPE = (
     '"posting_channel":{"kind":"agency_or_recruiter|direct_employer|unknown","confident":true|false,"evidence":"..."},'
     '"job_requirements":["..."],'
     '"requirement_coverage":[{"requirement":"...","importance":"mandatory|strongly_preferred|preferred|nice_to_have",'
-    '"requirement_type":"capability|eligibility","status":"supported|partially_supported|not_shown|mismatch",'
+    '"requirement_type":"capability|eligibility","canonical_requirement":"...","status":"supported|partially_supported|not_shown|mismatch",'
     '"matched_candidate_fact":"...","match_source":"capability_name|related_skill|eligibility",'
     '"matched_profile_term":"...","matched_job_text":"...","profile_support":["..."],"covered_requirement_elements":["..."],"role_defining":true|false,"role_defining_group":"..."}],'
     '"debug_reason":"..."}'

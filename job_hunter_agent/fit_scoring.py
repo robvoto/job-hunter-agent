@@ -253,13 +253,15 @@ def eligibility_gate_diagnostics(record: dict, profile: Optional[dict] = None) -
             continue
         if str(item.get("requirement_type") or "").strip().lower() != "eligibility":
             continue
+        if str(item.get("importance") or "").strip().lower() != "mandatory":
+            continue
         relevant_rows.append(item)
 
     if not relevant_rows:
         return {
             "status": ELIGIBILITY_GATE_NOT_APPLICABLE,
             "label": "Not applicable",
-            "reason": "No eligibility requirements were returned.",
+            "reason": "No mandatory eligibility requirements were returned.",
         }
 
     unresolved = 0
@@ -270,6 +272,7 @@ def eligibility_gate_diagnostics(record: dict, profile: Optional[dict] = None) -
                 item.get("matched_candidate_fact")
                 or item.get("profile_name")
                 or item.get("eligibility_name")
+                or item.get("canonical_requirement")
                 or ""
             )
         )
@@ -280,10 +283,7 @@ def eligibility_gate_diagnostics(record: dict, profile: Optional[dict] = None) -
                 "label": "Fail",
                 "reason": compact_whitespace(str(item.get("requirement") or "Eligibility mismatch")),
             }
-        if status in {"supported", "partially_supported"}:
-            if not matched_candidate_fact or eligibility_key not in eligibility_levels:
-                unresolved += 1
-                continue
+        if matched_candidate_fact and eligibility_key in eligibility_levels:
             if not eligibility_levels.get(eligibility_key, False):
                 return {
                     "status": ELIGIBILITY_GATE_FAIL,
@@ -292,8 +292,10 @@ def eligibility_gate_diagnostics(record: dict, profile: Optional[dict] = None) -
                         str(item.get("requirement") or matched_candidate_fact or "Eligibility mismatch")
                     ),
                 }
+            # The candidate profile is authoritative for a known eligibility fact.
+            # This also repairs an LLM not_shown result when the canonical fact is known.
             continue
-        if status == "not_shown":
+        if status in {"supported", "partially_supported", "not_shown"}:
             unresolved += 1
             continue
         unresolved += 1

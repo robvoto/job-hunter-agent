@@ -348,7 +348,7 @@ def test_render_job_card_keeps_unknown_mandatory_requirement_visible_once():
     assert html.count(requirement) == 1
     assert "No proof in profile" in html
     assert "Needs classification/review" in html
-    assert "prefill_eligibility=" in html
+    assert "prefill_eligibility=" not in html
 
 
 def test_render_job_card_shows_single_badge_for_uncertain_classification_and_no_add_action():
@@ -3176,7 +3176,7 @@ def test_render_job_card_debug_audit_shows_evidence_credit_and_decision_conversi
     assert "Decision trace" in html
     assert "Full LLM review: Run" in html
     assert "Final conversion: MAYBE → KEEP" in html
-    assert "Eligibility gate: Fail" in html
+    assert "Eligibility gate: Not applicable" in html
 
 
 def test_render_job_card_hides_debug_fit_sections_in_normal_mode():
@@ -4120,10 +4120,11 @@ def test_add_to_profile_link_carries_capability_prefill_query():
             "source": "seek",
             "requirement_coverage": [
                 {
-                    "requirement": "Stakeholder management",
+                    "requirement": "Strong stakeholder management is required",
+                    "canonical_requirement": "Stakeholder management",
                     "importance": "mandatory",
                     "status": "not_shown",
-                    "matched_job_text": "Stakeholder management",
+                    "matched_job_text": "Strong stakeholder management is required",
                 }
             ],
         },

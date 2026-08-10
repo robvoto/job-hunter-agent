@@ -28,6 +28,8 @@ _REASON_LABELS: dict[str, str] = {
     "LLM_TITLE_NOT_TARGET": "title judged a clear mismatch for your target roles",
     "HARD_BLOCK": "matched a hard blocker rule",
     "HARD_BLOCK_REQUIRED_SKILL": "requires a skill you flagged as blocking",
+    "MANDATORY_ELIGIBILITY_FAILED": "mandatory eligibility requirement is not met",
+    "MANDATORY_ELIGIBILITY_UNRESOLVED": "mandatory eligibility requirement could not be confirmed",
     "DETAILS_CHALLENGE_PAGE": "description page was a bot challenge",
     "DETAILS_BLOCKED_PAGE": "description page was blocked",
     "DETAILS_NAVIGATION_ERROR": "description page failed to load",
@@ -1078,12 +1080,28 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
             )
         )
 
+    eligibility_reject_reason = ""
+    if source != "rule":
+        eligibility_gate = eligibility_gate_diagnostics(record, profile)
+        if eligibility_gate["status"] == "fail":
+            eligibility_reject_reason = "MANDATORY_ELIGIBILITY_FAILED"
+        elif eligibility_gate["status"] == "unresolved":
+            eligibility_reject_reason = "MANDATORY_ELIGIBILITY_UNRESOLVED"
+
     fit_eval = {
         "llm_decision": review["decision"],
         "llm_fit_grade": review["grade"],
         RECORD_LLM_DEBUG_REASON_KEY: debug_reason,
         "review_source": source,
-        "decision": "KEEP" if review["decision"] != "REJECT" else "REJECT",
+        "decision": (
+            "REJECT"
+            if review["decision"] == "REJECT" or eligibility_reject_reason
+            else "KEEP"
+        ),
+        "_eligibility_gate_reject_reason": eligibility_reject_reason,
+        "_eligibility_gate_reason": (
+            eligibility_gate.get("reason", "") if source != "rule" else ""
+        ),
         RECORD_JOB_REQUIREMENTS_KEY: record[RECORD_JOB_REQUIREMENTS_KEY],
         RECORD_REQUIREMENT_COVERAGE_KEY: record[RECORD_REQUIREMENT_COVERAGE_KEY],
         RECORD_OCCUPATION_ALIGNMENT_KEY: record[RECORD_OCCUPATION_ALIGNMENT_KEY],
@@ -1500,9 +1518,13 @@ def review_post_detail_normalized_job(
     _apply_source_metadata_to_record(record, record.pop("posting_channel", None))
 
     if record[RECORD_DECISION_KEY] == "REJECT":
-        record[RECORD_REJECT_REASON_KEY] = (
+        eligibility_reject_reason = str(record.pop("_eligibility_gate_reject_reason", "") or "")
+        eligibility_reason = str(record.pop("_eligibility_gate_reason", "") or "")
+        record[RECORD_REJECT_REASON_KEY] = eligibility_reject_reason or (
             "LLM_REJECT" if record["review_source"] == "llm" else "DET_REJECT"
         )
+        if eligibility_reject_reason and eligibility_reason:
+            record[RECORD_DECISION_EXPLANATION_KEY] = eligibility_reason
         register_pending_learning_signals(
             merge_pending_learning_signals(
                 record.get("ad_learning_signals") or [],
@@ -1510,7 +1532,12 @@ def review_post_detail_normalized_job(
                 _build_requirement_classification_review_signals(record),
             )
         )
-        _finalize_job_result(record, context, reason=record[RECORD_REJECT_REASON_KEY])
+        _finalize_job_result(
+            record,
+            context,
+            reason=record[RECORD_REJECT_REASON_KEY],
+            explanation=eligibility_reason,
+        )
         return _build_outcome(record), record, skill_observations
 
     _freeze_fit_score_fields(record, profile)
