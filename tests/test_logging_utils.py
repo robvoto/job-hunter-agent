@@ -154,6 +154,7 @@ def test_setup_logging_suppresses_transport_chatter_by_default(
     transport_loggers = {
         "httpcore": logging.getLogger("httpcore"),
         "httpx": logging.getLogger("httpx"),
+        "openai": logging.getLogger("openai"),
     }
     original_levels = {name: logger.level for name, logger in transport_loggers.items()}
 
@@ -163,6 +164,7 @@ def test_setup_logging_suppresses_transport_chatter_by_default(
 
         transport_loggers["httpcore"].debug("TLS transport detail")
         transport_loggers["httpx"].info("HTTP Request: POST ... 200 OK")
+        transport_loggers["openai"].debug("OpenAI request payload")
         transport_loggers["httpx"].warning("HTTP transport warning")
 
         for handler in logging.getLogger().handlers:
@@ -171,13 +173,14 @@ def test_setup_logging_suppresses_transport_chatter_by_default(
         content = log_path.read_text(encoding="utf-8")
         assert "TLS transport detail" not in content
         assert "HTTP Request: POST ... 200 OK" not in content
+        assert "OpenAI request payload" not in content
         assert "HTTP transport warning" in content
     finally:
         for name, logger in transport_loggers.items():
             logger.setLevel(original_levels[name])
 
 
-def test_setup_logging_debug_enables_transport_diagnostics(
+def test_setup_logging_suppresses_transport_chatter_even_in_debug_mode(
     bare_root_logger, monkeypatch, tmp_path
 ):
     log_path = tmp_path / "server.log"
@@ -186,6 +189,7 @@ def test_setup_logging_debug_enables_transport_diagnostics(
     transport_loggers = {
         "httpcore": logging.getLogger("httpcore"),
         "httpx": logging.getLogger("httpx"),
+        "openai": logging.getLogger("openai"),
     }
     original_levels = {name: logger.level for name, logger in transport_loggers.items()}
 
@@ -195,13 +199,20 @@ def test_setup_logging_debug_enables_transport_diagnostics(
 
         transport_loggers["httpcore"].debug("TLS transport detail")
         transport_loggers["httpx"].info("HTTP Request: POST ... 200 OK")
+        transport_loggers["openai"].debug("OpenAI request payload")
+        logging.getLogger("job_hunter_agent.some_module").debug(
+            "Application debug detail"
+        )
 
         for handler in logging.getLogger().handlers:
             handler.flush()
 
         content = log_path.read_text(encoding="utf-8")
-        assert "TLS transport detail" in content
-        assert "HTTP Request: POST ... 200 OK" in content
+        assert "TLS transport detail" not in content
+        assert "HTTP Request: POST ... 200 OK" not in content
+        assert "OpenAI request payload" not in content
+        assert "Application debug detail" in content
+        assert not log_path.with_name("server.debug.log").exists()
     finally:
         for name, logger in transport_loggers.items():
             logger.setLevel(original_levels[name])

@@ -11,10 +11,7 @@ LOG_BLOCK_SEPARATOR = "-" * 80
 SERVER_LOG_MAX_BYTES = 10 * 1024 * 1024
 SERVER_LOG_BACKUP_COUNT = 5
 
-_TRANSPORT_LOGGERS = {
-    "httpcore": (logging.WARNING, logging.DEBUG),
-    "httpx": (logging.WARNING, logging.INFO),
-}
+_DEPENDENCY_LOGGERS = ("httpcore", "httpx", "openai")
 
 _LOG_SOURCE_SCOPE: contextvars.ContextVar[str] = contextvars.ContextVar(
     "job_hunter_log_source_scope",
@@ -54,6 +51,20 @@ class SourceScopeFilter(logging.Filter):
         record.source_scope = source_scope
         record.source_scope_prefix = prefix
         return True
+
+
+class CuratedLogFilter(logging.Filter):
+    """Drop dependency wire-trace noise (raw HTTP headers, connection
+    open/close events, retry bookkeeping) that isn't actionable at any
+    level. Real problems from these libraries still surface as WARNING+.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        is_dependency_record = any(
+            record.name == logger_name or record.name.startswith(f"{logger_name}.")
+            for logger_name in _DEPENDENCY_LOGGERS
+        )
+        return not (is_dependency_record and record.levelno < logging.WARNING)
 
 
 def format_log_block(title: str, fields: dict[str, object]) -> str:
@@ -119,21 +130,24 @@ def install_log_handler_filters() -> None:
         handler.addFilter(SourceScopeFilter())
 
 
-def _configure_transport_logging(*, debug: bool) -> None:
-    """Keep dependency transport traces out of normal operational logs."""
+def _configure_dependency_logging() -> None:
+    """Dependency wire-trace noise is never useful, in or out of --debug."""
 
-    for logger_name, (normal_level, debug_level) in _TRANSPORT_LOGGERS.items():
-        logging.getLogger(logger_name).setLevel(debug_level if debug else normal_level)
+    for logger_name in _DEPENDENCY_LOGGERS:
+        logging.getLogger(logger_name).setLevel(logging.WARNING)
 
 
 def setup_logging(*, debug: bool = False) -> None:
     """Configure the root logger: one console handler + one file handler.
 
-    Output goes to the console and ``output/server.log``. At the default INFO
-    level this shows curated, human-facing lines (per-job results, run
-    summaries, session banners, settings/auth changes). Passing ``debug=True``
-    raises the level to DEBUG, adding detailed trace (LLM calls, pipeline
-    stage-by-stage detail, scraper card-by-card detail).
+    Output goes to the console and ``output/server.log`` — a single file,
+    always. At the default INFO level this shows curated, human-facing
+    lines (per-job results, run summaries, session banners, settings/auth
+    changes). Passing ``debug=True`` raises the level to DEBUG, adding
+    detailed application trace (LLM calls, pipeline stage-by-stage detail,
+    scraper card-by-card detail). Dependency wire-trace noise (raw HTTP
+    headers, connection internals from httpx/httpcore/openai/urllib3) is
+    dropped at both levels — it's never actionable and clutters the file.
 
     No-op if handlers are already configured (e.g. running inside tests).
     """
@@ -150,6 +164,7 @@ def setup_logging(*, debug: bool = False) -> None:
         {
             "version": 1,
             "disable_existing_loggers": False,
+            "filters": {"curated": {"()": CuratedLogFilter}},
             "formatters": {
                 "console": {
                     "format": "%(source_scope_prefix)s%(message)s",
@@ -164,12 +179,14 @@ def setup_logging(*, debug: bool = False) -> None:
                     "class": "logging.StreamHandler",
                     "level": level,
                     "formatter": "console",
+                    "filters": ["curated"],
                     "stream": "ext://sys.__stdout__",
                 },
                 "file": {
                     "class": "logging.handlers.RotatingFileHandler",
                     "level": level,
                     "formatter": "file",
+                    "filters": ["curated"],
                     "filename": str(SERVER_LOG_PATH),
                     "encoding": "utf-8",
                     "maxBytes": SERVER_LOG_MAX_BYTES,
@@ -182,5 +199,5 @@ def setup_logging(*, debug: bool = False) -> None:
             },
         }
     )
-    _configure_transport_logging(debug=debug)
+    _configure_dependency_logging()
     install_log_handler_filters()

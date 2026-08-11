@@ -218,9 +218,10 @@ Background-service rule:
 
 Server logs:
 
-- all runtime output is written to `output/server.log`, timestamped
-- `./run` shows curated INFO-level lines (per-job results, run summaries, session banners, settings/auth changes); `./run --debug` raises the level to DEBUG and adds detailed trace (LLM calls, pipeline stage detail, scraper card detail) to the same file
-- the terminal mirrors the same stream that's written to the file
+- application runtime output is written to a single file, `output/server.log`, timestamped
+- `./run` shows curated INFO-level lines (per-job results, run summaries, session banners, settings/auth changes); `./run --debug` raises `server.log` to DEBUG, adding application trace (LLM calls, pipeline stage detail, scraper card detail)
+- raw dependency/API transport chatter (httpx/httpcore/openai wire-level detail — headers, connection open/close, retry bookkeeping) is dropped at every level, in and out of `--debug`; it's never actionable and only clutters the file. Genuine errors from those libraries still surface as WARNING+
+- the terminal mirrors the curated `server.log` stream
 - every server start writes a large `NEW SERVER SESSION STARTED` banner into the log, including the local start time, PID, and startup flags
 - on AWS, the EC2 browser-session launcher also prints an `AWS JOB HUNTER SERVICE STARTING` banner directly into `systemd`/`journalctl` before Python starts, so service restarts are obvious even if you are only watching the live service log
 - on AWS, `jobhunter-logs` shows `journalctl` plus the app log, accepts `--since "YYYY-MM-DD HH:MM:SS"` / `--until "YYYY-MM-DD HH:MM:SS"` when you need the pre-restart window, and `jobhunter-logs --follow` tails the app log by default

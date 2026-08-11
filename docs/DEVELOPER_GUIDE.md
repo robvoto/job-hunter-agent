@@ -45,8 +45,9 @@ Primary modules:
 
 Server logging:
 
-- all runtime logging writes to `output/server.log`, timestamped; the terminal mirrors the same output
-- `./run` shows curated INFO-level job/run summaries; `./run --debug` adds DEBUG-level pipeline/LLM/API trace to the same file — see `docs/OPERATIONS.md` for the command
+- application runtime logging writes to a single file, `output/server.log`, timestamped; the terminal mirrors its curated stream
+- `./run` shows curated INFO-level job/run summaries; `./run --debug` raises `server.log` to DEBUG for application pipeline/LLM trace — see `docs/OPERATIONS.md` for the command
+- raw dependency/API transport chatter (httpx/httpcore/openai wire-level detail) is dropped at every level; it's never written anywhere
 - `/api/debug/browser-log` is for browser-side JS logs only
 - debug/audit uncertainty events go to `output/uncertainty.jsonl`
 - reviewable runtime warnings go to SQLite `system_warnings`
