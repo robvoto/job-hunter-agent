@@ -33,6 +33,7 @@ from job_hunter_agent.profile_store import (
     KEY_ALIASES,
     KEY_CANDIDATE_CAPABILITIES,
     KEY_CANDIDATE_ELIGIBILITY,
+    KEY_CANDIDATE_QUALIFICATIONS,
     KEY_ICON_KEY,
     KEY_LEVEL,
     KEY_LOOKBACK_YEARS,
@@ -115,6 +116,15 @@ class _EligibilityExtraction(BaseModel):
     needs_review: bool = False
 
 
+class _QualificationExtraction(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    aliases: list[str] = Field(default_factory=list)
+    evidence: list[str] = Field(default_factory=list)
+    needs_review: bool = False
+
+
 class _MatchPreferenceExtraction(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -138,6 +148,7 @@ class _CvExtractionResponse(BaseModel):
 
     capabilities: list[_CapabilityExtraction] = Field(default_factory=list)
     eligibility: list[_EligibilityExtraction] = Field(default_factory=list)
+    qualifications: list[_QualificationExtraction] = Field(default_factory=list)
     match_preferences: _MatchPreferenceExtraction = Field(
         default_factory=_MatchPreferenceExtraction
     )
@@ -346,8 +357,11 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         "- target_occupation_queries: generate 3 to 8 machine-facing occupation query strings that match the candidate's occupation family.\n"
         "  Use standard job titles a job-search system could match against.\n"
         "- eligibility: extract explicit true/false facts the candidate formally holds or is legally allowed to claim. "
-        "Examples include clearances, citizenship, work rights, licences, registrations, and certifications. "
+        "Examples include clearances, citizenship, work rights, licences, and registrations. "
         "Only include facts that are directly supported by the CV text.\n"
+        "- qualifications: extract explicit education, degrees, certifications, and formal qualifications. "
+        "Return one concise reusable concept per item (for example CBAP, PRINCE2, Bachelor of Information Technology, or Diploma of Project Management), plus aliases and source evidence. "
+        "Never use a full CV sentence or a list of alternatives as the qualification name. Only include items directly supported by the CV text.\n"
         "- Do not invent employers, titles, capabilities, or preferences that are not grounded in the evidence.\n"
         "- Return only schema-valid output.\n\n"
         f"CV text:\n{source_text}"
@@ -377,6 +391,7 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         f"cache_key={cache_key} "
         f"capabilities={len(result.get(KEY_CAPABILITIES, []) or [])} "
         f"eligibility={len(result.get('eligibility', []) or [])} "
+        f"qualifications={len(result.get('qualifications', []) or [])} "
         f"role_experience={len(result.get(KEY_ROLE_EXPERIENCE, []) or [])} "
         f"role_titles={len(result.get('role_titles', []) or [])} "
         f"preferred_role_titles={len(result.get('preferred_role_titles', []) or [])} "
@@ -478,6 +493,37 @@ def _validate_eligibility(raw: list[Any]) -> list[dict[str, Any]]:
     if rejected:
         _cap_log(f"[ELIGIBILITY_VALIDATE] rejected {len(rejected)}: {rejected}")
     return capped
+
+
+def _validate_qualifications(raw: list[Any]) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in raw or []:
+        if not isinstance(item, dict):
+            continue
+        name = compact_whitespace(item.get("name") or item.get("label"))
+        name_key = name.casefold()
+        if not name_key or name_key in seen:
+            continue
+        aliases = item.get("aliases") or []
+        if isinstance(aliases, str):
+            aliases = [aliases]
+        evidence = item.get("evidence") or []
+        if isinstance(evidence, str):
+            evidence = [evidence]
+        result.append(
+            {
+                "name": name,
+                "aliases": [compact_whitespace(value) for value in aliases if compact_whitespace(value)],
+                "evidence": [compact_whitespace(value) for value in evidence if compact_whitespace(value)],
+                "value": True,
+                "needs_review": bool(item.get("needs_review")),
+            }
+        )
+        seen.add(name_key)
+        if len(result) >= 20:
+            break
+    return result
 
 
 def _aggregate_role_experience(raw: list[Any]) -> list[dict[str, Any]]:
@@ -670,12 +716,14 @@ def build_learning_patch(
     )
     capabilities = _validate_capabilities(raw_caps)
     eligibility = _validate_eligibility(raw_eligibility)
+    qualifications = _validate_qualifications(extracted.get("qualifications") or [])
     role_experience = _aggregate_role_experience(extracted.get(KEY_ROLE_EXPERIENCE) or [])
     approved_capabilities, review_signals = _split_learning_capabilities(
         capabilities, source_sections=source_sections
     )
     _cap_log(f"[BUILD_LEARNING_PATCH] {len(approved_capabilities)} capability group(s) written")
     _cap_log(f"[BUILD_LEARNING_PATCH] {len(eligibility)} eligibility fact(s) written")
+    _cap_log(f"[BUILD_LEARNING_PATCH] {len(qualifications)} qualification(s) written")
     _cap_log(f"[BUILD_LEARNING_PATCH] {len(role_experience)} role experience row(s) written")
     _cap_log(f"[BUILD_LEARNING_PATCH] {len(review_signals)} capability signal(s) need review")
 
@@ -728,6 +776,7 @@ def build_learning_patch(
 
     patch[KEY_CANDIDATE_CAPABILITIES] = approved_capabilities
     patch[KEY_CANDIDATE_ELIGIBILITY] = eligibility
+    patch[KEY_CANDIDATE_QUALIFICATIONS] = qualifications
     patch[KEY_ROLE_EXPERIENCE] = role_experience
     if review_signals and not is_desktop_runtime():
         register_signals(review_signals)

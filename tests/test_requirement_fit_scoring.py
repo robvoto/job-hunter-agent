@@ -1,6 +1,8 @@
 import json
 
-from job_hunter_agent import fit_scoring
+import pytest
+
+from job_hunter_agent import fit_scoring, llm_gate
 
 
 def _profile():
@@ -26,6 +28,23 @@ def _record(coverage, **extra):
     }
     record.update(extra)
     return record
+
+
+def _capability_lookup(profile):
+    lookup = {}
+    for rule in profile["candidate_capabilities"]:
+        canonical = rule["name"]
+        for term in [canonical, *(rule.get("aliases") or [])]:
+            lookup[term.lower()] = canonical
+    return lookup
+
+
+def _normalize_capability_row(raw_row, profile, role_experience=None):
+    return llm_gate.normalize_llm_requirement_coverage(
+        [raw_row],
+        valid_capability_names=_capability_lookup(profile),
+        role_experience=role_experience,
+    )[0]
 
 
 def test_requirement_fit_all_supported_strong_is_100():
@@ -222,6 +241,216 @@ def test_requirement_fit_uses_capability_level_not_llm_grade_or_title():
     assert fit_scoring.fit_score(record, _profile()) == 35
     labels = [entry["label"] for entry in fit_scoring.fit_score_breakdown(record, _profile())]
     assert any("Mandatory weak coverage: Salesforce configuration" in label for label in labels)
+
+
+@pytest.mark.parametrize(
+    ("requirement", "candidate_capabilities", "matched_candidate_fact", "profile_support", "status"),
+    [
+        (
+            "5+ years of Salesforce configuration experience required",
+            [
+                {"name": "Business Analysis", "level": "strong"},
+                {"name": "CRM", "level": "strong"},
+                {"name": "Stakeholder Management", "level": "strong"},
+            ],
+            "CRM",
+            ["Used CRM to manage customer information."],
+            "supported",
+        ),
+        (
+            "Demonstrated SAP S/4HANA implementation experience is mandatory",
+            [{"name": "SAP", "level": "basic"}],
+            "SAP",
+            ["Unrelated historical exposure to generic SAP."],
+            "supported",
+        ),
+        (
+            "Experience with BPMN 2.0 required",
+            [{"name": "Process Modelling", "level": "strong"}],
+            "Process Modelling",
+            ["Created process models."],
+            "partially_supported",
+        ),
+    ],
+)
+def test_mandatory_specific_capability_does_not_credit_adjacent_profile_fact(
+    requirement,
+    candidate_capabilities,
+    matched_candidate_fact,
+    profile_support,
+    status,
+):
+    profile = {
+        "candidate_capabilities": candidate_capabilities,
+        "scoring_rules": {"fit_breakdown": {"hard_block_penalty": -100}},
+    }
+    normalized = _normalize_capability_row(
+        {
+            "requirement": requirement,
+            "importance": "mandatory",
+            "requirement_type": "capability",
+            "status": status,
+            "matched_candidate_fact": matched_candidate_fact,
+            "matched_job_text": requirement,
+            "profile_support": profile_support,
+        },
+        profile,
+    )
+
+    assert normalized["status"] == "not_shown"
+    assert normalized["matched_candidate_fact"] == ""
+    assert normalized["capability_name"] == ""
+    assert fit_scoring.fit_score(_record([normalized]), profile) == 0
+
+
+def test_exact_capability_match_still_gets_normal_credit():
+    profile = {
+        "candidate_capabilities": [
+            {"name": "Stakeholder Management", "level": "strong"},
+        ],
+        "scoring_rules": {"fit_breakdown": {"hard_block_penalty": -100}},
+    }
+    normalized = _normalize_capability_row(
+        {
+            "requirement": "Strong stakeholder management required",
+            "importance": "mandatory",
+            "requirement_type": "capability",
+            "status": "supported",
+            "matched_candidate_fact": "Stakeholder Management",
+            "matched_job_text": "Strong stakeholder management required",
+            "profile_support": ["Led stakeholder management across delivery teams."],
+        },
+        profile,
+    )
+
+    assert normalized["status"] == "supported"
+    assert normalized["matched_candidate_fact"] == "Stakeholder Management"
+    assert fit_scoring.fit_score(_record([normalized]), profile) == 100
+
+
+def test_exact_capability_with_matching_role_duration_can_be_supported_without_digit_in_profile_support():
+    profile = {
+        "candidate_capabilities": [
+            {"name": "Salesforce", "level": "strong"},
+        ],
+        "scoring_rules": {"fit_breakdown": {"hard_block_penalty": -100}},
+    }
+    normalized = _normalize_capability_row(
+        {
+            "requirement": "5+ years of Salesforce configuration experience required",
+            "importance": "mandatory",
+            "requirement_type": "capability",
+            "status": "supported",
+            "matched_candidate_fact": "Salesforce",
+            "matched_job_text": "5+ years of Salesforce configuration experience required",
+            "profile_support": ["Configured CRM workflows for internal teams."],
+        },
+        profile,
+        role_experience=[
+            {
+                "normalized_title": "salesforce configuration",
+                "total_duration_months": 72,
+                "most_recent_end_year": 2025,
+            }
+        ],
+    )
+
+    assert normalized["status"] == "supported"
+    assert normalized["required_experience_months"] == 60
+    assert normalized["matched_role_experience_title"] == "salesforce configuration"
+    assert normalized["matched_role_experience_months"] == 72
+    assert normalized["experience_requirement_met"] is True
+    assert fit_scoring.fit_score(_record([normalized]), profile) == 100
+
+
+def test_approved_capability_alias_matches_bpmn_but_generic_process_modelling_does_not():
+    alias_profile = {
+        "candidate_capabilities": [
+            {"name": "Process Modelling", "aliases": ["BPMN 2.0"], "level": "strong"},
+        ],
+        "scoring_rules": {"fit_breakdown": {"hard_block_penalty": -100}},
+    }
+    aliased = _normalize_capability_row(
+        {
+            "requirement": "Experience with BPMN 2.0 required",
+            "importance": "mandatory",
+            "requirement_type": "capability",
+            "status": "supported",
+            "matched_candidate_fact": "BPMN 2.0",
+            "matched_job_text": "Experience with BPMN 2.0 required",
+            "profile_support": ["Designed BPMN 2.0 process models."],
+        },
+        alias_profile,
+    )
+
+    assert aliased["status"] == "supported"
+    assert aliased["matched_candidate_fact"] == "Process Modelling"
+    assert fit_scoring.fit_score(_record([aliased]), alias_profile) == 100
+
+
+def test_unknown_mandatory_capability_mapping_is_uncertain_and_zero_credit():
+    profile = {
+        "candidate_capabilities": [
+            {"name": "Business Analysis", "level": "strong"},
+            {"name": "CRM", "level": "strong"},
+        ],
+        "scoring_rules": {"fit_breakdown": {"hard_block_penalty": -100}},
+    }
+    normalized = _normalize_capability_row(
+        {
+            "requirement": "5+ years of Salesforce configuration experience required",
+            "importance": "mandatory",
+            "requirement_type": "capability",
+            "status": "supported",
+            "matched_candidate_fact": "Salesforce",
+            "matched_job_text": "5+ years of Salesforce configuration experience required",
+            "profile_support": ["Business analysis and CRM delivery experience."],
+        },
+        profile,
+    )
+
+    assert normalized["status"] == "not_shown"
+    assert fit_scoring.fit_score(_record([normalized]), profile) == 0
+
+
+def test_mandatory_capability_gap_lowers_fit_without_becoming_eligibility_gate():
+    profile = {
+        "candidate_capabilities": [
+            {"name": "Stakeholder Management", "level": "strong"},
+        ],
+        "candidate_eligibility": [],
+        "scoring_rules": {"fit_breakdown": {"hard_block_penalty": -100}},
+    }
+    stakeholder = _normalize_capability_row(
+        {
+            "requirement": "Strong stakeholder management required",
+            "importance": "mandatory",
+            "requirement_type": "capability",
+            "status": "supported",
+            "matched_candidate_fact": "Stakeholder Management",
+            "matched_job_text": "Strong stakeholder management required",
+            "profile_support": ["Led stakeholder management across delivery teams."],
+        },
+        profile,
+    )
+    missing_salesforce = _normalize_capability_row(
+        {
+            "requirement": "5+ years of Salesforce configuration experience required",
+            "importance": "mandatory",
+            "requirement_type": "capability",
+            "status": "supported",
+            "matched_candidate_fact": "Salesforce",
+            "matched_job_text": "5+ years of Salesforce configuration experience required",
+            "profile_support": [],
+        },
+        profile,
+    )
+    record = _record([stakeholder, missing_salesforce])
+
+    assert fit_scoring.fit_score(record, profile) == 50
+    assert fit_scoring.eligibility_gate_diagnostics(record, profile)["status"] == (
+        fit_scoring.ELIGIBILITY_GATE_NOT_APPLICABLE
+    )
 
 
 def test_requirement_fit_not_shown_and_mismatch_are_zero_and_counted():

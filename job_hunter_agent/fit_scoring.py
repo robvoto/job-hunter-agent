@@ -22,6 +22,7 @@ from job_hunter_agent.llm_protocol import (
 from job_hunter_agent.profile_store import (
     KEY_CANDIDATE_ELIGIBILITY,
     KEY_CANDIDATE_ELIGIBILITY_FACTS,
+    KEY_CANDIDATE_QUALIFICATIONS,
     KEY_CAPABILITY_LEVEL_WEIGHTS,
     KEY_OCCUPATION_ALIGNMENT,
     KEY_REQUIREMENT_IMPORTANCE_WEIGHTS,
@@ -182,6 +183,20 @@ def _candidate_eligibility_lookup(profile: dict) -> dict[str, bool]:
     return lookup
 
 
+def _candidate_qualification_lookup(profile: dict) -> dict[str, bool]:
+    lookup: dict[str, bool] = {}
+    for item in profile.get(KEY_CANDIDATE_QUALIFICATIONS, []) or []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        names = [name, *(item.get("aliases") or [])]
+        for value in names:
+            key = _normalise_lookup_text(str(value or ""))
+            if key:
+                lookup[key] = bool(item.get("value", True))
+    return lookup
+
+
 def _append_requirement_mapping_uncertainty(record: dict, item: dict, detail: str) -> None:
     raw_value = {
         "requirement": item.get("requirement"),
@@ -243,6 +258,7 @@ def eligibility_gate_diagnostics(record: dict, profile: Optional[dict] = None) -
 
     active_profile = profile or load_profile()
     eligibility_levels = _candidate_eligibility_lookup(active_profile)
+    qualification_levels = _candidate_qualification_lookup(active_profile)
     coverage = record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or []
     if not isinstance(coverage, list):
         coverage = []
@@ -251,7 +267,7 @@ def eligibility_gate_diagnostics(record: dict, profile: Optional[dict] = None) -
     for item in coverage:
         if not isinstance(item, dict):
             continue
-        if str(item.get("requirement_type") or "").strip().lower() != "eligibility":
+        if str(item.get("requirement_type") or "").strip().lower() not in {"eligibility", "qualification"}:
             continue
         if str(item.get("importance") or "").strip().lower() != "mandatory":
             continue
@@ -276,15 +292,17 @@ def eligibility_gate_diagnostics(record: dict, profile: Optional[dict] = None) -
                 or ""
             )
         )
+        requirement_type = str(item.get("requirement_type") or "").strip().lower()
+        known_levels = eligibility_levels if requirement_type == "eligibility" else qualification_levels
         eligibility_key = _normalise_lookup_text(matched_candidate_fact)
-        if status == "mismatch":
+        if status == "mismatch" and (not eligibility_key or eligibility_key not in known_levels or not known_levels[eligibility_key]):
             return {
                 "status": ELIGIBILITY_GATE_FAIL,
                 "label": "Fail",
                 "reason": compact_whitespace(str(item.get("requirement") or "Eligibility mismatch")),
             }
-        if matched_candidate_fact and eligibility_key in eligibility_levels:
-            if not eligibility_levels.get(eligibility_key, False):
+        if matched_candidate_fact and eligibility_key in known_levels:
+            if not known_levels.get(eligibility_key, False):
                 return {
                     "status": ELIGIBILITY_GATE_FAIL,
                     "label": "Fail",
@@ -344,7 +362,7 @@ def requirement_fit_audit_rows(record: dict, profile: Optional[dict] = None) -> 
             item.get("matched_candidate_fact") or item.get("profile_name") or ""
         ).strip()
         weight = importance_weights[importance]
-        is_eligibility_gate = requirement_type == "eligibility"
+        is_eligibility_gate = requirement_type in {"eligibility", "qualification"}
         scoring_weight = 0.0 if is_eligibility_gate else weight
         candidate_level = ""
         level_credit = 0.0
@@ -353,9 +371,12 @@ def requirement_fit_audit_rows(record: dict, profile: Optional[dict] = None) -> 
 
         if status in {"supported", "partially_supported"}:
             status_credit = float(status_weights[status])
-            if requirement_type == "eligibility":
+            if requirement_type in {"eligibility", "qualification"}:
+                known_levels = (
+                    eligibility_levels if requirement_type == "eligibility" else _candidate_qualification_lookup(active_profile)
+                )
                 eligibility_key = _normalise_lookup_text(matched_candidate_fact)
-                if eligibility_key in eligibility_levels and eligibility_levels[eligibility_key]:
+                if eligibility_key in known_levels and known_levels[eligibility_key]:
                     candidate_level = "confirmed"
                     level_credit = 0.0
                     credit_fraction = 0.0
@@ -677,6 +698,7 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
     status_weights = _requirement_status_weights(scoring_rules)
     capability_levels = _candidate_capability_level_lookup(profile, capability_credits)
     eligibility_levels = _candidate_eligibility_lookup(profile)
+    qualification_levels = _candidate_qualification_lookup(profile)
     total_weight = 0.0
     earned_weight = 0.0
     counts = {
@@ -704,7 +726,7 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
         weight = importance_weights.get(importance, importance_weights["preferred"])
         status = str(item.get("status") or "").strip().lower()
         requirement_type = str(item.get("requirement_type") or "capability").strip().lower()
-        scoring_weight = 0.0 if requirement_type == "eligibility" else weight
+        scoring_weight = 0.0 if requirement_type in {"eligibility", "qualification"} else weight
         total_weight += scoring_weight
         matched_candidate_fact = str(
             item.get("matched_candidate_fact")
@@ -747,9 +769,10 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
                 mandatory_gaps.append(requirement)
             continue
 
-        if requirement_type == "eligibility":
+        if requirement_type in {"eligibility", "qualification"}:
+            known_levels = eligibility_levels if requirement_type == "eligibility" else qualification_levels
             eligibility_key = _normalise_lookup_text(matched_candidate_fact)
-            if not matched_candidate_fact or eligibility_key not in eligibility_levels:
+            if not matched_candidate_fact or eligibility_key not in known_levels:
                 counts["unknown"] += 1
                 uncertain_count += 1
                 _append_requirement_mapping_uncertainty(
@@ -760,7 +783,7 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
                 if importance == "mandatory":
                     mandatory_gaps.append(requirement)
                 continue
-            if not eligibility_levels.get(eligibility_key, False):
+            if not known_levels.get(eligibility_key, False):
                 counts["mismatch"] += 1
                 if importance == "mandatory":
                     mandatory_gaps.append(requirement)

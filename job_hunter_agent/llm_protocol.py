@@ -7,8 +7,10 @@ LLM_ALLOWED_COVERAGE_IMPORTANCES = frozenset(
     {"mandatory", "strongly_preferred", "preferred", "nice_to_have"}
 )
 
-LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES = frozenset({"capability", "eligibility"})
-LLM_ALLOWED_COVERAGE_MATCH_SOURCES = frozenset({"capability_name", "related_skill", "eligibility"})
+LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES = frozenset({"capability", "eligibility", "qualification"})
+LLM_ALLOWED_COVERAGE_MATCH_SOURCES = frozenset(
+    {"capability_name", "related_skill", "eligibility", "qualification"}
+)
 LLM_INVALID_COVERAGE_REQUIREMENT_TYPE = "invalid"
 LLM_INVALID_COVERAGE_STATUS = "invalid"
 # Deterministic post-LLM validation could not confidently resolve capability vs
@@ -34,7 +36,7 @@ LLM_FIT_REVIEW_PROMPT_SHAPE = (
     '"posting_channel":{"kind":"agency_or_recruiter|direct_employer|unknown","confident":true|false,"evidence":"..."},'
     '"job_requirements":["..."],'
     '"requirement_coverage":[{"requirement":"...","importance":"mandatory|strongly_preferred|preferred|nice_to_have",'
-    '"requirement_type":"capability|eligibility","canonical_requirement":"...","status":"supported|partially_supported|not_shown|mismatch",'
+    '"requirement_type":"capability|eligibility|qualification","canonical_requirement":"...","status":"supported|partially_supported|not_shown|mismatch",'
     '"matched_candidate_fact":"...","matched_job_text":"...","profile_support":["..."],"covered_requirement_elements":["..."],"role_defining":true|false,"role_defining_group":"..."}],'
     '"debug_reason":"..."}'
 )
@@ -44,8 +46,8 @@ LLM_FIT_REVIEW_DEBUG_PROMPT_SHAPE = (
     '"posting_channel":{"kind":"agency_or_recruiter|direct_employer|unknown","confident":true|false,"evidence":"..."},'
     '"job_requirements":["..."],'
     '"requirement_coverage":[{"requirement":"...","importance":"mandatory|strongly_preferred|preferred|nice_to_have",'
-    '"requirement_type":"capability|eligibility","canonical_requirement":"...","status":"supported|partially_supported|not_shown|mismatch",'
-    '"matched_candidate_fact":"...","match_source":"capability_name|related_skill|eligibility",'
+    '"requirement_type":"capability|eligibility|qualification","canonical_requirement":"...","status":"supported|partially_supported|not_shown|mismatch",'
+    '"matched_candidate_fact":"...","match_source":"capability_name|related_skill|eligibility|qualification",'
     '"matched_profile_term":"...","matched_job_text":"...","profile_support":["..."],"covered_requirement_elements":["..."],"role_defining":true|false,"role_defining_group":"..."}],'
     '"debug_reason":"..."}'
 )

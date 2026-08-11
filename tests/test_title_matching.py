@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from job_hunter_agent import filters, title_normalization_rules
+import pytest
+
+from job_hunter_agent import filters
 
 
 def test_passes_title_filters_abbreviations_are_not_expanded(monkeypatch):
@@ -185,3 +187,55 @@ def test_title_block_rule_matches_whole_word_in_title_only():
     assert blocked["reason"] == "TITLE_BAD_KEYWORD:salesforce"
     assert allowed["ok"] is True
     assert not_partial["ok"] is True
+
+
+@pytest.fixture()
+def sap_block_profile():
+    return {
+        "target_roles": ["business analyst"],
+        "also_consider_roles": ["project coordinator"],
+        "reject_title_rules": [filters.build_title_block_rule("sap")],
+    }
+
+
+@pytest.mark.parametrize("title", ["SAP Business Analyst", "Senior SAP Business Analyst"])
+def test_configured_sap_blocker_rejects_matching_titles(title, sap_block_profile):
+    result = filters.analyze_title_filters(title, sap_block_profile)
+
+    assert result["ok"] is False
+    assert result["reason"] == "TITLE_BAD_KEYWORD:sap"
+
+
+@pytest.mark.parametrize(
+    ("role_key", "role", "title"),
+    [
+        ("target_roles", "business analyst", "SAP Business Analyst"),
+        ("also_consider_roles", "project coordinator", "SAP Project Coordinator"),
+    ],
+)
+def test_configured_sap_blocker_overrides_primary_and_secondary_role_matches(
+    role_key, role, title, sap_block_profile
+):
+    profile = {**sap_block_profile, "target_roles": [], "also_consider_roles": []}
+    profile[role_key] = [role]
+
+    result = filters.analyze_title_filters(title, profile)
+
+    assert result["matched_pattern"] == role
+    assert result["ok"] is False
+    assert result["reason"] == "TITLE_BAD_KEYWORD:sap"
+
+
+def test_ordinary_business_analyst_is_not_rejected_by_sap_blocker(sap_block_profile):
+    result = filters.analyze_title_filters("Business Analyst", sap_block_profile)
+
+    assert result["ok"] is True
+    assert result["reason"] == "OK"
+
+
+@pytest.mark.parametrize("title", ["Sapphire Business Analyst", "Similar Business Analyst"])
+def test_sap_blocker_does_not_match_similar_words(title, sap_block_profile):
+    result = filters.analyze_title_filters(title, sap_block_profile)
+
+    assert result["ok"] is True
+    assert result["reason"] == "OK"

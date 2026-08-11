@@ -62,27 +62,6 @@
       "professional registration",
       "teacher registration",
       "registered with"
-    ],
-    "qualification": [
-      "tertiary qualification",
-      "formal qualification",
-      "relevant qualification",
-      "bachelor degree",
-      "bachelor's degree",
-      "master's degree",
-      "masters degree",
-      "postgraduate qualification",
-      "recognised qualification"
-    ],
-    "certification": [
-      "certification",
-      "certified",
-      "cert iv",
-      "certificate iv",
-      "certificate in",
-      "pmp certified",
-      "prince2 certified",
-      "professional certification"
     ]
   }
 }

@@ -2,6 +2,7 @@
 import { JobHunterCapabilityEditor as capabilityEditor } from './settings-capability-editor.js';
 import { JobHunterClearanceEditor as clearanceEditor } from './settings-clearance-editor.js';
 import { JobHunterEligibilityEditor as eligibilityEditor } from './settings-eligibility-editor.js';
+import { JobHunterQualificationEditor as qualificationEditor } from './settings-qualification-editor.js';
 import { JobHunterAdminSettings as adminSettings } from '../global/settings-admin.js';
 import { JobHunterAlertsSettings as alertsSettings } from '../standard/settings-alerts.js';
 import * as capabilityUi from '../../common/capability-ui.js';
@@ -585,6 +586,7 @@ function collectProfile() {
     candidate_capabilities: capabilityEditor.collectCapabilityRuleState(),
     candidate_eligibility: clearanceEditor.collectClearanceRuleState(),
     candidate_eligibility_facts: eligibilityEditor.collectEligibilityFactState(),
+    candidate_qualifications: qualificationEditor.collectQualificationState(),
     target_roles: toLines(settingsField('target_roles').value),
     also_consider_roles: toLines(settingsField('also_consider_roles').value),
     must_not_require_skills: toLines(settingsField('must_not_require_skills').value),
@@ -646,6 +648,7 @@ function fillForm(profile) {
   capabilityEditor.setCapabilityRuleState(profile.candidate_capabilities || []);
   clearanceEditor.setClearanceRuleState(profile.candidate_eligibility || []);
   eligibilityEditor.setEligibilityFactState(profile.candidate_eligibility_facts || []);
+  qualificationEditor.setQualificationState(profile.candidate_qualifications || []);
   renderCapturedCvText(loadedSourceMaterials);
   renderRoleExperienceReadonly(profile);
   for (const id of ['target_roles', 'also_consider_roles', 'must_not_require_skills']) {
@@ -746,6 +749,25 @@ function consumeEligibilityPrefillFromUrl() {
   return true;
 }
 
+function consumeQualificationPrefillFromUrl() {
+  const url = new URL(window.location.href);
+  const prefill = normalizeCapabilityPrefill(url.searchParams.get('prefill_qualification') || '');
+  if (!prefill) return false;
+  setActiveSettingsSection('section-matrix', { scrollToTop: true });
+  const existing = qualificationEditor.collectQualificationState();
+  const existsAlready = existing.some((item) => normalizeCapabilityPrefill(item?.name).toLowerCase() === prefill.toLowerCase());
+  if (!existsAlready) {
+    qualificationEditor.setQualificationState([...existing, { name: prefill, value: true, aliases: [], evidence: [] }]);
+    markDirty();
+    showStatus(labelsWithName(window.__JOB_HUNTER_SETTINGS_CLEARANCES_LABELS__.qualification_prefill_added_message, prefill), 'success', { autoHideMs: 4500 });
+  } else {
+    showStatus(labelsWithName(window.__JOB_HUNTER_SETTINGS_CLEARANCES_LABELS__.qualification_prefill_exists_message, prefill), 'success', { autoHideMs: 3500 });
+  }
+  url.searchParams.delete('prefill_qualification');
+  window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+  return true;
+}
+
 function labelsWithName(template, name) {
   return String(template || '').replace('${name}', name);
 }
@@ -756,7 +778,7 @@ async function loadProfile() {
   const profile = await response.json();
   loadedProfile = profile;
   fillForm(profile);
-  if (!consumeCapabilityPrefillFromUrl() && !(await consumeEligibilityPrefillFromUrl())) {
+  if (!consumeCapabilityPrefillFromUrl() && !(await consumeEligibilityPrefillFromUrl()) && !(await consumeQualificationPrefillFromUrl())) {
     showStatus('Profile loaded.', 'success', { autoHideMs: 2600 });
   }
 }
@@ -1251,6 +1273,7 @@ chipEditor.initEventHandlers(markDirty);
 capabilityEditor.initEventHandlers(markDirty);
 clearanceEditor.initEventHandlers(markDirty);
 eligibilityEditor.initEventHandlers(markDirty);
+qualificationEditor.initEventHandlers(markDirty);
 alertsSettings.initEventHandlers();
 
 // -- Init ------------------------------------------------------------------

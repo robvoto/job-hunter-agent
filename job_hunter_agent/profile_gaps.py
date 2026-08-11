@@ -68,12 +68,19 @@ def _requirement_matches_eligibility(
     return STATUS_UNKNOWN
 
 
+def _requirement_matches_qualification(
+    requirement_norm: str, candidate_qualifications: list[dict]
+) -> str:
+    return _requirement_matches_eligibility(requirement_norm, candidate_qualifications)
+
+
 def classify_requirement_status(
     requirement: str,
     candidate_capabilities: list[dict],
     must_not_require_skills: list[str],
     candidate_eligibility: list[dict] | None = None,
     candidate_eligibility_facts: list[dict] | None = None,
+    candidate_qualifications: list[dict] | None = None,
     requirement_type: str = "capability",
 ) -> str:
     """
@@ -93,6 +100,8 @@ def classify_requirement_status(
             req_norm,
             [*(candidate_eligibility or []), *(candidate_eligibility_facts or [])],
         )
+    if normalized_requirement_type == "qualification":
+        return _requirement_matches_qualification(req_norm, candidate_qualifications or [])
     if _requirement_in_must_not_require(req_norm, must_not_require_skills):
         return STATUS_CONFIRMED_DO_NOT_HAVE
     if any(_requirement_matches_capability(req_norm, cap) for cap in candidate_capabilities):
@@ -106,6 +115,7 @@ def compute_profile_gaps(
     must_not_require_skills: list[str],
     candidate_eligibility: list[dict] | None = None,
     candidate_eligibility_facts: list[dict] | None = None,
+    candidate_qualifications: list[dict] | None = None,
 ) -> list[dict]:
     """
     Return capability-like requirement_coverage items that still need confirmation.
@@ -120,7 +130,12 @@ def compute_profile_gaps(
         status = str(item.get("status") or "").strip().lower()
         if status not in _CONFIRMABLE_REQUIREMENT_STATUSES:
             continue
-        capability_name = str(item.get("capability_name") or "").strip()
+        capability_name = str(
+            item.get("capability_name")
+            or item.get("qualification_name")
+            or item.get("eligibility_name")
+            or ""
+        ).strip()
         requirement_type = str(item.get("requirement_type") or "capability").strip().lower()
         if requirement_type not in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES:
             continue
@@ -139,6 +154,7 @@ def compute_profile_gaps(
                 candidate_eligibility,
                 candidate_eligibility_facts,
                 requirement_type=requirement_type,
+                candidate_qualifications=candidate_qualifications,
             )
             != STATUS_UNKNOWN
         ):
@@ -148,6 +164,9 @@ def compute_profile_gaps(
         gaps.append(
             {
                 "capability_name": capability_name,
+                "qualification_name": (
+                    capability_name if requirement_type == "qualification" else ""
+                ),
                 "matched_candidate_fact": matched_candidate_fact,
                 "requirement_type": requirement_type,
                 "raw_requirement": raw_requirement,

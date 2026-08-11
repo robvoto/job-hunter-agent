@@ -5,11 +5,13 @@ import logging
 
 from job_hunter_agent import (
     job_review_pipeline,
+    llm_gate,
     occupation_taxonomy,
     source_learning,
     workspace_renderer,
 )
 from job_hunter_agent.database import init_db
+from job_hunter_agent.filters import build_title_block_rule
 from job_hunter_agent.fit_scoring import fit_score, fit_score_breakdown
 from job_hunter_agent.job_review_pipeline import (
     ReviewPipelineContext,
@@ -23,13 +25,6 @@ from job_hunter_agent.occupation_taxonomy import (
     classify_title,
 )
 from job_hunter_agent.paths import SCORING_RULES_PATH
-from job_hunter_agent.signal_schema import (
-    CATEGORY_REQUIREMENT_CLASSIFICATION_REVIEW,
-    LEARNING_ORIGINAL_TEXTS_KEY,
-    LEARNING_SIGNAL_KEY,
-    LEARNING_SUGGESTED_CATEGORY_KEY,
-    LEARNING_SUGGESTED_VALUES_KEY,
-)
 from job_hunter_agent.record_schema import (
     APPLY_METHOD_EXTERNAL_APPLY,
     RECORD_APPLY_METHOD_KEY,
@@ -65,6 +60,13 @@ from job_hunter_agent.record_schema import (
     RECORD_URL_KEY,
     RECORD_WORK_MODE_KEY,
     RECORD_WORK_TYPE_KEY,
+)
+from job_hunter_agent.signal_schema import (
+    CATEGORY_REQUIREMENT_CLASSIFICATION_REVIEW,
+    LEARNING_ORIGINAL_TEXTS_KEY,
+    LEARNING_SIGNAL_KEY,
+    LEARNING_SUGGESTED_CATEGORY_KEY,
+    LEARNING_SUGGESTED_VALUES_KEY,
 )
 
 
@@ -1022,6 +1024,64 @@ def test_explicit_title_reject_rule_logs_immediate_title_reject(monkeypatch, cap
     assert "PIPELINE][TITLE_GATE" in caplog.text
 
 
+def test_configured_sap_title_blocker_stops_pipeline_before_llm_or_fit_work(
+    monkeypatch,
+):
+    record = _base_record("seek", "seek_detail", "card")
+    record[RECORD_TITLE_KEY] = "Senior SAP Business Analyst"
+    context = _review_context("SEEK")
+    context.profile.update(
+        {
+            "target_roles": ["business analyst"],
+            "also_consider_roles": ["project coordinator"],
+            "reject_title_rules": [build_title_block_rule("sap")],
+        }
+    )
+
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "passes_quick_card_filters",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("configured title blocker must run before card/fit work")
+        ),
+    )
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "resolve_llm_review_payload",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("configured title blocker must stop before LLM review")
+        ),
+    )
+
+    outcome, updated_record, _, should_fetch = review_pre_detail_normalized_job(record, context)
+
+    assert should_fetch is False
+    assert outcome[RECORD_DECISION_KEY] == "REJECT"
+    assert updated_record[RECORD_REJECT_REASON_KEY] == "TITLE_BAD_KEYWORD:sap"
+
+
+def test_sap_in_description_only_does_not_trigger_clean_title_blocker(monkeypatch):
+    record = _base_record("seek", "seek_detail", "card")
+    record[RECORD_TITLE_KEY] = "Business Analyst"
+    record[RECORD_DETAILS_TEXT_KEY] = "This role works with SAP stakeholders and delivery teams."
+    context = _review_context("SEEK")
+    context.profile.update(
+        {
+            "target_roles": ["business analyst"],
+            "also_consider_roles": ["project coordinator"],
+            "reject_title_rules": [build_title_block_rule("sap")],
+        }
+    )
+    monkeypatch.setattr(
+        job_review_pipeline, "passes_quick_card_filters", lambda **kwargs: (True, "OK")
+    )
+
+    _, updated_record, _, should_fetch = review_pre_detail_normalized_job(record, context)
+
+    assert should_fetch is True
+    assert updated_record[RECORD_TITLE_REASON_KEY] == "OK"
+
+
 def test_external_apply_stale_repost_rejects_before_llm(monkeypatch):
     record = _base_record("linkedin", "jobAdDetails", "card")
     record[RECORD_TITLE_REASON_KEY] = "OK"
@@ -1109,6 +1169,52 @@ def test_mandatory_eligibility_rejects_llm_keep_when_profile_fact_is_false(monke
     assert outcome[RECORD_DECISION_KEY] == "REJECT"
     assert updated_record[RECORD_REJECT_REASON_KEY] == "MANDATORY_ELIGIBILITY_FAILED"
     assert updated_record[RECORD_DECISION_EXPLANATION_KEY] == "NV2 Security Clearance Required"
+
+
+def test_llm_supported_specific_capability_without_valid_candidate_fact_gets_no_pipeline_credit(
+    monkeypatch,
+):
+    context = _review_context("SEEK")
+    context.profile["candidate_capabilities"] = [
+        {"name": "Business Analysis", "level": "strong"},
+        {"name": "CRM", "level": "strong"},
+        {"name": "Stakeholder Management", "level": "strong"},
+    ]
+    raw_payload = {
+        "fit_review": {"decision": "KEEP", "grade": "EXCELLENT"},
+        "job_requirements": ["5+ years of Salesforce configuration experience required"],
+        "requirement_coverage": [
+            {
+                "requirement": "5+ years of Salesforce configuration experience required",
+                "importance": "mandatory",
+                "requirement_type": "capability",
+                "status": "supported",
+                "matched_candidate_fact": "Salesforce",
+                "matched_job_text": "5+ years of Salesforce configuration experience required",
+                "profile_support": ["Business analysis and CRM experience."],
+            }
+        ],
+    }
+    valid_capability_names = {
+        "business analysis": "Business Analysis",
+        "crm": "CRM",
+        "stakeholder management": "Stakeholder Management",
+    }
+    normalized_payload = llm_gate.normalize_llm_review_payload(
+        raw_payload,
+        valid_capability_names=valid_capability_names,
+    )
+    _patch_llm_review_path(monkeypatch, normalized_payload)
+
+    outcome, updated_record, _ = review_post_detail_normalized_job(
+        _base_record("seek", "seek_detail", "card"), context
+    )
+
+    assert outcome[RECORD_DECISION_KEY] == "KEEP"
+    assert updated_record[RECORD_REQUIREMENT_COVERAGE_KEY][0]["status"] == "not_shown"
+    assert updated_record[RECORD_REQUIREMENT_COVERAGE_KEY][0]["matched_candidate_fact"] == ""
+    assert updated_record["fit_score"] == 0
+    assert updated_record[RECORD_LLM_FIT_GRADE_KEY] != "EXCELLENT"
 
 
 def test_preferred_eligibility_does_not_reject_llm_keep(monkeypatch):

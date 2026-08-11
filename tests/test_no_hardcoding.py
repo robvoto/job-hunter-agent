@@ -15,6 +15,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 OWNER_MODULES = [
     REPO_ROOT / "job_hunter_agent" / "profile_store.py",
+    REPO_ROOT / "job_hunter_agent" / "qualification_profile.py",
     REPO_ROOT / "job_hunter_agent" / "workspace_renderer.py",
 ]
 

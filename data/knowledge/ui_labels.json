@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 102,
+  "version": 103,
   "updated_at": "2026-08-07",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -90,7 +90,17 @@
     "eligibility_empty_text": "No generic eligibility facts added yet.",
     "eligibility_prefill_added_message": "Draft eligibility fact added: ${name}. Review it and save when ready.",
     "eligibility_prefill_exists_message": "This eligibility fact is already in your profile: ${name}.",
-    "eligibility_remove_button_label": "Remove"
+    "eligibility_remove_button_label": "Remove",
+    "qualification_add_error_message": "Could not save this qualification. Check your connection and try again.",
+    "qualification_settings_title": "Qualifications",
+    "qualification_help_text": "Add education, degrees, certifications, and formal qualifications as concise reusable profile concepts.",
+    "qualification_name_label": "Qualification name",
+    "qualification_name_placeholder": "e.g. CBAP, PRINCE2, Bachelor of Information Technology",
+    "qualification_add_button_label": "Add qualification",
+    "qualification_empty_text": "No qualifications added yet.",
+    "qualification_prefill_added_message": "Draft qualification added: ${name}. Review it and save when ready.",
+    "qualification_prefill_exists_message": "This qualification is already in your profile: ${name}.",
+    "qualification_remove_button_label": "Remove"
   },
   "role_history_labels_description": "Display labels for the read-only captured role history panel in Settings.",
   "role_history_labels": {
@@ -485,6 +495,8 @@
     "add_to_profile_action_title": "Add this to your capability profile",
     "add_to_eligibility_action_label": "Add eligibility",
     "add_to_eligibility_action_title": "Add this eligibility fact to your profile",
+    "add_to_qualification_action_label": "Add qualification",
+    "add_to_qualification_action_title": "Add this qualification to your profile",
     "posted_age_badge_template": "${days}+ Days Old",
     "posted_age_badge_tooltip_template": "This ad appears to be at least ${days} days old.",
     "posted_age_meta_today": "Today",

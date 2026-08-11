@@ -105,6 +105,7 @@ from job_hunter_agent.profile_store import (
     KEY_CANDIDATE_CAPABILITIES,
     KEY_CANDIDATE_ELIGIBILITY,
     KEY_CANDIDATE_ELIGIBILITY_FACTS,
+    KEY_CANDIDATE_QUALIFICATIONS,
     KEY_ROLE_EXPERIENCE,
     get_candidate_profile_tier_weights,
     get_candidate_profile_tiers,
@@ -445,6 +446,7 @@ def build_profile_prompt_context() -> str:
     from job_hunter_agent.profile_store import (
         KEY_CANDIDATE_CAPABILITIES,
         KEY_CANDIDATE_ELIGIBILITY,
+        KEY_CANDIDATE_QUALIFICATIONS,
         KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT,
         KEY_PRIMARY_PATTERNS,
         KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT,
@@ -463,6 +465,7 @@ def build_profile_prompt_context() -> str:
         *(profile.get(KEY_CANDIDATE_ELIGIBILITY, []) or []),
         *(profile.get(KEY_CANDIDATE_ELIGIBILITY_FACTS, []) or []),
     ]
+    qualification_rules = profile.get(KEY_CANDIDATE_QUALIFICATIONS, [])
     role_experience = profile.get(KEY_ROLE_EXPERIENCE, [])
     salary_preferences = profile.get("salary_preferences", {})
     match_preferences = (
@@ -515,6 +518,26 @@ def build_profile_prompt_context() -> str:
             label = f"- {name}: {value}"
             if evidence_text:
                 label += f" [{evidence_text}]"
+            parts.append(label)
+
+    if isinstance(qualification_rules, list) and qualification_rules:
+        parts.append("Qualifications matrix:")
+        for rule in qualification_rules[: get_llm_capability_rules_max_items()]:
+            if not isinstance(rule, dict):
+                continue
+            name = compact_whitespace(str(rule.get("name") or ""))
+            if not name:
+                continue
+            value = "true" if bool(rule.get("value", True)) else "false"
+            aliases = rule.get("aliases") or []
+            alias_text = ", ".join(
+                compact_whitespace(str(alias))
+                for alias in aliases[: get_llm_capability_rule_aliases_max_items()]
+                if compact_whitespace(str(alias))
+            ) if isinstance(aliases, list) else ""
+            label = f"- {name}: {value}"
+            if alias_text:
+                label += f" ({alias_text})"
             parts.append(label)
 
     if isinstance(role_experience, list) and role_experience:
@@ -628,8 +651,10 @@ def build_fit_review_guidance(profile: dict[str, Any] | None = None) -> str:
 def build_requirement_coverage_guidance() -> str:
     parts = [
         f"Use at most {get_llm_job_requirements_max_items()} requirement_coverage items.",
-        "Classify each requirement as capability or eligibility.",
-        "Use matched_candidate_fact for the exact canonical capability or eligibility name shown in the profile matrix; never put an evidence sentence there.",
+        "Classify each requirement as capability, eligibility, or qualification. Qualification covers education/degrees, certifications, and formal qualifications.",
+        "For qualification rows, importance must be mandatory or preferred.",
+        "Use matched_candidate_fact for the exact canonical capability or eligibility name shown in the profile matrix, or the exact qualification name shown in the qualifications matrix; never put an evidence sentence there.",
+        "Canonical qualification names must be concise reusable concepts such as CBAP, PRINCE2, Bachelor of Information Technology, or Diploma of Project Management — never the raw requirement sentence or an alternatives list.",
         "When the ad states explicit years or months of experience, compare that threshold against the role experience matrix before choosing supported versus partially_supported.",
     ]
     parts.extend(f"- {line}" for line in REQUIREMENT_COVERAGE_DEFAULT_LINES)
@@ -638,9 +663,10 @@ def build_requirement_coverage_guidance() -> str:
 
 def build_requirement_coverage_debug_guidance() -> str:
     parts = [
-        'For debug match diagnostics: return match_source exactly as "capability_name", "related_skill", or "eligibility".',
-        "For debug match diagnostics: return matched_profile_term as the exact capability name, related skill, or eligibility fact used.",
-        "For debug match diagnostics: matched_candidate_fact must stay the canonical capability or eligibility name.",
+        'For debug match diagnostics: return match_source exactly as "capability_name", "related_skill", "eligibility", or "qualification".',
+        'Existing debug consumers recognize the legacy source set: "match_source":"capability_name|related_skill|eligibility".',
+        "For debug match diagnostics: return matched_profile_term as the exact capability name, related skill, eligibility fact, or qualification used.",
+        "For debug match diagnostics: matched_candidate_fact must stay the canonical profile concept.",
         "For debug match diagnostics: profile_support must contain only actual candidate evidence text, never just the capability name or related skill label.",
     ]
     return "\n".join(parts)
@@ -887,6 +913,20 @@ def _build_valid_eligibility_lookup(
     return lookup
 
 
+def _build_valid_qualification_lookup(
+    valid_qualification_names: dict[str, str] | None,
+) -> dict[str, str] | None:
+    if valid_qualification_names is None:
+        return None
+    lookup: dict[str, str] = {}
+    for key, value in valid_qualification_names.items():
+        normalized_key = compact_whitespace(key).lower()
+        canonical_value = compact_whitespace(value)
+        if normalized_key and canonical_value:
+            lookup[normalized_key] = canonical_value
+    return lookup
+
+
 def _recover_capability_from_profile_support(
     profile_support: list[str],
     valid_capability_lookup: dict[str, str] | None,
@@ -1017,6 +1057,16 @@ def _has_meaningful_requirement_evidence(
     evidence_tokens = _semantic_match_tokens(evidence_text)
     if not requirement_tokens or not evidence_tokens:
         return False
+
+    # Versioned or otherwise numbered identifiers are substantive requirement
+    # elements: generic vendor/domain evidence cannot prove them by itself.
+    # For example, "SAP" must not prove "SAP S/4HANA" without evidence of
+    # the specific versioned platform.
+    specific_requirement_tokens = {
+        token for token in requirement_tokens if any(character.isdigit() for character in token)
+    }
+    if specific_requirement_tokens and not specific_requirement_tokens & evidence_tokens:
+        return False
     if requirement_tokens & evidence_tokens:
         return True
 
@@ -1033,6 +1083,7 @@ def normalize_llm_requirement_coverage(
     value: Any,
     valid_capability_names: dict[str, str] | None = None,
     valid_eligibility_names: dict[str, str] | None = None,
+    valid_qualification_names: dict[str, str] | None = None,
     role_experience: list[dict[str, Any]] | None = None,
     max_items: int | None = None,
     include_debug_match_diagnostics: bool = False,
@@ -1051,6 +1102,7 @@ def normalize_llm_requirement_coverage(
 
     valid_capability_lookup = _build_valid_capability_lookup(valid_capability_names)
     valid_eligibility_lookup = _build_valid_eligibility_lookup(valid_eligibility_names)
+    valid_qualification_lookup = _build_valid_qualification_lookup(valid_qualification_names)
     results: list[dict[str, Any]] = []
     seen: set[str] = set()
     for item in value:
@@ -1118,6 +1170,7 @@ def normalize_llm_requirement_coverage(
         matched_candidate_fact = compact_whitespace(matched_candidate_fact_raw)
         capability_name = ""
         eligibility_name = ""
+        qualification_name = ""
         if requirement_type_is_valid and requirement_type == "eligibility":
             eligibility_name = (
                 valid_eligibility_lookup.get(matched_candidate_fact.lower(), "")
@@ -1125,6 +1178,15 @@ def normalize_llm_requirement_coverage(
                 else matched_candidate_fact.lower()
             )
             matched_candidate_fact = eligibility_name or matched_candidate_fact
+        elif requirement_type_is_valid and requirement_type == "qualification":
+            if importance not in {"mandatory", "preferred"}:
+                importance = "preferred"
+            qualification_name = (
+                valid_qualification_lookup.get(matched_candidate_fact.lower(), "")
+                if valid_qualification_lookup is not None
+                else matched_candidate_fact
+            )
+            matched_candidate_fact = qualification_name or matched_candidate_fact
         elif requirement_type_is_valid:
             capability_name = (
                 valid_capability_lookup.get(matched_candidate_fact.lower(), "")
@@ -1249,7 +1311,30 @@ def normalize_llm_requirement_coverage(
             matched_candidate_fact = ""
             capability_name = ""
             eligibility_name = ""
-        if requirement_type != "eligibility" and status in {"supported", "partially_supported"} and not capability_name:
+        if requirement_type == "qualification" and status in {"supported", "partially_supported"} and not qualification_name:
+            logger.warning(
+                "[LLM][WARN] purpose=fit_review requirement_coverage_missing_qualification requirement=%r status=%s importance=%s",
+                requirement,
+                status,
+                importance,
+            )
+            _record_requirement_coverage_warning(
+                requirement=requirement,
+                importance=importance,
+                requirement_type_before=requirement_type_before,
+                requirement_type_after=requirement_type,
+                status_before=status_before,
+                status_after="not_shown",
+                proposed_matched_candidate_fact=matched_candidate_fact,
+                proposed_capability_name=capability_name,
+                proposed_eligibility_name=qualification_name,
+                matched_job_text=matched_job_text,
+                reason="invalid_qualification_match",
+            )
+            status = "not_shown"
+            matched_candidate_fact = ""
+            qualification_name = ""
+        if requirement_type == "capability" and status in {"supported", "partially_supported"} and not capability_name:
             logger.warning(
                 "[LLM][WARN] purpose=fit_review requirement_coverage_missing_capability requirement=%r status=%s importance=%s",
                 requirement,
@@ -1328,6 +1413,8 @@ def normalize_llm_requirement_coverage(
             "matched_job_text": matched_job_text,
             "profile_support": profile_support,
         }
+        if qualification_name:
+            normalized_item["qualification_name"] = qualification_name
         if covered_requirement_elements:
             normalized_item["covered_requirement_elements"] = covered_requirement_elements
         if role_defining:
@@ -1399,7 +1486,11 @@ def derive_fit_review_grade(
             support_score += weight * 0.5
         elif status == "mismatch":
             mismatch_count += 1
-        elif status == "not_shown" and importance == "mandatory" and requirement_type == "eligibility":
+        elif (
+            status == "not_shown"
+            and importance == "mandatory"
+            and requirement_type in {"eligibility", "qualification"}
+        ):
             mandatory_eligibility_unresolved = True
         # not_shown: 0 contribution, weight still counted in max_score
 
@@ -1436,14 +1527,20 @@ def derive_fit_review_grade(
 
 
 def has_eligibility_mismatch(requirement_coverage: list[dict[str, Any]]) -> bool:
-    """Return True when any eligibility requirement is an explicit mismatch.
+    """Return True when a mandatory boolean qualification/eligibility gate mismatches.
 
     Eligibility facts (clearance, work rights, etc.) are boolean gating facts, not
     gradeable capabilities: a mismatch means the candidate is not eligible, so this
     must force a hard reject regardless of the LLM's own decision or overall grade.
     """
     return any(
-        str(item.get("requirement_type") or "").strip().lower() == "eligibility"
+        (
+            str(item.get("requirement_type") or "").strip().lower() == "eligibility"
+            or (
+                str(item.get("requirement_type") or "").strip().lower() == "qualification"
+                and str(item.get("importance") or "").strip().lower() == "mandatory"
+            )
+        )
         and str(item.get("status") or "").strip().lower() == "mismatch"
         for item in requirement_coverage
     )
@@ -1547,6 +1644,7 @@ def normalize_llm_review_payload(
     value: Any,
     valid_capability_names: dict[str, str] | None = None,
     valid_eligibility_names: dict[str, str] | None = None,
+    valid_qualification_names: dict[str, str] | None = None,
     role_experience: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     include_debug_match_diagnostics = get_llm_fit_review_debug_match_diagnostics_enabled()
@@ -1565,6 +1663,7 @@ def normalize_llm_review_payload(
                 value.get("requirement_coverage"),
                 valid_capability_names=valid_capability_names,
                 valid_eligibility_names=valid_eligibility_names,
+                valid_qualification_names=valid_qualification_names,
                 role_experience=role_experience,
                 include_debug_match_diagnostics=include_debug_match_diagnostics,
             )
@@ -1855,6 +1954,7 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
     )
     valid_capability_names: dict[str, str] | None = None
     valid_eligibility_names: dict[str, str] | None = None
+    valid_qualification_names: dict[str, str] | None = None
     if fit_review:
         profile = load_profile()
         valid_capability_names = {}
@@ -1879,6 +1979,17 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
                 normalized_term = canonical.lower()
                 if normalized_term:
                     valid_eligibility_names[normalized_term] = canonical
+        valid_qualification_names = {}
+        for rule in profile.get(KEY_CANDIDATE_QUALIFICATIONS, []) or []:
+            if not isinstance(rule, dict):
+                continue
+            canonical = str(rule.get("name") or "").strip()
+            if not canonical:
+                continue
+            for term in [canonical, *(rule.get("aliases") or [])]:
+                normalized_term = str(term or "").strip().lower()
+                if normalized_term:
+                    valid_qualification_names[normalized_term] = canonical
         role_experience = profile.get(KEY_ROLE_EXPERIENCE, [])
         if not valid_capability_names:
             raise ValueError(
@@ -1972,6 +2083,7 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
         parsed.model_dump(),
         valid_capability_names=valid_capability_names,
         valid_eligibility_names=valid_eligibility_names,
+        valid_qualification_names=valid_qualification_names,
         role_experience=role_experience,
     )
     payload.update(_llm_usage_summary(resp, model))

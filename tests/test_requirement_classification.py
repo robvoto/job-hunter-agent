@@ -40,6 +40,15 @@ def test_plain_capability_requirement_defers_to_valid_llm_answer():
     assert result == "capability"
 
 
+def test_qualification_wording_defers_to_llm_qualification_type():
+    result = requirement_classification.classify_requirement_type(
+        "CBAP certification",
+        "",
+        "qualification",
+    )
+    assert result == "qualification"
+
+
 def test_conflicting_signals_are_uncertain_not_guessed():
     result = requirement_classification.classify_requirement_type(
         "5+ years working in a security clearance environment",

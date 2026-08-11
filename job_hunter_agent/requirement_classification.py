@@ -12,7 +12,9 @@ answer is never trusted on its own:
 - A requirement carrying an explicit years/months duration and no eligibility
   term is always capability, regardless of what the LLM said.
 - A requirement matching both signals at once is contradictory and returned
-  as uncertain for human review rather than guessed.
+  as uncertain for human review rather than guessed. Education, degrees, and
+  certifications intentionally remain LLM-classified as qualifications; their
+  wording is too varied for a deterministic gate.
 - Anything else defers to the LLM's own (valid) answer.
 """
 
@@ -46,7 +48,11 @@ def _load_eligibility_terms() -> list[str]:
     if not isinstance(categories, dict):
         return []
     terms: list[str] = []
-    for values in categories.values():
+    for category, values in categories.items():
+        # Formal qualifications and certifications are a first-class LLM
+        # classification, not deterministic eligibility keywords.
+        if str(category).strip().lower() in {"qualification", "certification"}:
+            continue
         if not isinstance(values, list):
             continue
         for term in values:

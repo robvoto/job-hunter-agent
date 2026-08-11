@@ -63,6 +63,7 @@ from job_hunter_agent.profile_gaps import (
 )
 from job_hunter_agent.profile_store import (
     ENGAGEMENT_TYPE_OPTIONS,
+    KEY_CANDIDATE_QUALIFICATIONS,
     get_match_levels,
     get_scoring_rules,
     load_profile,
@@ -1200,6 +1201,7 @@ def render_job_card(
     candidate_capabilities = active_profile.get("candidate_capabilities") or []
     must_not_require_skills = active_profile.get("must_not_require_skills") or []
     candidate_eligibility_facts = active_profile.get("candidate_eligibility_facts") or []
+    candidate_qualifications = active_profile.get(KEY_CANDIDATE_QUALIFICATIONS) or []
     requirement_statuses = [
         {
             "requirement": item,
@@ -1215,6 +1217,7 @@ def render_job_card(
         must_not_require_skills,
         active_profile.get("candidate_eligibility") or [],
         candidate_eligibility_facts,
+        candidate_qualifications,
     )
     duplicate_links = record.get(RECORD_DUPLICATE_LINKS_KEY)
     if not isinstance(duplicate_links, list):
@@ -1852,16 +1855,29 @@ def render_job_card(
             "invalid",
         ) and not is_uncertain_classification:
             is_eligibility = bool(row.get("is_eligibility"))
-            prefill_key = "prefill_eligibility" if is_eligibility else "prefill_capability"
+            is_qualification = bool(row.get("is_qualification"))
+            prefill_key = (
+                "prefill_qualification"
+                if is_qualification
+                else ("prefill_eligibility" if is_eligibility else "prefill_capability")
+            )
             action_label_key = (
-                "add_to_eligibility_action_label"
-                if is_eligibility
-                else "add_to_profile_action_label"
+                "add_to_qualification_action_label"
+                if is_qualification
+                else (
+                    "add_to_eligibility_action_label"
+                    if is_eligibility
+                    else "add_to_profile_action_label"
+                )
             )
             action_title_key = (
-                "add_to_eligibility_action_title"
-                if is_eligibility
-                else "add_to_profile_action_title"
+                "add_to_qualification_action_title"
+                if is_qualification
+                else (
+                    "add_to_eligibility_action_title"
+                    if is_eligibility
+                    else "add_to_profile_action_title"
+                )
             )
             add_to_profile_html = (
                 f'<a class="workspace-text-action job-requirement-action req-add-to-profile" href="/settings?{prefill_key}={quote(canonical_requirement)}#section-matrix" '
@@ -1968,7 +1984,8 @@ def render_job_card(
                 str(item.get("requirement_type") or "")
             ).lower()
             is_eligibility = raw_requirement_type in {"eligibility", "invalid", "uncertain"}
-            classification_review = raw_requirement_type not in {"capability", "eligibility"}
+            is_qualification = raw_requirement_type == "qualification"
+            classification_review = raw_requirement_type not in {"capability", "eligibility", "qualification"}
             known_generic_terms = {
                 compact_whitespace(str(fact.get("name") or "")).lower()
                 for fact in (active_profile.get("candidate_eligibility_facts") or [])
@@ -2002,12 +2019,14 @@ def render_job_card(
             row["canonical_requirement"] = compact_whitespace(str(item.get("canonical_requirement") or ""))
             row["importance"] = str(item.get("importance") or "preferred").strip().lower()
             row["is_eligibility"] = is_eligibility
+            row["is_qualification"] = is_qualification
             row["classification_review"] = classification_review
             row["matched_candidate_fact"] = compact_whitespace(
                 str(item.get("matched_candidate_fact") or item.get("profile_name") or "")
             )
             row["capability_name"] = compact_whitespace(str(item.get("capability_name") or ""))
             row["eligibility_name"] = compact_whitespace(str(item.get("eligibility_name") or ""))
+            row["qualification_name"] = compact_whitespace(str(item.get("qualification_name") or ""))
             row["matched_job_text"] = compact_whitespace(str(item.get("matched_job_text") or ""))
             row["required_experience_months"] = _workspace_int(
                 item.get("required_experience_months") or 0

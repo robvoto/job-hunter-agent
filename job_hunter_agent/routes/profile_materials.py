@@ -8,6 +8,7 @@ from fastapi import APIRouter, Body, Request
 
 from job_hunter_agent import server_helpers as srv
 from job_hunter_agent.eligibility_profile import prepare_eligibility_fact
+from job_hunter_agent.qualification_profile import normalize_qualifications
 from job_hunter_agent.auth import auth_required_response, is_admin
 from job_hunter_agent.config import GLOBAL_SETTINGS_PATH
 from job_hunter_agent.global_settings import save_global_settings
@@ -19,7 +20,7 @@ from job_hunter_agent.source_documents import (
     refresh_role_history_from_saved_cv,
     save_source_materials,
 )
-from job_hunter_agent.profile_store import KEY_CANDIDATE_ELIGIBILITY_FACTS
+from job_hunter_agent.profile_store import KEY_CANDIDATE_ELIGIBILITY_FACTS, KEY_CANDIDATE_QUALIFICATIONS
 from job_hunter_agent.system_warnings import (
     is_actionable_system_warning,
     list_system_warnings,
@@ -90,6 +91,11 @@ def api_profile_patch(body: dict = Body(...)):  # type: ignore[no-untyped-def]
             patch[KEY_CANDIDATE_ELIGIBILITY_FACTS] = prepared_profile[
                 KEY_CANDIDATE_ELIGIBILITY_FACTS
             ]
+        if KEY_CANDIDATE_QUALIFICATIONS in body:
+            qualifications = body.get(KEY_CANDIDATE_QUALIFICATIONS)
+            if not isinstance(qualifications, list):
+                raise ValueError(f"{KEY_CANDIDATE_QUALIFICATIONS} must be a list")
+            patch[KEY_CANDIDATE_QUALIFICATIONS] = normalize_qualifications(qualifications)
 
         updated = srv.patch_profile(patch)
 
@@ -161,6 +167,34 @@ def api_profile_eligibility_save(body: dict = Body(...)):  # type: ignore[no-unt
             "profile": updated,
         }
     )
+
+
+@router.post("/api/profile/qualification")
+def api_profile_qualification_save(body: dict = Body(...)):  # type: ignore[no-untyped-def]
+    """Add or edit one qualification through the shared profile save path."""
+
+    try:
+        before = srv.load_profile()
+        profile = copy.deepcopy(before)
+        existing = list(profile.get(KEY_CANDIDATE_QUALIFICATIONS) or [])
+        name = str(body.get("name") or "").strip()
+        if not name:
+            raise ValueError("Qualification name is required")
+        item = {
+            "name": name,
+            "value": body.get("value", True),
+            "aliases": body.get("aliases") or [],
+            "evidence": body.get("evidence") or [],
+        }
+        normalized = normalize_qualifications([*existing, item])
+        saved = next((row for row in normalized if row.get("name", "").casefold() == name.casefold()), None)
+        if saved is None:
+            raise ValueError("Qualification name could not be saved after normalization")
+        profile[KEY_CANDIDATE_QUALIFICATIONS] = normalized
+        updated = srv.save_profile(profile)
+    except Exception as exc:
+        return json_response({"error": str(exc)}, 400)
+    return json_response({"ok": True, "qualification": saved, "profile": updated})
 
 
 @router.post("/api/profile/refresh-role-history-from-saved-cv")

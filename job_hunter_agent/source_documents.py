@@ -33,6 +33,7 @@ from job_hunter_agent.profile_store import (
     DEFAULT_PROFILE,
     KEY_CANDIDATE_CAPABILITIES,
     KEY_CANDIDATE_ELIGIBILITY,
+    KEY_CANDIDATE_QUALIFICATIONS,
     KEY_CV_MAX_PAGES,
     KEY_EVIDENCE_TIERS,
     KEY_MUST_NOT_REQUIRED_SKILLS,
@@ -62,6 +63,7 @@ ONBOARDING_RESET_FIELDS = (
     "dominant_signal_clusters",
     KEY_MUST_NOT_REQUIRED_SKILLS,
     KEY_CANDIDATE_ELIGIBILITY,
+    KEY_CANDIDATE_QUALIFICATIONS,
     KEY_ROLE_EXPERIENCE,
     KEY_TARGET_OCCUPATION_QUERIES,
 )
@@ -493,6 +495,7 @@ def run_onboarding(
         "target_titles": len(patch.get(KEY_PRIMARY_PATTERNS) or []),
         "secondary_titles": len(patch.get(KEY_SECONDARY_PATTERNS) or []),
         "capabilities": len(patch.get(KEY_CANDIDATE_CAPABILITIES) or []),
+        "qualifications": len(patch.get(KEY_CANDIDATE_QUALIFICATIONS) or []),
         "occupation_queries": len(patch.get(KEY_TARGET_OCCUPATION_QUERIES) or []),
     }
 

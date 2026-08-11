@@ -333,6 +333,16 @@ _SETTINGS_CLEARANCES_LABEL_KEYS = (
     "eligibility_prefill_added_message",
     "eligibility_prefill_exists_message",
     "eligibility_remove_button_label",
+    "qualification_add_error_message",
+    "qualification_settings_title",
+    "qualification_help_text",
+    "qualification_name_label",
+    "qualification_name_placeholder",
+    "qualification_add_button_label",
+    "qualification_empty_text",
+    "qualification_prefill_added_message",
+    "qualification_prefill_exists_message",
+    "qualification_remove_button_label",
 )
 
 _ROLE_HISTORY_LABEL_KEYS = (

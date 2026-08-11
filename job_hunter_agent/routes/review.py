@@ -19,6 +19,7 @@ from job_hunter_agent.profile_store import CAPABILITY_ICON_GENERIC
 from job_hunter_agent.profile_store import (
     KEY_CANDIDATE_ELIGIBILITY,
     KEY_CANDIDATE_ELIGIBILITY_FACTS,
+    KEY_CANDIDATE_QUALIFICATIONS,
 )
 from job_hunter_agent.eligibility_profile import prepare_eligibility_fact
 from job_hunter_agent.record_schema import (
@@ -313,6 +314,17 @@ def _profile_gap_eligibility_index(profile: dict) -> dict[str, int]:
     return lookup
 
 
+def _profile_gap_qualification_index(profile: dict) -> dict[str, int]:
+    lookup: dict[str, int] = {}
+    for idx, item in enumerate(profile.get(KEY_CANDIDATE_QUALIFICATIONS, []) or []):
+        if not isinstance(item, dict):
+            continue
+        name = _profile_gap_name_key(item.get("name"))
+        if name:
+            lookup[name] = idx
+    return lookup
+
+
 def _matches_managed_clearance(name: str) -> bool:
     target = _profile_gap_name_key(name)
     return any(
@@ -371,12 +383,31 @@ def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
             profile.get(KEY_CANDIDATE_ELIGIBILITY) or [],
             profile.get(KEY_CANDIDATE_ELIGIBILITY_FACTS) or [],
             requirement_type=requirement_type,
+            candidate_qualifications=profile.get(KEY_CANDIDATE_QUALIFICATIONS) or [],
         )
 
         if action == "confirm_have":
             if current_status == STATUS_CONFIRMED_HAVE:
                 return json_response({"ok": True})
-            if requirement_type == "eligibility":
+            if requirement_type == "qualification":
+                qualifications = list(profile.get(KEY_CANDIDATE_QUALIFICATIONS) or [])
+                lookup = _profile_gap_qualification_index(profile)
+                item_value = {
+                    "name": canonical_item_name,
+                    "value": True,
+                    "aliases": [],
+                    "evidence": [str(canonical_item.get("matched_job_text") or "").strip()]
+                    if str(canonical_item.get("matched_job_text") or "").strip()
+                    else [],
+                    "needs_review": False,
+                }
+                normalized_name = _profile_gap_name_key(canonical_item_name)
+                if normalized_name in lookup:
+                    qualifications[lookup[normalized_name]] = item_value
+                else:
+                    qualifications.append(item_value)
+                profile[KEY_CANDIDATE_QUALIFICATIONS] = qualifications
+            elif requirement_type == "eligibility":
                 eligibility_key = (
                     KEY_CANDIDATE_ELIGIBILITY
                     if _matches_managed_clearance(canonical_item_name)
@@ -426,7 +457,26 @@ def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
         elif action == "confirm_do_not_have":
             if current_status == STATUS_CONFIRMED_DO_NOT_HAVE:
                 return json_response({"ok": True})
-            if requirement_type == "eligibility":
+            if requirement_type == "qualification":
+                qualifications = list(profile.get(KEY_CANDIDATE_QUALIFICATIONS) or [])
+                lookup = _profile_gap_qualification_index(profile)
+                item_value = {
+                    "name": canonical_item_name,
+                    "value": False,
+                    "aliases": [],
+                    "evidence": [str(canonical_item.get("matched_job_text") or "").strip()]
+                    if str(canonical_item.get("matched_job_text") or "").strip()
+                    else [],
+                    "needs_review": False,
+                }
+                normalized_name = _profile_gap_name_key(canonical_item_name)
+                if normalized_name in lookup:
+                    qualifications[lookup[normalized_name]] = item_value
+                else:
+                    qualifications.append(item_value)
+                profile[KEY_CANDIDATE_QUALIFICATIONS] = qualifications
+                srv.save_profile(profile)
+            elif requirement_type == "eligibility":
                 eligibility_key = (
                     KEY_CANDIDATE_ELIGIBILITY
                     if _matches_managed_clearance(canonical_item_name)
