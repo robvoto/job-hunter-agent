@@ -109,6 +109,7 @@ from job_hunter_agent.profile_store import (
     KEY_ROLE_EXPERIENCE,
     get_candidate_profile_tier_weights,
     get_candidate_profile_tiers,
+    load_clearance_ui_options,
     load_profile,
 )
 from job_hunter_agent.runtime_helpers import (
@@ -911,6 +912,34 @@ def _build_valid_eligibility_lookup(
         if normalized_key and canonical_value:
             lookup[normalized_key] = canonical_value
     return lookup
+
+
+def _build_profile_eligibility_names(profile: dict[str, Any]) -> dict[str, str]:
+    """Map profile-owned eligibility names and managed aliases to canonical facts."""
+
+    managed_options = load_clearance_ui_options()
+    managed_terms_by_key: dict[str, list[str]] = {}
+    for option in managed_options:
+        terms = [option["value"], option["label"], *option["aliases"]]
+        for term in terms:
+            key = compact_whitespace(term).casefold()
+            if key:
+                managed_terms_by_key[key] = terms
+
+    valid_names: dict[str, str] = {}
+    for source_key in (KEY_CANDIDATE_ELIGIBILITY, KEY_CANDIDATE_ELIGIBILITY_FACTS):
+        for rule in profile.get(source_key, []) or []:
+            if not isinstance(rule, dict):
+                continue
+            canonical = compact_whitespace(rule.get("name"))
+            if not canonical:
+                continue
+            managed_terms = managed_terms_by_key.get(canonical.casefold(), [])
+            for term in [canonical, *managed_terms]:
+                normalized_term = compact_whitespace(term).casefold()
+                if normalized_term:
+                    valid_names[normalized_term] = canonical
+    return valid_names
 
 
 def _build_valid_qualification_lookup(
@@ -1968,17 +1997,7 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
                 normalized_term = str(term or "").strip().lower()
                 if normalized_term:
                     valid_capability_names[normalized_term] = canonical
-        valid_eligibility_names = {}
-        for source_key in (KEY_CANDIDATE_ELIGIBILITY, KEY_CANDIDATE_ELIGIBILITY_FACTS):
-            for rule in profile.get(source_key, []) or []:
-                if not isinstance(rule, dict):
-                    continue
-                canonical = str(rule.get("name") or "").strip()
-                if not canonical:
-                    continue
-                normalized_term = canonical.lower()
-                if normalized_term:
-                    valid_eligibility_names[normalized_term] = canonical
+        valid_eligibility_names = _build_profile_eligibility_names(profile)
         valid_qualification_names = {}
         for rule in profile.get(KEY_CANDIDATE_QUALIFICATIONS, []) or []:
             if not isinstance(rule, dict):
