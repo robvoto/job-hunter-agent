@@ -43,6 +43,12 @@ When cleaning instructions, check:
 3. Preserve long useful content by moving it to `DETAILS.md`, not deleting it outright.
 4. Report exactly what changed and what was left alone.
 
+## Repeated mistake protocol
+- If the same agent/tooling mistake happens more than once and the correction is known, update the owning skill in the same work session instead of relying on conversational memory.
+- Put the rule at the narrowest correct scope: universal behaviour in `AGENTS.md`, tooling failures in the tooling skill, UI consistency in the UI/design-system skill, etc.
+- Record the cause and recovery rule, not the incident narrative. Example: an MCP `UnicodeDecodeError` is an output-decoding failure; retry with bounded ASCII-safe output rather than declaring the filesystem unavailable.
+- Do not create duplicate rules in several skills. Link or route to the single owner.
+
 ## Ongoing maintenance
 - When new instructions are added, check whether they made the wrong file bigger.
 - If a rule is universal, keep it short in `AGENTS.md`.

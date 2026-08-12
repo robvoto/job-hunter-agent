@@ -25,9 +25,10 @@ from typing import Any, Literal
 
 logger = logging.getLogger(__name__)
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 from job_hunter_agent.logging_utils import format_log_block
+from job_hunter_agent.profile_item_names import normalize_profile_item_name
 from job_hunter_agent.profile_store import (
     DEFAULT_ONBOARDING_SETTINGS,
     KEY_ALIASES,
@@ -111,7 +112,7 @@ class _EligibilityExtraction(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str
-    value: bool = True
+    value: StrictBool = True
     evidence: list[str] = Field(default_factory=list)
     needs_review: bool = False
 
@@ -356,9 +357,12 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         "  Do not repeat any preferred_role_titles entry here. Use standalone role titles only, no duplicates.\n"
         "- target_occupation_queries: generate 3 to 8 machine-facing occupation query strings that match the candidate's occupation family.\n"
         "  Use standard job titles a job-search system could match against.\n"
-        "- eligibility: extract explicit true/false facts the candidate formally holds or is legally allowed to claim. "
-        "Examples include clearances, citizenship, work rights, licences, and registrations. "
-        "Only include facts that are directly supported by the CV text.\n"
+        "- eligibility: extract only current, independently verifiable facts the candidate actually holds or is legally allowed to claim now. "
+        "Examples include an existing clearance, citizenship, work rights, licence, or registration. "
+        "Do not treat future possibility, willingness, suitability, or being eligible/able to obtain something as a current eligibility fact. "
+        "For example, 'eligible to obtain a clearance' is not the same as holding that clearance and must not be returned as eligibility=true. "
+        "Return one concise fact per item; split independent facts instead of combining them. "
+        "Only include facts directly supported by the CV text.\n"
         "- qualifications: extract explicit education, degrees, certifications, and formal qualifications. "
         "Return one concise reusable concept per item (for example CBAP, PRINCE2, Bachelor of Information Technology, or Diploma of Project Management), plus aliases and source evidence. "
         "Never use a full CV sentence or a list of alternatives as the qualification name. Only include items directly supported by the CV text.\n"
@@ -458,20 +462,15 @@ def _validate_eligibility(raw: list[Any]) -> list[dict[str, Any]]:
             rejected.append("<non-dict>")
             continue
         name = compact_whitespace(str(item.get("name") or item.get("label") or "")).strip()
-        if not name:
-            rejected.append("<empty name>")
+        if not normalize_profile_item_name(name):
+            rejected.append(name or "<empty name>")
             continue
         raw_value = item.get("value", True)
-        if isinstance(raw_value, str):
-            lowered_value = raw_value.strip().lower()
-            if lowered_value in {"false", "no", "n", "0", "absent", "missing", "none"}:
-                value = False
-            elif lowered_value in {"true", "yes", "y", "1", "have", "has", "held", "present"}:
-                value = True
-            else:
-                value = bool(raw_value)
-        else:
-            value = bool(raw_value)
+        if not isinstance(raw_value, bool):
+            raise ValueError(
+                f"Eligibility value must be a boolean; received {type(raw_value).__name__} for {name!r}"
+            )
+        value = raw_value
         evidence_raw = item.get("evidence") or []
         if isinstance(evidence_raw, str):
             evidence_raw = [evidence_raw]

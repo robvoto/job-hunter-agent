@@ -34,6 +34,8 @@ Any new heuristic or hardcoded business/display rule is a red flag and requires 
 - Do not add local fallback defaults for business values, decision labels, or display labels in feature code. If the owner does not provide the value, surface an explicit error or fix the owner.
 - If the same label or copy is reused across summary, tooltip, and debug views, put it in the owning JSON/data file once and read it from there.
 - Source-specific parsing and cleanup rules must live in data/config/knowledge and be loaded by the engine; do not embed them in Python constants.
+- Do not implement semantic classification with hand-authored phrase/substring lists in feature code (for example `("eligible to", "able to obtain", ...)`). That is a brittle heuristic and hardcoding even if it is called validation.
+- When the distinction requires language understanding, use the LLM/schema/prompt at the owning interpretation boundary and preserve uncertain cases for review. Deterministic code may enforce structural/schema invariants, but must not pretend a growing phrase list is semantic understanding.
 - Onboarding title-tier copy and validation messages must come from `data/knowledge/ui_labels.json` via the bootstrap label global; do not hardcode target/also-consider/search keyword text in templates or JS.
 - If the requested change would force a workaround, legacy pattern, anti-pattern, or unnecessary monolith, say so before editing: name the pattern, explain why it is suboptimal, and state the professional alternative. Ask before using the weaker approach if a better one is feasible within scope.
 

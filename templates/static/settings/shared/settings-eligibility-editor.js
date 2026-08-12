@@ -91,7 +91,13 @@ export const JobHunterEligibilityEditor = (function () {
                 <span class="toggle-switch-ui"></span>
               </span>
             </label>
-            <button class="jh-button jh-button--danger jh-button--compact" type="button" data-eligibility-field="remove" data-eligibility-index="${index}">${escapeHtml(labels.eligibility_remove_button_label)}</button>
+            <button class="cap-remove-btn capability-remove-btn" type="button" data-eligibility-field="remove" data-eligibility-index="${index}"
+                    aria-label="${escapeHtml(labels.eligibility_remove_button_label)} ${escapeHtml(fact.name)}"
+                    title="${escapeHtml(labels.eligibility_remove_button_label)}">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="cap-remove-icon">
+                <path d="M9 3.5h6l1 1.5H19v2H5v-2h3l1-1.5Zm-1 5h8l-.6 9.3A2 2 0 0 1 13.4 20H10.6a2 2 0 0 1-1.99-1.7L8 8.5Zm2 2v6m4-6v6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path>
+              </svg>
+            </button>
           </div>
         </article>`;
     }).join('');

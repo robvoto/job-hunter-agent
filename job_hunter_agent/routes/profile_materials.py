@@ -7,12 +7,19 @@ import copy
 from fastapi import APIRouter, Body, Request
 
 from job_hunter_agent import server_helpers as srv
-from job_hunter_agent.eligibility_profile import prepare_eligibility_fact
-from job_hunter_agent.qualification_profile import normalize_qualifications
 from job_hunter_agent.auth import auth_required_response, is_admin
 from job_hunter_agent.config import GLOBAL_SETTINGS_PATH
+from job_hunter_agent.eligibility_profile import (
+    prepare_eligibility_fact,
+    prepare_eligibility_facts_for_profile_save,
+)
 from job_hunter_agent.global_settings import save_global_settings
 from job_hunter_agent.knowledge_sync_roundtrip import sync_knowledge_roundtrip
+from job_hunter_agent.profile_store import (
+    KEY_CANDIDATE_ELIGIBILITY_FACTS,
+    KEY_CANDIDATE_QUALIFICATIONS,
+)
+from job_hunter_agent.qualification_profile import normalize_qualifications
 from job_hunter_agent.routes.responses import json_response
 from job_hunter_agent.scraper_health import run_scraper_configuration_validation
 from job_hunter_agent.source_documents import (
@@ -20,7 +27,6 @@ from job_hunter_agent.source_documents import (
     refresh_role_history_from_saved_cv,
     save_source_materials,
 )
-from job_hunter_agent.profile_store import KEY_CANDIDATE_ELIGIBILITY_FACTS, KEY_CANDIDATE_QUALIFICATIONS
 from job_hunter_agent.system_warnings import (
     is_actionable_system_warning,
     list_system_warnings,
@@ -82,15 +88,10 @@ def api_profile_patch(body: dict = Body(...)):  # type: ignore[no-untyped-def]
             generic_facts = body.get(KEY_CANDIDATE_ELIGIBILITY_FACTS)
             if not isinstance(generic_facts, list):
                 raise ValueError(f"{KEY_CANDIDATE_ELIGIBILITY_FACTS} must be a list")
-            prepared_profile = dict(current)
-            prepared_profile[KEY_CANDIDATE_ELIGIBILITY_FACTS] = []
-            for item in generic_facts:
-                if not isinstance(item, dict):
-                    continue
-                _save_generic_eligibility_fact(prepared_profile, dict(item))
-            patch[KEY_CANDIDATE_ELIGIBILITY_FACTS] = prepared_profile[
-                KEY_CANDIDATE_ELIGIBILITY_FACTS
-            ]
+            patch[KEY_CANDIDATE_ELIGIBILITY_FACTS] = prepare_eligibility_facts_for_profile_save(
+                current.get(KEY_CANDIDATE_ELIGIBILITY_FACTS, []),
+                generic_facts,
+            )
         if KEY_CANDIDATE_QUALIFICATIONS in body:
             qualifications = body.get(KEY_CANDIDATE_QUALIFICATIONS)
             if not isinstance(qualifications, list):

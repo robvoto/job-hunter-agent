@@ -13,8 +13,11 @@ Use before editing CV/onboarding/profile extraction, capability clustering, elig
 - Preserve questionable signals with `needs_review: true` where relevant.
 - Do not invent capabilities, domains, or evidence not present in source material.
 - Keep `candidate_capabilities` for skills/experience and `candidate_eligibility` for explicit true/false facts such as clearances, work rights, licences, registrations, and certifications.
+- Eligibility facts must describe a **current claimable state**, not a future possibility. "Eligible to obtain", "able to obtain", willingness, suitability, or generic "X eligibility" are not proof that the candidate holds X.
+- Keep independent eligibility facts separate. Do not compress prerequisite/dependency wording into one canonical label; if a prerequisite (for example citizenship) is itself explicitly true, store that separately and do not infer the dependent fact.
 - Do not hardcode extraction dictionaries to force outcomes.
 - LLM extraction must be inspectable, constrained, and overrideable.
+- Semantic eligibility interpretation belongs in the LLM extraction contract/schema, not in Python substring/regex phrase heuristics. Deterministic validation should enforce shape and evidence boundaries only.
 - Profile updates should be incremental, not silent regeneration.
 
 ## Owners
@@ -46,3 +49,22 @@ catch only the expected import failure and keep unexpected errors visible.
 - Is the profile update incremental?
 - Is schema normalised at the owner boundary?
 - Does `normalize_full_profile` preserve `candidate_capabilities` through a round-trip?
+
+## Profile-field integration gate
+
+When adding or changing a persisted candidate-profile field, do not stop at the
+extractor or runtime normaliser. If the field is user-editable or user-visible,
+load `dashboard-ui` (and `css-design-system` for visual changes) and verify the
+complete Settings contract:
+
+- profile default, normaliser, and runtime consumer use the same canonical key;
+- the Settings partial renders the control/editor;
+- `settings-page.js` loads the field and includes it in `collectProfile()`;
+- route validation and persistence accept the same shape;
+- labels come from the owning knowledge/bootstrap source;
+- a save/reload regression test covers the round trip, with a browser test for
+  interactive controls where the existing Settings E2E path supports it.
+
+Backend-only profile fields must be explicitly documented as read-only or
+runtime-only. Never assume a new profile key will appear in Settings
+automatically.

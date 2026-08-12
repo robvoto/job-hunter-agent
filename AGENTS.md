@@ -30,6 +30,7 @@ Reusable defaults:
 - `instruction-maintenance`: AGENTS, adapter files, skills, instruction docs.
 - `no-hardcoding`: config, schema, thresholds, labels, defaults, fallback values, business rules.
 - `css-design-system`: CSS, spacing, layout, reusable components, theme tokens.
+- `mcp-tooling`: WSL/filesystem/Google connector access and MCP failure recovery.
 
 ### UI task routing (required, not optional)
 

@@ -46,6 +46,7 @@ Choose the best matching skill. Combine with reusable skills such as `code-chang
 | `.skills/scraping/SKILL.md` | SEEK/LinkedIn scraping and raw evidence capture |
 | `.skills/ad-learning/SKILL.md` | Extracting learning candidates from job ads |
 | `.skills/knowledge-management/SKILL.md` | Managed knowledge/config sources and loaders |
+| `.skills/mcp-tooling/SKILL.md` | WSL/filesystem/Google connector access and MCP failure recovery |
 | `.skills/history-dedup/SKILL.md` | Job history, viewed/applied/hidden state, deduplication |
 | `.skills/suggested-tuning/SKILL.md` | Settings > Optimise > Suggested Tuning |
 

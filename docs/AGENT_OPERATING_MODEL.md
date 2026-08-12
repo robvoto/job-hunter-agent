@@ -84,6 +84,7 @@ The description is important because agent systems often discover skills from na
 | `dashboard-ui` | Workspace and settings UI, including workspace output sync. |
 | `history-dedup` | Job history, saved/viewed/applied/hidden state, duplicate identity. |
 | `instruction-maintenance` | AGENTS, adapter files, skills, and instruction docs. |
+| `mcp-tooling` | WSL/filesystem/Google connector access and MCP failure recovery. |
 | `job-filtering` | Deterministic pass/fail filters, hard blockers, and reject reasons. |
 | `knowledge-management` | Managed knowledge/config/source-of-truth ownership. |
 | `no-hardcoding` | Config, schema, thresholds, labels, defaults, fallback values, rule IDs, and business-rule ownership. |

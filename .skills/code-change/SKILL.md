@@ -20,6 +20,7 @@ Use before modifying existing code.
 - Do not introduce legacy/backward-compatibility code unless explicitly requested.
 - Do not mask failures with fallback encoders, fallback parsers, fallback labels, guessed config, alternate fields, broad exception swallowing, or default values. Surface the failure unless the human explicitly approves the fallback with a stated reason.
 - Do not change business judgement during mechanical cleanup.
+- If code is deciding what human language means, classify that as semantic interpretation before coding. Do not implement semantic interpretation with regexes, keyword/phrase lists, substring checks, hand-authored synonym tables, or string-to-boolean word maps; use the owning LLM/schema/managed-knowledge path, or fail/log for review when meaning is unresolved.
 - Load `.skills/no-hardcoding/SKILL.md` if the change touches thresholds, mappings, labels, schema fields, defaults, or rule IDs. Do not rely on this trigger alone — it depends on recognizing the change as label-related, which is easy to miss on incidental edits. Any edit to a designated owner module (see `.skills/no-hardcoding/SKILL.md`'s Enforcement section) must run `tests/test_no_hardcoding.py` regardless of what the change looks like.
 - If a task is likely owned by one module, search that owner first and stop once you find the source of truth.
 - When a symptom is visible in the UI, inspect the rendered template, injected bootstrap data, and owning normaliser in parallel before editing.

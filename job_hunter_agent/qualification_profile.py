@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from job_hunter_agent.profile_item_names import canonical_profile_item_name
+from job_hunter_agent.profile_item_names import normalize_profile_item_name
 from job_hunter_agent.text_processing import compact_whitespace
 
 KEY_NAME = "name"
@@ -25,7 +25,7 @@ def normalize_qualifications(items: Any) -> list[dict[str, Any]]:
         # rejects unsafe persisted values; it must not supply or rewrite the
         # qualification concept.
         name = compact_whitespace(raw.get(KEY_NAME) or raw.get("label"))
-        if not canonical_profile_item_name(name):
+        if not normalize_profile_item_name(name):
             continue
         name_key = name.casefold()
         if not name_key or name_key in seen:
@@ -40,7 +40,7 @@ def normalize_qualifications(items: Any) -> list[dict[str, Any]]:
             alias_key = clean_alias.casefold()
             if not clean_alias or alias_key == name_key or alias_key in seen_aliases:
                 continue
-            if not canonical_profile_item_name(clean_alias):
+            if not normalize_profile_item_name(clean_alias):
                 continue
             seen_aliases.add(alias_key)
             clean_aliases.append(clean_alias)

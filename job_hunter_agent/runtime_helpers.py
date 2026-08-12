@@ -6,9 +6,9 @@ arguments and maintains persistent runtime logs for LLM costs and
 investigation events.
 """
 
-import os
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -172,7 +172,10 @@ def log_settings_change(
     """Log a small before/after summary for saved settings payloads."""
     diffs = list(_iter_settings_diffs(before or {}, after or {}))
     if not diffs:
-        logger.info("[%s] settings saved; no effective changes", scope)
+        logger.info(
+            "[%s] settings save completed; no effective changes in this scope",
+            scope,
+        )
         return
 
     logger.info("[%s] settings changed (%d field%s):", scope, len(diffs), "" if len(diffs) == 1 else "s")

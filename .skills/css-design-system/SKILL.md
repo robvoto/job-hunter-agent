@@ -39,6 +39,8 @@ CSS changes must improve the shared design system, not create another one-off pa
 ## Component discipline
 
 - Reuse existing cards, rows, buttons, chips, badges, toggles, choice strips, drawers, alerts, and help patterns.
+- **Before creating or styling any action control, search the repo and `docs/UI_COMPONENT_MAP.md` for the same semantic action** (for example remove/delete, add, edit, save, close). If an equivalent exists, reuse its markup/class/component rather than introducing a visually different control.
+- A semantic equivalent beats a page-specific preference: a remove action that is an icon elsewhere must not become a text button on a new editor without an explicit product decision.
 - Do not duplicate component variants because one screen looks slightly different.
 - Fix the smallest owning shared selector when multiple screens share the same visual problem.
 - Do not solve overflow by hiding content unless that is the explicit UX requirement.

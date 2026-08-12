@@ -76,3 +76,14 @@ def test_save_user_settings_preserves_existing_fields_on_partial_update(isolated
     saved = user_settings.load_user_settings(None, create_if_missing=False)
     assert saved["workspace"]["minimum_score"] == 55
     assert saved["telegram"]["enabled"] is True
+
+
+def test_save_user_settings_no_change_log_identifies_unchanged_scope(isolated_db, caplog):
+    with caplog.at_level(logging.INFO):
+        user_settings.save_user_settings(None, {})
+
+    messages = _messages(caplog)
+    assert any(
+        "[USER_SETTINGS] settings save completed; no effective changes in this scope" in message
+        for message in messages
+    )

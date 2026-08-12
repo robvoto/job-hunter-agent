@@ -224,8 +224,13 @@ function normalizeSummaryList(values) {
 }
 
 function fieldLabelText(fieldId) {
+  const field = document.getElementById(fieldId);
   const label = document.querySelector(`label[for="${fieldId}"]`);
-  return label ? normalizeSummaryWhitespace(label.textContent) : '';
+  const labelText = label ? normalizeSummaryWhitespace(label.textContent) : '';
+  const sourceTitle = field?.closest('.search-source-panel')
+    ?.querySelector('.search-source-title');
+  const sourceText = normalizeSummaryWhitespace(sourceTitle?.textContent || '');
+  return sourceText && labelText ? `${sourceText} ${labelText}` : labelText;
 }
 
 function formatSummaryBoolean(value) {
@@ -277,11 +282,21 @@ function captureCandidateSettingsSnapshot(profile, userSettings) {
     searchKeyword: normalizedProfile.search_settings?.keywords || '',
     locations: normalizedProfile.search_settings?.locations || [],
     searchDateWindow: normalizedProfile.search_settings?.date_range_days ?? '',
+    seekMaxPages: normalizedProfile.search_settings?.seek_max_pages ?? '',
+    seekQuickApplyOnly: normalizedProfile.search_settings?.seek_quick_apply_only ?? '',
+    linkedinResultsPerSearch: normalizedProfile.search_settings?.linkedin_results_per_search ?? '',
+    linkedinEasyApplyOnly: normalizedProfile.search_settings?.linkedin_easy_apply_only ?? '',
+    apsjobsResultsPerSearch: normalizedProfile.search_settings?.apsjobs_results_per_search ?? '',
     minimumSalaryYearly: normalizedProfile.salary_preferences?.minimum_salary_yearly ?? 0,
     minimumDailyRate: normalizedProfile.salary_preferences?.minimum_daily_rate ?? 0,
     targetRoles: normalizedProfile.target_roles || [],
     alsoConsiderRoles: normalizedProfile.also_consider_roles || [],
     mustNotRequireSkills: normalizedProfile.must_not_require_skills || [],
+    engagementType: normalizedProfile.match_preferences?.engagement_type || [],
+    workModePreference: normalizedProfile.match_preferences?.work_mode_preference || [],
+    sectorPreference: normalizedProfile.match_preferences?.prefer_sector || '',
+    minContractMonths: normalizedProfile.match_preferences?.min_contract_months ?? '',
+    preferenceWeights: normalizedProfile.preference_weights || {},
     seekEnabled: enabledSources.includes('seek'),
     linkedinEnabled: enabledSources.includes('linkedin'),
     apsjobsEnabled: enabledSources.includes('apsjobs'),
@@ -295,29 +310,64 @@ function captureCandidateSettingsSnapshot(profile, userSettings) {
 }
 
 const candidateSettingsSummaryFields = [
-  { key: 'searchKeyword', fieldId: 'keywords', format: formatSummaryText },
-  { key: 'locations', fieldId: 'locations', format: formatSummaryList },
-  { key: 'searchDateWindow', fieldId: 'search_date_window', format: (value) => formatSummarySelect('search_date_window', value) },
-  { key: 'minimumSalaryYearly', fieldId: 'minimum_salary_yearly', format: formatSummaryCurrency },
-  { key: 'minimumDailyRate', fieldId: 'minimum_daily_rate', format: formatSummaryCurrency },
-  { key: 'targetRoles', fieldId: 'target_roles', format: formatSummaryList },
-  { key: 'alsoConsiderRoles', fieldId: 'also_consider_roles', format: formatSummaryList },
-  { key: 'mustNotRequireSkills', fieldId: 'must_not_require_skills', format: formatSummaryList },
-  { key: 'seekEnabled', fieldId: 'seek_enabled', format: formatSummaryBoolean },
-  { key: 'linkedinEnabled', fieldId: 'linkedin_enabled', format: formatSummaryBoolean },
-  { key: 'apsjobsEnabled', fieldId: 'apsjobs_enabled', format: formatSummaryBoolean },
-  { key: 'scheduleEnabled', fieldId: 'schedule_enabled', format: formatSummaryBoolean },
-  { key: 'scheduleTimeLocal', fieldId: 'schedule_daily_time_local', format: formatSummaryTime },
-  { key: 'telegramEnabled', fieldId: 'telegram_enabled', format: formatSummaryBoolean },
-  { key: 'telegramBotUsername', fieldId: 'telegram_bot_username', format: formatSummaryText },
-  { key: 'telegramDisableLinkPreview', fieldId: 'telegram_disable_link_preview', format: formatSummaryBoolean },
-  { key: 'llmModel', fieldId: 'llm_model', format: formatSummaryText },
+  { key: 'searchKeyword', path: 'search_settings.keywords', fieldId: 'keywords', format: formatSummaryText },
+  { key: 'locations', path: 'search_settings.locations', fieldId: 'locations', format: formatSummaryList },
+  { key: 'searchDateWindow', path: 'search_settings.date_range_days', fieldId: 'search_date_window', format: (value) => formatSummarySelect('search_date_window', value) },
+  { key: 'seekMaxPages', path: 'search_settings.seek_max_pages', fieldId: 'seek_max_pages', format: formatSummaryText },
+  { key: 'seekQuickApplyOnly', path: 'search_settings.seek_quick_apply_only', fieldId: 'seek_quick_apply_only', format: formatSummaryText },
+  { key: 'linkedinResultsPerSearch', path: 'search_settings.linkedin_results_per_search', fieldId: 'linkedin_results_per_search', format: formatSummaryText },
+  { key: 'linkedinEasyApplyOnly', path: 'search_settings.linkedin_easy_apply_only', fieldId: 'linkedin_easy_apply_only', format: formatSummaryText },
+  { key: 'apsjobsResultsPerSearch', path: 'search_settings.apsjobs_results_per_search', fieldId: 'apsjobs_results_per_search', format: formatSummaryText },
+  { key: 'minimumSalaryYearly', path: 'salary_preferences.minimum_salary_yearly', fieldId: 'minimum_salary_yearly', format: formatSummaryCurrency },
+  { key: 'minimumDailyRate', path: 'salary_preferences.minimum_daily_rate', fieldId: 'minimum_daily_rate', format: formatSummaryCurrency },
+  { key: 'targetRoles', path: 'target_roles', fieldId: 'target_roles', format: formatSummaryList },
+  { key: 'alsoConsiderRoles', path: 'also_consider_roles', fieldId: 'also_consider_roles', format: formatSummaryList },
+  { key: 'mustNotRequireSkills', path: 'must_not_require_skills', fieldId: 'must_not_require_skills', format: formatSummaryList },
+  { key: 'engagementType', path: 'match_preferences.engagement_type', fieldId: 'engagement_type_label', format: formatSummaryList },
+  { key: 'workModePreference', path: 'match_preferences.work_mode_preference', fieldId: 'work_mode_preference_label', format: formatSummaryList },
+  { key: 'sectorPreference', path: 'match_preferences.prefer_sector', fieldId: 'sector_preference_label', format: formatSummaryText },
+  { key: 'minContractMonths', path: 'match_preferences.min_contract_months', fieldId: 'min_contract_months', format: formatSummaryText },
+  { key: 'seekEnabled', path: 'enabled_sources', fieldId: 'seek_enabled', format: formatSummaryBoolean },
+  { key: 'linkedinEnabled', path: 'enabled_sources', fieldId: 'linkedin_enabled', format: formatSummaryBoolean },
+  { key: 'apsjobsEnabled', path: 'enabled_sources', fieldId: 'apsjobs_enabled', format: formatSummaryBoolean },
+  { key: 'scheduleEnabled', path: 'schedule.enabled', fieldId: 'schedule_enabled', format: formatSummaryBoolean, scope: 'user_settings' },
+  { key: 'scheduleTimeLocal', path: 'schedule.daily_time_local', fieldId: 'schedule_daily_time_local', format: formatSummaryTime, scope: 'user_settings' },
+  { key: 'telegramEnabled', path: 'telegram.enabled', fieldId: 'telegram_enabled', format: formatSummaryBoolean, scope: 'user_settings' },
+  { key: 'telegramBotUsername', path: 'telegram.bot_username', fieldId: 'telegram_bot_username', format: formatSummaryText, scope: 'user_settings' },
+  { key: 'telegramDisableLinkPreview', path: 'telegram.disable_link_preview', fieldId: 'telegram_disable_link_preview', format: formatSummaryBoolean, scope: 'user_settings' },
+  { key: 'llmModel', path: 'llm.model', fieldId: 'llm_model', format: formatSummaryText, scope: 'user_settings' },
 ];
+
+function collectSettingsDiffs(before, after, path = [], diffs = []) {
+  if (before && typeof before === 'object' && !Array.isArray(before)
+      && after && typeof after === 'object' && !Array.isArray(after)) {
+    const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+    [...keys].sort().forEach((key) => {
+      collectSettingsDiffs(before[key], after[key], [...path, key], diffs);
+    });
+    return diffs;
+  }
+  if (JSON.stringify(before) !== JSON.stringify(after)) {
+    diffs.push({ path: path.join('.'), before, after });
+  }
+  return diffs;
+}
+
+function formatGenericSummaryValue(value) {
+  if (value === null || value === undefined || value === '') {
+    return sharedUiLabels.settings_value_not_set;
+  }
+  if (typeof value === 'boolean') return formatSummaryBoolean(value);
+  if (Array.isArray(value)) return value.length ? value.join(', ') : sharedUiLabels.settings_value_none;
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
 
 function buildCandidateSettingsSaveMessage(beforeProfile, beforeUserSettings, afterProfile, afterUserSettings) {
   const beforeSnapshot = captureCandidateSettingsSnapshot(beforeProfile, beforeUserSettings);
   const afterSnapshot = captureCandidateSettingsSnapshot(afterProfile, afterUserSettings);
   const lines = [];
+  const coveredDiffs = new Set();
 
   candidateSettingsSummaryFields.forEach((field) => {
     const beforeValue = beforeSnapshot[field.key];
@@ -330,6 +380,17 @@ function buildCandidateSettingsSaveMessage(beforeProfile, beforeUserSettings, af
       return;
     }
     lines.push(`${label}: ${field.format(beforeValue)} -> ${field.format(afterValue)}`);
+    coveredDiffs.add(`${field.scope || 'profile'}.${field.path}`);
+  });
+
+  const genericDiffs = [
+    ...collectSettingsDiffs(beforeProfile, afterProfile).map((diff) => ({ ...diff, scope: 'profile' })),
+    ...collectSettingsDiffs(beforeUserSettings, afterUserSettings).map((diff) => ({ ...diff, scope: 'user_settings' })),
+  ];
+  genericDiffs.forEach((diff) => {
+    const qualifiedPath = `${diff.scope}.${diff.path}`;
+    if (coveredDiffs.has(qualifiedPath)) return;
+    lines.push(`${qualifiedPath}: ${formatGenericSummaryValue(diff.before)} -> ${formatGenericSummaryValue(diff.after)}`);
   });
 
   if (!lines.length) {

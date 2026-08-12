@@ -12,6 +12,7 @@ from job_hunter_agent.profile_store import (
     KEY_CANDIDATE_ELIGIBILITY_FACTS,
     normalize_full_profile,
 )
+from job_hunter_agent.routes import profile_materials
 
 _STATIC_DIR = Path(__file__).resolve().parent.parent / "templates" / "static" / "settings" / "shared"
 
@@ -95,6 +96,25 @@ def test_generic_endpoint_does_not_create_managed_clearance_levels(monkeypatch):
 
     assert response.status_code == 400
     assert saved == []
+
+
+def test_eligibility_normalizer_rejects_non_boolean_value():
+    from job_hunter_agent.eligibility_profile import normalize_eligibility_facts
+
+    try:
+        normalize_eligibility_facts([{"name": "Australian citizenship", "value": "yes", "evidence": []}])
+    except ValueError as exc:
+        assert "must be a boolean" in str(exc)
+    else:
+        raise AssertionError("invalid eligibility boolean was silently coerced")
+
+
+def test_eligibility_editor_reuses_shared_trash_action():
+    source = (_STATIC_DIR / "settings-eligibility-editor.js").read_text(encoding="utf-8")
+
+    assert 'class="cap-remove-btn capability-remove-btn"' in source
+    assert 'class="cap-remove-icon"' in source
+    assert 'jh-button--danger jh-button--compact' not in source
 
 
 def test_settings_add_flow_calls_the_shared_save_endpoint_not_a_local_only_push():

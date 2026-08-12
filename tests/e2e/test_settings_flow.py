@@ -140,6 +140,22 @@ def test_schedule_toggle_persists_after_reload(candidate_page):
     )
 
 
+def test_settings_save_confirmation_shows_linkedin_before_and_after(candidate_page):
+    page = candidate_page
+    page.goto("/settings#section-search")
+
+    results_input = page.locator("#linkedin_results_per_search")
+    results_input.wait_for(state="visible")
+    before = int(results_input.input_value())
+    after = before - 1 if before > 5 else before + 1
+    results_input.fill(str(after))
+
+    page.locator("#save_settings_btn").click()
+    expect(page.locator("#status")).to_contain_text(
+        f"LinkedIn Results per search: {before} -> {after}"
+    )
+
+
 def test_capability_alias_preview_uses_related_skills_copy(candidate_page):
     _seed_candidate_capabilities(
         "candidate@e2e.test",
