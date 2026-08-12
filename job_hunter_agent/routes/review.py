@@ -376,6 +376,15 @@ def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
             or ""
         ).strip()
         requirement_type = str(canonical_item.get("requirement_type") or "capability").strip().lower()
+        if requirement_type == "qualification":
+            # matched_candidate_fact is not vetted for a single-concept name (only
+            # canonical_requirement is, gated by profile_action_allowed — see
+            # llm_gate.normalize_llm_requirement_coverage). _profile_gap_confirmable_item
+            # already requires profile_action_allowed is True, so canonical_requirement
+            # is guaranteed to be a resolved, non-compound concept here.
+            canonical_item_name = str(
+                canonical_item.get("canonical_requirement") or canonical_item_name
+            ).strip()
 
         profile = srv.load_profile()
         current_status = classify_requirement_status(

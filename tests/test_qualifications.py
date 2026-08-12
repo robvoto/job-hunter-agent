@@ -22,15 +22,17 @@ def _profile(qualifications):
     }
 
 
-def test_qualification_profile_discards_raw_requirement_sentences_as_names():
+def test_qualification_profile_normalization_is_shape_only_and_dedupes_by_name():
+    # normalize_qualifications() is documented as shape-only (see
+    # qualification_profile.py): it must not judge whether a name is a single
+    # atomic concept or compound ad prose. That judgement happens upstream, at
+    # the qualification-save boundary in routes/review.py, which stores the
+    # JH-286-vetted canonical_requirement rather than raw job-ad text — see
+    # test_profile_gap_api.py::test_profile_gap_confirm_have_qualification_uses_canonical_requirement_not_matched_fact.
     normalized = normalize_qualifications(
         [
-            {
-                "name": "CBAP, Agile BA, or equivalent certifications",
-                "value": True,
-                "evidence": ["CBAP certification held"],
-            },
             {"name": "CBAP", "value": True, "evidence": ["CBAP certification held"]},
+            {"name": "cbap", "value": True, "evidence": ["duplicate casing"]},
         ]
     )
 

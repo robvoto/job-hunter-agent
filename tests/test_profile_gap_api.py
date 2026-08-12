@@ -142,6 +142,90 @@ def test_profile_gap_confirm_have_is_idempotent(client, monkeypatch):
     assert saved_profiles == [], "no save when capability already exists"
 
 
+def test_profile_gap_confirm_have_qualification_uses_canonical_requirement_not_matched_fact(
+    client, monkeypatch
+):
+    # matched_candidate_fact is not vetted by JH-286's profile_action_allowed
+    # gate (only canonical_requirement is). If the two fields ever diverge, the
+    # save path must trust canonical_requirement, never raw/compound ad text.
+    job_key = "job-1"
+    monkeypatch.setattr(
+        "job_hunter_agent.routes.review.load_job_history",
+        lambda: _job_history_with_requirement_coverage(
+            job_key,
+            [
+                {
+                    "requirement": "CBAP, Agile BA, or equivalent certifications",
+                    "requirement_type": "qualification",
+                    "status": "not_shown",
+                    "canonical_requirement": "CBAP",
+                    "matched_candidate_fact": "CBAP, Agile BA, or equivalent certifications",
+                    "matched_job_text": "CBAP, Agile BA, or equivalent certifications",
+                    "profile_action_allowed": True,
+                }
+            ],
+        ),
+    )
+    existing_profile = {"candidate_qualifications": []}
+    saved_profiles = []
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+    )
+
+    resp = client.post(
+        "/api/profile-gap",
+        json={
+            "job_key": job_key,
+            "capability_name": "CBAP, Agile BA, or equivalent certifications",
+            "action": "confirm_have",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
+    quals = saved_profiles[0]["candidate_qualifications"]
+    assert [q["name"] for q in quals] == ["CBAP"]
+
+
+def test_profile_gap_confirm_have_qualification_atomic_name_saved_unchanged(client, monkeypatch):
+    job_key = "job-1"
+    monkeypatch.setattr(
+        "job_hunter_agent.routes.review.load_job_history",
+        lambda: _job_history_with_requirement_coverage(
+            job_key,
+            [
+                {
+                    "requirement": "PRINCE2 certification required",
+                    "requirement_type": "qualification",
+                    "status": "not_shown",
+                    "canonical_requirement": "PRINCE2",
+                    "matched_candidate_fact": "PRINCE2",
+                    "matched_job_text": "PRINCE2 certification required",
+                    "profile_action_allowed": True,
+                }
+            ],
+        ),
+    )
+    existing_profile = {"candidate_qualifications": []}
+    saved_profiles = []
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+    )
+
+    resp = client.post(
+        "/api/profile-gap",
+        json={"job_key": job_key, "capability_name": "PRINCE2", "action": "confirm_have"},
+    )
+    assert resp.status_code == 200
+    quals = saved_profiles[0]["candidate_qualifications"]
+    assert [q["name"] for q in quals] == ["PRINCE2"]
+
+
 def test_profile_gap_confirm_have_rejects_non_capability_string(client, monkeypatch):
     job_key = "job-1"
     monkeypatch.setattr(

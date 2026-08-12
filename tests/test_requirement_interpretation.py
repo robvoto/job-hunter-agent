@@ -8,7 +8,6 @@ import pytest
 
 from job_hunter_agent import fit_scoring, llm_gate
 from job_hunter_agent.profile_gaps import compute_profile_gaps
-from job_hunter_agent.qualification_profile import normalize_qualifications
 from job_hunter_agent.requirement_classification import classify_requirement_type
 
 
@@ -221,27 +220,29 @@ def test_captured_rows_use_production_normalization_and_preserve_safe_profile_fi
 def test_raw_captured_ad_sentences_are_not_stored_as_qualification_names(
     captured_requirements,
 ):
-    raw_sentence_rows = [
-        case
-        for case in captured_requirements
-        if case.wording
-        in {
-            "A Bachelor Degree or equivalent in Commerce, Finance or Accounting",
-            "CA or CPA qualified (or willing to obtain)",
-            "Previous experience in insolvency is required",
-            "Australian Citizenship is Required",
-            "NV2 Security Clearance Required",
-            "Relevant qualifications in Business Analysis, Information Technology, Project Management, or a related field",
-            "CBAP, Agile BA, or equivalent certifications are desirable",
-        }
+    """The qualification-save boundary (routes/review.py's confirm_have) stores
+    canonical_requirement, gated by profile_action_allowed — never the raw
+    requirement wording. For every captured qualification-type row, whatever the
+    production pipeline would allow into candidate_qualifications must never be
+    the raw ad sentence itself.
+    """
+    qualification_rows = [
+        case for case in captured_requirements if case.expected_type == "qualification"
     ]
+    assert qualification_rows
 
-    normalized = normalize_qualifications(
-        [{"name": case.wording, "value": True} for case in raw_sentence_rows]
-    )
-
-    stored_names = {item["name"] for item in normalized}
-    assert not stored_names.intersection(case.wording for case in raw_sentence_rows)
+    for case in qualification_rows:
+        normalized = llm_gate.normalize_llm_requirement_coverage(
+            [_raw_item(case)],
+            valid_qualification_names=_profile_lookups()["qualification"],
+        )
+        item = normalized[0]
+        if item["profile_action_allowed"]:
+            stored_name = item["canonical_requirement"]
+            assert stored_name == case.canonical_requirement, case.wording
+        else:
+            stored_name = ""
+        assert stored_name != case.wording, case.wording
 
 
 def test_unisys_review_rejects_missing_required_nv2_but_not_preferred_cbap():
