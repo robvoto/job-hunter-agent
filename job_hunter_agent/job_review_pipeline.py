@@ -1232,8 +1232,10 @@ def review_pre_detail_normalized_job(
                 )
                 return _build_outcome(record), record, skill_observations, False
 
-            # near or uncertain: cheap title-only LLM check against target/secondary
-            # target roles before paying for a full detail fetch + fit review.
+            # Near/uncertain titles get one cheap semantic check before detail fetch.
+            # Strict mode keeps the original role-list contract; exploration mode may
+            # use candidate capability names only to decide whether an unfamiliar title
+            # is plausible enough to inspect, never to score or accept the job here.
             _title_judgment_t0 = time.monotonic()
             title_capability_names = [
                 str(rule.get("name") or "").strip()

@@ -154,7 +154,9 @@ Changes here affect the app globally, but users do not edit them from their own 
 
 `Title targeting`
 
-- target roles, also-consider roles, and a single search keyword
+- preferred roles and alternative roles describe the candidate's explicit role direction
+- `Explore adjacent roles` is optional: when enabled, unfamiliar but plausible titles can reach description review instead of being rejected only because the exact title is not listed
+- when disabled, title review keeps the stricter preferred/alternative-role behaviour
 - used to keep role targeting configurable per candidate instead of hardcoded in code
 
 `Minimum annual base (excludes super)` / `Minimum daily rate (excludes super)`

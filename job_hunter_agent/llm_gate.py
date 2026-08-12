@@ -1737,6 +1737,8 @@ def normalize_llm_review_payload(
                 ", ".join(cited_capabilities) or "(none)",
             )
             decision_to_use = fit_review_normalized["decision"]
+            # Normalized coverage is authoritative: a derived MISMATCH cannot remain KEEP/MAYBE.
+            # This prevents model optimism from contradicting the deterministic final fit grade.
             if grade_to_use == "MISMATCH" and decision_to_use != "REJECT":
                 logger.warning(
                     "[LLM][FIT_DECISION] purpose=fit_review model_decision=%s overridden_to=REJECT"
@@ -2262,12 +2264,13 @@ def llm_judge_title(
     explore_adjacent_roles: bool = False,
     llm_client: Any = None,
 ) -> dict[str, Any] | None:
-    """Cheap title-only check of a job title against the candidate's target/secondary target roles.
+    """Decide whether a near/uncertain title should reach full description review.
 
-    Runs after O*NET occupation classification returns near/uncertain, before the expensive
-    detail fetch + full fit review. Returns {"verdict": "match"|"no_match"|"uncertain", "reason": str}
-    or None if the LLM is unavailable, the title is empty, or the output is unparseable — callers
-    must treat None the same as "uncertain" and never hard-reject on an LLM failure.
+    Strict mode judges only against preferred/alternative role lists. Exploration mode may also
+    use candidate capability names to avoid rejecting plausible adjacent titles merely because
+    the exact title is unlisted. This function never scores or accepts the job; it only returns
+    match/no_match/uncertain for the pre-detail gate. LLM failure or unparseable output returns
+    None, which callers must treat like uncertain rather than hard-rejecting the job.
     """
     active_client = llm_client or client
     title = str(title or "").strip()
