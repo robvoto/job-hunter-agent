@@ -378,6 +378,57 @@ def test_render_job_card_shows_single_badge_for_uncertain_classification_and_no_
     assert "prefill_capability=" not in html
 
 
+def test_render_job_card_gap_button_carries_the_capability_name_not_requirement_text():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_requirements": ["AWS platform experience"],
+            "requirement_coverage": [
+                {
+                    "requirement": "Cloud computing (AWS) experience",
+                    "requirement_type": "capability",
+                    "status": "not_shown",
+                    "capability_name": "Cloud computing (AWS)",
+                    "matched_job_text": "AWS platform experience",
+                    "canonical_requirement": "Cloud computing (AWS)",
+                    "profile_action_allowed": True,
+                }
+            ],
+        },
+        _test_profile(),
+    )
+
+    assert 'data-capability-name="Cloud computing (AWS)"' in html
+    assert "data-requirement=" not in html
+
+
+def test_render_job_card_omits_gap_actions_for_vague_or_alternative_requirement():
+    # A clause the LLM only resolved to named_alternatives (e.g. "CBAP or
+    # equivalent") never gets profile_action_allowed=True. It must stay
+    # visible as an unresolved requirement but show no confirmation buttons.
+    requirement = "CBAP, Agile BA, or equivalent certifications"
+    html = workspace_renderer.render_job_card(
+        {
+            "job_requirements": [requirement],
+            "requirement_coverage": [
+                {
+                    "requirement": requirement,
+                    "requirement_type": "qualification",
+                    "status": "not_shown",
+                    "qualification_name": "CBAP",
+                    "matched_job_text": requirement,
+                    "canonical_requirement": "",
+                    "profile_action_allowed": False,
+                }
+            ],
+        },
+        _test_profile(),
+    )
+
+    assert html.count(requirement) >= 1
+    assert "Needs confirmation" not in html
+    assert "gap-btn" not in html
+
+
 def test_build_ad_learning_signals_registers_pending_capability_signals(monkeypatch):
     monkeypatch.setattr(
         source_learning,

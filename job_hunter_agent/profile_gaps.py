@@ -130,6 +130,8 @@ def compute_profile_gaps(
         status = str(item.get("status") or "").strip().lower()
         if status not in _CONFIRMABLE_REQUIREMENT_STATUSES:
             continue
+        if item.get("profile_action_allowed") is not True:
+            continue
         capability_name = str(
             item.get("capability_name")
             or item.get("qualification_name")

@@ -62,6 +62,7 @@ def test_profile_gap_confirm_have_adds_canonical_capability(client, monkeypatch)
                     "status": "not_shown",
                     "capability_name": "Cloud computing (AWS)",
                     "matched_job_text": "AWS platform experience",
+                    "profile_action_allowed": True,
                 }
             ],
         ),
@@ -110,6 +111,7 @@ def test_profile_gap_confirm_have_is_idempotent(client, monkeypatch):
                     "status": "not_shown",
                     "capability_name": "Cloud computing (AWS)",
                     "matched_job_text": "AWS platform experience",
+                    "profile_action_allowed": True,
                 }
             ],
         ),
@@ -193,6 +195,7 @@ def test_profile_gap_confirm_do_not_have_adds_to_must_not_require(client, monkey
                     "status": "not_shown",
                     "capability_name": "AHPRA registration",
                     "matched_job_text": "AHPRA registration",
+                    "profile_action_allowed": True,
                 }
             ],
         ),
@@ -234,6 +237,7 @@ def test_profile_gap_confirm_do_not_have_is_idempotent(client, monkeypatch):
                     "status": "not_shown",
                     "capability_name": "AHPRA registration",
                     "matched_job_text": "AHPRA registration",
+                    "profile_action_allowed": True,
                 }
             ],
         ),
@@ -275,6 +279,7 @@ def test_profile_gap_confirm_have_adds_candidate_eligibility(client, monkeypatch
                     "requirement_type": "eligibility",
                     "matched_candidate_fact": "PV clearance",
                     "matched_job_text": "Must hold a PV clearance",
+                    "profile_action_allowed": True,
                 }
             ],
         ),
@@ -321,6 +326,7 @@ def test_profile_gap_confirm_do_not_have_adds_candidate_eligibility_false(client
                     "requirement_type": "eligibility",
                     "matched_candidate_fact": "PV clearance",
                     "matched_job_text": "Must hold a PV clearance",
+                    "profile_action_allowed": True,
                 }
             ],
         ),
@@ -369,3 +375,77 @@ def test_profile_gap_invalid_action_returns_400(client):
     )
     assert resp.status_code == 400
     assert "invalid action" in resp.json()["error"]
+
+
+def test_profile_gap_rejects_item_without_profile_action_allowed(client, monkeypatch):
+    # A direct API call naming a real requirement_coverage item that the LLM
+    # gate never marked profile_action_allowed=True (e.g. a vague "CBAP or
+    # equivalent" clause) must be rejected server-side, even though the item
+    # exists and its name matches exactly. The UI must not be the only gate.
+    job_key = "job-unsafe"
+    monkeypatch.setattr(
+        "job_hunter_agent.routes.review.load_job_history",
+        lambda: _job_history_with_requirement_coverage(
+            job_key,
+            [
+                {
+                    "requirement": "CBAP, Agile BA, or equivalent certifications",
+                    "status": "not_shown",
+                    "capability_name": "CBAP",
+                    "matched_job_text": "CBAP, Agile BA, or equivalent certifications",
+                    "profile_action_allowed": False,
+                }
+            ],
+        ),
+    )
+    existing_profile = {"candidate_capabilities": [], "must_not_require_skills": []}
+    saved_profiles = []
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+    )
+
+    resp = client.post(
+        "/api/profile-gap",
+        json={"job_key": job_key, "capability_name": "CBAP", "action": "confirm_have"},
+    )
+    assert resp.status_code == 400
+    assert "confirmable requirement coverage item" in resp.json()["error"]
+    assert saved_profiles == []
+
+
+def test_profile_gap_rejects_item_missing_profile_action_allowed_flag(client, monkeypatch):
+    # Same as above but the flag is absent entirely rather than explicitly
+    # False — must still be treated as not allowed (strict `is True` check).
+    job_key = "job-unsafe-missing-flag"
+    monkeypatch.setattr(
+        "job_hunter_agent.routes.review.load_job_history",
+        lambda: _job_history_with_requirement_coverage(
+            job_key,
+            [
+                {
+                    "requirement": "CBAP, Agile BA, or equivalent certifications",
+                    "status": "not_shown",
+                    "capability_name": "CBAP",
+                    "matched_job_text": "CBAP, Agile BA, or equivalent certifications",
+                }
+            ],
+        ),
+    )
+    existing_profile = {"candidate_capabilities": [], "must_not_require_skills": []}
+    saved_profiles = []
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+    )
+
+    resp = client.post(
+        "/api/profile-gap",
+        json={"job_key": job_key, "capability_name": "CBAP", "action": "confirm_have"},
+    )
+    assert resp.status_code == 400
+    assert saved_profiles == []

@@ -286,6 +286,8 @@ def _profile_gap_confirmable_item(job_key: str, value: str) -> dict:
     for item in _profile_gap_requirement_coverage(job_key):
         if str(item.get("status") or "").strip().lower() not in _PROFILE_GAP_CONFIRMABLE_STATUSES:
             continue
+        if item.get("profile_action_allowed") is not True:
+            continue
         raw_requirement_type = str(item.get("requirement_type") or "").strip().lower()
         if raw_requirement_type and raw_requirement_type not in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES:
             continue

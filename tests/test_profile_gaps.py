@@ -26,6 +26,7 @@ _REQUIREMENT_COVERAGE = [
         "status": "not_shown",
         "capability_name": "Cloud computing (AWS)",
         "matched_job_text": "AWS platform experience",
+        "profile_action_allowed": True,
     },
     {
         "requirement": "Permanent full-time role",
@@ -158,3 +159,22 @@ def test_compute_gaps_skips_requirement_coverage_when_capability_is_must_not_req
 
 def test_compute_gaps_empty_input_returns_empty():
     assert compute_profile_gaps([], _CAPABILITY_RULES, _MUST_NOT_REQUIRE) == []
+
+
+def test_compute_gaps_excludes_item_without_profile_action_allowed():
+    # A vague or alternative requirement (e.g. "CBAP or equivalent") never gets
+    # profile_action_allowed set to True by the LLM gate. It must stay excluded
+    # from confirmable gaps even though it is otherwise a plain, unconfirmed
+    # capability-type item with a resolvable capability_name.
+    unresolved_item = {
+        "requirement": "CBAP or equivalent certification",
+        "status": "not_shown",
+        "capability_name": "CBAP",
+        "matched_job_text": "CBAP or equivalent certification",
+        "profile_action_allowed": False,
+    }
+    assert compute_profile_gaps([unresolved_item], [], []) == []
+
+    missing_flag_item = dict(unresolved_item)
+    del missing_flag_item["profile_action_allowed"]
+    assert compute_profile_gaps([missing_flag_item], [], []) == []

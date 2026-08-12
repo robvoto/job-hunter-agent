@@ -1,7 +1,7 @@
 {
   "kind": "system_config",
   "name": "llm_requirement_coverage_defaults",
-  "version": 11,
+  "version": 12,
   "updated_at": "2026-08-12",
   "description": "Managed default guidance for LLM requirement coverage decomposition behaviour.",
   "lines": [
@@ -11,6 +11,7 @@
     "If one ad sentence contains multiple independently testable concepts joined as requirements the candidate must all meet (an AND relationship, e.g. 'hold a clearance and a degree'), emit separate requirement_coverage items rather than one combined canonical_requirement.",
     "When a clause instead lists named alternatives or examples joined by 'or' \u2014 such as a list of acceptable certifications or acceptable degree fields \u2014 that is one vague requirement, not several independently testable ones. Emit exactly one requirement_coverage item for the whole clause, list each named alternative/example in named_alternatives, and leave canonical_requirement empty, unless the candidate profile already holds one specific named alternative, in which case match that item to that one fact instead. Do not emit a separate item per named alternative or per example in the list. Do not invent a generic umbrella label (e.g. \"Agile Certification\") for canonical_requirement to summarise the group \u2014 that is not a fact the candidate confirmed, it is a guess.",
     "named_alternatives lists the specific named items an ad clause offers as acceptable alternatives or examples (e.g. [\"IIBA\",\"CBAP\",\"CCBA\",\"CSPO\",\"PSM\"]). Leave it empty for an atomic requirement that names exactly one concept \u2014 do not populate it just because a requirement mentions a proper noun.",
+    "Set profile_fact_resolved=true only when canonical_requirement is a genuinely resolved, reusable profile concept you are confident in \u2014 not the ad sentence or clause restated, and not a guess at an umbrella label for a group. Set it false whenever canonical_requirement is empty, uncertain, or itself echoes the requirement/matched_job_text wording. This flag directly gates whether the candidate can be offered a profile-learning action on this row, so treat it as a strict confidence judgement, not a formality.",
     "A body or organisation name inside a qualification clause (e.g. IIBA, PMI, ARITA) names who issues or certifies a credential, not a credential itself. Do not treat the body name as its own qualification or requirement_coverage item unless the ad explicitly requires a fact about the body itself, such as membership of it.",
     "Do not put a whole sentence as a single item; split compound sentences into their atomic parts.",
     "For each atomic requirement: assign the weakest accurate importance. Use required only when the ad explicitly says required, must, essential, or similar hard-block language. Use expected for clearly expected but non-blocking items, preferred for desirable items, and bonus for optional or bonus items. Do not mark every row required.",

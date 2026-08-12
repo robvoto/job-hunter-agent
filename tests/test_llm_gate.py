@@ -1313,6 +1313,7 @@ def test_normalize_coverage_allows_profile_action_for_clear_single_fact():
                 "importance": "required",
                 "requirement_type": "qualification",
                 "canonical_requirement": "CBAP",
+                "profile_fact_resolved": True,
                 "status": "not_shown",
                 "matched_job_text": "CBAP certification is required.",
                 "profile_support": [],
@@ -1323,6 +1324,53 @@ def test_normalize_coverage_allows_profile_action_for_clear_single_fact():
     assert result[0]["canonical_requirement"] == "CBAP"
     assert result[0]["profile_action_allowed"] is True
     assert "named_alternatives" not in result[0]
+
+
+def test_normalize_coverage_allows_short_atomic_requirement_echoing_its_own_text():
+    # A short atomic requirement's canonical name can legitimately equal the
+    # requirement text verbatim (e.g. "Java"). Whether that is a resolved
+    # concept or restated ad prose is a language-understanding judgement, so
+    # normalization must trust profile_fact_resolved rather than guess from
+    # text equality — this must NOT be treated as an unresolved echo.
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "Java",
+                "importance": "required",
+                "requirement_type": "capability",
+                "canonical_requirement": "Java",
+                "profile_fact_resolved": True,
+                "status": "not_shown",
+                "matched_job_text": "Java",
+                "profile_support": [],
+            }
+        ],
+    )
+
+    assert result[0]["canonical_requirement"] == "Java"
+    assert result[0]["profile_action_allowed"] is True
+
+
+def test_normalize_coverage_blocks_profile_action_when_fact_not_resolved():
+    # canonical_requirement and a clean single-alternative shape are not
+    # enough on their own — without the LLM's explicit profile_fact_resolved
+    # confirmation (missing here), profile_action_allowed must stay False.
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "CBAP certification is required.",
+                "importance": "required",
+                "requirement_type": "qualification",
+                "canonical_requirement": "CBAP",
+                "status": "not_shown",
+                "matched_job_text": "CBAP certification is required.",
+                "profile_support": [],
+            }
+        ],
+    )
+
+    assert result[0]["canonical_requirement"] == "CBAP"
+    assert result[0]["profile_action_allowed"] is False
 
 
 def test_normalize_coverage_blocks_profile_action_for_invented_umbrella_label():
@@ -1372,6 +1420,28 @@ def test_normalize_coverage_blocks_profile_action_for_bare_issuer_alternative():
     assert result[0]["profile_action_allowed"] is False
 
 
+def test_normalize_coverage_blocks_profile_action_for_single_named_alternative():
+    # "CBAP or equivalent" is still a disjunctive/example clause even though
+    # only one alternative could be named — a lone named alternative does not
+    # make the clause atomic, so profile_action_allowed must stay False.
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "CBAP or equivalent certification required.",
+                "importance": "required",
+                "requirement_type": "qualification",
+                "canonical_requirement": "CBAP",
+                "named_alternatives": ["CBAP"],
+                "status": "not_shown",
+                "matched_job_text": "CBAP or equivalent certification required.",
+                "profile_support": [],
+            }
+        ],
+    )
+
+    assert result[0]["profile_action_allowed"] is False
+
+
 def test_normalize_coverage_keeps_and_joined_requirements_independently_actionable():
     # Genuinely independent AND-joined requirements must each keep their own
     # correct profile_action_allowed value — the vague-alternatives gate must
@@ -1383,6 +1453,7 @@ def test_normalize_coverage_keeps_and_joined_requirements_independently_actionab
                 "importance": "required",
                 "requirement_type": "eligibility",
                 "canonical_requirement": "Australian Citizenship",
+                "profile_fact_resolved": True,
                 "status": "not_shown",
                 "matched_job_text": "Australian Citizenship is required",
                 "profile_support": [],
@@ -1392,6 +1463,7 @@ def test_normalize_coverage_keeps_and_joined_requirements_independently_actionab
                 "importance": "required",
                 "requirement_type": "eligibility",
                 "canonical_requirement": "NV2",
+                "profile_fact_resolved": True,
                 "status": "not_shown",
                 "matched_job_text": "NV2 Security Clearance is required",
                 "profile_support": [],

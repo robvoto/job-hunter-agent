@@ -315,6 +315,12 @@ class _LLMRequirementCoverageItem(BaseModel):
     # Normalization gates profile-learning actions on this, not on whether
     # canonical_requirement merely happens to be non-empty.
     named_alternatives: list[str] = Field(default_factory=list)
+    # Explicit LLM judgement: true only when canonical_requirement names a
+    # single reusable profile concept the model actually resolved, not the
+    # ad sentence restated. Deterministic code must not guess this from text
+    # equality — it only trusts the flag. Missing/false keeps the row
+    # visible but blocks profile-learning actions on it.
+    profile_fact_resolved: bool = False
     status: str
     matched_candidate_fact: str = Field(
         default="",
@@ -1203,13 +1209,12 @@ def normalize_llm_requirement_coverage(
             requirement_type = LLM_INVALID_COVERAGE_REQUIREMENT_TYPE
             requirement_type_is_valid = False
         canonical_requirement = normalize_profile_item_name(item.get("canonical_requirement"))
-        if canonical_requirement and _echoes_requirement_prose(
-            canonical_requirement, requirement, matched_job_text
-        ):
-            # The LLM restated the ad sentence instead of naming a concept —
-            # treat it the same as an unresolved canonicalisation rather than
-            # inventing or keeping a fact from raw prose.
-            canonical_requirement = ""
+        # Whether canonical_requirement resolves to a genuine single concept
+        # (vs. the ad sentence restated) is a language-understanding question,
+        # not a structural one — deterministic code must not guess it from
+        # text equality (e.g. "Java" legitimately equals its own canonical
+        # name). Trust the LLM's own explicit judgement instead.
+        profile_fact_resolved = bool(item.get("profile_fact_resolved"))
         raw_named_alternatives = item.get("named_alternatives") or []
         if isinstance(raw_named_alternatives, str):
             raw_named_alternatives = [raw_named_alternatives]
@@ -1224,12 +1229,16 @@ def normalize_llm_requirement_coverage(
                 seen_alternatives.add(lowered_alternative)
                 named_alternatives.append(cleaned_alternative)
         # canonical_requirement is a display/interpretation label only — it is
-        # not proof the row is one safe factual profile candidate. A row that
-        # names more than one alternative/example (e.g. a list of acceptable
-        # certifications) stays a vague group even if the model still produced
-        # a label for it, so profile-learning actions must gate on this flag,
-        # not on canonical_requirement being merely non-empty.
-        profile_action_allowed = bool(canonical_requirement) and len(named_alternatives) <= 1
+        # not proof the row is one safe factual profile candidate. Per the
+        # named_alternatives field contract, ANY named alternative (not just
+        # more than one) means the ad posed a disjunctive/example clause
+        # rather than one atomic concept. profile_fact_resolved is the LLM's
+        # own explicit confirmation that canonical_requirement is a genuinely
+        # resolved concept, not restated ad prose. All three must hold for
+        # profile-learning actions to be safe.
+        profile_action_allowed = (
+            bool(canonical_requirement) and not named_alternatives and profile_fact_resolved
+        )
         matched_candidate_fact_raw = item.get("matched_candidate_fact") or item.get("profile_name")
         if not matched_candidate_fact_raw:
             matched_candidate_fact_raw = item.get("capability_name") or item.get("eligibility_name")
@@ -1622,25 +1631,6 @@ def _clean_job_requirement_text(value: Any) -> str:
     cleaned = re.sub(r"^[•\-\u2013\u2014]+\s*", "", cleaned).strip()
     cleaned = re.sub(r"^\d+[.)]\s*", "", cleaned).strip()
     return cleaned
-
-
-def _echoes_requirement_prose(canonical_requirement: str, requirement: str, matched_job_text: str) -> bool:
-    """True when canonical_requirement is just the ad sentence restated.
-
-    canonical_requirement must name one reusable profile concept, not the ad
-    wording it was extracted from — this applies whether the sentence is one
-    atomic requirement or a vague group of alternatives/examples. This is a
-    deterministic backstop for that rule: it does not attempt to interpret
-    the sentence, only whether canonical_requirement is the sentence.
-    """
-
-    def _fold(text: str) -> str:
-        return text.strip().rstrip(".,;:!?").casefold()
-
-    canonical_key = _fold(canonical_requirement)
-    if not canonical_key:
-        return False
-    return canonical_key in {_fold(requirement), _fold(matched_job_text)}
 
 
 def normalize_llm_job_requirements(value: Any, max_items: int | None = None) -> list[str]:

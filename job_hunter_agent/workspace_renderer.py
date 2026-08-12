@@ -2060,13 +2060,14 @@ def render_job_card(
                 f'<div class="job-gap-item">'
                 f'<span class="job-gap-requirement">{safe_html(gap_requirement)}</span>'
                 f'<div class="job-gap-actions">'
-                f'<button class="gap-btn jh-button jh-button--primary jh-button--compact" data-requirement="{safe_html(gap_requirement)}" data-action="confirm_have">{gap_confirm_have_label}</button>'
-                f'<button class="gap-btn jh-button jh-button--danger jh-button--compact" data-requirement="{safe_html(gap_requirement)}" data-action="confirm_do_not_have">{gap_confirm_not_have_label}</button>'
-                f'<button class="gap-btn jh-button jh-button--neutral jh-button--compact" data-requirement="{safe_html(gap_requirement)}" data-action="decide_later">{gap_decide_later_label}</button>'
+                f'<button class="gap-btn jh-button jh-button--primary jh-button--compact" data-capability-name="{safe_html(gap_capability_name)}" data-action="confirm_have">{gap_confirm_have_label}</button>'
+                f'<button class="gap-btn jh-button jh-button--danger jh-button--compact" data-capability-name="{safe_html(gap_capability_name)}" data-action="confirm_do_not_have">{gap_confirm_not_have_label}</button>'
+                f'<button class="gap-btn jh-button jh-button--neutral jh-button--compact" data-capability-name="{safe_html(gap_capability_name)}" data-action="decide_later">{gap_decide_later_label}</button>'
                 f"</div>"
                 f"</div>"
             )
             for gap in profile_gaps
+            for gap_capability_name in [str(gap.get("capability_name") or "").strip()]
             for gap_requirement in [
                 str(
                     gap.get(PROFILE_GAP_JOB_REQUIREMENT_TEXT_KEY)
@@ -2075,7 +2076,7 @@ def render_job_card(
                     or ""
                 ).strip()
             ]
-            if gap_requirement
+            if gap_capability_name and gap_requirement
         )
         gap_heading_label = safe_html(_workspace_label("workspace_card_labels", "gap_heading_label"))
         profile_gaps_html = (
