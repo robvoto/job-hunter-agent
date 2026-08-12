@@ -500,6 +500,51 @@ def test_profile_gap_rejects_item_without_profile_action_allowed(client, monkeyp
     assert saved_profiles == []
 
 
+def test_profile_gap_rejects_qualification_item_missing_canonical_requirement(client, monkeypatch):
+    # Defensive hardening: a stale/malformed historical job record could in
+    # theory carry profile_action_allowed=True without canonical_requirement
+    # (e.g. from before that field existed). The qualification save path must
+    # reject this rather than silently falling back to the unvetted
+    # matched_candidate_fact name.
+    job_key = "job-malformed"
+    monkeypatch.setattr(
+        "job_hunter_agent.routes.review.load_job_history",
+        lambda: _job_history_with_requirement_coverage(
+            job_key,
+            [
+                {
+                    "requirement": "CBAP, Agile BA, or equivalent certifications",
+                    "requirement_type": "qualification",
+                    "status": "not_shown",
+                    "matched_candidate_fact": "CBAP, Agile BA, or equivalent certifications",
+                    "matched_job_text": "CBAP, Agile BA, or equivalent certifications",
+                    "profile_action_allowed": True,
+                }
+            ],
+        ),
+    )
+    existing_profile = {"candidate_qualifications": []}
+    saved_profiles = []
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+    )
+
+    resp = client.post(
+        "/api/profile-gap",
+        json={
+            "job_key": job_key,
+            "capability_name": "CBAP, Agile BA, or equivalent certifications",
+            "action": "confirm_have",
+        },
+    )
+    assert resp.status_code == 400
+    assert "canonical_requirement" in resp.json()["error"]
+    assert saved_profiles == []
+
+
 def test_profile_gap_rejects_item_missing_profile_action_allowed_flag(client, monkeypatch):
     # Same as above but the flag is absent entirely rather than explicitly
     # False — must still be treated as not allowed (strict `is True` check).
