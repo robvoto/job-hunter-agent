@@ -686,7 +686,7 @@ def test_title_not_target_logs_uncertainty_when_onet_is_uncertain(monkeypatch, t
             result=RESULT_UNCERTAIN, matched_occupation_code=None, confidence=0.0, reason="no_match"
         ),
     )
-    monkeypatch.setattr(job_review_pipeline, "llm_judge_title", lambda *args: None)
+    monkeypatch.setattr(job_review_pipeline, "llm_judge_title", lambda *args, **kwargs: None)
 
     outcome, updated_record, _, should_fetch = review_pre_detail_normalized_job(record, context)
 
@@ -785,7 +785,7 @@ def test_llm_title_judgment_hard_rejects_confident_no_match(monkeypatch):
     monkeypatch.setattr(
         job_review_pipeline,
         "llm_judge_title",
-        lambda title, target_roles, secondary_roles: {
+        lambda title, target_roles, secondary_roles, candidate_capabilities=None, **kwargs: {
             "verdict": "no_match",
             "reason": "Enablement/coordination role, not a target analyst or delivery role.",
         },
@@ -823,7 +823,7 @@ def test_llm_title_judgment_uncertain_falls_through_to_detail_fetch(monkeypatch)
     monkeypatch.setattr(
         job_review_pipeline,
         "llm_judge_title",
-        lambda title, target_roles, secondary_roles: {
+        lambda title, target_roles, secondary_roles, candidate_capabilities=None, **kwargs: {
             "verdict": "uncertain",
             "reason": "Title alone does not rule the role in or out.",
         },
@@ -834,6 +834,27 @@ def test_llm_title_judgment_uncertain_falls_through_to_detail_fetch(monkeypatch)
     assert should_fetch is True, "uncertain LLM verdict must not block description fetch"
     assert updated_record[RECORD_TITLE_REASON_KEY] == "TITLE_POTENTIAL_MATCH"
     assert updated_record[RECORD_LLM_TITLE_JUDGMENT_KEY]["verdict"] == "uncertain"
+
+
+def test_unlisted_adjacent_title_uses_candidate_capabilities_and_reaches_description(monkeypatch):
+    record = _base_record("seek", "seek_detail", "card")
+    record[RECORD_TITLE_KEY] = "Technology Delivery Specialist"
+    context = _review_context("SEEK")
+    context.profile["target_roles"] = ["business analyst"]
+    context.profile["also_consider_roles"] = []
+    context.profile["explore_adjacent_roles"] = True
+    context.profile["candidate_capabilities"] = [{"name": "Business Analysis", "level": "strong"}, {"name": "Agile Delivery Management", "level": "strong"}, {"name": "Stakeholder Management", "level": "strong"}]
+    seen = {}
+    monkeypatch.setattr(job_review_pipeline, "analyze_title_filters", lambda title, profile: {"ok": False, "reason": "TITLE_NOT_TARGET"})
+    monkeypatch.setattr(job_review_pipeline, "_onet_classify_title", lambda title, profile: OccupationClassification(result=RESULT_UNCERTAIN, matched_occupation_code=None, confidence=0.0, reason="no_match"))
+    def fake_title_judge(title, target_roles, secondary_roles, candidate_capabilities=None, **kwargs):
+        seen["capabilities"] = candidate_capabilities; seen["explore_adjacent_roles"] = kwargs.get("explore_adjacent_roles"); return {"verdict": "uncertain", "reason": "Delivery capability makes the title plausible."}
+    monkeypatch.setattr(job_review_pipeline, "llm_judge_title", fake_title_judge)
+    _, updated_record, _, should_fetch = review_pre_detail_normalized_job(record, context)
+    assert should_fetch is True
+    assert "Agile Delivery Management" in seen["capabilities"]
+    assert seen["explore_adjacent_roles"] is True
+    assert updated_record[RECORD_TITLE_REASON_KEY] == "TITLE_POTENTIAL_MATCH"
 
 
 def test_llm_title_judgment_match_falls_through_to_detail_fetch(monkeypatch):
@@ -855,7 +876,7 @@ def test_llm_title_judgment_match_falls_through_to_detail_fetch(monkeypatch):
     monkeypatch.setattr(
         job_review_pipeline,
         "llm_judge_title",
-        lambda title, target_roles, secondary_roles: {"verdict": "match", "reason": "Close variant."},
+        lambda title, target_roles, secondary_roles, candidate_capabilities=None, **kwargs: {"verdict": "match", "reason": "Close variant."},
     )
 
     outcome, updated_record, _, should_fetch = review_pre_detail_normalized_job(record, context)
@@ -884,7 +905,7 @@ def test_llm_title_judgment_unavailable_falls_through_safely(monkeypatch):
     monkeypatch.setattr(
         job_review_pipeline,
         "llm_judge_title",
-        lambda title, target_roles, secondary_roles: None,
+        lambda title, target_roles, secondary_roles, candidate_capabilities=None, **kwargs: None,
     )
 
     outcome, updated_record, _, should_fetch = review_pre_detail_normalized_job(record, context)
@@ -933,7 +954,7 @@ def test_pipeline_leaves_info_clear_and_stashes_curated_summary_for_the_report(
     monkeypatch.setattr(
         job_review_pipeline,
         "llm_judge_title",
-        lambda title, target_roles, secondary_roles: {
+        lambda title, target_roles, secondary_roles, candidate_capabilities=None, **kwargs: {
             "verdict": "no_match",
             "reason": (
                 "The title suggests a general ServiceNow platform role rather than a "

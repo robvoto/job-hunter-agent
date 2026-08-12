@@ -718,6 +718,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--control-space-xs);
+  font-weight: 700;
 }
 
 .job-requirement-badges {

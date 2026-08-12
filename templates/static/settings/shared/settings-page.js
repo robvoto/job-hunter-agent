@@ -26,6 +26,7 @@ import {
   setWorkModePreferenceValues,
   setToggleChecked,
   getToggleChecked,
+  setToggleStateText,
   syncSourcePanelDisabledState,
   setChoiceGroupValue,
   getChoiceGroupValue,
@@ -597,6 +598,17 @@ function initFieldInfoDrawers() {
 upgradeSettingsHelpBlocks();
 initFieldInfoDrawers();
 
+function syncExploreAdjacentRolesState() {
+  setToggleStateText(
+    'explore_adjacent_roles_state',
+    getToggleChecked('explore_adjacent_roles'),
+    sharedUiLabels.settings_value_on,
+    sharedUiLabels.settings_value_off,
+  );
+}
+
+document.getElementById('explore_adjacent_roles')?.addEventListener('change', syncExploreAdjacentRolesState);
+
 function collectProfile() {
   chipEditor.flushChipEditorInputs();
   const searchDateWindow = Number(document.getElementById('search_date_window')?.value || '3');
@@ -650,6 +662,7 @@ function collectProfile() {
     candidate_qualifications: qualificationEditor.collectQualificationState(),
     target_roles: toLines(settingsField('target_roles').value),
     also_consider_roles: toLines(settingsField('also_consider_roles').value),
+    explore_adjacent_roles: getToggleChecked('explore_adjacent_roles'),
     must_not_require_skills: toLines(settingsField('must_not_require_skills').value),
     reject_title_rules: textToRules(settingsField('reject_title_rules').value, 'pattern'),
     reject_description_phrase_rules: textToRules(settingsField('reject_description_phrase_rules').value, 'phrase'),
@@ -686,6 +699,8 @@ function fillForm(profile) {
   setToggleChecked('seek_enabled', _enabledSources.includes('seek'));
   setToggleChecked('linkedin_enabled', _enabledSources.includes('linkedin'));
   setToggleChecked('apsjobs_enabled', _enabledSources.includes('apsjobs'));
+  setToggleChecked('explore_adjacent_roles', Boolean(profile.explore_adjacent_roles));
+  syncExploreAdjacentRolesState();
   ['seek_enabled', 'linkedin_enabled', 'apsjobs_enabled'].forEach(syncSourcePanelDisabledState);
   setEngagementTypeValues(profile.match_preferences?.engagement_type);
   setWorkModePreferenceValues(profile.match_preferences?.work_mode_preference || []);

@@ -162,6 +162,8 @@ _ONBOARDING_TITLE_TIER_LABEL_KEYS = (
     "search_keyword_label",
     "search_keyword_help",
     "search_keyword_example",
+    "explore_adjacent_roles_label",
+    "explore_adjacent_roles_help",
 )
 _ONBOARDING_IMPORT_SUMMARY_LABEL_KEYS = (
     "lead_in",

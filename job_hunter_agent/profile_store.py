@@ -62,6 +62,7 @@ KEY_LOCATIONS = "locations"
 KEY_ENGAGEMENT_TYPE = "engagement_type"
 KEY_WORK_MODE_PREFERENCE = "work_mode_preference"
 KEY_PREFER_SECTOR = "prefer_sector"
+KEY_EXPLORE_ADJACENT_ROLES = "explore_adjacent_roles"
 KEY_MIN_SALARY_YEARLY = "minimum_salary_yearly"
 KEY_MIN_DAILY_RATE = "minimum_daily_rate"
 
@@ -189,6 +190,7 @@ MATCHING_RULE_PROFILE_KEYS = frozenset(
         KEY_CANDIDATE_QUALIFICATIONS,
         KEY_PRIMARY_PATTERNS,
         KEY_SECONDARY_PATTERNS,
+        KEY_EXPLORE_ADJACENT_ROLES,
         KEY_MUST_NOT_REQUIRED_SKILLS,
         "reject_title_rules",
         "reject_description_phrase_rules",
@@ -341,6 +343,7 @@ DEFAULT_PROFILE = {
     "dominant_signal_clusters": [],
     "target_roles": [],
     "also_consider_roles": [],
+    KEY_EXPLORE_ADJACENT_ROLES: False,
     KEY_TARGET_OCCUPATION_QUERIES: [],
     "must_not_require_skills": [],
     "onboarding_settings": {

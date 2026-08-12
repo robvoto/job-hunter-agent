@@ -145,7 +145,11 @@ from job_hunter_agent.occupation_taxonomy import (
 from job_hunter_agent.onet_taxonomy_import import normalize_title as normalize_occupation_title
 from job_hunter_agent.paths import UNCERTAINTY_LOG_PATH
 from job_hunter_agent.preferences import passes_preference_filters
-from job_hunter_agent.profile_store import get_match_levels
+from job_hunter_agent.profile_store import (
+    KEY_CANDIDATE_CAPABILITIES,
+    KEY_EXPLORE_ADJACENT_ROLES,
+    get_match_levels,
+)
 from job_hunter_agent.record_schema import (
     APPLY_METHOD_EXTERNAL_APPLY,
     CONFIDENCE_HIGH,
@@ -1231,10 +1235,17 @@ def review_pre_detail_normalized_job(
             # near or uncertain: cheap title-only LLM check against target/secondary
             # target roles before paying for a full detail fetch + fit review.
             _title_judgment_t0 = time.monotonic()
+            title_capability_names = [
+                str(rule.get("name") or "").strip()
+                for rule in (profile.get(KEY_CANDIDATE_CAPABILITIES) or [])
+                if isinstance(rule, dict) and str(rule.get("name") or "").strip()
+            ]
             title_judgment = llm_judge_title(
                 title,
                 profile.get("target_roles"),
                 profile.get("also_consider_roles"),
+                title_capability_names,
+                explore_adjacent_roles=bool(profile.get(KEY_EXPLORE_ADJACENT_ROLES, False)),
             )
             _title_judgment_elapsed_ms = int((time.monotonic() - _title_judgment_t0) * 1000)
             if title_judgment is not None:

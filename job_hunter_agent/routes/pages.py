@@ -391,6 +391,16 @@ def _render_template_with_locations(
         )
 
         html = html.replace(
+            "__JOB_HUNTER_TITLE_TIER_EXPLORE_ADJACENT_ROLES_LABEL__",
+            title_tier_labels["explore_adjacent_roles_label"],
+        )
+
+        html = html.replace(
+            "__JOB_HUNTER_TITLE_TIER_EXPLORE_ADJACENT_ROLES_HELP__",
+            title_tier_labels["explore_adjacent_roles_help"],
+        )
+
+        html = html.replace(
             "__JOB_HUNTER_MIN_CONTRACT_MONTH_OPTIONS__",
             srv.render_min_contract_month_options(selected_value=None),
         )

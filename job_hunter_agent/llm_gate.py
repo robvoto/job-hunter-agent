@@ -1733,6 +1733,13 @@ def normalize_llm_review_payload(
                 ", ".join(cited_capabilities) or "(none)",
             )
             decision_to_use = fit_review_normalized["decision"]
+            if grade_to_use == "MISMATCH" and decision_to_use != "REJECT":
+                logger.warning(
+                    "[LLM][FIT_DECISION] purpose=fit_review model_decision=%s overridden_to=REJECT"
+                    " reason=derived_grade_mismatch",
+                    decision_to_use,
+                )
+                decision_to_use = "REJECT"
             if has_eligibility_mismatch(requirement_coverage) and decision_to_use != "REJECT":
                 logger.warning(
                     "[LLM][ELIGIBILITY_GATE] purpose=fit_review model_decision=%s overridden_to=REJECT"
@@ -2246,6 +2253,9 @@ def llm_judge_title(
     title: str,
     target_roles: list[str] | None,
     secondary_roles: list[str] | None,
+    candidate_capabilities: list[str] | None = None,
+    *,
+    explore_adjacent_roles: bool = False,
     llm_client: Any = None,
 ) -> dict[str, Any] | None:
     """Cheap title-only check of a job title against the candidate's target/secondary target roles.
@@ -2262,21 +2272,41 @@ def llm_judge_title(
 
     target_roles = [str(r).strip() for r in (target_roles or []) if str(r).strip()]
     secondary_roles = [str(r).strip() for r in (secondary_roles or []) if str(r).strip()]
+    candidate_capabilities = [
+        str(value).strip() for value in (candidate_capabilities or []) if str(value).strip()
+    ]
     if not target_roles and not secondary_roles:
         return None
 
-    system_prompt = "\n".join(
-        [
-            "You are a cheap pre-filter checking whether a job title plausibly matches a candidate's target roles, before the full job description is fetched.",
-            f"Target roles: {', '.join(target_roles) or 'none'}",
-            f"Secondary target roles: {', '.join(secondary_roles) or 'none'}",
-            f"Return JSON only, shape: {LLM_TITLE_JUDGMENT_SHAPE}",
-            "verdict=match: the title clearly matches or is a close variant of a target/secondary role.",
-            "verdict=no_match: the title is for a distinctly different role or seniority/function, even if it shares generic words.",
-            "verdict=uncertain: title alone is not enough to tell — a job description could plausibly change the answer.",
-            "Judge on the title alone. Do not guess at duties not implied by the title.",
-        ]
-    )
+    if explore_adjacent_roles:
+        system_prompt = "\n".join(
+            [
+                "You are a conservative cheap pre-filter deciding whether a job title can be ruled out before the full job description is fetched.",
+                f"Preferred role directions: {', '.join(target_roles) or 'none'}",
+                f"Other explicitly interesting role directions: {', '.join(secondary_roles) or 'none'}",
+                f"Candidate capability signals: {', '.join(candidate_capabilities) or 'none provided'}",
+                "The role lists are positive direction signals, NOT an exhaustive whitelist of acceptable job titles.",
+                f"Return JSON only, shape: {LLM_TITLE_JUDGMENT_SHAPE}",
+                "verdict=match: the title clearly matches a preferred/interesting direction or is an obvious close variant.",
+                "verdict=no_match: use only when the title itself clearly identifies a different profession, function, seniority, or specialisation that the candidate profile does not plausibly support.",
+                "verdict=uncertain: use for unfamiliar or adjacent titles where the candidate's capabilities could plausibly transfer and the job description could change the answer.",
+                "Do not reject merely because the exact title is absent from the preferred/interesting role lists.",
+                "Judge only what the title supports. Do not invent duties that are not implied by the title.",
+            ]
+        )
+    else:
+        system_prompt = "\n".join(
+            [
+                "You are a cheap pre-filter checking whether a job title plausibly matches a candidate's target roles, before the full job description is fetched.",
+                f"Target roles: {', '.join(target_roles) or 'none'}",
+                f"Secondary target roles: {', '.join(secondary_roles) or 'none'}",
+                f"Return JSON only, shape: {LLM_TITLE_JUDGMENT_SHAPE}",
+                "verdict=match: the title clearly matches or is a close variant of a target/secondary role.",
+                "verdict=no_match: the title is for a distinctly different role or seniority/function, even if it shares generic words.",
+                "verdict=uncertain: title alone is not enough to tell — a job description could plausibly change the answer.",
+                "Judge on the title alone. Do not guess at duties not implied by the title.",
+            ]
+        )
 
     max_output_tokens = get_llm_title_judgment_max_output_tokens()
     try:

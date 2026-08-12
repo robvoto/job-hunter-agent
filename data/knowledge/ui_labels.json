@@ -40,7 +40,9 @@
     "move_to_also_consider_label": "Move to alternative roles",
     "search_keyword_label": "Search keyword",
     "search_keyword_help": "Use one broad keyword for the search, not a list of role names. Mixed-role keywords broaden the same search rather than creating separate result lists.",
-    "search_keyword_example": "e.g. Business Analyst"
+    "search_keyword_example": "e.g. Business Analyst",
+    "explore_adjacent_roles_label": "Explore adjacent roles",
+    "explore_adjacent_roles_help": "Let unfamiliar but plausible titles reach description review. Turn this off to keep title matching strict."
   },
   "capability_ui_labels_description": "Display labels and help text for capability review and editing screens.",
   "capability_ui_labels": {

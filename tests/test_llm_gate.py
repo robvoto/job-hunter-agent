@@ -1064,9 +1064,9 @@ def test_normalize_llm_review_payload_overrides_keep_to_reject_on_eligibility_mi
     assert payload["fit_review"]["decision"] == "REJECT"
 
 
-def test_normalize_llm_review_payload_does_not_override_on_capability_mismatch():
-    # A capability mismatch alone must not trigger the eligibility gate override —
-    # the model's own decision still governs capability-only mismatches.
+def test_normalize_llm_review_payload_rejects_keep_when_all_capability_coverage_is_mismatch():
+    # A derived MISMATCH grade is authoritative: a job with no supported requirement
+    # coverage cannot remain KEEP just because the model returned KEEP.
     payload = llm_gate.normalize_llm_review_payload(
         {
             "decision": "KEEP",
@@ -1083,7 +1083,8 @@ def test_normalize_llm_review_payload_does_not_override_on_capability_mismatch()
         },
         valid_capability_names={"some tool": "Some Tool"},
     )
-    assert payload["fit_review"]["decision"] == "KEEP"
+    assert payload["fit_review"]["grade"] == "MISMATCH"
+    assert payload["fit_review"]["decision"] == "REJECT"
 
 
 def test_importance_defaults_to_preferred_when_missing():
@@ -1548,6 +1549,40 @@ def test_llm_judge_title_parses_match_verdict():
         "Senior Business Analyst", ["senior business analyst"], [], llm_client=client
     )
     assert result == {"verdict": "match", "reason": "Direct match."}
+
+
+def test_llm_judge_title_prompt_treats_role_lists_as_direction_not_whitelist():
+    captured = {}
+    class _FakeResponse:
+        usage = None
+        output_text = '{"verdict":"uncertain","reason":"Could be adjacent delivery work."}'
+    class _FakeResponses:
+        def create(self, **kwargs): captured.update(kwargs); return _FakeResponse()
+    class _FakeClient:
+        responses = _FakeResponses()
+    result = llm_gate.llm_judge_title("Technology Delivery Specialist", ["business analyst"], ["ai implementation consultant"], ["Business Analysis", "Agile Delivery Management", "Stakeholder Management"], explore_adjacent_roles=True, llm_client=_FakeClient())
+    prompt = captured["input"][0]["content"]
+    assert result["verdict"] == "uncertain"
+    assert "NOT an exhaustive whitelist" in prompt
+    assert "Agile Delivery Management" in prompt
+    assert "Do not reject merely because the exact title is absent" in prompt
+
+
+def test_llm_judge_title_strict_mode_keeps_original_contract():
+    captured = {}
+    class _FakeResponse:
+        usage = None
+        output_text = '{"verdict":"no_match","reason":"Not a target role."}'
+    class _FakeResponses:
+        def create(self, **kwargs): captured.update(kwargs); return _FakeResponse()
+    class _FakeClient:
+        responses = _FakeResponses()
+    llm_gate.llm_judge_title("Technology Delivery Specialist", ["business analyst"], ["technical business analyst"], ["Agile Delivery Management"], llm_client=_FakeClient())
+    prompt = captured["input"][0]["content"]
+    assert "Target roles: business analyst" in prompt
+    assert "Secondary target roles: technical business analyst" in prompt
+    assert "NOT an exhaustive whitelist" not in prompt
+    assert "Candidate capability signals" not in prompt
 
 
 def test_llm_judge_title_returns_none_on_invalid_verdict():
