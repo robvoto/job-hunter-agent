@@ -62,8 +62,8 @@ def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
     assert "Add an alternative role" in html
     assert 'id="engagement_type_label"' in html
     assert 'id="min_contract_months"' in html
-    assert 'class="choice-strip"' in html
-    assert 'class="choice-card choice-card--work-mode"' in html
+    assert 'class="choice-strip jh-choice-group"' in html
+    assert 'class="choice-card jh-choice choice-card--work-mode"' in html
     assert 'name="work_mode_preference" value="remote" checked' in html
     assert 'name="work_mode_preference" value="hybrid" checked' in html
     assert 'name="work_mode_preference" value="onsite" checked' in html
