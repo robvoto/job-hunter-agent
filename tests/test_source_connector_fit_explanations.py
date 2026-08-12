@@ -4134,6 +4134,7 @@ def test_add_to_profile_link_carries_capability_prefill_query():
                 {
                     "requirement": "Strong stakeholder management is required",
                     "canonical_requirement": "Stakeholder management",
+                    "profile_action_allowed": True,
                     "importance": "required",
                     "status": "not_shown",
                     "matched_job_text": "Strong stakeholder management is required",
@@ -4144,6 +4145,218 @@ def test_add_to_profile_link_carries_capability_prefill_query():
     )
 
     assert "/settings?prefill_capability=Stakeholder%20management#section-matrix" in html
+
+
+def test_no_add_to_profile_link_for_unresolved_bonus_alternatives_list():
+    """A vague group of named alternatives/examples must stay one visible row
+    with no profile-learning action — it is not a clear canonical fact, so it
+    must not be exploded into per-alternative gaps or actions (JH decomposition
+    bug: 'Tertiary qualifications or BA/Agile certifications (IIBA, CBAP, CCBA,
+    CSPO, PSM) are a bonus.')."""
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-vague-bonus-alternatives",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Tertiary qualifications or BA/Agile certifications (IIBA, CBAP, CCBA, CSPO, PSM) are a bonus.",
+            "fit_highlights": [],
+            "source": "seek",
+            "requirement_coverage": [
+                {
+                    "requirement": "Tertiary qualifications or BA/Agile certifications (IIBA, CBAP, CCBA, CSPO, PSM) are a bonus.",
+                    "requirement_type": "qualification",
+                    "canonical_requirement": "",
+                    "profile_action_allowed": False,
+                    "importance": "bonus",
+                    "status": "not_shown",
+                    "matched_job_text": "Tertiary qualifications or BA/Agile certifications (IIBA, CBAP, CCBA, CSPO, PSM) are a bonus.",
+                }
+            ],
+        },
+        _test_profile(),
+    )
+
+    assert "Tertiary qualifications or BA/Agile certifications" in html
+    assert "req-add-to-profile" not in html
+    assert "prefill_qualification=" not in html
+    assert "prefill_eligibility=" not in html
+    assert "prefill_capability=" not in html
+    assert "prefill_qualification=IIBA" not in html
+
+
+def test_no_add_to_profile_link_for_unresolved_required_alternatives_list():
+    """Vague mandatory ('required') wording that cannot resolve to one clear
+    fact must stay visible (not hidden, not silently dropped) but must not be
+    converted into a specific profile-learning action either."""
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-vague-required-alternatives",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "One of CBAP, CCBA, or an equivalent BA certification is required.",
+            "fit_highlights": [],
+            "source": "seek",
+            "requirement_coverage": [
+                {
+                    "requirement": "One of CBAP, CCBA, or an equivalent BA certification is required.",
+                    "requirement_type": "qualification",
+                    "canonical_requirement": "",
+                    "profile_action_allowed": False,
+                    "importance": "required",
+                    "status": "not_shown",
+                    "matched_job_text": "One of CBAP, CCBA, or an equivalent BA certification is required.",
+                }
+            ],
+        },
+        _test_profile(),
+    )
+
+    assert "One of CBAP, CCBA, or an equivalent BA certification is required." in html
+    assert "job-requirement-item--required-not-shown" in html
+    assert "req-add-to-profile" not in html
+    assert "prefill_qualification=" not in html
+
+
+def test_add_to_profile_link_shown_for_clear_single_qualification():
+    """A single, cleanly resolved qualification requirement must keep getting
+    its Add-to-profile action — the vague-alternatives fix must not suppress
+    the existing, valid behaviour."""
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-clear-single-qualification",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "CBAP certification is required.",
+            "fit_highlights": [],
+            "source": "seek",
+            "requirement_coverage": [
+                {
+                    "requirement": "CBAP certification is required.",
+                    "requirement_type": "qualification",
+                    "canonical_requirement": "CBAP",
+                    "profile_action_allowed": True,
+                    "importance": "required",
+                    "status": "not_shown",
+                    "matched_job_text": "CBAP certification is required.",
+                }
+            ],
+        },
+        _test_profile(),
+    )
+
+    assert "/settings?prefill_qualification=CBAP#section-matrix" in html
+
+
+def test_independent_and_joined_requirements_each_get_own_add_to_profile_link():
+    """Genuinely independent requirements joined with AND must keep gating
+    independently — the fix for OR-joined alternatives lists must not collapse
+    real multi-requirement decomposition."""
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-independent-and-requirements",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Canberra ACT",
+            "work_type": "Full Time",
+            "work_mode": "On-site",
+            "salary": "N/A",
+            "full_description": "Australian Citizenship and NV2 Security Clearance are required.",
+            "fit_highlights": [],
+            "source": "seek",
+            "requirement_coverage": [
+                {
+                    "requirement": "Australian Citizenship is required",
+                    "requirement_type": "eligibility",
+                    "canonical_requirement": "Australian Citizenship",
+                    "profile_action_allowed": True,
+                    "importance": "required",
+                    "status": "not_shown",
+                    "matched_job_text": "Australian Citizenship is required",
+                },
+                {
+                    "requirement": "NV2 Security Clearance is required",
+                    "requirement_type": "eligibility",
+                    "canonical_requirement": "NV2",
+                    "profile_action_allowed": True,
+                    "importance": "required",
+                    "status": "not_shown",
+                    "matched_job_text": "NV2 Security Clearance is required",
+                },
+            ],
+        },
+        _test_profile(),
+    )
+
+    assert "/settings?prefill_eligibility=Australian%20Citizenship#section-matrix" in html
+    assert "/settings?prefill_eligibility=NV2#section-matrix" in html
+
+
+def test_no_add_to_profile_link_for_partial_match_alternatives():
+    """Partial Match rows must never get the profile-learning action, even
+    when a canonical fact happens to be present — tuning belongs in Settings,
+    not a profile-learning shortcut on an uncertain match."""
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-partial-match-alternatives",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "CBAP, CCBA, or an equivalent certification is desirable.",
+            "fit_highlights": [],
+            "source": "seek",
+            "requirement_coverage": [
+                {
+                    "requirement": "CBAP, CCBA, or an equivalent certification is desirable.",
+                    "requirement_type": "qualification",
+                    "canonical_requirement": "CBAP",
+                    "profile_action_allowed": True,
+                    "importance": "preferred",
+                    "status": "partially_supported",
+                    "matched_job_text": "CBAP, CCBA, or an equivalent certification is desirable.",
+                }
+            ],
+        },
+        _test_profile(),
+    )
+
+    assert "job-requirement-item--partially-supported" in html
+    assert "req-add-to-profile" not in html
+    assert "prefill_qualification=" not in html
 
 
 def test_contract_duration_meta_stays_hidden_for_non_contract_jobs():

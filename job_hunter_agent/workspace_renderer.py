@@ -1789,7 +1789,10 @@ def render_job_card(
         )
         add_to_profile_html = ""
         canonical_requirement = compact_whitespace(str(row.get("canonical_requirement") or ""))
-        if canonical_requirement and css_modifier in (
+        # profile_action_allowed (not canonical_requirement truthiness alone) is the
+        # safety gate: an unresolved/vague group can still carry a display label
+        # without being safe to prefill into the candidate's profile.
+        if canonical_requirement and row.get("profile_action_allowed") and css_modifier in (
             "mismatch",
             "not-shown",
             "required-not-shown",
@@ -1959,6 +1962,11 @@ def render_job_card(
             row["coverage_status"] = str(item.get("status") or "not_shown").strip().lower()
             row["requirement_type"] = raw_requirement_type
             row["canonical_requirement"] = compact_whitespace(str(item.get("canonical_requirement") or ""))
+            # Set by normalize_llm_requirement_coverage: whether canonical_requirement
+            # is one clear, candidate-confirmable fact and not a vague/invented group
+            # label. Add-to-profile must gate on this, not just on canonical_requirement
+            # being non-empty.
+            row["profile_action_allowed"] = bool(item.get("profile_action_allowed"))
             row["importance"] = str(item.get("importance") or "preferred").strip().lower()
             row["is_eligibility"] = is_eligibility
             row["is_qualification"] = is_qualification

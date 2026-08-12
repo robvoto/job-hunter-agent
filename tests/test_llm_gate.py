@@ -218,6 +218,7 @@ def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
                 "importance": "preferred",
                 "requirement_type": "capability",
                 "canonical_requirement": "",
+                "profile_action_allowed": False,
                 "status": "supported",
                 "matched_candidate_fact": "Stakeholder Engagement",
                 "capability_name": "Stakeholder Engagement",
@@ -230,6 +231,7 @@ def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
                 "importance": "preferred",
                 "requirement_type": "capability",
                 "canonical_requirement": "",
+                "profile_action_allowed": False,
                 "status": "partially_supported",
                 "matched_candidate_fact": "Process Mapping",
                 "capability_name": "Process Mapping",
@@ -1299,6 +1301,106 @@ def test_normalize_coverage_accepts_profile_capability_aliases():
 
     assert result[0]["matched_candidate_fact"] == "Rest Api Design And Development"
     assert result[0]["capability_name"] == "Rest Api Design And Development"
+
+
+def test_normalize_coverage_allows_profile_action_for_clear_single_fact():
+    # A requirement that resolves to exactly one named concept, with no
+    # competing alternatives, is safe to offer as an Add-to-profile action.
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "CBAP certification is required.",
+                "importance": "required",
+                "requirement_type": "qualification",
+                "canonical_requirement": "CBAP",
+                "status": "not_shown",
+                "matched_job_text": "CBAP certification is required.",
+                "profile_support": [],
+            }
+        ],
+    )
+
+    assert result[0]["canonical_requirement"] == "CBAP"
+    assert result[0]["profile_action_allowed"] is True
+    assert "named_alternatives" not in result[0]
+
+
+def test_normalize_coverage_blocks_profile_action_for_invented_umbrella_label():
+    # Even if the model still produces a display label for a vague group
+    # (e.g. an invented "Agile Certification" summary), more than one named
+    # alternative means it is not one confirmed fact — profile_action_allowed
+    # must stay False regardless of canonical_requirement being non-empty.
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "Tertiary qualifications or BA/Agile certifications (IIBA, CBAP, CCBA, CSPO, PSM) are a bonus.",
+                "importance": "bonus",
+                "requirement_type": "qualification",
+                "canonical_requirement": "Agile Certification",
+                "named_alternatives": ["IIBA", "CBAP", "CCBA", "CSPO", "PSM"],
+                "status": "not_shown",
+                "matched_job_text": "Tertiary qualifications or BA/Agile certifications (IIBA, CBAP, CCBA, CSPO, PSM) are a bonus.",
+                "profile_support": [],
+            }
+        ],
+    )
+
+    assert result[0]["canonical_requirement"] == "Agile Certification"
+    assert result[0]["profile_action_allowed"] is False
+    assert result[0]["named_alternatives"] == ["IIBA", "CBAP", "CCBA", "CSPO", "PSM"]
+
+
+def test_normalize_coverage_blocks_profile_action_for_bare_issuer_alternative():
+    # A certifying body name (IIBA) picked out as one alternative among a
+    # named-alternatives list must not become a standalone profile-actionable
+    # qualification just because canonical_requirement happens to be set.
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "IIBA, CBAP, or CCBA certification preferred.",
+                "importance": "preferred",
+                "requirement_type": "qualification",
+                "canonical_requirement": "IIBA",
+                "named_alternatives": ["IIBA", "CBAP", "CCBA"],
+                "status": "not_shown",
+                "matched_job_text": "IIBA, CBAP, or CCBA certification preferred.",
+                "profile_support": [],
+            }
+        ],
+    )
+
+    assert result[0]["profile_action_allowed"] is False
+
+
+def test_normalize_coverage_keeps_and_joined_requirements_independently_actionable():
+    # Genuinely independent AND-joined requirements must each keep their own
+    # correct profile_action_allowed value — the vague-alternatives gate must
+    # not bleed across unrelated rows in the same payload.
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "Australian Citizenship is required",
+                "importance": "required",
+                "requirement_type": "eligibility",
+                "canonical_requirement": "Australian Citizenship",
+                "status": "not_shown",
+                "matched_job_text": "Australian Citizenship is required",
+                "profile_support": [],
+            },
+            {
+                "requirement": "NV2 Security Clearance is required",
+                "importance": "required",
+                "requirement_type": "eligibility",
+                "canonical_requirement": "NV2",
+                "status": "not_shown",
+                "matched_job_text": "NV2 Security Clearance is required",
+                "profile_support": [],
+            },
+        ],
+    )
+
+    assert result[0]["profile_action_allowed"] is True
+    assert result[1]["profile_action_allowed"] is True
 
 
 def test_normalize_coverage_marks_invalid_requirement_type_for_review(monkeypatch):
