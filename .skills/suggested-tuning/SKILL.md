@@ -64,7 +64,7 @@ Supported patterns include:
 - `CARD_SPECIALIST:*`
 - `DESC_CAPABILITY_LOW:*`
 - `TITLE_BAD_KEYWORD:*`
-- `DESC_MANDATORY_SKILL:*`
+- `DESC_REQUIRED_SKILL:*`
 
 Adding a phrase exclusion from the panel calls:
 

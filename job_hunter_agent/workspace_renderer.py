@@ -342,7 +342,7 @@ def _render_full_description_html(description: str) -> str:
     return _render_structured_description_html(description)
 
 
-_MANDATORY_REQUIREMENT_ACRONYMS = frozenset(
+_REQUIRED_REQUIREMENT_ACRONYMS = frozenset(
     {"3pl", "api", "erp", "hris", "nv1", "nv2", "sap", "sql", "uat", "wms"}
 )
 
@@ -665,7 +665,7 @@ def _humanize_check_item(text: str) -> str:
         or "required but not shown" in lower
         or "appears required" in lower
         or lower.startswith("critical missing requirement")
-        or lower.startswith("missing mandatory requirement")
+        or lower.startswith("missing required requirement")
     ):
         requirement_warning = _humanize_missing_requirement_warning(text)
         if requirement_warning:
@@ -687,7 +687,7 @@ def _humanize_requirement_label(text: str) -> str:
         return ""
 
     cleaned = re.sub(
-        r"^(critical missing requirement|missing mandatory requirement)\s*:\s*",
+        r"^(critical missing requirement|missing required requirement)\s*:\s*",
         "",
         cleaned,
         flags=re.IGNORECASE,
@@ -705,7 +705,7 @@ def _humanize_requirement_label(text: str) -> str:
             humanized_parts.append(part)
             continue
         lowered = part.lower()
-        if lowered in _MANDATORY_REQUIREMENT_ACRONYMS:
+        if lowered in _REQUIRED_REQUIREMENT_ACRONYMS:
             humanized_parts.append(part.upper())
         elif part.isupper():
             humanized_parts.append(part)
@@ -720,7 +720,7 @@ def _humanize_missing_requirement_warning(text: str) -> str:
     requirement = _humanize_requirement_label(text)
     if not requirement:
         return ""
-    return f"Missing mandatory requirement: {requirement}"
+    return f"Missing required requirement: {requirement}"
 
 
 def _build_checks_before_applying_items(
@@ -1628,44 +1628,21 @@ def render_job_card(
     # detailed and LLM-verified). Skip the short job_requirements bullets to avoid
     # showing the same requirements twice with different text.
     has_coverage = len(coverage_rows) > 0
-    workspace_card_label_group = _workspace_ui_labels().get("workspace_card_labels", {})
-    coverage_status_label_keys = {
-        "supported": "coverage_status_supported",
-        "partially_supported": "coverage_status_partially_supported",
-        "not_shown": "coverage_status_not_shown",
-        "mismatch": "coverage_status_mismatch",
-        "invalid": "coverage_status_invalid",
-    }
-    profile_status_label_keys = {
-        STATUS_CONFIRMED_HAVE: "coverage_status_supported",
-        STATUS_CONFIRMED_DO_NOT_HAVE: "coverage_status_mismatch",
-        STATUS_UNKNOWN: "coverage_status_not_shown",
-    }
     importance_label_keys = {
-        "mandatory": "importance_mandatory",
-        "strongly_preferred": "importance_strongly_preferred",
+        "required": "importance_required",
+        "expected": "importance_expected",
         "preferred": "importance_preferred",
-        "nice_to_have": "importance_nice_to_have",
+        "bonus": "importance_bonus",
     }
     # Ordering only (not display text) — keeps each importance tier visually
     # clustered within a requirement group instead of merging preferred tiers.
     importance_sort_buckets = {
-        "mandatory": 0,
-        "strongly_preferred": 1,
+        "required": 0,
+        "expected": 1,
         "preferred": 2,
-        "nice_to_have": 3,
+        "bonus": 3,
     }
     matched_css_modifiers = {"supported", "confirmed-have"}
-    # Badge suppression only applies to "no evidence found" gaps — the group
-    # heading + add-to-profile action already say that. "confirmed-do-not-have"
-    # is a confirmed negative fact (not merely unproven), so its badge stays.
-    _NOT_FOUND_CSS_MODIFIERS = {
-        "mismatch",
-        "mandatory-not-shown",
-        "not-shown",
-        "unknown",
-    }
-
     def _requirement_key(value: str) -> str:
         return compact_whitespace(value).lower()
 
@@ -1708,8 +1685,8 @@ def render_job_card(
             return "mismatch"
         if coverage_status == "invalid":
             return "invalid"
-        if coverage_status == "not_shown" and importance == "mandatory":
-            return "mandatory-not-shown"
+        if coverage_status == "not_shown" and importance == "required":
+            return "required-not-shown"
         if coverage_status == "not_shown":
             return "not-shown"
         if profile_status == STATUS_CONFIRMED_HAVE:
@@ -1724,8 +1701,6 @@ def render_job_card(
             return "", False
         if _is_structured_meta_requirement(req_text):
             return "", False
-        profile_status = str(row.get("profile_status") or "").strip()
-        coverage_status = str(row.get("coverage_status") or "").strip().lower()
         importance = str(row.get("importance") or "").strip().lower()
         matched_candidate_fact = compact_whitespace(
             str(
@@ -1756,34 +1731,7 @@ def render_job_card(
 
         css_modifier = _css_modifier_for_row(row)
 
-        if coverage_status:
-            status_key = coverage_status_label_keys.get(coverage_status)
-            if coverage_status == "not_shown" and importance == "mandatory":
-                status_key = "coverage_status_mandatory_not_shown"
-            elif (
-                coverage_status == "invalid"
-                and importance == "mandatory"
-                and row.get("requirement_type") == "invalid"
-            ):
-                status_key = "coverage_status_mandatory_not_shown"
-        else:
-            status_key = profile_status_label_keys.get(profile_status)
-        status_label = workspace_card_label_group.get(status_key, "") if status_key else ""
         is_uncertain_classification = row.get("requirement_type") == "uncertain"
-        if (
-            css_modifier in _NOT_FOUND_CSS_MODIFIERS
-            or css_modifier in matched_css_modifiers
-            or is_uncertain_classification
-        ):
-            # Group placement already communicates generic matched/missing state.
-            # Keep only row-level labels that add information, such as partial match,
-            # confirmed negative, classification review, importance, or evidence.
-            status_label = ""
-        classification_label = (
-            workspace_card_label_group.get("coverage_status_classification_review", "")
-            if row.get("classification_review")
-            else ""
-        )
 
         importance_label = ""
         if importance:
@@ -1839,18 +1787,12 @@ def render_job_card(
             if importance_label
             else ""
         )
-        status_html = "".join(
-            f'<span class="job-requirement-status jh-badge">{safe_html(label)}</span>'
-            for label in (status_label, classification_label)
-            if label
-        )
-
         add_to_profile_html = ""
         canonical_requirement = compact_whitespace(str(row.get("canonical_requirement") or ""))
         if canonical_requirement and css_modifier in (
             "mismatch",
             "not-shown",
-            "mandatory-not-shown",
+            "required-not-shown",
             "unknown",
             "invalid",
         ) and not is_uncertain_classification:
@@ -1889,7 +1831,7 @@ def render_job_card(
             f'<li class="job-requirement-item job-requirement-item--{safe_html(css_modifier)}">'
             f'<span class="job-requirement-text">'
             f'<span class="job-requirement-title-line">'
-            f'{safe_html(req_text)}{importance_html}{status_html}{add_to_profile_html}'
+            f'{safe_html(req_text)}{importance_html}{add_to_profile_html}'
             f'</span>'
             f'{detail_html}{experience_note_html}'
             f"</span>"

@@ -238,8 +238,8 @@ When Job Hunter explains why a role fits, the primary user-facing evidence is re
 
 If the agent keeps suggesting roles with a specific requirement you don't have (e.g., a specific security clearance or software tool), use the **Not For Me** button on the job card.
 
-- It will prompt you to select the "mandatory blockers" found in that job description.
-- Once saved, the agent learns to automatically reject future roles that list those terms as mandatory requirements.
+- It will prompt you to select the "required blockers" found in that job description.
+- Once saved, the agent learns to automatically reject future roles that list those terms as required requirements.
 - You can review and delete these rules in the **Admin > Learning** screen.
 
 ## Dodgy Jobs

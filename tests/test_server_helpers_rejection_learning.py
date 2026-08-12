@@ -260,7 +260,7 @@ def test_save_requirement_blockers_feedback_suggests_description_block_when_only
                 "title": "Senior Business Analyst",
                 "company": "Acme",
                 "decision": "REJECT",
-                "full_description": "Strong SAP experience is mandatory for this role.",
+                "full_description": "Strong SAP experience is required for this role.",
             },
             {
                 "job_key": "rej-2",
@@ -386,7 +386,7 @@ def test_save_requirement_blockers_feedback_applies_both_title_and_description_b
                 "title": "Senior Business Analyst - SAP",
                 "company": "Acme",
                 "decision": "REJECT",
-                "full_description": "Strong SAP experience is mandatory for this role. Also requires Salesforce.",
+                "full_description": "Strong SAP experience is required for this role. Also requires Salesforce.",
             },
             {
                 "job_key": "rej-2",
@@ -400,7 +400,7 @@ def test_save_requirement_blockers_feedback_applies_both_title_and_description_b
                 "title": "Project Manager - Salesforce",
                 "company": "Gamma",
                 "decision": "REJECT",
-                "full_description": "Mandatory Salesforce certification.",
+                "full_description": "Required Salesforce certification.",
             },
         ],
     )
@@ -455,7 +455,7 @@ def test_save_requirement_blockers_feedback_applies_both_title_and_description_b
 
     assert result["description_block_suggestions"] == []  # Applied, so no suggestions
 
-    assert "Added 2 mandatory requirement blockers" in result["message"]
+    assert "Added 2 required requirement blockers" in result["message"]
 
     assert "Added 1 title block" in result["message"]
 

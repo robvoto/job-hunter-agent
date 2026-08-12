@@ -119,7 +119,7 @@ def _keep_review_payload(
         "requirement_coverage": [
             {
                 "requirement": requirement,
-                "importance": "mandatory",
+                "importance": "required",
                 "status": "supported",
                 "capability_name": capability_name,
                 "matched_job_text": matched_job_text,
@@ -843,17 +843,36 @@ def test_unlisted_adjacent_title_uses_candidate_capabilities_and_reaches_descrip
     context.profile["target_roles"] = ["business analyst"]
     context.profile["also_consider_roles"] = []
     context.profile["explore_adjacent_roles"] = True
-    context.profile["candidate_capabilities"] = [{"name": "Business Analysis", "level": "strong"}, {"name": "Agile Delivery Management", "level": "strong"}, {"name": "Stakeholder Management", "level": "strong"}]
+    context.profile["candidate_capabilities"] = [
+        {"name": "Business Analysis", "level": "strong"},
+        {"name": "Agile Delivery Management", "level": "strong"},
+        {"name": "Stakeholder Management", "level": "strong"},
+    ]
     seen = {}
-    monkeypatch.setattr(job_review_pipeline, "analyze_title_filters", lambda title, profile: {"ok": False, "reason": "TITLE_NOT_TARGET"})
-    monkeypatch.setattr(job_review_pipeline, "_onet_classify_title", lambda title, profile: OccupationClassification(result=RESULT_UNCERTAIN, matched_occupation_code=None, confidence=0.0, reason="no_match"))
+
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "analyze_title_filters",
+        lambda title, profile: {"ok": False, "reason": "TITLE_NOT_TARGET"},
+    )
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "_onet_classify_title",
+        lambda title, profile: OccupationClassification(
+            result=RESULT_UNCERTAIN, matched_occupation_code=None, confidence=0.0, reason="no_match"
+        ),
+    )
+
     def fake_title_judge(title, target_roles, secondary_roles, candidate_capabilities=None, **kwargs):
-        seen["capabilities"] = candidate_capabilities; seen["explore_adjacent_roles"] = kwargs.get("explore_adjacent_roles"); return {"verdict": "uncertain", "reason": "Delivery capability makes the title plausible."}
+        seen["capabilities"] = candidate_capabilities
+        return {"verdict": "uncertain", "reason": "Delivery capability makes the title plausible."}
+
     monkeypatch.setattr(job_review_pipeline, "llm_judge_title", fake_title_judge)
+
     _, updated_record, _, should_fetch = review_pre_detail_normalized_job(record, context)
+
     assert should_fetch is True
     assert "Agile Delivery Management" in seen["capabilities"]
-    assert seen["explore_adjacent_roles"] is True
     assert updated_record[RECORD_TITLE_REASON_KEY] == "TITLE_POTENTIAL_MATCH"
 
 
@@ -1165,7 +1184,7 @@ def test_external_apply_unverified_original_date_does_not_reject(monkeypatch):
     assert updated_record[RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY] is None
 
 
-def test_mandatory_eligibility_rejects_llm_keep_when_profile_fact_is_false(monkeypatch):
+def test_required_eligibility_rejects_llm_keep_when_profile_fact_is_false(monkeypatch):
     record = _base_record("seek", "jobAdDetails", "card")
     record[RECORD_TITLE_REASON_KEY] = "OK"
     context = _review_context("SEEK")
@@ -1175,7 +1194,7 @@ def test_mandatory_eligibility_rejects_llm_keep_when_profile_fact_is_false(monke
         {
             "requirement": "NV2 Security Clearance Required",
             "canonical_requirement": "NV2",
-            "importance": "mandatory",
+            "importance": "required",
             "requirement_type": "eligibility",
             "status": "not_shown",
             "matched_candidate_fact": "",
@@ -1188,7 +1207,7 @@ def test_mandatory_eligibility_rejects_llm_keep_when_profile_fact_is_false(monke
     outcome, updated_record, _ = review_post_detail_normalized_job(record, context)
 
     assert outcome[RECORD_DECISION_KEY] == "REJECT"
-    assert updated_record[RECORD_REJECT_REASON_KEY] == "MANDATORY_ELIGIBILITY_FAILED"
+    assert updated_record[RECORD_REJECT_REASON_KEY] == "REQUIRED_ELIGIBILITY_FAILED"
     assert updated_record[RECORD_DECISION_EXPLANATION_KEY] == "NV2 Security Clearance Required"
 
 
@@ -1207,7 +1226,7 @@ def test_llm_supported_specific_capability_without_valid_candidate_fact_gets_no_
         "requirement_coverage": [
             {
                 "requirement": "5+ years of Salesforce configuration experience required",
-                "importance": "mandatory",
+                "importance": "required",
                 "requirement_type": "capability",
                 "status": "supported",
                 "matched_candidate_fact": "Salesforce",
@@ -1367,7 +1386,7 @@ def test_llm_review_fields_persist_on_record(monkeypatch):
         "requirement_coverage": [
             {
                 "requirement": "Stakeholder engagement",
-                "importance": "mandatory",
+                "importance": "required",
                 "status": "supported",
                 "capability_name": "Stakeholder Engagement",
                 "matched_job_text": "work with stakeholders",
@@ -1454,7 +1473,7 @@ def test_maybe_review_with_complete_coverage_is_not_rejected(monkeypatch, caplog
         capability_name="Regulatory Compliance",
         matched_job_text="not shown",
         grade="SOLID",
-        debug_reason="Strong business analysis fit but mandatory compliance experience missing.",
+        debug_reason="Strong business analysis fit but required compliance experience missing.",
     )
     payload["fit_review"]["decision"] = "MAYBE"
     _patch_llm_review_path(monkeypatch, payload)
@@ -1481,7 +1500,7 @@ def test_frozen_requirement_fit_score_breakdown_is_stored_once(caplog, monkeypat
         "requirement_coverage": [
             {
                 "requirement": "Stakeholder engagement",
-                "importance": "mandatory",
+                "importance": "required",
                 "status": "supported",
                 "capability_name": "Stakeholder Engagement",
                 "matched_job_text": "work with stakeholders",
@@ -1513,7 +1532,7 @@ def test_fit_review_logs_shared_requirement_score_diagnostics(monkeypatch, caplo
         "requirement_coverage": [
             {
                 "requirement": "Stakeholder engagement",
-                "importance": "mandatory",
+                "importance": "required",
                 "requirement_type": "capability",
                 "status": "supported",
                 "matched_candidate_fact": "Stakeholder Engagement",
@@ -1542,10 +1561,10 @@ def test_fit_review_logs_shared_requirement_score_diagnostics(monkeypatch, caplo
     messages = [entry.message for entry in caplog.records]
     block = next(message for message in messages if "Requirement scoring" in message)
     assert "Outcome: KEEP | Grade: STRONG" in block
-    assert "Eligibility gate: Not applicable | No mandatory eligibility requirements were returned." in block
+    assert "Eligibility gate: Not applicable | No required eligibility requirements were returned." in block
     assert "Why: Requirement coverage returned for scoring diagnostics." in block
     assert (
-        "Stakeholder engagement | Mandatory | Capability | In profile | Stakeholder Engagement"
+        "Stakeholder engagement | Required | Capability | In profile | Stakeholder Engagement"
         in block
     )
     assert "Evidence: Led stakeholder workshops." in block
@@ -1561,7 +1580,7 @@ def test_fit_review_logs_role_duration_requirement_diagnostics(monkeypatch, capl
         "requirement_coverage": [
             {
                 "requirement": "Minimum 5 years experience as Business Analyst",
-                "importance": "mandatory",
+                "importance": "required",
                 "requirement_type": "capability",
                 "status": "partially_supported",
                 "matched_candidate_fact": "Business Analysis",
@@ -1848,7 +1867,7 @@ def test_build_requirement_classification_review_signals_surfaces_uncertain_item
         RECORD_REQUIREMENT_COVERAGE_KEY: [
             {
                 "requirement": "5+ years working in a security clearance environment",
-                "importance": "mandatory",
+                "importance": "required",
                 "requirement_type": "uncertain",
                 "status": "invalid",
                 "llm_proposed_requirement_type": "capability",

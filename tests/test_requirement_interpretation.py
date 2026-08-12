@@ -35,7 +35,7 @@ def captured_requirements() -> tuple[CapturedRequirement, ...]:
             "seek:93806022",
             "A Bachelor Degree or equivalent in Commerce, Finance or Accounting",
             "qualification",
-            "mandatory",
+            "required",
             "qualification",
             canonical_requirement="Bachelor Degree",
             matched_candidate_fact="Bachelor Degree",
@@ -45,7 +45,7 @@ def captured_requirements() -> tuple[CapturedRequirement, ...]:
             "seek:93806022",
             "CA or CPA qualified (or willing to obtain)",
             "qualification",
-            "mandatory",
+            "required",
             "qualification",
             matched_job_text="CA or CPA qualified (or willing to obtain)",
         ),
@@ -53,7 +53,7 @@ def captured_requirements() -> tuple[CapturedRequirement, ...]:
             "seek:93806022",
             "ARITA Introduction to Insolvency certification",
             "qualification",
-            "mandatory",
+            "required",
             "qualification",
             canonical_requirement="ARITA Introduction to Insolvency",
             matched_candidate_fact="ARITA Introduction to Insolvency",
@@ -63,7 +63,7 @@ def captured_requirements() -> tuple[CapturedRequirement, ...]:
             "seek:93806022",
             "ARITA professional qualification (or willing to obtain)",
             "qualification",
-            "mandatory",
+            "required",
             "qualification",
             canonical_requirement="ARITA professional qualification",
             matched_candidate_fact="ARITA professional qualification",
@@ -74,7 +74,7 @@ def captured_requirements() -> tuple[CapturedRequirement, ...]:
             "seek:93806022",
             "Previous experience in insolvency is required",
             "capability",
-            "mandatory",
+            "required",
             "capability",
             canonical_requirement="Insolvency experience",
             matched_candidate_fact="Insolvency experience",
@@ -82,9 +82,9 @@ def captured_requirements() -> tuple[CapturedRequirement, ...]:
         ),
         CapturedRequirement(
             "seek:93865558",
-            "Australian Citizenship is Mandatory",
+            "Australian Citizenship is Required",
             "eligibility",
-            "mandatory",
+            "required",
             "capability",
             canonical_requirement="Australian Citizenship",
             matched_candidate_fact="Australian Citizenship",
@@ -94,7 +94,7 @@ def captured_requirements() -> tuple[CapturedRequirement, ...]:
             "seek:93865558",
             "NV2 Security Clearance Required",
             "eligibility",
-            "mandatory",
+            "required",
             "capability",
             canonical_requirement="NV2",
             matched_candidate_fact="NV2",
@@ -104,7 +104,7 @@ def captured_requirements() -> tuple[CapturedRequirement, ...]:
             "seek:93865558",
             "Relevant qualifications in Business Analysis, Information Technology, Project Management, or a related field",
             "qualification",
-            "mandatory",
+            "required",
             "qualification",
         ),
         CapturedRequirement(
@@ -118,7 +118,7 @@ def captured_requirements() -> tuple[CapturedRequirement, ...]:
             "capability-controls",
             "5+ years supporting client outcomes",
             "capability",
-            "mandatory",
+            "required",
             "eligibility",
             canonical_requirement="Client outcomes",
             matched_candidate_fact="Client outcomes",
@@ -128,7 +128,7 @@ def captured_requirements() -> tuple[CapturedRequirement, ...]:
             "capability-controls",
             "Strong stakeholder management and communication skills",
             "capability",
-            "mandatory",
+            "required",
             "capability",
             canonical_requirement="Stakeholder management",
             matched_candidate_fact="Stakeholder management",
@@ -225,7 +225,7 @@ def test_raw_captured_ad_sentences_are_not_stored_as_qualification_names(
             "A Bachelor Degree or equivalent in Commerce, Finance or Accounting",
             "CA or CPA qualified (or willing to obtain)",
             "Previous experience in insolvency is required",
-            "Australian Citizenship is Mandatory",
+            "Australian Citizenship is Required",
             "NV2 Security Clearance Required",
             "Relevant qualifications in Business Analysis, Information Technology, Project Management, or a related field",
             "CBAP, Agile BA, or equivalent certifications are desirable",
@@ -240,7 +240,7 @@ def test_raw_captured_ad_sentences_are_not_stored_as_qualification_names(
     assert not stored_names.intersection(case.wording for case in raw_sentence_rows)
 
 
-def test_unisys_review_rejects_missing_mandatory_nv2_but_not_preferred_cbap():
+def test_unisys_review_rejects_missing_required_nv2_but_not_preferred_cbap():
     payload = llm_gate.normalize_llm_review_payload(
         {
             "decision": "KEEP",
@@ -249,9 +249,9 @@ def test_unisys_review_rejects_missing_mandatory_nv2_but_not_preferred_cbap():
                 _raw_item(
                     CapturedRequirement(
                         "seek:93865558",
-                        "Australian Citizenship is Mandatory",
+                        "Australian Citizenship is Required",
                         "eligibility",
-                        "mandatory",
+                        "required",
                         "capability",
                         canonical_requirement="Australian Citizenship",
                         matched_candidate_fact="Australian Citizenship",
@@ -263,7 +263,7 @@ def test_unisys_review_rejects_missing_mandatory_nv2_but_not_preferred_cbap():
                         "seek:93865558",
                         "NV2 Security Clearance Required",
                         "eligibility",
-                        "mandatory",
+                        "required",
                         "capability",
                         canonical_requirement="NV2",
                         matched_candidate_fact="NV2",
@@ -310,7 +310,7 @@ def test_willing_to_obtain_is_unresolved_not_already_held_requirement(wording, c
         "seek:93806022",
         wording,
         "qualification",
-        "mandatory",
+        "required",
         "qualification",
         canonical_requirement=canonical,
         matched_candidate_fact=canonical,
@@ -331,12 +331,12 @@ def test_willing_to_obtain_is_unresolved_not_already_held_requirement(wording, c
     assert not llm_gate.has_eligibility_mismatch(normalized)
 
 
-def test_mandatory_qualification_definitely_absent_rejects():
+def test_required_qualification_definitely_absent_rejects():
     case = CapturedRequirement(
         "seek:93865558",
         "Relevant qualification is required",
         "qualification",
-        "mandatory",
+        "required",
         "qualification",
         canonical_requirement="CBAP",
         matched_candidate_fact="CBAP",
@@ -358,12 +358,12 @@ def test_mandatory_qualification_definitely_absent_rejects():
     )["status"] == fit_scoring.ELIGIBILITY_GATE_FAIL
 
 
-def test_mandatory_capability_gap_affects_fit_without_becoming_eligibility_gate():
+def test_required_capability_gap_affects_fit_without_becoming_eligibility_gate():
     case = CapturedRequirement(
         "capability-controls",
         "5+ years supporting client outcomes",
         "capability",
-        "mandatory",
+        "required",
         "eligibility",
         canonical_requirement="Client outcomes",
         matched_candidate_fact="Client outcomes",

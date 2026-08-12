@@ -40,12 +40,12 @@ def test_qualification_profile_discards_raw_requirement_sentences_as_names():
     ][0]["name"] == "CBAP"
 
 
-def test_mandatory_qualification_false_fails_the_gate():
+def test_required_qualification_false_fails_the_gate():
     record = _record(
         {
             "requirement": "CBAP certification",
             "canonical_requirement": "CBAP",
-            "importance": "mandatory",
+            "importance": "required",
             "requirement_type": "qualification",
             "status": "mismatch",
             "matched_candidate_fact": "CBAP",
@@ -86,7 +86,7 @@ def test_matching_qualification_passes_and_maps_to_canonical_profile_name():
             {
                 "requirement": "Demonstrated CBAP certification",
                 "canonical_requirement": "CBAP",
-                "importance": "mandatory",
+                "importance": "required",
                 "requirement_type": "qualification",
                 "status": "supported",
                 "matched_candidate_fact": "CBAP",
@@ -112,7 +112,7 @@ def test_compound_qualification_mapping_stays_unresolved_without_atomic_profile_
             {
                 "requirement": "CBAP, Agile BA, or equivalent certifications",
                 "canonical_requirement": "CBAP, Agile BA, or equivalent certifications",
-                "importance": "mandatory",
+                "importance": "required",
                 "requirement_type": "qualification",
                 "status": "supported",
                 "matched_candidate_fact": "CBAP, Agile BA, or equivalent certifications",

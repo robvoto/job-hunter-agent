@@ -49,7 +49,7 @@ def _normalize_capability_row(raw_row, profile, role_experience=None):
 
 def test_requirement_fit_all_supported_strong_is_100():
     record = _record([
-        {"requirement": "Stakeholder engagement", "importance": "mandatory", "status": "supported", "capability_name": "stakeholder engagement"}
+        {"requirement": "Stakeholder engagement", "importance": "required", "status": "supported", "capability_name": "stakeholder engagement"}
     ], title_match_metadata={"match_family": "primary"}, salary="$300k", posted_age_days=0)
 
     assert fit_scoring.fit_score(record, _profile()) == 100
@@ -62,7 +62,7 @@ def test_requirement_fit_audit_exposes_exact_evidence_mapping_and_credit():
     record = _record([
         {
             "requirement": "5–7 years in digital health",
-            "importance": "mandatory",
+            "importance": "required",
             "requirement_type": "capability",
             "status": "partially_supported",
             "matched_candidate_fact": "stakeholder engagement",
@@ -79,7 +79,7 @@ def test_requirement_fit_audit_exposes_exact_evidence_mapping_and_credit():
     assert rows == [
         {
             "requirement": "5–7 years in digital health",
-            "importance": "mandatory",
+            "importance": "required",
             "requirement_type": "capability",
             "status": "partially_supported",
             "matched_candidate_fact": "stakeholder engagement",
@@ -118,7 +118,7 @@ def test_requirement_fit_diagnostics_and_formatter_cover_all_status_types():
         [
             {
                 "requirement": "Stakeholder workshops",
-                "importance": "mandatory",
+                "importance": "required",
                 "requirement_type": "capability",
                 "status": "supported",
                 "matched_candidate_fact": "stakeholder engagement",
@@ -128,7 +128,7 @@ def test_requirement_fit_diagnostics_and_formatter_cover_all_status_types():
             },
             {
                 "requirement": "SQL analysis",
-                "importance": "mandatory",
+                "importance": "required",
                 "requirement_type": "capability",
                 "status": "partially_supported",
                 "matched_candidate_fact": "sql",
@@ -138,7 +138,7 @@ def test_requirement_fit_diagnostics_and_formatter_cover_all_status_types():
             },
             {
                 "requirement": "Hold PV clearance",
-                "importance": "mandatory",
+                "importance": "required",
                 "requirement_type": "eligibility",
                 "status": "supported",
                 "matched_candidate_fact": "PV clearance",
@@ -164,7 +164,7 @@ def test_requirement_fit_diagnostics_and_formatter_cover_all_status_types():
             },
             {
                 "requirement": "Data platform uplift",
-                "importance": "mandatory",
+                "importance": "required",
                 "requirement_type": "capability",
                 "status": "supported",
                 "matched_candidate_fact": "",
@@ -222,7 +222,7 @@ def test_requirement_fit_partially_supported_uses_partial_status_credit():
     record = _record([
         {
             "requirement": "Stakeholder engagement",
-            "importance": "mandatory",
+            "importance": "required",
             "status": "partially_supported",
             "capability_name": "stakeholder engagement",
         }
@@ -235,12 +235,12 @@ def test_requirement_fit_partially_supported_uses_partial_status_credit():
 
 def test_requirement_fit_uses_capability_level_not_llm_grade_or_title():
     record = _record([
-        {"requirement": "Salesforce configuration", "importance": "mandatory", "status": "supported", "capability_name": "salesforce"}
+        {"requirement": "Salesforce configuration", "importance": "required", "status": "supported", "capability_name": "salesforce"}
     ], llm_fit_grade="EXCELLENT", title_match_metadata={"match_family": "primary"})
 
     assert fit_scoring.fit_score(record, _profile()) == 35
     labels = [entry["label"] for entry in fit_scoring.fit_score_breakdown(record, _profile())]
-    assert any("Mandatory weak coverage: Salesforce configuration" in label for label in labels)
+    assert any("Required weak coverage: Salesforce configuration" in label for label in labels)
 
 
 @pytest.mark.parametrize(
@@ -258,7 +258,7 @@ def test_requirement_fit_uses_capability_level_not_llm_grade_or_title():
             "supported",
         ),
         (
-            "Demonstrated SAP S/4HANA implementation experience is mandatory",
+            "Demonstrated SAP S/4HANA implementation experience is required",
             [{"name": "SAP", "level": "basic"}],
             "SAP",
             ["Unrelated historical exposure to generic SAP."],
@@ -273,7 +273,7 @@ def test_requirement_fit_uses_capability_level_not_llm_grade_or_title():
         ),
     ],
 )
-def test_mandatory_specific_capability_does_not_credit_adjacent_profile_fact(
+def test_required_specific_capability_does_not_credit_adjacent_profile_fact(
     requirement,
     candidate_capabilities,
     matched_candidate_fact,
@@ -287,7 +287,7 @@ def test_mandatory_specific_capability_does_not_credit_adjacent_profile_fact(
     normalized = _normalize_capability_row(
         {
             "requirement": requirement,
-            "importance": "mandatory",
+            "importance": "required",
             "requirement_type": "capability",
             "status": status,
             "matched_candidate_fact": matched_candidate_fact,
@@ -313,7 +313,7 @@ def test_exact_capability_match_still_gets_normal_credit():
     normalized = _normalize_capability_row(
         {
             "requirement": "Strong stakeholder management required",
-            "importance": "mandatory",
+            "importance": "required",
             "requirement_type": "capability",
             "status": "supported",
             "matched_candidate_fact": "Stakeholder Management",
@@ -338,7 +338,7 @@ def test_exact_capability_with_matching_role_duration_can_be_supported_without_d
     normalized = _normalize_capability_row(
         {
             "requirement": "5+ years of Salesforce configuration experience required",
-            "importance": "mandatory",
+            "importance": "required",
             "requirement_type": "capability",
             "status": "supported",
             "matched_candidate_fact": "Salesforce",
@@ -373,7 +373,7 @@ def test_approved_capability_alias_matches_bpmn_but_generic_process_modelling_do
     aliased = _normalize_capability_row(
         {
             "requirement": "Experience with BPMN 2.0 required",
-            "importance": "mandatory",
+            "importance": "required",
             "requirement_type": "capability",
             "status": "supported",
             "matched_candidate_fact": "BPMN 2.0",
@@ -388,7 +388,7 @@ def test_approved_capability_alias_matches_bpmn_but_generic_process_modelling_do
     assert fit_scoring.fit_score(_record([aliased]), alias_profile) == 100
 
 
-def test_unknown_mandatory_capability_mapping_is_uncertain_and_zero_credit():
+def test_unknown_required_capability_mapping_is_uncertain_and_zero_credit():
     profile = {
         "candidate_capabilities": [
             {"name": "Business Analysis", "level": "strong"},
@@ -399,7 +399,7 @@ def test_unknown_mandatory_capability_mapping_is_uncertain_and_zero_credit():
     normalized = _normalize_capability_row(
         {
             "requirement": "5+ years of Salesforce configuration experience required",
-            "importance": "mandatory",
+            "importance": "required",
             "requirement_type": "capability",
             "status": "supported",
             "matched_candidate_fact": "Salesforce",
@@ -413,7 +413,7 @@ def test_unknown_mandatory_capability_mapping_is_uncertain_and_zero_credit():
     assert fit_scoring.fit_score(_record([normalized]), profile) == 0
 
 
-def test_mandatory_capability_gap_lowers_fit_without_becoming_eligibility_gate():
+def test_required_capability_gap_lowers_fit_without_becoming_eligibility_gate():
     profile = {
         "candidate_capabilities": [
             {"name": "Stakeholder Management", "level": "strong"},
@@ -424,7 +424,7 @@ def test_mandatory_capability_gap_lowers_fit_without_becoming_eligibility_gate()
     stakeholder = _normalize_capability_row(
         {
             "requirement": "Strong stakeholder management required",
-            "importance": "mandatory",
+            "importance": "required",
             "requirement_type": "capability",
             "status": "supported",
             "matched_candidate_fact": "Stakeholder Management",
@@ -436,7 +436,7 @@ def test_mandatory_capability_gap_lowers_fit_without_becoming_eligibility_gate()
     missing_salesforce = _normalize_capability_row(
         {
             "requirement": "5+ years of Salesforce configuration experience required",
-            "importance": "mandatory",
+            "importance": "required",
             "requirement_type": "capability",
             "status": "supported",
             "matched_candidate_fact": "Salesforce",
@@ -455,8 +455,8 @@ def test_mandatory_capability_gap_lowers_fit_without_becoming_eligibility_gate()
 
 def test_requirement_fit_not_shown_and_mismatch_are_zero_and_counted():
     record = _record([
-        {"requirement": "Stakeholder engagement", "importance": "mandatory", "status": "supported", "capability_name": "stakeholder engagement"},
-        {"requirement": "Python engineering", "importance": "mandatory", "status": "not_shown", "capability_name": ""},
+        {"requirement": "Stakeholder engagement", "importance": "required", "status": "supported", "capability_name": "stakeholder engagement"},
+        {"requirement": "Python engineering", "importance": "required", "status": "not_shown", "capability_name": ""},
         {"requirement": "NV1 clearance", "importance": "preferred", "status": "mismatch", "capability_name": ""},
     ])
 
@@ -472,7 +472,7 @@ def test_requirement_fit_unknown_mapped_capability_logs_uncertainty(tmp_path, mo
     record = _record([
         {
             "requirement": "Data platform uplift",
-            "importance": "mandatory",
+            "importance": "required",
             "status": "supported",
             "capability_name": "unknown data platform capability",
             "matched_job_text": "data platform uplift",
@@ -491,7 +491,7 @@ def test_requirement_fit_eligibility_uses_candidate_eligibility_not_capability()
     record = _record([
         {
             "requirement": "Hold PV security clearance",
-            "importance": "mandatory",
+            "importance": "required",
             "status": "supported",
             "requirement_type": "eligibility",
             "matched_candidate_fact": "PV clearance",
@@ -517,7 +517,7 @@ def test_requirement_fit_false_eligibility_counts_as_mismatch(tmp_path, monkeypa
     record = _record([
         {
             "requirement": "Hold PV security clearance",
-            "importance": "mandatory",
+            "importance": "required",
             "status": "supported",
             "requirement_type": "eligibility",
             "matched_candidate_fact": "PV clearance",
@@ -558,12 +558,12 @@ def test_preferred_eligibility_does_not_gate_job():
     assert gate["status"] == fit_scoring.ELIGIBILITY_GATE_NOT_APPLICABLE
 
 
-def test_mandatory_canonical_eligibility_uses_profile_truth_when_llm_says_not_shown():
+def test_required_canonical_eligibility_uses_profile_truth_when_llm_says_not_shown():
     record = _record([
         {
             "requirement": "NV2 Security Clearance Required",
             "canonical_requirement": "NV2",
-            "importance": "mandatory",
+            "importance": "required",
             "status": "not_shown",
             "requirement_type": "eligibility",
         }
@@ -578,12 +578,12 @@ def test_mandatory_canonical_eligibility_uses_profile_truth_when_llm_says_not_sh
     assert gate["reason"] == "NV2 Security Clearance Required"
 
 
-def test_mandatory_canonical_eligibility_passes_when_profile_confirms_it():
+def test_required_canonical_eligibility_passes_when_profile_confirms_it():
     record = _record([
         {
-            "requirement": "Australian Citizenship is Mandatory",
+            "requirement": "Australian Citizenship is Required",
             "canonical_requirement": "Australian Citizenship",
-            "importance": "mandatory",
+            "importance": "required",
             "status": "not_shown",
             "requirement_type": "eligibility",
         }
@@ -609,7 +609,7 @@ def test_requirement_fit_invalid_requirement_type_logs_uncertainty(tmp_path, mon
     record = _record([
         {
             "requirement": "PV clearance",
-            "importance": "mandatory",
+            "importance": "required",
             "status": "invalid",
             "requirement_type": "credential",
             "matched_candidate_fact": "",
@@ -640,7 +640,7 @@ def test_requirement_fit_invalid_status_does_not_score_even_with_valid_capabilit
     record = _record([
         {
             "requirement": "SQL experience",
-            "importance": "mandatory",
+            "importance": "required",
             "status": "invalid",
             "requirement_type": "capability",
             "capability_name": "sql",
@@ -676,7 +676,7 @@ def test_requirement_fit_uncertain_classification_does_not_score(tmp_path, monke
     record = _record([
         {
             "requirement": "5+ years working in a security clearance environment",
-            "importance": "mandatory",
+            "importance": "required",
             "status": "invalid",
             "requirement_type": "uncertain",
             "matched_candidate_fact": "",
@@ -697,7 +697,7 @@ def _fully_supported_record(**extra):
         [
             {
                 "requirement": "Stakeholder engagement",
-                "importance": "mandatory",
+                "importance": "required",
                 "status": "supported",
                 "capability_name": "stakeholder engagement",
             }
@@ -747,7 +747,7 @@ def test_occupation_alignment_different_clamps_to_zero_not_negative():
         [
             {
                 "requirement": "SQL experience",
-                "importance": "mandatory",
+                "importance": "required",
                 "status": "mismatch",
                 "capability_name": "",
             }
@@ -812,7 +812,7 @@ def test_role_defining_specialist_gap_caps_generic_high_score():
     record = _record([
         {
             "requirement": "Stakeholder engagement",
-            "importance": "mandatory",
+            "importance": "required",
             "requirement_type": "capability",
             "status": "supported",
             "matched_candidate_fact": "stakeholder engagement",

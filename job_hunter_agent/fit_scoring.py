@@ -59,15 +59,15 @@ LLM_REVIEW_STATE_EVALUATED = "evaluated"
 LLM_REVIEW_STATE_INVALID = "invalid"
 LLM_REVIEW_INCOMPLETE_LABEL = "LLM review incomplete"
 
-# Debug audit rows must read the same words as the job card UI (Mandatory/Expected/
+# Debug audit rows must read the same words as the job card UI (Required/Expected/
 # Preferred/Bonus, In profile/Partial match/etc, Strong/Working/...) instead of
 # title-casing the raw enum values — otherwise the same status shows up as two
 # different phrases depending on which view you're looking at.
 _AUDIT_IMPORTANCE_LABEL_KEYS = {
-    "mandatory": "importance_mandatory",
-    "strongly_preferred": "importance_strongly_preferred",
+    "required": "importance_required",
+    "expected": "importance_expected",
     "preferred": "importance_preferred",
-    "nice_to_have": "importance_nice_to_have",
+    "bonus": "importance_bonus",
 }
 _AUDIT_STATUS_LABEL_KEYS = {
     "supported": "coverage_status_supported",
@@ -76,9 +76,9 @@ _AUDIT_STATUS_LABEL_KEYS = {
     "invalid": "coverage_status_invalid",
     # "not_shown" has no badge text in the main UI (redundant there with the
     # "Needs attention" group heading), but the audit table needs a non-blank
-    # status for every row, so reuse the mandatory-gap wording — it's accurate
+    # status for every row, so reuse the required-gap wording — it's accurate
     # regardless of importance.
-    "not_shown": "coverage_status_mandatory_not_shown",
+    "not_shown": "coverage_status_required_not_shown",
 }
 
 
@@ -269,7 +269,7 @@ def eligibility_gate_diagnostics(record: dict, profile: Optional[dict] = None) -
             continue
         if str(item.get("requirement_type") or "").strip().lower() not in {"eligibility", "qualification"}:
             continue
-        if str(item.get("importance") or "").strip().lower() != "mandatory":
+        if str(item.get("importance") or "").strip().lower() != "required":
             continue
         relevant_rows.append(item)
 
@@ -277,7 +277,7 @@ def eligibility_gate_diagnostics(record: dict, profile: Optional[dict] = None) -
         return {
             "status": ELIGIBILITY_GATE_NOT_APPLICABLE,
             "label": "Not applicable",
-            "reason": "No mandatory eligibility requirements were returned.",
+            "reason": "No required eligibility requirements were returned.",
         }
 
     unresolved = 0
@@ -712,8 +712,8 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
         "mismatch": 0,
         "unknown": 0,
     }
-    mandatory_gaps: list[str] = []
-    weak_mandatory: list[str] = []
+    required_gaps: list[str] = []
+    weak_required: list[str] = []
     uncertain_count = 0
 
     for item in coverage:
@@ -738,13 +738,13 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
 
         if status in {"not_shown", "not shown"}:
             counts["not_shown"] += 1
-            if importance == "mandatory":
-                mandatory_gaps.append(requirement)
+            if importance == "required":
+                required_gaps.append(requirement)
             continue
         if status == "mismatch":
             counts["mismatch"] += 1
-            if importance == "mandatory":
-                mandatory_gaps.append(requirement)
+            if importance == "required":
+                required_gaps.append(requirement)
             continue
         if status not in {"supported", "partially_supported"}:
             counts["unknown"] += 1
@@ -754,8 +754,8 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
                 item,
                 "Requirement was not marked as supported or partially_supported, so scoring treated it as not covered and needs review.",
             )
-            if importance == "mandatory":
-                mandatory_gaps.append(requirement)
+            if importance == "required":
+                required_gaps.append(requirement)
             continue
         if requirement_type not in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES:
             counts["unknown"] += 1
@@ -765,8 +765,8 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
                 item,
                 "Requirement was marked with an invalid requirement type and needs review before scoring can treat it as covered.",
             )
-            if importance == "mandatory":
-                mandatory_gaps.append(requirement)
+            if importance == "required":
+                required_gaps.append(requirement)
             continue
 
         if requirement_type in {"eligibility", "qualification"}:
@@ -780,13 +780,13 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
                     item,
                     "Requirement was marked as covered but the mapped candidate eligibility fact is missing or cannot be resolved.",
                 )
-                if importance == "mandatory":
-                    mandatory_gaps.append(requirement)
+                if importance == "required":
+                    required_gaps.append(requirement)
                 continue
             if not known_levels.get(eligibility_key, False):
                 counts["mismatch"] += 1
-                if importance == "mandatory":
-                    mandatory_gaps.append(requirement)
+                if importance == "required":
+                    required_gaps.append(requirement)
                 continue
             counts["eligibility"] += 1
             continue
@@ -801,8 +801,8 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
                 item,
                 "Requirement was marked as covered but the mapped candidate capability is missing or cannot be resolved.",
             )
-            if importance == "mandatory":
-                mandatory_gaps.append(requirement)
+            if importance == "required":
+                required_gaps.append(requirement)
             continue
 
         credit = capability_credits[level] * float(status_weights[status])
@@ -811,8 +811,8 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
         counts[bucket] += 1
         if status == "partially_supported":
             counts["partial"] += 1
-        if importance == "mandatory" and level in {"basic", "low", "limited_depth"}:
-            weak_mandatory.append(requirement)
+        if importance == "required" and level in {"basic", "low", "limited_depth"}:
+            weak_required.append(requirement)
 
     percent = round((earned_weight / total_weight) * 100) if total_weight > 0 else 0
     label_parts = [
@@ -830,18 +830,18 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
         label_parts.append(f"needs review {counts['unknown']}")
 
     entries = [{"label": " | ".join(label_parts), "value": int(percent), "section": "requirement_fit"}]
-    for requirement in mandatory_gaps[:3]:
+    for requirement in required_gaps[:3]:
         entries.append(
             {
-                "label": f"Mandatory gap: {requirement}",
+                "label": f"Required gap: {requirement}",
                 "value": 0,
                 "section": "requirement_fit_warning",
             }
         )
-    for requirement in weak_mandatory[:3]:
+    for requirement in weak_required[:3]:
         entries.append(
             {
-                "label": f"Mandatory weak coverage: {requirement}",
+                "label": f"Required weak coverage: {requirement}",
                 "value": 0,
                 "section": "requirement_fit_warning",
             }

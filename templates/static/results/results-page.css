@@ -731,7 +731,6 @@
   gap: var(--control-space-xs);
 }
 
-.job-requirement-status,
 .job-req-importance {
   grid-column: auto;
   justify-self: auto;
@@ -750,73 +749,19 @@
   white-space: nowrap;
 }
 
-.job-requirement-status {
-  color: var(--text-muted);
-  background: color-mix(in srgb, var(--bg-surface) 75%, transparent);
-}
-
-.job-requirement-item--confirmed-have .job-requirement-status {
-  border-color: var(--state-success-border);
-  color: var(--state-success-text);
-  background: var(--state-success-bg);
-}
-
-.job-requirement-item--confirmed-do-not-have .job-requirement-status {
-  border-color: var(--state-error-border);
-  color: var(--state-error-text);
-  background: var(--state-error-bg);
-}
-
-/* Coverage status variants (from LLM requirement_coverage) */
-.job-requirement-item--supported .job-requirement-status {
-  border-color: var(--state-success-border);
-  color: var(--state-success-text);
-  background: var(--state-success-bg);
-}
-
-/* Same warning-tier row background as --invalid, so mandatory-but-unproven
+/* Same warning-tier row background as --invalid, so required-but-unproven
    requirements get consistent visual weight regardless of which panel they render in. */
 .job-requirement-item--partially-supported {
   background: color-mix(in srgb, var(--state-warning-bg) 40%, transparent);
 }
 
-.job-requirement-item--partially-supported .job-requirement-status {
-  border-color: var(--state-warning-border);
-  color: var(--state-warning-text);
-  background: var(--state-warning-bg);
-}
-
-.job-requirement-item--not-shown .job-requirement-status {
-  border-color: var(--border-subtle);
-  color: var(--text-muted);
-  background: transparent;
-}
-
-.job-requirement-item--invalid .job-requirement-status {
-  border-color: var(--state-warning-border);
-  color: var(--state-warning-text);
-  background: var(--state-warning-bg);
-}
-
-/* mandatory + not_shown: same red urgency as mismatch — user needs to review this gap */
-.job-requirement-item--mandatory-not-shown {
+/* required + not_shown: same red urgency as mismatch — user needs to review this gap */
+.job-requirement-item--required-not-shown {
   background: color-mix(in srgb, var(--state-error-bg) 40%, transparent);
-}
-
-.job-requirement-item--mandatory-not-shown .job-requirement-status {
-  border-color: var(--state-error-border);
-  color: var(--state-error-text);
-  background: var(--state-error-bg);
 }
 
 .job-requirement-item--mismatch {
   background: color-mix(in srgb, var(--state-error-bg) 55%, transparent);
-}
-
-.job-requirement-item--mismatch .job-requirement-status {
-  border-color: var(--state-error-border);
-  color: var(--state-error-text);
-  background: var(--state-error-bg);
 }
 
 .job-requirement-action {
@@ -885,13 +830,13 @@
   color: var(--text-muted);
 }
 
-.job-req-importance--mandatory {
+.job-req-importance--required {
   border-color: color-mix(in srgb, var(--state-warning-border) 70%, var(--border-subtle));
   background: color-mix(in srgb, var(--state-warning-bg) 82%, var(--bg-surface));
   color: var(--state-warning-text);
 }
 
-.job-req-importance--strongly-preferred {
+.job-req-importance--expected {
   border-color: color-mix(in srgb, var(--state-info-border) 70%, var(--border-subtle));
   background: color-mix(in srgb, var(--state-info-bg) 82%, var(--bg-surface));
   color: var(--state-info-text);
@@ -903,7 +848,7 @@
   color: var(--text-primary);
 }
 
-.job-req-importance--nice-to-have {
+.job-req-importance--bonus {
   border-color: color-mix(in srgb, var(--state-success-border) 70%, var(--border-subtle));
   background: color-mix(in srgb, var(--state-success-bg) 82%, var(--bg-surface));
   color: var(--state-success-text);

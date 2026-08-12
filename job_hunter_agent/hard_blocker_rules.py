@@ -1,7 +1,7 @@
 """Hard blocker rule management and detection logic.
 
 This module handles the loading, normalisation, and persistence of rules used
-to detect mandatory requirements in job ads that conflict with a candidate's
+to detect required requirements in job ads that conflict with a candidate's
 profile. It provides logic for matching these rules against job text to
 automatically identify dealbreakers using candidate-specific exclusion terms.
 """

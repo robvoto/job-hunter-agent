@@ -412,7 +412,7 @@ def test_rendered_workspace_html_content(tmp_path):
             "run_efficiency_intro": "Search targets this run: ",
             "run_efficiency_separator": ". ",
             "how_match_levels_work_summary": "How scoring works",
-            "how_match_levels_work_copy": "Job Hunter compares each job's requirements with evidence in your profile. Mandatory requirements and stronger evidence carry more weight. Missing, partial, or weak mandatory requirements lower the result, which is then grouped into the match level shown on the card. Location, posted date, viewed status, and Easy or Quick Apply help you review jobs, but they do not prove fit.",
+            "how_match_levels_work_copy": "Job Hunter compares each job's requirements with evidence in your profile. Required requirements and stronger evidence carry more weight. Missing, partial, or weak required requirements lower the result, which is then grouped into the match level shown on the card. Location, posted date, viewed status, and Easy or Quick Apply help you review jobs, but they do not prove fit.",
             "rejection_panel_title": "Why isn&#39;t this a fit for you?",
             "rejection_panel_copy": "Choose required terms you do not want the app to accept again.",
             "rejection_how_this_works_summary": "How this works",
@@ -524,7 +524,7 @@ def test_rendered_workspace_html_content(tmp_path):
         assert "Run Efficiency" not in rendered_html
         assert "How scoring works" in rendered_html
         assert "How Match Levels Work" not in rendered_html
-        assert "Mandatory requirements and stronger evidence carry more weight." in rendered_html
+        assert "Required requirements and stronger evidence carry more weight." in rendered_html
         assert "Easy or Quick Apply help you review jobs, but they do not prove fit." in rendered_html
         assert (
             '<button class="scope-tab is-active" type="button" '

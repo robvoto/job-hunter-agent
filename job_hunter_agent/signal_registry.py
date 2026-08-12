@@ -92,15 +92,15 @@ CATEGORY_METADATA = {
     },
     CATEGORY_HARD_BLOCKER_PATTERN: {
         "label": "Hard blocker pattern",
-        "description": "Strong rejection patterns that disqualify a job. Hard blockers are mandatory dealbreakers that block matching jobs from processing.",
+        "description": "Strong rejection patterns that disqualify a job. Hard blockers are required dealbreakers that block matching jobs from processing.",
         "examples": [
             "must hold CPA",
             "active NV2 required",
-            "on-site 5 days mandatory",
+            "on-site 5 days required",
             "requires current driving licence",
             "willing to work weekends",
         ],
-        "warning": "⚠️ DANGER: Wrong approvals here can reject valid jobs. Only approve if the phrase is an absolute mandatory blocker.",
+        "warning": "⚠️ DANGER: Wrong approvals here can reject valid jobs. Only approve if the phrase is an absolute required blocker.",
     },
     CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE: {
         "label": "Job type",

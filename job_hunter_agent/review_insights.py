@@ -296,7 +296,7 @@ _REQUIREMENT_LABEL_SUFFIXES = (
     " required",
     " preferred",
     " preferred but not essential",
-    " mandatory",
+    " required",
     " essential",
     " desired",
 )
@@ -564,16 +564,16 @@ def _build_rule_tuning_suggestions_from_reviews(review_items: list[dict[str, Any
                     "samples": samples,
                 }
             )
-        elif prefix == "DESC_MANDATORY_SKILL" and count >= rule_min:
+        elif prefix == "DESC_REQUIRED_SKILL" and count >= rule_min:
             skill = _friendly_reason_suffix(suffix)
             suggestions.append(
                 {
                     "kind": "rule",
                     "reason": reason,
                     "count": count,
-                    "headline": f"Mandatory skill signal repeated: {skill}",
+                    "headline": f"Required skill signal repeated: {skill}",
                     "detail": f"{count} role(s) required {skill} strongly enough to reject.",
-                    "target": "Mandatory skills you do not have",
+                    "target": "Required skills you do not have",
                     "recommendation": "Add this only if it becomes a recurring blocker for otherwise relevant roles.",
                     "samples": samples,
                 }

@@ -53,6 +53,10 @@ from job_hunter_agent.llm_protocol import (
     LLM_ALLOWED_COVERAGE_IMPORTANCES,
     LLM_ALLOWED_COVERAGE_MATCH_SOURCES,
     LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES,
+    LLM_COVERAGE_IMPORTANCE_BONUS,
+    LLM_COVERAGE_IMPORTANCE_EXPECTED,
+    LLM_COVERAGE_IMPORTANCE_PREFERRED,
+    LLM_COVERAGE_IMPORTANCE_REQUIRED,
     LLM_ALLOWED_DECISIONS,
     LLM_ALLOWED_GRADES,
     LLM_ALLOWED_OCCUPATION_ALIGNMENTS,
@@ -653,7 +657,7 @@ def build_requirement_coverage_guidance() -> str:
     parts = [
         f"Use at most {get_llm_job_requirements_max_items()} requirement_coverage items.",
         "Classify each requirement as capability, eligibility, or qualification. Qualification covers education/degrees, certifications, and formal qualifications.",
-        "For qualification rows, importance must be mandatory or preferred.",
+        "For qualification rows, importance must be required or preferred.",
         "Use matched_candidate_fact for the exact canonical capability or eligibility name shown in the profile matrix, or the exact qualification name shown in the qualifications matrix; never put an evidence sentence there.",
         "Canonical qualification names must be concise reusable concepts such as CBAP, PRINCE2, Bachelor of Information Technology, or Diploma of Project Management — never the raw requirement sentence or an alternatives list.",
         "When the ad states explicit years or months of experience, compare that threshold against the role experience matrix before choosing supported versus partially_supported.",
@@ -877,12 +881,12 @@ _ALLOWED_REQUIREMENT_COVERAGE_STATUSES = frozenset(
 )
 
 # Importance weights used by derive_fit_review_grade.
-# mandatory requirements dominate the grade; nice_to_have items barely affect it.
+# required requirements dominate the grade; bonus items barely affect it.
 _IMPORTANCE_WEIGHTS: dict[str, float] = {
-    "mandatory": 3.0,
-    "strongly_preferred": 2.0,
-    "preferred": 1.0,
-    "nice_to_have": 0.25,
+    LLM_COVERAGE_IMPORTANCE_REQUIRED: 3.0,
+    LLM_COVERAGE_IMPORTANCE_EXPECTED: 2.0,
+    LLM_COVERAGE_IMPORTANCE_PREFERRED: 1.0,
+    LLM_COVERAGE_IMPORTANCE_BONUS: 0.25,
 }
 
 
@@ -1208,8 +1212,8 @@ def normalize_llm_requirement_coverage(
             )
             matched_candidate_fact = eligibility_name or matched_candidate_fact
         elif requirement_type_is_valid and requirement_type == "qualification":
-            if importance not in {"mandatory", "preferred"}:
-                importance = "preferred"
+            if importance not in {LLM_COVERAGE_IMPORTANCE_REQUIRED, LLM_COVERAGE_IMPORTANCE_PREFERRED}:
+                importance = LLM_COVERAGE_IMPORTANCE_PREFERRED
             qualification_name = (
                 valid_qualification_lookup.get(matched_candidate_fact.lower(), "")
                 if valid_qualification_lookup is not None
@@ -1290,9 +1294,9 @@ def normalize_llm_requirement_coverage(
                     requirement,
                 )
         if status not in _ALLOWED_REQUIREMENT_COVERAGE_STATUSES:
-            if importance != "mandatory":
+            if importance != LLM_COVERAGE_IMPORTANCE_REQUIRED:
                 continue
-            # Mandatory wording is never discarded just because the model
+            # Required wording is never discarded just because the model
             # returned an invalid/unknown status. It remains visible as an
             # unresolved item and cannot contribute support to scoring.
             status = LLM_INVALID_COVERAGE_STATUS
@@ -1483,11 +1487,11 @@ def derive_fit_review_grade(
 ) -> str:
     """Derive grade from importance-weighted requirement coverage.
 
-    Importance weights: mandatory=3, strongly_preferred=2, preferred=1, nice_to_have=0.25.
-    Any mismatch caps at WEAK. mandatory+not_shown lowers the ratio but does not auto-reject,
-    except an unresolved mandatory eligibility fact (e.g. clearance, work rights), which also
+    Importance weights: required=3, expected=2, preferred=1, bonus=0.25.
+    Any mismatch caps at WEAK. required+not_shown lowers the ratio but does not auto-reject,
+    except an unresolved required eligibility fact (e.g. clearance, work rights), which also
     caps at WEAK — eligibility is a boolean gate, not a gradeable capability, so an unknown
-    mandatory eligibility fact must not be diluted away by unrelated supported requirements.
+    required eligibility fact must not be diluted away by unrelated supported requirements.
     Items without an importance field default to 'preferred' (weight 1.0).
     """
     total_items = max(len(requirement_coverage), len(job_requirements or []))
@@ -1497,7 +1501,7 @@ def derive_fit_review_grade(
     supported_count = 0
     partial_count = 0
     mismatch_count = 0
-    mandatory_eligibility_unresolved = False
+    required_eligibility_unresolved = False
     support_score = 0.0
     max_score = 0.0
 
@@ -1517,10 +1521,10 @@ def derive_fit_review_grade(
             mismatch_count += 1
         elif (
             status == "not_shown"
-            and importance == "mandatory"
+            and importance == LLM_COVERAGE_IMPORTANCE_REQUIRED
             and requirement_type in {"eligibility", "qualification"}
         ):
-            mandatory_eligibility_unresolved = True
+            required_eligibility_unresolved = True
         # not_shown: 0 contribution, weight still counted in max_score
 
         max_score += weight
@@ -1538,7 +1542,7 @@ def derive_fit_review_grade(
         # Any mismatch caps at WEAK regardless of importance or support ratio.
         return "WEAK"
 
-    if mandatory_eligibility_unresolved:
+    if required_eligibility_unresolved:
         return "WEAK"
 
     support_ratio = support_score / max_score if max_score > 0 else 0
@@ -1556,7 +1560,7 @@ def derive_fit_review_grade(
 
 
 def has_eligibility_mismatch(requirement_coverage: list[dict[str, Any]]) -> bool:
-    """Return True when a mandatory boolean qualification/eligibility gate mismatches.
+    """Return True when a required boolean qualification/eligibility gate mismatches.
 
     Eligibility facts (clearance, work rights, etc.) are boolean gating facts, not
     gradeable capabilities: a mismatch means the candidate is not eligible, so this
@@ -1567,7 +1571,7 @@ def has_eligibility_mismatch(requirement_coverage: list[dict[str, Any]]) -> bool
             str(item.get("requirement_type") or "").strip().lower() == "eligibility"
             or (
                 str(item.get("requirement_type") or "").strip().lower() == "qualification"
-                and str(item.get("importance") or "").strip().lower() == "mandatory"
+                and str(item.get("importance") or "").strip().lower() == LLM_COVERAGE_IMPORTANCE_REQUIRED
             )
         )
         and str(item.get("status") or "").strip().lower() == "mismatch"

@@ -79,7 +79,7 @@ def test_generic_business_analyst_target_pattern_allows_common_ba_titles(monkeyp
     assert reason_ai == "OK"
 
 
-def test_approved_hard_blocker_rules_rejects_mandatory_requirement_text(tmp_path, monkeypatch):
+def test_approved_hard_blocker_rules_rejects_required_requirement_text(tmp_path, monkeypatch):
     rules_path = _hard_blocker_rules_path(tmp_path)
     _write_hard_blocker_rules(rules_path, [{"value": "must have {term}", "aliases": []}])
     monkeypatch.setattr(

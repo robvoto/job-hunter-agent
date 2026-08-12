@@ -1,7 +1,7 @@
 {
   "kind": "system_config",
   "name": "llm_requirement_coverage_defaults",
-  "version": 8,
+  "version": 9,
   "updated_at": "2026-08-10",
   "description": "Managed default guidance for LLM requirement coverage decomposition behaviour.",
   "lines": [
@@ -10,7 +10,7 @@
     "canonical_requirement must name one concept only. Never copy requirement prose such as \"NV2 Security Clearance Required\" or compound alternatives such as \"CBAP, Agile BA, or equivalent certifications are desirable\" into canonical_requirement.",
     "If one ad sentence contains multiple independently testable concepts, emit separate requirement_coverage items rather than one combined canonical_requirement.",
     "Do not put a whole sentence as a single item; split compound sentences into their atomic parts.",
-    "For each atomic requirement: assign the weakest accurate importance. Use mandatory only when the ad explicitly says required, must, essential, or similar hard-block language. Use strongly_preferred for clearly expected but non-blocking items, preferred for desirable items, and nice_to_have for optional or bonus items. Do not mark every row mandatory.",
+    "For each atomic requirement: assign the weakest accurate importance. Use required only when the ad explicitly says required, must, essential, or similar hard-block language. Use expected for clearly expected but non-blocking items, preferred for desirable items, and bonus for optional or bonus items. Do not mark every row required.",
     "Store the original job-ad sentence in matched_job_text for traceability \u2014 do not match the whole sentence directly to a capability.",
     "Classify each supported or partially_supported requirement as capability, eligibility, or qualification. Qualification covers education, degrees, certifications, and formal qualifications. A deterministic check still protects existing capability and eligibility gates, but qualification interpretation is LLM-driven.",
     "capability covers skills, responsibilities, knowledge, domain experience, seniority, and years or duration of experience \u2014 e.g. '5+ years supporting client outcomes' is capability, not eligibility.",

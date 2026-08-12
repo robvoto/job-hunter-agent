@@ -392,17 +392,17 @@ def test_results_panel_styles_use_shared_outer_panel_and_inset_job_cards():
     assert "border-bottom:" not in body
 
 
-def test_requirement_badges_stay_visually_attached_to_requirement_text():
+def test_requirement_importance_badge_stays_visually_attached_to_requirement_text():
     results_css = (
         ROOT_DIR / "templates" / "static" / "results" / "results-page.css"
     ).read_text(encoding="utf-8")
 
     assert ".job-requirement-list {\n  list-style: none;\n  padding-left: 0 !important;\n  display: flex;" in results_css
-    assert ".job-requirement-item {\n  display: flex;" in results_css
+    assert ".job-requirement-item {\n  display: block;" in results_css
     assert "flex-wrap: wrap;" in results_css
-    assert ".job-requirement-badges {\n  display: flex;" in results_css
-    assert "justify-self: end;" not in results_css
-    assert ".job-requirement-text {\n    flex-basis: 100%;" in results_css
+    assert ".job-requirement-title-line {\n  display: flex;" in results_css
+    assert ".job-req-importance {" in results_css
+    assert ".job-requirement-status" not in results_css
 
 
 def test_capability_strength_controls_use_shared_semantic_tone_classes():

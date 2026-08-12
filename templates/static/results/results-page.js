@@ -1134,7 +1134,7 @@
       _rejResetPanelChrome();
     }
 
-    async function _rejPersistMandatoryBlockers(blockers, titleBlockPhrases = [], descriptionBlockPhrases = []) {
+    async function _rejPersistRequiredBlockers(blockers, titleBlockPhrases = [], descriptionBlockPhrases = []) {
       const button = _rejectionPendingButton;
       const approvedSuggestionTokens = {};
       blockers.forEach((blocker) => {
@@ -1143,7 +1143,7 @@
           approvedSuggestionTokens[key] = _rejectionApprovalTokens[key];
         }
       });
-      const response = await jobHunterFetch(`${API_BASE_URL}/api/rejection-feedback/mandatory-blockers`, {
+      const response = await jobHunterFetch(`${API_BASE_URL}/api/rejection-feedback/required-blockers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1195,7 +1195,7 @@
             document.querySelectorAll('#rejection-panel-body input[type=checkbox][data-description-followup]:checked')
           ).map(cb => String(cb.dataset.phrase || '').trim()).filter(Boolean);
           const allDescriptionPhrases = [...new Set([...selectedDescriptionPhrases, ...suggestedDescriptionPhrases])];
-          const result = await _rejPersistMandatoryBlockers(
+          const result = await _rejPersistRequiredBlockers(
             _rejectionSavedBlockers,
             selectedTitlePhrases,
             allDescriptionPhrases,
@@ -1213,7 +1213,7 @@
           return;
         }
         _rejectionSavedBlockers = blockers;
-        const result = await _rejPersistMandatoryBlockers(blockers);
+        const result = await _rejPersistRequiredBlockers(blockers);
         const hasFollowups =
           blockers.length > 0 ||
           (Array.isArray(result?.title_block_suggestions) && result.title_block_suggestions.length) ||

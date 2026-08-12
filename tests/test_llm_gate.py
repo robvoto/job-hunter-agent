@@ -955,14 +955,14 @@ def _cov_imp(req: str, status: str, importance: str, cap: str = "") -> dict:
     }
 
 
-def test_nice_to_have_not_shown_does_not_materially_penalise():
-    # 3 mandatory fully supported + 4 nice_to_have not_shown.
-    # nice_to_have weight is 0.25, so their not_shown barely reduces the ratio.
-    coverage = [_cov_imp(f"m{i}", "supported", "mandatory", f"cap{i}") for i in range(3)] + [
-        _cov_imp(f"n{i}", "not_shown", "nice_to_have") for i in range(4)
+def test_bonus_not_shown_does_not_materially_penalise():
+    # 3 required fully supported + 4 bonus not_shown.
+    # bonus weight is 0.25, so their not_shown barely reduces the ratio.
+    coverage = [_cov_imp(f"m{i}", "supported", "required", f"cap{i}") for i in range(3)] + [
+        _cov_imp(f"n{i}", "not_shown", "bonus") for i in range(4)
     ]
     grade = llm_gate.derive_fit_review_grade(coverage)
-    # mandatory support_score = 3*3 = 9; max_score = 3*3 + 4*0.25 = 10
+    # required support_score = 3*3 = 9; max_score = 3*3 + 4*0.25 = 10
     # ratio = 0.9 → EXCELLENT not possible (total_items=7, not all supported)
     # supported_count(3) >= max(2, 7-1=6)? NO → skip STRONG
     # ratio(0.9) >= 0.5 → at least SOLID
@@ -970,22 +970,22 @@ def test_nice_to_have_not_shown_does_not_materially_penalise():
     assert grade not in {"WEAK", "POOR", "MISMATCH"}
 
 
-def test_mandatory_not_shown_lowers_grade():
-    # 3 nice_to_have supported but 2 mandatory not_shown.
-    # mandatory gaps should keep grade low despite nice_to_have coverage.
-    coverage = [_cov_imp(f"n{i}", "supported", "nice_to_have", f"cap{i}") for i in range(3)] + [
-        _cov_imp(f"m{i}", "not_shown", "mandatory") for i in range(2)
+def test_required_not_shown_lowers_grade():
+    # 3 bonus supported but 2 required not_shown.
+    # required gaps should keep grade low despite bonus coverage.
+    coverage = [_cov_imp(f"n{i}", "supported", "bonus", f"cap{i}") for i in range(3)] + [
+        _cov_imp(f"m{i}", "not_shown", "required") for i in range(2)
     ]
     # support_score = 3*0.25 = 0.75; max_score = 3*0.25 + 2*3 = 6.75; ratio = 0.11
     grade = llm_gate.derive_fit_review_grade(coverage)
     assert grade in {"WEAK", "POOR", "MISMATCH"}
 
 
-def test_mandatory_mismatch_caps_at_weak():
+def test_required_mismatch_caps_at_weak():
     coverage = [
-        _cov_imp("r1", "supported", "mandatory", "cap1"),
-        _cov_imp("r2", "supported", "mandatory", "cap2"),
-        _cov_imp("r3", "mismatch", "mandatory"),
+        _cov_imp("r1", "supported", "required", "cap1"),
+        _cov_imp("r2", "supported", "required", "cap2"),
+        _cov_imp("r3", "mismatch", "required"),
     ]
     assert llm_gate.derive_fit_review_grade(coverage) == "WEAK"
 
@@ -993,7 +993,7 @@ def test_mandatory_mismatch_caps_at_weak():
 # ── eligibility vs capability separation ──────────────────────────────────────
 
 
-def _cov_elig(req: str, status: str, importance: str = "mandatory") -> dict:
+def _cov_elig(req: str, status: str, importance: str = "required") -> dict:
     return {
         "requirement": req,
         "importance": importance,
@@ -1005,22 +1005,22 @@ def _cov_elig(req: str, status: str, importance: str = "mandatory") -> dict:
     }
 
 
-def test_mandatory_eligibility_not_shown_caps_at_weak_despite_high_capability_support():
-    # 9 mandatory capabilities fully supported + 1 mandatory eligibility fact never
+def test_required_eligibility_not_shown_caps_at_weak_despite_high_capability_support():
+    # 9 required capabilities fully supported + 1 required eligibility fact never
     # surfaced. Support ratio alone would read 0.9 (STRONG territory), but an unresolved
-    # mandatory eligibility fact must not be diluted away by unrelated capability support.
+    # required eligibility fact must not be diluted away by unrelated capability support.
     coverage = [
-        _cov_imp(f"cap{i}", "supported", "mandatory", f"cap{i}") for i in range(9)
+        _cov_imp(f"cap{i}", "supported", "required", f"cap{i}") for i in range(9)
     ] + [_cov_elig("security clearance", "not_shown")]
     assert llm_gate.derive_fit_review_grade(coverage) == "WEAK"
 
 
-def test_mandatory_capability_not_shown_still_only_dilutes_ratio():
-    # Same shape, but the unresolved mandatory item is a capability, not eligibility —
+def test_required_capability_not_shown_still_only_dilutes_ratio():
+    # Same shape, but the unresolved required item is a capability, not eligibility —
     # existing dilution behaviour (not an auto-cap) must be unchanged.
     coverage = [
-        _cov_imp(f"cap{i}", "supported", "mandatory", f"cap{i}") for i in range(9)
-    ] + [_cov_imp("some other tool", "not_shown", "mandatory")]
+        _cov_imp(f"cap{i}", "supported", "required", f"cap{i}") for i in range(9)
+    ] + [_cov_imp("some other tool", "not_shown", "required")]
     grade = llm_gate.derive_fit_review_grade(coverage)
     assert grade != "WEAK"
 
@@ -1032,7 +1032,7 @@ def test_has_eligibility_mismatch_true_for_eligibility_mismatch():
 
 def test_has_eligibility_mismatch_false_for_capability_mismatch():
     # A capability mismatch is not an eligibility mismatch — the two must stay separate.
-    coverage = [_cov_imp("some skill", "mismatch", "mandatory")]
+    coverage = [_cov_imp("some skill", "mismatch", "required")]
     assert llm_gate.has_eligibility_mismatch(coverage) is False
 
 
@@ -1053,7 +1053,7 @@ def test_normalize_llm_review_payload_overrides_keep_to_reject_on_eligibility_mi
                 {
                     "requirement": "Security clearance",
                     "status": "mismatch",
-                    "importance": "mandatory",
+                    "importance": "required",
                     "requirement_type": "eligibility",
                     "matched_candidate_fact": "security clearance",
                 },
@@ -1075,7 +1075,7 @@ def test_normalize_llm_review_payload_rejects_keep_when_all_capability_coverage_
                 {
                     "requirement": "Some tool",
                     "status": "mismatch",
-                    "importance": "mandatory",
+                    "importance": "required",
                     "requirement_type": "capability",
                     "capability_name": "some tool",
                 },
@@ -1100,7 +1100,7 @@ def test_normalize_coverage_includes_importance_field():
     items = [
         {
             "requirement": "Agile delivery",
-            "importance": "mandatory",
+            "importance": "required",
             "status": "supported",
             "capability_name": "agile methodologies",
             "matched_job_text": "agile ceremonies",
@@ -1108,7 +1108,7 @@ def test_normalize_coverage_includes_importance_field():
         },
         {
             "requirement": "Nice portfolio",
-            "importance": "nice_to_have",
+            "importance": "bonus",
             "status": "not_shown",
             "capability_name": "",
             "matched_job_text": "portfolio optional",
@@ -1119,15 +1119,15 @@ def test_normalize_coverage_includes_importance_field():
         items,
         valid_capability_names={"agile methodologies": "Agile Methodologies"},
     )
-    assert result[0]["importance"] == "mandatory"
-    assert result[1]["importance"] == "nice_to_have"
+    assert result[0]["importance"] == "required"
+    assert result[1]["importance"] == "bonus"
 
 
 def test_normalize_coverage_supports_eligibility_items():
     items = [
         {
             "requirement": "PV clearance",
-            "importance": "mandatory",
+            "importance": "required",
             "requirement_type": "eligibility",
             "status": "supported",
             "matched_candidate_fact": "PV clearance",
@@ -1155,7 +1155,7 @@ def test_normalize_coverage_converts_invalid_eligibility_match_to_not_shown(monk
     items = [
         {
             "requirement": "Hold PV security clearance",
-            "importance": "mandatory",
+            "importance": "required",
             "requirement_type": "eligibility",
             "status": "supported",
             "matched_candidate_fact": "government environments",
@@ -1218,7 +1218,7 @@ def test_normalize_coverage_converts_invalid_capability_match_to_not_shown(monke
     items = [
         {
             "requirement": "SAP experience",
-            "importance": "mandatory",
+            "importance": "required",
             "requirement_type": "capability",
             "status": "supported",
             "matched_candidate_fact": "finance transformation",
@@ -1258,7 +1258,7 @@ def test_normalize_coverage_recovers_canonical_capability_from_profile_support()
         [
             {
                 "requirement": "Python experience",
-                "importance": "mandatory",
+                "importance": "required",
                 "requirement_type": "capability",
                 "status": "supported",
                 "matched_candidate_fact": "",
@@ -1311,7 +1311,7 @@ def test_normalize_coverage_marks_invalid_requirement_type_for_review(monkeypatc
     items = [
         {
             "requirement": "PV clearance",
-            "importance": "mandatory",
+            "importance": "required",
             "requirement_type": "credential",
             "status": "supported",
             "matched_candidate_fact": "PV clearance",
@@ -1358,7 +1358,7 @@ def test_normalize_coverage_reclassifies_experience_wording_as_capability(monkey
         [
             {
                 "requirement": "5+ years supporting client outcomes",
-                "importance": "mandatory",
+                "importance": "required",
                 "requirement_type": "eligibility",
                 "status": "supported",
                 "matched_candidate_fact": "",
@@ -1384,7 +1384,7 @@ def test_normalize_coverage_reclassifies_security_clearance_as_eligibility(monke
         [
             {
                 "requirement": "Ability to obtain Baseline security clearance",
-                "importance": "mandatory",
+                "importance": "required",
                 "requirement_type": "capability",
                 "status": "supported",
                 "matched_candidate_fact": "",
@@ -1410,7 +1410,7 @@ def test_normalize_coverage_marks_conflicting_classification_uncertain(monkeypat
         [
             {
                 "requirement": "5+ years working in a security clearance environment",
-                "importance": "mandatory",
+                "importance": "required",
                 "requirement_type": "capability",
                 "status": "supported",
                 "matched_candidate_fact": "",
@@ -1426,12 +1426,12 @@ def test_normalize_coverage_marks_conflicting_classification_uncertain(monkeypat
     assert warnings[0]["context"]["requirement_type_after"] == "uncertain"
 
 
-def test_normalize_coverage_preserves_malformed_mandatory_requirement():
+def test_normalize_coverage_preserves_malformed_required_requirement():
     result = llm_gate.normalize_llm_requirement_coverage(
         [
             {
                 "requirement": "Must hold an unfamiliar professional registration",
-                "importance": "mandatory",
+                "importance": "required",
                 "requirement_type": "credential",
                 "status": "unexpected_status",
                 "matched_candidate_fact": "",
@@ -1441,7 +1441,7 @@ def test_normalize_coverage_preserves_malformed_mandatory_requirement():
 
     assert len(result) == 1
     assert result[0]["requirement"] == "Must hold an unfamiliar professional registration"
-    assert result[0]["importance"] == "mandatory"
+    assert result[0]["importance"] == "required"
     assert result[0]["requirement_type"] == "invalid"
     assert result[0]["status"] == "invalid"
 
@@ -1467,7 +1467,7 @@ def test_build_requirement_coverage_guidance_includes_key_phrases():
     assert "atomic" in guidance
     assert "Use at most" in guidance
     assert "capability or eligibility" in guidance
-    assert "Do not mark every row mandatory" in guidance
+    assert "Do not mark every row required" in guidance
 
 
 def test_build_job_requirements_guidance_excludes_work_types_from_requirements():
@@ -1551,38 +1551,89 @@ def test_llm_judge_title_parses_match_verdict():
     assert result == {"verdict": "match", "reason": "Direct match."}
 
 
+
+
 def test_llm_judge_title_prompt_treats_role_lists_as_direction_not_whitelist():
     captured = {}
+
     class _FakeResponse:
         usage = None
         output_text = '{"verdict":"uncertain","reason":"Could be adjacent delivery work."}'
+
     class _FakeResponses:
-        def create(self, **kwargs): captured.update(kwargs); return _FakeResponse()
+        def create(self, **kwargs):
+            captured.update(kwargs)
+            return _FakeResponse()
+
     class _FakeClient:
         responses = _FakeResponses()
-    result = llm_gate.llm_judge_title("Technology Delivery Specialist", ["business analyst"], ["ai implementation consultant"], ["Business Analysis", "Agile Delivery Management", "Stakeholder Management"], explore_adjacent_roles=True, llm_client=_FakeClient())
+
+    result = llm_gate.llm_judge_title(
+        "Technology Delivery Specialist",
+        ["business analyst"],
+        ["ai implementation consultant"],
+        ["Business Analysis", "Agile Delivery Management", "Stakeholder Management"],
+        explore_adjacent_roles=True,
+        llm_client=_FakeClient(),
+    )
+
     prompt = captured["input"][0]["content"]
     assert result["verdict"] == "uncertain"
     assert "NOT an exhaustive whitelist" in prompt
     assert "Agile Delivery Management" in prompt
     assert "Do not reject merely because the exact title is absent" in prompt
 
-
-def test_llm_judge_title_strict_mode_keeps_original_contract():
+def test_llm_judge_title_strict_mode_keeps_original_whitelist_style_contract():
     captured = {}
+
     class _FakeResponse:
         usage = None
         output_text = '{"verdict":"no_match","reason":"Not a target role."}'
+
     class _FakeResponses:
-        def create(self, **kwargs): captured.update(kwargs); return _FakeResponse()
+        def create(self, **kwargs):
+            captured.update(kwargs)
+            return _FakeResponse()
+
     class _FakeClient:
         responses = _FakeResponses()
-    llm_gate.llm_judge_title("Technology Delivery Specialist", ["business analyst"], ["technical business analyst"], ["Agile Delivery Management"], llm_client=_FakeClient())
+
+    llm_gate.llm_judge_title(
+        "Technology Delivery Specialist",
+        ["business analyst"],
+        ["technical business analyst"],
+        ["Agile Delivery Management"],
+        llm_client=_FakeClient(),
+    )
+
     prompt = captured["input"][0]["content"]
     assert "Target roles: business analyst" in prompt
     assert "Secondary target roles: technical business analyst" in prompt
     assert "NOT an exhaustive whitelist" not in prompt
     assert "Candidate capability signals" not in prompt
+
+
+def test_normalize_review_rejects_model_keep_when_derived_grade_is_mismatch():
+    payload = llm_gate.normalize_llm_review_payload(
+        {
+            "fit_review": {"decision": "KEEP", "grade": "STRONG"},
+            "job_requirements": ["Must have Salesforce"],
+            "requirement_coverage": [
+                {
+                    "requirement": "Must have Salesforce",
+                    "importance": "required",
+                    "requirement_type": "capability",
+                    "status": "mismatch",
+                    "matched_candidate_fact": "",
+                    "matched_job_text": "Must have Salesforce",
+                    "profile_support": [],
+                }
+            ],
+        }
+    )
+
+    assert payload["fit_review"]["grade"] == "MISMATCH"
+    assert payload["fit_review"]["decision"] == "REJECT"
 
 
 def test_llm_judge_title_returns_none_on_invalid_verdict():

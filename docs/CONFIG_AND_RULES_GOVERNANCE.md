@@ -127,4 +127,4 @@ Every new or changed rule/config feature must answer these questions before codi
 
 Coding agents must inspect the relevant skills and docs before editing. If a task would place business rules, source rules, scoring policy, labels, prompts, or thresholds in Python, the agent must stop or move the rule to the correct owner.
 
-The `no-hardcoding` skill is mandatory for changes involving thresholds, mappings, labels, rule IDs, source parsing, scoring, prompt copy, or reusable knowledge.
+The `no-hardcoding` skill is required for changes involving thresholds, mappings, labels, rule IDs, source parsing, scoring, prompt copy, or reusable knowledge.

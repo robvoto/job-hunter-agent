@@ -46,10 +46,10 @@ sum(requirement importance weight)
 Requirement importance weights:
 
 ```text
-mandatory = 3.0
-strongly_preferred = 2.0
+required = 3.0
+expected = 2.0
 preferred = 1.0
-nice_to_have = 0.25
+bonus = 0.25
 ```
 
 Candidate capability credits:
@@ -232,8 +232,8 @@ The main score includes requirement coverage and the occupation alignment adjust
 | Candidate capability level | Strong / working / basic / low determines coverage credit. |
 | Candidate eligibility fact | True eligibility support counts as covered; false or missing facts do not. |
 | Stored role duration evidence | Explicit "X years/months" requirements can be downgraded to `partially_supported` when saved `role_experience` cannot prove the threshold for the matching role title. |
-| Mandatory gaps | Shown as warnings with zero additional score effect. |
-| Mandatory weak coverage | Shown as warnings with zero additional score effect. |
+| Required gaps | Shown as warnings with zero additional score effect. |
+| Required weak coverage | Shown as warnings with zero additional score effect. |
 | Unknown mapped capability or eligibility fact | Logged to `output/uncertainty.jsonl` and the admin warning store. |
 
 ### 3. Context entries
@@ -309,10 +309,10 @@ Current importance weights used by `derive_fit_review_grade`:
 
 | Importance | Weight |
 |---|---:|
-| mandatory | 3.0 |
-| strongly_preferred | 2.0 |
+| required | 3.0 |
+| expected | 2.0 |
 | preferred | 1.0 |
-| nice_to_have | 0.25 |
+| bonus | 0.25 |
 
 Current derivation rules:
 
@@ -330,7 +330,7 @@ Current derivation rules:
 
 Important limitation:
 
-Mandatory `not_shown` lowers the weighted ratio but does not automatically reject the job. That is deliberate for now, because a missing profile capability may mean the candidate profile is incomplete rather than the candidate cannot do it.
+Required `not_shown` lowers the weighted ratio but does not automatically reject the job. That is deliberate for now, because a missing profile capability may mean the candidate profile is incomplete rather than the candidate cannot do it.
 
 ### Missing CV evidence default
 
@@ -399,7 +399,7 @@ This prevents the system from treating a job sentence as proof of capability mer
 
 ## What is deliberately not counted as capability proof
 
-These signals can help ranking but should not prove mandatory requirement fit:
+These signals can help ranking but should not prove required requirement fit:
 
 - location
 - salary/rate
@@ -466,7 +466,7 @@ The intended architecture is:
 ## Current known limitations
 
 1. A `KEEP` review is invalid unless `requirement_coverage` is present and non-empty.
-2. Mandatory missing evidence does not automatically reject. It contributes zero coverage and is shown as a warning.
+2. Required missing evidence does not automatically reject. It contributes zero coverage and is shown as a warning.
 3. Preference signals no longer affect the main fit score. They can still exist as metadata, filters, badges, or separate ranking logic.
 4. Deterministic shortcuts can still produce early rejects without an LLM call. Deterministic keep candidates must still be confirmed by the LLM fit review before they become final KEEP rows. Audit the shortcut trigger via `det_rule`; audit final keeps via `review_source` and `requirement_coverage`.
 5. Older docs or backlog items may still use broad "heuristic" language. Treat that as technical debt unless it refers to an actual rule.
@@ -491,6 +491,6 @@ Unsafe changes without explicit approval:
 - changing requirement importance weights
 - changing capability level credits
 - adding new scoring categories
-- making mandatory gaps auto-reject
+- making required gaps auto-reject
 - changing deterministic shortcut thresholds
 - making signal registry entries add direct score points

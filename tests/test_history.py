@@ -25,7 +25,7 @@ def test_history_reuse_with_url_variation():
         "llm_decision": "KEEP",
         "llm_fit_grade": "STRONG",
         RECORD_REQUIREMENT_COVERAGE_KEY: [
-            {"requirement": "Business analysis", "importance": "mandatory", "status": "supported"}
+            {"requirement": "Business analysis", "importance": "required", "status": "supported"}
         ],
         "title": "Software Engineer",
         "company": "Tech Corp",

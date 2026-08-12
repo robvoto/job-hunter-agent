@@ -3,8 +3,17 @@
 LLM_ALLOWED_DECISIONS = frozenset({"KEEP", "REJECT", "MAYBE"})
 LLM_ALLOWED_GRADES = frozenset({"EXCELLENT", "STRONG", "SOLID", "WEAK", "POOR", "MISMATCH"})
 
+LLM_COVERAGE_IMPORTANCE_REQUIRED = "required"
+LLM_COVERAGE_IMPORTANCE_EXPECTED = "expected"
+LLM_COVERAGE_IMPORTANCE_PREFERRED = "preferred"
+LLM_COVERAGE_IMPORTANCE_BONUS = "bonus"
 LLM_ALLOWED_COVERAGE_IMPORTANCES = frozenset(
-    {"mandatory", "strongly_preferred", "preferred", "nice_to_have"}
+    {
+        LLM_COVERAGE_IMPORTANCE_REQUIRED,
+        LLM_COVERAGE_IMPORTANCE_EXPECTED,
+        LLM_COVERAGE_IMPORTANCE_PREFERRED,
+        LLM_COVERAGE_IMPORTANCE_BONUS,
+    }
 )
 
 LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES = frozenset({"capability", "eligibility", "qualification"})
@@ -35,7 +44,7 @@ LLM_FIT_REVIEW_PROMPT_SHAPE = (
     '"occupation_alignment":"same|adjacent|different","occupation_alignment_reason":"...",'
     '"posting_channel":{"kind":"agency_or_recruiter|direct_employer|unknown","confident":true|false,"evidence":"..."},'
     '"job_requirements":["..."],'
-    '"requirement_coverage":[{"requirement":"...","importance":"mandatory|strongly_preferred|preferred|nice_to_have",'
+    '"requirement_coverage":[{"requirement":"...","importance":"required|expected|preferred|bonus",'
     '"requirement_type":"capability|eligibility|qualification","canonical_requirement":"...","status":"supported|partially_supported|not_shown|mismatch",'
     '"matched_candidate_fact":"...","matched_job_text":"...","profile_support":["..."],"covered_requirement_elements":["..."],"role_defining":true|false,"role_defining_group":"..."}],'
     '"debug_reason":"..."}'
@@ -45,7 +54,7 @@ LLM_FIT_REVIEW_DEBUG_PROMPT_SHAPE = (
     '"occupation_alignment":"same|adjacent|different","occupation_alignment_reason":"...",'
     '"posting_channel":{"kind":"agency_or_recruiter|direct_employer|unknown","confident":true|false,"evidence":"..."},'
     '"job_requirements":["..."],'
-    '"requirement_coverage":[{"requirement":"...","importance":"mandatory|strongly_preferred|preferred|nice_to_have",'
+    '"requirement_coverage":[{"requirement":"...","importance":"required|expected|preferred|bonus",'
     '"requirement_type":"capability|eligibility|qualification","canonical_requirement":"...","status":"supported|partially_supported|not_shown|mismatch",'
     '"matched_candidate_fact":"...","match_source":"capability_name|related_skill|eligibility|qualification",'
     '"matched_profile_term":"...","matched_job_text":"...","profile_support":["..."],"covered_requirement_elements":["..."],"role_defining":true|false,"role_defining_group":"..."}],'

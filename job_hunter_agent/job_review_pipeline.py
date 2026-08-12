@@ -28,8 +28,8 @@ _REASON_LABELS: dict[str, str] = {
     "LLM_TITLE_NOT_TARGET": "title judged a clear mismatch for your target roles",
     "HARD_BLOCK": "matched a hard blocker rule",
     "HARD_BLOCK_REQUIRED_SKILL": "requires a skill you flagged as blocking",
-    "MANDATORY_ELIGIBILITY_FAILED": "mandatory eligibility requirement is not met",
-    "MANDATORY_ELIGIBILITY_UNRESOLVED": "mandatory eligibility requirement could not be confirmed",
+    "REQUIRED_ELIGIBILITY_FAILED": "required eligibility requirement is not met",
+    "REQUIRED_ELIGIBILITY_UNRESOLVED": "required eligibility requirement could not be confirmed",
     "DETAILS_CHALLENGE_PAGE": "description page was a bot challenge",
     "DETAILS_BLOCKED_PAGE": "description page was blocked",
     "DETAILS_NAVIGATION_ERROR": "description page failed to load",
@@ -1088,9 +1088,9 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
     if source != "rule":
         eligibility_gate = eligibility_gate_diagnostics(record, profile)
         if eligibility_gate["status"] == "fail":
-            eligibility_reject_reason = "MANDATORY_ELIGIBILITY_FAILED"
+            eligibility_reject_reason = "REQUIRED_ELIGIBILITY_FAILED"
         elif eligibility_gate["status"] == "unresolved":
-            eligibility_reject_reason = "MANDATORY_ELIGIBILITY_UNRESOLVED"
+            eligibility_reject_reason = "REQUIRED_ELIGIBILITY_UNRESOLVED"
 
     fit_eval = {
         "llm_decision": review["decision"],

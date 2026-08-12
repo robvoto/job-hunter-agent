@@ -1,7 +1,7 @@
 {
   "kind": "system_config",
   "name": "llm_rejection_suggestions_defaults",
-  "version": 1,
+  "version": 2,
   "updated_at": "2026-06-10",
   "description": "Managed default guidance for LLM rejection blocker suggestion behaviour.",
   "lines": [
@@ -10,6 +10,6 @@
     "Use the candidate profile context to avoid suggesting requirements already evidenced by the candidate.",
     "Suggest only concise blocker terms that appear to be hard requirements for this specific job and are not clearly evidenced by the candidate profile.",
     "Hard blockers can be from any field: credentials, clearances, licences, work authorization, language, location, regulated/domain experience, industry background, products, platforms, tools, or specialist experience.",
-    "Do not suggest desirable, preferred, nice-to-have, generic duties, soft skills, broad transferable capabilities, sentence fragments, or broad work verbs."
+    "Do not suggest desirable, preferred, bonus, generic duties, soft skills, broad transferable capabilities, sentence fragments, or broad work verbs."
   ]
 }

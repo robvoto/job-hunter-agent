@@ -122,8 +122,8 @@ def api_rule_phrase(body: dict = Body(...)):  # type: ignore[no-untyped-def]
     )
 
 
-@router.post("/api/rejection-feedback/mandatory-blockers")
-def api_rejection_feedback_mandatory_blockers(body: dict = Body(...)):  # type: ignore[no-untyped-def]
+@router.post("/api/rejection-feedback/required-blockers")
+def api_rejection_feedback_required_blockers(body: dict = Body(...)):  # type: ignore[no-untyped-def]
     try:
         blockers = body.get("blockers", [])
         title_block_phrases = body.get("title_block_phrases", [])

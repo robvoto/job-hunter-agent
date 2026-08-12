@@ -398,7 +398,7 @@ The current fit review has two layers. The LLM returns a holistic decision/grade
 
 As of 2026-07-21, explicit duration requirements such as "5+ years as Business Analyst" also compare the reviewed requirement text against stored onboarding `role_experience` rows. This does not add a new hidden score. Instead, it tightens `requirement_coverage` evidence: a row can be downgraded from `supported` to `partially_supported` when the runtime profile cannot prove the required role-duration threshold from saved title-duration evidence.
 
-Ongoing architecture direction: mandatory job requirements should become the main scoring spine. Candidate capabilities should be used as evidence to prove those requirements. The current implementation is not fully requirement-coverage-driven yet.
+Ongoing architecture direction: required job requirements should become the main scoring spine. Candidate capabilities should be used as evidence to prove those requirements. The current implementation is not fully requirement-coverage-driven yet.
 
 O*NET is used as a conservative occupation-family helper. It uses onboarding-generated target_occupation_queries to derive target occupation codes. Uncertain O*NET results continue to detail/LLM review rather than rejecting the job.
 

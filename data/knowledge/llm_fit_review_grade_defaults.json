@@ -1,12 +1,12 @@
 {
   "kind": "system_config",
   "name": "llm_fit_review_grade_defaults",
-  "version": 1,
+  "version": 2,
   "updated_at": "2026-06-10",
   "description": "Managed default guidance for LLM fit review grade assignment behaviour.",
   "lines": [
     "Set fit_review.grade as a rough signal — the system re-derives the final grade from requirement_coverage.",
     "Prioritise accurate requirement_coverage over a precise grade.",
-    "Use MISMATCH only when the candidate clearly cannot meet a mandatory requirement."
+    "Use MISMATCH only when the candidate clearly cannot meet a required requirement."
   ]
 }

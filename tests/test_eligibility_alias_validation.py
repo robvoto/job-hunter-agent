@@ -23,7 +23,7 @@ def test_managed_clearance_alias_resolves_to_profile_canonical_fact(canonical, a
         [
             {
                 "requirement": f"Must hold {alias}",
-                "importance": "mandatory",
+                "importance": "required",
                 "requirement_type": "eligibility",
                 "status": "supported",
                 "matched_candidate_fact": alias,

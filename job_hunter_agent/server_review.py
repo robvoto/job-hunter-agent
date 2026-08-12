@@ -494,7 +494,7 @@ def save_requirement_blockers_feedback(
     title_block_phrases: list[str] | None = None,
     description_block_phrases: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Saves feedback for mandatory requirement blockers and optionally applies title/description blocks.
+    """Saves feedback for required requirement blockers and optionally applies title/description blocks.
 
 
 
@@ -520,7 +520,7 @@ def save_requirement_blockers_feedback(
 
         teaser: A short description or teaser of the job.
 
-        blockers: A list of mandatory requirement phrases to block.
+        blockers: A list of required requirement phrases to block.
 
         title_block_phrases: Optional list of phrases to immediately apply as title block rules.
 
@@ -617,11 +617,11 @@ def save_requirement_blockers_feedback(
 
     if added_blockers:
         bits.append(
-            f"Added {len(added_blockers)} mandatory requirement {'blocker' if len(added_blockers) == 1 else 'blockers'}."
+            f"Added {len(added_blockers)} required requirement {'blocker' if len(added_blockers) == 1 else 'blockers'}."
         )
 
     elif skipped_blockers:
-        bits.append(f"{len(skipped_blockers)} mandatory requirement blocker(s) already existed.")
+        bits.append(f"{len(skipped_blockers)} required requirement blocker(s) already existed.")
 
     if applied_titles:
         bits.append(f"Added {len(applied_titles)} title block(s).")

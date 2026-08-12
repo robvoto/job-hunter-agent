@@ -25,7 +25,7 @@ Requirements:
 
 Real SEEK — Unisys, seek:93865558
 Requirements:
-- Australian Citizenship is Mandatory
+- Australian Citizenship is Required
 - NV2 Security Clearance Required
 - Relevant qualifications in Business Analysis, Information Technology, Project Management, or a related field
 - CBAP, Agile BA, or equivalent certifications are desirable
