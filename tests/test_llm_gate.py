@@ -43,6 +43,14 @@ def test_build_job_requirements_prompt_excludes_work_type_from_job_requirements(
     assert "structured work_type metadata" in prompt
 
 
+def test_posting_channel_guidance_treats_employer_voice_as_direct_evidence():
+    prompt = llm_gate.build_posting_channel_guidance()
+
+    assert "our employees" in prompt
+    assert "our business" in prompt
+    assert "Do not require the literal phrase 'we are the employer'" in prompt
+
+
 def test_fit_review_prompt_excludes_learning_guidance(monkeypatch):
     monkeypatch.setattr(
         llm_gate,

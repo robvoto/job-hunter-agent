@@ -297,6 +297,11 @@ def resolve_llm_review_payload(
     profile: dict | None = None,
     learning_only: bool = False,
 ) -> dict[str, Any]:
+    """Build and resolve the bounded LLM review payload for one normalized job.
+
+    Fit review includes board-supplied company identity for posting-channel
+    classification; learning-only mode deliberately excludes that identity.
+    """
 
     job_key = str(record.get(RECORD_JOB_KEY) or "unknown")
 
@@ -316,7 +321,13 @@ def resolve_llm_review_payload(
         record.get(RECORD_FIT_SOURCE_TEXT_KEY) or record.get(RECORD_FULL_DESCRIPTION_KEY) or ""
     )
 
-    llm_input_text = "\n".join(part for part in [title_text, str(body_text).strip()] if part)
+    # Fit review needs the board-displayed company/advertiser as factual context for
+    # posting-channel classification. Learning-only calls stay description-only so
+    # company identity cannot become a learned job requirement or capability signal.
+    company_text = f"Source-listed company/advertiser: {company.strip()}" if not learning_only and company.strip() else ""
+    llm_input_text = "\n".join(
+        part for part in [title_text, company_text, str(body_text).strip()] if part
+    )
 
     max_llm_chars = get_llm_max_chars()
 

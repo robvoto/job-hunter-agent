@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import contextvars
+import json
 import logging
 import re
 import sys
@@ -476,10 +477,19 @@ def _set_seek_run_progress(
 
 
 def _seek_nested_value(payload: object, key_names: tuple[str, ...]) -> object:
+    """Find the first matching SEEK GraphQL field by exact/base field name.
+
+    SEEK serializes some fields as ``label({...})``; matching the base name
+    is valid, but arbitrary substring matching would incorrectly treat
+    ``__typename`` as a match for ``name``.
+    """
     if isinstance(payload, dict):
         for key, value in payload.items():
             key_text = str(key or "")
-            if any(name in key_text for name in key_names) and value not in (None, "", [], {}):
+            key_matches = any(
+                key_text == name or key_text.startswith(f"{name}(") for name in key_names
+            )
+            if key_matches and value not in (None, "", [], {}):
                 return value
             nested = _seek_nested_value(value, key_names)
             if nested not in (None, "", [], {}):
@@ -509,6 +519,40 @@ def _seek_json_safe_value(value: object):
     return value
 
 
+def _seek_json_assignment_value(script_text: str, variable_name: str) -> object:
+    """Read one JSON-backed window assignment from SEEK's server-state script."""
+    marker = f"window.{variable_name} ="
+    marker_index = script_text.find(marker)
+    if marker_index < 0:
+        return None
+
+    json_text = script_text[marker_index + len(marker) :].lstrip()
+    try:
+        value, _ = json.JSONDecoder().raw_decode(json_text)
+    except json.JSONDecodeError as exc:
+        logger.warning(
+            "[SEEK][SOURCE_METADATA] invalid %s JSON in server-state script: %s",
+            variable_name,
+            exc,
+        )
+        return None
+    return value
+
+
+async def _read_seek_redux_payload_async(page) -> object:
+    """Read SEEK_REDUX_DATA from the structured server-state script.
+
+    SEEK's job page can expose the JSON in the script before/without publishing
+    the matching window global, so the script is the source-of-truth boundary.
+    """
+    locator = page.locator('script[data-automation="server-state"]')
+    if await locator.count() == 0:
+        logger.warning("[SEEK][SOURCE_METADATA] server-state script is missing")
+        return None
+    script_text = str(await locator.first.text_content() or "")
+    return _seek_json_assignment_value(script_text, "SEEK_REDUX_DATA")
+
+
 def _seek_canonical_url(url: str) -> str:
     """Return the SEEK job URL with tracking params and fragment stripped."""
     try:
@@ -525,11 +569,9 @@ def _seek_job_id_from_url(url: str) -> str:
 
 
 def _seek_advertiser_id_from_payload(payload: object) -> str:
-    """Extract the advertiser or hirer ID from a SEEK page payload when present."""
-    if not isinstance(payload, dict):
-        return ""
+    """Extract the advertiser or hirer ID from SEEK's nested page payload."""
     for block_key in ("advertiser", "hirer"):
-        block = payload.get(block_key)
+        block = _seek_nested_value(payload, (block_key,))
         if isinstance(block, dict):
             aid = str(block.get("id") or "").strip()
             if aid:
@@ -540,6 +582,10 @@ def _seek_advertiser_id_from_payload(payload: object) -> str:
 def _seek_source_metadata(
     detail_page, details_payload: dict, *, redux_payload=None, url: str = ""
 ) -> tuple[dict, object]:
+    """Normalize SEEK publisher/company evidence without deciding posting channel.
+
+    Structured source facts are preserved here for the later classifier.
+    """
     if redux_payload is None and detail_page is not None:
         try:
             redux_payload = detail_page.evaluate("window.SEEK_REDUX_DATA || null")
@@ -841,11 +887,7 @@ async def _fetch_seek_job_detail_async(record: dict, page) -> dict:
     )
     record["_obs_detail_fetch_ms"] = _fetch_ms
 
-    redux_payload = None
-    try:
-        redux_payload = await page.evaluate("window.SEEK_REDUX_DATA || null")
-    except Exception:
-        pass
+    redux_payload = await _read_seek_redux_payload_async(page)
     raw_html = await page.content() if DEBUG_CAPTURE_SOURCE_PAYLOADS else None
 
     source_metadata, raw_source_payload = _seek_source_metadata(

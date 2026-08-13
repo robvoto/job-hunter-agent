@@ -100,6 +100,10 @@ def build_keep_snapshot(record: dict) -> dict:
 
 
 def can_reuse_kept_job(history_entry: dict, record: dict, profile: Optional[dict] = None) -> bool:
+    """Reuse a kept snapshot only when fit and source classification are complete.
+
+    Unclassified posting-channel state is re-reviewed rather than persisted forever.
+    """
 
     if not isinstance(history_entry, dict):
         return False
@@ -113,6 +117,18 @@ def can_reuse_kept_job(history_entry: dict, record: dict, profile: Optional[dict
         return False
 
     if not has_complete_llm_keep_data(snapshot):
+        return False
+
+    posting_channel = snapshot.get(RECORD_POSTING_CHANNEL_EVIDENCE_KEY)
+    posting_channel_source = (
+        compact_whitespace(posting_channel.get("source") or "")
+        if isinstance(posting_channel, dict)
+        else ""
+    )
+    # Old keep snapshots can contain the scraper's blank source state even when
+    # fit data is complete. Re-review those once so the LLM/source classifier
+    # can populate a real posting-channel result instead of reusing "unclear" forever.
+    if not posting_channel_source or posting_channel_source == "insufficient_evidence":
         return False
 
     if not record.get("job_key"):

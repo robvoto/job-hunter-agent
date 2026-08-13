@@ -24,7 +24,7 @@ def _build_record(
 
 def test_resolve_llm_review_payload_fit_review_cache_hit_skips_llm(monkeypatch):
     record = _build_record()
-    llm_fp = source_learning.build_llm_cache_key("Title\nDescription")
+    llm_fp = source_learning.build_llm_cache_key("Title\nSource-listed company/advertiser: Company\nDescription")
     llm_cache = {
         llm_fp: {
             "fit_review": {"decision": "KEEP", "grade": "SOLID"},
@@ -107,7 +107,7 @@ def test_resolve_llm_review_payload_learning_only_cache_hit_skips_llm(monkeypatc
 
 def test_resolve_llm_review_payload_cache_hit_uses_role_experience_for_years_requirements(monkeypatch):
     record = _build_record()
-    llm_fp = source_learning.build_llm_cache_key("Title\nDescription")
+    llm_fp = source_learning.build_llm_cache_key("Title\nSource-listed company/advertiser: Company\nDescription")
     llm_cache = {
         llm_fp: {
             "fit_review": {"decision": "KEEP", "grade": "EXCELLENT"},
@@ -159,12 +159,13 @@ def test_resolve_llm_review_payload_cache_hit_uses_role_experience_for_years_req
 
 def test_resolve_llm_review_payload_cache_miss_calls_llm(monkeypatch):
     record = _build_record()
-    llm_fp = source_learning.build_llm_cache_key("Title\nDescription")
+    llm_fp = source_learning.build_llm_cache_key("Title\nSource-listed company/advertiser: Company\nDescription")
     llm_cache = {}
-    called = {"count": 0}
+    called = {"count": 0, "input": ""}
 
-    def fake_llm(*_args, **_kwargs):
+    def fake_llm(review_input, *_args, **_kwargs):
         called["count"] += 1
+        called["input"] = review_input
         return {
             "fit_review": {"decision": "KEEP", "grade": "SOLID"},
             "learning_candidates": [],
@@ -194,6 +195,7 @@ def test_resolve_llm_review_payload_cache_miss_calls_llm(monkeypatch):
     payload = source_learning.resolve_llm_review_payload(record, llm_cache)
 
     assert called["count"] == 1
+    assert called["input"] == "Title\nSource-listed company/advertiser: Company\nDescription"
     assert payload["payload_source"] == "llm"
     assert payload["fit_review"] == {"decision": "KEEP", "grade": "SOLID"}
     assert llm_fp not in llm_cache
@@ -201,7 +203,7 @@ def test_resolve_llm_review_payload_cache_miss_calls_llm(monkeypatch):
 
 def test_resolve_llm_review_payload_partial_cache_calls_llm(monkeypatch):
     record = _build_record()
-    llm_fp = source_learning.build_llm_cache_key("Title\nDescription")
+    llm_fp = source_learning.build_llm_cache_key("Title\nSource-listed company/advertiser: Company\nDescription")
     llm_cache = {
         llm_fp: {
             "learning_candidates": [

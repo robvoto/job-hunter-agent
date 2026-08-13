@@ -56,6 +56,7 @@ from job_hunter_agent.scrapers.seek_runner import (
     _classify_seek_list_page_failure,
     _handle_seek_list_page_failure,
     _log_seek_list_page_diagnostics,
+    _seek_json_assignment_value,
     _seek_run_progress,
     _set_seek_run_progress,
     _seek_source_metadata,
@@ -254,6 +255,45 @@ def test_seek_card_record_keeps_expected_shape_and_review_buckets(monkeypatch):
         seek_record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY]
         == jobspy_record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY]
     )
+
+
+def test_seek_server_state_parser_preserves_nested_employer_metadata():
+    script_text = '''
+        window.SEEK_CONFIG = {};
+        window.SEEK_REDUX_DATA = {
+          "jobdetails": {
+            "result": {
+              "__typename": "JobDetails",
+              "job": {
+                "advertiser": {
+                  "__typename": "Advertiser",
+                  "id": "44935084",
+                  "name": "Volkswagen Financial Services Australia Pty Limited"
+                }
+              },
+              "companySearchUrl": "https://au.seek.com/Volkswagen-Financial-Services-Australia-Pty-Limited-jobs/at-this-company",
+              "seoInfo": {
+                "normalisedOrganisationName": "Volkswagen Financial Services Australia Pty Limited"
+              }
+            }
+          }
+        };
+        window.SEEK_APP_CONFIG = {};
+    '''
+
+    redux_payload = _seek_json_assignment_value(script_text, "SEEK_REDUX_DATA")
+    metadata, _ = _seek_source_metadata(
+        None,
+        {"apply_url": "https://www.seek.com.au/job/93915767/apply"},
+        redux_payload=redux_payload,
+        url="https://www.seek.com.au/job/93915767?tracking=abc",
+    )
+
+    assert metadata["advertiser_id"] == "44935084"
+    assert metadata["poster_company"] == "Volkswagen Financial Services Australia Pty Limited"
+    assert metadata["hiring_company"] == "Volkswagen Financial Services Australia Pty Limited"
+    assert metadata["company_profile_url"].startswith("https://au.seek.com/Volkswagen-")
+    assert metadata[RECORD_SOURCE_PLATFORM_JOB_ID_KEY] == "93915767"
 
 
 def test_seek_source_metadata_preserves_platform_and_ats_ids():
