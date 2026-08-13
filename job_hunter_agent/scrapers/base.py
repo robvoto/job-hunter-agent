@@ -1,6 +1,7 @@
 """Shared base class and helpers for all job source connectors."""
 
 import json
+import re
 from abc import ABC, abstractmethod
 from datetime import date, datetime
 from typing import Any, Optional, Set
@@ -76,6 +77,7 @@ from job_hunter_agent.signal_schema import (
     LEARNING_SOURCE_KEY,
     LEARNING_SUGGESTED_VALUES_KEY,
 )
+from job_hunter_agent.job_types import load_job_type_learning_guardrails
 from job_hunter_agent.work_mode_extraction import extract_from_linkedin
 
 JOBSPY_DATE_POSTED_KEY = "date_posted"
@@ -615,9 +617,42 @@ def _map_job_type(raw: str, mapping: dict) -> str:
 map_job_type = _map_job_type
 
 
+_JOB_TYPE_PAGE_STRUCTURE_PATTERNS = (
+    re.compile(r"<[^>]+>", flags=re.IGNORECASE),
+    re.compile(r"\b(?:window|document|navigator)\s*\.\s*[A-Za-z_$]", flags=re.IGNORECASE),
+    re.compile(r"\b(?:function|const|let|var)\s+[A-Za-z_$]", flags=re.IGNORECASE),
+    re.compile(r"[{}]"),
+)
+
+
+def _is_valid_job_type_learning_candidate(value: str) -> bool:
+    """Allow scalar unknown types while blocking captured page or script structure."""
+    if not value:
+        return False
+    guardrails = load_job_type_learning_guardrails()
+    normalized = str(value or "").strip()
+    if not normalized:
+        return False
+
+    non_learnable_values = {
+        str(entry).strip().lower()
+        for entry in guardrails.get("non_learnable_values", [])
+        if str(entry).strip()
+    }
+    if normalized.lower() in non_learnable_values:
+        return False
+    if len(normalized) > int(guardrails["max_chars"]):
+        return False
+    if len(normalized.split()) > int(guardrails["max_words"]):
+        return False
+    if normalized.count("\n") + 1 > int(guardrails["max_lines"]):
+        return False
+    return not any(pattern.search(normalized) for pattern in _JOB_TYPE_PAGE_STRUCTURE_PATTERNS)
+
+
 def _register_unknown_job_type(raw_value: str) -> None:
     cleaned_raw = str(raw_value or "").strip()
-    if not cleaned_raw or cleaned_raw.lower() in {"unknown", "n/a", "na"}:
+    if not _is_valid_job_type_learning_candidate(cleaned_raw):
         return
     from job_hunter_agent.signal_registry import register_signals
 

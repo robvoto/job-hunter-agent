@@ -17,7 +17,11 @@ from job_hunter_agent.global_settings import (
     KEY_APSJOBS_RESULTS_PER_SEARCH,
     KEY_DATE_RANGE_DAYS,
 )
-from job_hunter_agent.io_utils import DEBUG_CAPTURE_SOURCE_PAYLOADS, write_source_payload_debug
+from job_hunter_agent.io_utils import (
+    DEBUG_CAPTURE_SOURCE_PAYLOADS,
+    load_parsing_rules,
+    write_source_payload_debug,
+)
 from job_hunter_agent.job_review_pipeline import (
     ReviewPipelineContext,
     ReviewPipelineHooks,
@@ -293,6 +297,72 @@ def _extract_labeled_value(lines: list[str], labels: tuple[str, ...]) -> str:
     return ""
 
 
+def _load_aps_job_type_rules() -> tuple[tuple[str, ...], tuple[str, ...]]:
+    rules = load_parsing_rules().get("apsjobs_job_type_rules")
+    if not isinstance(rules, dict):
+        raise ValueError("parsing_rules must define apsjobs_job_type_rules as a dict.")
+
+    def _clean_labels(values: object) -> tuple[str, ...]:
+        if not isinstance(values, list):
+            return ()
+        cleaned: list[str] = []
+        for value in values:
+            label = compact_whitespace(value).lower()
+            if label:
+                cleaned.append(label)
+        return tuple(cleaned)
+
+    job_type_labels = _clean_labels(rules.get("job_type_labels"))
+    metadata_labels = _clean_labels(rules.get("metadata_labels"))
+    if not job_type_labels or not metadata_labels:
+        raise ValueError(
+            "parsing_rules.apsjobs_job_type_rules must define job_type_labels and metadata_labels."
+        )
+    return job_type_labels, metadata_labels
+
+
+def _extract_aps_job_type_value(text: str) -> str:
+    """Extract one bounded APS job-type value from normal or collapsed text."""
+    lines = [compact_whitespace(line) for line in text.splitlines()]
+    job_type_labels, metadata_labels = _load_aps_job_type_rules()
+    label_pattern = re.compile(
+        r"(?<!\w)(?:" + "|".join(re.escape(label) for label in job_type_labels) + r")",
+        flags=re.IGNORECASE,
+    )
+    metadata_pattern = re.compile(
+        r"(?:" + "|".join(re.escape(label) for label in metadata_labels) + r")",
+        flags=re.IGNORECASE,
+    )
+
+    for index, line in enumerate(lines):
+        if not line:
+            continue
+        label_match = label_pattern.search(line)
+        if not label_match:
+            continue
+
+        remainder = line[label_match.end() :]
+        next_label = metadata_pattern.search(remainder)
+        if next_label:
+            value = compact_whitespace(remainder[: next_label.start()].lstrip(" :"))
+            if value:
+                return value
+            continue
+
+        if remainder.lstrip().startswith(":"):
+            value = compact_whitespace(remainder.lstrip()[1:])
+            if value:
+                return value
+            continue
+
+        if not remainder.strip() and index + 1 < len(lines):
+            next_line = compact_whitespace(lines[index + 1])
+            if next_line and not metadata_pattern.search(next_line):
+                return next_line
+
+    return ""
+
+
 def _extract_posted_text(text: str) -> str:
     patterns = (
         r"\b(?:posted|advertised|published)\s+(?:on\s+)?\d{1,2}\s+[A-Za-z]+\s+\d{4}\b",
@@ -311,24 +381,7 @@ def _extract_posted_text(text: str) -> str:
 
 
 def _extract_job_type_text(text: str) -> str:
-    lines = [compact_whitespace(line) for line in text.splitlines()]
-    for label in ("employment type", "job type", "classification", "engagement type", "type"):
-        value = _extract_labeled_value(lines, (label,))
-        if value:
-            return value
-    lowered = compact_whitespace(text).lower()
-    for candidate in (
-        "ongoing",
-        "non-ongoing",
-        "permanent",
-        "temporary",
-        "contract",
-        "full time",
-        "part time",
-    ):
-        if candidate in lowered:
-            return candidate
-    return ""
+    return _extract_aps_job_type_value(text)
 
 
 def _extract_job_payload(page, *, job_url: str, anchor_text: str, run_iso: str) -> dict:

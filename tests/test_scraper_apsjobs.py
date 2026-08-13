@@ -232,6 +232,46 @@ def test_extract_posted_text_and_age_from_visible_listing_text():
     )
 
 
+def test_extract_job_type_text_from_multiline_aps_metadata():
+    assert (
+        apsjobs_module._extract_job_type_text(
+            "Opportunity Type\nFull-Time\nOpportunity Status\nOngoing"
+        )
+        == "Full-Time"
+    )
+
+
+def test_extract_job_type_text_from_collapsed_aps_metadata():
+    assert (
+        apsjobs_module._extract_job_type_text(
+            "...Opportunity TypeFull-TimeOpportunity StatusOngoingClosing Date..."
+        )
+        == "Full-Time"
+    )
+
+
+def test_extract_job_type_text_from_collapsed_aps_multi_value():
+    assert (
+        apsjobs_module._extract_job_type_text(
+            "...Opportunity TypeFull-Time;Part-TimeOpportunity StatusOngoing..."
+        )
+        == "Full-Time;Part-Time"
+    )
+
+
+def test_extract_job_type_text_does_not_return_an_unbounded_page_tail():
+    assert (
+        apsjobs_module._extract_job_type_text(
+            "Opportunity TypeFull-Time role details and application information: contact us"
+        )
+        == ""
+    )
+
+
+def test_extract_job_type_text_does_not_use_generic_type_label():
+    assert apsjobs_module._extract_job_type_text("Type: page text") == ""
+
+
 def test_format_apsjobs_run_progress_keeps_elapsed_separate():
     progress = apsjobs_module._format_apsjobs_run_progress(
         1,

@@ -1,7 +1,7 @@
 """Helpers for job types."""
 
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from job_hunter_agent.text_processing import compact_whitespace
 
@@ -40,6 +40,29 @@ def _load_raw() -> dict:
         logger.warning("[JOB_TYPES][WARN] job_type knowledge was not a dict; returning empty.")
         return {}
     return payload
+
+
+def load_job_type_learning_guardrails() -> dict[str, Any]:
+    """Return structural guardrails for pending job-type learning candidates."""
+    raw = _load_raw()
+    guardrails = raw.get("learning_guardrails")
+    if not isinstance(guardrails, dict):
+        raise ValueError("job_type knowledge must define learning_guardrails as a dict.")
+
+    non_learnable_values = guardrails.get("non_learnable_values")
+    if not isinstance(non_learnable_values, list) or not all(
+        isinstance(value, str) and str(value).strip() for value in non_learnable_values
+    ):
+        raise ValueError(
+            "job_type knowledge.learning_guardrails must define non_learnable_values as a list of strings."
+        )
+    for field in ("max_chars", "max_words", "max_lines"):
+        value = guardrails.get(field)
+        if not isinstance(value, int) or value <= 0:
+            raise ValueError(
+                f"job_type knowledge.learning_guardrails must define {field} as a positive integer."
+            )
+    return guardrails
 
 
 def load_job_type(force_reload: bool = False) -> dict:
@@ -93,11 +116,8 @@ def save_job_type(mapping: dict[str, str]) -> dict[str, str]:
             cleaned[key] = value
 
     existing = _load_raw()
-    payload = {
-        "mapping": cleaned,
-        "filter_groups": existing.get("filter_groups", []),
-        "work_type_inference": existing.get("work_type_inference", {}),
-    }
+    payload = dict(existing)
+    payload["mapping"] = cleaned
     set_knowledge("job_type", payload)
 
     global _cached_mapping, _cached_filter_groups, _cached_inference_rules

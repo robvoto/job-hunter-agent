@@ -4,7 +4,7 @@ from datetime import date
 from types import SimpleNamespace
 
 from job_hunter_agent import job_types
-from job_hunter_agent.scrapers.base import normalize_jobspy_record
+from job_hunter_agent.scrapers.base import _map_job_type, normalize_jobspy_record
 
 
 def test_unknown_job_type_is_preserved_and_registered(monkeypatch):
@@ -71,3 +71,58 @@ def test_upsert_job_type_entry_writes_normalized_mapping(isolated_db, monkeypatc
     job_types.upsert_job_type_entry("Fixed term")
 
     assert job_types.load_job_type(force_reload=True) == {"fixedterm": "Fixed term"}
+
+
+def test_page_script_job_type_candidate_is_not_registered(monkeypatch):
+    captured = []
+    monkeypatch.setattr(
+        "job_hunter_agent.signal_registry.register_signals",
+        lambda signals, category="": captured.extend(signals),
+    )
+
+    _map_job_type(
+        "window.Aura.beforeFrameworkInit.push(init);}());Skip to navigation"
+        + " Job details and application information " * 40,
+        {},
+    )
+
+    assert captured == []
+
+
+def test_concise_unknown_job_type_candidate_is_registered(monkeypatch):
+    captured = []
+    monkeypatch.setattr(
+        "job_hunter_agent.signal_registry.register_signals",
+        lambda signals, category="": captured.extend(signals),
+    )
+
+    _map_job_type("Seasonal rotation", {})
+
+    assert [item["signal"] for item in captured] == ["Seasonal rotation"]
+
+
+def test_plain_text_page_blob_job_type_candidate_is_not_registered(monkeypatch):
+    captured = []
+    monkeypatch.setattr(
+        "job_hunter_agent.signal_registry.register_signals",
+        lambda signals, category="": captured.extend(signals),
+    )
+
+    blob = "job details and application information " * 10
+
+    _map_job_type(blob.strip(), {})
+
+    assert len(blob.strip()) >= 300
+    assert captured == []
+
+
+def test_jobspy_other_sentinel_is_not_registered(monkeypatch):
+    captured = []
+    monkeypatch.setattr(
+        "job_hunter_agent.signal_registry.register_signals",
+        lambda signals, category="": captured.extend(signals),
+    )
+
+    _map_job_type("other", {})
+
+    assert captured == []

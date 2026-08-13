@@ -97,5 +97,16 @@
         ]
       }
     ]
+  },
+  "learning_guardrails": {
+    "non_learnable_values": [
+      "unknown",
+      "n/a",
+      "na",
+      "other"
+    ],
+    "max_chars": 160,
+    "max_words": 18,
+    "max_lines": 2
   }
 }

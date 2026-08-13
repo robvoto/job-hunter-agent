@@ -73,6 +73,25 @@
     "supporting",
     "working"
   ],
+  "apsjobs_job_type_rules_description": "APSJobs-specific job-type labels and the metadata labels that bound the captured value.",
+  "apsjobs_job_type_rules": {
+    "job_type_labels": [
+      "opportunity type",
+      "employment type",
+      "job type",
+      "engagement type"
+    ],
+    "metadata_labels": [
+      "aps classification",
+      "salary",
+      "office arrangement",
+      "office arrangement details",
+      "opportunity status",
+      "opportunity employment type",
+      "closing date",
+      "job category"
+    ]
+  },
   "candidate_profile_section_routing_description": "Section labels used to route profile text into primary, secondary, or supplementary evidence buckets.",
   "candidate_profile_section_routing": {
     "default_bucket": "primary_candidate_profile_context",
