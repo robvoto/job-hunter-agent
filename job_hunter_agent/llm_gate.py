@@ -359,6 +359,7 @@ class _LLMFitReviewPayload(BaseModel):
     occupation_alignment_reason: str = ""
     posting_channel: _LLMPostingChannel = Field(default_factory=_LLMPostingChannel)
     debug_reason: str = ""
+    eligibility_requirements: list[_LLMRequirementCoverageItem] = Field(default_factory=list)
     requirement_coverage: list[_LLMRequirementCoverageItem] = Field(default_factory=list)
     job_requirements: list[str] = Field(default_factory=list)
 
@@ -369,6 +370,7 @@ class _LLMFitReviewDebugPayload(BaseModel):
     occupation_alignment_reason: str = ""
     posting_channel: _LLMPostingChannel = Field(default_factory=_LLMPostingChannel)
     debug_reason: str = ""
+    eligibility_requirements: list[_LLMRequirementCoverageDebugItem] = Field(default_factory=list)
     requirement_coverage: list[_LLMRequirementCoverageDebugItem] = Field(default_factory=list)
     job_requirements: list[str] = Field(default_factory=list)
 
@@ -667,8 +669,8 @@ def build_fit_review_guidance(profile: dict[str, Any] | None = None) -> str:
 
 def build_requirement_coverage_guidance() -> str:
     parts = [
-        f"Use at most {get_llm_job_requirements_max_items()} requirement_coverage items.",
-        "Classify each requirement as capability, eligibility, or qualification. Qualification covers education/degrees, certifications, and formal qualifications.",
+        f"Use at most {get_llm_job_requirements_max_items()} capability/qualification requirement_coverage items. eligibility_requirements are separate and do not consume this limit.",
+        "Use requirement_type=capability or qualification in requirement_coverage, and requirement_type=eligibility in eligibility_requirements.",
         "For qualification rows, importance must be required or preferred.",
         "Use matched_candidate_fact for the exact canonical capability or eligibility name shown in the profile matrix, or the exact qualification name shown in the qualifications matrix; never put an evidence sentence there.",
         "Canonical qualification names must be concise reusable concepts such as CBAP, PRINCE2, Bachelor of Information Technology, or Diploma of Project Management — never the raw requirement sentence or an alternatives list.",
@@ -951,11 +953,26 @@ def _build_profile_eligibility_names(profile: dict[str, Any]) -> dict[str, str]:
             if not canonical:
                 continue
             managed_terms = managed_terms_by_key.get(canonical.casefold(), [])
-            for term in [canonical, *managed_terms]:
+            raw_aliases = rule.get("aliases") or []
+            aliases = [raw_aliases] if isinstance(raw_aliases, str) else raw_aliases
+            for term in [canonical, *managed_terms, *aliases]:
                 normalized_term = compact_whitespace(term).casefold()
                 if normalized_term:
                     valid_names[normalized_term] = canonical
     return valid_names
+
+
+def _build_profile_eligibility_values(profile: dict[str, Any]) -> dict[str, bool]:
+    """Return canonical eligibility truth values from the candidate profile."""
+    values: dict[str, bool] = {}
+    for source_key in (KEY_CANDIDATE_ELIGIBILITY, KEY_CANDIDATE_ELIGIBILITY_FACTS):
+        for rule in profile.get(source_key, []) or []:
+            if not isinstance(rule, dict):
+                continue
+            canonical = compact_whitespace(rule.get("name"))
+            if canonical:
+                values[canonical.casefold()] = bool(rule.get("value", True))
+    return values
 
 
 def _build_valid_qualification_lookup(
@@ -1124,12 +1141,107 @@ def _has_meaningful_requirement_evidence(
     return False
 
 
+def _known_profile_eligibility_mentions(
+    values: list[str],
+    valid_eligibility_lookup: dict[str, str] | None,
+) -> list[str]:
+    """Resolve exact eligibility mentions from profile-owned names and aliases only."""
+    if not valid_eligibility_lookup:
+        return []
+    found: dict[str, str] = {}
+    terms = sorted(valid_eligibility_lookup.items(), key=lambda item: (-len(item[0]), item[0]))
+    for raw_value in values:
+        normalized_value = compact_whitespace(raw_value).casefold()
+        if not normalized_value:
+            continue
+        for term, canonical in terms:
+            if re.search(rf"(?<!\w){re.escape(term)}(?!\w)", normalized_value):
+                found.setdefault(canonical.casefold(), canonical)
+    return list(found.values())
+
+
+def _atomicize_known_eligibility_rows(
+    rows: list[dict[str, Any]],
+    valid_eligibility_names: dict[str, str] | None,
+    eligibility_fact_values: dict[str, bool] | None = None,
+) -> list[dict[str, Any]]:
+    """Enforce one known eligibility fact per non-alternative eligibility row."""
+    lookup = _build_valid_eligibility_lookup(valid_eligibility_names)
+    if not lookup:
+        return rows
+
+    normalized_rows: list[dict[str, Any]] = []
+    for row in rows:
+        if str(row.get("requirement_type") or "").strip().lower() != "eligibility":
+            normalized_rows.append(row)
+            continue
+
+        values = [
+            *[str(value) for value in (row.get("covered_requirement_elements") or [])],
+            str(row.get("requirement") or ""),
+            str(row.get("matched_job_text") or ""),
+        ]
+        mentions = _known_profile_eligibility_mentions(values, lookup)
+        if len(mentions) <= 1 or (row.get("named_alternatives") or []):
+            normalized_rows.append(row)
+            continue
+
+        original_fact = compact_whitespace(
+            row.get("eligibility_name") or row.get("matched_candidate_fact")
+        ).casefold()
+        original_canonical = lookup.get(original_fact, "").casefold() if original_fact else ""
+        for canonical in mentions:
+            fact_value = (eligibility_fact_values or {}).get(canonical.casefold())
+            status = row.get("status") if canonical.casefold() == original_canonical else "not_shown"
+            if fact_value is True:
+                status = "supported"
+            elif fact_value is False:
+                status = "not_shown"
+            atomic = dict(row)
+            atomic.update(
+                requirement=canonical,
+                canonical_requirement=canonical,
+                matched_candidate_fact=canonical,
+                eligibility_name=canonical,
+                capability_name="",
+                covered_requirement_elements=[canonical],
+                profile_action_allowed=False,
+                status=status,
+            )
+            normalized_rows.append(atomic)
+        logger.warning(
+            "[LLM][COVERAGE] split compound eligibility row requirement=%r facts=%s",
+            row.get("requirement"),
+            ", ".join(mentions),
+        )
+    return normalized_rows
+
+
+def _merge_requirement_coverage(
+    eligibility_rows: list[dict[str, Any]],
+    general_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Merge dedicated eligibility rows before general coverage without duplicates."""
+    merged: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for row in [*eligibility_rows, *general_rows]:
+        canonical = compact_whitespace(row.get("canonical_requirement")).casefold()
+        requirement = compact_whitespace(row.get("requirement")).casefold()
+        key = (str(row.get("requirement_type") or "").strip().lower(), canonical or requirement)
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(row)
+    return merged
+
+
 def normalize_llm_requirement_coverage(
     value: Any,
     valid_capability_names: dict[str, str] | None = None,
     valid_eligibility_names: dict[str, str] | None = None,
     valid_qualification_names: dict[str, str] | None = None,
     role_experience: list[dict[str, Any]] | None = None,
+    eligibility_fact_values: dict[str, bool] | None = None,
     max_items: int | None = None,
     include_debug_match_diagnostics: bool = False,
 ) -> list[dict[str, Any]]:
@@ -1150,6 +1262,7 @@ def normalize_llm_requirement_coverage(
     valid_qualification_lookup = _build_valid_qualification_lookup(valid_qualification_names)
     results: list[dict[str, Any]] = []
     seen: set[str] = set()
+    non_eligibility_count = 0
     for item in value:
         if not isinstance(item, dict):
             continue
@@ -1318,6 +1431,20 @@ def normalize_llm_requirement_coverage(
         role_defining_group = compact_whitespace(item.get("role_defining_group"))
         if not requirement:
             continue
+        known_eligibility_mentions: list[str] = []
+        if requirement_type == "eligibility":
+            known_eligibility_mentions = _known_profile_eligibility_mentions(
+                [*covered_requirement_elements, requirement, matched_job_text],
+                valid_eligibility_lookup,
+            )
+            if len(known_eligibility_mentions) == 1 and not eligibility_name:
+                eligibility_name = known_eligibility_mentions[0]
+                matched_candidate_fact = eligibility_name
+                fact_value = (eligibility_fact_values or {}).get(eligibility_name.casefold())
+                if fact_value is True:
+                    status = "supported"
+                elif fact_value is False:
+                    status = "not_shown"
         if (
             requirement_type == "capability"
             and status in {"supported", "partially_supported"}
@@ -1362,7 +1489,12 @@ def normalize_llm_requirement_coverage(
             matched_candidate_fact = ""
             capability_name = ""
             eligibility_name = ""
-        if requirement_type == "eligibility" and status in {"supported", "partially_supported"} and not eligibility_name:
+        if (
+            requirement_type == "eligibility"
+            and status in {"supported", "partially_supported"}
+            and not eligibility_name
+            and not known_eligibility_mentions
+        ):
             logger.warning(
                 "[LLM][WARN] purpose=fit_review requirement_coverage_missing_eligibility requirement=%r status=%s importance=%s",
                 requirement,
@@ -1522,10 +1654,16 @@ def normalize_llm_requirement_coverage(
                 )
             ):
                 normalized_item["status"] = "partially_supported"
+        if requirement_type != "eligibility":
+            if non_eligibility_count >= max_items:
+                continue
+            non_eligibility_count += 1
         results.append(normalized_item)
-        if len(results) >= max_items:
-            break
-    return results
+    return _atomicize_known_eligibility_rows(
+        results,
+        valid_eligibility_names,
+        eligibility_fact_values,
+    )
 
 
 def derive_fit_review_grade(
@@ -1726,6 +1864,7 @@ def normalize_llm_review_payload(
     valid_eligibility_names: dict[str, str] | None = None,
     valid_qualification_names: dict[str, str] | None = None,
     role_experience: list[dict[str, Any]] | None = None,
+    eligibility_fact_values: dict[str, bool] | None = None,
 ) -> dict[str, Any]:
     include_debug_match_diagnostics = get_llm_fit_review_debug_match_diagnostics_enabled()
     if isinstance(value, dict):
@@ -1739,13 +1878,27 @@ def normalize_llm_review_payload(
                     "decision": value.get("decision"),
                     "grade": value.get("grade"),
                 }
+            eligibility_requirements = normalize_llm_requirement_coverage(
+                value.get("eligibility_requirements"),
+                valid_capability_names=valid_capability_names,
+                valid_eligibility_names=valid_eligibility_names,
+                valid_qualification_names=valid_qualification_names,
+                role_experience=role_experience,
+                eligibility_fact_values=eligibility_fact_values,
+                include_debug_match_diagnostics=include_debug_match_diagnostics,
+            )
             requirement_coverage = normalize_llm_requirement_coverage(
                 value.get("requirement_coverage"),
                 valid_capability_names=valid_capability_names,
                 valid_eligibility_names=valid_eligibility_names,
                 valid_qualification_names=valid_qualification_names,
                 role_experience=role_experience,
+                eligibility_fact_values=eligibility_fact_values,
                 include_debug_match_diagnostics=include_debug_match_diagnostics,
+            )
+            requirement_coverage = _merge_requirement_coverage(
+                eligibility_requirements,
+                requirement_coverage,
             )
             job_requirements = normalize_llm_job_requirements(value.get("job_requirements"))
             derived_grade = derive_fit_review_grade(requirement_coverage, job_requirements)
@@ -2044,6 +2197,7 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
     valid_capability_names: dict[str, str] | None = None
     valid_eligibility_names: dict[str, str] | None = None
     valid_qualification_names: dict[str, str] | None = None
+    eligibility_fact_values: dict[str, bool] | None = None
     if fit_review:
         profile = load_profile()
         valid_capability_names = {}
@@ -2058,6 +2212,7 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
                 if normalized_term:
                     valid_capability_names[normalized_term] = canonical
         valid_eligibility_names = _build_profile_eligibility_names(profile)
+        eligibility_fact_values = _build_profile_eligibility_values(profile)
         valid_qualification_names = {}
         for rule in profile.get(KEY_CANDIDATE_QUALIFICATIONS, []) or []:
             if not isinstance(rule, dict):
@@ -2164,6 +2319,7 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
         valid_eligibility_names=valid_eligibility_names,
         valid_qualification_names=valid_qualification_names,
         role_experience=role_experience,
+        eligibility_fact_values=eligibility_fact_values,
     )
     payload.update(_llm_usage_summary(resp, model))
     if fit_review:

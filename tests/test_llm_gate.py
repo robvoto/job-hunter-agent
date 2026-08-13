@@ -1015,6 +1015,137 @@ def _cov_elig(req: str, status: str, importance: str = "required") -> dict:
     }
 
 
+def test_requirement_coverage_prompt_reserves_dedicated_eligibility_output():
+    guidance = llm_gate.build_requirement_coverage_guidance()
+    assert "eligibility_requirements are separate and do not consume this limit" in guidance
+    assert '"eligibility_requirements"' in llm_gate.LLM_FIT_REVIEW_PROMPT_SHAPE
+
+
+def test_fit_review_preserves_and_splits_eligibility_outside_general_row_budget():
+    general_rows = [
+        {
+            "requirement": f"Capability requirement {index}",
+            "importance": "required",
+            "requirement_type": "capability",
+            "canonical_requirement": f"Capability {index}",
+            "status": "not_shown",
+            "matched_job_text": f"Capability requirement {index}",
+        }
+        for index in range(8)
+    ]
+    result = llm_gate.normalize_llm_review_payload(
+        {
+            "fit_review": {"decision": "MAYBE", "grade": "WEAK"},
+            "job_requirements": [row["requirement"] for row in general_rows],
+            "requirement_coverage": general_rows,
+            "eligibility_requirements": [
+                {
+                    "requirement": "Australian citizenship with Baseline Security Clearance",
+                    "importance": "required",
+                    "requirement_type": "eligibility",
+                    "canonical_requirement": "Baseline Security Clearance",
+                    "profile_fact_resolved": True,
+                    "status": "supported",
+                    "matched_candidate_fact": "Baseline",
+                    "matched_job_text": "Candidates must be Australian citizens with Baseline Security Clearance",
+                    "profile_support": ["Baseline Security Clearance"],
+                    "covered_requirement_elements": [
+                        "Australian citizenship",
+                        "Baseline Security Clearance",
+                    ],
+                }
+            ],
+        },
+        valid_eligibility_names={
+            "australian citizenship": "Australian Citizenship",
+            "australian citizen": "Australian Citizenship",
+            "baseline": "Baseline",
+            "baseline security clearance": "Baseline",
+        },
+        eligibility_fact_values={
+            "australian citizenship": True,
+            "baseline": True,
+        },
+    )
+    coverage = result["requirement_coverage"]
+    eligibility_rows = [row for row in coverage if row["requirement_type"] == "eligibility"]
+    capability_rows = [row for row in coverage if row["requirement_type"] == "capability"]
+    assert len(capability_rows) == 8
+    assert {row["matched_candidate_fact"] for row in eligibility_rows} == {
+        "Australian Citizenship",
+        "Baseline",
+    }
+    assert all(row["status"] == "supported" for row in eligibility_rows)
+
+
+def test_compound_eligibility_does_not_inherit_support_for_false_profile_fact():
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "Australian citizenship with Baseline Security Clearance",
+                "importance": "required",
+                "requirement_type": "eligibility",
+                "canonical_requirement": "Baseline Security Clearance",
+                "profile_fact_resolved": True,
+                "status": "supported",
+                "matched_candidate_fact": "Baseline",
+                "matched_job_text": "Candidates must be Australian citizens with Baseline Security Clearance",
+                "profile_support": ["Baseline Security Clearance"],
+                "covered_requirement_elements": [
+                    "Australian citizenship",
+                    "Baseline Security Clearance",
+                ],
+            }
+        ],
+        valid_eligibility_names={
+            "australian citizenship": "Australian Citizenship",
+            "australian citizen": "Australian Citizenship",
+            "baseline": "Baseline",
+            "baseline security clearance": "Baseline",
+        },
+        eligibility_fact_values={
+            "australian citizenship": False,
+            "baseline": True,
+        },
+    )
+    by_fact = {row["matched_candidate_fact"]: row for row in result}
+    assert by_fact["Baseline"]["status"] == "supported"
+    assert by_fact["Australian Citizenship"]["status"] == "not_shown"
+
+
+def test_eligibility_row_after_general_limit_is_not_dropped():
+    rows = [
+        {
+            "requirement": f"Capability requirement {index}",
+            "importance": "required",
+            "requirement_type": "capability",
+            "status": "not_shown",
+        }
+        for index in range(8)
+    ]
+    rows.append(
+        {
+            "requirement": "Australian Citizenship is required",
+            "importance": "required",
+            "requirement_type": "eligibility",
+            "canonical_requirement": "Australian Citizenship",
+            "status": "supported",
+            "matched_candidate_fact": "Australian Citizenship",
+            "matched_job_text": "Australian Citizenship is required",
+            "profile_support": ["Australian Citizenship"],
+        }
+    )
+    result = llm_gate.normalize_llm_requirement_coverage(
+        rows,
+        valid_eligibility_names={"australian citizenship": "Australian Citizenship"},
+        eligibility_fact_values={"australian citizenship": True},
+        max_items=8,
+    )
+    assert len(result) == 9
+    assert result[-1]["requirement_type"] == "eligibility"
+    assert result[-1]["matched_candidate_fact"] == "Australian Citizenship"
+
+
 def test_required_eligibility_not_shown_caps_at_weak_despite_high_capability_support():
     # 9 required capabilities fully supported + 1 required eligibility fact never
     # surfaced. Support ratio alone would read 0.9 (STRONG territory), but an unresolved
