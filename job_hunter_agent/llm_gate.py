@@ -304,6 +304,13 @@ class _LLMReviewDecision(BaseModel):
     grade: str
 
 
+class _LLMTitleJudgment(BaseModel):
+    """Structured pre-detail title-gate response owned by llm_judge_title."""
+
+    verdict: str
+    reason: str = ""
+
+
 class _LLMRequirementCoverageItem(BaseModel):
     requirement: str
     importance: str = "preferred"
@@ -2527,31 +2534,28 @@ def llm_judge_title(
             len(title),
             max_output_tokens,
         )
-        resp = active_client.responses.create(
+        resp = active_client.responses.parse(
             model=model,
             input=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f'Job title: "{title}"'},
             ],
             max_output_tokens=max_output_tokens,
+            text_format=_LLMTitleJudgment,
         )
         _log_llm_call(resp, "title_judgment", model)
     except Exception as exc:
         logger.error("[LLM][FAIL] purpose=title_judgment error=%s", exc)
         return None
 
-    raw = str(getattr(resp, "output_text", "") or "").strip()
-    if not raw:
+    parsed = getattr(resp, "output_parsed", None)
+    if parsed is None:
+        logger.warning("[LLM][WARN] purpose=title_judgment parsed_output_missing")
         return None
 
-    try:
-        parsed = _json_mod.loads(raw)
-    except _json_mod.JSONDecodeError:
-        logger.warning("[LLM][WARN] purpose=title_judgment parse_error=%r", raw[:200])
-        return None
-
-    verdict = str(parsed.get("verdict") or "").strip().lower()
-    reason = str(parsed.get("reason") or "").strip()
+    payload = parsed.model_dump()
+    verdict = str(payload.get("verdict") or "").strip().lower()
+    reason = str(payload.get("reason") or "").strip()
     if verdict not in LLM_ALLOWED_TITLE_JUDGMENT_VERDICTS:
         logger.warning("[LLM][WARN] purpose=title_judgment invalid_verdict=%r", verdict)
         return None

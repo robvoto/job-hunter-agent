@@ -56,6 +56,16 @@ When an embedded title phrase maps to multiple O*NET codes:
 
 This avoids both wasteful LLM calls and broad false-negative gates.
 
+## Title-only LLM fallback before detail fetch
+
+O*NET is the first low-cost occupation signal, but `near` and `uncertain` are not automatic permission to open the full job advertisement. For titles that still need semantic judgment, the pre-detail pipeline calls `llm_gate.llm_judge_title()` with the title and the candidate's target/secondary role directions.
+
+- `no_match` rejects as `LLM_TITLE_NOT_TARGET` before the browser detail fetch.
+- `match` and `uncertain` continue to the normal detail-review path.
+- A genuine provider or structured-output failure fails open to detail review rather than becoming a false-negative rejection.
+
+The title judgment is a typed structured-output boundary. The current OpenAI adapter uses `responses.parse()` with a Pydantic response model. Do not replace this with raw JSON parsing or add markdown-fence/regex fallback parsers: a formatting wrapper must not turn a valid semantic `no_match` into an unavailable result and cause an unnecessary browser/LLM review.
+
 ## What not to do
 
 Do not fix this by adding generic blocked-title keywords to every user profile.

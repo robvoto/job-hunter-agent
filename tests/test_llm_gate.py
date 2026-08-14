@@ -1809,16 +1809,21 @@ def test_build_rejection_suggestions_guidance_includes_key_phrase():
 # ── llm_judge_title ────────────────────────────────────────────────────────────
 
 
-def _fake_title_judgment_client(output_text: str):
+def _fake_title_judgment_client(payload: dict | None, *, output_text: str = ""):
+    class _FakeParsed:
+        def model_dump(self):
+            return dict(payload or {})
+
     class _FakeResponse:
         usage = None
 
-    resp = _FakeResponse()
-    resp.output_text = output_text
+    response = _FakeResponse()
+    response.output_parsed = _FakeParsed() if payload is not None else None
+    response.output_text = output_text
 
     class _FakeResponses:
-        def create(self, **kwargs):
-            return resp
+        def parse(self, **kwargs):
+            return response
 
     class _FakeClient:
         responses = _FakeResponses()
@@ -1845,7 +1850,7 @@ def test_llm_judge_title_returns_none_when_no_target_roles_configured():
 
 def test_llm_judge_title_parses_no_match_verdict():
     client = _fake_title_judgment_client(
-        '{"verdict":"no_match","reason":"Enablement/coordination role, not a target role."}'
+        {"verdict": "no_match", "reason": "Enablement/coordination role, not a target role."}
     )
     result = llm_gate.llm_judge_title(
         "Business Enablement Coordinator", ["senior business analyst"], [], llm_client=client
@@ -1857,7 +1862,7 @@ def test_llm_judge_title_parses_no_match_verdict():
 
 
 def test_llm_judge_title_parses_match_verdict():
-    client = _fake_title_judgment_client('{"verdict":"match","reason":"Direct match."}')
+    client = _fake_title_judgment_client({"verdict": "match", "reason": "Direct match."})
     result = llm_gate.llm_judge_title(
         "Senior Business Analyst", ["senior business analyst"], [], llm_client=client
     )
@@ -1869,12 +1874,16 @@ def test_llm_judge_title_parses_match_verdict():
 def test_llm_judge_title_prompt_treats_role_lists_as_direction_not_whitelist():
     captured = {}
 
+    class _FakeParsed:
+        def model_dump(self):
+            return {"verdict": "uncertain", "reason": "Could be adjacent delivery work."}
+
     class _FakeResponse:
         usage = None
-        output_text = '{"verdict":"uncertain","reason":"Could be adjacent delivery work."}'
+        output_parsed = _FakeParsed()
 
     class _FakeResponses:
-        def create(self, **kwargs):
+        def parse(self, **kwargs):
             captured.update(kwargs)
             return _FakeResponse()
 
@@ -1891,6 +1900,7 @@ def test_llm_judge_title_prompt_treats_role_lists_as_direction_not_whitelist():
     )
 
     prompt = captured["input"][0]["content"]
+    assert captured["text_format"] is llm_gate._LLMTitleJudgment
     assert result["verdict"] == "uncertain"
     assert "NOT an exhaustive whitelist" in prompt
     assert "Agile Delivery Management" in prompt
@@ -1899,12 +1909,16 @@ def test_llm_judge_title_prompt_treats_role_lists_as_direction_not_whitelist():
 def test_llm_judge_title_strict_mode_keeps_original_whitelist_style_contract():
     captured = {}
 
+    class _FakeParsed:
+        def model_dump(self):
+            return {"verdict": "no_match", "reason": "Not a target role."}
+
     class _FakeResponse:
         usage = None
-        output_text = '{"verdict":"no_match","reason":"Not a target role."}'
+        output_parsed = _FakeParsed()
 
     class _FakeResponses:
-        def create(self, **kwargs):
+        def parse(self, **kwargs):
             captured.update(kwargs)
             return _FakeResponse()
 
@@ -1950,7 +1964,7 @@ def test_normalize_review_rejects_model_keep_when_derived_grade_is_mismatch():
 
 
 def test_llm_judge_title_returns_none_on_invalid_verdict():
-    client = _fake_title_judgment_client('{"verdict":"maybe","reason":"unsure"}')
+    client = _fake_title_judgment_client({"verdict": "maybe", "reason": "unsure"})
     result = llm_gate.llm_judge_title(
         "Business Analyst", ["senior business analyst"], [], llm_client=client
     )
@@ -1958,7 +1972,7 @@ def test_llm_judge_title_returns_none_on_invalid_verdict():
 
 
 def test_llm_judge_title_returns_none_on_unparseable_output():
-    client = _fake_title_judgment_client("not json")
+    client = _fake_title_judgment_client(None, output_text="not json")
     result = llm_gate.llm_judge_title(
         "Business Analyst", ["senior business analyst"], [], llm_client=client
     )
@@ -1967,7 +1981,7 @@ def test_llm_judge_title_returns_none_on_unparseable_output():
 
 def test_llm_judge_title_returns_none_on_client_exception():
     class _RaisingResponses:
-        def create(self, **kwargs):
+        def parse(self, **kwargs):
             raise RuntimeError("boom")
 
     class _RaisingClient:

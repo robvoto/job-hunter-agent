@@ -43,8 +43,8 @@ Use the equivalent live-Sheets operations for the current runtime:
 ### Getting the next JH ID
 Read existing IDs from the live `Backlog` sheet, find the highest valid `JH-###` number, and increment by 1. Ignore malformed placeholders such as `JH-NEXT`.
 
-## Column order (as of 2026-05-26)
-1. ID, 2. Creator, 3. Title, 4. Epic, 5. Type, 6. Priority, 7. Size, 8. Problem, 9. Outcome, 10. Acceptance Criteria, 11. Original Source, 12. Duplicate Of, 13. Depends On, 14. Notes, 15. Implementation State, 16. Implementation Date, 17. Implemented By, 18. Evidence, 19. Human Review Needed, 20. Review Category, 21. Review Reason
+## Column order (verified 2026-08-14)
+1. ID, 2. Creator, 3. Title, 4. Epic, 5. Type, 6. Priority, 7. Size, 8. Problem, 9. Outcome, 10. Acceptance Criteria, 11. Original Source, 12. Duplicate Of, 13. Depends On, 14. Notes, 15. Implementation State, 16. Implementation Date, 17. Implemented By, 18. Evidence, 19. Human Review Needed, 20. Review Category, 21. Review Reason, 22. Created Date, 23. Modified Date, 24. Resolved Date
 
 ## Creating a backlog row from a rough idea
 When the human gives a rough idea, create a complete row rather than asking them to fill every field.
@@ -66,6 +66,9 @@ Fill the columns that exist in the sheet:
 - `Notes`: assumptions, uncertainty, or implementation cautions.
 - `Implementation State`: `Not Done` by default unless implementation is verified.
 - `Implementation Date`, `Implemented By`, `Evidence`: fill only when implementation is verified.
+- `Created Date`: set when a new row is created.
+- `Modified Date`: update when the row is materially changed.
+- `Resolved Date`: set when the item is resolved; leave blank while still open.
 
 ## Selecting work
 - Do not pick or implement rows where `Implementation State = Done`.

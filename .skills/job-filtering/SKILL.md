@@ -32,8 +32,10 @@ The hard gates in the title filter are:
 1. Empty title → `TITLE_EMPTY`
 2. User-configured `reject_title_rules` → e.g. `TITLE_BAD_KEYWORD`, `TITLE_BAD_ROLE`
 3. No pattern match (`TITLE_NOT_TARGET`) is **not** itself a hard reject. `job_review_pipeline.py::review_pre_detail_normalized_job()` consults the O*NET occupation-family classifier (`occupation_taxonomy.py::classify_title()`) as a conservative fallback:
-   - O*NET says the occupation family is clearly far (`RESULT_FAR`) → hard reject as `ONET_FAR_OCCUPATION`, no LLM call. `title_reason` stays `TITLE_NOT_TARGET` on this record.
-   - O*NET says near or uncertain (`RESULT_NEAR`/`RESULT_UNCERTAIN`) → treated as a potential match, `title_reason` is overwritten to `TITLE_REASON_POTENTIAL_MATCH`, and the job proceeds to detail fetch/LLM review.
+   - O*NET says the occupation family is clearly far (`RESULT_FAR`) → hard reject as `ONET_FAR_OCCUPATION`, with no title LLM or detail fetch. `title_reason` stays `TITLE_NOT_TARGET` on this record.
+   - O*NET says near or uncertain (`RESULT_NEAR`/`RESULT_UNCERTAIN`) → run the cheap title-only LLM judgment (`llm_gate.py::llm_judge_title()`) before fetching the job description when the LLM is available.
+   - Title LLM `no_match` → hard reject as `LLM_TITLE_NOT_TARGET`, with no detail fetch. `match` or `uncertain` → continue toward detail review. A genuine LLM/API/structured-output failure remains fail-open and continues to detail review; unavailable evidence must not become a false-negative hard reject.
+   - `llm_judge_title()` owns a typed structured-output contract. Use the provider SDK's structured parse path (`responses.parse()` for the current OpenAI adapter); do not reintroduce raw `json.loads()` parsing, markdown-fence stripping, regex recovery, or another fallback parser for this semantic gate.
    - The original O*NET verdict is preserved in `record["onet_classification"]` (never overwritten), so anything reading audit rows to detect "title didn't match but still went to review" must key off `onet_classification.result`, not `title_reason`/`reject_reason` — those get overwritten or never equal `TITLE_NOT_TARGET` once a row reaches final decision. See `review_insights.py::build_title_optimization_suggestions()`.
    - Do not insert extra deterministic semantic gates between `TITLE_NOT_TARGET` and this fallback path, such as "core keyword overlap" checks or guessed "domain qualifier" interpretations.
 
