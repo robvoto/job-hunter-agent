@@ -236,10 +236,16 @@ def test_onboarding_review_css_documents_final_summary_local_exception():
 
 
 def test_settings_exposes_adjacent_role_exploration_switch():
-    html = (ROOT_DIR / "templates" / "partials" / "settings" / "standard" / "settings-matrix.html").read_text(encoding="utf-8")
+    html = (
+        ROOT_DIR / "templates" / "partials" / "settings" / "standard" / "settings-matrix.html"
+    ).read_text(encoding="utf-8")
     js = (ROOT_DIR / "templates" / "static" / "settings" / "shared" / "settings-page.js").read_text(encoding="utf-8")
+
     assert 'id="explore_adjacent_roles" type="checkbox" role="switch"' in html
-    assert "__JOB_HUNTER_TITLE_TIER_EXPLORE_ADJACENT_ROLES_LABEL__" in html
+    assert '__JOB_HUNTER_TITLE_TIER_EXPLORE_ADJACENT_ROLES_LABEL__' in html
+    assert '__JOB_HUNTER_TITLE_TIER_EXPLORE_ADJACENT_ROLES_HELP__' in html
+    assert '<details class="field-info-drawer">' in html
+    assert '<span class="field-help">__JOB_HUNTER_TITLE_TIER_EXPLORE_ADJACENT_ROLES_HELP__</span>' not in html
     assert 'id="explore_adjacent_roles_state"' in html
     assert "explore_adjacent_roles: getToggleChecked('explore_adjacent_roles')" in js
     assert "setToggleChecked('explore_adjacent_roles', Boolean(profile.explore_adjacent_roles))" in js

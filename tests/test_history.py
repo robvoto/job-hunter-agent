@@ -2,9 +2,20 @@
 
 from datetime import datetime
 
-from job_hunter_agent.history import apply_kept_job_reuse, can_reuse_kept_job, update_job_history
+from job_hunter_agent.history import (
+    apply_detail_evidence_reuse,
+    apply_kept_job_reuse,
+    build_detail_evidence_snapshot,
+    can_reuse_detail_evidence,
+    can_reuse_kept_job,
+    update_job_history,
+)
 from job_hunter_agent.record_schema import (
+    RECORD_APPLY_METHOD_KEY,
     RECORD_DECISION_KEY,
+    RECORD_DESCRIPTION_SOURCE_KEY,
+    RECORD_DETAILS_STATUS_KEY,
+    RECORD_DETAILS_TEXT_KEY,
     RECORD_JOB_KEY,
     RECORD_LAST_KEPT_SNAPSHOT_KEY,
     RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
@@ -174,3 +185,65 @@ def test_apply_kept_job_reuse_restores_posting_channel_and_source_metadata():
 
     assert reused[RECORD_POSTING_CHANNEL_EVIDENCE_KEY] == snapshot[RECORD_POSTING_CHANNEL_EVIDENCE_KEY]
     assert reused[RECORD_SOURCE_METADATA_KEY] == snapshot[RECORD_SOURCE_METADATA_KEY]
+
+
+def _fetched_record(fetched_text: str = "Full role description text.") -> dict:
+    return {
+        RECORD_JOB_KEY: "seek:12345",
+        RECORD_DETAILS_TEXT_KEY: fetched_text,
+        RECORD_DETAILS_STATUS_KEY: "ok",
+        RECORD_SOURCE_METADATA_KEY: {"platform": "seek"},
+        RECORD_DESCRIPTION_SOURCE_KEY: "seek_detail_page",
+        RECORD_APPLY_METHOD_KEY: "direct_apply",
+        "_raw_source_payload": {"jobDetails": {"id": "12345"}},
+    }
+
+
+def test_build_detail_evidence_snapshot_captures_fetched_fields():
+    record = _fetched_record()
+
+    snapshot = build_detail_evidence_snapshot(record, "2026-06-01T00:00:00+10:00")
+
+    assert snapshot[RECORD_DETAILS_TEXT_KEY] == "Full role description text."
+    assert snapshot["raw_source_payload"] == {"jobDetails": {"id": "12345"}}
+    assert snapshot["fetched_at"] == "2026-06-01T00:00:00+10:00"
+
+
+def test_can_reuse_detail_evidence_true_within_window():
+    entry = {"detail_evidence": build_detail_evidence_snapshot(_fetched_record(), "2026-06-01T00:00:00+10:00")}
+
+    assert can_reuse_detail_evidence(entry, max_age_days=7, run_iso="2026-06-05T00:00:00+10:00") is True
+
+
+def test_can_reuse_detail_evidence_false_when_stale():
+    entry = {"detail_evidence": build_detail_evidence_snapshot(_fetched_record(), "2026-06-01T00:00:00+10:00")}
+
+    assert can_reuse_detail_evidence(entry, max_age_days=7, run_iso="2026-06-20T00:00:00+10:00") is False
+
+
+def test_can_reuse_detail_evidence_false_when_fetch_produced_no_text():
+    entry = {
+        "detail_evidence": build_detail_evidence_snapshot(
+            _fetched_record(fetched_text=""), "2026-06-01T00:00:00+10:00"
+        )
+    }
+
+    assert can_reuse_detail_evidence(entry, max_age_days=7, run_iso="2026-06-01T01:00:00+10:00") is False
+
+
+def test_can_reuse_detail_evidence_false_when_no_evidence_cached():
+    assert can_reuse_detail_evidence({}, max_age_days=7, run_iso="2026-06-01T00:00:00+10:00") is False
+
+
+def test_apply_detail_evidence_reuse_restores_fetched_fields_without_raw_html():
+    fetched = _fetched_record()
+    entry = {"detail_evidence": build_detail_evidence_snapshot(fetched, "2026-06-01T00:00:00+10:00")}
+
+    record = {RECORD_JOB_KEY: "seek:12345", "_raw_html": "<html>stale from a prior card</html>"}
+    reused = apply_detail_evidence_reuse(record, entry)
+
+    assert reused[RECORD_DETAILS_TEXT_KEY] == "Full role description text."
+    assert reused[RECORD_DETAILS_STATUS_KEY] == "ok"
+    assert reused[RECORD_APPLY_METHOD_KEY] == "direct_apply"
+    assert reused["_raw_source_payload"] == {"jobDetails": {"id": "12345"}}
+    assert reused["_raw_html"] is None

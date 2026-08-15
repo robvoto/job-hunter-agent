@@ -566,10 +566,27 @@ def finalize_scrape_run(
         if not run_was_stopped:
             run_stats["last_run_error"] = NO_FRESH_CARDS_ERROR
         run_stats["source_breakdown"] = _build_source_breakdown(context.enabled_sources, [])
+        run_stats["source_discovery_cache"] = context.source_cache_stats or {}
 
         _log_run_summary(run_stats, [])
         _log_source_final_stats(run_stats)
         _print_run_summary(run_stats)
+
+        # Persist LLM cache and job history before workspace rendering, which can
+        # fail independently (template/record bugs) and must not cost this run's
+        # already-computed LLM cache entries or job-history updates.
+        context.llm_cache, pruned_llm_cache_count = prune_llm_cache_for_current_profile(
+            context.llm_cache
+        )
+        if pruned_llm_cache_count:
+            logger.debug(
+                "[LLM][CACHE] pruned %d stale cache entries for the active profile fingerprint",
+                pruned_llm_cache_count,
+            )
+
+        save_llm_cache(context.llm_cache)
+
+        save_job_history(context.job_history)
 
         workspace_service.render_html(
             get_workspace_results_path(),
@@ -590,19 +607,6 @@ def finalize_scrape_run(
             datetime.now().astimezone(),
             context.dashboard_debug_mode,
         )
-
-        context.llm_cache, pruned_llm_cache_count = prune_llm_cache_for_current_profile(
-            context.llm_cache
-        )
-        if pruned_llm_cache_count:
-            logger.debug(
-                "[LLM][CACHE] pruned %d stale cache entries for the active profile fingerprint",
-                pruned_llm_cache_count,
-            )
-
-        save_llm_cache(context.llm_cache)
-
-        save_job_history(context.job_history)
 
         if run_was_stopped:
             logger.info("Run stopped before any fresh cards were captured.")
@@ -700,6 +704,22 @@ def finalize_scrape_run(
 
     workspace_path = get_workspace_results_path()
 
+    # Persist LLM cache and job history before workspace rendering, which can
+    # fail independently (template/record bugs) and must not cost this run's
+    # already-computed LLM cache entries or job-history updates.
+    context.llm_cache, pruned_llm_cache_count = prune_llm_cache_for_current_profile(
+        context.llm_cache
+    )
+    if pruned_llm_cache_count:
+        logger.debug(
+            "[LLM][CACHE] pruned %d stale cache entries for the active profile fingerprint",
+            pruned_llm_cache_count,
+        )
+
+    save_llm_cache(context.llm_cache)
+
+    save_job_history(context.job_history)
+
     workspace_service.render_html(
         workspace_path,
         merged_pool,
@@ -714,19 +734,6 @@ def finalize_scrape_run(
         context.dashboard_debug_mode,
         workspace_records=workspace_records,
     )
-
-    context.llm_cache, pruned_llm_cache_count = prune_llm_cache_for_current_profile(
-        context.llm_cache
-    )
-    if pruned_llm_cache_count:
-        logger.debug(
-            "[LLM][CACHE] pruned %d stale cache entries for the active profile fingerprint",
-            pruned_llm_cache_count,
-        )
-
-    save_llm_cache(context.llm_cache)
-
-    save_job_history(context.job_history)
 
     write_debug_json(audit_rows)
 

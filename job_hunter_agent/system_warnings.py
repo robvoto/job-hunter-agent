@@ -18,6 +18,15 @@ _SYSTEM_WARNING_DIAGNOSTIC_WARNING_CATEGORIES = frozenset(
     {
         "job_identity_uncertainty",
         "llm_requirement_coverage",
+        "preference_uncertainty",
+        "requirement_coverage_uncertainty",
+    }
+)
+_SCRAPER_VALIDATION_CATEGORIES = frozenset(
+    {
+        "scraper_configuration_validation",
+        "source_failure",
+        "source_timeout",
     }
 )
 
@@ -42,23 +51,84 @@ def _warning_row(row) -> dict[str, Any]:
     return payload
 
 
-def is_actionable_system_warning(warning: dict[str, Any]) -> bool:
-    """Return whether a warning should appear in the top-level admin alert feed.
+def classify_system_warning(warning: dict[str, Any]) -> dict[str, str]:
+    """Classify one stored warning for the admin System health surface.
 
-    The admin panel is reserved for failures an operator can act on quickly.
-    Low-signal diagnostics still remain stored in SQLite and logs, but do not
-    crowd the actionable warning surface.
+    This module is the single owner of actionable-versus-diagnostic policy. UI
+    consumers receive the classification result and must not recreate category
+    lists or severity rules.
     """
 
-    severity = str(warning.get("severity") or "").strip().lower()
-    category = str(warning.get("category") or "").strip().lower()
-    if severity in {"critical", "error"}:
-        return True
+    severity = str(warning["severity"]).strip().lower()
+    category = str(warning["category"]).strip().lower()
+
     if severity == "info":
-        return False
+        return {"kind": "diagnostic"}
     if severity == "warning" and category in _SYSTEM_WARNING_DIAGNOSTIC_WARNING_CATEGORIES:
-        return False
-    return severity == "warning"
+        return {"kind": "diagnostic"}
+    return {"kind": "operational"}
+
+
+def is_actionable_system_warning(warning: dict[str, Any]) -> bool:
+    """Return whether a warning belongs in the default System health incident feed."""
+
+    return classify_system_warning(warning)["kind"] == "operational"
+
+
+def system_warning_operator_action(warning: dict[str, Any]) -> dict[str, str] | None:
+    """Return the operator action contract owned by this warning classification."""
+
+    if not is_actionable_system_warning(warning):
+        return None
+    category = str(warning["category"]).strip().lower()
+    if category in _SCRAPER_VALIDATION_CATEGORIES:
+        return {
+            "type": "run_scraper_validation",
+            "label_key": "system_health_scraper_validation_action_label",
+            "guidance_key": "system_health_scraper_investigation_help",
+        }
+    return None
+
+
+def aggregate_system_warning_diagnostics(
+    warnings: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Aggregate diagnostic rows by category and source with the latest sample."""
+
+    groups: dict[tuple[str, str], dict[str, Any]] = {}
+    for warning in warnings:
+        if classify_system_warning(warning)["kind"] != "diagnostic":
+            continue
+
+        category = str(warning["category"]).strip()
+        source = str(warning["source"]).strip()
+        key = (category, source)
+        count = int(warning["count"])
+        last_seen_at = str(warning["last_seen_at"]).strip()
+
+        group = groups.get(key)
+        if group is None:
+            groups[key] = {
+                "category": category,
+                "source": source,
+                "record_count": 1,
+                "occurrence_count": count,
+                "last_seen_at": last_seen_at,
+                "sample": dict(warning),
+            }
+            continue
+
+        group["record_count"] += 1
+        group["occurrence_count"] += count
+        if last_seen_at > str(group["last_seen_at"]):
+            group["last_seen_at"] = last_seen_at
+            group["sample"] = dict(warning)
+
+    return sorted(
+        groups.values(),
+        key=lambda item: (str(item["last_seen_at"]), str(item["category"]), str(item["source"])),
+        reverse=True,
+    )
 
 
 def make_system_warning_fingerprint(*parts: Any) -> str:
@@ -136,10 +206,9 @@ def record_system_warning(
                 context_json = excluded.context_json,
                 last_seen_at = excluded.last_seen_at,
                 count = system_warnings.count + 1,
-                status = CASE
-                    WHEN system_warnings.status = 'unresolved' THEN excluded.status
-                    ELSE system_warnings.status
-                END
+                -- Every recurrence is a fresh incident, regardless of the prior
+                -- reviewed/dismissed status or any caller-supplied insert status.
+                status = 'unresolved'
             """,
             (
                 severity_text,

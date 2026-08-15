@@ -35,6 +35,7 @@ from job_hunter_agent.global_settings import (
     KEY_SIGNAL_CLUSTER_DENSE_SNIPPET_ALIAS_HITS,
     KEY_SIGNAL_CLUSTER_MIN_ALIAS_HITS,
     KEY_SIGNAL_CLUSTER_MIN_SNIPPET_HITS,
+    get_llm_capability_naming_aliases_max_items,
 )
 from job_hunter_agent.profile_learning import (
     _CURRENT_YEAR,
@@ -432,7 +433,13 @@ def _rename_top_clusters(
     top = candidates[:20]
     try:
         labels = name_capability_clusters(
-            [{"name": item["seed"], "aliases": item["aliases"][:6]} for item in top],
+            [
+                {
+                    "name": item["seed"],
+                    "aliases": item["aliases"][: get_llm_capability_naming_aliases_max_items()],
+                }
+                for item in top
+            ],
             llm_client=llm_client,
         )
         if not labels:

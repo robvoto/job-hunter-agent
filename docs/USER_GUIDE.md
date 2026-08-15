@@ -149,7 +149,7 @@ Changes here affect the app globally, but users do not edit them from their own 
 
 `Capability rules`
 
-- structured capability names with strength and aliases
+- structured capability names with strength and Related Skills
 - used by deterministic filtering and the LLM prompt
 
 `Title targeting`

@@ -28,8 +28,11 @@ from job_hunter_agent.source_documents import (
     save_source_materials,
 )
 from job_hunter_agent.system_warnings import (
+    aggregate_system_warning_diagnostics,
+    classify_system_warning,
     is_actionable_system_warning,
     list_system_warnings,
+    system_warning_operator_action,
     update_system_warning_status,
 )
 
@@ -297,21 +300,57 @@ def api_admin_scraper_config_validation(request: Request):  # type: ignore[no-un
 
 
 @router.get("/api/admin/system-warnings")
-def api_admin_system_warnings_get(request: Request):  # type: ignore[no-untyped-def]
+def api_admin_system_warnings_get(
+    request: Request, include_diagnostics: bool = False
+):  # type: ignore[no-untyped-def]
     if not is_admin(request):
         return auth_required_response("/api/admin/system-warnings", False)
     try:
+        labels = srv.load_system_health_labels()
         unresolved_warnings = list_system_warnings()
-        actionable_warnings = [
-            warning for warning in unresolved_warnings if is_actionable_system_warning(warning)
-        ]
+        actionable_warnings = []
+        diagnostics = []
+
+        for warning in unresolved_warnings:
+            enriched = dict(warning)
+            classification = classify_system_warning(enriched)["kind"]
+            enriched["classification"] = classification
+            if classification == "diagnostic":
+                diagnostics.append(enriched)
+                continue
+
+            operator_action = system_warning_operator_action(enriched)
+            if operator_action is None:
+                enriched["operator_action"] = None
+                enriched["operator_guidance"] = labels[
+                    "system_health_developer_investigation_help"
+                ]
+            else:
+                enriched["operator_action"] = {
+                    "type": operator_action["type"],
+                    "label": labels[operator_action["label_key"]],
+                }
+                enriched["operator_guidance"] = labels[operator_action["guidance_key"]]
+            actionable_warnings.append(enriched)
+
+        diagnostic_groups = aggregate_system_warning_diagnostics(diagnostics)
+        for group in diagnostic_groups:
+            group["classification"] = "diagnostic"
+
         return json_response(
             {
                 "warnings": actionable_warnings,
+                "diagnostic_groups": diagnostic_groups if include_diagnostics else [],
+                "labels": labels,
                 "summary": {
-                    "total_unresolved": len(unresolved_warnings),
-                    "visible_actionable": len(actionable_warnings),
-                    "hidden_diagnostics": len(unresolved_warnings) - len(actionable_warnings),
+                    "total_unresolved_records": len(unresolved_warnings),
+                    "active_problem_records": len(actionable_warnings),
+                    "active_problem_occurrences": sum(
+                        int(warning["count"]) for warning in actionable_warnings
+                    ),
+                    "diagnostic_records": len(diagnostics),
+                    "diagnostic_occurrences": sum(int(warning["count"]) for warning in diagnostics),
+                    "diagnostic_groups": len(diagnostic_groups),
                 },
             }
         )
@@ -328,8 +367,20 @@ def api_admin_system_warnings_patch(
     if not is_admin(request):
         return auth_required_response("/api/admin/system-warnings", False)
     try:
-        status = str(body.get("status") or "").strip().lower()
-        updated = update_system_warning_status(warning_id, status)
+        action = str(body.get("action") or "").strip().lower()
+        if action != "acknowledge":
+            raise ValueError("Unsupported system warning action")
+
+        warning = next(
+            (item for item in list_system_warnings() if int(item["id"]) == int(warning_id)),
+            None,
+        )
+        if warning is None:
+            raise LookupError(f"System warning {warning_id} not found")
+        if not is_actionable_system_warning(warning):
+            raise ValueError("Technical diagnostics are read-only")
+
+        updated = update_system_warning_status(warning_id, "reviewed")
         return json_response({"ok": True, "warning": updated})
     except LookupError as exc:
         return json_response({"error": str(exc)}, 404)

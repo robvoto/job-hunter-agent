@@ -29,10 +29,10 @@ from job_hunter_agent.global_settings import (
     KEY_CAPABILITY_ALIAS_LIMIT,
     KEY_DATE_RANGE_DAYS,
     KEY_LIMITS,
-    KEY_LOCATIONS_MAX_SELECTED,
     KEY_LINKEDIN_HOURS_OLD,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
     KEY_LLM_SETTINGS,
+    KEY_LOCATIONS_MAX_SELECTED,
     KEY_MODEL_OPTIONS,
     KEY_SEARCH_SETTINGS,
     KEY_SEEK_MAX_PAGES,
@@ -46,12 +46,11 @@ from job_hunter_agent.io_utils import (
     clear_agent_state,
     clear_audit_rows,
     clear_job_history,
-    clear_runtime_caches,
     clear_review_data,
     clear_run_stats,
+    clear_runtime_caches,
     clear_user_settings,
-    clear_workspace_pool, 
-    load_parsing_rules,
+    clear_workspace_pool,
     load_run_stats,
     load_ui_labels,
     write_run_stats,
@@ -59,14 +58,13 @@ from job_hunter_agent.io_utils import (
 from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.locations import resolve_location
 from job_hunter_agent.paths import (
+    REPO_ROOT as ROOT_DIR,
+)
+from job_hunter_agent.paths import (
     USERS_DIR,
     get_workspace_results_path,
 )
 from job_hunter_agent.posting_utils import parse_timestamp
-from job_hunter_agent.release_metadata import load_app_release_metadata
-from job_hunter_agent.paths import (
-    REPO_ROOT as ROOT_DIR,
-)
 from job_hunter_agent.profile_store import (
     DEFAULT_ONBOARDING_SETTINGS,
     DEFAULT_PROFILE,
@@ -103,6 +101,9 @@ from job_hunter_agent.profile_store import (
     save_profile,
     validate_search_keywords,
 )
+from job_hunter_agent.release_metadata import (
+    load_app_release_metadata as load_app_release_metadata,
+)
 from job_hunter_agent.run_control import (
     begin_run_progress_scope,
     clear_run_stop_request,
@@ -120,9 +121,9 @@ from job_hunter_agent.user_settings import (
     KEY_SCHEDULE,
     KEY_TELEGRAM,
     KEY_WORKSPACE,
+    list_user_setting_user_ids,
     load_agent_state,
     load_user_settings,
-    list_user_setting_user_ids,
 )
 from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
 
@@ -481,6 +482,40 @@ _ONBOARDING_FLOW_LABEL_KEYS = (
     "reading_cv_label",
 )
 
+_SYSTEM_HEALTH_LABEL_KEYS = (
+    "system_health_heading",
+    "system_health_copy",
+    "system_health_refresh_label",
+    "system_health_diagnostics_show_label",
+    "system_health_diagnostics_hide_label",
+    "system_health_checking_status",
+    "system_health_empty",
+    "system_health_diagnostics_heading",
+    "system_health_diagnostics_copy",
+    "system_health_diagnostics_empty",
+    "system_health_acknowledge_label",
+    "system_health_acknowledging_label",
+    "system_health_acknowledged_status",
+    "system_health_scraper_validation_action_label",
+    "system_health_scraper_validation_running_label",
+    "system_health_scraper_validation_running_status",
+    "system_health_scraper_validation_completed_status",
+    "system_health_scraper_validation_error",
+    "system_health_developer_investigation_help",
+    "system_health_scraper_investigation_help",
+    "system_health_technical_context_label",
+    "system_health_sample_label",
+    "system_health_records_label",
+    "system_health_occurrences_label",
+    "system_health_last_seen_label",
+    "system_health_job_label",
+    "system_health_run_label",
+    "system_health_active_count_template",
+    "system_health_diagnostic_count_template",
+    "system_health_load_error",
+    "system_health_action_error",
+)
+
 _GLOBAL_SETTINGS_LABEL_KEYS = (
     "card_highlight_heading",
     "card_highlight_copy",
@@ -608,6 +643,7 @@ _GLOBAL_SETTINGS_LABEL_KEYS = (
     "capability_presets_heading",
     "capability_presets_copy",
     "capability_presets_empty_help",
+    *_SYSTEM_HEALTH_LABEL_KEYS,
 )
 
 
@@ -824,6 +860,12 @@ def load_global_settings_labels() -> dict[str, str]:
     return _load_required_ui_labels("global_settings_labels", _GLOBAL_SETTINGS_LABEL_KEYS)
 
 
+def load_system_health_labels() -> dict[str, str]:
+    """Return the managed copy used by the admin System health panel."""
+
+    return _load_required_ui_labels("global_settings_labels", _SYSTEM_HEALTH_LABEL_KEYS)
+
+
 def get_docs() -> list[dict[str, str]]:
     """Return allowed markdown docs under the repo root (for /docs API)."""
     docs: list[dict[str, str]] = []
@@ -1015,6 +1057,9 @@ def build_bootstrap_script(
     )
     parts.append(
         f"<script>window.__JOB_HUNTER_SETTINGS_ALERTS_LABELS__ = {json.dumps(load_settings_alerts_labels(), ensure_ascii=True)};</script>"
+    )
+    parts.append(
+        f"<script>window.__JOB_HUNTER_SYSTEM_HEALTH_LABELS__ = {json.dumps(load_system_health_labels(), ensure_ascii=True)};</script>"
     )
     parts.append(
         f"<script>window.__JOB_HUNTER_SETTINGS_CLEARANCES_LABELS__ = {json.dumps(load_settings_clearances_labels(), ensure_ascii=True)};</script>"

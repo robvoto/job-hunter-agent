@@ -13,6 +13,7 @@ from job_hunter_agent import (
 from job_hunter_agent.database import init_db
 from job_hunter_agent.filters import build_title_block_rule
 from job_hunter_agent.fit_scoring import fit_score, fit_score_breakdown
+from job_hunter_agent.history import update_job_history
 from job_hunter_agent.job_review_pipeline import (
     ReviewPipelineContext,
     review_post_detail_normalized_job,
@@ -1182,6 +1183,62 @@ def test_external_apply_unverified_original_date_does_not_reject(monkeypatch):
     assert updated_record[RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY] == "unverified"
     assert updated_record[RECORD_ORIGINAL_POSTED_DATE_KEY] == ""
     assert updated_record[RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY] is None
+
+
+def _seed_reusable_kept_history(context, source: str) -> None:
+    kept_record = _base_record(source, "jobAdDetails", "card")
+    kept_record[RECORD_DECISION_KEY] = "KEEP"
+    kept_record["llm_decision"] = "KEEP"
+    kept_record["llm_fit_grade"] = "STRONG"
+    kept_record[RECORD_REQUIREMENT_COVERAGE_KEY] = [
+        {"requirement": "Stakeholder engagement", "importance": "required", "status": "supported"}
+    ]
+    kept_record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY] = {
+        "kind": "direct_employer",
+        "source": "llm_classifier",
+        "text_evidence": ["The ad describes the employer's own team."],
+    }
+    update_job_history(context.job_history, kept_record, context.run_iso)
+
+
+def test_seek_kept_job_with_reusable_snapshot_skips_detail_fetch(monkeypatch):
+    """Regression: SEEK used to be unconditionally deferred to post-detail reuse,
+    forcing a browser detail fetch even for a job with a fresh, reusable KEEP
+    snapshot. SEEK no longer performs the external posting-date check that
+    justified deferring (see _should_check_external_posting_date), so the
+    pre-detail reuse short-circuit should now apply."""
+    context = _review_context("SEEK")
+    _seed_reusable_kept_history(context, "seek")
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "analyze_title_filters",
+        lambda title, profile: {"ok": True, "reason": "OK"},
+    )
+
+    new_card = _base_record("seek", "jobAdDetails", "card")
+    outcome, _, _, should_fetch = review_pre_detail_normalized_job(new_card, context)
+
+    assert should_fetch is False
+    assert outcome[RECORD_DECISION_KEY] == "KEEP"
+
+
+def test_linkedin_external_apply_still_defers_reuse_to_post_detail(monkeypatch):
+    """LinkedIn external-apply records must still defer reuse until after the
+    post-detail stale-repost check runs, so a stale repost can still be caught
+    even for a job that was previously kept."""
+    context = _review_context("LINKEDIN")
+    _seed_reusable_kept_history(context, "linkedin")
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "analyze_title_filters",
+        lambda title, profile: {"ok": True, "reason": "OK"},
+    )
+
+    new_card = _base_record("linkedin", "jobAdDetails", "card")
+    new_card[RECORD_APPLY_METHOD_KEY] = APPLY_METHOD_EXTERNAL_APPLY
+    _, _, _, should_fetch = review_pre_detail_normalized_job(new_card, context)
+
+    assert should_fetch is True
 
 
 def test_required_eligibility_rejects_llm_keep_when_profile_fact_is_false(monkeypatch):

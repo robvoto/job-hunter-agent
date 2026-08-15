@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+from job_hunter_agent import preferences
 from job_hunter_agent.database import db_conn, init_db
 from job_hunter_agent.system_warnings import (
+    aggregate_system_warning_diagnostics,
     is_actionable_system_warning,
     list_system_warnings,
     record_system_warning,
+    system_warning_operator_action,
     update_system_warning_status,
 )
 
 
-def test_system_warning_record_dedupes_and_preserves_review_status(tmp_path):
+def test_system_warning_record_dedupes_and_reopens_when_fault_recurs(tmp_path):
     db = tmp_path / "warnings.db"
     init_db(db)
 
@@ -56,7 +59,7 @@ def test_system_warning_record_dedupes_and_preserves_review_status(tmp_path):
     )
 
     assert third["count"] == 3
-    assert third["status"] == "reviewed"
+    assert third["status"] == "unresolved"
     assert third["context"]["reason_code"] == "example"
 
 
@@ -74,7 +77,7 @@ def test_system_warning_listing_defaults_to_unresolved_and_hides_dismissed(tmp_p
         db_path=db,
     )
     record_system_warning(
-        severity="info",
+        severity="warning",
         category="preference_uncertainty",
         source="passes_preference_filters",
         message="Work mode unclear.",
@@ -130,7 +133,7 @@ def test_actionable_warning_filter_hides_diagnostics(tmp_path):
         db_path=db,
     )
     record_system_warning(
-        severity="info",
+        severity="warning",
         category="preference_uncertainty",
         source="preferences",
         message="Preference is unclear.",
@@ -158,3 +161,103 @@ def test_actionable_warning_filter_hides_diagnostics(tmp_path):
     actionable = [warning for warning in warnings if is_actionable_system_warning(warning)]
 
     assert [warning["fingerprint"] for warning in actionable] == ["fingerprint-error"]
+
+
+def test_preference_work_mode_uncertainty_keeps_production_shape_and_passes_filter(monkeypatch):
+    recorded = []
+    monkeypatch.setattr(preferences, "append_uncertainty_log", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        preferences,
+        "record_system_warning",
+        lambda **kwargs: recorded.append(kwargs) or kwargs,
+    )
+
+    ok, reason = preferences.passes_preference_filters(
+        {"job_key": "seek:work-mode", "work_type": "Permanent", "work_mode": ""},
+        {"match_preferences": {"work_mode_preference": ["remote"]}},
+    )
+
+    assert (ok, reason) == (True, "OK")
+    warning = next(
+        item for item in recorded if item["context"]["reason_code"] == "WORK_MODE_UNCLEAR"
+    )
+    assert warning["severity"] == "warning"
+    assert warning["category"] == "preference_uncertainty"
+    assert warning["source"] == "passes_preference_filters"
+    assert is_actionable_system_warning(warning) is False
+
+
+def test_diagnostics_aggregate_by_category_and_source_without_deleting_records(tmp_path):
+    db = tmp_path / "warnings.db"
+    init_db(db)
+
+    record_system_warning(
+        severity="warning",
+        category="preference_uncertainty",
+        source="passes_preference_filters",
+        message="Work mode unclear for first job.",
+        fingerprint="preference-1",
+        job_key="seek:1",
+        db_path=db,
+    )
+    record_system_warning(
+        severity="warning",
+        category="preference_uncertainty",
+        source="passes_preference_filters",
+        message="Work mode unclear for first job.",
+        fingerprint="preference-1",
+        job_key="seek:1",
+        db_path=db,
+    )
+    record_system_warning(
+        severity="warning",
+        category="preference_uncertainty",
+        source="passes_preference_filters",
+        message="Work mode unclear for second job.",
+        fingerprint="preference-2",
+        job_key="seek:2",
+        db_path=db,
+    )
+
+    diagnostics = [
+        warning for warning in list_system_warnings(db_path=db)
+        if not is_actionable_system_warning(warning)
+    ]
+    groups = aggregate_system_warning_diagnostics(diagnostics)
+
+    assert len(diagnostics) == 2
+    assert len(groups) == 1
+    assert groups[0]["category"] == "preference_uncertainty"
+    assert groups[0]["source"] == "passes_preference_filters"
+    assert groups[0]["record_count"] == 2
+    assert groups[0]["occurrence_count"] == 3
+    assert groups[0]["sample"]["id"] in {warning["id"] for warning in diagnostics}
+
+
+def test_system_warning_operator_action_only_offers_a_real_supported_check():
+    source_failure = {
+        "severity": "error",
+        "category": "source_failure",
+        "source": "seek",
+    }
+    source_timeout = {
+        "severity": "warning",
+        "category": "source_timeout",
+        "source": "linkedin",
+    }
+    data_failure = {
+        "severity": "warning",
+        "category": "json_parse_failure",
+        "source": "load_json_dict",
+    }
+
+    assert is_actionable_system_warning(source_failure) is True
+    assert is_actionable_system_warning(source_timeout) is True
+    expected_scraper_action = {
+        "type": "run_scraper_validation",
+        "label_key": "system_health_scraper_validation_action_label",
+        "guidance_key": "system_health_scraper_investigation_help",
+    }
+    assert system_warning_operator_action(source_failure) == expected_scraper_action
+    assert system_warning_operator_action(source_timeout) == expected_scraper_action
+    assert system_warning_operator_action(data_failure) is None

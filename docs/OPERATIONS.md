@@ -234,7 +234,8 @@ Server logs:
 - the AWS service startup path rebuilds saved workspace HTML before serving requests, so `deploy-jobhunter-release` refreshes rendered workspace output as part of a normal deploy
 - browser `console.log` is separate from server logs and only matters for JS running in the page
 - debug/audit uncertainty events are appended to `output/uncertainty.jsonl`
-- reviewable runtime warnings are stored in SQLite `system_warnings` and shown in the admin settings page
+- runtime events are stored in SQLite `system_warnings`; Global settings → System health shows unresolved operational problems by default and groups routine uncertainty into an optional read-only diagnostics drill-down
+- acknowledging an operational problem hides the current occurrence only; the same fingerprint returns to the active list if the fault recurs
 - to emit one, call `job_hunter_agent.runtime_helpers.build_uncertainty_entry()` then `append_uncertainty_log()` with `job_hunter_agent.paths.UNCERTAINTY_LOG_PATH`
 - keep `reason_code` stable so the file stays queryable across agents and future runs
 - run-progress updates are also written into `output/server.log` (at DEBUG level, under `./run --debug`) as `RUN_PROGRESS` markers, so a stuck overlay can be matched to the backend timeline after the fact

@@ -162,7 +162,7 @@ def get_llm_capability_rules_max_items() -> int:
 
 
 def get_llm_capability_rule_aliases_max_items() -> int:
-    """Max aliases kept per capability rule."""
+    """Max Related Skills shown per capability rule in fit-review prompts."""
     return get_llm_prompt_setting_int(KEY_LLM_PROMPT_CAPABILITY_RULE_ALIASES_MAX_ITEMS)
 
 

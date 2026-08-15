@@ -5,6 +5,7 @@ import json
 import pytest
 
 from job_hunter_agent import llm_gate
+import job_hunter_agent.routes.review as review_routes
 
 
 class _FakeResponse:
@@ -318,6 +319,29 @@ def test_llm_suggest_rejection_blockers_uses_llm_response(monkeypatch):
     system_prompt = fake_client.responses.calls[0]["input"][0]["content"]
     assert "platform" in system_prompt
     assert "industry" in system_prompt
+
+
+def test_rejection_suggestions_route_uses_llm_gate(monkeypatch):
+    monkeypatch.setattr(review_routes, "get_job_description", lambda job_id: "Job description")
+    monkeypatch.setattr(
+        review_routes.llm_gate,
+        "llm_suggest_rejection_blockers",
+        lambda description: ["Salesforce"],
+    )
+    monkeypatch.setattr(review_routes.srv, "_rejection_suggestions_cache", {})
+    monkeypatch.setattr(
+        review_routes.srv.SettingsHandler,
+        "_issue_rejection_suggestion_approval_tokens",
+        lambda job_id, suggestions: {"Salesforce": "approval-token"},
+    )
+
+    response = review_routes.api_rejection_suggestions("job-1")
+
+    assert response.status_code == 200
+    assert json.loads(response.body) == {
+        "other": ["Salesforce"],
+        "approval_tokens": {"Salesforce": "approval-token"},
+    }
 
 
 def test_normalize_llm_review_payload_fit_review_shape():

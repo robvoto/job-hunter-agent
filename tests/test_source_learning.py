@@ -198,7 +198,47 @@ def test_resolve_llm_review_payload_cache_miss_calls_llm(monkeypatch):
     assert called["input"] == "Title\nSource-listed company/advertiser: Company\nDescription"
     assert payload["payload_source"] == "llm"
     assert payload["fit_review"] == {"decision": "KEEP", "grade": "SOLID"}
-    assert llm_fp not in llm_cache
+    # A cache MISS must be written back so a later equivalent job hits the cache.
+    assert llm_fp in llm_cache
+    assert llm_cache[llm_fp]["fit_review"] == {"decision": "KEEP", "grade": "SOLID"}
+
+
+def test_resolve_llm_review_payload_second_equivalent_call_hits_cache(monkeypatch):
+    """Regression: a MISS used to compute a fresh payload but never write it into
+    llm_cache, so a second call for the same job description always missed again
+    and re-called the LLM. The write-back must make the second call a cache HIT."""
+    record = _build_record()
+    llm_cache: dict = {}
+    called = {"count": 0}
+
+    def fake_llm(*_args, **_kwargs):
+        called["count"] += 1
+        return {
+            "fit_review": {"decision": "KEEP", "grade": "SOLID"},
+            "learning_candidates": [],
+            "contextual_capability_matches": [],
+            "job_requirements": ["Stakeholder engagement"],
+            "requirement_coverage": [
+                {
+                    "requirement": "Stakeholder engagement",
+                    "status": "supported",
+                    "capability_name": "stakeholder engagement",
+                    "matched_job_text": "stakeholder workshops",
+                    "profile_support": ["stakeholder management"],
+                },
+            ],
+        }
+
+    monkeypatch.setattr(source_learning, "llm_is_enabled", lambda: True)
+    monkeypatch.setattr(source_learning, "llm_should_consider_with_learning", fake_llm)
+
+    first = source_learning.resolve_llm_review_payload(record, llm_cache)
+    second = source_learning.resolve_llm_review_payload(record, llm_cache)
+
+    assert called["count"] == 1
+    assert first["payload_source"] == "llm"
+    assert second["payload_source"] == "cache"
+    assert second["fit_review"]["decision"] == "KEEP"
 
 
 def test_resolve_llm_review_payload_partial_cache_calls_llm(monkeypatch):
@@ -261,6 +301,8 @@ def test_resolve_llm_review_payload_partial_cache_calls_llm(monkeypatch):
     assert called["count"] == 1
     assert payload["payload_source"] == "llm"
     assert payload["fit_review"] == {"decision": "KEEP", "grade": "STRONG"}
+    # The freshly computed fit_review is written back into the cache entry.
+    assert llm_cache[llm_fp]["fit_review"] == {"decision": "KEEP", "grade": "STRONG"}
 
 
 def test_resolve_llm_review_payload_counts_truncations(monkeypatch):

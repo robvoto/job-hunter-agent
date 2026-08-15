@@ -615,7 +615,10 @@ def render_html(
     )
 
     workspace_config_labels = {
-        "rejectionLoadingSuggestions": ws_page_labels.get("rejection_loading_suggestions")
+        "rejectionLoadingSuggestions": ws_page_labels.get("rejection_loading_suggestions"),
+        "profileGapAddedLabel": ws_page_labels["LABEL_WS_PROFILE_GAP_ADDED_LABEL"],
+        "profileGapNotHaveSavedLabel": ws_page_labels["LABEL_WS_PROFILE_GAP_NOT_HAVE_SAVED_LABEL"],
+        "profileGapErrorLabel": ws_page_labels["LABEL_WS_PROFILE_GAP_ERROR_LABEL"],
     }
 
     top_reject_reasons_html = "".join(

@@ -163,10 +163,13 @@ def build_seek_search_targets(
     profile: dict, configured_date_range: int, sort_newest_first: bool
 ) -> List[dict]:
     search_settings = get_search_settings(profile)
-    keywords = str(search_settings.get("keywords") or "").strip()
+    preferred_roles = [
+        str(value).strip() for value in (profile.get("target_roles") or []) if str(value).strip()
+    ]
+    keywords = preferred_roles[0] if preferred_roles else str(search_settings.get("keywords") or "").strip()
     if not keywords:
         raise ValueError(
-            "Search keywords are not configured. Please complete onboarding and set a search keyword before running."
+            "No preferred role is configured. Please complete onboarding and add a preferred role before running."
         )
     locations = _dedupe_preserve_order(
         [str(value).strip() for value in search_settings.get("locations", []) if str(value).strip()]

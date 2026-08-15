@@ -222,7 +222,7 @@ def test_linkedin_search_targets_include_distinct_profile_roles():
     targets = scraper._build_search_targets({"keywords": "scrum master", "locations": ["Sydney"]})
 
     assert [target["search_term"] for target in targets] == [
-        "scrum master",
+        "Scrum Master",
         "Agile Project Coordinator",
         "Delivery Manager",
     ]
@@ -454,7 +454,7 @@ def test_linkedin_step_through_pauses_on_rejected_jobs(monkeypatch):
     assert pause_calls == []
 
 
-def test_linkedin_stops_before_starting_next_target_after_stop_request(monkeypatch):
+def test_linkedin_stops_processing_rows_after_stop_request(monkeypatch):
     from job_hunter_agent.scrapers import linkedin as linkedin_module
 
     class _Rows:
@@ -528,7 +528,10 @@ def test_linkedin_stops_before_starting_next_target_after_stop_request(monkeypat
         lambda record, _context: ({"decision": "KEEP"}, record, [], True),
     )
 
+    reviewed_terms: list[str] = []
+
     def _fake_review(record, _context, hooks=None):
+        reviewed_terms.append(record["search_keywords"])
         stop_requested["value"] = True
         return {"decision": "KEEP"}, record, []
 
@@ -536,8 +539,193 @@ def test_linkedin_stops_before_starting_next_target_after_stop_request(monkeypat
 
     kept_records, _, _ = scraper.scrape()
 
+    # Both targets' jobspy fetches may run concurrently (bounded prefetch), but once
+    # the stop request fires during target 1's row review, target 2's rows must never
+    # be reviewed/kept.
     assert len(kept_records) == 1
-    assert fetched_terms == ["scrum master"]
+    assert reviewed_terms == ["scrum master"]
+
+
+def test_linkedin_prefetches_targets_concurrently_bounded_by_setting(monkeypatch):
+    import threading
+    import time as time_module
+
+    from job_hunter_agent.scrapers import linkedin as linkedin_module
+
+    class _Rows:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def sort_values(self, **_kwargs):
+            return self
+
+        def iterrows(self):
+            return enumerate(self._rows)
+
+        def __len__(self):
+            return len(self._rows)
+
+    num_targets = 4
+    configured_workers = 2
+    scraper = LinkedInScraper(
+        profile={"search_settings": {"linkedin_parallel_search_workers": configured_workers}},
+        llm_cache={},
+        job_history={},
+        applied_job_keys=set(),
+        hidden_job_keys=set(),
+        run_iso="2026-06-22T09:00:00+10:00",
+    )
+
+    monkeypatch.setattr(
+        scraper,
+        "_build_search_targets",
+        lambda _settings: [
+            {
+                "search_term": f"role-{idx}",
+                "location": "Sydney, Australia",
+                "results_wanted": 1,
+                "hours_old": 168,
+                "sort_newest_first": False,
+                "easy_apply": None,
+            }
+            for idx in range(num_targets)
+        ],
+    )
+
+    concurrency_lock = threading.Lock()
+    in_flight = {"current": 0, "peak": 0}
+
+    def _fake_fetch(target):
+        idx = int(target["search_term"].split("-")[1])
+        with concurrency_lock:
+            in_flight["current"] += 1
+            in_flight["peak"] = max(in_flight["peak"], in_flight["current"])
+        try:
+            # Hold the "fetch" open briefly so overlapping submissions have a
+            # chance to run concurrently rather than racing straight through.
+            time_module.sleep(0.05)
+        finally:
+            with concurrency_lock:
+                in_flight["current"] -= 1
+        return _Rows(
+            [
+                {
+                    "id": f"li-{idx}",
+                    "title": f"Role {idx}",
+                    "company": "Example Co",
+                    "location": "Sydney",
+                    "job_url": f"https://www.linkedin.com/jobs/view/{idx}",
+                    "description": "Example description",
+                }
+            ]
+        )
+
+    monkeypatch.setattr(scraper, "_fetch_jobspy", _fake_fetch)
+    monkeypatch.setattr(scraper, "_detect_closed_job_signals", lambda _record: [])
+    monkeypatch.setattr(
+        linkedin_module,
+        "review_pre_detail_normalized_job",
+        lambda record, _context: ({"decision": "KEEP"}, record, [], True),
+    )
+    monkeypatch.setattr(
+        linkedin_module,
+        "review_post_detail_normalized_job",
+        lambda record, _context, hooks=None: ({"decision": "KEEP"}, record, []),
+    )
+
+    kept_records, _, _ = scraper.scrape()
+
+    # Results must stay in original target order regardless of fetch/completion
+    # timing, and at least two fetches must have genuinely overlapped in time,
+    # proving the configured worker cap is actually used for real concurrency
+    # (not just accepted and ignored).
+    assert [record["job_key"] for record in kept_records] == [
+        f"linkedin:li-{idx}" for idx in range(num_targets)
+    ]
+    assert in_flight["peak"] >= configured_workers
+
+
+def test_linkedin_scrape_isolates_failed_target_fetch(monkeypatch):
+    from job_hunter_agent.scrapers import linkedin as linkedin_module
+
+    class _Rows:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def sort_values(self, **_kwargs):
+            return self
+
+        def iterrows(self):
+            return enumerate(self._rows)
+
+        def __len__(self):
+            return len(self._rows)
+
+    scraper = LinkedInScraper(
+        profile={},
+        llm_cache={},
+        job_history={},
+        applied_job_keys=set(),
+        hidden_job_keys=set(),
+        run_iso="2026-06-22T09:00:00+10:00",
+    )
+
+    monkeypatch.setattr(
+        scraper,
+        "_build_search_targets",
+        lambda _settings: [
+            {
+                "search_term": "flaky target",
+                "location": "Sydney, Australia",
+                "results_wanted": 1,
+                "hours_old": 168,
+                "sort_newest_first": False,
+                "easy_apply": None,
+            },
+            {
+                "search_term": "healthy target",
+                "location": "Sydney, Australia",
+                "results_wanted": 1,
+                "hours_old": 168,
+                "sort_newest_first": False,
+                "easy_apply": None,
+            },
+        ],
+    )
+
+    def _fake_fetch(target):
+        if target["search_term"] == "flaky target":
+            raise RuntimeError("jobspy blew up")
+        return _Rows(
+            [
+                {
+                    "id": "li-healthy",
+                    "title": "Healthy Role",
+                    "company": "Example Co",
+                    "location": "Sydney",
+                    "job_url": "https://www.linkedin.com/jobs/view/healthy",
+                    "description": "Example description",
+                }
+            ]
+        )
+
+    monkeypatch.setattr(scraper, "_fetch_jobspy", _fake_fetch)
+    monkeypatch.setattr(scraper, "_detect_closed_job_signals", lambda _record: [])
+    monkeypatch.setattr(
+        linkedin_module,
+        "review_pre_detail_normalized_job",
+        lambda record, _context: ({"decision": "KEEP"}, record, [], True),
+    )
+    monkeypatch.setattr(
+        linkedin_module,
+        "review_post_detail_normalized_job",
+        lambda record, _context, hooks=None: ({"decision": "KEEP"}, record, []),
+    )
+
+    kept_records, _, _ = scraper.scrape()
+
+    assert len(kept_records) == 1
+    assert kept_records[0]["job_key"] == "linkedin:li-healthy"
 
 
 def test_fetch_jobspy_with_timeout_uses_timeout_worker(monkeypatch):

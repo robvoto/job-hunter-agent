@@ -25,13 +25,13 @@ from job_hunter_agent.global_settings import (
     DEFAULT_PREFERENCE_WEIGHTS,
     DEFAULT_SEARCH_SETTINGS,
     KEY_APSJOBS_RESULTS_PER_SEARCH,
-    KEY_CAPABILITY_ALIAS_LIMIT,
     KEY_CAPABILITY_STRENGTH_PRESETS,
     KEY_DATE_RANGE_DAYS,
     KEY_LIMITS,
     KEY_LINKEDIN_EASY_APPLY_ONLY,
     KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS,
     KEY_LINKEDIN_HOURS_OLD,
+    KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
     KEY_LOCATIONS_MAX_SELECTED,
     KEY_SEEK_MAX_PAGES,
@@ -544,18 +544,15 @@ def normalize_capability_rules(
     rules: list[dict[str, Any]] | None,
     onboarding_settings: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """Normalise learned capability rules and keep alias growth under onboarding limits."""
+    """Normalise learned capability rules.
+
+    `onboarding_settings` (e.g. capability_alias_limit) intentionally does not
+    bound aliases here: that limit only applies to automatic CV-extraction
+    (cv_pipeline.py). Once a Related Skill is persisted to the profile, it is
+    never silently truncated.
+    """
     cleaned: list[dict[str, Any]] = []
     seen_names: set[str] = set()
-    source_onboarding = onboarding_settings if isinstance(onboarding_settings, dict) else {}
-    try:
-        alias_limit = int(
-            source_onboarding.get(KEY_CAPABILITY_ALIAS_LIMIT)
-            or DEFAULT_ONBOARDING_SETTINGS[KEY_CAPABILITY_ALIAS_LIMIT]
-        )
-    except Exception as exc:
-        alias_limit = int(DEFAULT_ONBOARDING_SETTINGS[KEY_CAPABILITY_ALIAS_LIMIT])
-        logger.warning("Failed to normalise capability alias limit: %s", exc)
 
     for rule in rules or []:
         if not isinstance(rule, dict):
@@ -583,7 +580,7 @@ def normalize_capability_rules(
 
         if derive_job_description_aliases:
             alias_items = derive_job_description_aliases(
-                name, [str(rule.get("name") or "").strip(), *alias_items], max_aliases=alias_limit
+                name, [str(rule.get("name") or "").strip(), *alias_items], max_aliases=None
             )
 
         name_norm = re.sub(r"\s+", " ", name).strip().lower()
@@ -1124,6 +1121,25 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
             KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS
         ]
         logger.warning("Failed to normalise linkedin_fetch_timeout_seconds: %s", exc)
+
+    try:
+        merged[KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS] = max(
+            search_limits[KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS]["min"],
+            min(
+                int(
+                    merged.get(
+                        KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS,
+                        DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS],
+                    )
+                ),
+                search_limits[KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS]["max"],
+            ),
+        )
+    except Exception as exc:
+        merged[KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS] = DEFAULT_SEARCH_SETTINGS[
+            KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS
+        ]
+        logger.warning("Failed to normalise linkedin_parallel_search_workers: %s", exc)
 
     try:
         merged[KEY_APSJOBS_RESULTS_PER_SEARCH] = max(

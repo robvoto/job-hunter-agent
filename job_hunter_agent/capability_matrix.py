@@ -10,7 +10,7 @@ def _clean_term(value: Any) -> str:
     return compact_whitespace(value).lower()
 
 
-def expand_capability_terms(rule: dict[str, Any], max_terms: int = 10) -> list[str]:
+def expand_capability_terms(rule: dict[str, Any], max_terms: int | None = None) -> list[str]:
     """Return all searchable terms for a capability: name + aliases, deduplicated."""
     name = _clean_term(rule.get("name"))
     aliases = [_clean_term(a) for a in (rule.get("aliases") or []) if _clean_term(a)]
@@ -20,7 +20,7 @@ def expand_capability_terms(rule: dict[str, Any], max_terms: int = 10) -> list[s
         if term and term not in seen:
             seen.add(term)
             terms.append(term)
-    return terms[:max_terms]
+    return terms[:max_terms] if max_terms is not None else terms
 
 
 def canonical_capability_term(rule: dict[str, Any]) -> str:
@@ -52,7 +52,7 @@ def _is_structurally_valid_alias(raw_alias: Any) -> bool:
 def derive_job_description_aliases(
     name: str,
     raw_aliases: list[str] | None,
-    max_aliases: int = 10,
+    max_aliases: int | None = 10,
 ) -> list[str]:
     """Return clean, deduplicated aliases excluding the canonical name."""
     excluded = {_clean_term(name)}
@@ -62,7 +62,7 @@ def derive_job_description_aliases(
         if cleaned and cleaned not in excluded and _is_structurally_valid_alias(alias):
             excluded.add(cleaned)
             result.append(cleaned)
-    return result[:max_aliases]
+    return result[:max_aliases] if max_aliases is not None else result
 
 
 def choose_capability_name(name: str, raw_aliases: list[str] | None) -> str:

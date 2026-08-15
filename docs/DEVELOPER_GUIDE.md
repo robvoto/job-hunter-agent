@@ -94,7 +94,7 @@ Current reviewed state:
 - `build_system_prompt()` calls `build_profile_prompt_context()` internally.
 - `llm_suggest_rejection_blockers()` also calls `build_profile_prompt_context()` directly when it builds its own focused system prompt.
 - This can mean separate LLM paths load the profile independently, but there is no confirmed duplicate load inside a single shared prompt-builder call chain.
-- The fit-review profile context must stay limited to authoritative structured profile sources: candidate capabilities, capability aliases/levels/fit, candidate eligibility, evidence tiers, relevant matching preferences, and target-role context.
+- The fit-review profile context must stay limited to authoritative structured profile sources: candidate capabilities, Related Skills/levels/fit, candidate eligibility, evidence tiers, relevant matching preferences, and target-role context.
 
 Rule:
 

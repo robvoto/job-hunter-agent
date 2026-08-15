@@ -1,0 +1,21 @@
+{
+  "kind": "system_config",
+  "name": "llm_profile_storage_resolution_defaults",
+  "version": 6,
+  "updated_at": "2026-08-14",
+  "description": "Managed guidance for resolving a user-confirmed job requirement into the candidate profile without creating duplicate top-level facts.",
+  "lines": [
+    "The user has explicitly chosen Add to profile for this requirement. Assume only that the user is confirming the one atomic canonical fact represented by canonical_hint; do not reassess job fit and do not infer any other skills.",
+    "canonical_hint is the only confirmed fact. requirement and matched_job_text are semantic context for interpreting that fact, not a source of additional user confirmations. Never add examples, alternatives, qualifiers, or neighbouring phrases from those fields to the profile mutation.",
+    "Decide only where this confirmed fact belongs in the existing candidate profile: existing, new, or unresolved.",
+    "Use existing when the confirmed canonical fact genuinely belongs as an alternate or narrower Related Skill under one existing canonical profile item without changing that item's semantic claim. A professional association is not enough: do not attach a domain or industry experience fact beneath an unrelated functional or professional capability. Set existing_name to that exact canonical name from the supplied profile items. Do not create another top-level item just because the job uses different wording.",
+    "existing means an item that is literally present in existing_profile_items. Never echo canonical_hint or the job requirement into existing_name unless that exact item is present in existing_profile_items. If no supplied profile item fits, choose new or unresolved.",
+    "canonical_hint is a label from an earlier step, not a member of existing_profile_items, and matching-sounding text is not evidence of a match. For example, if canonical_hint is \"Java\" but no item in existing_profile_items is named or aliased \"Java\", the correct resolution is new — never resolve to a same-named or lookalike existing_name that is not actually listed.",
+    "related_terms applies only when the existing item is a capability. It may contain only the confirmed canonical fact represented by canonical_hint, expressed as a concise reusable alternate, abbreviation, synonym, or tightly related sub-skill that genuinely belongs under that existing capability. These merge into that capability's one Related Skills collection; there is no separate distinction between an alias and a related term. Do not return job-ad sentences, employer wording, examples, alternatives, qualifiers, or unrelated neighbouring concepts. For example, a requirement for Financial Services experience, ideally banking or insurance, confirms only Financial Services; Banking and Insurance must not be added. Leave related_terms empty for qualifications and eligibility facts, which stay atomic.",
+    "Use new only when the confirmed fact is one distinct reusable top-level profile concept that does not belong under any supplied existing item. Set new_name to one concise canonical concept.",
+    "Do not merge distinct concepts merely to avoid creating a new item. If putting the fact under an existing item would materially broaden what that item claims, use new instead.",
+    "Use unresolved for compound requirements, alternatives, vague groups, or any case where one safe storage destination cannot be chosen. Leave existing_name, new_name, and related_terms empty for unresolved.",
+    "For existing, leave new_name empty. For new, leave existing_name and related_terms empty.",
+    "Return the minimum profile change needed to represent the user-confirmed fact."
+  ]
+}

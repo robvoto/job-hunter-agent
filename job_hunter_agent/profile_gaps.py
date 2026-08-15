@@ -14,7 +14,7 @@ from job_hunter_agent.llm_protocol import LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES
 STATUS_UNKNOWN = "unknown"
 STATUS_CONFIRMED_HAVE = "confirmed_have"
 STATUS_CONFIRMED_DO_NOT_HAVE = "confirmed_do_not_have"
-_CONFIRMABLE_REQUIREMENT_STATUSES = frozenset({"not_shown", "partially_supported"})
+_CONFIRMABLE_REQUIREMENT_STATUSES = frozenset({"not_shown", "mismatch", "invalid"})
 PROFILE_GAP_JOB_REQUIREMENT_TEXT_KEY = "job_requirement_text"
 _ELIGIBILITY_TRUE_KEYS = frozenset({"true", "yes", "y", "1", "have", "has", "held", "present"})
 _ELIGIBILITY_FALSE_KEYS = frozenset({"false", "no", "n", "0", "absent", "missing", "none", "not"})
@@ -133,7 +133,8 @@ def compute_profile_gaps(
         if item.get("profile_action_allowed") is not True:
             continue
         capability_name = str(
-            item.get("capability_name")
+            item.get("canonical_requirement")
+            or item.get("capability_name")
             or item.get("qualification_name")
             or item.get("eligibility_name")
             or ""

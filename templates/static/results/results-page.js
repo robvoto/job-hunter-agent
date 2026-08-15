@@ -349,7 +349,97 @@
       const potentialPanel = document.querySelector('.workspace-panel[data-workspace-panel="potential"]');
       const cards = potentialPanel ? Array.from(potentialPanel.querySelectorAll('.job-card')) : [];
       const count = cards.filter(card => cardMatchesPotentialFilters(card, filters)).length;
-      potentialTab.textContent = `${baseLabel} (${count})`;
+      workspaceTabs
+        .filter(tab => tab.dataset.workspaceTarget === 'potential')
+        .forEach(tab => {
+          tab.textContent = `${tab.dataset.tabLabel || baseLabel} (${count})`;
+        });
+
+      for (const workspace of ['applied', 'hidden']) {
+        const panel = document.querySelector(`.workspace-panel[data-workspace-panel="${workspace}"]`);
+        const workspaceCount = panel ? panel.querySelectorAll('.job-card').length : 0;
+        workspaceTabs
+          .filter(tab => tab.dataset.workspaceTarget === workspace)
+          .forEach(tab => {
+            const label = tab.dataset.tabLabel || workspace;
+            tab.textContent = `${label} (${workspaceCount})`;
+          });
+      }
+    }
+
+    function ensureWorkspaceGrid(panel) {
+      if (!panel) {
+        return null;
+      }
+      const existingGrid = panel.querySelector('.job-grid');
+      if (existingGrid) {
+        return existingGrid;
+      }
+      const section = panel.querySelector('section.section');
+      if (!section) {
+        return null;
+      }
+      section.querySelector('.empty-state')?.remove();
+      const grid = document.createElement('div');
+      grid.className = 'job-grid';
+      const body = section.querySelector('.results-section-body');
+      (body || section).appendChild(grid);
+      return grid;
+    }
+
+    function copyReviewButtonData(sourceButton, targetButton) {
+      if (!sourceButton || !targetButton) {
+        return;
+      }
+      for (const attribute of Array.from(sourceButton.attributes)) {
+        if (!attribute.name.startsWith('data-') || attribute.name === 'data-review-action') {
+          continue;
+        }
+        targetButton.setAttribute(attribute.name, attribute.value);
+      }
+    }
+
+    function moveCardAfterReview(card, action) {
+      const destination = {
+        applied: 'applied',
+        unapply: 'potential',
+        hidden: 'hidden',
+        unhide: 'potential',
+      }[action];
+      if (!destination || !card) {
+        return;
+      }
+
+      if (!card.dataset.reviewOriginalRecordKind) {
+        card.dataset.reviewOriginalRecordKind = card.dataset.recordKind || 'current';
+      }
+      card.dataset.recordKind = destination === 'potential'
+        ? card.dataset.reviewOriginalRecordKind
+        : destination;
+      card.removeAttribute('data-review-dismissed');
+      card.classList.remove('is-reviewed');
+
+      const targetPanel = document.querySelector(
+        `.workspace-panel[data-workspace-panel="${destination}"]`,
+      );
+      const targetGrid = ensureWorkspaceGrid(targetPanel);
+      if (!targetGrid) {
+        return;
+      }
+
+      const sourceActions = card.querySelector('.job-actions');
+      const targetActions = targetPanel.querySelector('.job-actions');
+      if (sourceActions && targetActions) {
+        const replacementActions = targetActions.cloneNode(true);
+        const sourceButton = sourceActions.querySelector('.review-button');
+        replacementActions.querySelectorAll('.review-button').forEach(button => {
+          copyReviewButtonData(sourceButton, button);
+        });
+        sourceActions.replaceWith(replacementActions);
+      }
+
+      targetGrid.appendChild(card);
+      applyWorkspaceControls();
     }
 
     function applyWorkspaceControls() {
@@ -690,10 +780,14 @@
         hideBlockConfirm(card);
         card.classList.add('is-reviewed');
         status.textContent = options.successMessage || reviewSuccessMessage(action, payload);
-        if (payload?.reload_workspace || ['applied', 'unapply', 'hidden', 'unhide'].includes(action)) {
+        if (payload?.reload_workspace && !payload?.workspace_refresh_async) {
           saveWorkspaceFilters();
           saveWorkspacePagination();
           window.location.reload();
+          return;
+        }
+        if (['applied', 'unapply', 'hidden', 'unhide'].includes(action)) {
+          moveCardAfterReview(card, action);
           return;
         }
         window.setTimeout(() => {
@@ -1291,36 +1385,46 @@
     });
     // end rejection-learning panel
 
-    // Profile gap actions — "Needs confirmation" block on each job card
+    // Profile-learning actions live on safe atomic requirement rows and share
+    // the existing profile-gap API/storage semantics.
     document.addEventListener('click', function(event) {
       const btn = event.target.closest('.gap-btn');
       if (!btn) return;
       const action = String(btn.dataset.action || '').trim();
       const capabilityName = String(btn.dataset.capabilityName || '').trim();
-      const gapBlock = btn.closest('.job-gaps-block');
-      const jobKey = String(gapBlock && gapBlock.dataset ? gapBlock.dataset.jobKey || '' : '').trim();
+      const jobCard = btn.closest('.job-card');
+      const cardJobKeyEl = jobCard ? jobCard.querySelector('[data-job-key]') : null;
+      const jobKey = String(
+        (cardJobKeyEl ? cardJobKeyEl.dataset.jobKey : '')
+        || ''
+      ).trim();
       if (!capabilityName || !action) return;
 
-      const gapItem = btn.closest('.job-gap-item');
-      const gapsBlock = gapBlock;
-
-      function hideGapItem() {
-        if (gapItem) gapItem.hidden = true;
-        if (gapsBlock) {
-          const remaining = gapsBlock.querySelectorAll('.job-gap-item:not([hidden])');
-          if (!remaining.length) gapsBlock.hidden = true;
+      function showRowStatus(message) {
+        let statusEl = btn.parentElement ? btn.parentElement.querySelector('.review-status') : null;
+        if (!statusEl) {
+          statusEl = document.createElement('span');
+          statusEl.className = 'review-status';
+          btn.insertAdjacentElement('afterend', statusEl);
         }
+        statusEl.textContent = message;
       }
 
-      if (action === 'decide_later') {
-        hideGapItem();
-        return;
+      function replaceRowActionsWithBadge(message, allBtns) {
+        const badge = document.createElement('span');
+        badge.className = 'jh-badge';
+        badge.textContent = message;
+        allBtns.forEach(function(otherBtn) {
+          if (otherBtn !== btn) otherBtn.remove();
+        });
+        btn.replaceWith(badge);
       }
+
       if (!jobKey) return;
       if (blockStaticExportWrite()) return;
 
-      const allBtns = btn.closest('.job-gap-actions')
-        ? Array.from(btn.closest('.job-gap-actions').querySelectorAll('button'))
+      const allBtns = btn.parentElement
+        ? Array.from(btn.parentElement.querySelectorAll('.gap-btn'))
         : [btn];
       allBtns.forEach(function(b) { b.disabled = true; });
 
@@ -1329,13 +1433,20 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ job_key: jobKey, capability_name: capabilityName, action: action }),
       }).then(function(resp) {
-        if (!resp.ok) {
-          allBtns.forEach(function(b) { b.disabled = false; });
-          return;
-        }
-        hideGapItem();
+        return resp.json().catch(function() { return {}; }).then(function(data) {
+          if (!resp.ok || data.error) {
+            allBtns.forEach(function(b) { b.disabled = false; });
+            showRowStatus(data.error || WORKSPACE_CONTEXT.labels.profileGapErrorLabel);
+            return;
+          }
+          const savedLabel = action === 'confirm_do_not_have'
+            ? WORKSPACE_CONTEXT.labels.profileGapNotHaveSavedLabel
+            : WORKSPACE_CONTEXT.labels.profileGapAddedLabel;
+          replaceRowActionsWithBadge(savedLabel, allBtns);
+        });
       }).catch(function() {
         allBtns.forEach(function(b) { b.disabled = false; });
+        showRowStatus(WORKSPACE_CONTEXT.labels.profileGapErrorLabel);
       });
     });
 })();

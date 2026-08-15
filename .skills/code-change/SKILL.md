@@ -34,6 +34,7 @@ Rules:
 - Run the full suite for broad/risky/shared changes or release/merge preparation.
 - Add or update tests when behaviour changes.
 - Record exact validation commands and results before claiming done.
+- When a fix can only be proven against a real external run (live scrape, real LLM call, anything with real cost/time), scope that run to the minimum that proves the claim — a reduced page/date range, or a direct check against already-persisted state for a handful of keys — before defaulting to a full end-to-end run, and especially before running a second full one to observe cache/reuse behaviour.
 
 ## Text utility changes
 Use this section for reusable text normalization, matching/parsing helpers, scoring source text, and description-trust utilities.

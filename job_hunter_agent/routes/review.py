@@ -6,17 +6,24 @@ import re
 
 from fastapi import APIRouter, Body, Query
 
+from job_hunter_agent import llm_gate
 from job_hunter_agent import server_helpers as srv
 from job_hunter_agent.io_utils import load_job_history
 from job_hunter_agent.job_identity import normalize_job_key
-from job_hunter_agent.llm_protocol import LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES
+from job_hunter_agent.llm_protocol import (
+    LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES,
+    LLM_PROFILE_RESOLUTION_EXISTING,
+    LLM_PROFILE_RESOLUTION_NEW,
+)
 from job_hunter_agent.profile_gaps import (
     STATUS_CONFIRMED_DO_NOT_HAVE,
     STATUS_CONFIRMED_HAVE,
     classify_requirement_status,
 )
+from job_hunter_agent.profile_item_names import normalize_profile_item_name
 from job_hunter_agent.profile_store import CAPABILITY_ICON_GENERIC
 from job_hunter_agent.profile_store import (
+    KEY_CANDIDATE_CAPABILITIES,
     KEY_CANDIDATE_ELIGIBILITY,
     KEY_CANDIDATE_ELIGIBILITY_FACTS,
     KEY_CANDIDATE_QUALIFICATIONS,
@@ -61,7 +68,7 @@ def api_rejection_suggestions(job_id: str = Query("")):  # type: ignore[no-untyp
             )
         logger.debug("Rejection suggestions cache hit: job_id=%s suggestions=%s", job_id, suggestions)
     else:
-        suggestions = srv.llm_suggest_rejection_blockers(description)
+        suggestions = llm_gate.llm_suggest_rejection_blockers(description)
         approval_tokens = srv.SettingsHandler._issue_rejection_suggestion_approval_tokens(
             job_id, suggestions
         )
@@ -253,8 +260,8 @@ def api_rule_title_block_delete(body: dict = Body(...)):  # type: ignore[no-unty
     return json_response({"ok": True, "reject_title_rules": saved.get("reject_title_rules", [])})
 
 
-_PROFILE_GAP_VALID_ACTIONS = frozenset({"confirm_have", "confirm_do_not_have", "decide_later"})
-_PROFILE_GAP_CONFIRMABLE_STATUSES = frozenset({"not_shown", "partially_supported"})
+_PROFILE_GAP_VALID_ACTIONS = frozenset({"confirm_have", "confirm_do_not_have"})
+_PROFILE_GAP_CONFIRMABLE_STATUSES = frozenset({"not_shown", "mismatch", "invalid"})
 
 
 def _profile_gap_name_key(value: str) -> str:
@@ -279,6 +286,24 @@ def _profile_gap_requirement_coverage(job_key: str) -> list[dict]:
     return [item for item in coverage if isinstance(item, dict)]
 
 
+def _profile_gap_coverage_name(item: dict) -> str:
+    """Return the display/lookup name for a confirmable coverage item.
+
+    canonical_requirement is the one field guaranteed non-empty whenever
+    profile_action_allowed is True (see llm_gate.normalize_llm_requirement_coverage);
+    matched_candidate_fact/capability_name/eligibility_name are blanked on the
+    common not_shown path, so they must not be tried first.
+    """
+    return str(
+        item.get("canonical_requirement")
+        or item.get("matched_candidate_fact")
+        or item.get("profile_name")
+        or item.get("capability_name")
+        or item.get("eligibility_name")
+        or ""
+    ).strip()
+
+
 def _profile_gap_confirmable_item(job_key: str, value: str) -> dict:
     target_name = _profile_gap_name_key(value)
     if not target_name:
@@ -291,13 +316,7 @@ def _profile_gap_confirmable_item(job_key: str, value: str) -> dict:
         raw_requirement_type = str(item.get("requirement_type") or "").strip().lower()
         if raw_requirement_type and raw_requirement_type not in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES:
             continue
-        coverage_name = str(
-            item.get("matched_candidate_fact")
-            or item.get("profile_name")
-            or item.get("capability_name")
-            or item.get("eligibility_name")
-            or ""
-        ).strip()
+        coverage_name = _profile_gap_coverage_name(item)
         if _profile_gap_name_key(coverage_name) != target_name:
             continue
         return dict(item)
@@ -340,13 +359,121 @@ def _matches_managed_clearance(name: str) -> bool:
     )
 
 
+def _resolve_and_confirm_requirement(canonical_item: dict, profile: dict) -> dict:
+    """Turn a user-confirmed job requirement into a candidate profile write.
+
+    Delegates the existing/new/unresolved storage decision to the dedicated
+    click-time LLM resolver (llm_gate.llm_resolve_profile_storage) rather than
+    blindly appending a new top-level profile item. Raises ValueError with a
+    user-facing message on unresolved or failed resolution — the caller must
+    not fall back to a blind append. Reloading the profile on every call and
+    resolving `existing` to a no-op (or an idempotent aliases merge) makes
+    repeating the same confirmation safe to call more than once.
+    """
+    requirement_type = str(canonical_item.get("requirement_type") or "capability").strip().lower()
+    try:
+        resolved = llm_gate.llm_resolve_profile_storage(canonical_item, profile)
+    except llm_gate.LLMCallError as exc:
+        raise ValueError(f"Could not confirm this requirement: {exc}") from exc
+
+    resolution = resolved["resolution"]
+    profile_target = resolved["profile_target"]
+
+    if resolution == LLM_PROFILE_RESOLUTION_EXISTING:
+        related_terms = resolved.get("related_terms") or []
+        if requirement_type == "capability" and related_terms:
+            capabilities = list(profile.get(KEY_CANDIDATE_CAPABILITIES) or [])
+            target_key = normalize_profile_item_name(profile_target).casefold()
+            for idx, item in enumerate(capabilities):
+                if not isinstance(item, dict):
+                    continue
+                if normalize_profile_item_name(item.get("name")).casefold() != target_key:
+                    continue
+                existing_aliases = list(item.get("aliases") or [])
+                seen_aliases = {
+                    normalize_profile_item_name(alias).casefold() for alias in existing_aliases
+                }
+                merged_aliases = list(existing_aliases)
+                for term in related_terms:
+                    term_key = normalize_profile_item_name(term).casefold()
+                    if not term_key or term_key in seen_aliases:
+                        continue
+                    seen_aliases.add(term_key)
+                    merged_aliases.append(term)
+                merged = dict(item)
+                merged["aliases"] = merged_aliases
+                capabilities[idx] = merged
+                profile[KEY_CANDIDATE_CAPABILITIES] = capabilities
+                srv.save_profile(profile)
+                break
+        return {"ok": True, "resolution": resolution, "profile_target": profile_target}
+
+    if resolution == LLM_PROFILE_RESOLUTION_NEW:
+        if requirement_type == "qualification":
+            qualifications = list(profile.get(KEY_CANDIDATE_QUALIFICATIONS) or [])
+            qualifications.append(
+                {
+                    "name": profile_target,
+                    "value": True,
+                    "aliases": [],
+                    "evidence": [str(canonical_item.get("matched_job_text") or "").strip()]
+                    if str(canonical_item.get("matched_job_text") or "").strip()
+                    else [],
+                    "needs_review": False,
+                }
+            )
+            profile[KEY_CANDIDATE_QUALIFICATIONS] = qualifications
+        elif requirement_type == "eligibility":
+            eligibility_key = (
+                KEY_CANDIDATE_ELIGIBILITY
+                if _matches_managed_clearance(profile_target)
+                else KEY_CANDIDATE_ELIGIBILITY_FACTS
+            )
+            eligibility = list(profile.get(eligibility_key) or [])
+            eligibility.append(
+                {
+                    "name": profile_target,
+                    "value": True,
+                    "evidence": [str(canonical_item.get("matched_job_text") or "").strip()]
+                    if str(canonical_item.get("matched_job_text") or "").strip()
+                    else [],
+                    "needs_review": False,
+                }
+            )
+            if eligibility_key == KEY_CANDIDATE_ELIGIBILITY_FACTS:
+                eligibility, _ = prepare_eligibility_fact(
+                    profile.get(KEY_CANDIDATE_ELIGIBILITY_FACTS) or [],
+                    name=profile_target,
+                    value=True,
+                    evidence=[str(canonical_item.get("matched_job_text") or "").strip()]
+                    if str(canonical_item.get("matched_job_text") or "").strip()
+                    else [],
+                )
+            profile[eligibility_key] = eligibility
+        else:
+            capabilities = list(profile.get(KEY_CANDIDATE_CAPABILITIES) or [])
+            capabilities.append(
+                {
+                    "name": profile_target,
+                    "level": "working",
+                    "fit": "supporting",
+                    "aliases": [],
+                    "icon_key": CAPABILITY_ICON_GENERIC,
+                }
+            )
+            profile[KEY_CANDIDATE_CAPABILITIES] = capabilities
+        srv.save_profile(profile)
+        return {"ok": True, "resolution": resolution, "profile_target": profile_target}
+
+    raise ValueError("This requirement is not specific enough to safely add to your profile.")
+
+
 @router.post("/api/profile-gap")
 def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
     """Record a user response to a 'Needs confirmation' gap on a job card.
 
     confirm_have        → add the canonical profile item to the matching profile bucket
-    confirm_do_not_have → add the canonical profile item to the matching profile bucket
-    decide_later        → no-op; gap reappears on next page load
+    confirm_do_not_have → add the canonical negative profile signal to the matching bucket
     """
     try:
         action = str(body.get("action", "")).strip()
@@ -354,9 +481,6 @@ def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
         job_key = str(body.get("job_key", "")).strip()
         if action not in _PROFILE_GAP_VALID_ACTIONS:
             raise ValueError(f"invalid action: {action!r}")
-
-        if action == "decide_later":
-            return json_response({"ok": True})
 
         if not job_key:
             raise ValueError("job_key is required")
@@ -368,15 +492,11 @@ def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
             raise ValueError(
                 "capability_name is not a confirmable requirement coverage item for this job"
             )
-        canonical_item_name = str(
-            canonical_item.get("matched_candidate_fact")
-            or canonical_item.get("profile_name")
-            or canonical_item.get("capability_name")
-            or canonical_item.get("eligibility_name")
-            or ""
-        ).strip()
+        canonical_item_name = _profile_gap_coverage_name(canonical_item)
         requirement_type = str(canonical_item.get("requirement_type") or "capability").strip().lower()
-        if requirement_type == "qualification":
+        if requirement_type == "qualification" and not str(
+            canonical_item.get("canonical_requirement") or ""
+        ).strip():
             # matched_candidate_fact is not vetted for a single-concept name (only
             # canonical_requirement is, gated by profile_action_allowed — see
             # llm_gate.normalize_llm_requirement_coverage). _profile_gap_confirmable_item
@@ -384,11 +504,9 @@ def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
             # should always be resolved here. No fallback to the unvetted name: a
             # stale or malformed historical job record missing canonical_requirement
             # must be rejected, not silently trusted.
-            canonical_item_name = str(canonical_item.get("canonical_requirement") or "").strip()
-            if not canonical_item_name:
-                raise ValueError(
-                    "qualification requirement coverage item is missing a resolved canonical_requirement"
-                )
+            raise ValueError(
+                "qualification requirement coverage item is missing a resolved canonical_requirement"
+            )
 
         profile = srv.load_profile()
         current_status = classify_requirement_status(
@@ -404,70 +522,10 @@ def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
         if action == "confirm_have":
             if current_status == STATUS_CONFIRMED_HAVE:
                 return json_response({"ok": True})
-            if requirement_type == "qualification":
-                qualifications = list(profile.get(KEY_CANDIDATE_QUALIFICATIONS) or [])
-                lookup = _profile_gap_qualification_index(profile)
-                item_value = {
-                    "name": canonical_item_name,
-                    "value": True,
-                    "aliases": [],
-                    "evidence": [str(canonical_item.get("matched_job_text") or "").strip()]
-                    if str(canonical_item.get("matched_job_text") or "").strip()
-                    else [],
-                    "needs_review": False,
-                }
-                normalized_name = _profile_gap_name_key(canonical_item_name)
-                if normalized_name in lookup:
-                    qualifications[lookup[normalized_name]] = item_value
-                else:
-                    qualifications.append(item_value)
-                profile[KEY_CANDIDATE_QUALIFICATIONS] = qualifications
-            elif requirement_type == "eligibility":
-                eligibility_key = (
-                    KEY_CANDIDATE_ELIGIBILITY
-                    if _matches_managed_clearance(canonical_item_name)
-                    else KEY_CANDIDATE_ELIGIBILITY_FACTS
-                )
-                eligibility = list(profile.get(eligibility_key) or [])
-                lookup = _profile_gap_eligibility_index(profile)
-                normalized_name = _profile_gap_name_key(canonical_item_name)
-                item_value = {
-                    "name": canonical_item_name,
-                    "value": True,
-                    "evidence": [str(canonical_item.get("matched_job_text") or "").strip()]
-                    if str(canonical_item.get("matched_job_text") or "").strip()
-                    else [],
-                    "needs_review": False,
-                }
-                if normalized_name in lookup:
-                    eligibility[lookup[normalized_name]] = item_value
-                else:
-                    eligibility.append(item_value)
-                if eligibility_key == KEY_CANDIDATE_ELIGIBILITY_FACTS:
-                    eligibility, _ = prepare_eligibility_fact(
-                        profile.get(KEY_CANDIDATE_ELIGIBILITY_FACTS) or [],
-                        name=canonical_item_name,
-                        value=True,
-                        evidence=[str(canonical_item.get("matched_job_text") or "").strip()]
-                        if str(canonical_item.get("matched_job_text") or "").strip()
-                        else [],
-                    )
-                profile[eligibility_key] = eligibility
-            else:
-                if current_status == STATUS_CONFIRMED_DO_NOT_HAVE:
-                    raise ValueError("capability_name is already saved as must_not_require_skills")
-                rules = list(profile.get("candidate_capabilities") or [])
-                rules.append(
-                    {
-                        "name": canonical_item_name,
-                        "level": "working",
-                        "fit": "supporting",
-                        "aliases": [],
-                        "icon_key": CAPABILITY_ICON_GENERIC,
-                    }
-                )
-                profile["candidate_capabilities"] = rules
-            srv.save_profile(profile)
+            if requirement_type == "capability" and current_status == STATUS_CONFIRMED_DO_NOT_HAVE:
+                raise ValueError("capability_name is already saved as must_not_require_skills")
+            result = _resolve_and_confirm_requirement(canonical_item, profile)
+            return json_response(result)
 
         elif action == "confirm_do_not_have":
             if current_status == STATUS_CONFIRMED_DO_NOT_HAVE:

@@ -13,15 +13,21 @@
 
           <section class="panel system-warnings-panel" id="system_warnings_panel">
             <div class="panel-header">
-              <h2>System warnings</h2>
-              <p class="panel-copy">Actionable runtime warnings from the scrapers, fit scoring, onboarding, and runtime maintenance flows. Lower-signal diagnostics stay recorded in runtime logs and storage, but are hidden from this panel by default so real breakages stay visible.</p>
+              <h2>__JOB_HUNTER_GLOBAL_SETTINGS_SYSTEM_HEALTH_HEADING__</h2>
+              <p class="panel-copy">__JOB_HUNTER_GLOBAL_SETTINGS_SYSTEM_HEALTH_COPY__</p>
             </div>
             <div class="panel-actions system-warnings-toolbar">
-              <button id="system_warnings_refresh_button" type="button" class="jh-button jh-button--secondary">Refresh warnings</button>
-              <div id="system_warnings_status" class="field-help">Loading actionable warnings...</div>
+              <button id="system_warnings_refresh_button" type="button" class="jh-button jh-button--secondary">__JOB_HUNTER_GLOBAL_SETTINGS_SYSTEM_HEALTH_REFRESH_LABEL__</button>
+              <button id="system_diagnostics_toggle_button" type="button" class="jh-button jh-button--neutral" aria-expanded="false">__JOB_HUNTER_GLOBAL_SETTINGS_SYSTEM_HEALTH_DIAGNOSTICS_SHOW_LABEL__</button>
+              <div id="system_warnings_status" class="field-help">__JOB_HUNTER_GLOBAL_SETTINGS_SYSTEM_HEALTH_CHECKING_STATUS__</div>
             </div>
-            <div id="system_warnings_empty" class="field-help" hidden>No actionable system warnings right now.</div>
+            <div id="system_warnings_empty" class="field-help" hidden>__JOB_HUNTER_GLOBAL_SETTINGS_SYSTEM_HEALTH_EMPTY__</div>
             <div id="system_warnings_list" class="system-warnings-list" aria-live="polite"></div>
+            <section id="system_diagnostics_section" hidden>
+              <h3>__JOB_HUNTER_GLOBAL_SETTINGS_SYSTEM_HEALTH_DIAGNOSTICS_HEADING__</h3>
+              <p class="panel-copy">__JOB_HUNTER_GLOBAL_SETTINGS_SYSTEM_HEALTH_DIAGNOSTICS_COPY__</p>
+              <div id="system_diagnostics_list" class="system-warnings-list" aria-live="polite"></div>
+            </section>
           </section>
 
           <section class="panel" id="scraper_validation_panel">
@@ -140,6 +146,10 @@
             <input id="search_default_linkedin_fetch_timeout_seconds" type="number" min="5" max="60" step="1">
             <div class="field-help">Maximum time allowed for one LinkedIn jobspy search before that target is aborted. Valid range: <span id="search_default_linkedin_fetch_timeout_seconds_bounds"></span>.</div>
 
+            <label for="search_default_linkedin_parallel_search_workers">Default LinkedIn parallel search workers</label>
+            <input id="search_default_linkedin_parallel_search_workers" type="number" min="1" max="10" step="1">
+            <div class="field-help">How many LinkedIn jobspy search targets may fetch concurrently instead of waiting for each other's timeout in turn. Valid range: <span id="search_default_linkedin_parallel_search_workers_bounds"></span>.</div>
+
 
             <label class="toggle-switch" for="search_default_sort_newest_first">
               <span class="toggle-switch-copy">
@@ -169,14 +179,14 @@
 
             <label class="toggle-switch" for="playwright_headless">
               <span class="toggle-switch-copy">
-                <span class="toggle-switch-title">Run browser headless</span>
+                <span class="toggle-switch-title">Run SEEK browser headless</span>
               </span>
               <span class="toggle-switch-control">
                 <input id="playwright_headless" type="checkbox" role="switch">
                 <span class="toggle-switch-ui"></span>
               </span>
             </label>
-            <div class="field-help">When enabled, the scraper browser runs invisibly in the background. Required on AWS and any server without a display. Disable only for local debugging to watch the browser.</div>
+            <div class="field-help">When enabled, SEEK's Playwright browser runs invisibly in the background. Required on AWS and any server without a display. Disable only for local debugging to watch the browser. This setting only controls SEEK: APS always runs its own Playwright browser headless regardless of this toggle, and LinkedIn uses the JobSpy library rather than Playwright, so headless mode doesn't apply to it.</div>
 
             <label for="playwright_browser_mode">Playwright browser mode</label>
             <select id="playwright_browser_mode" class="jh-select">
@@ -260,6 +270,12 @@
             <label for="search_limit_linkedin_fetch_timeout_seconds_max">LinkedIn fetch timeout maximum (seconds)</label>
             <input id="search_limit_linkedin_fetch_timeout_seconds_max" type="number" min="1" max="300" step="1">
             <div class="field-help">Allowed range for the LinkedIn result budget per search term.</div>
+
+            <label for="search_limit_linkedin_parallel_search_workers_min">LinkedIn parallel search workers minimum</label>
+            <input id="search_limit_linkedin_parallel_search_workers_min" type="number" min="1" max="10000" step="1">
+            <label for="search_limit_linkedin_parallel_search_workers_max">LinkedIn parallel search workers maximum</label>
+            <input id="search_limit_linkedin_parallel_search_workers_max" type="number" min="1" max="10000" step="1">
+            <div class="field-help">Allowed range for how many LinkedIn search targets may fetch concurrently.</div>
 
             <h3 class="panel-subheading">Salary limits</h3>
 
@@ -450,7 +466,7 @@
           <section class="panel onboarding-defaults-panel">
             <h2>Onboarding Defaults</h2>
             <p class="panel-copy">These defaults seed fresh onboarding runs. They belong here because they are global tuning, not a candidate profile.</p>
-            <div class="field-help">These controls also shape how the learning pass keeps aliases and capability clusters when the system extracts your CV.</div>
+            <div class="field-help">These controls shape automatic CV extraction and capability learning. Persisted or user-confirmed Related Skills are kept separately from LLM prompt budgets.</div>
 
             <label for="onboarding_extraction_lookback_years">Extraction lookback years</label>
             <input id="onboarding_extraction_lookback_years" type="number" min="1" max="20" step="1">
@@ -472,9 +488,9 @@
             <input id="onboarding_cv_max_pages" type="number" min="1" max="100" step="1">
             <div class="field-help">Only the first N pages of each uploaded CV are read during onboarding. Longer files are truncated and flagged in the onboarding alert.</div>
 
-            <label for="onboarding_capability_alias_limit">Capability alias limit</label>
+            <label for="onboarding_capability_alias_limit">CV extraction Related Skills limit</label>
             <input id="onboarding_capability_alias_limit" type="number" min="1" max="20" step="1">
-            <div class="field-help">Controls two things: how many aliases the LLM is asked to generate per capability during CV extraction, and the maximum kept per capability rule. Raise this if capabilities are matching too few job-description variants.</div>
+            <div class="field-help">Controls how many Related Skills the LLM is asked to generate per capability during automatic CV extraction. It does not truncate persisted or user-confirmed Related Skills. Separate LLM prompt-budget settings control how much profile context is sent to the model.</div>
 
             <label for="onboarding_signal_cluster_min_alias_hits">Signal cluster minimum alias hits</label>
             <input id="onboarding_signal_cluster_min_alias_hits" type="number" min="1" max="10" step="1">

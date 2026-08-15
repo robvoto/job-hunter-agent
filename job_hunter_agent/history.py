@@ -12,8 +12,12 @@ from job_hunter_agent.global_settings import (
     get_repeated_listing_min_times_seen,
 )
 from job_hunter_agent.llm_review_state import has_complete_llm_keep_data
-from job_hunter_agent.posting_utils import parse_timestamp
+from job_hunter_agent.posting_utils import days_since, parse_timestamp
 from job_hunter_agent.record_schema import (
+    RECORD_APPLY_METHOD_KEY,
+    RECORD_DESCRIPTION_SOURCE_KEY,
+    RECORD_DETAILS_STATUS_KEY,
+    RECORD_DETAILS_TEXT_KEY,
     RECORD_FIT_LABEL_KEY,
     RECORD_FIT_SCORE_BREAKDOWN_KEY,
     RECORD_FIT_SCORE_KEY,
@@ -97,6 +101,58 @@ def build_keep_snapshot(record: dict) -> dict:
             snapshot[field] = record.get(field)
 
     return snapshot
+
+
+# Raw detail-page evidence, distinct from KEEP_SNAPSHOT_FIELDS: a decision
+# snapshot (used by can_reuse_kept_job) reuses a prior *decision*, while this
+# reuses only the fetched *evidence* so a full review (deterministic filters +
+# LLM) can still run against current profile/settings without reopening a
+# browser page for a job whose detail page was already fetched recently.
+DETAIL_EVIDENCE_FIELDS = (
+    RECORD_DETAILS_TEXT_KEY,
+    RECORD_DETAILS_STATUS_KEY,
+    RECORD_SOURCE_METADATA_KEY,
+    RECORD_DESCRIPTION_SOURCE_KEY,
+    RECORD_APPLY_METHOD_KEY,
+)
+
+
+def build_detail_evidence_snapshot(record: dict, run_iso: str) -> dict:
+    snapshot = {field: record.get(field) for field in DETAIL_EVIDENCE_FIELDS}
+    snapshot["raw_source_payload"] = record.get("_raw_source_payload")
+    snapshot["fetched_at"] = run_iso
+    return snapshot
+
+
+def can_reuse_detail_evidence(history_entry: dict, max_age_days: int, run_iso: str) -> bool:
+    """Whether a persisted detail-page fetch is fresh enough to reuse instead of
+    reopening the browser. Only gates the *fetch*, not the decision: the caller
+    still runs the full review pipeline against the reused evidence, so a
+    profile/settings change can still change the outcome.
+    """
+    if not isinstance(history_entry, dict):
+        return False
+    evidence = history_entry.get("detail_evidence")
+    if not isinstance(evidence, dict):
+        return False
+    if not str(evidence.get(RECORD_DETAILS_TEXT_KEY) or "").strip():
+        return False
+    reference = parse_timestamp(run_iso)
+    if not reference:
+        return False
+    age_days = days_since(evidence.get("fetched_at"), reference)
+    if age_days is None:
+        return False
+    return age_days <= max_age_days
+
+
+def apply_detail_evidence_reuse(record: dict, history_entry: dict) -> dict:
+    evidence = history_entry.get("detail_evidence") or {}
+    for field in DETAIL_EVIDENCE_FIELDS:
+        record[field] = evidence.get(field)
+    record["_raw_source_payload"] = evidence.get("raw_source_payload")
+    record["_raw_html"] = None
+    return record
 
 
 def can_reuse_kept_job(history_entry: dict, record: dict, profile: Optional[dict] = None) -> bool:

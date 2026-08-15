@@ -414,6 +414,12 @@ def resolve_llm_review_payload(
     else:
         payload = llm_should_consider_with_learning(truncated_input)
 
+    # Persist the freshly computed payload so later equivalent jobs (same
+    # profile fingerprint + description) hit the cache instead of paying for
+    # another LLM call. Merge over any stale/partial cached entry rather than
+    # discarding it outright.
+    llm_cache[llm_fp] = {**(cached or {}), **payload}
+
     payload["payload_source"] = "llm"
 
     return payload

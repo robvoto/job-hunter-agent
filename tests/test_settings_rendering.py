@@ -169,6 +169,16 @@ def test_settings_utils_review_normaliser_preserves_icon_key():
     assert "return { name, level, aliases, icon_key };" in js_text
 
 
+def test_settings_utils_exports_toggle_state_text_helper():
+    repo_root = Path(__file__).resolve().parents[1]
+    js_text = (
+        repo_root / "templates" / "static" / "settings" / "shared" / "settings-utils.js"
+    ).read_text(encoding="utf-8")
+
+    assert "function setToggleStateText(stateId, checked, checkedLabel, uncheckedLabel)" in js_text
+    assert "  setToggleStateText," in js_text
+
+
 def test_admin_settings_script_exposes_system_warnings_controls():
     repo_root = Path(__file__).resolve().parents[1]
     js_text = (
@@ -180,6 +190,16 @@ def test_admin_settings_script_exposes_system_warnings_controls():
     assert "/api/admin/clear-current-user-search-state" in js_text
     assert "initSystemWarningsControls" in js_text
     assert "/api/admin/system-warnings" in js_text
+    assert "window.__JOB_HUNTER_SYSTEM_HEALTH_LABELS__" in js_text
+    assert "system_health_diagnostics_show_label" in js_text
+    assert "renderSystemDiagnosticGroup" in js_text
+    assert "system_health_acknowledge_label" in js_text
+    assert "data-system-warning-action=\"acknowledge\"" in js_text
+    assert "data-system-warning-action=\"review\"" not in js_text
+    assert "data-system-warning-action=\"dismiss\"" not in js_text
+    assert "data-system-warning-action=\"resolve\"" not in js_text
+    assert "Mark resolved" not in js_text
+    assert "Run scraper validation" not in js_text
     assert "initScraperValidationControls" in js_text
     assert "/api/admin/scraper-config-validation" in js_text
 
@@ -209,6 +229,13 @@ def test_global_settings_page_renders_system_warnings_panel(monkeypatch):
     assert 'id="system_warnings_panel"' in html
     assert 'id="system_warnings_list"' in html
     assert 'id="system_warnings_refresh_button"' in html
+    assert 'id="system_diagnostics_toggle_button"' in html
+    assert 'id="system_diagnostics_section"' in html
+    assert 'id="system_diagnostics_list"' in html
+    assert "System health" in html
+    assert "Show technical diagnostics" in html
+    assert "__JOB_HUNTER_GLOBAL_SETTINGS_SYSTEM_HEALTH_" not in html
+    assert "window.__JOB_HUNTER_SYSTEM_HEALTH_LABELS__" in html
     assert 'id="scraper_validation_panel"' in html
     assert 'id="scraper_validation_button"' in html
     assert 'id="scraper_validation_results"' in html

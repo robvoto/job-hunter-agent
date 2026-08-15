@@ -23,9 +23,11 @@ from job_hunter_agent.global_settings import (
     KEY_LINKEDIN_EASY_APPLY_ONLY,
     KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS,
     KEY_LINKEDIN_HOURS_OLD,
+    KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
     KEY_SORT_NEWEST_FIRST,
     get_linkedin_fetch_timeout_seconds,
+    get_linkedin_parallel_search_workers,
 )
 from job_hunter_agent.io_utils import DEBUG_CAPTURE_SOURCE_PAYLOADS, write_source_payload_debug
 from job_hunter_agent.job_review_pipeline import (
@@ -196,7 +198,7 @@ def _ordered_unique_search_terms(search_settings: dict, profile: dict | None = N
     ordered_terms: list[str] = []
     seen_terms: set[str] = set()
 
-    candidates: list[str] = [str(search_settings.get("keywords") or "").strip()]
+    candidates: list[str] = []
     if isinstance(profile, dict):
         for key in (
             KEY_PRIMARY_PATTERNS,
@@ -207,6 +209,8 @@ def _ordered_unique_search_terms(search_settings: dict, profile: dict | None = N
             if not isinstance(values, list):
                 continue
             candidates.extend(str(value).strip() for value in values)
+    if not any(str(value).strip() for value in candidates):
+        candidates.append(str(search_settings.get("keywords") or "").strip())
 
     for candidate in candidates:
         normalized = " ".join(candidate.split()).strip()

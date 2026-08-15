@@ -37,6 +37,12 @@ def test_expand_capability_terms_respects_max():
     assert terms == ["a", "b"]
 
 
+def test_expand_capability_terms_unbounded_by_default():
+    aliases = [f"skill{i}" for i in range(1, 13)]
+    terms = expand_capability_terms({"name": "core skill", "aliases": aliases})
+    assert terms == ["core skill", *aliases]
+
+
 def test_derive_job_description_aliases_excludes_canonical_name():
     aliases = derive_job_description_aliases(
         "stakeholder engagement",
@@ -55,6 +61,12 @@ def test_derive_job_description_aliases_deduplicates():
 def test_derive_job_description_aliases_respects_max():
     aliases = derive_job_description_aliases("x", ["a", "b", "c", "d"], max_aliases=2)
     assert aliases == ["a", "b"]
+
+
+def test_derive_job_description_aliases_unbounded_when_max_aliases_is_none():
+    raw_aliases = [f"skill{i}" for i in range(1, 13)]
+    aliases = derive_job_description_aliases("core skill", raw_aliases, max_aliases=None)
+    assert aliases == raw_aliases
 
 
 def test_choose_capability_name_returns_cleaned_name():
@@ -84,6 +96,18 @@ def test_normalize_capability_rules_uses_choose_capability_name():
         ]
     )
     assert rules[0]["name"] == "stakeholder engagement"
+
+
+def test_normalize_capability_rules_never_truncates_stored_aliases():
+    # capability_alias_limit only bounds automatic CV-extraction; once a
+    # Related Skill is persisted to the profile it must never be silently
+    # dropped on a later load/save, regardless of this setting.
+    raw_aliases = [f"skill {i}" for i in range(1, 13)]
+    rules = normalize_capability_rules(
+        [{"name": "Core Skill", "level": "strong", "aliases": raw_aliases}],
+        onboarding_settings={"capability_alias_limit": 3},
+    )
+    assert len(rules[0]["aliases"]) == len(raw_aliases)
 
 
 def test_find_profile_capability_matches_uses_expanded_alias_terms():

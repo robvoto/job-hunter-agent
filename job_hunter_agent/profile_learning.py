@@ -413,7 +413,7 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
     return result
 
 
-def _validate_capabilities(raw: list[Any]) -> list[dict[str, Any]]:
+def _validate_capabilities(raw: list[Any], *, alias_limit: int) -> list[dict[str, Any]]:
     result = []
     rejected: list[str] = []
     _cap_log(f"[CAP_VALIDATE] LLM returned {len(raw or [])} raw capability candidate(s)")
@@ -437,7 +437,7 @@ def _validate_capabilities(raw: list[Any]) -> list[dict[str, Any]]:
             {
                 KEY_NAME: name,
                 KEY_LEVEL: level if level in _VALID_LEVELS else CapabilityLevel.BASIC,
-                KEY_ALIASES: aliases[:6],
+                KEY_ALIASES: aliases[:alias_limit],
                 KEY_ICON_KEY: icon_key,
                 KEY_NEEDS_REVIEW: needs_review,
             }
@@ -713,7 +713,7 @@ def build_learning_patch(
     _cap_log(
         f"[BUILD_LEARNING_PATCH] LLM extraction returned {len(raw_caps)} capability candidate(s) before validation"
     )
-    capabilities = _validate_capabilities(raw_caps)
+    capabilities = _validate_capabilities(raw_caps, alias_limit=alias_limit)
     eligibility = _validate_eligibility(raw_eligibility)
     qualifications = _validate_qualifications(extracted.get("qualifications") or [])
     role_experience = _aggregate_role_experience(extracted.get(KEY_ROLE_EXPERIENCE) or [])

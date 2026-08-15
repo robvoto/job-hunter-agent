@@ -388,6 +388,16 @@ def test_build_apsjobs_search_targets_uses_configured_default_when_unset():
     ]
 
 
+def test_build_apsjobs_search_targets_prefers_profile_role_over_legacy_keyword():
+    keywords, targets = apsjobs_module.build_apsjobs_search_targets(
+        {"keywords": "legacy keyword", "locations": ["NSW"]},
+        {"target_roles": ["Senior Systems Analyst"]},
+    )
+
+    assert keywords == "Senior Systems Analyst"
+    assert all(target["search_term"] == "Senior Systems Analyst" for target in targets)
+
+
 def test_build_apsjobs_search_targets_honours_override_per_location():
     keywords, targets = apsjobs_module.build_apsjobs_search_targets(
         {

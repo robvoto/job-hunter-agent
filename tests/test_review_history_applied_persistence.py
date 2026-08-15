@@ -16,7 +16,11 @@ def test_append_review_key_applied_persists_profile_and_history(monkeypatch: pyt
     from the DB fresh (no in-memory cache), so this exercises the same
     persistence path api_review() relies on for acceptance criteria #4/#6.
     """
-    monkeypatch.setattr(review_history_service, "rebuild_workspace_after_rule_change", lambda reason="": None)
+    monkeypatch.setattr(
+        review_history_service,
+        "rebuild_workspace_after_rule_change",
+        lambda reason="", **kwargs: None,
+    )
 
     result = review_history_service.append_review_key(
         "applied",
@@ -48,7 +52,11 @@ def test_append_review_key_applied_is_idempotent_and_keeps_first_applied_at(
     """Re-applying the same job (e.g. after an unapply/re-apply cycle) must not
     duplicate the profile entry or clobber the original first-applied timestamp.
     """
-    monkeypatch.setattr(review_history_service, "rebuild_workspace_after_rule_change", lambda reason="": None)
+    monkeypatch.setattr(
+        review_history_service,
+        "rebuild_workspace_after_rule_change",
+        lambda reason="", **kwargs: None,
+    )
 
     review_history_service.append_review_key("applied", JOB_KEY, title="Senior Backend Engineer")
     first_history = load_job_history()

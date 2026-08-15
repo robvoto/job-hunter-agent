@@ -67,6 +67,9 @@ from job_hunter_agent.llm_protocol import (
     LLM_INVALID_COVERAGE_STATUS,
     LLM_INVALID_OCCUPATION_ALIGNMENT,
     LLM_INVALID_POSTING_CHANNEL_KIND,
+    LLM_PROFILE_RESOLUTION_EXISTING,
+    LLM_PROFILE_RESOLUTION_NEW,
+    LLM_PROFILE_RESOLUTION_UNRESOLVED,
     LLM_UNCERTAIN_COVERAGE_REQUIREMENT_TYPE,
     LLM_FIT_REVIEW_PROMPT_SHAPE,
     LLM_JOB_REQUIREMENTS_PROMPT_SHAPE,
@@ -349,6 +352,13 @@ class _LLMJobRequirementsPayload(BaseModel):
     job_requirements: list[str] = Field(default_factory=list)
 
 
+class _LLMProfileStorageResolution(BaseModel):
+    resolution: str
+    existing_name: str = ""
+    new_name: str = ""
+    related_terms: list[str] = Field(default_factory=list)
+
+
 class _LLMReviewPayload(BaseModel):
     fit_review: _LLMReviewDecision | None = None
     learning_candidates: list[_LLMLearningCandidate] = Field(default_factory=list)
@@ -462,6 +472,9 @@ REQUIREMENT_COVERAGE_DEFAULT_LINES = _load_managed_prompt_lines("llm_requirement
 FIT_REVIEW_GRADE_DEFAULT_LINES = _load_managed_prompt_lines("llm_fit_review_grade_defaults")
 OCCUPATION_ALIGNMENT_DEFAULT_LINES = _load_managed_prompt_lines("llm_occupation_alignment_defaults")
 POSTING_CHANNEL_DEFAULT_LINES = _load_managed_prompt_lines("llm_posting_channel_defaults")
+PROFILE_STORAGE_RESOLUTION_DEFAULT_LINES = _load_managed_prompt_lines(
+    "llm_profile_storage_resolution_defaults"
+)
 
 
 def llm_is_enabled() -> bool:
@@ -677,7 +690,7 @@ def build_fit_review_guidance(profile: dict[str, Any] | None = None) -> str:
 def build_requirement_coverage_guidance() -> str:
     parts = [
         f"Use at most {get_llm_job_requirements_max_items()} capability/qualification requirement_coverage items. eligibility_requirements are separate and do not consume this limit.",
-        "Use requirement_type=capability or qualification in requirement_coverage, and requirement_type=eligibility in eligibility_requirements.",
+        "Classify each requirement as capability, eligibility, or qualification. Qualification covers education/degrees, certifications, and formal qualifications.",
         "For qualification rows, importance must be required or preferred.",
         "Use matched_candidate_fact for the exact canonical capability or eligibility name shown in the profile matrix, or the exact qualification name shown in the qualifications matrix; never put an evidence sentence there.",
         "Canonical qualification names must be concise reusable concepts such as CBAP, PRINCE2, Bachelor of Information Technology, or Diploma of Project Management — never the raw requirement sentence or an alternatives list.",
@@ -743,9 +756,13 @@ def build_capability_naming_guidance() -> str:
     return "\n".join(parts)
 
 
+def build_profile_storage_resolution_guidance() -> str:
+    return "\n".join(f"- {line}" for line in PROFILE_STORAGE_RESOLUTION_DEFAULT_LINES)
+
+
 # Bump when the fit-review response shape changes so stale cache entries
 # (missing new fields) are treated as misses and re-reviewed by the LLM.
-LLM_CACHE_SCHEMA_VERSION = 2
+LLM_CACHE_SCHEMA_VERSION = 3
 
 
 def build_llm_cache_key(job_description_text: str) -> str:
@@ -753,6 +770,67 @@ def build_llm_cache_key(job_description_text: str) -> str:
         str(job_description_text or "").encode("utf-8", errors="ignore")
     ).hexdigest()
     return f"v{LLM_CACHE_SCHEMA_VERSION}:{_profile_fingerprint()}:{desc_hash}"
+
+
+# Title judgments have a separate contract version because their prompt/inputs can
+# evolve independently from the full fit-review payload schema above.
+TITLE_JUDGMENT_CACHE_CONTRACT_VERSION = 1
+
+
+def _canonical_title_cache_values(values: list[str] | None) -> list[str]:
+    return sorted(
+        {
+            compact_whitespace(str(value)).casefold()
+            for value in (values or [])
+            if compact_whitespace(str(value))
+        }
+    )
+
+
+def build_title_judgment_cache_key(
+    title: str,
+    target_roles: list[str] | None,
+    secondary_roles: list[str] | None,
+    candidate_capabilities: list[str] | None = None,
+    *,
+    explore_adjacent_roles: bool = False,
+) -> str:
+    """Return a stable cache key for the semantic pre-detail title judgment.
+
+    The key includes every input that can affect the verdict. Capability names are
+    intentionally excluded in strict mode because llm_judge_title ignores them there.
+    The active profile fingerprint keeps title entries aligned with the same pruning
+    lifecycle as the existing full-review LLM cache.
+    """
+    payload = {
+        "contract_version": TITLE_JUDGMENT_CACHE_CONTRACT_VERSION,
+        "title": compact_whitespace(title).casefold(),
+        "target_roles": _canonical_title_cache_values(target_roles),
+        "secondary_roles": _canonical_title_cache_values(secondary_roles),
+        "explore_adjacent_roles": bool(explore_adjacent_roles),
+        "candidate_capabilities": (
+            _canonical_title_cache_values(candidate_capabilities)
+            if explore_adjacent_roles
+            else []
+        ),
+    }
+    digest = hashlib.sha256(
+        _json_mod.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return (
+        f"v{LLM_CACHE_SCHEMA_VERSION}:{_profile_fingerprint()}:"
+        f"title:v{TITLE_JUDGMENT_CACHE_CONTRACT_VERSION}:{digest}"
+    )
+
+
+def normalize_llm_title_judgment(value: Any) -> dict[str, str] | None:
+    if not isinstance(value, dict):
+        return None
+    verdict = str(value.get("verdict") or "").strip().lower()
+    reason = str(value.get("reason") or "").strip()
+    if verdict not in LLM_ALLOWED_TITLE_JUDGMENT_VERDICTS:
+        return None
+    return {"verdict": verdict, "reason": reason}
 
 
 def _require_fit_review(value: Any) -> Dict[str, str]:
@@ -1176,51 +1254,59 @@ def _atomicize_known_eligibility_rows(
     lookup = _build_valid_eligibility_lookup(valid_eligibility_names)
     if not lookup:
         return rows
-
     normalized_rows: list[dict[str, Any]] = []
     for row in rows:
         if str(row.get("requirement_type") or "").strip().lower() != "eligibility":
             normalized_rows.append(row)
             continue
-
         values = [
             *[str(value) for value in (row.get("covered_requirement_elements") or [])],
             str(row.get("requirement") or ""),
             str(row.get("matched_job_text") or ""),
         ]
         mentions = _known_profile_eligibility_mentions(values, lookup)
-        if len(mentions) <= 1 or (row.get("named_alternatives") or []):
-            normalized_rows.append(row)
-            continue
-
-        original_fact = compact_whitespace(
-            row.get("eligibility_name") or row.get("matched_candidate_fact")
-        ).casefold()
-        original_canonical = lookup.get(original_fact, "").casefold() if original_fact else ""
-        for canonical in mentions:
-            fact_value = (eligibility_fact_values or {}).get(canonical.casefold())
-            status = row.get("status") if canonical.casefold() == original_canonical else "not_shown"
-            if fact_value is True:
-                status = "supported"
-            elif fact_value is False:
-                status = "not_shown"
-            atomic = dict(row)
-            atomic.update(
-                requirement=canonical,
-                canonical_requirement=canonical,
-                matched_candidate_fact=canonical,
-                eligibility_name=canonical,
-                capability_name="",
-                covered_requirement_elements=[canonical],
-                profile_action_allowed=False,
-                status=status,
+        if len(mentions) > 1 and not (row.get("named_alternatives") or []):
+            original_fact = compact_whitespace(row.get("eligibility_name") or row.get("matched_candidate_fact")).casefold()
+            original_canonical = lookup.get(original_fact, "").casefold() if original_fact else ""
+            for canonical in mentions:
+                fact_value = (eligibility_fact_values or {}).get(canonical.casefold())
+                status = row.get("status") if canonical.casefold() == original_canonical else "not_shown"
+                if fact_value is True:
+                    status = "supported"
+                elif fact_value is False:
+                    status = "not_shown"
+                atomic = dict(row)
+                atomic.update(
+                    requirement=canonical,
+                    canonical_requirement=canonical,
+                    matched_candidate_fact=canonical,
+                    eligibility_name=canonical,
+                    capability_name="",
+                    covered_requirement_elements=[canonical],
+                    profile_action_allowed=False,
+                    status=status,
+                )
+                normalized_rows.append(atomic)
+            logger.warning(
+                "[LLM][COVERAGE] split compound eligibility row requirement=%r facts=%s",
+                row.get("requirement"),
+                ", ".join(mentions),
             )
-            normalized_rows.append(atomic)
-        logger.warning(
-            "[LLM][COVERAGE] split compound eligibility row requirement=%r facts=%s",
-            row.get("requirement"),
-            ", ".join(mentions),
-        )
+            continue
+        if len(mentions) == 1 and not row.get("eligibility_name"):
+            row = dict(row)
+            fact_value = (eligibility_fact_values or {}).get(mentions[0].casefold())
+            row.update(
+                canonical_requirement=mentions[0],
+                matched_candidate_fact=mentions[0],
+                eligibility_name=mentions[0],
+                capability_name="",
+            )
+            if fact_value is True:
+                row["status"] = "supported"
+            elif fact_value is False:
+                row["status"] = "not_shown"
+        normalized_rows.append(row)
     return normalized_rows
 
 
@@ -1235,10 +1321,9 @@ def _merge_requirement_coverage(
         canonical = compact_whitespace(row.get("canonical_requirement")).casefold()
         requirement = compact_whitespace(row.get("requirement")).casefold()
         key = (str(row.get("requirement_type") or "").strip().lower(), canonical or requirement)
-        if key in seen:
-            continue
-        seen.add(key)
-        merged.append(row)
+        if key not in seen:
+            seen.add(key)
+            merged.append(row)
     return merged
 
 
@@ -1329,12 +1414,6 @@ def normalize_llm_requirement_coverage(
             requirement_type = LLM_INVALID_COVERAGE_REQUIREMENT_TYPE
             requirement_type_is_valid = False
         canonical_requirement = normalize_profile_item_name(item.get("canonical_requirement"))
-        # Whether canonical_requirement resolves to a genuine single concept
-        # (vs. the ad sentence restated) is a language-understanding question,
-        # not a structural one — deterministic code must not guess it from
-        # text equality (e.g. "Java" legitimately equals its own canonical
-        # name). Trust the LLM's own explicit judgement instead.
-        profile_fact_resolved = bool(item.get("profile_fact_resolved"))
         raw_named_alternatives = item.get("named_alternatives") or []
         if isinstance(raw_named_alternatives, str):
             raw_named_alternatives = [raw_named_alternatives]
@@ -1348,6 +1427,12 @@ def normalize_llm_requirement_coverage(
                     continue
                 seen_alternatives.add(lowered_alternative)
                 named_alternatives.append(cleaned_alternative)
+        # Whether canonical_requirement resolves to a genuine single concept
+        # (vs. the ad sentence restated) is a language-understanding question,
+        # not a structural one — deterministic code must not guess it from
+        # text equality (e.g. "Java" legitimately equals its own canonical
+        # name). Trust the LLM's own explicit judgement instead.
+        profile_fact_resolved = bool(item.get("profile_fact_resolved"))
         # canonical_requirement is a display/interpretation label only — it is
         # not proof the row is one safe factual profile candidate. Per the
         # named_alternatives field contract, ANY named alternative (not just
@@ -1438,20 +1523,6 @@ def normalize_llm_requirement_coverage(
         role_defining_group = compact_whitespace(item.get("role_defining_group"))
         if not requirement:
             continue
-        known_eligibility_mentions: list[str] = []
-        if requirement_type == "eligibility":
-            known_eligibility_mentions = _known_profile_eligibility_mentions(
-                [*covered_requirement_elements, requirement, matched_job_text],
-                valid_eligibility_lookup,
-            )
-            if len(known_eligibility_mentions) == 1 and not eligibility_name:
-                eligibility_name = known_eligibility_mentions[0]
-                matched_candidate_fact = eligibility_name
-                fact_value = (eligibility_fact_values or {}).get(eligibility_name.casefold())
-                if fact_value is True:
-                    status = "supported"
-                elif fact_value is False:
-                    status = "not_shown"
         if (
             requirement_type == "capability"
             and status in {"supported", "partially_supported"}
@@ -1496,12 +1567,7 @@ def normalize_llm_requirement_coverage(
             matched_candidate_fact = ""
             capability_name = ""
             eligibility_name = ""
-        if (
-            requirement_type == "eligibility"
-            and status in {"supported", "partially_supported"}
-            and not eligibility_name
-            and not known_eligibility_mentions
-        ):
+        if requirement_type == "eligibility" and status in {"supported", "partially_supported"} and not eligibility_name:
             logger.warning(
                 "[LLM][WARN] purpose=fit_review requirement_coverage_missing_eligibility requirement=%r status=%s importance=%s",
                 requirement,
@@ -2137,6 +2203,232 @@ def name_capability_clusters(clusters: list[dict[str, Any]], llm_client: Any = N
         return []
 
 
+def _profile_storage_lookup(profile: dict[str, Any], requirement_type: str) -> dict[str, str]:
+    """Return exact profile-owned names/aliases for storage validation."""
+
+    if requirement_type == "eligibility":
+        return _build_profile_eligibility_names(profile)
+
+    source_key = (
+        KEY_CANDIDATE_QUALIFICATIONS
+        if requirement_type == "qualification"
+        else KEY_CANDIDATE_CAPABILITIES
+    )
+    lookup: dict[str, str] = {}
+    for item in profile.get(source_key, []) or []:
+        if not isinstance(item, dict):
+            continue
+        canonical = normalize_profile_item_name(item.get("name"))
+        if not canonical:
+            continue
+        aliases = item.get("aliases") or []
+        if not isinstance(aliases, list):
+            raise ValueError(f"Profile {source_key} aliases must be a list")
+        terms = [canonical, *aliases]
+        for term in terms:
+            key = compact_whitespace(term).casefold()
+            if key:
+                lookup[key] = canonical
+    return lookup
+
+
+def _profile_storage_items(profile: dict[str, Any], requirement_type: str) -> list[dict[str, Any]]:
+    """Group the exact profile-owned lookup into compact LLM context."""
+
+    grouped: dict[str, list[str]] = {}
+    for term, canonical in _profile_storage_lookup(profile, requirement_type).items():
+        aliases = grouped.setdefault(canonical, [])
+        if term != canonical.casefold() and term not in aliases:
+            aliases.append(term)
+    return [
+        {"name": canonical, "aliases": aliases}
+        for canonical, aliases in grouped.items()
+    ]
+
+
+def normalize_llm_profile_storage_resolution(
+    value: Any,
+    *,
+    profile: dict[str, Any],
+    requirement_type: str,
+) -> dict[str, Any]:
+    """Validate the LLM storage decision using exact profile ownership only.
+
+    Semantic grouping belongs to the dedicated LLM call. This boundary only
+    verifies the returned existing target is profile-owned, a proposed new name
+    is not already an exact name/alias, and related terms do not collide with a
+    different existing profile item.
+    """
+
+    if requirement_type not in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES:
+        raise ValueError(f"Unsupported profile storage requirement_type: {requirement_type!r}")
+    if not isinstance(value, dict):
+        raise ValueError("Profile storage resolution must be an object")
+
+    resolution = compact_whitespace(value.get("resolution")).lower()
+    existing_name = normalize_profile_item_name(value.get("existing_name"))
+    new_name = normalize_profile_item_name(value.get("new_name"))
+    raw_related_terms = value.get("related_terms")
+    if not isinstance(raw_related_terms, list):
+        raise ValueError("Profile storage related_terms must be a list")
+
+    related_terms: list[str] = []
+    seen_related: set[str] = set()
+    for raw_term in raw_related_terms:
+        term = normalize_profile_item_name(raw_term)
+        key = term.casefold()
+        if not key or key in seen_related:
+            continue
+        seen_related.add(key)
+        related_terms.append(term)
+    if related_terms and requirement_type != "capability":
+        raise ValueError("related_terms is only supported for capability requirements")
+
+    lookup = _profile_storage_lookup(profile, requirement_type)
+
+    if resolution == LLM_PROFILE_RESOLUTION_EXISTING:
+        if not existing_name or new_name:
+            raise ValueError("Existing profile resolution requires existing_name only")
+        canonical = lookup.get(existing_name.casefold())
+        if not canonical:
+            raise ValueError("Existing profile resolution target is not profile-owned")
+        novel_terms: list[str] = []
+        for term in related_terms:
+            term_key = term.casefold()
+            owned_by = lookup.get(term_key)
+            if owned_by and owned_by.casefold() != canonical.casefold():
+                raise ValueError("Related term is already owned by a different profile item")
+            if owned_by or term_key == canonical.casefold():
+                continue
+            novel_terms.append(term)
+        return {
+            "resolution": LLM_PROFILE_RESOLUTION_EXISTING,
+            "profile_target": canonical,
+            "related_terms": novel_terms,
+        }
+
+    if resolution == LLM_PROFILE_RESOLUTION_NEW:
+        if existing_name or related_terms or not new_name:
+            raise ValueError("New profile resolution requires new_name only")
+        existing_target = lookup.get(new_name.casefold())
+        if existing_target:
+            raise ValueError("New profile resolution duplicates an existing profile name or alias")
+        return {
+            "resolution": LLM_PROFILE_RESOLUTION_NEW,
+            "profile_target": new_name,
+            "related_terms": [],
+        }
+
+    if resolution == LLM_PROFILE_RESOLUTION_UNRESOLVED:
+        if existing_name or new_name or related_terms:
+            raise ValueError("Unresolved profile resolution must not propose profile changes")
+        return {
+            "resolution": LLM_PROFILE_RESOLUTION_UNRESOLVED,
+            "profile_target": "",
+            "related_terms": [],
+        }
+
+    raise ValueError(f"Invalid profile storage resolution: {resolution!r}")
+
+
+def llm_resolve_profile_storage(
+    requirement_row: dict[str, Any],
+    profile: dict[str, Any],
+    llm_client: Any = None,
+) -> dict[str, Any]:
+    """Resolve one user-confirmed requirement into existing/new/unresolved storage."""
+
+    active_client = llm_client or client
+    if active_client is None:
+        raise RuntimeError("Profile storage resolution requires an available LLM client")
+    if not isinstance(requirement_row, dict):
+        raise ValueError("requirement_row must be an object")
+
+    requirement_type = compact_whitespace(requirement_row.get("requirement_type")).lower()
+    if requirement_type not in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES:
+        raise ValueError(f"Unsupported profile storage requirement_type: {requirement_type!r}")
+    requirement = compact_whitespace(requirement_row.get("requirement"))
+    matched_job_text = compact_whitespace(requirement_row.get("matched_job_text"))
+    canonical_hint = normalize_profile_item_name(requirement_row.get("canonical_requirement"))
+    if not requirement:
+        raise ValueError("Profile storage resolution requires a job requirement")
+    if not canonical_hint:
+        # No single resolved concept to store — never let the LLM guess a
+        # destination for a vague/unresolvable requirement.
+        return {
+            "resolution": LLM_PROFILE_RESOLUTION_UNRESOLVED,
+            "profile_target": "",
+            "related_terms": [],
+        }
+
+    payload = {
+        "requirement_type": requirement_type,
+        "requirement": requirement,
+        "matched_job_text": matched_job_text,
+        "canonical_hint": canonical_hint,
+        "existing_profile_items": _profile_storage_items(profile, requirement_type),
+    }
+    model = _log_llm_model_once()
+    try:
+        resp = active_client.responses.parse(
+            model=model,
+            input=[
+                {
+                    "role": "system",
+                    "content": build_profile_storage_resolution_guidance(),
+                },
+                {
+                    "role": "user",
+                    "content": _json_mod.dumps(payload, ensure_ascii=False),
+                },
+            ],
+            max_output_tokens=get_llm_capability_naming_max_output_tokens(),
+            text_format=_LLMProfileStorageResolution,
+        )
+        _log_llm_call(resp, "profile_storage_resolution", model)
+    except APITimeoutError as exc:
+        raise LLMCallError(
+            "APITimeoutError: Request timed out.",
+            purpose="profile_storage_resolution",
+            model=model,
+            is_timeout=True,
+        ) from exc
+    except APIStatusError as exc:
+        raise LLMCallError(
+            f"HTTP {exc.status_code} — {exc.message}",
+            purpose="profile_storage_resolution",
+            model=model,
+            status_code=exc.status_code,
+        ) from exc
+    except Exception as exc:
+        raise LLMCallError(
+            f"{type(exc).__name__}: {exc}",
+            purpose="profile_storage_resolution",
+            model=model,
+        ) from exc
+
+    parsed = getattr(resp, "output_parsed", None)
+    if parsed is None:
+        raise LLMCallError(
+            "LLM returned no parsed profile storage resolution",
+            purpose="profile_storage_resolution",
+            model=model,
+        )
+    normalized = normalize_llm_profile_storage_resolution(
+        parsed.model_dump(),
+        profile=profile,
+        requirement_type=requirement_type,
+    )
+    logger.debug(
+        "[LLM][RESULT] purpose=profile_storage_resolution requirement_type=%s resolution=%s target=%r related_terms=%s",
+        requirement_type,
+        normalized["resolution"],
+        normalized["profile_target"],
+        normalized["related_terms"],
+    )
+    return normalized
+
+
 def llm_should_consider(job_description_text: str) -> Dict[str, str]:
     return normalize_llm_review(
         llm_should_consider_with_learning(job_description_text).get("fit_review")
@@ -2553,20 +2845,19 @@ def llm_judge_title(
         logger.warning("[LLM][WARN] purpose=title_judgment parsed_output_missing")
         return None
 
-    payload = parsed.model_dump()
-    verdict = str(payload.get("verdict") or "").strip().lower()
-    reason = str(payload.get("reason") or "").strip()
-    if verdict not in LLM_ALLOWED_TITLE_JUDGMENT_VERDICTS:
-        logger.warning("[LLM][WARN] purpose=title_judgment invalid_verdict=%r", verdict)
+    payload = normalize_llm_title_judgment(parsed.model_dump())
+    if payload is None:
+        raw_verdict = str(getattr(parsed, "verdict", "") or "").strip().lower()
+        logger.warning("[LLM][WARN] purpose=title_judgment invalid_verdict=%r", raw_verdict)
         return None
 
     logger.debug(
         "[LLM][RESULT] purpose=title_judgment title=%r verdict=%s reason=%r",
         title,
-        verdict,
-        reason,
+        payload["verdict"],
+        payload["reason"],
     )
-    return {"verdict": verdict, "reason": reason}
+    return payload
 
 
 def get_cost_summary() -> dict[str, Any]:

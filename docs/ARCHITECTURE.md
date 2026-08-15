@@ -55,7 +55,7 @@ State-changing UI actions use `POST` plus CSRF protection. `GET /logout` is not 
 
 ## Operational warnings
 
-Runtime warnings that need admin review are stored in SQLite `system_warnings` and surfaced in the admin settings page. Debug/audit-only uncertainty events still write to `output/uncertainty.jsonl`.
+Runtime events are stored in SQLite `system_warnings`. The admin **System health** surface shows only unresolved operational problems by default; routine job-level uncertainties are grouped into an optional, read-only technical-diagnostics drill-down. Supported incidents expose a real operator check, acknowledgement hides only the current occurrence, and recurrence reopens the problem. Debug/audit uncertainty events also write to `output/uncertainty.jsonl`.
 
 ---
 

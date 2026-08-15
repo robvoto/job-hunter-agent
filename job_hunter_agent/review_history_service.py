@@ -220,13 +220,15 @@ def append_review_key(
     review_controls[list_name] = existing
     save_profile(profile)
     persist_review_event(action, normalized, url=url, title=title, company=company, teaser=teaser)
-    rebuild_workspace_after_rule_change(f"review action saved: {action}")
+    refresh_id = rebuild_workspace_after_rule_change(f"review action saved: {action}")
     return {
         "ok": True,
         "action": action,
         "job_key": normalized,
         "saved_count": len(existing),
         "reload_workspace": True,
+        "workspace_refresh_async": True,
+        "workspace_refresh_id": refresh_id,
     }
 
 
@@ -263,13 +265,15 @@ def remove_review_key(
     review_controls[list_name] = updated
     save_profile(profile)
     persist_review_event(action, normalized, url=url, title=title, company=company, teaser=teaser)
-    rebuild_workspace_after_rule_change(f"review action saved: {action}")
+    refresh_id = rebuild_workspace_after_rule_change(f"review action saved: {action}")
     return {
         "ok": True,
         "action": action,
         "job_key": normalized,
         "saved_count": len(updated),
         "reload_workspace": True,
+        "workspace_refresh_async": True,
+        "workspace_refresh_id": refresh_id,
     }
 
 

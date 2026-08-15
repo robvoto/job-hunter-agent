@@ -17,6 +17,7 @@ from job_hunter_agent.run_control import (
     request_run_stop,
 )
 from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
+from job_hunter_agent.workspace_refresh_service import workspace_refresh_status
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +91,14 @@ def api_results_html():  # type: ignore[no-untyped-def]
 def api_health():  # type: ignore[no-untyped-def]
 
     return json_response({"ok": True})
+
+
+@router.get("/api/workspace-refresh/{refresh_id}")
+def api_workspace_refresh(refresh_id: str):  # type: ignore[no-untyped-def]
+    status = workspace_refresh_status(refresh_id)
+    if status == "unknown":
+        return json_response({"error": "Workspace refresh was not found"}, 404)
+    return json_response({"ok": status != "error", "status": status, "ready": status == "ready"})
 
 
 @router.get("/api/run-stats")

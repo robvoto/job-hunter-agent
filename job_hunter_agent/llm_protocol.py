@@ -20,6 +20,17 @@ LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES = frozenset({"capability", "eligibility",
 LLM_ALLOWED_COVERAGE_MATCH_SOURCES = frozenset(
     {"capability_name", "related_skill", "eligibility", "qualification"}
 )
+LLM_PROFILE_RESOLUTION_EXISTING = "existing"
+LLM_PROFILE_RESOLUTION_NEW = "new"
+LLM_PROFILE_RESOLUTION_UNRESOLVED = "unresolved"
+LLM_ALLOWED_PROFILE_RESOLUTIONS = frozenset(
+    {
+        LLM_PROFILE_RESOLUTION_EXISTING,
+        LLM_PROFILE_RESOLUTION_NEW,
+        LLM_PROFILE_RESOLUTION_UNRESOLVED,
+    }
+)
+LLM_INVALID_PROFILE_RESOLUTION = "invalid"
 LLM_INVALID_COVERAGE_REQUIREMENT_TYPE = "invalid"
 LLM_INVALID_COVERAGE_STATUS = "invalid"
 # Deterministic post-LLM validation could not confidently resolve capability vs

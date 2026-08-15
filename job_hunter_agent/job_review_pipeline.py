@@ -127,8 +127,10 @@ from job_hunter_agent.job_quality import (
 from job_hunter_agent.llm_gate import (
     LLMCallError,
     LLMReviewValidationError,
+    build_title_judgment_cache_key,
     get_session_cost_usd,
     llm_judge_title,
+    normalize_llm_title_judgment,
 )
 from job_hunter_agent.llm_review_state import has_complete_llm_keep_data
 from job_hunter_agent.logging_utils import format_debug_marker, format_log_block
@@ -647,7 +649,14 @@ def _source_key(record: dict) -> str:
 
 
 def _defer_keep_reuse_until_post_detail(record: dict) -> bool:
-    return _source_key(record) in {"linkedin", "seek"}
+    # Reuse must wait for the post-detail stale-repost check whenever that check
+    # will actually run for this record, so a KEEP snapshot is never reused
+    # without first re-verifying the listing isn't a stale repost. Derived
+    # directly from _should_check_external_posting_date rather than kept as an
+    # independent source list, so the two can't drift apart again (this is what
+    # previously left SEEK deferred to post-detail long after SEEK was excluded
+    # from the external posting-date check itself).
+    return _should_check_external_posting_date(record)
 
 
 def _should_check_external_posting_date(record: dict) -> bool:
@@ -1242,13 +1251,28 @@ def review_pre_detail_normalized_job(
                 for rule in (profile.get(KEY_CANDIDATE_CAPABILITIES) or [])
                 if isinstance(rule, dict) and str(rule.get("name") or "").strip()
             ]
-            title_judgment = llm_judge_title(
+            target_roles = profile.get("target_roles")
+            secondary_roles = profile.get("also_consider_roles")
+            explore_adjacent_roles = bool(profile.get(KEY_EXPLORE_ADJACENT_ROLES, False))
+            title_cache_key = build_title_judgment_cache_key(
                 title,
-                profile.get("target_roles"),
-                profile.get("also_consider_roles"),
+                target_roles,
+                secondary_roles,
                 title_capability_names,
-                explore_adjacent_roles=bool(profile.get(KEY_EXPLORE_ADJACENT_ROLES, False)),
+                explore_adjacent_roles=explore_adjacent_roles,
             )
+            title_judgment = normalize_llm_title_judgment(context.llm_cache.get(title_cache_key))
+            title_cache_hit = title_judgment is not None
+            if not title_cache_hit:
+                title_judgment = llm_judge_title(
+                    title,
+                    target_roles,
+                    secondary_roles,
+                    title_capability_names,
+                    explore_adjacent_roles=explore_adjacent_roles,
+                )
+                if title_judgment is not None:
+                    context.llm_cache[title_cache_key] = title_judgment
             _title_judgment_elapsed_ms = int((time.monotonic() - _title_judgment_t0) * 1000)
             if title_judgment is not None:
                 record[RECORD_LLM_TITLE_JUDGMENT_KEY] = title_judgment
@@ -1263,6 +1287,7 @@ def review_pre_detail_normalized_job(
                         "also_consider_roles": profile.get("also_consider_roles") or [],
                         "verdict": (title_judgment or {}).get("verdict", "unavailable"),
                         "llm_reason": (title_judgment or {}).get("reason", ""),
+                        "cache": "HIT" if title_cache_hit else "MISS",
                         "elapsed_ms": _title_judgment_elapsed_ms,
                     },
                 )

@@ -1625,6 +1625,9 @@
   border: 0;
   border-radius: 0;
   background: transparent;
+  color: var(--text-primary);
+  font-size: var(--control-font-size);
+  line-height: var(--control-line-height);
   box-shadow: none;
 }
 
@@ -1676,24 +1679,22 @@
   transition: background var(--interactive-motion-fast), box-shadow var(--interactive-motion-fast), transform var(--interactive-motion-fast);
 }
 
-/* Draw the plus with centered bars instead of relying on the font glyph baseline. */
-.btn-add::before,
-.btn-add::after {
-  content: "";
+/* Use the standard text plus while keeping its visual alignment independent of the label font baseline. */
+.btn-add::before {
+  content: "+";
   position: absolute;
   left: 50%;
   top: 50%;
   z-index: 1;
-  width: calc(var(--add-action-size) * 0.34);
-  height: 3px;
-  border-radius: 999px;
-  background: var(--add-action-color);
+  width: auto;
+  height: auto;
+  background: none;
+  color: var(--add-action-color);
+  font-size: var(--add-action-font-size);
+  font-weight: var(--add-action-font-weight);
+  line-height: 1;
   pointer-events: none;
-  transform: translate(-50%, -50%);
-}
-
-.btn-add::after {
-  transform: translate(-50%, -50%) rotate(90deg);
+  transform: translate(-50%, -53%);
 }
 
 .btn-add:hover {

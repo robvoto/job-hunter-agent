@@ -11,6 +11,10 @@
 
 export const JobHunterAdminSettings = (function () {
   const PLAYWRIGHT_TIMEOUT_MS_PER_SECOND = 1000;
+  const systemHealthLabels = window.__JOB_HUNTER_SYSTEM_HEALTH_LABELS__;
+  if (!systemHealthLabels) {
+    throw new Error('Missing system health labels.');
+  }
   const PROMPT_TEMPLATE_FIELDS = [
     ['compensation_target_yearly', 'llm_prompt_compensation_target_yearly'],
     ['compensation_target_daily', 'llm_prompt_compensation_target_daily'],
@@ -31,6 +35,7 @@ export const JobHunterAdminSettings = (function () {
     search_default_linkedin_hours_old: ['search_settings', 'linkedin_hours_old'],
     search_default_linkedin_results_per_search: ['search_settings', 'linkedin_results_per_search'],
     search_default_linkedin_fetch_timeout_seconds: ['search_settings', 'linkedin_fetch_timeout_seconds'],
+    search_default_linkedin_parallel_search_workers: ['search_settings', 'linkedin_parallel_search_workers'],
     search_default_sort_newest_first: ['search_settings', 'sort_newest_first'],
     search_default_linkedin_easy_apply_only: ['search_settings', 'linkedin_easy_apply_only'],
     default_country_suffix: ['default_country_suffix', null],
@@ -51,6 +56,8 @@ export const JobHunterAdminSettings = (function () {
     search_limit_linkedin_results_per_search_max: ['limits.search', 'linkedin_results_per_search'],
     search_limit_linkedin_fetch_timeout_seconds_min: ['limits.search', 'linkedin_fetch_timeout_seconds'],
     search_limit_linkedin_fetch_timeout_seconds_max: ['limits.search', 'linkedin_fetch_timeout_seconds'],
+    search_limit_linkedin_parallel_search_workers_min: ['limits.search', 'linkedin_parallel_search_workers'],
+    search_limit_linkedin_parallel_search_workers_max: ['limits.search', 'linkedin_parallel_search_workers'],
     salary_limit_minimum_salary_yearly_max: ['limits.salary', 'minimum_salary_yearly'],
     salary_limit_minimum_daily_rate_max: ['limits.salary', 'minimum_daily_rate'],
     evidence_primary_weight: ['candidate_profile_tier_weights', 'primary_candidate_profile_context'],
@@ -236,6 +243,7 @@ export const JobHunterAdminSettings = (function () {
     setFieldValue('search_default_linkedin_hours_old', searchDefaults.linkedin_hours_old);
     setFieldValue('search_default_linkedin_results_per_search', searchDefaults.linkedin_results_per_search);
     setFieldValue('search_default_linkedin_fetch_timeout_seconds', searchDefaults.linkedin_fetch_timeout_seconds);
+    setFieldValue('search_default_linkedin_parallel_search_workers', searchDefaults.linkedin_parallel_search_workers);
     setToggleChecked('search_default_sort_newest_first', searchDefaults.sort_newest_first !== false);
     const liEasyApply = searchDefaults[LINKEDIN_EASY_APPLY_ONLY];
     setFieldValue('search_default_' + LINKEDIN_EASY_APPLY_ONLY, (liEasyApply === null || liEasyApply === undefined) ? '' : liEasyApply);
@@ -243,6 +251,7 @@ export const JobHunterAdminSettings = (function () {
     setBounds('search_default_linkedin_hours_old', searchLimits.linkedin_hours_old);
     setBounds('search_default_linkedin_results_per_search', searchLimits.linkedin_results_per_search);
     setBounds('search_default_linkedin_fetch_timeout_seconds', searchLimits.linkedin_fetch_timeout_seconds);
+    setBounds('search_default_linkedin_parallel_search_workers', searchLimits.linkedin_parallel_search_workers);
     setFieldValue('default_country_suffix', defaultCountrySuffix);
     setFieldValue('session_max_age_days', playwrightSettings.session_max_age_days);
     requireElement('playwright_headless').checked = playwrightSettings.headless !== false;
@@ -266,6 +275,7 @@ export const JobHunterAdminSettings = (function () {
     setOptionalFieldText('search_default_linkedin_hours_old_bounds', rangeText(searchLimits.linkedin_hours_old));
     setOptionalFieldText('search_default_linkedin_results_per_search_bounds', rangeText(searchLimits.linkedin_results_per_search));
     setOptionalFieldText('search_default_linkedin_fetch_timeout_seconds_bounds', rangeText(searchLimits.linkedin_fetch_timeout_seconds));
+    setOptionalFieldText('search_default_linkedin_parallel_search_workers_bounds', rangeText(searchLimits.linkedin_parallel_search_workers));
 
     setFieldValue('evidence_primary_weight', evidenceWeights.primary_candidate_profile_context);
     setFieldValue('evidence_secondary_weight', evidenceWeights.secondary_candidate_profile_context);
@@ -421,6 +431,7 @@ export const JobHunterAdminSettings = (function () {
         linkedin_hours_old: readNumber('search_default_linkedin_hours_old', currentSearch.linkedin_hours_old),
         linkedin_results_per_search: readNumber('search_default_linkedin_results_per_search', currentSearch.linkedin_results_per_search),
         linkedin_fetch_timeout_seconds: readNumber('search_default_linkedin_fetch_timeout_seconds', currentSearch.linkedin_fetch_timeout_seconds),
+        linkedin_parallel_search_workers: readNumber('search_default_linkedin_parallel_search_workers', currentSearch.linkedin_parallel_search_workers),
         sort_newest_first: Boolean(document.getElementById('search_default_sort_newest_first')?.checked),
         [LINKEDIN_EASY_APPLY_ONLY]: (() => {
           const raw = document.getElementById('search_default_' + LINKEDIN_EASY_APPLY_ONLY).value;
@@ -452,6 +463,10 @@ export const JobHunterAdminSettings = (function () {
           linkedin_fetch_timeout_seconds: {
             min: readNumber('search_limit_linkedin_fetch_timeout_seconds_min', currentSearchLimits.linkedin_fetch_timeout_seconds?.min),
             max: readNumber('search_limit_linkedin_fetch_timeout_seconds_max', currentSearchLimits.linkedin_fetch_timeout_seconds?.max),
+          },
+          linkedin_parallel_search_workers: {
+            min: readNumber('search_limit_linkedin_parallel_search_workers_min', currentSearchLimits.linkedin_parallel_search_workers?.min),
+            max: readNumber('search_limit_linkedin_parallel_search_workers_max', currentSearchLimits.linkedin_parallel_search_workers?.max),
           },
         },
         salary: {
@@ -686,7 +701,15 @@ export const JobHunterAdminSettings = (function () {
   }
 
   function systemWarningLabel(value) {
-    return String(value || '').replace(/_/g, ' ').trim() || 'unknown';
+    const label = String(value || '').replace(/_/g, ' ').trim();
+    if (!label) {
+      throw new Error(systemHealthLabels.system_health_load_error);
+    }
+    return label;
+  }
+
+  function systemHealthCountText(template, count) {
+    return String(template).replace('{count}', String(count));
   }
 
   function systemWarningContextHtml(context) {
@@ -696,75 +719,135 @@ export const JobHunterAdminSettings = (function () {
     const contextText = typeof context === 'string' ? context : JSON.stringify(context, null, 2);
     return `
       <details class="system-warning-context">
-        <summary>Context</summary>
+        <summary>${escapeHtml(systemHealthLabels.system_health_technical_context_label)}</summary>
         <pre>${escapeHtml(contextText)}</pre>
       </details>
     `;
   }
 
   function renderSystemWarningCard(warning) {
-    const severity = systemWarningLabel(warning?.severity);
-    const category = systemWarningLabel(warning?.category);
-    const status = systemWarningLabel(warning?.status);
-    const source = String(warning?.source || '').trim() || 'unknown';
-    const message = String(warning?.message || '').trim() || 'No message';
-    const jobKey = String(warning?.job_key || '').trim();
-    const runId = String(warning?.run_id || '').trim();
-    const lastSeen = String(warning?.last_seen_at || '').trim();
-    const count = Number(warning?.count || 0);
-    const context = warning?.context;
+    if (warning?.classification !== 'operational') {
+      throw new Error(systemHealthLabels.system_health_load_error);
+    }
+
+    const severity = systemWarningLabel(warning.severity);
+    const category = systemWarningLabel(warning.category);
+    const source = String(warning.source || '').trim();
+    const message = String(warning.message || '').trim();
+    const jobKey = String(warning.job_key || '').trim();
+    const runId = String(warning.run_id || '').trim();
+    const lastSeen = String(warning.last_seen_at || '').trim();
+    const count = Number(warning.count);
+    const context = warning.context;
+    const operatorGuidance = String(warning.operator_guidance || '').trim();
+    const operatorAction = warning.operator_action;
+    const operatorActionType = String(operatorAction?.type || '').trim();
+    const operatorActionLabel = String(operatorAction?.label || '').trim();
+    const operatorActionHtml = operatorActionType && operatorActionLabel
+      ? `<button type="button" class="jh-button jh-button--secondary jh-button--compact" data-system-warning-action="${escapeHtml(operatorActionType)}" data-warning-id="${escapeHtml(String(warning.id))}">${escapeHtml(operatorActionLabel)}</button>`
+      : '';
+
+    if (!source || !message || !lastSeen || !operatorGuidance || !Number.isFinite(count)) {
+      throw new Error(systemHealthLabels.system_health_load_error);
+    }
 
     return `
-      <article class="system-warning-card" data-warning-id="${escapeHtml(String(warning?.id || ''))}">
+      <article class="system-warning-card" data-warning-id="${escapeHtml(String(warning.id))}">
         <div class="system-warning-card__head">
           <div class="system-warning-card__copy">
             <h3 class="system-warning-card__title">${escapeHtml(message)}</h3>
-            <div class="system-warning-card__message">
-              ${escapeHtml(category)} · ${escapeHtml(source)}
-            </div>
+            <div class="system-warning-card__message">${escapeHtml(category)} · ${escapeHtml(source)}</div>
             <div class="system-warning-card__meta">
-              <span><strong>Status:</strong> ${escapeHtml(status)}</span>
-              <span><strong>Count:</strong> ${Number.isFinite(count) ? count : 0}</span>
-              ${jobKey ? `<span><strong>Job:</strong> ${escapeHtml(jobKey)}</span>` : ''}
-              ${runId ? `<span><strong>Run:</strong> ${escapeHtml(runId)}</span>` : ''}
-              ${lastSeen ? `<span><strong>Last seen:</strong> ${escapeHtml(lastSeen)}</span>` : ''}
+              <span><strong>${escapeHtml(systemHealthLabels.system_health_occurrences_label)}:</strong> ${count}</span>
+              ${jobKey ? `<span><strong>${escapeHtml(systemHealthLabels.system_health_job_label)}:</strong> ${escapeHtml(jobKey)}</span>` : ''}
+              ${runId ? `<span><strong>${escapeHtml(systemHealthLabels.system_health_run_label)}:</strong> ${escapeHtml(runId)}</span>` : ''}
+              <span><strong>${escapeHtml(systemHealthLabels.system_health_last_seen_label)}:</strong> ${escapeHtml(lastSeen)}</span>
             </div>
           </div>
           <div class="system-warning-pill-row">
-            <span class="system-warning-pill ${systemWarningSeverityClass(warning?.severity)}">${escapeHtml(severity)}</span>
-            <span class="system-warning-pill system-warning-pill--info">${escapeHtml(status)}</span>
+            <span class="system-warning-pill ${systemWarningSeverityClass(warning.severity)}">${escapeHtml(severity)}</span>
           </div>
         </div>
+        <div class="field-help">${escapeHtml(operatorGuidance)}</div>
         ${systemWarningContextHtml(context)}
         <div class="system-warning-actions">
-          <button type="button" class="jh-button jh-button--secondary jh-button--compact" data-system-warning-action="review" data-warning-id="${escapeHtml(String(warning?.id || ''))}">Review</button>
-          <button type="button" class="jh-button jh-button--neutral jh-button--compact" data-system-warning-action="dismiss" data-warning-id="${escapeHtml(String(warning?.id || ''))}">Dismiss</button>
+          ${operatorActionHtml}
+          <button type="button" class="jh-button jh-button--neutral jh-button--compact" data-system-warning-action="acknowledge" data-warning-id="${escapeHtml(String(warning.id))}">${escapeHtml(systemHealthLabels.system_health_acknowledge_label)}</button>
         </div>
       </article>
     `;
   }
 
-  async function fetchSystemWarnings() {
-    const response = await window.jobHunterFetch('/api/admin/system-warnings');
+  function renderSystemDiagnosticGroup(group) {
+    if (group?.classification !== 'diagnostic') {
+      throw new Error(systemHealthLabels.system_health_load_error);
+    }
+
+    const category = systemWarningLabel(group.category);
+    const source = String(group.source || '').trim();
+    const recordCount = Number(group.record_count);
+    const occurrenceCount = Number(group.occurrence_count);
+    const lastSeen = String(group.last_seen_at || '').trim();
+    const sample = group.sample && typeof group.sample === 'object' ? group.sample : null;
+
+    if (!source || !Number.isFinite(recordCount) || !Number.isFinite(occurrenceCount) || !lastSeen || !sample) {
+      throw new Error(systemHealthLabels.system_health_load_error);
+    }
+
+    const sampleMessage = String(sample.message || '').trim();
+    if (!sampleMessage) {
+      throw new Error(systemHealthLabels.system_health_load_error);
+    }
+    const samplePayload = {
+      job_key: sample.job_key || null,
+      run_id: sample.run_id || null,
+      context: sample.context,
+    };
+
+    return `
+      <article class="system-warning-card" data-system-diagnostic-group="${escapeHtml(`${group.category}|${group.source}`)}">
+        <div class="system-warning-card__head">
+          <div class="system-warning-card__copy">
+            <h3 class="system-warning-card__title">${escapeHtml(category)} · ${escapeHtml(source)}</h3>
+            <div class="system-warning-card__meta">
+              <span><strong>${escapeHtml(systemHealthLabels.system_health_records_label)}:</strong> ${recordCount}</span>
+              <span><strong>${escapeHtml(systemHealthLabels.system_health_occurrences_label)}:</strong> ${occurrenceCount}</span>
+              <span><strong>${escapeHtml(systemHealthLabels.system_health_last_seen_label)}:</strong> ${escapeHtml(lastSeen)}</span>
+            </div>
+          </div>
+        </div>
+        <details class="system-warning-context">
+          <summary>${escapeHtml(systemHealthLabels.system_health_sample_label)}</summary>
+          <div class="system-warning-card__message">${escapeHtml(sampleMessage)}</div>
+          <pre>${escapeHtml(JSON.stringify(samplePayload, null, 2))}</pre>
+        </details>
+      </article>
+    `;
+  }
+
+  async function fetchSystemWarnings(includeDiagnostics = false) {
+    const query = includeDiagnostics ? '?include_diagnostics=true' : '';
+    const response = await window.jobHunterFetch(`/api/admin/system-warnings${query}`);
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(payload.error || 'Could not load system warnings.');
+      throw new Error(payload.error || systemHealthLabels.system_health_load_error);
     }
     return {
       warnings: Array.isArray(payload.warnings) ? payload.warnings : [],
+      diagnosticGroups: Array.isArray(payload.diagnostic_groups) ? payload.diagnostic_groups : [],
       summary: payload && typeof payload.summary === 'object' && payload.summary ? payload.summary : {},
     };
   }
 
-  async function updateSystemWarningStatus(warningId, status) {
+  async function acknowledgeSystemWarning(warningId) {
     const response = await window.jobHunterFetch(`/api/admin/system-warnings/${encodeURIComponent(warningId)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ action: 'acknowledge' }),
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(payload.error || 'Could not update system warning.');
+      throw new Error(payload.error || systemHealthLabels.system_health_action_error);
     }
     return payload.warning;
   }
@@ -775,7 +858,7 @@ export const JobHunterAdminSettings = (function () {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(payload.error || 'Could not run scraper validation.');
+      throw new Error(payload.error || systemHealthLabels.system_health_scraper_validation_error);
     }
     return payload;
   }
@@ -786,13 +869,21 @@ export const JobHunterAdminSettings = (function () {
     const empty = document.getElementById('system_warnings_empty');
     const status = document.getElementById('system_warnings_status');
     const refreshButton = document.getElementById('system_warnings_refresh_button');
-    if (!panel || !list || !empty || !status || typeof window.jobHunterFetch !== 'function') {
+    const diagnosticsToggle = document.getElementById('system_diagnostics_toggle_button');
+    const diagnosticsSection = document.getElementById('system_diagnostics_section');
+    const diagnosticsList = document.getElementById('system_diagnostics_list');
+    if (
+      !panel || !list || !empty || !status || !diagnosticsToggle
+      || !diagnosticsSection || !diagnosticsList
+      || typeof window.jobHunterFetch !== 'function'
+    ) {
       return;
     }
     if (panel.dataset.bound === 'true') {
       return;
     }
     panel.dataset.bound = 'true';
+    let diagnosticsVisible = false;
 
     const setStatus = (message, kind) => {
       status.textContent = String(message || '');
@@ -803,44 +894,53 @@ export const JobHunterAdminSettings = (function () {
     };
 
     const renderWarnings = (warnings) => {
-      if (!warnings.length) {
-        list.innerHTML = '';
-        empty.hidden = false;
+      empty.hidden = warnings.length > 0;
+      list.innerHTML = warnings.map((warning) => renderSystemWarningCard(warning)).join('');
+    };
+
+    const renderDiagnostics = (groups) => {
+      diagnosticsSection.hidden = !diagnosticsVisible;
+      if (!diagnosticsVisible) {
+        diagnosticsList.innerHTML = '';
         return;
       }
-      empty.hidden = true;
-      list.innerHTML = warnings.map(renderSystemWarningCard).join('');
+      diagnosticsList.innerHTML = groups.length
+        ? groups.map((group) => renderSystemDiagnosticGroup(group)).join('')
+        : `<p class="field-help">${escapeHtml(systemHealthLabels.system_health_diagnostics_empty)}</p>`;
     };
 
     const refresh = async ({ silent = false } = {}) => {
       if (!silent) {
-        setStatus('Loading actionable warnings...', 'loading');
+        setStatus(systemHealthLabels.system_health_checking_status, 'loading');
       }
       try {
-        const payload = await fetchSystemWarnings();
-        const warnings = Array.isArray(payload?.warnings) ? payload.warnings : [];
-        const summary = payload?.summary && typeof payload.summary === 'object' ? payload.summary : {};
-        const hiddenDiagnostics = Number(summary.hidden_diagnostics || 0);
-        renderWarnings(warnings);
-        if (warnings.length) {
-          setStatus(
-            hiddenDiagnostics > 0
-              ? `Showing ${warnings.length} actionable warning${warnings.length === 1 ? '' : 's'}. ${hiddenDiagnostics} diagnostic item${hiddenDiagnostics === 1 ? '' : 's'} hidden.`
-              : `${warnings.length} actionable warning${warnings.length === 1 ? '' : 's'}.`,
-            'success',
-          );
-          return;
+        const payload = await fetchSystemWarnings(diagnosticsVisible);
+        const warnings = payload.warnings;
+        const diagnosticGroups = payload.diagnosticGroups;
+        const summary = payload.summary;
+        const activeCount = Number(summary.active_problem_records);
+        const diagnosticCount = Number(summary.diagnostic_records);
+
+        if (!Number.isFinite(activeCount) || !Number.isFinite(diagnosticCount)) {
+          throw new Error(systemHealthLabels.system_health_load_error);
         }
-        setStatus(
-          hiddenDiagnostics > 0
-            ? `No actionable system warnings. ${hiddenDiagnostics} diagnostic item${hiddenDiagnostics === 1 ? '' : 's'} hidden.`
-            : 'No actionable system warnings.',
-          'success',
+
+        renderWarnings(warnings);
+        renderDiagnostics(diagnosticGroups);
+        const activeText = systemHealthCountText(
+          systemHealthLabels.system_health_active_count_template,
+          activeCount,
         );
+        const diagnosticText = systemHealthCountText(
+          systemHealthLabels.system_health_diagnostic_count_template,
+          diagnosticCount,
+        );
+        setStatus(`${activeText} ${diagnosticText}`, activeCount > 0 ? 'warning' : 'success');
       } catch (error) {
         list.innerHTML = '';
+        diagnosticsList.innerHTML = '';
         empty.hidden = false;
-        setStatus(error.message || 'Could not load system warnings.', 'error');
+        setStatus(error.message || systemHealthLabels.system_health_load_error, 'error');
       }
     };
 
@@ -852,19 +952,37 @@ export const JobHunterAdminSettings = (function () {
       if (!warningId || !action) return;
       const originalLabel = button.textContent;
       button.disabled = true;
-      button.textContent = 'Saving...';
-      setStatus('Updating system warning...', 'loading');
+      button.textContent = action === 'run_scraper_validation'
+        ? systemHealthLabels.system_health_scraper_validation_running_label
+        : systemHealthLabels.system_health_acknowledging_label;
       try {
-        const statusValue = action === 'review' ? 'reviewed' : 'dismissed';
-        await updateSystemWarningStatus(warningId, statusValue);
-        await refresh({ silent: true });
-        setStatus('System warning updated.', 'success');
+        if (action === 'run_scraper_validation') {
+          setStatus(systemHealthLabels.system_health_scraper_validation_running_status, 'loading');
+          await runScraperValidation();
+          await refresh({ silent: true });
+          setStatus(systemHealthLabels.system_health_scraper_validation_completed_status, 'success');
+        } else if (action === 'acknowledge') {
+          await acknowledgeSystemWarning(warningId);
+          await refresh({ silent: true });
+          setStatus(systemHealthLabels.system_health_acknowledged_status, 'success');
+        } else {
+          throw new Error(systemHealthLabels.system_health_action_error);
+        }
       } catch (error) {
-        setStatus(error.message || 'Could not update system warning.', 'error');
+        setStatus(error.message || systemHealthLabels.system_health_action_error, 'error');
       } finally {
         button.disabled = false;
         button.textContent = originalLabel;
       }
+    });
+
+    diagnosticsToggle.addEventListener('click', async () => {
+      diagnosticsVisible = !diagnosticsVisible;
+      diagnosticsToggle.setAttribute('aria-expanded', diagnosticsVisible ? 'true' : 'false');
+      diagnosticsToggle.textContent = diagnosticsVisible
+        ? systemHealthLabels.system_health_diagnostics_hide_label
+        : systemHealthLabels.system_health_diagnostics_show_label;
+      await refresh();
     });
 
     if (refreshButton) {
@@ -919,7 +1037,7 @@ export const JobHunterAdminSettings = (function () {
       const originalLabel = button.textContent;
       button.disabled = true;
       button.textContent = 'Running...';
-      setStatus('Running scraper validation...', 'loading');
+      setStatus(systemHealthLabels.system_health_scraper_validation_running_status, 'loading');
       results.textContent = '';
       try {
         const payload = await runScraperValidation();
@@ -930,7 +1048,7 @@ export const JobHunterAdminSettings = (function () {
         );
       } catch (error) {
         results.textContent = '';
-        setStatus(error.message || 'Could not run scraper validation.', 'error');
+        setStatus(error.message || systemHealthLabels.system_health_scraper_validation_error, 'error');
       } finally {
         button.disabled = false;
         button.textContent = originalLabel;
@@ -1015,4 +1133,3 @@ export const JobHunterAdminSettings = (function () {
     initSystemWarningsControls,
   };
 }());
-

@@ -10,6 +10,7 @@ from job_hunter_agent.record_schema import (
 )
 from job_hunter_agent.workspace_data import (
     build_applied_workspace_record,
+    build_workspace_record_sets,
     build_hidden_workspace_record,
     build_history_workspace_record,
 )
@@ -103,6 +104,38 @@ def test_build_applied_workspace_record_carries_requirement_coverage():
     assert record["original_posted_date_status"] == ORIGINAL_POSTED_DATE_STATUS_UNVERIFIED
     assert record["job_quality_signals"] == _SNAPSHOT["job_quality_signals"]
     assert has_complete_llm_keep_data(record)
+
+
+def test_build_workspace_record_sets_excludes_applied_and_hidden_current_records():
+    records = [
+        {"job_key": "linkedin:applied", "posted_age_days": 1},
+        {"job_key": "seek:hidden", "posted_age_days": 2},
+        {"job_key": "seek:current", "posted_age_days": 3},
+    ]
+
+    result = build_workspace_record_sets(
+        records,
+        {},
+        {"linkedin:applied"},
+        {"seek:hidden"},
+        datetime(2026, 7, 8),
+        profile={},
+        is_workspace_eligible_fn=lambda record, profile: True,
+        fit_score_fn=lambda record, profile: 90,
+        viewed_by_user_fn=lambda record: False,
+        normalize_job_key_fn=lambda value: value.strip().lower(),
+        parse_timestamp_fn=lambda value: None,
+        build_archive_records_fn=lambda *args: [],
+        build_applied_records_fn=lambda keys, history, reference_time: [
+            {"job_key": key, "applied": True} for key in sorted(keys)
+        ],
+        build_hidden_records_fn=lambda keys, history, reference_time: [
+            {"job_key": key, "hidden": True} for key in sorted(keys)
+        ],
+    )
+
+    assert [record["job_key"] for record in result["current_records"]] == ["seek:current"]
+    assert [record["job_key"] for record in result["shortlist_records"]] == ["seek:current"]
 
 
 def test_build_history_workspace_record_preserves_unknown_posting_channel_from_snapshot():

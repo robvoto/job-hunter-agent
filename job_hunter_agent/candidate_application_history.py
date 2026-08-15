@@ -486,6 +486,15 @@ def _candidate_history_now() -> str:
 
 
 def _load_candidate_application_history_store() -> list[dict]:
+    # A missing store is a valid initial state until history has been imported
+    # or saved locally. Handle it here so the generic JSON loader does not
+    # present normal first-use behaviour as an operational warning.
+    if not _CANDIDATE_APPLICATION_HISTORY_PATH.exists():
+        logger.info(
+            "[candidate_application_history] No local application-history store yet; "
+            "starting with 0 records. Import or save application history to populate it."
+        )
+        return []
     return load_json_list(_CANDIDATE_APPLICATION_HISTORY_PATH)
 
 

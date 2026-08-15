@@ -11,7 +11,6 @@ from functools import lru_cache
 from html import escape, unescape
 from string import Template
 from typing import Any, Dict, List, Optional
-from urllib.parse import quote
 
 from job_hunter_agent.capability_matching import build_display_competitive_risks
 from job_hunter_agent.company_normalization import normalize_company_name
@@ -54,12 +53,10 @@ from job_hunter_agent.preferences import (
     display_work_type_label,
 )
 from job_hunter_agent.profile_gaps import (
-    PROFILE_GAP_JOB_REQUIREMENT_TEXT_KEY,
     STATUS_CONFIRMED_DO_NOT_HAVE,
     STATUS_CONFIRMED_HAVE,
     STATUS_UNKNOWN,
     classify_requirement_status,
-    compute_profile_gaps,
 )
 from job_hunter_agent.profile_store import (
     ENGAGEMENT_TYPE_OPTIONS,
@@ -591,6 +588,9 @@ _WORKSPACE_PAGE_LABEL_KEYS = (
     "rejection_cancel_button",
     "rejection_admin_tip_prefix",
     "rejection_admin_tip_link_text",
+    "profile_gap_added_label",
+    "profile_gap_not_have_saved_label",
+    "profile_gap_error_label",
 )
 
 
@@ -1211,14 +1211,6 @@ def render_job_card(
         }
         for item in job_requirements
     ]
-    profile_gaps = compute_profile_gaps(
-        coverage_rows,
-        candidate_capabilities,
-        must_not_require_skills,
-        active_profile.get("candidate_eligibility") or [],
-        candidate_eligibility_facts,
-        candidate_qualifications,
-    )
     duplicate_links = record.get(RECORD_DUPLICATE_LINKS_KEY)
     if not isinstance(duplicate_links, list):
         duplicate_links = []
@@ -1801,11 +1793,6 @@ def render_job_card(
         ) and not is_uncertain_classification:
             is_eligibility = bool(row.get("is_eligibility"))
             is_qualification = bool(row.get("is_qualification"))
-            prefill_key = (
-                "prefill_qualification"
-                if is_qualification
-                else ("prefill_eligibility" if is_eligibility else "prefill_capability")
-            )
             action_label_key = (
                 "add_to_qualification_action_label"
                 if is_qualification
@@ -1825,10 +1812,19 @@ def render_job_card(
                 )
             )
             add_to_profile_html = (
-                f'<a class="workspace-text-action job-requirement-action req-add-to-profile" href="/settings?{prefill_key}={quote(canonical_requirement)}#section-matrix" '
-                f'title="{safe_html(_workspace_label("workspace_card_labels", action_title_key))}" target="_blank" rel="noopener">'
-                '<span class="workspace-text-action__icon" aria-hidden="true">+</span>'
-                f'<span>{safe_html(_workspace_label("workspace_card_labels", action_label_key))}</span></a>'
+                '<button type="button" class="jh-button jh-button--primary jh-button--compact job-requirement-action gap-btn" '
+                f'data-action="confirm_have" data-capability-name="{safe_html(canonical_requirement)}" '
+                f'title="{safe_html(_workspace_label("workspace_card_labels", action_title_key))}">'
+                '<span aria-hidden="true">+</span>'
+                f'<span>{safe_html(_workspace_label("workspace_card_labels", action_label_key))}</span></button>'
+            )
+            not_have_label = safe_html(
+                _workspace_label("workspace_card_labels", "gap_confirm_not_have_label")
+            )
+            add_to_profile_html += (
+                f'<button type="button" class="jh-button jh-button--danger jh-button--compact job-requirement-action gap-btn" '
+                f'data-action="confirm_do_not_have" data-capability-name="{safe_html(canonical_requirement)}">'
+                f"{not_have_label}</button>"
             )
         html = (
             f'<li class="job-requirement-item job-requirement-item--{safe_html(css_modifier)}">'
@@ -2048,43 +2044,6 @@ def render_job_card(
                 "</details>"
             )
 
-    profile_gaps_html = ""
-    if profile_gaps:
-        gap_confirm_have_label = safe_html(_workspace_label("workspace_card_labels", "gap_confirm_have_label"))
-        gap_confirm_not_have_label = safe_html(
-            _workspace_label("workspace_card_labels", "gap_confirm_not_have_label")
-        )
-        gap_decide_later_label = safe_html(_workspace_label("workspace_card_labels", "gap_decide_later_label"))
-        gap_items_html = "".join(
-            (
-                f'<div class="job-gap-item">'
-                f'<span class="job-gap-requirement">{safe_html(gap_requirement)}</span>'
-                f'<div class="job-gap-actions">'
-                f'<button class="gap-btn jh-button jh-button--primary jh-button--compact" data-capability-name="{safe_html(gap_capability_name)}" data-action="confirm_have">{gap_confirm_have_label}</button>'
-                f'<button class="gap-btn jh-button jh-button--danger jh-button--compact" data-capability-name="{safe_html(gap_capability_name)}" data-action="confirm_do_not_have">{gap_confirm_not_have_label}</button>'
-                f'<button class="gap-btn jh-button jh-button--neutral jh-button--compact" data-capability-name="{safe_html(gap_capability_name)}" data-action="decide_later">{gap_decide_later_label}</button>'
-                f"</div>"
-                f"</div>"
-            )
-            for gap in profile_gaps
-            for gap_capability_name in [str(gap.get("capability_name") or "").strip()]
-            for gap_requirement in [
-                str(
-                    gap.get(PROFILE_GAP_JOB_REQUIREMENT_TEXT_KEY)
-                    or gap.get("raw_requirement")
-                    or gap.get("capability_name")
-                    or ""
-                ).strip()
-            ]
-            if gap_capability_name and gap_requirement
-        )
-        gap_heading_label = safe_html(_workspace_label("workspace_card_labels", "gap_heading_label"))
-        profile_gaps_html = (
-            f'<div class="job-gaps-block" data-job-key="{job_key}">'
-            f'<div class="job-gap-heading">{gap_heading_label} ({len(profile_gaps)})</div>'
-            f'<div class="job-gap-items">{gap_items_html}</div>'
-            f"</div>"
-        )
     check_items_html = "".join(f"<li>{safe_html(item)}</li>" for item in check_items)
 
     risk_html = (
@@ -2370,7 +2329,6 @@ def render_job_card(
         f"{eligibility_html}"
         f"{job_requirements_html}"
         f"{llm_review_html}"
-        f"{profile_gaps_html}"
         f"{candidate_history_html}"
         f"{context_html}"
         f"{actions_html}"

@@ -494,7 +494,21 @@ def build_workspace_record_sets(
             -(timestamp or datetime.min).timestamp() if timestamp else float("-inf"),
         )
 
-    current_records = sorted(curated_kept_records, key=_rank_by_fit)
+    state_blocked_keys = {
+        normalize_job_key_fn(str(job_key or ""))
+        for job_key in (*applied_job_keys, *hidden_job_keys)
+        if normalize_job_key_fn(str(job_key or ""))
+    }
+
+    current_records = sorted(
+        [
+            record
+            for record in curated_kept_records
+            if normalize_job_key_fn(str(record.get("job_key") or ""))
+            not in state_blocked_keys
+        ],
+        key=_rank_by_fit,
+    )
 
     current_run_keys = {
         normalize_job_key_fn(str(record.get("job_key") or ""))

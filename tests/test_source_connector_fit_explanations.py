@@ -12,6 +12,7 @@ from job_hunter_agent import (
     capability_matching,
     description_trust,
     fit_scoring,
+    llm_gate,
     role_analysis,
     signal_detection,
     source_connector,
@@ -4164,7 +4165,7 @@ def test_contract_duration_requirement_is_suppressed_when_already_shown_in_meta(
     assert ">Contract (6 Months)<" not in html
 
 
-def test_add_to_profile_link_carries_capability_prefill_query():
+def test_add_to_profile_button_carries_capability_data_attributes():
     html = workspace_renderer.render_job_card(
         {
             "job_key": "test-prefill-link",
@@ -4195,7 +4196,94 @@ def test_add_to_profile_link_carries_capability_prefill_query():
         _capability_profile(),
     )
 
-    assert "/settings?prefill_capability=Stakeholder%20management#section-matrix" in html
+    assert 'data-action="confirm_have" data-capability-name="Stakeholder management"' in html
+    assert 'data-action="confirm_do_not_have" data-capability-name="Stakeholder management"' in html
+    assert "Needs confirmation" not in html
+
+
+def test_profile_fact_resolved_true_flows_through_to_add_to_profile_button():
+    coverage = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "Working knowledge of responsible AI principles",
+                "importance": "required",
+                "requirement_type": "capability",
+                "canonical_requirement": "Responsible AI",
+                "profile_fact_resolved": True,
+                "status": "not_shown",
+                "matched_job_text": "Working knowledge of responsible AI principles",
+                "profile_support": [],
+            }
+        ],
+        valid_capability_names={},
+    )
+
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-profile-fact-resolved",
+            "title": "AI Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Working knowledge of responsible AI principles",
+            "fit_highlights": [],
+            "source": "seek",
+            "requirement_coverage": coverage,
+        },
+        _test_profile(),
+    )
+
+    assert 'data-action="confirm_have" data-capability-name="Responsible AI"' in html
+
+
+def test_profile_fact_resolved_false_suppresses_add_to_profile_button():
+    coverage = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "Write testable user stories and acceptance criteria",
+                "importance": "required",
+                "requirement_type": "capability",
+                "canonical_requirement": "User stories and acceptance criteria",
+                "profile_fact_resolved": False,
+                "status": "not_shown",
+                "matched_job_text": "Write testable user stories and acceptance criteria",
+                "profile_support": [],
+            }
+        ],
+        valid_capability_names={
+            "acceptance testing": "Acceptance testing",
+            "acceptance criteria": "Acceptance testing",
+        },
+    )
+
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-profile-fact-not-resolved",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Write testable user stories and acceptance criteria",
+            "fit_highlights": [],
+            "source": "seek",
+            "requirement_coverage": coverage,
+        },
+        _capability_profile(),
+    )
+
+    assert "req-add-to-profile" not in html
 
 
 def test_no_add_to_profile_link_for_unresolved_bonus_alternatives_list():
@@ -4319,7 +4407,7 @@ def test_add_to_profile_link_shown_for_clear_single_qualification():
         _test_profile(),
     )
 
-    assert "/settings?prefill_qualification=CBAP#section-matrix" in html
+    assert 'data-action="confirm_have" data-capability-name="CBAP"' in html
 
 
 def test_independent_and_joined_requirements_each_get_own_add_to_profile_link():
@@ -4366,8 +4454,8 @@ def test_independent_and_joined_requirements_each_get_own_add_to_profile_link():
         _test_profile(),
     )
 
-    assert "/settings?prefill_eligibility=Australian%20Citizenship#section-matrix" in html
-    assert "/settings?prefill_eligibility=NV2#section-matrix" in html
+    assert 'data-action="confirm_have" data-capability-name="Australian Citizenship"' in html
+    assert 'data-action="confirm_have" data-capability-name="NV2"' in html
 
 
 def test_no_add_to_profile_link_for_partial_match_alternatives():
@@ -4408,6 +4496,46 @@ def test_no_add_to_profile_link_for_partial_match_alternatives():
     assert "job-requirement-item--partially-supported" in html
     assert "req-add-to-profile" not in html
     assert "prefill_qualification=" not in html
+
+
+def test_no_add_to_profile_link_for_matched_requirement():
+    """Matched rows must never get the profile-learning action either — the
+    fact is already represented in the profile, so offering to add it again
+    is confusing and, if clicked, would create a duplicate."""
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-matched-requirement",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "CBAP certification is required.",
+            "fit_highlights": [],
+            "source": "seek",
+            "requirement_coverage": [
+                {
+                    "requirement": "CBAP certification is required.",
+                    "requirement_type": "qualification",
+                    "canonical_requirement": "CBAP",
+                    "profile_action_allowed": True,
+                    "importance": "required",
+                    "status": "supported",
+                    "matched_candidate_fact": "CBAP",
+                    "matched_job_text": "CBAP certification is required.",
+                }
+            ],
+        },
+        _test_profile(),
+    )
+
+    assert "job-requirement-item--supported" in html
+    assert "req-add-to-profile" not in html
 
 
 def test_contract_duration_meta_stays_hidden_for_non_contract_jobs():

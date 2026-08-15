@@ -56,8 +56,7 @@ def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
 
     assert "Preferred roles" in html
     assert "Alternative roles" in html
-    assert "Search keyword" in html
-    assert 'placeholder="e.g. Business Analyst"' in html
+    assert 'id="review_search_keywords"' not in html
     assert "Add a preferred role" in html
     assert "Add an alternative role" in html
     assert 'id="engagement_type_label"' in html
@@ -995,6 +994,22 @@ def test_normalize_onboarding_settings_payload_supports_current_key():
     assert normalized["signal_cluster_dense_snippet_alias_hits"] == 5
 
 
+def test_validate_capabilities_uses_managed_alias_limit():
+    validated = profile_learning._validate_capabilities(
+        [
+            {
+                "name": "delivery",
+                "level": "working",
+                "aliases": ["one", "two", "three", "four"],
+                "icon_key": "generic_capability",
+            }
+        ],
+        alias_limit=2,
+    )
+
+    assert validated[0]["aliases"] == ["one", "two"]
+
+
 def test_normalize_onboarding_settings_payload_clamps_current_keys(monkeypatch):
     monkeypatch.setattr(server_helpers, "load_profile", lambda: {"onboarding_settings": {}})
 
@@ -1342,7 +1357,7 @@ def test_remove_review_key_supports_unapply(monkeypatch):
     monkeypatch.setattr(
         review_history_service,
         "rebuild_workspace_after_rule_change",
-        lambda reason="": events.append(((f"rebuild:{reason}",), {})),
+        lambda reason="", **kwargs: events.append(((f"rebuild:{reason}",), kwargs)),
     )
 
     result = review_history_service.remove_review_key("unapply", "job-1")
@@ -1353,6 +1368,7 @@ def test_remove_review_key_supports_unapply(monkeypatch):
     assert saved_profile["review_controls"]["hidden_job_keys"] == ["job-3"]
     assert events[0][0][0] == "unapply"
     assert str(events[1][0][0]).startswith("rebuild:review action saved: unapply")
+    assert events[1][1] == {}
 
 
 def test_matching_rules_changed_detects_capability_matrix_change():
@@ -1376,6 +1392,7 @@ def test_matching_rules_changed_ignores_identical_values():
 
 def test_rebuild_workspace_after_rule_change_runs_in_background(monkeypatch, tmp_path):
     started = []
+    joined = []
     rebuilds = []
 
     class FakeThread:
@@ -1389,6 +1406,9 @@ def test_rebuild_workspace_after_rule_change_runs_in_background(monkeypatch, tmp
             started.append({"daemon": self.daemon, "name": self.name})
             if self.target:
                 self.target(*self.args)
+
+        def join(self):
+            joined.append(True)
 
     monkeypatch.setattr(
         workspace_refresh_service, "get_workspace_results_path", lambda: tmp_path / "workspace.html"
@@ -1404,7 +1424,35 @@ def test_rebuild_workspace_after_rule_change_runs_in_background(monkeypatch, tmp
     workspace_refresh_service.rebuild_workspace_after_rule_change("profile matching rules saved")
 
     assert started == [{"daemon": True, "name": "job-hunter-workspace-rebuild"}]
+    assert joined == []
     assert rebuilds == ["profile matching rules saved; applying saved filters to current results"]
+
+
+def test_rebuild_workspace_after_rule_change_can_wait_for_snapshot(monkeypatch, tmp_path):
+    joined = []
+
+    class FakeThread:
+        def __init__(self, target=None, args=None, daemon=None, name=None):
+            self.target = target
+            self.args = args or ()
+
+        def start(self):
+            self.target(*self.args)
+
+        def join(self):
+            joined.append(True)
+
+    workspace_path = tmp_path / "workspace.html"
+    workspace_path.write_text("ok", encoding="utf-8")
+    monkeypatch.setattr(workspace_refresh_service, "get_workspace_results_path", lambda: workspace_path)
+    monkeypatch.setattr(workspace_refresh_service.threading, "Thread", FakeThread)
+    monkeypatch.setattr(workspace_refresh_service, "rebuild_workspace_results", lambda reason="": None)
+
+    workspace_refresh_service.rebuild_workspace_after_rule_change(
+        "review action saved: applied", wait_for_completion=True
+    )
+
+    assert joined == [True]
 
 
 def test_rebuild_workspace_on_startup_runs_when_data_exists(monkeypatch, tmp_path):

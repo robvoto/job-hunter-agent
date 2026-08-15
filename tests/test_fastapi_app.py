@@ -488,7 +488,22 @@ def test_admin_system_warnings_api_lists_and_updates(monkeypatch):
                 "first_seen_at": "2026-07-14T00:00:00+00:00",
                 "last_seen_at": "2026-07-14T00:00:00+00:00",
                 "count": 2,
-            }
+            },
+            {
+                "id": 2,
+                "severity": "warning",
+                "category": "preference_uncertainty",
+                "source": "passes_preference_filters",
+                "message": "Work mode unclear.",
+                "fingerprint": "diagnostic-fp",
+                "status": "unresolved",
+                "job_key": "seek:2",
+                "run_id": "",
+                "context": {"reason_code": "WORK_MODE_UNCLEAR"},
+                "first_seen_at": "2026-07-14T00:00:00+00:00",
+                "last_seen_at": "2026-07-14T00:00:00+00:00",
+                "count": 1,
+            },
         ],
     )
     monkeypatch.setattr(
@@ -508,13 +523,33 @@ def test_admin_system_warnings_api_lists_and_updates(monkeypatch):
     payload = response.json()
     assert payload["warnings"][0]["id"] == 1
     assert payload["warnings"][0]["context"] == {"error_type": "RuntimeError"}
+    assert payload["warnings"][0]["operator_action"] == {
+        "type": "run_scraper_validation",
+        "label": "Run scraper validation",
+    }
+    assert "Run scraper validation" in payload["warnings"][0]["operator_guidance"]
+    assert payload["diagnostic_groups"] == []
     assert payload["summary"] == {
-        "total_unresolved": 1,
-        "visible_actionable": 1,
-        "hidden_diagnostics": 0,
+        "total_unresolved_records": 2,
+        "active_problem_records": 1,
+        "active_problem_occurrences": 2,
+        "diagnostic_records": 1,
+        "diagnostic_occurrences": 1,
+        "diagnostic_groups": 1,
     }
 
-    response = client.patch("/api/admin/system-warnings/1", json={"status": "reviewed"})
+    diagnostics_response = client.get(
+        "/api/admin/system-warnings?include_diagnostics=true"
+    )
+    assert diagnostics_response.status_code == 200
+    diagnostics_payload = diagnostics_response.json()
+    assert diagnostics_payload["diagnostic_groups"][0]["category"] == "preference_uncertainty"
+    assert diagnostics_payload["diagnostic_groups"][0]["record_count"] == 1
+    assert diagnostics_payload["diagnostic_groups"][0]["sample"]["id"] == 2
+
+    response = client.patch(
+        "/api/admin/system-warnings/1", json={"action": "acknowledge"}
+    )
     assert response.status_code == 200
     assert response.json()["warning"]["status"] == "reviewed"
 

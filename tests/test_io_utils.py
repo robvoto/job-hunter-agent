@@ -2,24 +2,28 @@
 
 from datetime import datetime, timedelta, timezone
 
-from job_hunter_agent import io_utils
+from job_hunter_agent import io_utils, llm_gate
 
 
-def test_prune_llm_cache_for_current_profile_keeps_only_active_fingerprint(monkeypatch):
-    monkeypatch.setattr("job_hunter_agent.llm_gate._profile_fingerprint", lambda: "active-fp")
+def test_prune_llm_cache_for_current_profile_keeps_only_active_schema_and_fingerprint(monkeypatch):
+    monkeypatch.setattr(llm_gate, "_profile_fingerprint", lambda: "active-fp")
 
+    active_one = llm_gate.build_llm_cache_key("one")
+    active_three = llm_gate.build_llm_cache_key("three")
+    current_version = llm_gate.LLM_CACHE_SCHEMA_VERSION
     cache = {
-        "active-fp:one": {"value": 1},
-        "stale-fp:two": {"value": 2},
-        "active-fp:three": {"value": 3},
+        active_one: {"value": 1},
+        f"v{current_version}:stale-fp:two": {"value": 2},
+        active_three: {"value": 3},
+        f"v{current_version - 1}:active-fp:old-schema": {"value": 4},
     }
 
     pruned, removed = io_utils.prune_llm_cache_for_current_profile(cache)
 
-    assert removed == 1
+    assert removed == 2
     assert pruned == {
-        "active-fp:one": {"value": 1},
-        "active-fp:three": {"value": 3},
+        active_one: {"value": 1},
+        active_three: {"value": 3},
     }
 
 

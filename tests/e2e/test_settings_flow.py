@@ -203,3 +203,67 @@ def test_capability_alias_preview_uses_related_skills_copy(candidate_page):
             "scrum master",
         ]
     )
+
+
+def test_capability_related_skills_beyond_alias_limit_survive_settings_save(candidate_page):
+    # capability_alias_limit only bounds automatic CV-extraction; a save/reload
+    # round trip through the real Settings UI must never truncate a capability's
+    # already-confirmed Related Skills down to that limit.
+    related_skills = [
+        "scrum",
+        "lean delivery",
+        "sprint delivery",
+        "backlog refinement",
+        "agile project management",
+        "scrum master",
+        "kanban",
+        "release planning",
+        "story mapping",
+        "velocity tracking",
+        "retrospectives",
+        "product backlog",
+    ]
+    _seed_candidate_capabilities(
+        "candidate@e2e.test",
+        [
+            {
+                "name": "agile delivery",
+                "level": "strong",
+                "aliases": related_skills,
+                "icon_key": "delivery_project",
+            }
+        ],
+    )
+
+    page = candidate_page
+    page.goto("/settings#section-matrix")
+
+    card = page.locator("#capability_matrix_editor .capability-card").first
+    card.wait_for(state="visible")
+
+    # The capability matrix editor itself isn't touched here, so mark the form
+    # dirty (as a human would by changing some unrelated field) to enable Save
+    # and exercise the same serialize-whole-profile round trip a real save does.
+    page.locator('[data-section="section-alerts"]').click()
+    page.locator('label.toggle-switch[for="telegram_disable_link_preview"]').click()
+    page.locator('[data-section="section-matrix"]').click()
+
+    save_btn = page.locator("#save_settings_btn")
+    expect(save_btn).to_be_enabled()
+    save_btn.click()
+    expect(page.locator("#status")).to_contain_text("Settings saved successfully.")
+
+    page.reload()
+    reloaded_card = page.locator("#capability_matrix_editor .capability-card").first
+    reloaded_card.wait_for(state="visible")
+
+    summary = reloaded_card.locator(".capability-summary-label")
+    expect(summary).to_have_text(f"View {len(related_skills)} related skills")
+
+    drawer = reloaded_card.locator("details.capability-alias-drawer")
+    reloaded_card.locator(".cap-alias-summary").click()
+    expect(drawer).to_have_attribute("open", "")
+    expanded_aliases = drawer.locator(".cap-alias-chips")
+    assert expanded_aliases.locator(".cap-alias-chip-label").count() == len(
+        related_skills
+    ) - 2, "all confirmed Related Skills beyond the preview must survive the round trip"

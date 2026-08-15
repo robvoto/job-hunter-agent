@@ -207,6 +207,67 @@ def test_finalize_scrape_run_writes_outputs(monkeypatch, tmp_path, capsys, caplo
     assert all(detail["determinate"] is False for _, detail in progress_states)
 
 
+def test_finalize_scrape_run_saves_llm_cache_and_job_history_before_render_html(
+    monkeypatch, tmp_path
+):
+    """Regression: workspace rendering used to run before the LLM cache and job
+    history were persisted, so a render_html failure (template/record bug)
+    would silently discard this run's freshly computed, already-paid-for LLM
+    cache entries and job history updates. Persistence must now happen first."""
+    context = _build_context()
+
+    workspace_path = tmp_path / "workspace.html"
+
+    calls: list[str] = []
+
+    with db_conn() as conn:
+        conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", ("test_user",))
+
+    monkeypatch.setattr(scrape_finalize, "set_run_progress_state", lambda text, **detail: None)
+    monkeypatch.setattr(scrape_finalize, "get_workspace_results_path", lambda: workspace_path)
+    monkeypatch.setattr(
+        scrape_finalize,
+        "deduplicate_across_sources",
+        lambda records: records,
+    )
+    monkeypatch.setattr(
+        scrape_finalize.workspace_service,
+        "build_run_stats",
+        lambda *args: {"run_started_at": "2026-05-16T08:12:40", "cards_seen": 1},
+    )
+    monkeypatch.setattr(
+        scrape_finalize.workspace_service,
+        "build_workspace_record_sets",
+        lambda *args, **kwargs: {"shortlist_records": [{"job_key": "job:1"}]},
+    )
+    monkeypatch.setattr(
+        scrape_finalize, "save_llm_cache", lambda payload: calls.append("save_llm_cache")
+    )
+    monkeypatch.setattr(
+        scrape_finalize, "save_job_history", lambda payload: calls.append("save_job_history")
+    )
+
+    def _boom_render_html(*args, **kwargs):
+        calls.append("render_html")
+        raise RuntimeError("template blew up")
+
+    monkeypatch.setattr(scrape_finalize.workspace_service, "render_html", _boom_render_html)
+
+    try:
+        scrape_finalize.finalize_scrape_run(
+            context,
+            kept_records=[{"job_key": "job:1"}],
+            audit_rows=[{"job_key": "job:1", "decision": "KEEP"}],
+            skill_observations=[],
+        )
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("expected render_html failure to propagate")
+
+    assert calls == ["save_llm_cache", "save_job_history", "render_html"]
+
+
 def test_finalize_scrape_run_builds_source_breakdown_from_decisions(monkeypatch, tmp_path):
     context = _build_context()
 

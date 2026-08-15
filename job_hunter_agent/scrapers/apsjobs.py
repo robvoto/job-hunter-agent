@@ -581,6 +581,9 @@ class APSJobsScraper(BaseJobScraper):
         started_at = monotonic()
         try:
             with sync_playwright() as playwright:
+                # Always headless, independent of the admin "Run SEEK browser
+                # headless" setting (get_playwright_headless): APS has no
+                # assisted-verification flow that needs a visible browser.
                 context = playwright.chromium.launch_persistent_context(
                     user_data_dir=str(PLAYWRIGHT_USER_DATA_DIR),
                     headless=True,

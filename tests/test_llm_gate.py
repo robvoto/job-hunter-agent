@@ -1044,7 +1044,6 @@ def test_fit_review_preserves_and_splits_eligibility_outside_general_row_budget(
                     "importance": "required",
                     "requirement_type": "eligibility",
                     "canonical_requirement": "Baseline Security Clearance",
-                    "profile_fact_resolved": True,
                     "status": "supported",
                     "matched_candidate_fact": "Baseline",
                     "matched_job_text": "Candidates must be Australian citizens with Baseline Security Clearance",
@@ -1062,10 +1061,6 @@ def test_fit_review_preserves_and_splits_eligibility_outside_general_row_budget(
             "baseline": "Baseline",
             "baseline security clearance": "Baseline",
         },
-        eligibility_fact_values={
-            "australian citizenship": True,
-            "baseline": True,
-        },
     )
     coverage = result["requirement_coverage"]
     eligibility_rows = [row for row in coverage if row["requirement_type"] == "eligibility"]
@@ -1075,42 +1070,6 @@ def test_fit_review_preserves_and_splits_eligibility_outside_general_row_budget(
         "Australian Citizenship",
         "Baseline",
     }
-    assert all(row["status"] == "supported" for row in eligibility_rows)
-
-
-def test_compound_eligibility_does_not_inherit_support_for_false_profile_fact():
-    result = llm_gate.normalize_llm_requirement_coverage(
-        [
-            {
-                "requirement": "Australian citizenship with Baseline Security Clearance",
-                "importance": "required",
-                "requirement_type": "eligibility",
-                "canonical_requirement": "Baseline Security Clearance",
-                "profile_fact_resolved": True,
-                "status": "supported",
-                "matched_candidate_fact": "Baseline",
-                "matched_job_text": "Candidates must be Australian citizens with Baseline Security Clearance",
-                "profile_support": ["Baseline Security Clearance"],
-                "covered_requirement_elements": [
-                    "Australian citizenship",
-                    "Baseline Security Clearance",
-                ],
-            }
-        ],
-        valid_eligibility_names={
-            "australian citizenship": "Australian Citizenship",
-            "australian citizen": "Australian Citizenship",
-            "baseline": "Baseline",
-            "baseline security clearance": "Baseline",
-        },
-        eligibility_fact_values={
-            "australian citizenship": False,
-            "baseline": True,
-        },
-    )
-    by_fact = {row["matched_candidate_fact"]: row for row in result}
-    assert by_fact["Baseline"]["status"] == "supported"
-    assert by_fact["Australian Citizenship"]["status"] == "not_shown"
 
 
 def test_eligibility_row_after_general_limit_is_not_dropped():
@@ -1138,12 +1097,10 @@ def test_eligibility_row_after_general_limit_is_not_dropped():
     result = llm_gate.normalize_llm_requirement_coverage(
         rows,
         valid_eligibility_names={"australian citizenship": "Australian Citizenship"},
-        eligibility_fact_values={"australian citizenship": True},
         max_items=8,
     )
     assert len(result) == 9
     assert result[-1]["requirement_type"] == "eligibility"
-    assert result[-1]["matched_candidate_fact"] == "Australian Citizenship"
 
 
 def test_required_eligibility_not_shown_caps_at_weak_despite_high_capability_support():
@@ -1444,7 +1401,8 @@ def test_normalize_coverage_accepts_profile_capability_aliases():
 
 def test_normalize_coverage_allows_profile_action_for_clear_single_fact():
     # A requirement that resolves to exactly one named concept, with no
-    # competing alternatives, is safe to offer as an Add-to-profile action.
+    # competing alternatives, and an explicit profile_fact_resolved=True
+    # judgement, is safe to offer as an Add-to-profile action.
     result = llm_gate.normalize_llm_requirement_coverage(
         [
             {
@@ -1458,6 +1416,7 @@ def test_normalize_coverage_allows_profile_action_for_clear_single_fact():
                 "profile_support": [],
             }
         ],
+        valid_qualification_names={},
     )
 
     assert result[0]["canonical_requirement"] == "CBAP"
@@ -1467,10 +1426,9 @@ def test_normalize_coverage_allows_profile_action_for_clear_single_fact():
 
 def test_normalize_coverage_allows_short_atomic_requirement_echoing_its_own_text():
     # A short atomic requirement's canonical name can legitimately equal the
-    # requirement text verbatim (e.g. "Java"). Whether that is a resolved
-    # concept or restated ad prose is a language-understanding judgement, so
-    # normalization must trust profile_fact_resolved rather than guess from
-    # text equality — this must NOT be treated as an unresolved echo.
+    # requirement text verbatim (e.g. "Java"). The LLM owns that semantic
+    # judgement via profile_fact_resolved; deterministic code must not guess
+    # it from text equality.
     result = llm_gate.normalize_llm_requirement_coverage(
         [
             {
@@ -1484,16 +1442,16 @@ def test_normalize_coverage_allows_short_atomic_requirement_echoing_its_own_text
                 "profile_support": [],
             }
         ],
+        valid_capability_names={},
     )
 
     assert result[0]["canonical_requirement"] == "Java"
     assert result[0]["profile_action_allowed"] is True
 
 
-def test_normalize_coverage_blocks_profile_action_when_fact_not_resolved():
-    # canonical_requirement and a clean single-alternative shape are not
-    # enough on their own — without the LLM's explicit profile_fact_resolved
-    # confirmation (missing here), profile_action_allowed must stay False.
+def test_normalize_coverage_blocks_profile_action_when_profile_fact_resolved_is_missing():
+    # A canonical label alone is not a profile-learning decision. Missing the
+    # LLM-owned profile_fact_resolved judgement fails closed.
     result = llm_gate.normalize_llm_requirement_coverage(
         [
             {
@@ -1506,6 +1464,7 @@ def test_normalize_coverage_blocks_profile_action_when_fact_not_resolved():
                 "profile_support": [],
             }
         ],
+        valid_qualification_names={},
     )
 
     assert result[0]["canonical_requirement"] == "CBAP"
@@ -1525,11 +1484,14 @@ def test_normalize_coverage_blocks_profile_action_for_invented_umbrella_label():
                 "requirement_type": "qualification",
                 "canonical_requirement": "Agile Certification",
                 "named_alternatives": ["IIBA", "CBAP", "CCBA", "CSPO", "PSM"],
+                "profile_resolution": "new",
+                "profile_target": "Agile Certification",
                 "status": "not_shown",
                 "matched_job_text": "Tertiary qualifications or BA/Agile certifications (IIBA, CBAP, CCBA, CSPO, PSM) are a bonus.",
                 "profile_support": [],
             }
         ],
+        valid_qualification_names={},
     )
 
     assert result[0]["canonical_requirement"] == "Agile Certification"
@@ -1549,11 +1511,14 @@ def test_normalize_coverage_blocks_profile_action_for_bare_issuer_alternative():
                 "requirement_type": "qualification",
                 "canonical_requirement": "IIBA",
                 "named_alternatives": ["IIBA", "CBAP", "CCBA"],
+                "profile_resolution": "new",
+                "profile_target": "IIBA",
                 "status": "not_shown",
                 "matched_job_text": "IIBA, CBAP, or CCBA certification preferred.",
                 "profile_support": [],
             }
         ],
+        valid_qualification_names={},
     )
 
     assert result[0]["profile_action_allowed"] is False
@@ -1571,11 +1536,14 @@ def test_normalize_coverage_blocks_profile_action_for_single_named_alternative()
                 "requirement_type": "qualification",
                 "canonical_requirement": "CBAP",
                 "named_alternatives": ["CBAP"],
+                "profile_resolution": "new",
+                "profile_target": "CBAP",
                 "status": "not_shown",
                 "matched_job_text": "CBAP or equivalent certification required.",
                 "profile_support": [],
             }
         ],
+        valid_qualification_names={},
     )
 
     assert result[0]["profile_action_allowed"] is False
@@ -1608,6 +1576,7 @@ def test_normalize_coverage_keeps_and_joined_requirements_independently_actionab
                 "profile_support": [],
             },
         ],
+        valid_eligibility_names={},
     )
 
     assert result[0]["profile_action_allowed"] is True
@@ -1806,6 +1775,13 @@ def test_build_rejection_suggestions_guidance_includes_key_phrase():
     assert "blocker" in guidance.lower()
 
 
+def test_build_profile_storage_guidance_binds_mutations_to_atomic_canonical_fact():
+    guidance = llm_gate.build_profile_storage_resolution_guidance()
+    assert "one atomic canonical fact represented by canonical_hint" in guidance
+    assert "domain or industry experience" in guidance
+    assert "Banking and Insurance must not be added" in guidance
+
+
 # ── llm_judge_title ────────────────────────────────────────────────────────────
 
 
@@ -1816,20 +1792,19 @@ def _fake_title_judgment_client(payload: dict | None, *, output_text: str = ""):
 
     class _FakeResponse:
         usage = None
+        output_parsed = _FakeParsed() if payload is not None else None
 
-    response = _FakeResponse()
-    response.output_parsed = _FakeParsed() if payload is not None else None
-    response.output_text = output_text
+    resp = _FakeResponse()
+    resp.output_text = output_text
 
     class _FakeResponses:
         def parse(self, **kwargs):
-            return response
+            return resp
 
     class _FakeClient:
         responses = _FakeResponses()
 
     return _FakeClient()
-
 
 def test_llm_judge_title_returns_none_without_client():
     result = llm_gate.llm_judge_title("Business Analyst", ["business analyst"], [], llm_client=None)
@@ -1837,20 +1812,21 @@ def test_llm_judge_title_returns_none_without_client():
 
 
 def test_llm_judge_title_returns_none_for_empty_title():
-    client = _fake_title_judgment_client('{"verdict":"match","reason":"ok"}')
+    client = _fake_title_judgment_client({"verdict": "match", "reason": "ok"})
     result = llm_gate.llm_judge_title("", ["business analyst"], [], llm_client=client)
     assert result is None
 
 
 def test_llm_judge_title_returns_none_when_no_target_roles_configured():
-    client = _fake_title_judgment_client('{"verdict":"match","reason":"ok"}')
+    client = _fake_title_judgment_client({"verdict": "match", "reason": "ok"})
     result = llm_gate.llm_judge_title("Business Analyst", [], [], llm_client=client)
     assert result is None
 
 
 def test_llm_judge_title_parses_no_match_verdict():
     client = _fake_title_judgment_client(
-        {"verdict": "no_match", "reason": "Enablement/coordination role, not a target role."}
+        {"verdict": "no_match", "reason": "Enablement/coordination role, not a target role."},
+        output_text='```json\n{"verdict":"no_match","reason":"ignored raw text"}\n```',
     )
     result = llm_gate.llm_judge_title(
         "Business Enablement Coordinator", ["senior business analyst"], [], llm_client=client
@@ -2043,4 +2019,256 @@ def test_requirement_coverage_keeps_partial_match_when_evidence_covers_real_requ
         valid_capability_names={"process modelling": "Process Modelling"},
     )
     assert result[0]["status"] == "partially_supported"
-    assert result[0]["matched_candidate_fact"] == "Process Modelling"
+
+
+def _storage_profile():
+    return {
+        "candidate_capabilities": [
+            {
+                "name": "Business Analysis",
+                "level": "strong",
+                "aliases": ["Requirements Analysis", "User stories"],
+            },
+        ],
+        "candidate_qualifications": [
+            {"name": "CBAP", "value": True, "aliases": []},
+        ],
+        "candidate_eligibility": [
+            {"name": "Australian Citizenship", "value": True},
+        ],
+    }
+
+
+def test_normalize_profile_storage_resolution_existing_requires_profile_owned_target():
+    # Spec section C's core safety check: an EXISTING resolution target must be
+    # literally present in the profile (name or alias) — an LLM hallucinating a
+    # plausible-sounding name must fail closed, not write.
+    with pytest.raises(ValueError, match="not profile-owned"):
+        llm_gate.normalize_llm_profile_storage_resolution(
+            {"resolution": "existing", "existing_name": "Java", "related_terms": []},
+            profile=_storage_profile(),
+            requirement_type="capability",
+        )
+
+
+def test_normalize_profile_storage_resolution_existing_matches_via_any_alias():
+    resolved_via_first_alias = llm_gate.normalize_llm_profile_storage_resolution(
+        {"resolution": "existing", "existing_name": "Requirements Analysis", "related_terms": []},
+        profile=_storage_profile(),
+        requirement_type="capability",
+    )
+    assert resolved_via_first_alias["profile_target"] == "Business Analysis"
+
+    resolved_via_second_alias = llm_gate.normalize_llm_profile_storage_resolution(
+        {"resolution": "existing", "existing_name": "User stories", "related_terms": []},
+        profile=_storage_profile(),
+        requirement_type="capability",
+    )
+    assert resolved_via_second_alias["profile_target"] == "Business Analysis"
+
+
+def test_normalize_profile_storage_resolution_rejects_related_term_owned_elsewhere():
+    profile = _storage_profile()
+    profile["candidate_capabilities"].append(
+        {"name": "Stakeholder Management", "level": "strong", "aliases": ["Communication"]}
+    )
+    with pytest.raises(ValueError, match="already owned by a different profile item"):
+        llm_gate.normalize_llm_profile_storage_resolution(
+            {
+                "resolution": "existing",
+                "existing_name": "Business Analysis",
+                "related_terms": ["Communication"],
+            },
+            profile=profile,
+            requirement_type="capability",
+        )
+
+
+def test_normalize_profile_storage_resolution_rejects_related_terms_for_non_capability():
+    with pytest.raises(ValueError, match="only supported for capability requirements"):
+        llm_gate.normalize_llm_profile_storage_resolution(
+            {
+                "resolution": "existing",
+                "existing_name": "CBAP",
+                "related_terms": ["Something"],
+            },
+            profile=_storage_profile(),
+            requirement_type="qualification",
+        )
+
+
+def test_normalize_profile_storage_resolution_new_rejects_name_collision():
+    with pytest.raises(ValueError, match="duplicates an existing profile name or alias"):
+        llm_gate.normalize_llm_profile_storage_resolution(
+            {"resolution": "new", "new_name": "requirements analysis", "related_terms": []},
+            profile=_storage_profile(),
+            requirement_type="capability",
+        )
+
+
+def test_normalize_profile_storage_resolution_new_accepts_genuinely_new_name():
+    resolved = llm_gate.normalize_llm_profile_storage_resolution(
+        {"resolution": "new", "new_name": "Java", "related_terms": []},
+        profile=_storage_profile(),
+        requirement_type="capability",
+    )
+    assert resolved == {"resolution": "new", "profile_target": "Java", "related_terms": []}
+
+
+def test_normalize_profile_storage_resolution_unresolved_rejects_any_proposed_change():
+    with pytest.raises(ValueError, match="must not propose profile changes"):
+        llm_gate.normalize_llm_profile_storage_resolution(
+            {"resolution": "unresolved", "new_name": "Java", "related_terms": []},
+            profile=_storage_profile(),
+            requirement_type="capability",
+        )
+
+    resolved = llm_gate.normalize_llm_profile_storage_resolution(
+        {"resolution": "unresolved", "related_terms": []},
+        profile=_storage_profile(),
+        requirement_type="capability",
+    )
+    assert resolved == {"resolution": "unresolved", "profile_target": "", "related_terms": []}
+
+
+class _FakeProfileStorageParsed:
+    def __init__(self, **fields):
+        # Mirrors _LLMProfileStorageResolution's pydantic defaults so model_dump()
+        # always yields all four keys, matching the real parsed response shape.
+        self._fields = {"existing_name": "", "new_name": "", "related_terms": [], **fields}
+
+    def model_dump(self):
+        return dict(self._fields)
+
+
+class _FakeProfileStorageClient:
+    def __init__(self, **fields):
+        self._parsed = _FakeProfileStorageParsed(**fields)
+
+    class _Responses:
+        def __init__(self, parsed):
+            self._parsed = parsed
+
+        def parse(self, **kwargs):
+            response = type("_Resp", (), {"output_parsed": self._parsed, "usage": None})()
+            return response
+
+    @property
+    def responses(self):
+        return self._Responses(self._parsed)
+
+
+def test_llm_resolve_profile_storage_returns_validated_existing_resolution(monkeypatch):
+    monkeypatch.setattr(llm_gate, "_log_llm_call", lambda *args, **kwargs: None)
+    client = _FakeProfileStorageClient(resolution="existing", existing_name="Business Analysis")
+
+    result = llm_gate.llm_resolve_profile_storage(
+        {
+            "requirement_type": "capability",
+            "requirement": "Write clear business requirements",
+            "matched_job_text": "Write clear business requirements",
+            "canonical_requirement": "Business requirements analysis",
+        },
+        _storage_profile(),
+        llm_client=client,
+    )
+
+    assert result == {
+        "resolution": "existing",
+        "profile_target": "Business Analysis",
+        "related_terms": [],
+    }
+
+
+def test_llm_resolve_profile_storage_fails_closed_when_llm_hallucinates_unowned_target(monkeypatch):
+    # Even if the LLM call itself succeeds, a hallucinated existing_name that
+    # is not actually in the profile must never reach save_profile — the
+    # deterministic validator inside llm_resolve_profile_storage must raise.
+    monkeypatch.setattr(llm_gate, "_log_llm_call", lambda *args, **kwargs: None)
+    client = _FakeProfileStorageClient(resolution="existing", existing_name="Java")
+
+    with pytest.raises(ValueError, match="not profile-owned"):
+        llm_gate.llm_resolve_profile_storage(
+            {
+                "requirement_type": "capability",
+                "requirement": "Java development experience is required.",
+                "matched_job_text": "Java development experience is required.",
+                "canonical_requirement": "Java",
+            },
+            _storage_profile(),
+            llm_client=client,
+        )
+
+
+def test_llm_resolve_profile_storage_raises_without_an_available_client(monkeypatch):
+    monkeypatch.setattr(llm_gate, "client", None)
+    with pytest.raises(RuntimeError, match="Profile storage resolution requires an available LLM client"):
+        llm_gate.llm_resolve_profile_storage(
+            {
+                "requirement_type": "capability",
+                "requirement": "Java development experience is required.",
+                "matched_job_text": "Java development experience is required.",
+            },
+            _storage_profile(),
+            llm_client=None,
+        )
+
+
+def test_llm_resolve_profile_storage_wraps_client_exception_as_llm_call_error(monkeypatch):
+    class _RaisingResponses:
+        def parse(self, **kwargs):
+            raise RuntimeError("boom")
+
+    class _RaisingClient:
+        responses = _RaisingResponses()
+
+    with pytest.raises(llm_gate.LLMCallError):
+        llm_gate.llm_resolve_profile_storage(
+            {
+                "requirement_type": "capability",
+                "requirement": "Java development experience is required.",
+                "matched_job_text": "Java development experience is required.",
+                "canonical_requirement": "Java",
+            },
+            _storage_profile(),
+            llm_client=_RaisingClient(),
+        )
+
+
+def test_llm_resolve_profile_storage_returns_unresolved_without_calling_llm_when_canonical_requirement_is_empty():
+    class _FailingResponses:
+        def parse(self, **kwargs):
+            raise AssertionError("LLM must not be called when canonical_requirement is empty")
+
+    class _FailingClient:
+        responses = _FailingResponses()
+
+    result = llm_gate.llm_resolve_profile_storage(
+        {
+            "requirement_type": "capability",
+            "requirement": "Tertiary qualifications or BA/Agile certifications (IIBA, CBAP, CCBA, CSPO, PSM)",
+            "matched_job_text": "Tertiary qualifications or BA/Agile certifications (IIBA, CBAP, CCBA, CSPO, PSM)",
+            "canonical_requirement": "",
+        },
+        _storage_profile(),
+        llm_client=_FailingClient(),
+    )
+
+    assert result == {"resolution": "unresolved", "profile_target": "", "related_terms": []}
+
+
+def test_profile_storage_lookup_folds_all_aliases():
+    lookup = llm_gate._profile_storage_lookup(_storage_profile(), "capability")
+    assert lookup["business analysis"] == "Business Analysis"
+    assert lookup["requirements analysis"] == "Business Analysis"
+    assert lookup["user stories"] == "Business Analysis"
+
+
+def test_profile_storage_items_groups_aliases_under_canonical_name():
+    items = llm_gate._profile_storage_items(_storage_profile(), "capability")
+    assert items == [
+        {
+            "name": "Business Analysis",
+            "aliases": ["requirements analysis", "user stories"],
+        }
+    ]

@@ -18,6 +18,8 @@ def test_results_page_uses_runtime_workspace_config():
     assert "window.__JOB_HUNTER_WORKSPACE__" in results_html
     assert 'href="/settings#section-search"' in results_html
     assert 'class="rejection-panel-actions"' in results_html
+    assert 'class="jh-button jh-button--primary rejection-btn-save"' in results_html
+    assert 'class="jh-button jh-button--secondary rejection-btn-cancel"' in results_html
     assert 'class="block-admin-tip"' in results_html
     assert 'id="reset_workspace_filters"' in results_html
     assert 'class="jh-button jh-button--neutral jh-button--compact workspace-text-action workspace-text-action--reset"' in results_html
@@ -118,7 +120,7 @@ def test_render_section_passes_debug_mode_through_to_job_cards():
     assert render_job_card.call_args.kwargs["debug_mode"] is True
 
 
-def test_results_page_javascript_persists_pagination_before_review_reload():
+def test_results_page_javascript_moves_reviewed_cards_without_waiting_for_workspace_reload():
     root = Path(__file__).resolve().parent.parent
     results_js = (root / "templates" / "static" / "results" / "results-page.js").read_text(
         encoding="utf-8"
@@ -129,9 +131,13 @@ def test_results_page_javascript_persists_pagination_before_review_reload():
     assert "loadWorkspacePagination();" in results_js
     assert "setActiveWorkspace((window.location.hash || '#potential').replace('#', ''), false, false);" in results_js
     assert re.search(
-        r"if \(payload\?\.reload_workspace \|\| \['applied', 'unapply', 'hidden', 'unhide'\]\.includes\(action\)\) \{\s+saveWorkspaceFilters\(\);\s+saveWorkspacePagination\(\);\s+window\.location\.reload\(\);",
+        r"if \(payload\?\.reload_workspace && !payload\?\.workspace_refresh_async\) \{\s+saveWorkspaceFilters\(\);\s+saveWorkspacePagination\(\);\s+window\.location\.reload\(\);",
         results_js,
     )
+    assert "function moveCardAfterReview(card, action)" in results_js
+    assert "targetGrid.appendChild(card);" in results_js
+    assert "moveCardAfterReview(card, action);" in results_js
+    assert "reloadAfterWorkspaceRefresh(payload?.workspace_refresh_id);" not in results_js
 
 
 def test_results_styles_keep_debug_match_tile_number_visible():
@@ -426,6 +432,9 @@ def test_rendered_workspace_html_content(tmp_path):
             "rejection_cancel_button": "Cancel",
             "rejection_admin_tip_prefix": "Need to edit saved rules? ",
             "rejection_admin_tip_link_text": "Open Settings",
+            "profile_gap_added_label": "Added to profile",
+            "profile_gap_not_have_saved_label": "Saved as not required",
+            "profile_gap_error_label": "Could not update profile.",
         }
     }
 

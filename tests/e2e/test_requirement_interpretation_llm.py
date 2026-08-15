@@ -56,6 +56,135 @@ Capability controls:
 - 5+ years supporting client outcomes
 """
 
+@pytest.mark.llm_e2e
+@pytest.mark.timeout(90)
+@pytest.mark.skipif(
+    not (_ALLOW_LLM and _HAS_REAL_KEY),
+    reason=(
+        "Real-LLM semantic contract is opt-in only. Set JOB_HUNTER_E2E_ALLOW_LLM=1 "
+        "and a real OPENAI_API_KEY to run it."
+    ),
+)
+def test_real_llm_resolves_confirmed_requirement_into_profile_storage(monkeypatch):
+    """Click-time profile storage resolution (llm_resolve_profile_storage) is a
+    dedicated decision, separate from fit-review. This proves its three real
+    outcomes: a reworded existing skill collapses onto the existing capability
+    instead of creating a duplicate, a genuinely new atomic skill becomes a new
+    top-level item, and a vague/compound requirement fails closed as
+    unresolved rather than guessing a storage destination.
+    """
+    from conftest import _cheapest_llm_model
+
+    from job_hunter_agent import llm_gate
+
+    model = _cheapest_llm_model()
+    profile = {
+        "candidate_capabilities": [
+            {
+                "name": "Business Analysis",
+                "level": "strong",
+                "aliases": ["Requirements Analysis"],
+            },
+            {
+                "name": "Stakeholder Management",
+                "level": "strong",
+                "aliases": ["Communication"],
+            },
+        ],
+        "candidate_eligibility": [],
+        "candidate_eligibility_facts": [],
+        "candidate_qualifications": [],
+    }
+
+    monkeypatch.setattr(llm_gate, "_log_llm_model_once", lambda: model)
+
+    existing_row = {
+        "requirement_type": "capability",
+        "requirement": "Write clear business requirements and analyse stakeholder needs",
+        "matched_job_text": "Write clear business requirements and analyse stakeholder needs",
+        "canonical_requirement": "Business requirements analysis",
+    }
+    existing_result = llm_gate.llm_resolve_profile_storage(existing_row, profile)
+    assert existing_result["resolution"] == "existing", existing_result
+    assert existing_result["profile_target"] == "Business Analysis", existing_result
+
+    new_row = {
+        "requirement_type": "capability",
+        "requirement": "Java development experience is required.",
+        "matched_job_text": "Java development experience is required.",
+        "canonical_requirement": "Java",
+    }
+    new_result = llm_gate.llm_resolve_profile_storage(new_row, profile)
+    assert new_result["resolution"] == "new", new_result
+    assert "java" in new_result["profile_target"].casefold(), new_result
+
+    vague_row = {
+        "requirement_type": "qualification",
+        "requirement": (
+            "Tertiary qualifications or BA/Agile certifications (IIBA, CBAP, "
+            "CCBA, CSPO, PSM) are a bonus."
+        ),
+        "matched_job_text": (
+            "Tertiary qualifications or BA/Agile certifications (IIBA, CBAP, "
+            "CCBA, CSPO, PSM) are a bonus."
+        ),
+        "canonical_requirement": "",
+    }
+    vague_result = llm_gate.llm_resolve_profile_storage(vague_row, profile)
+    assert vague_result["resolution"] == "unresolved", vague_result
+    assert vague_result["profile_target"] == "", vague_result
+
+
+@pytest.mark.llm_e2e
+@pytest.mark.timeout(180)
+@pytest.mark.skipif(
+    not (_ALLOW_LLM and _HAS_REAL_KEY),
+    reason=(
+        "Real-LLM semantic contract is opt-in only. Set JOB_HUNTER_E2E_ALLOW_LLM=1 "
+        "and a real OPENAI_API_KEY to run it."
+    ),
+)
+def test_real_llm_keeps_financial_services_domain_out_of_governance_capability(monkeypatch):
+    """Repeatedly guard the live bug's domain-versus-function storage boundary.
+
+    The ad wording contains banking and insurance as examples/qualifiers, but
+    the click confirms only the atomic Financial Services canonical fact. The
+    resolver must not place that domain fact under Governance and Compliance
+    Management or promote the examples into profile facts.
+    """
+    from conftest import _cheapest_llm_model
+
+    from job_hunter_agent import llm_gate
+
+    monkeypatch.setattr(llm_gate, "_log_llm_model_once", lambda: _cheapest_llm_model())
+    profile = {
+        "candidate_capabilities": [
+            {
+                "name": "Governance and Compliance Management",
+                "level": "working",
+                "aliases": ["governance", "compliance", "document rigour"],
+            }
+        ],
+        "candidate_eligibility": [],
+        "candidate_eligibility_facts": [],
+        "candidate_qualifications": [],
+    }
+    row = {
+        "requirement_type": "capability",
+        "requirement": "Experience within Financial services, ideally banking or insurance",
+        "canonical_requirement": "financial services",
+        "matched_job_text": "Financial services background, ideally within banking or insurance",
+    }
+
+    for _ in range(3):
+        result = llm_gate.llm_resolve_profile_storage(row, profile)
+        target = str(result.get("profile_target") or "").casefold()
+        related_terms = [str(term).casefold() for term in result.get("related_terms") or []]
+        assert target != "governance and compliance management", result
+        assert "banking" not in target, result
+        assert "insurance" not in target, result
+        assert all("banking" not in term and "insurance" not in term for term in related_terms), result
+
 
 @pytest.mark.llm_e2e
 @pytest.mark.timeout(90)

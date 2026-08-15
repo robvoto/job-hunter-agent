@@ -1113,57 +1113,12 @@
 }
 
 .rejection-btn-save {
-  flex: 1;
-  padding: 10px 16px;
-  background: var(--accent);
-  color: var(--button-text);
-  border: none;
-  border-radius: 8px;
-  font-size: 0.88rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 120ms ease, opacity 120ms ease;
+  flex: 0 0 auto;
 }
 
-.rejection-btn-save:not(:disabled):hover {
-  transform: translateY(-1px);
-}
-
-.rejection-btn-save:not(:disabled):active {
-  transform: translateY(0) scale(0.98);
-}
-
-.rejection-btn-save:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
-.rejection-btn-skip {
-  padding: 10px 16px;
-  background: var(--bg-surface);
-  color: var(--text-muted);
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  font-size: 0.86rem;
-  cursor: pointer;
-  transition: transform 120ms ease, opacity 120ms ease;
-}
-
-.rejection-btn-skip:hover {
-  transform: translateY(-1px);
-}
-
-.rejection-btn-skip:active {
-  transform: translateY(0) scale(0.98);
-}
-
+.rejection-btn-skip,
 .rejection-btn-cancel {
-  padding: 10px 12px;
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 0.86rem;
-  cursor: pointer;
+  flex: 0 0 auto;
 }
 
 .rejection-inline-tip {
@@ -1417,6 +1372,7 @@
 
 .block-admin-tip a {
   color: var(--accent);
+  margin-inline-start: 0.25em;
 }
 
 
@@ -1460,74 +1416,7 @@
   color: var(--text-muted);
 }
 
-/* ── Profile gap block — "Needs confirmation" ───────────────────────────────
-   Uses warning semantic tokens: amber tint, clearly visible but not alarming.
-   Sits inside the job card between the job-requirements block and history.
-   ── */
-
-.job-gaps-block {
-  margin: 0 0 12px;
-  padding: var(--surface-pad-block-sm) var(--surface-pad-inline-sm);
-  border: 1px solid var(--state-warning-border);
-  border-radius: var(--radius-lg);
-  background: var(--state-warning-bg);
-}
-
-.job-gaps-block[hidden] {
-  display: none;
-}
-
-.job-gap-heading {
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: var(--state-warning-text);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  margin-bottom: 8px;
-}
-
-.job-gap-items {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.job-gap-item {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px 10px;
-  background: color-mix(in srgb, var(--bg-surface) 70%, transparent);
-  border: 1px solid color-mix(in srgb, var(--state-warning-border) 60%, transparent);
-  border-radius: var(--radius-sm);
-}
-
-.job-gap-item[hidden] {
-  display: none;
-}
-
-.job-gap-requirement {
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  line-height: 1.4;
-}
-
-.job-gap-evidence {
-  font-size: 0.82rem;
-  color: var(--text-muted);
-  line-height: 1.4;
-  font-style: italic;
-}
-
-.job-gap-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 2px;
-}
-
-/* Compact ghost buttons for gap responses */
+/* Compact profile-learning actions retain the gap-btn JS hook. */
 .gap-btn {
   display: inline-flex;
   align-items: center;
@@ -1542,48 +1431,9 @@
   border: 1px solid transparent;
 }
 
-.gap-btn--have {
-  background: var(--state-success-bg);
-  color: var(--state-success-text);
-  border-color: var(--state-success-border);
-}
-
-.gap-btn--have:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--state-success-bg) 80%, var(--state-success-border));
-}
-
-.gap-btn--not-have {
-  background: var(--state-error-bg);
-  color: var(--state-error-text);
-  border-color: var(--state-error-border);
-}
-
-.gap-btn--not-have:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--state-error-bg) 80%, var(--state-error-border));
-}
-
-.gap-btn--later {
-  background: var(--state-neutral-bg);
-  color: var(--state-neutral-text);
-  border-color: var(--state-neutral-border);
-}
-
-.gap-btn--later:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--state-neutral-bg) 80%, var(--state-neutral-border));
-}
-
 .gap-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
-}
-
-/* Dark theme: soften the amber background slightly */
-[data-theme="dark-professional"] .job-gaps-block {
-  border-color: var(--state-warning-border);
-}
-
-[data-theme="dark-professional"] .job-gap-item {
-  background: color-mix(in srgb, var(--bg-surface) 60%, transparent);
 }
 
 @media (max-width: 700px) {

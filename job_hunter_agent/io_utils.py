@@ -398,12 +398,12 @@ def save_llm_cache(cache: Dict[str, Any]) -> None:
 
 
 def prune_llm_cache_for_current_profile(cache: Dict[str, Any]) -> tuple[Dict[str, Any], int]:
-    """Keep only LLM cache entries for the active profile fingerprint."""
+    """Keep only cache entries for the active schema and profile fingerprint."""
 
-    from job_hunter_agent.llm_gate import _profile_fingerprint
+    from job_hunter_agent.llm_gate import LLM_CACHE_SCHEMA_VERSION, _profile_fingerprint
 
     fingerprint = _profile_fingerprint()
-    prefix = f"{fingerprint}:"
+    prefix = f"v{LLM_CACHE_SCHEMA_VERSION}:{fingerprint}:"
     pruned: Dict[str, Any] = {}
     removed = 0
 
