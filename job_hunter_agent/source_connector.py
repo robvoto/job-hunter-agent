@@ -33,6 +33,7 @@ from job_hunter_agent.run_control import (
 )
 from job_hunter_agent.runtime_helpers import (
     CLI_FLAG_DEBUG,
+    CLI_FLAG_FORCE_REFRESH,
     CLI_FLAG_NO_LLM,
     CLI_FLAG_REBUILD_WORKSPACE,
     CLI_FLAG_STEP,
@@ -115,19 +116,25 @@ if has_cli_flag(sys.argv, CLI_FLAG_STEP):
     enable_step_through()
 
 
-def scrape_jobs_direct(*, trigger_label: str = "manual scrape command") -> str:
+def scrape_jobs_direct(
+    *, trigger_label: str = "manual scrape command", force_refresh: bool = False
+) -> str:
     """Run one scrape inside an isolated control scope in every execution mode."""
     if run_control_scope_active():
-        return _scrape_jobs_direct_scoped(trigger_label=trigger_label)
+        return _scrape_jobs_direct_scoped(
+            trigger_label=trigger_label, force_refresh=force_refresh
+        )
 
     progress_scope = begin_run_progress_scope()
     try:
-        return _scrape_jobs_direct_scoped(trigger_label=trigger_label)
+        return _scrape_jobs_direct_scoped(
+            trigger_label=trigger_label, force_refresh=force_refresh
+        )
     finally:
         end_run_progress_scope(progress_scope)
 
 
-def _scrape_jobs_direct_scoped(*, trigger_label: str) -> str:
+def _scrape_jobs_direct_scoped(*, trigger_label: str, force_refresh: bool = False) -> str:
     from job_hunter_agent.global_settings import (
         get_playwright_browser_mode,
         get_playwright_headless,
@@ -139,6 +146,7 @@ def _scrape_jobs_direct_scoped(*, trigger_label: str) -> str:
     clear_run_stop_request()
     clear_run_progress()
     context = build_scrape_run_context(sys.argv)
+    context.force_source_refresh = bool(force_refresh or has_cli_flag(sys.argv, CLI_FLAG_FORCE_REFRESH))
     if step_through_enabled():
         # Step-through is intentionally single-file so each job can be reviewed
         # before the next detail fetch starts.

@@ -62,7 +62,7 @@
         "capability_working_long_history_min_months": "Allowed min/max total duration required for long-history working capabilities.",
         "capability_drop_to_basic_after_years": "Allowed min/max age after which an old capability drops to basic.",
         "capability_max_items": "Allowed min/max number of capability rules kept after onboarding.",
-        "capability_alias_limit": "Allowed min/max aliases kept per capability.",
+        "capability_alias_limit": "Allowed min/max aliases the LLM generates per capability during CV extraction.",
         "cv_max_pages": "Allowed min/max number of CV pages read during onboarding.",
         "signal_cluster_min_alias_hits": "Allowed min/max alias-hit threshold for keeping learned signal clusters.",
         "signal_cluster_min_snippet_hits": "Allowed min/max snippet-hit threshold for keeping learned signal clusters.",
@@ -90,7 +90,10 @@
         "candidate_application_history_cache_max_entries": "Allowed min/max number of saved candidate application history extraction cache entries.",
         "candidate_application_history_cache_max_age_days": "Allowed min/max age for saved candidate application history extraction cache entries before pruning.",
         "occupation_title_cache_max_entries": "Allowed min/max number of saved occupation-title classification cache rows.",
-        "occupation_title_cache_max_age_days": "Allowed min/max age for occupation-title classification cache rows before pruning."
+        "occupation_title_cache_max_age_days": "Allowed min/max age for occupation-title classification cache rows before pruning.",
+        "source_discovery_cache_max_entries": "Allowed min/max number of source discovery snapshots retained per user.",
+        "source_discovery_cache_max_age_minutes": "Allowed min/max freshness window for successful source discovery snapshots.",
+        "linkedin_failure_backoff_minutes": "Allowed min/max temporary backoff window after a fully timed-out identical LinkedIn search."
       }
     },
     "preference_weights": {
@@ -136,7 +139,10 @@
         "candidate_application_history_cache_max_entries": "Maximum number of saved candidate application history extraction cache entries kept on disk.",
         "candidate_application_history_cache_max_age_days": "Maximum age for saved candidate application history extraction cache entries before pruning.",
         "occupation_title_cache_max_entries": "Maximum number of saved occupation-title classification cache rows kept in SQLite.",
-        "occupation_title_cache_max_age_days": "Maximum age for saved occupation-title classification cache rows before pruning."
+        "occupation_title_cache_max_age_days": "Maximum age for saved occupation-title classification cache rows before pruning.",
+        "source_discovery_cache_max_entries": "Maximum number of saved source discovery snapshots kept per user.",
+        "source_discovery_cache_max_age_minutes": "How many minutes a successful source discovery snapshot can be reused.",
+        "linkedin_failure_backoff_minutes": "How many minutes a fully timed-out identical LinkedIn search is suppressed before retrying."
       }
     },
     "description_trust_settings": {

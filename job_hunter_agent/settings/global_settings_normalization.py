@@ -53,6 +53,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_LINKEDIN_EASY_APPLY_ONLY,
     KEY_LINKEDIN_ENABLED,
     KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS,
+    KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS,
     KEY_SEEK_QUICK_APPLY_ONLY,
     KEY_LINKEDIN_HOURS_OLD,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
@@ -93,6 +94,9 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_ONBOARDING_SETTINGS,
     KEY_OCCUPATION_TITLE_CACHE_MAX_AGE_DAYS,
     KEY_OCCUPATION_TITLE_CACHE_MAX_ENTRIES,
+    KEY_SOURCE_DISCOVERY_CACHE_MAX_ENTRIES,
+    KEY_SOURCE_DISCOVERY_CACHE_MAX_AGE_MINUTES,
+    KEY_LINKEDIN_FAILURE_BACKOFF_MINUTES,
     KEY_PLAYWRIGHT_BROWSER_MODE,
     KEY_PLAYWRIGHT_HEADLESS,
     KEY_PLAYWRIGHT_SELECTOR_TIMEOUT,
@@ -934,6 +938,27 @@ def normalize_global_settings(
             normalized_cache_limits[KEY_OCCUPATION_TITLE_CACHE_MAX_AGE_DAYS]["min"],
             normalized_cache_limits[KEY_OCCUPATION_TITLE_CACHE_MAX_AGE_DAYS]["max"],
         ),
+        KEY_SOURCE_DISCOVERY_CACHE_MAX_ENTRIES: _require_int(
+            cache_source,
+            KEY_SOURCE_DISCOVERY_CACHE_MAX_ENTRIES,
+            DEFAULT_CACHE_SETTINGS[KEY_SOURCE_DISCOVERY_CACHE_MAX_ENTRIES],
+            normalized_cache_limits[KEY_SOURCE_DISCOVERY_CACHE_MAX_ENTRIES]["min"],
+            normalized_cache_limits[KEY_SOURCE_DISCOVERY_CACHE_MAX_ENTRIES]["max"],
+        ),
+        KEY_SOURCE_DISCOVERY_CACHE_MAX_AGE_MINUTES: _require_int(
+            cache_source,
+            KEY_SOURCE_DISCOVERY_CACHE_MAX_AGE_MINUTES,
+            DEFAULT_CACHE_SETTINGS[KEY_SOURCE_DISCOVERY_CACHE_MAX_AGE_MINUTES],
+            normalized_cache_limits[KEY_SOURCE_DISCOVERY_CACHE_MAX_AGE_MINUTES]["min"],
+            normalized_cache_limits[KEY_SOURCE_DISCOVERY_CACHE_MAX_AGE_MINUTES]["max"],
+        ),
+        KEY_LINKEDIN_FAILURE_BACKOFF_MINUTES: _require_int(
+            cache_source,
+            KEY_LINKEDIN_FAILURE_BACKOFF_MINUTES,
+            DEFAULT_CACHE_SETTINGS[KEY_LINKEDIN_FAILURE_BACKOFF_MINUTES],
+            normalized_cache_limits[KEY_LINKEDIN_FAILURE_BACKOFF_MINUTES]["min"],
+            normalized_cache_limits[KEY_LINKEDIN_FAILURE_BACKOFF_MINUTES]["max"],
+        ),
     }
 
     normalized_description_trust_settings = {
@@ -1090,6 +1115,13 @@ def normalize_global_settings(
                 _search_setting_default_int(KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS, 20),
                 normalized_search_limits[KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS]["min"],
                 normalized_search_limits[KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS]["max"],
+            ),
+            KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS: _require_int(
+                search_source,
+                KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS,
+                _search_setting_default_int(KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS, 3),
+                normalized_search_limits[KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS]["min"],
+                normalized_search_limits[KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS]["max"],
             ),
             KEY_SEEK_QUICK_APPLY_ONLY: (
                 None

@@ -28,6 +28,12 @@ Primary runtime pipeline.
 python -m job_hunter_agent.source_connector
 ```
 
+Use `--force-refresh` on the source connector when a live-board refresh is
+deliberately required. The `/api/run` endpoint accepts the equivalent boolean
+`force_refresh` request field. Otherwise, recent identical source searches may
+reuse normalized discovery snapshots; the current profile filters and review
+pipeline still run on every invocation.
+
 This command runs from the authenticated account context already present in the app. It does not accept a manual account id or scope. If no signed-in account is available, it stops and asks you to log in first.
 
 Responsibilities:
@@ -529,11 +535,18 @@ The current managed defaults for history and cache retention live in `data/confi
 - `cache_settings.candidate_application_history_cache_max_age_days`: `30`
 - `cache_settings.occupation_title_cache_max_entries`: `10000`
 - `cache_settings.occupation_title_cache_max_age_days`: `365`
+- `cache_settings.source_discovery_cache_max_entries`: `10000`
+- `cache_settings.source_discovery_cache_max_age_minutes`: `60`
+- `cache_settings.linkedin_failure_backoff_minutes`: `15`
 
 Behavior:
 
 - Job history is pruned by both age and count.
 - The occupation-title cache is pruned by both age and count.
+- Source discovery snapshots are retained per account and reused only for a
+  matching source signature within the configured freshness window.
+- A fully timed-out identical LinkedIn search records a temporary bounded
+  backoff state; it does not suppress future retries permanently.
 - The file-backed caches are pruned by both age and count.
 - Admin > Global settings also exposes maintenance actions to clear shared runtime caches or clear the current user search state immediately.
 - Clear current user search state also clears transient runtime caches, per-user agent state, the current workspace HTML, and recruiter/history review state so the next run regenerates from clean runtime state.

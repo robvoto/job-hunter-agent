@@ -199,6 +199,18 @@
       "occupation_title_cache_max_age_days": {
         "min": 30,
         "max": 3650
+      },
+      "source_discovery_cache_max_entries": {
+        "min": 100,
+        "max": 100000
+      },
+      "source_discovery_cache_max_age_minutes": {
+        "min": 1,
+        "max": 10080
+      },
+      "linkedin_failure_backoff_minutes": {
+        "min": 1,
+        "max": 1440
       }
     }
   },
@@ -232,7 +244,10 @@
     "candidate_application_history_cache_max_entries": 2000,
     "candidate_application_history_cache_max_age_days": 30,
     "occupation_title_cache_max_entries": 10000,
-    "occupation_title_cache_max_age_days": 365
+    "occupation_title_cache_max_age_days": 365,
+    "source_discovery_cache_max_entries": 10000,
+    "source_discovery_cache_max_age_minutes": 60,
+    "linkedin_failure_backoff_minutes": 15
   },
   "description_trust_settings": {
     "min_trusted_description_length": 600

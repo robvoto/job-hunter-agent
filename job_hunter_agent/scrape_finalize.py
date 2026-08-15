@@ -664,6 +664,7 @@ def finalize_scrape_run(
         run_stats["last_run_error"] = NO_FRESH_CARDS_ERROR
 
     run_stats["source_breakdown"] = _build_source_breakdown(context.enabled_sources, audit_rows)
+    run_stats["source_discovery_cache"] = context.source_cache_stats or {}
 
     workspace_records = workspace_service.build_workspace_record_sets(
         merged_pool,

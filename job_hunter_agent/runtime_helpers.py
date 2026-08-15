@@ -20,6 +20,7 @@ CLI_FLAG_DEBUG = "--debug"
 CLI_FLAG_REBUILD_WORKSPACE = "--rebuild-workspace"
 CLI_FLAG_RESET_NEW_TO_YOU = "--reset-new-to-you"
 CLI_FLAG_STEP = "--step"
+CLI_FLAG_FORCE_REFRESH = "--force-refresh"
 DESKTOP_RUNTIME_ENV_VAR = "JOB_HUNTER_DESKTOP_MODE"
 
 

@@ -389,6 +389,18 @@
             <label for="cache_occupation_title_cache_max_age_days">Occupation title cache max age (days)</label>
             <input id="cache_occupation_title_cache_max_age_days" type="number" min="30" max="3650" step="1">
             <div class="field-help">Maximum age for saved occupation-title classification cache rows before pruning.</div>
+
+            <label for="cache_source_discovery_cache_max_entries">Source discovery cache max entries</label>
+            <input id="cache_source_discovery_cache_max_entries" type="number" min="100" max="100000" step="1">
+            <div class="field-help">Maximum number of normalized source-discovery snapshots kept per user.</div>
+
+            <label for="cache_source_discovery_cache_max_age_minutes">Source discovery cache freshness (minutes)</label>
+            <input id="cache_source_discovery_cache_max_age_minutes" type="number" min="1" max="10080" step="1">
+            <div class="field-help">How long a successful identical source search can reuse its discovery snapshot.</div>
+
+            <label for="cache_linkedin_failure_backoff_minutes">LinkedIn failure backoff (minutes)</label>
+            <input id="cache_linkedin_failure_backoff_minutes" type="number" min="1" max="1440" step="1">
+            <div class="field-help">Temporary retry delay after every target in an identical LinkedIn search times out.</div>
           </section>
 
           <section class="panel">

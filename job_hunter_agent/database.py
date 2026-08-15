@@ -193,6 +193,20 @@ CREATE INDEX IF NOT EXISTS idx_occupation_title_cache_lookup
     ON occupation_title_cache(normalized_title, candidate_profile_hash, taxonomy_version);
 CREATE INDEX IF NOT EXISTS idx_occupation_title_cache_result
     ON occupation_title_cache(result);
+
+-- Per-user source discovery evidence. Success and failure rows are separate so
+-- a transient failure cannot overwrite the last known-good snapshot.
+CREATE TABLE IF NOT EXISTS source_discovery_cache (
+    user_id     TEXT NOT NULL REFERENCES users(user_id),
+    source      TEXT NOT NULL,
+    signature   TEXT NOT NULL,
+    status      TEXT NOT NULL CHECK (status IN ('success', 'failure')),
+    data        TEXT NOT NULL,
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, source, signature, status)
+);
+CREATE INDEX IF NOT EXISTS idx_source_discovery_cache_lookup
+    ON source_discovery_cache(user_id, source, signature, status, updated_at);
 """
 
 _SYSTEM_WARNINGS_SCHEMA = """
@@ -353,6 +367,7 @@ EXPECTED_TABLES = {
     "agent_state",
     "system_warnings",
     "occupation_title_cache",
+    "source_discovery_cache",
 }
 
 

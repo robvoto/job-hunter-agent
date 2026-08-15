@@ -18,7 +18,16 @@ from job_hunter_agent.run_control import (
     step_through_enabled,
 )
 from job_hunter_agent.source_errors import PartialSourceResultsError
-from job_hunter_agent.global_settings import get_seek_assisted_verification_enabled
+from job_hunter_agent.global_settings import (
+    KEY_APSJOBS_RESULTS_PER_SEARCH,
+    KEY_DATE_RANGE_DAYS,
+    KEY_LINKEDIN_EASY_APPLY_ONLY,
+    KEY_LINKEDIN_HOURS_OLD,
+    KEY_LINKEDIN_RESULTS_PER_SEARCH,
+    KEY_SEEK_MAX_PAGES,
+    KEY_SORT_NEWEST_FIRST,
+    get_seek_assisted_verification_enabled,
+)
 from job_hunter_agent.scrapers.apsjobs import APSJobsScraper
 from job_hunter_agent.scrapers.seek import build_seek_search_targets
 from job_hunter_agent.scrapers.seek_runner import (
@@ -38,6 +47,13 @@ from job_hunter_agent.system_warnings import (
 )
 from job_hunter_agent.logging_utils import format_log_block
 from job_hunter_agent.logging_utils import reset_log_source_scope, set_log_source_scope
+from job_hunter_agent.source_discovery_cache import (
+    build_source_search_signature,
+    load_linkedin_failure_backoff,
+    load_source_discovery_snapshot,
+    save_source_discovery_snapshot,
+    save_source_failure_state,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +84,92 @@ class SourceRunResult:
     # Isolated copies mutated by the scraper — merged back into context after both sources finish.
     _job_history_snapshot: dict[str, Any] = field(default_factory=dict)
     _llm_cache_snapshot: dict[str, Any] = field(default_factory=dict)
+    discovery_records: list[dict] = field(default_factory=list)
+    source_cache_status: str = "MISS"
+    source_cache_signature: str = ""
+    source_failure_backoff: bool = False
+    source_collection_complete: bool = True
+
+
+def _source_search_signature(context: ScrapeRunContext, source: str) -> str:
+    """Build a signature from source inputs, excluding downstream fit preferences."""
+    inputs: dict[str, Any] = {
+        "date_range_days": context.configured_date_range,
+        "sort_newest_first": context.sort_newest_first,
+    }
+    if source == SOURCE_SEEK:
+        inputs.update(
+            {
+                "search_settings": {
+                    "keywords": context.search_settings.get("keywords"),
+                    "locations": context.search_settings.get("locations"),
+                    "classification_ids": context.search_settings.get("classification_ids"),
+                    KEY_DATE_RANGE_DAYS: context.search_settings.get(KEY_DATE_RANGE_DAYS),
+                    KEY_SEEK_MAX_PAGES: context.search_settings.get(KEY_SEEK_MAX_PAGES),
+                    KEY_SORT_NEWEST_FIRST: context.search_settings.get(KEY_SORT_NEWEST_FIRST),
+                },
+                "search_targets": build_seek_search_targets(
+                    context.profile, context.configured_date_range, context.sort_newest_first
+                ),
+                "max_pages": context.configured_seek_max_pages,
+            }
+        )
+    elif source == SOURCE_LINKEDIN:
+        from job_hunter_agent.scrapers.linkedin import build_linkedin_search_targets
+
+        inputs["search_settings"] = {
+            "keywords": context.search_settings.get("keywords"),
+            "locations": context.search_settings.get("locations"),
+            KEY_DATE_RANGE_DAYS: context.search_settings.get(KEY_DATE_RANGE_DAYS),
+            KEY_LINKEDIN_HOURS_OLD: context.search_settings.get(KEY_LINKEDIN_HOURS_OLD),
+            KEY_LINKEDIN_RESULTS_PER_SEARCH: context.search_settings.get(
+                KEY_LINKEDIN_RESULTS_PER_SEARCH
+            ),
+            KEY_LINKEDIN_EASY_APPLY_ONLY: context.search_settings.get(
+                KEY_LINKEDIN_EASY_APPLY_ONLY
+            ),
+            KEY_SORT_NEWEST_FIRST: context.search_settings.get(KEY_SORT_NEWEST_FIRST),
+        }
+        inputs["search_targets"] = build_linkedin_search_targets(
+            context.search_settings, context.profile
+        )
+    elif source == SOURCE_APSJOBS:
+        from job_hunter_agent.scrapers.apsjobs import build_apsjobs_search_targets
+
+        inputs["search_settings"] = {
+            "keywords": context.search_settings.get("keywords"),
+            "locations": context.search_settings.get("locations"),
+            KEY_DATE_RANGE_DAYS: context.search_settings.get(KEY_DATE_RANGE_DAYS),
+            KEY_APSJOBS_RESULTS_PER_SEARCH: context.search_settings.get(
+                KEY_APSJOBS_RESULTS_PER_SEARCH
+            ),
+        }
+        inputs["search_targets"] = build_apsjobs_search_targets(
+            context.search_settings, context.profile
+        )[1]
+    return build_source_search_signature(source, inputs)
+
+
+def _source_cache_lookup(context: ScrapeRunContext, source: str) -> tuple[str, str, list[dict] | None]:
+    signature = _source_search_signature(context, source)
+    if context.force_source_refresh:
+        logger.info("[%s][SOURCE_CACHE] MISS reason=force_refresh", source.upper())
+        return signature, "MISS", None
+    snapshot = load_source_discovery_snapshot(source, signature)
+    if snapshot is not None:
+        logger.info(
+            "[%s][SOURCE_CACHE] HIT records=%d signature=%s",
+            source.upper(), len(snapshot), signature[:12]
+        )
+        return signature, "HIT", snapshot
+    if source == SOURCE_LINKEDIN and load_linkedin_failure_backoff(source, signature):
+        logger.warning(
+            "[%s][SOURCE_CACHE] BACKOFF identical timed-out search signature=%s",
+            source.upper(), signature[:12]
+        )
+        return signature, "BACKOFF", []
+    logger.info("[%s][SOURCE_CACHE] MISS signature=%s", source.upper(), signature[:12])
+    return signature, "MISS", None
 
 
 def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
@@ -79,8 +181,13 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
     """
     job_history: dict[str, Any] = dict(context.job_history)
     llm_cache: dict[str, Any] = dict(context.llm_cache)
+    signature = ""
+    cache_status = "MISS"
+    cached_records = None
+    captured_records: list[dict] = []
     headless = bool(getattr(context, "headless", False))
     try:
+        signature, cache_status, cached_records = _source_cache_lookup(context, SOURCE_SEEK)
         set_run_progress_state(
             "Starting SEEK",
             stage="starting",
@@ -112,6 +219,8 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
             playwright_selector_timeout=context.playwright_selector_timeout,
             seek_parallel_detail_workers=context.seek_parallel_detail_workers,
             assisted_verification_enabled=assisted_verification_enabled,
+            discovery_records=cached_records,
+            discovery_capture=captured_records,
         )
         try:
             kept, audit, skills = seek_scrape_to_records(**_seek_kwargs, headless=headless)
@@ -171,6 +280,8 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
                     error=exc,
                     _job_history_snapshot=job_history,
                     _llm_cache_snapshot=llm_cache,
+                    source_cache_status=cache_status,
+                    source_cache_signature=signature,
                 )
             logger.warning(
                 "[SEEK] Headless SEEK run hit %s; retrying with AWS browser session",
@@ -225,6 +336,9 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
             skill_observations=skills,
             _job_history_snapshot=job_history,
             _llm_cache_snapshot=llm_cache,
+            discovery_records=(cached_records if cached_records is not None else captured_records),
+            source_cache_status=cache_status,
+            source_cache_signature=signature,
         )
     except PartialSourceResultsError as exc:
         logger.exception("[SEEK] scraping failed after partial results")
@@ -255,6 +369,9 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
             error=exc.original_error,
             _job_history_snapshot=job_history,
             _llm_cache_snapshot=llm_cache,
+            discovery_records=(cached_records if cached_records is not None else captured_records),
+            source_cache_status=cache_status,
+            source_cache_signature=signature,
         )
     except Exception as exc:
         logger.exception("[SEEK] scraping failed")
@@ -292,7 +409,13 @@ def _run_linkedin_source(context: ScrapeRunContext) -> SourceRunResult:
     """
     job_history: dict[str, Any] = dict(context.job_history)
     llm_cache: dict[str, Any] = dict(context.llm_cache)
+    signature = ""
+    cache_status = "MISS"
+    cached_records = None
+    captured_records: list[dict] = []
+    failure_state = {"all_targets_timed_out": False}
     try:
+        signature, cache_status, cached_records = _source_cache_lookup(context, SOURCE_LINKEDIN)
         set_run_progress_state(
             "Starting LinkedIn",
             stage="starting",
@@ -309,6 +432,9 @@ def _run_linkedin_source(context: ScrapeRunContext) -> SourceRunResult:
             applied_job_keys=context.applied_job_keys,
             hidden_job_keys=context.hidden_job_keys,
             run_iso=context.run_iso,
+            discovery_records=cached_records,
+            discovery_capture=captured_records,
+            discovery_status=failure_state,
         )
         kept, audit, skills = li.scrape()
         return SourceRunResult(
@@ -318,6 +444,11 @@ def _run_linkedin_source(context: ScrapeRunContext) -> SourceRunResult:
             skill_observations=skills,
             _job_history_snapshot=job_history,
             _llm_cache_snapshot=llm_cache,
+            discovery_records=(cached_records if cached_records is not None else captured_records),
+            source_cache_status=cache_status,
+            source_cache_signature=signature,
+            source_failure_backoff=failure_state["all_targets_timed_out"],
+            source_collection_complete=failure_state.get("complete", True),
         )
     except PartialSourceResultsError as exc:
         logger.exception("[LinkedIn] scraping failed after partial results")
@@ -379,7 +510,12 @@ def _run_apsjobs_source(context: ScrapeRunContext) -> SourceRunResult:
     """Run APS Jobs with isolated mutable state for safe parallel collection."""
     job_history: dict[str, Any] = dict(context.job_history)
     llm_cache: dict[str, Any] = dict(context.llm_cache)
+    signature = ""
+    cache_status = "MISS"
+    cached_records = None
+    captured_records: list[dict] = []
     try:
+        signature, cache_status, cached_records = _source_cache_lookup(context, SOURCE_APSJOBS)
         set_run_progress_state(
             "Starting APSJobs",
             stage="starting",
@@ -394,6 +530,8 @@ def _run_apsjobs_source(context: ScrapeRunContext) -> SourceRunResult:
             applied_job_keys=context.applied_job_keys,
             hidden_job_keys=context.hidden_job_keys,
             run_iso=context.run_iso,
+            discovery_records=cached_records,
+            discovery_capture=captured_records,
         )
         kept, audit, skills = scraper.scrape()
         return SourceRunResult(
@@ -403,6 +541,9 @@ def _run_apsjobs_source(context: ScrapeRunContext) -> SourceRunResult:
             skill_observations=skills,
             _job_history_snapshot=job_history,
             _llm_cache_snapshot=llm_cache,
+            discovery_records=(cached_records if cached_records is not None else captured_records),
+            source_cache_status=cache_status,
+            source_cache_signature=signature,
         )
     except PartialSourceResultsError as exc:
         logger.warning(
@@ -569,6 +710,8 @@ def _log_source_complete(result: SourceRunResult, *, elapsed_s: float) -> None:
                 "audit": len(result.audit_rows),
                 "skills": len(result.skill_observations),
                 "error": type(result.error).__name__ if result.error is not None else "none",
+                "source_cache": result.source_cache_status,
+                "source_cache_signature": result.source_cache_signature[:12],
             },
         )
     )
@@ -869,6 +1012,33 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
     for result in results:
         context.job_history.update(result._job_history_snapshot)
         context.llm_cache.update(result._llm_cache_snapshot)
+
+    context.source_cache_stats = {
+        result.source: {
+            "status": result.source_cache_status,
+            "signature": result.source_cache_signature,
+            "records": len(result.discovery_records),
+            "external_source_calls_avoided": result.source_cache_status in {"HIT", "BACKOFF"},
+        }
+        for result in results
+    }
+
+    # Commit only complete source snapshots after all source workers return. A
+    # source exception, stop, or partial-result path therefore cannot replace a
+    # known-good snapshot.
+    for result in results:
+        if result.source_cache_status != "MISS" or not result.source_cache_signature:
+            continue
+        if result.error is not None:
+            continue
+        if result.source_failure_backoff:
+            save_source_failure_state(result.source, result.source_cache_signature)
+        elif result.source_collection_complete:
+            save_source_discovery_snapshot(
+                result.source,
+                result.source_cache_signature,
+                result.discovery_records,
+            )
 
     # Collect outputs even from errored sources so partial current-run audit data survives.
     for result in results:

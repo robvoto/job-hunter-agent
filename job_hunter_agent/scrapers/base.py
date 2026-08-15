@@ -331,6 +331,9 @@ class BaseJobScraper(ABC):
         applied_job_keys: Set[str],
         hidden_job_keys: Set[str],
         run_iso: str,
+        discovery_records: list[dict] | None = None,
+        discovery_capture: list[dict] | None = None,
+        discovery_status: dict[str, bool] | None = None,
     ):
         self.profile = profile
         self.llm_cache = llm_cache
@@ -338,6 +341,9 @@ class BaseJobScraper(ABC):
         self.applied_job_keys = applied_job_keys
         self.hidden_job_keys = hidden_job_keys
         self.run_iso = run_iso
+        self.discovery_records = discovery_records
+        self.discovery_capture = discovery_capture
+        self.discovery_status = discovery_status if discovery_status is not None else {}
 
     @abstractmethod
     def scrape(self) -> tuple:

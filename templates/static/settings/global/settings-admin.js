@@ -76,6 +76,9 @@ export const JobHunterAdminSettings = (function () {
     cache_candidate_application_history_cache_max_age_days: ['cache_settings', 'candidate_application_history_cache_max_age_days'],
     cache_occupation_title_cache_max_entries: ['cache_settings', 'occupation_title_cache_max_entries'],
     cache_occupation_title_cache_max_age_days: ['cache_settings', 'occupation_title_cache_max_age_days'],
+    cache_source_discovery_cache_max_entries: ['cache_settings', 'source_discovery_cache_max_entries'],
+    cache_source_discovery_cache_max_age_minutes: ['cache_settings', 'source_discovery_cache_max_age_minutes'],
+    cache_linkedin_failure_backoff_minutes: ['cache_settings', 'linkedin_failure_backoff_minutes'],
     description_trust_min_trusted_description_length: ['description_trust_settings', 'min_trusted_description_length'],
     source_document_allowed_suffixes: ['source_document_settings', 'allowed_suffixes'],
     onboarding_extraction_lookback_years: ['onboarding_settings', 'extraction_lookback_years'],
@@ -287,6 +290,9 @@ export const JobHunterAdminSettings = (function () {
     setFieldValue('cache_candidate_application_history_cache_max_age_days', cacheSettings.candidate_application_history_cache_max_age_days);
     setFieldValue('cache_occupation_title_cache_max_entries', cacheSettings.occupation_title_cache_max_entries);
     setFieldValue('cache_occupation_title_cache_max_age_days', cacheSettings.occupation_title_cache_max_age_days);
+    setFieldValue('cache_source_discovery_cache_max_entries', cacheSettings.source_discovery_cache_max_entries);
+    setFieldValue('cache_source_discovery_cache_max_age_minutes', cacheSettings.source_discovery_cache_max_age_minutes);
+    setFieldValue('cache_linkedin_failure_backoff_minutes', cacheSettings.linkedin_failure_backoff_minutes);
     setFieldValue('onboarding_extraction_lookback_years', onboarding.extraction_lookback_years);
     setFieldValue('onboarding_title_extraction_min_months', onboarding.title_extraction_min_months);
     setFieldValue('onboarding_max_target_patterns', onboarding.max_target_patterns);
@@ -508,6 +514,18 @@ export const JobHunterAdminSettings = (function () {
         occupation_title_cache_max_age_days: readNumber(
           'cache_occupation_title_cache_max_age_days',
           currentCacheSettings.occupation_title_cache_max_age_days,
+        ),
+        source_discovery_cache_max_entries: readNumber(
+          'cache_source_discovery_cache_max_entries',
+          currentCacheSettings.source_discovery_cache_max_entries,
+        ),
+        source_discovery_cache_max_age_minutes: readNumber(
+          'cache_source_discovery_cache_max_age_minutes',
+          currentCacheSettings.source_discovery_cache_max_age_minutes,
+        ),
+        linkedin_failure_backoff_minutes: readNumber(
+          'cache_linkedin_failure_backoff_minutes',
+          currentCacheSettings.linkedin_failure_backoff_minutes,
         ),
       },
       description_trust_settings: {

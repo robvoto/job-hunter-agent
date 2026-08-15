@@ -6,6 +6,7 @@ Purpose: orchestrate the SEEK Playwright flow, detail review, and record finaliz
 from __future__ import annotations
 
 import asyncio
+import copy
 import contextvars
 import json
 import logging
@@ -27,7 +28,12 @@ from playwright.sync_api import sync_playwright
 
 import job_hunter_agent.record_schema as rs
 from job_hunter_agent.global_settings import KEY_SEEK_QUICK_APPLY_ONLY, get_playwright_browser_mode
-from job_hunter_agent.history import finalize_record
+from job_hunter_agent.history import (
+    apply_detail_evidence_reuse,
+    build_detail_evidence_snapshot,
+    can_reuse_detail_evidence,
+    finalize_record,
+)
 from job_hunter_agent.io_utils import DEBUG_CAPTURE_SOURCE_PAYLOADS, write_source_payload_debug
 from job_hunter_agent.job_quality import detect_broad_engagement_signal
 from job_hunter_agent.job_review_pipeline import (
@@ -855,6 +861,50 @@ def _review_pre_detail_batch(
     return pre_decided, needs_detail
 
 
+def _review_seek_card_batch(
+    card_records: list[dict],
+    review_context: ReviewPipelineContext,
+    detail_session: "_AsyncDetailSession",
+    n_detail_workers: int,
+    kept_records: list[dict],
+    skill_observations: list[dict],
+) -> None:
+    """Review live or cached discovery records through the existing pipeline."""
+    if not card_records:
+        return
+    if step_through_enabled():
+        for index, record in enumerate(card_records):
+            if run_stop_requested():
+                break
+            pre_outcome, record, _, should_fetch_details = review_pre_detail_normalized_job(
+                record, review_context
+            )
+            if pre_outcome["decision"] != "KEEP" or not should_fetch_details:
+                outcome, observations = pre_outcome, []
+            else:
+                outcome, _, observations, _ = detail_session.run_batch(
+                    [(index, record)], review_context
+                )[index]
+            if outcome.get("decision") == "KEEP":
+                skill_observations.extend(observations)
+                kept_records.append(record)
+        return
+
+    pre_decided, needs_detail = _review_pre_detail_batch(
+        card_records, review_context, n_detail_workers
+    )
+    batch_results: dict[int, tuple] = {index: result for index, result in pre_decided}
+    if needs_detail and not run_stop_requested():
+        batch_results.update(detail_session.run_batch(needs_detail, review_context))
+    for index in range(len(card_records)):
+        if index not in batch_results:
+            continue
+        outcome, record, observations, _ = batch_results[index]
+        if outcome.get("decision") == "KEEP":
+            skill_observations.extend(observations)
+            kept_records.append(record)
+
+
 async def _fetch_seek_job_detail_async(record: dict, page) -> dict:
     """Async Playwright fetch — mirrors _fetch_seek_job_detail but uses an async page.
 
@@ -947,10 +997,31 @@ async def _seek_detail_batch_on_context(
                     0.0,
                 )
                 return
-            page = await browser_context.new_page()
+            job_key = str(rec.get(rs.RECORD_JOB_KEY) or "")
+            history_entry = review_context.job_history.get(job_key) if job_key else None
+            cache_hit = history_entry is not None and can_reuse_detail_evidence(
+                history_entry, review_context.date_range_days, review_context.run_iso
+            )
+            page = None
             t0 = time.monotonic()
             try:
-                rec = await _fetch_seek_job_detail_async(rec, page)
+                if cache_hit:
+                    rec = apply_detail_evidence_reuse(rec, history_entry)
+                    logger.debug(
+                        "[PIPELINE][DETAIL_CACHE_HIT] source=SEEK job_key=%s title=%r company=%r url=%r",
+                        job_key,
+                        rec.get(rs.RECORD_TITLE_KEY),
+                        rec.get(rs.RECORD_COMPANY_KEY),
+                        rec.get(rs.RECORD_URL_KEY),
+                    )
+                else:
+                    page = await browser_context.new_page()
+                    rec = await _fetch_seek_job_detail_async(rec, page)
+                    if job_key:
+                        entry = review_context.job_history.setdefault(job_key, {})
+                        entry["detail_evidence"] = build_detail_evidence_snapshot(
+                            rec, review_context.run_iso
+                        )
                 quick_apply_only = review_context.profile.get("search_settings", {}).get(
                     KEY_SEEK_QUICK_APPLY_ONLY
                 )
@@ -995,7 +1066,8 @@ async def _seek_detail_batch_on_context(
                     traceback.format_exc(),
                 )
             finally:
-                await page.close()
+                if page is not None:
+                    await page.close()
 
     await asyncio.gather(*[_process_one(idx, rec) for idx, rec in needs_detail])
     return results
@@ -1085,6 +1157,8 @@ def seek_scrape_to_records(
     seek_parallel_detail_workers: int,
     headless: bool,
     assisted_verification_enabled: bool,
+    discovery_records: list[dict] | None = None,
+    discovery_capture: list[dict] | None = None,
 ) -> tuple:
     """Collect, review and return SEEK records while publishing bounded stage progress.
 
@@ -1149,7 +1223,24 @@ def seek_scrape_to_records(
             )
             try:
                 total_targets = len(search_targets)
+                if discovery_records is not None:
+                    cached_records = [copy.deepcopy(record) for record in discovery_records]
+                    for record in cached_records:
+                        record[rs.RECORD_RUN_STARTED_AT_KEY] = run_iso
+                    _set_seek_run_progress(
+                        1, max(1, total_targets), detail="Cached discovery results"
+                    )
+                    _review_seek_card_batch(
+                        cached_records,
+                        review_context,
+                        detail_session,
+                        n_detail_workers,
+                        kept_records,
+                        skill_observations,
+                    )
                 for target_index, search_target in enumerate(search_targets, start=1):
+                    if discovery_records is not None:
+                        break
                     if run_stop_requested():
                         logger.debug("[SEEK] stop requested; ending scrape")
                         break
@@ -1251,7 +1342,10 @@ def seek_scrape_to_records(
                                 record = build_seek_card_record(
                                     card, search_target, run_iso, current_page_num, filter_state
                                 )
+                                record[rs.RECORD_PAGE_KEY] = current_page_num
                                 record["job_quality_signals"] = detect_broad_engagement_signal(record)
+                                if discovery_capture is not None:
+                                    discovery_capture.append(copy.deepcopy(record))
                                 card_records.append(record)
                             except TargetClosedError:
                                 logger.warning(

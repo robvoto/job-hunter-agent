@@ -1,6 +1,7 @@
 """Route handlers for scrape debug."""
 
 import contextvars
+from functools import partial
 import logging
 import threading
 
@@ -98,6 +99,9 @@ def api_browser_log(body: dict = Body(default_factory=dict)):  # type: ignore[no
 
 @router.post("/api/run")
 def api_run(body: dict = Body(default_factory=dict)):  # type: ignore[no-untyped-def]
+    force_refresh = body.get("force_refresh", False)
+    if not isinstance(force_refresh, bool):
+        return json_response({"error": "force_refresh must be a boolean"}, 400)
     try:
         search_settings = srv._normalize_search_settings_payload(body)
     except Exception as exc:
@@ -135,7 +139,11 @@ def api_run(body: dict = Body(default_factory=dict)):  # type: ignore[no-untyped
         if search_settings:
             srv.patch_profile({"search_settings": search_settings})
         ctx = contextvars.copy_context()
-        threading.Thread(target=ctx.run, args=(srv._run_scrape_job,), daemon=True).start()
+        threading.Thread(
+            target=ctx.run,
+            args=(partial(srv._run_scrape_job, force_refresh=force_refresh),),
+            daemon=True,
+        ).start()
     except Exception as exc:
         srv._set_run_in_progress(False)
         return json_response({"error": str(exc)}, 400)

@@ -672,6 +672,7 @@ def clear_runtime_caches(db_path: Path | None = None) -> dict[str, Any]:
 
     with db_conn(db_path) as conn:
         conn.execute("DELETE FROM occupation_title_cache")
+        conn.execute("DELETE FROM source_discovery_cache")
 
     return {
         "ok": True,

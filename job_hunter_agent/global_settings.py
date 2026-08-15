@@ -303,6 +303,18 @@ def get_occupation_title_cache_max_age_days() -> int:
     )
 
 
+def get_source_discovery_cache_max_age_minutes() -> int:
+    return int(load_global_settings()[KEY_CACHE_SETTINGS][KEY_SOURCE_DISCOVERY_CACHE_MAX_AGE_MINUTES])
+
+
+def get_source_discovery_cache_max_entries() -> int:
+    return int(load_global_settings()[KEY_CACHE_SETTINGS][KEY_SOURCE_DISCOVERY_CACHE_MAX_ENTRIES])
+
+
+def get_linkedin_failure_backoff_minutes() -> int:
+    return int(load_global_settings()[KEY_CACHE_SETTINGS][KEY_LINKEDIN_FAILURE_BACKOFF_MINUTES])
+
+
 def get_min_trusted_description_length() -> int:
     return int(
         load_global_settings()[KEY_DESCRIPTION_TRUST_SETTINGS][KEY_MIN_TRUSTED_DESCRIPTION_LENGTH]
@@ -329,7 +341,14 @@ def get_linkedin_fetch_timeout_seconds() -> float:
     return float(load_global_settings()[KEY_SEARCH_SETTINGS][KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS])
 
 
+def get_linkedin_parallel_search_workers() -> int:
+    return int(load_global_settings()[KEY_SEARCH_SETTINGS][KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS])
+
+
 def get_playwright_headless() -> bool:
+    """SEEK's Playwright headless mode. APS launches its own persistent Playwright
+    context independently of this setting (always headless); LinkedIn uses JobSpy
+    and has no Playwright browser, so this setting doesn't apply to it."""
     return bool(load_global_settings()["playwright_settings"][KEY_PLAYWRIGHT_HEADLESS])
 
 

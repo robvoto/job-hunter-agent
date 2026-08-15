@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import copy
 import re
 from datetime import datetime
 from time import monotonic
@@ -484,14 +485,19 @@ def _extract_job_payload(page, *, job_url: str, anchor_text: str, run_iso: str) 
     }
 
 
-def build_apsjobs_search_targets(search_settings: dict) -> tuple[str, list[dict]]:
+def build_apsjobs_search_targets(search_settings: dict, profile: dict | None = None) -> tuple[str, list[dict]]:
     """Build APSJobs search targets from search settings.
 
     Returns the trimmed keywords string and one target per configured shared
     location mapped to an APS state or territory filter. Duplicate mapped
     states collapse to one target.
     """
-    keywords = str(search_settings.get("keywords") or "").strip()
+    preferred_roles = [
+        str(value).strip()
+        for value in ((profile or {}).get("target_roles") or [])
+        if str(value).strip()
+    ]
+    keywords = preferred_roles[0] if preferred_roles else str(search_settings.get("keywords") or "").strip()
     raw_locations = [
         str(location).strip()
         for location in search_settings.get("locations", [])
@@ -531,7 +537,7 @@ class APSJobsScraper(BaseJobScraper):
         scanned_titles: list[str] = []
 
         search_settings = get_search_settings(self.profile)
-        keywords, targets = build_apsjobs_search_targets(search_settings)
+        keywords, targets = build_apsjobs_search_targets(search_settings, self.profile)
         if not keywords:
             logger.debug("[APSJobs] no search keywords configured; skipping")
             return kept_records, audit_rows, skill_observations
@@ -550,6 +556,15 @@ class APSJobsScraper(BaseJobScraper):
             ),
             source_name="APSJobs",
         )
+
+        if self.discovery_records is not None:
+            for cached_record in self.discovery_records:
+                if run_stop_requested():
+                    break
+                self._review_discovered_record(
+                    dict(cached_record), review_context, kept_records, skill_observations
+                )
+            return kept_records, audit_rows, skill_observations
 
         PLAYWRIGHT_USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
         total_targets = len(targets)
@@ -723,31 +738,21 @@ class APSJobsScraper(BaseJobScraper):
                                         "apsjobs_detail_page"
                                     )
                                 record[RECORD_DETAILS_TEXT_KEY] = str(record.get(RECORD_DETAILS_TEXT_KEY) or "")
-
-                                pre_outcome, record, _, should_fetch_details = review_pre_detail_normalized_job(
-                                    record, review_context
+                                if self.discovery_capture is not None:
+                                    self.discovery_capture.append(copy.deepcopy(record))
+                                was_kept = self._review_discovered_record(
+                                    record, review_context, kept_records, skill_observations
                                 )
-                                if pre_outcome["decision"] != "KEEP" or not should_fetch_details:
-                                    continue
-
-                                hooks = ReviewPipelineHooks()
-                                outcome, record, record_skill_observations = review_post_detail_normalized_job(
-                                    record, review_context, hooks=hooks
-                                )
-                                if outcome["decision"] != "KEEP":
-                                    continue
-
-                                skill_observations.extend(record_skill_observations)
-                                kept_records.append(record)
-                                logger.debug(
-                                    "%s KEPT %s @ %s | %s | %s | %s",
-                                    target_tag,
-                                    record.get(RECORD_TITLE_KEY),
-                                    record.get(RECORD_COMPANY_KEY),
-                                    record.get(RECORD_POSTED_AGE_DAYS_KEY),
-                                    record.get(RECORD_LOCATION_KEY),
-                                    record.get(RECORD_SALARY_KEY) or "N/A",
-                                )
+                                if was_kept:
+                                    logger.debug(
+                                        "%s KEPT %s @ %s | %s | %s | %s",
+                                        target_tag,
+                                        record.get(RECORD_TITLE_KEY),
+                                        record.get(RECORD_COMPANY_KEY),
+                                        record.get(RECORD_POSTED_AGE_DAYS_KEY),
+                                        record.get(RECORD_LOCATION_KEY),
+                                        record.get(RECORD_SALARY_KEY) or "N/A",
+                                    )
                                 if DEBUG_CAPTURE_SOURCE_PAYLOADS:
                                     write_source_payload_debug(
                                         self.source_name,
@@ -794,3 +799,25 @@ class APSJobsScraper(BaseJobScraper):
             determinate=False,
         )
         return kept_records, audit_rows, skill_observations
+
+    def _review_discovered_record(
+        self,
+        record: dict,
+        review_context: ReviewPipelineContext,
+        kept_records: list[dict],
+        skill_observations: list[dict],
+    ) -> bool:
+        """Run current filtering/review logic on live or cached APS evidence."""
+        pre_outcome, record, _, should_fetch_details = review_pre_detail_normalized_job(
+            record, review_context
+        )
+        if pre_outcome["decision"] != "KEEP" or not should_fetch_details:
+            return False
+        outcome, record, record_skill_observations = review_post_detail_normalized_job(
+            record, review_context, hooks=ReviewPipelineHooks()
+        )
+        if outcome["decision"] == "KEEP":
+            skill_observations.extend(record_skill_observations)
+            kept_records.append(record)
+            return True
+        return False

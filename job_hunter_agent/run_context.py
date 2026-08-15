@@ -31,6 +31,7 @@ from job_hunter_agent.posting_utils import get_manual_skip_sets
 from job_hunter_agent.profile_store import get_search_settings, load_profile
 from job_hunter_agent.runtime_helpers import (
     CLI_FLAG_DEBUG,
+    CLI_FLAG_FORCE_REFRESH,
     CLI_FLAG_NO_LLM,
     has_cli_flag,
 )
@@ -84,6 +85,10 @@ class ScrapeRunContext:
     reset_new_to_you: bool
 
     headless: bool = False
+
+    force_source_refresh: bool = False
+
+    source_cache_stats: dict[str, dict[str, Any]] | None = None
 
 
 def build_scrape_run_context(argv: list[str] | None = None) -> ScrapeRunContext:
@@ -175,4 +180,5 @@ def build_scrape_run_context(argv: list[str] | None = None) -> ScrapeRunContext:
         no_llm_mode=has_cli_flag(active_argv, CLI_FLAG_NO_LLM),
         dashboard_debug_mode=has_cli_flag(active_argv, CLI_FLAG_DEBUG),
         reset_new_to_you=TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING,
+        force_source_refresh=has_cli_flag(active_argv, CLI_FLAG_FORCE_REFRESH),
     )

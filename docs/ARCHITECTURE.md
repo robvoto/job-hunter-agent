@@ -81,7 +81,8 @@ Primary modules:
 * `scrapers/seek.py` — SEEK low-level page helpers, selectors, URL building, detail payload fetch
 * `scrapers/linkedin.py` — LinkedIn via python-jobspy
 * `scrapers/apsjobs.py` — APSJobs Playwright scraper for government-seeking profiles
-* `source_runner.py` — routes enabled sources; enabled sources run concurrently via `ThreadPoolExecutor` with isolated mutable state per source when more than one source is active; step-through keeps the run serial for manual inspection; SEEK can pause a visible persistent browser for manual verification when the assisted flag is enabled
+* `source_runner.py` — routes enabled sources; checks the persisted per-source discovery snapshot before running a board search; enabled sources run concurrently via `ThreadPoolExecutor` with isolated mutable state per source when more than one source is active; step-through keeps the run serial for manual inspection; SEEK can pause a visible persistent browser for manual verification when the assisted flag is enabled
+* `source_discovery_cache.py` — persists normalized pre-decision source evidence and bounded LinkedIn failure state; it never stores final fit decisions
 * `source_connector.py` — orchestration entry point
 
 Responsibilities:

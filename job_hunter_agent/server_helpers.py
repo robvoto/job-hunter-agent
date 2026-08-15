@@ -1493,11 +1493,11 @@ def _write_run_stats_field(key: str, value: object) -> None:
         logger.warning("Could not write run_stats.%s: %s", key, write_exc)
 
 
-def _run_scrape_job() -> None:
+def _run_scrape_job(*, force_refresh: bool = False) -> None:
     """Own one background scrape lifecycle from start through terminal state."""
     progress_scope = begin_run_progress_scope()
     try:
-        scrape_jobs_direct()
+        scrape_jobs_direct(force_refresh=force_refresh)
         _write_run_stats_field("last_run_error", None)
     except Exception as exc:
         if run_stop_requested():
