@@ -1259,12 +1259,21 @@ def _atomicize_known_eligibility_rows(
         if str(row.get("requirement_type") or "").strip().lower() != "eligibility":
             normalized_rows.append(row)
             continue
-        values = [
+        # Decide atomicity from the row's own semantic fields first. matched_job_text
+        # is trace evidence and may contain the full compound source sentence shared
+        # by several already-atomic rows. Reading it unconditionally can manufacture
+        # duplicate eligibility facts.
+        row_values = [
             *[str(value) for value in (row.get("covered_requirement_elements") or [])],
+            str(row.get("canonical_requirement") or ""),
             str(row.get("requirement") or ""),
-            str(row.get("matched_job_text") or ""),
         ]
-        mentions = _known_profile_eligibility_mentions(values, lookup)
+        mentions = _known_profile_eligibility_mentions(row_values, lookup)
+        if not mentions:
+            mentions = _known_profile_eligibility_mentions(
+                [str(row.get("matched_job_text") or "")],
+                lookup,
+            )
         if len(mentions) > 1 and not (row.get("named_alternatives") or []):
             original_fact = compact_whitespace(row.get("eligibility_name") or row.get("matched_candidate_fact")).casefold()
             original_canonical = lookup.get(original_fact, "").casefold() if original_fact else ""
@@ -1318,9 +1327,18 @@ def _merge_requirement_coverage(
     merged: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     for row in [*eligibility_rows, *general_rows]:
+        requirement_type = str(row.get("requirement_type") or "").strip().lower()
         canonical = compact_whitespace(row.get("canonical_requirement")).casefold()
         requirement = compact_whitespace(row.get("requirement")).casefold()
-        key = (str(row.get("requirement_type") or "").strip().lower(), canonical or requirement)
+        matched_fact = compact_whitespace(
+            row.get("matched_candidate_fact") or row.get("eligibility_name")
+        ).casefold()
+        identity = (
+            matched_fact
+            if requirement_type == "eligibility" and matched_fact
+            else canonical or requirement
+        )
+        key = (requirement_type, identity)
         if key not in seen:
             seen.add(key)
             merged.append(row)

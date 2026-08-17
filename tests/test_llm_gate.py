@@ -1072,6 +1072,74 @@ def test_fit_review_preserves_and_splits_eligibility_outside_general_row_budget(
     }
 
 
+def test_atomic_eligibility_rows_do_not_resplit_from_shared_trace_sentence():
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "Australian Citizenship",
+                "importance": "required",
+                "requirement_type": "eligibility",
+                "canonical_requirement": "Australian Citizenship",
+                "status": "supported",
+                "matched_candidate_fact": "Australian Citizenship",
+                "matched_job_text": "Work Rights: Only Australian Citizens with Baseline",
+                "profile_support": ["Australian Citizenship"],
+                "covered_requirement_elements": ["Australian Citizenship"],
+            },
+            {
+                "requirement": "Baseline Security Clearance",
+                "importance": "required",
+                "requirement_type": "eligibility",
+                "canonical_requirement": "Baseline Security Clearance",
+                "status": "supported",
+                "matched_candidate_fact": "Baseline",
+                "matched_job_text": "Work Rights: Only Australian Citizens with Baseline",
+                "profile_support": ["Baseline Security Clearance"],
+                "covered_requirement_elements": ["Baseline"],
+            },
+        ],
+        valid_eligibility_names={
+            "australian citizenship": "Australian Citizenship",
+            "australian citizens": "Australian Citizenship",
+            "baseline": "Baseline",
+            "baseline security clearance": "Baseline",
+        },
+        eligibility_fact_values={
+            "australian citizenship": True,
+            "baseline": True,
+        },
+    )
+
+    assert [(row["requirement"], row["matched_candidate_fact"]) for row in result] == [
+        ("Australian Citizenship", "Australian Citizenship"),
+        ("Baseline Security Clearance", "Baseline"),
+    ]
+
+
+def test_merge_deduplicates_eligibility_aliases_by_resolved_profile_fact():
+    result = llm_gate._merge_requirement_coverage(
+        [
+            {
+                "requirement": "Baseline Security Clearance",
+                "requirement_type": "eligibility",
+                "canonical_requirement": "Baseline Security Clearance",
+                "matched_candidate_fact": "Baseline",
+            }
+        ],
+        [
+            {
+                "requirement": "Baseline",
+                "requirement_type": "eligibility",
+                "canonical_requirement": "Baseline",
+                "matched_candidate_fact": "Baseline",
+            }
+        ],
+    )
+
+    assert len(result) == 1
+    assert result[0]["requirement"] == "Baseline Security Clearance"
+
+
 def test_eligibility_row_after_general_limit_is_not_dropped():
     rows = [
         {
