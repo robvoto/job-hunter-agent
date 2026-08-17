@@ -612,9 +612,17 @@ body {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  gap: var(--control-space-md);
   margin-left: auto;
   padding-top: 0;
+  white-space: nowrap;
+}
+
+/* Local layout exception: footer repeats the pagination controls below the job grid. */
+.results-pagination-footer .section-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--control-space-md);
   white-space: nowrap;
 }
 
