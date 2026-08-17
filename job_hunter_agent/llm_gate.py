@@ -6,10 +6,10 @@ coverage structured so deterministic checks stay in control.
 
 from __future__ import annotations
 
-import os
 import hashlib
 import json as _json_mod
 import logging
+import os
 import re
 import sys
 from typing import Any, Dict
@@ -17,11 +17,8 @@ from typing import Any, Dict
 from openai import APIStatusError, APITimeoutError, OpenAI
 from pydantic import AliasChoices, BaseModel, Field, ValidationError
 
-from job_hunter_agent.config import DEBUG_MODE
 from job_hunter_agent.experience_requirements import resolve_role_experience_requirement
-from job_hunter_agent.requirement_classification import classify_requirement_type
 from job_hunter_agent.global_settings import (
-    get_llm_fit_review_debug_match_diagnostics_enabled,
     KEY_LLM_PRICING_PER_1M,
     KEY_LLM_PROMPT_EVIDENCE_TIERS,
     KEY_LLM_PROMPT_SETTINGS,
@@ -32,6 +29,7 @@ from job_hunter_agent.global_settings import (
     get_llm_capability_rule_aliases_max_items,
     get_llm_capability_rules_max_items,
     get_llm_fit_decision_max_output_tokens,
+    get_llm_fit_review_debug_match_diagnostics_enabled,
     get_llm_job_description_max_chars,
     get_llm_job_requirements_max_items,
     get_llm_job_requirements_max_output_tokens,
@@ -39,10 +37,10 @@ from job_hunter_agent.global_settings import (
     get_llm_learning_candidates_max_output_tokens,
     get_llm_max_retries,
     get_llm_raw_output_log_max_chars,
-    get_llm_request_timeout_seconds,
     get_llm_rejection_blocker_suggestions_max_items,
     get_llm_rejection_blocker_suggestions_max_output_tokens,
     get_llm_rejection_blocker_suggestions_max_words,
+    get_llm_request_timeout_seconds,
     get_llm_title_judgment_max_output_tokens,
     load_global_settings,
 )
@@ -53,36 +51,39 @@ from job_hunter_agent.llm_protocol import (
     LLM_ALLOWED_COVERAGE_IMPORTANCES,
     LLM_ALLOWED_COVERAGE_MATCH_SOURCES,
     LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES,
+    LLM_ALLOWED_DECISIONS,
+    LLM_ALLOWED_EXPERIENCE_COMPONENT_KINDS,
+    LLM_ALLOWED_GRADES,
+    LLM_ALLOWED_OCCUPATION_ALIGNMENTS,
+    LLM_ALLOWED_POSTING_CHANNEL_KINDS,
+    LLM_ALLOWED_TITLE_JUDGMENT_VERDICTS,
     LLM_COVERAGE_IMPORTANCE_BONUS,
     LLM_COVERAGE_IMPORTANCE_EXPECTED,
     LLM_COVERAGE_IMPORTANCE_PREFERRED,
     LLM_COVERAGE_IMPORTANCE_REQUIRED,
-    LLM_ALLOWED_DECISIONS,
-    LLM_ALLOWED_GRADES,
-    LLM_ALLOWED_OCCUPATION_ALIGNMENTS,
-    LLM_ALLOWED_POSTING_CHANNEL_KINDS,
+    LLM_EXPERIENCE_COMPONENT_DURATION,
+    LLM_EXPERIENCE_COMPONENT_QUALIFIER,
+    LLM_EXPERIENCE_COMPONENT_ROLE_ACTIVITY,
     LLM_FIT_REVIEW_DEBUG_PROMPT_SHAPE,
-    LLM_ALLOWED_TITLE_JUDGMENT_VERDICTS,
+    LLM_FIT_REVIEW_PROMPT_SHAPE,
     LLM_INVALID_COVERAGE_REQUIREMENT_TYPE,
     LLM_INVALID_COVERAGE_STATUS,
     LLM_INVALID_OCCUPATION_ALIGNMENT,
     LLM_INVALID_POSTING_CHANNEL_KIND,
+    LLM_JOB_REQUIREMENTS_PROMPT_SHAPE,
+    LLM_LEARNING_ONLY_PROMPT_SHAPE,
     LLM_PROFILE_RESOLUTION_EXISTING,
     LLM_PROFILE_RESOLUTION_NEW,
     LLM_PROFILE_RESOLUTION_UNRESOLVED,
-    LLM_UNCERTAIN_COVERAGE_REQUIREMENT_TYPE,
-    LLM_FIT_REVIEW_PROMPT_SHAPE,
-    LLM_JOB_REQUIREMENTS_PROMPT_SHAPE,
-    LLM_LEARNING_ONLY_PROMPT_SHAPE,
     LLM_PROMPT_CAPABILITY_LEVELS_HEADER,
     LLM_PROMPT_CAPABILITY_NAMING_INTRO,
     LLM_PROMPT_CLUSTERS_HEADER,
     LLM_PROMPT_DEBUG_REASON_INTRO,
     LLM_PROMPT_DEFAULT_CAPABILITY_NAMING_GUIDANCE_HEADER,
     LLM_PROMPT_DEFAULT_FIT_REVIEW_GUIDANCE_HEADER,
-    LLM_PROMPT_ELIGIBILITY_HEADER,
     LLM_PROMPT_DO_NOT_INVENT,
     LLM_PROMPT_DO_NOT_SAVE,
+    LLM_PROMPT_ELIGIBILITY_HEADER,
     LLM_PROMPT_FIT_REVIEW_ONLY_INTRO,
     LLM_PROMPT_JOB_DESCRIPTION_PREFIX,
     LLM_PROMPT_JSON_ONLY,
@@ -98,13 +99,9 @@ from job_hunter_agent.llm_protocol import (
     LLM_REJECTION_SUGGESTIONS_JSON_SHAPE,
     LLM_SECTION_LABEL_CLASSIFICATION_SHAPE,
     LLM_TITLE_JUDGMENT_SHAPE,
+    LLM_UNCERTAIN_COVERAGE_REQUIREMENT_TYPE,
 )
 from job_hunter_agent.paths import LLM_COSTS_PATH as _LLM_COSTS_PATH
-from job_hunter_agent.runtime_helpers import is_desktop_runtime
-from job_hunter_agent.system_warnings import (
-    make_system_warning_fingerprint,
-    record_system_warning,
-)
 
 # Import at module level to allow monkeypatching in tests
 from job_hunter_agent.profile_item_names import normalize_profile_item_name
@@ -119,11 +116,13 @@ from job_hunter_agent.profile_store import (
     load_clearance_ui_options,
     load_profile,
 )
+from job_hunter_agent.requirement_classification import classify_requirement_type
 from job_hunter_agent.runtime_helpers import (
     CLI_FLAG_NO_LLM,
     append_llm_cost_log,
     build_llm_cost_entry,
     has_cli_flag,
+    is_desktop_runtime,
 )
 from job_hunter_agent.signal_schema import (
     CATEGORY_HARD_BLOCKER_PATTERN,
@@ -136,6 +135,10 @@ from job_hunter_agent.signal_schema import (
     LEARNING_SUGGESTED_VALUES_KEY,
     PATTERN_SIGNAL_CATEGORIES,
     VALID_SIGNAL_CATEGORIES,
+)
+from job_hunter_agent.system_warnings import (
+    make_system_warning_fingerprint,
+    record_system_warning,
 )
 from job_hunter_agent.text_processing import compact_whitespace
 from job_hunter_agent.user_settings import DEFAULT_USER_SETTINGS, load_user_settings
@@ -314,6 +317,11 @@ class _LLMTitleJudgment(BaseModel):
     reason: str = ""
 
 
+class _LLMExperienceComponent(BaseModel):
+    kind: str
+    text: str
+
+
 class _LLMRequirementCoverageItem(BaseModel):
     requirement: str
     importance: str = "preferred"
@@ -339,6 +347,7 @@ class _LLMRequirementCoverageItem(BaseModel):
     matched_job_text: str = ""
     profile_support: list[str] = Field(default_factory=list)
     covered_requirement_elements: list[str] = Field(default_factory=list)
+    experience_components: list[_LLMExperienceComponent] = Field(default_factory=list)
     role_defining: bool = False
     role_defining_group: str = ""
 
@@ -1226,6 +1235,52 @@ def _has_meaningful_requirement_evidence(
     return False
 
 
+def _normalize_experience_components(value: Any) -> list[dict[str, str]]:
+    """Keep the LLM's explicit experience decomposition structurally valid."""
+    if not isinstance(value, list):
+        return []
+
+    components: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        kind = compact_whitespace(item.get("kind")).lower()
+        text = compact_whitespace(item.get("text"))
+        if kind not in LLM_ALLOWED_EXPERIENCE_COMPONENT_KINDS or not text:
+            continue
+        identity = (kind, text.casefold())
+        if identity in seen:
+            continue
+        seen.add(identity)
+        components.append({"kind": kind, "text": text})
+    return components
+
+
+def _experience_qualifier_evidence_count(
+    experience_components: list[dict[str, str]],
+    matched_candidate_fact: str,
+    profile_support: list[str],
+) -> tuple[int, int]:
+    """Validate qualifier evidence independently from role-duration evidence."""
+    qualifiers = [
+        component["text"]
+        for component in experience_components
+        if component.get("kind") == LLM_EXPERIENCE_COMPONENT_QUALIFIER
+    ]
+    supported = sum(
+        _has_meaningful_requirement_evidence(
+            qualifier,
+            "",
+            matched_candidate_fact,
+            profile_support,
+            [qualifier],
+        )
+        for qualifier in qualifiers
+    )
+    return supported, len(qualifiers)
+
+
 def _known_profile_eligibility_mentions(
     values: list[str],
     valid_eligibility_lookup: dict[str, str] | None,
@@ -1537,6 +1592,9 @@ def normalize_llm_requirement_coverage(
             for value in raw_covered_elements
             if compact_whitespace(value)
         ] if isinstance(raw_covered_elements, list) else []
+        experience_components = _normalize_experience_components(
+            item.get("experience_components")
+        )
         role_defining = bool(item.get("role_defining"))
         role_defining_group = compact_whitespace(item.get("role_defining_group"))
         if not requirement:
@@ -1661,14 +1719,31 @@ def normalize_llm_requirement_coverage(
             matched_job_text,
             role_experience,
         )
-        role_history_proves_requirement = bool(
+        has_experience_qualifier = any(
+            component.get("kind") == LLM_EXPERIENCE_COMPONENT_QUALIFIER
+            for component in experience_components
+        )
+        has_experience_duration = any(
+            component.get("kind") == LLM_EXPERIENCE_COMPONENT_DURATION
+            for component in experience_components
+        )
+        has_experience_role_or_activity = any(
+            component.get("kind") == LLM_EXPERIENCE_COMPONENT_ROLE_ACTIVITY
+            for component in experience_components
+        )
+        experience_components_complete = (
+            has_experience_duration and has_experience_role_or_activity
+        )
+        role_history_covers_unqualified_experience = bool(
             preliminary_experience_requirement
             and preliminary_experience_requirement.get("matched_role_experience_title")
+            and experience_components_complete
+            and not has_experience_qualifier
         )
         if (
             requirement_type == "capability"
             and status in {"supported", "partially_supported"}
-            and not role_history_proves_requirement
+            and not role_history_covers_unqualified_experience
             and not _has_meaningful_requirement_evidence(
                 requirement,
                 matched_job_text,
@@ -1695,6 +1770,57 @@ def normalize_llm_requirement_coverage(
             capability_name = ""
             profile_support = []
             covered_requirement_elements = []
+        if (
+            requirement_type == "capability"
+            and preliminary_experience_requirement
+            and status in {"supported", "partially_supported"}
+        ):
+            if not experience_components_complete:
+                _record_requirement_coverage_warning(
+                    requirement=requirement,
+                    importance=importance,
+                    requirement_type_before=requirement_type_before,
+                    requirement_type_after=requirement_type,
+                    status_before=status_before,
+                    status_after="not_shown",
+                    proposed_matched_candidate_fact=matched_candidate_fact,
+                    proposed_capability_name=capability_name,
+                    proposed_eligibility_name=eligibility_name,
+                    matched_job_text=matched_job_text,
+                    reason="missing_experience_components",
+                )
+                status = "not_shown"
+                matched_candidate_fact = ""
+                capability_name = ""
+                profile_support = []
+                covered_requirement_elements = []
+            else:
+                qualifier_supported, qualifier_count = _experience_qualifier_evidence_count(
+                    experience_components,
+                    matched_candidate_fact,
+                    profile_support,
+                )
+                if qualifier_count and not qualifier_supported:
+                    _record_requirement_coverage_warning(
+                        requirement=requirement,
+                        importance=importance,
+                        requirement_type_before=requirement_type_before,
+                        requirement_type_after=requirement_type,
+                        status_before=status_before,
+                        status_after="not_shown",
+                        proposed_matched_candidate_fact=matched_candidate_fact,
+                        proposed_capability_name=capability_name,
+                        proposed_eligibility_name=eligibility_name,
+                        matched_job_text=matched_job_text,
+                        reason="missing_experience_qualifier_evidence",
+                    )
+                    status = "not_shown"
+                    matched_candidate_fact = ""
+                    capability_name = ""
+                    profile_support = []
+                    covered_requirement_elements = []
+                elif qualifier_count and qualifier_supported < qualifier_count:
+                    status = "partially_supported"
         key = requirement.lower()
         if key in seen:
             continue
@@ -1720,6 +1846,8 @@ def normalize_llm_requirement_coverage(
             normalized_item["qualification_name"] = qualification_name
         if covered_requirement_elements:
             normalized_item["covered_requirement_elements"] = covered_requirement_elements
+        if experience_components:
+            normalized_item["experience_components"] = experience_components
         if role_defining:
             normalized_item["role_defining"] = True
         if role_defining_group:

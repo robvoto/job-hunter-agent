@@ -279,6 +279,10 @@ def test_normalize_llm_review_payload_downgrades_supported_when_role_duration_is
                     "capability_name": "business analysis",
                     "matched_job_text": "Minimum 5+ years experience as a Business Analyst in digital programs",
                     "profile_support": ["Ran BA activities across delivery teams."],
+                    "experience_components": [
+                        {"kind": "duration", "text": "5+ years"},
+                        {"kind": "role_or_activity", "text": "Business Analyst"},
+                    ],
                 }
             ],
         },
@@ -314,6 +318,10 @@ def test_normalize_llm_review_payload_downgrades_supported_when_years_requiremen
                     "capability_name": "python",
                     "matched_job_text": "Minimum 5+ years Python backend development",
                     "profile_support": ["Built Python services."],
+                    "experience_components": [
+                        {"kind": "duration", "text": "5+ years"},
+                        {"kind": "role_or_activity", "text": "Python backend development"},
+                    ],
                 }
             ],
         },
@@ -347,6 +355,10 @@ def test_normalize_llm_review_payload_matches_years_requirement_against_role_var
                     "capability_name": "business analysis",
                     "matched_job_text": "Minimum 5+ years experience as BA",
                     "profile_support": ["Ran BA activities across delivery teams."],
+                    "experience_components": [
+                        {"kind": "duration", "text": "5+ years"},
+                        {"kind": "role_or_activity", "text": "Business Analyst"},
+                    ],
                 }
             ],
         },
@@ -2035,6 +2047,117 @@ def test_llm_judge_title_returns_none_on_client_exception():
         "Business Analyst", ["senior business analyst"], [], llm_client=_RaisingClient()
     )
     assert result is None
+
+
+@pytest.mark.parametrize(
+    "requirement, qualifier",
+    [
+        (
+            "5+ years’ experience as a Senior Business Analyst within the Australian Life Insurance industry",
+            "Australian Life Insurance industry",
+        ),
+        (
+            "5+ years as a Business Analyst within telecommunications",
+            "telecommunications",
+        ),
+    ],
+)
+def test_experience_duration_does_not_prove_missing_qualifier(requirement, qualifier):
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": requirement,
+                "importance": "required",
+                "requirement_type": "capability",
+                "status": "supported",
+                "matched_candidate_fact": "Business Analysis",
+                "matched_job_text": requirement,
+                "profile_support": ["Led business analysis across delivery teams."],
+                "experience_components": [
+                    {"kind": "duration", "text": "5+ years"},
+                    {"kind": "role_or_activity", "text": "Business Analyst"},
+                    {"kind": "qualifier", "text": qualifier},
+                ],
+            }
+        ],
+        valid_capability_names={"business analysis": "Business Analysis"},
+        role_experience=[
+            {
+                "normalized_title": "Senior Business Analyst",
+                "total_duration_months": 72,
+                "most_recent_end_year": 2025,
+            }
+        ],
+    )
+
+    assert result[0]["status"] == "not_shown"
+    assert result[0]["matched_candidate_fact"] == ""
+    assert result[0]["profile_support"] == []
+    assert result[0]["experience_requirement_met"] is True
+
+
+def test_unqualified_business_analyst_duration_remains_supported_from_role_history():
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "5+ years as a Business Analyst",
+                "importance": "required",
+                "requirement_type": "capability",
+                "status": "supported",
+                "matched_candidate_fact": "Business Analysis",
+                "matched_job_text": "5+ years as a Business Analyst",
+                "profile_support": [],
+                "experience_components": [
+                    {"kind": "duration", "text": "5+ years"},
+                    {"kind": "role_or_activity", "text": "Business Analyst"},
+                ],
+            }
+        ],
+        valid_capability_names={"business analysis": "Business Analysis"},
+        role_experience=[
+            {
+                "normalized_title": "Business Analyst",
+                "total_duration_months": 60,
+                "most_recent_end_year": 2025,
+            }
+        ],
+    )
+
+    assert result[0]["status"] == "supported"
+    assert result[0]["experience_requirement_met"] is True
+
+
+def test_experience_qualifier_evidence_preserves_a_legitimate_partial_match():
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "5+ years as a Business Analyst within telecommunications",
+                "importance": "required",
+                "requirement_type": "capability",
+                "status": "supported",
+                "matched_candidate_fact": "Business Analysis",
+                "matched_job_text": "5+ years as a Business Analyst within telecommunications",
+                "profile_support": ["Delivered business analysis for telecommunications programs."],
+                "experience_components": [
+                    {"kind": "duration", "text": "5+ years"},
+                    {"kind": "role_or_activity", "text": "Business Analyst"},
+                    {"kind": "qualifier", "text": "telecommunications"},
+                ],
+            }
+        ],
+        valid_capability_names={"business analysis": "Business Analysis"},
+        role_experience=[
+            {
+                "normalized_title": "Business Analyst",
+                "total_duration_months": 24,
+                "most_recent_end_year": 2025,
+            }
+        ],
+    )
+
+    assert result[0]["status"] == "partially_supported"
+    assert result[0]["matched_candidate_fact"] == "Business Analysis"
+    assert result[0]["experience_requirement_met"] is False
 
 
 def test_requirement_coverage_rejects_broad_transferable_capability_as_partial_evidence():

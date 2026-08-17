@@ -117,9 +117,13 @@ def test_resolve_llm_review_payload_cache_hit_uses_role_experience_for_years_req
                 {
                     "requirement": "5+ years experience as a Business Analyst",
                     "status": "supported",
-                    "capability_name": "business analysis",
-                    "matched_job_text": "Minimum 5+ years experience as a Business Analyst",
-                    "profile_support": ["Ran BA activities across delivery teams."],
+                        "capability_name": "business analysis",
+                        "matched_job_text": "Minimum 5+ years experience as a Business Analyst",
+                        "profile_support": ["Ran BA activities across delivery teams."],
+                        "experience_components": [
+                            {"kind": "duration", "text": "5+ years"},
+                            {"kind": "role_or_activity", "text": "Business Analyst"},
+                        ],
                 }
             ],
         }

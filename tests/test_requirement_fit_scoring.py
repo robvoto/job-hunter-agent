@@ -344,6 +344,10 @@ def test_exact_capability_with_matching_role_duration_can_be_supported_without_d
             "matched_candidate_fact": "Salesforce",
             "matched_job_text": "5+ years of Salesforce configuration experience required",
             "profile_support": ["Configured CRM workflows for internal teams."],
+            "experience_components": [
+                {"kind": "duration", "text": "5+ years"},
+                {"kind": "role_or_activity", "text": "Salesforce configuration"},
+            ],
         },
         profile,
         role_experience=[

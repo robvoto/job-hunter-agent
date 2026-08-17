@@ -17,6 +17,16 @@ LLM_ALLOWED_COVERAGE_IMPORTANCES = frozenset(
 )
 
 LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES = frozenset({"capability", "eligibility", "qualification"})
+LLM_EXPERIENCE_COMPONENT_DURATION = "duration"
+LLM_EXPERIENCE_COMPONENT_ROLE_ACTIVITY = "role_or_activity"
+LLM_EXPERIENCE_COMPONENT_QUALIFIER = "qualifier"
+LLM_ALLOWED_EXPERIENCE_COMPONENT_KINDS = frozenset(
+    {
+        LLM_EXPERIENCE_COMPONENT_DURATION,
+        LLM_EXPERIENCE_COMPONENT_ROLE_ACTIVITY,
+        LLM_EXPERIENCE_COMPONENT_QUALIFIER,
+    }
+)
 LLM_ALLOWED_COVERAGE_MATCH_SOURCES = frozenset(
     {"capability_name", "related_skill", "eligibility", "qualification"}
 )
@@ -57,10 +67,10 @@ LLM_FIT_REVIEW_PROMPT_SHAPE = (
     '"job_requirements":["..."],'
     '"eligibility_requirements":[{"requirement":"...","importance":"required|expected|preferred|bonus",'
     '"requirement_type":"eligibility","canonical_requirement":"...","named_alternatives":["..."],"profile_fact_resolved":true|false,"status":"supported|partially_supported|not_shown|mismatch",'
-    '"matched_candidate_fact":"...","matched_job_text":"...","profile_support":["..."],"covered_requirement_elements":["..."],"role_defining":true|false,"role_defining_group":"..."}],'
+    '"matched_candidate_fact":"...","matched_job_text":"...","profile_support":["..."],"covered_requirement_elements":["..."],"experience_components":[{"kind":"duration|role_or_activity|qualifier","text":"..."}],"role_defining":true|false,"role_defining_group":"..."}],'
     '"requirement_coverage":[{"requirement":"...","importance":"required|expected|preferred|bonus",'
     '"requirement_type":"capability|eligibility|qualification","canonical_requirement":"...","named_alternatives":["..."],"profile_fact_resolved":true|false,"status":"supported|partially_supported|not_shown|mismatch",'
-    '"matched_candidate_fact":"...","matched_job_text":"...","profile_support":["..."],"covered_requirement_elements":["..."],"role_defining":true|false,"role_defining_group":"..."}],'
+    '"matched_candidate_fact":"...","matched_job_text":"...","profile_support":["..."],"covered_requirement_elements":["..."],"experience_components":[{"kind":"duration|role_or_activity|qualifier","text":"..."}],"role_defining":true|false,"role_defining_group":"..."}],'
     '"debug_reason":"..."}'
 )
 LLM_FIT_REVIEW_DEBUG_PROMPT_SHAPE = (
@@ -70,11 +80,11 @@ LLM_FIT_REVIEW_DEBUG_PROMPT_SHAPE = (
     '"job_requirements":["..."],'
     '"eligibility_requirements":[{"requirement":"...","importance":"required|expected|preferred|bonus",'
     '"requirement_type":"eligibility","canonical_requirement":"...","named_alternatives":["..."],"profile_fact_resolved":true|false,"status":"supported|partially_supported|not_shown|mismatch",'
-    '"matched_candidate_fact":"...","matched_job_text":"...","profile_support":["..."],"covered_requirement_elements":["..."],"role_defining":true|false,"role_defining_group":"..."}],'
+    '"matched_candidate_fact":"...","matched_job_text":"...","profile_support":["..."],"covered_requirement_elements":["..."],"experience_components":[{"kind":"duration|role_or_activity|qualifier","text":"..."}],"role_defining":true|false,"role_defining_group":"..."}],'
     '"requirement_coverage":[{"requirement":"...","importance":"required|expected|preferred|bonus",'
     '"requirement_type":"capability|eligibility|qualification","canonical_requirement":"...","named_alternatives":["..."],"profile_fact_resolved":true|false,"status":"supported|partially_supported|not_shown|mismatch",'
     '"matched_candidate_fact":"...","match_source":"capability_name|related_skill|eligibility|qualification",'
-    '"matched_profile_term":"...","matched_job_text":"...","profile_support":["..."],"covered_requirement_elements":["..."],"role_defining":true|false,"role_defining_group":"..."}],'
+    '"matched_profile_term":"...","matched_job_text":"...","profile_support":["..."],"covered_requirement_elements":["..."],"experience_components":[{"kind":"duration|role_or_activity|qualifier","text":"..."}],"role_defining":true|false,"role_defining_group":"..."}],'
     '"debug_reason":"..."}'
 )
 LLM_PROMPT_DEBUG_REASON_INTRO = (
