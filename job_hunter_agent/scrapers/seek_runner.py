@@ -17,7 +17,7 @@ import time
 import traceback
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, TimeoutError as FutureTimeoutError, wait
 from datetime import datetime
-from typing import Any, Dict, List, Set, cast
+from typing import Any, Callable, Dict, List, Set, cast
 from urllib.parse import urlsplit, urlunsplit
 
 logger = logging.getLogger(__name__)
@@ -864,12 +864,17 @@ def _review_pre_detail_batch(
 def _review_seek_card_batch(
     card_records: list[dict],
     review_context: ReviewPipelineContext,
-    detail_session: "_AsyncDetailSession",
+    detail_session_provider: "_LazyDetailSession",
     n_detail_workers: int,
     kept_records: list[dict],
     skill_observations: list[dict],
 ) -> None:
-    """Review live or cached discovery records through the existing pipeline."""
+    """Review live or cached discovery records through the existing pipeline.
+
+    detail_session_provider only launches a real browser session the first time
+    a record actually needs an uncached detail fetch, so a discovery-cache HIT
+    where every record's detail evidence is also reusable never opens Playwright.
+    """
     if not card_records:
         return
     if step_through_enabled():
@@ -882,7 +887,7 @@ def _review_seek_card_batch(
             if pre_outcome["decision"] != "KEEP" or not should_fetch_details:
                 outcome, observations = pre_outcome, []
             else:
-                outcome, _, observations, _ = detail_session.run_batch(
+                outcome, _, observations, _ = detail_session_provider.get().run_batch(
                     [(index, record)], review_context
                 )[index]
             if outcome.get("decision") == "KEEP":
@@ -895,7 +900,7 @@ def _review_seek_card_batch(
     )
     batch_results: dict[int, tuple] = {index: result for index, result in pre_decided}
     if needs_detail and not run_stop_requested():
-        batch_results.update(detail_session.run_batch(needs_detail, review_context))
+        batch_results.update(detail_session_provider.get().run_batch(needs_detail, review_context))
     for index in range(len(card_records)):
         if index not in batch_results:
             continue
@@ -1141,6 +1146,27 @@ class _AsyncDetailSession:
         await self._pw_cm.__aexit__(None, None, None)
 
 
+class _LazyDetailSession:
+    """Defers _AsyncDetailSession creation until a detail fetch is actually needed.
+
+    Used on the cached-discovery replay path so a discovery-cache HIT where every
+    record's detail evidence is also reusable never launches Playwright at all.
+    """
+
+    def __init__(self, factory: Callable[[], "_AsyncDetailSession"]) -> None:
+        self._factory = factory
+        self._session: "_AsyncDetailSession | None" = None
+
+    def get(self) -> "_AsyncDetailSession":
+        if self._session is None:
+            self._session = self._factory()
+        return self._session
+
+    def close_if_created(self) -> None:
+        if self._session is not None:
+            self._session.close()
+
+
 def seek_scrape_to_records(
     profile: dict,
     search_targets: List[dict],
@@ -1159,6 +1185,7 @@ def seek_scrape_to_records(
     assisted_verification_enabled: bool,
     discovery_records: list[dict] | None = None,
     discovery_capture: list[dict] | None = None,
+    discovery_status: dict[str, bool] | None = None,
 ) -> tuple:
     """Collect, review and return SEEK records while publishing bounded stage progress.
 
@@ -1182,6 +1209,55 @@ def seek_scrape_to_records(
         date_range_days=configured_date_range,
         source_name="SEEK",
     )
+
+    if discovery_records is not None:
+        # Cached source discovery is handled before any live-source/browser
+        # initialization: no SEEK list browser is launched, and the async detail
+        # session (_LazyDetailSession) is only created if a cached record still
+        # needs an uncached detail fetch (its detail evidence isn't reusable).
+        n_detail_workers = max(1, seek_parallel_detail_workers)
+        cached_records = [copy.deepcopy(record) for record in discovery_records]
+        for record in cached_records:
+            record[rs.RECORD_RUN_STARTED_AT_KEY] = run_iso
+        _set_seek_run_progress(1, 1, detail="Cached discovery results")
+        session_provider = _LazyDetailSession(
+            lambda: _AsyncDetailSession(
+                headless=headless,
+                viewport_width=playwright_viewport_width,
+                viewport_height=playwright_viewport_height,
+                n_workers=n_detail_workers,
+            )
+        )
+        try:
+            _review_seek_card_batch(
+                cached_records,
+                review_context,
+                session_provider,
+                n_detail_workers,
+                kept_records,
+                skill_observations,
+            )
+        except BotChallengeDetected:
+            raise
+        except Exception as exc:
+            raise PartialSourceResultsError(
+                "seek",
+                kept_records=kept_records,
+                audit_rows=audit_rows,
+                skill_observations=skill_observations,
+                original_error=exc,
+            ) from exc
+        finally:
+            session_provider.close_if_created()
+        set_run_progress_state(
+            "SEEK complete",
+            stage="source_collection",
+            source="seek",
+            headline="SEEK",
+            detail="Source collection complete",
+            determinate=False,
+        )
+        return kept_records, audit_rows, skill_observations
 
     browser_mode = "persistent" if WORKSPACE_DEBUG_MODE else get_playwright_browser_mode()
     use_persistent_browser = browser_mode == "persistent"
@@ -1221,28 +1297,13 @@ def seek_scrape_to_records(
                 viewport_height=playwright_viewport_height,
                 n_workers=n_detail_workers,
             )
+            collection_complete = True
             try:
                 total_targets = len(search_targets)
-                if discovery_records is not None:
-                    cached_records = [copy.deepcopy(record) for record in discovery_records]
-                    for record in cached_records:
-                        record[rs.RECORD_RUN_STARTED_AT_KEY] = run_iso
-                    _set_seek_run_progress(
-                        1, max(1, total_targets), detail="Cached discovery results"
-                    )
-                    _review_seek_card_batch(
-                        cached_records,
-                        review_context,
-                        detail_session,
-                        n_detail_workers,
-                        kept_records,
-                        skill_observations,
-                    )
                 for target_index, search_target in enumerate(search_targets, start=1):
-                    if discovery_records is not None:
-                        break
                     if run_stop_requested():
                         logger.debug("[SEEK] stop requested; ending scrape")
+                        collection_complete = False
                         break
                     base_search_url = search_target["url"]
                     search_location = search_target["location"]
@@ -1272,6 +1333,7 @@ def seek_scrape_to_records(
                         page_tag = f"[SEEK p{current_page_num}/{configured_seek_max_pages}]"
                         if run_stop_requested():
                             logger.debug("%s stop requested; ending scrape", page_tag)
+                            collection_complete = False
                             break
                         page_url = (
                             set_page_param(base_search_url, current_page_num)
@@ -1337,6 +1399,7 @@ def seek_scrape_to_records(
                         for card in job_cards:
                             if run_stop_requested():
                                 logger.debug("%s stop requested; finishing current page", page_tag)
+                                collection_complete = False
                                 break
                             try:
                                 record = build_seek_card_record(
@@ -1397,6 +1460,7 @@ def seek_scrape_to_records(
                             # each job before the batch advances.
                             for i, record in enumerate(card_records):
                                 if run_stop_requested():
+                                    collection_complete = False
                                     break
                                 pre_outcome, record, _, should_fetch_details = (
                                     review_pre_detail_normalized_job(record, review_context)
@@ -1482,6 +1546,7 @@ def seek_scrape_to_records(
                             break
 
                         if run_stop_requested():
+                            collection_complete = False
                             break
 
                         current_page_num += 1
@@ -1496,6 +1561,8 @@ def seek_scrape_to_records(
             finally:
                 detail_session.close()
                 context.close()
+                if discovery_status is not None:
+                    discovery_status["complete"] = collection_complete
     except BotChallengeDetected:
         raise
     except Exception as exc:

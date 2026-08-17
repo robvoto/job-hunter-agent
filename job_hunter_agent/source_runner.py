@@ -186,6 +186,7 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
     cache_status = "MISS"
     cached_records = None
     captured_records: list[dict] = []
+    failure_state: dict[str, Any] = {"complete": True}
     headless = bool(getattr(context, "headless", False))
     try:
         signature, cache_status, cached_records = _source_cache_lookup(context, SOURCE_SEEK)
@@ -222,6 +223,7 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
             assisted_verification_enabled=assisted_verification_enabled,
             discovery_records=cached_records,
             discovery_capture=captured_records,
+            discovery_status=failure_state,
         )
         try:
             kept, audit, skills = seek_scrape_to_records(**_seek_kwargs, headless=headless)
@@ -340,6 +342,7 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
             discovery_records=(cached_records if cached_records is not None else captured_records),
             source_cache_status=cache_status,
             source_cache_signature=signature,
+            source_collection_complete=failure_state.get("complete", True),
         )
     except PartialSourceResultsError as exc:
         logger.exception("[SEEK] scraping failed after partial results")
@@ -414,7 +417,7 @@ def _run_linkedin_source(context: ScrapeRunContext) -> SourceRunResult:
     cache_status = "MISS"
     cached_records = None
     captured_records: list[dict] = []
-    failure_state = {"all_targets_timed_out": False}
+    failure_state: dict[str, Any] = {"complete": True}
     try:
         signature, cache_status, cached_records = _source_cache_lookup(context, SOURCE_LINKEDIN)
         set_run_progress_state(
@@ -438,17 +441,91 @@ def _run_linkedin_source(context: ScrapeRunContext) -> SourceRunResult:
             discovery_status=failure_state,
         )
         kept, audit, skills = li.scrape()
+
+        final_status = str(failure_state.get("final_status", "healthy"))
+        total_targets = int(failure_state.get("total_targets", 0))
+        attempted = int(failure_state.get("attempted_targets", 0))
+        succeeded = int(failure_state.get("succeeded_targets", 0))
+        timed_out = int(failure_state.get("timed_out_targets", 0))
+        failed = int(failure_state.get("failed_targets", 0))
+        skipped = int(failure_state.get("skipped_after_breaker", 0))
+        breaker_tripped = bool(failure_state.get("circuit_breaker_tripped", False))
+        full_failure = final_status == "full_failure"
+        error: Exception | None = None
+
+        if full_failure:
+            reason = "consecutive_timeouts" if failed > 0 and timed_out == failed else "consecutive_failures"
+            message = (
+                f"LinkedIn source failed: {attempted}/{total_targets} targets attempted, "
+                f"{timed_out} timed out, {failed} failed, {skipped} skipped after "
+                f"{'circuit breaker' if breaker_tripped else 'run end'}."
+            )
+            logger.error(
+                format_log_block(
+                    "LINKEDIN][SOURCE_FAILED",
+                    {
+                        "attempted": attempted,
+                        "timed_out": timed_out,
+                        "failed": failed,
+                        "remaining_skipped": skipped,
+                        "reason": reason,
+                    },
+                )
+            )
+            _record_source_warning(
+                source=SOURCE_LINKEDIN,
+                severity="error",
+                category="source_failure",
+                message=message,
+                run_id=context.run_iso,
+                context={
+                    "attempted": attempted,
+                    "timed_out": timed_out,
+                    "failed": failed,
+                    "skipped_after_breaker": skipped,
+                    "circuit_breaker_tripped": breaker_tripped,
+                    "reason": reason,
+                },
+                fingerprint_parts=("source_failure", SOURCE_LINKEDIN, reason),
+            )
+            error = RuntimeError(message)
+        elif final_status == "partial_failure":
+            message = (
+                f"LinkedIn source partially collected: {succeeded}/{attempted} attempted "
+                f"targets succeeded"
+                + (f", {skipped} skipped after circuit breaker" if breaker_tripped else "")
+                + "."
+            )
+            logger.warning(format_log_block("LINKEDIN][SOURCE_PARTIAL", {"message": message}))
+            _record_source_warning(
+                source=SOURCE_LINKEDIN,
+                severity="warning",
+                category="source_failure",
+                message=message,
+                run_id=context.run_iso,
+                context={
+                    "attempted": attempted,
+                    "succeeded": succeeded,
+                    "timed_out": timed_out,
+                    "failed": failed,
+                    "skipped_after_breaker": skipped,
+                    "circuit_breaker_tripped": breaker_tripped,
+                },
+                fingerprint_parts=("source_partial", SOURCE_LINKEDIN, "partial_collection"),
+            )
+
         return SourceRunResult(
             source=SOURCE_LINKEDIN,
             kept_records=kept,
             audit_rows=audit,
             skill_observations=skills,
+            error=error,
             _job_history_snapshot=job_history,
             _llm_cache_snapshot=llm_cache,
             discovery_records=(cached_records if cached_records is not None else captured_records),
             source_cache_status=cache_status,
             source_cache_signature=signature,
-            source_failure_backoff=failure_state["all_targets_timed_out"],
+            source_failure_backoff=full_failure,
             source_collection_complete=failure_state.get("complete", True),
         )
     except PartialSourceResultsError as exc:
@@ -515,6 +592,7 @@ def _run_apsjobs_source(context: ScrapeRunContext) -> SourceRunResult:
     cache_status = "MISS"
     cached_records = None
     captured_records: list[dict] = []
+    failure_state: dict[str, Any] = {"complete": True}
     try:
         signature, cache_status, cached_records = _source_cache_lookup(context, SOURCE_APSJOBS)
         set_run_progress_state(
@@ -533,6 +611,7 @@ def _run_apsjobs_source(context: ScrapeRunContext) -> SourceRunResult:
             run_iso=context.run_iso,
             discovery_records=cached_records,
             discovery_capture=captured_records,
+            discovery_status=failure_state,
         )
         kept, audit, skills = scraper.scrape()
         return SourceRunResult(
@@ -545,6 +624,7 @@ def _run_apsjobs_source(context: ScrapeRunContext) -> SourceRunResult:
             discovery_records=(cached_records if cached_records is not None else captured_records),
             source_cache_status=cache_status,
             source_cache_signature=signature,
+            source_collection_complete=failure_state.get("complete", True),
         )
     except PartialSourceResultsError as exc:
         logger.warning(
@@ -1038,11 +1118,9 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
         for result in results:
             if result.source_cache_status != "MISS" or not result.source_cache_signature:
                 continue
-            if result.error is not None:
-                continue
             if result.source_failure_backoff:
                 save_source_failure_state(result.source, result.source_cache_signature)
-            elif result.source_collection_complete:
+            elif result.error is None and result.source_collection_complete:
                 save_source_discovery_snapshot(
                     result.source,
                     result.source_cache_signature,

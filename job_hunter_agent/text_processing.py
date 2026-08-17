@@ -1,6 +1,7 @@
 """Helpers for text processing."""
 
 import re
+from functools import lru_cache
 from typing import List, Optional, Set
 
 _ESCAPED_LIST_MARKER_RE = re.compile(r"(?<!\S)\\\*(?=\s+\S)")
@@ -45,9 +46,19 @@ def dedupe_preserve_order(values: List[str]) -> List[str]:
     return result
 
 
-def compact_whitespace(value: Optional[str]) -> str:
+@lru_cache(maxsize=8192)
+def _compact_whitespace_cached(text: str) -> str:
 
-    return re.sub(r"\s+", " ", str(value or "")).strip()
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def compact_whitespace(value: Optional[str]) -> str:
+    # Per-term capability/eligibility/signal matching re-checks the same
+    # normalized description text many times per job record (profiling a
+    # 247-record cached-SEEK repeat search: ~175k calls, ~4s of redundant
+    # re.sub work). str() always yields a hashable key, so caching here is
+    # safe and pure -- no invalidation needed.
+    return _compact_whitespace_cached(str(value or ""))
 
 
 def _normalize_escaped_list_markers(text: str, replacement: str) -> str:

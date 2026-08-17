@@ -315,6 +315,14 @@ def get_linkedin_failure_backoff_minutes() -> int:
     return int(load_global_settings()[KEY_CACHE_SETTINGS][KEY_LINKEDIN_FAILURE_BACKOFF_MINUTES])
 
 
+def get_linkedin_max_consecutive_target_failures() -> int:
+    return int(
+        load_global_settings()[KEY_CACHE_SETTINGS][
+            KEY_LINKEDIN_MAX_CONSECUTIVE_TARGET_FAILURES
+        ]
+    )
+
+
 def get_min_trusted_description_length() -> int:
     return int(
         load_global_settings()[KEY_DESCRIPTION_TRUST_SETTINGS][KEY_MIN_TRUSTED_DESCRIPTION_LENGTH]

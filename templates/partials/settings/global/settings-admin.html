@@ -417,6 +417,10 @@
             <label for="cache_linkedin_failure_backoff_minutes">LinkedIn failure backoff (minutes)</label>
             <input id="cache_linkedin_failure_backoff_minutes" type="number" min="1" max="1440" step="1">
             <div class="field-help">Temporary retry delay after every target in an identical LinkedIn search times out.</div>
+
+            <label for="cache_linkedin_max_consecutive_target_failures">LinkedIn max consecutive target failures</label>
+            <input id="cache_linkedin_max_consecutive_target_failures" type="number" min="1" max="24" step="1">
+            <div class="field-help">How many consecutive LinkedIn target failures are allowed in one run before the circuit breaker stops submitting further searches.</div>
           </section>
 
           <section class="panel">

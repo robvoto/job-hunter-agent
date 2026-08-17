@@ -27,6 +27,7 @@ from job_hunter_agent.global_settings import (
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
     KEY_SORT_NEWEST_FIRST,
     get_linkedin_fetch_timeout_seconds,
+    get_linkedin_max_consecutive_target_failures,
     get_linkedin_parallel_search_workers,
 )
 from job_hunter_agent.io_utils import DEBUG_CAPTURE_SOURCE_PAYLOADS, write_source_payload_debug
@@ -38,7 +39,7 @@ from job_hunter_agent.job_review_pipeline import (
 )
 from job_hunter_agent.job_types import load_job_type
 from job_hunter_agent.locations import resolve_location
-from job_hunter_agent.logging_utils import format_debug_marker
+from job_hunter_agent.logging_utils import format_debug_marker, format_log_block
 from job_hunter_agent.profile_store import get_search_settings
 from job_hunter_agent.profile_store import (
     KEY_PRIMARY_PATTERNS,
@@ -330,8 +331,10 @@ class LinkedInScraper(BaseJobScraper):
 
         total_targets = len(targets)
         if self.discovery_records is not None:
+            cached_collection_complete = True
             for index, cached_record in enumerate(self.discovery_records, start=1):
                 if run_stop_requested():
+                    cached_collection_complete = False
                     break
                 self._review_discovered_record(
                     dict(cached_record),
@@ -342,7 +345,7 @@ class LinkedInScraper(BaseJobScraper):
                     skill_observations,
                     check_closed_signals=False,
                 )
-            self.discovery_status["complete"] = True
+            self.discovery_status["complete"] = cached_collection_complete
             return kept_records, audit_rows, skill_observations
 
         parallel_search_workers = max(
@@ -375,6 +378,16 @@ class LinkedInScraper(BaseJobScraper):
         # dedup (seen_job_keys) and shared review_context state stay deterministic.
         pending_fetches: dict[int, tuple[Future, float]] = {}
         next_to_submit = 0
+        run_started_at = time.monotonic()
+        attempted_targets = 0
+        succeeded_targets = 0
+        timed_out_targets = 0
+        failed_targets = 0
+        skipped_after_breaker = 0
+        rows_collected = 0
+        consecutive_failures = 0
+        breaker_tripped = False
+        max_consecutive_failures = max(1, int(get_linkedin_max_consecutive_target_failures()))
 
         def _log_target_banner(idx: int, tgt: dict) -> None:
             logger.debug(
@@ -426,16 +439,25 @@ class LinkedInScraper(BaseJobScraper):
                 for target_index, target in enumerate(targets, start=1):
                     if run_stop_requested():
                         logger.debug("[LinkedIn] stop requested before target start; ending scrape")
+                        self.discovery_status["complete"] = False
                         break
+
+                    idx0 = target_index - 1
+                    if idx0 not in pending_fetches:
+                        # Circuit breaker tripped before this target was ever submitted.
+                        skipped_after_breaker += 1
+                        continue
+
                     target_tag = f"[LinkedIn target {target_index}/{total_targets}]"
                     _set_linkedin_run_progress(target_index, total_targets)
-                    _log_target_banner(target_index - 1, target)
+                    _log_target_banner(idx0, target)
 
-                    future, fetch_started_at = pending_fetches.pop(target_index - 1)
-                    if next_to_submit < total_targets:
+                    future, fetch_started_at = pending_fetches.pop(idx0)
+                    if not breaker_tripped and next_to_submit < total_targets:
                         _submit(next_to_submit)
                         next_to_submit += 1
 
+                    attempted_targets += 1
                     try:
                         rows = future.result()
                         logger.debug(
@@ -446,18 +468,37 @@ class LinkedInScraper(BaseJobScraper):
                         )
                     except InterruptedError:
                         logger.debug("%s jobspy fetch cancelled due to stop request", target_tag)
+                        self.discovery_status["complete"] = False
                         break
                     except Exception as exc:
                         logger.warning("%s jobspy call failed: %s: %s", target_tag, type(exc).__name__, exc)
                         self.discovery_status["complete"] = False
+                        failed_targets += 1
+                        consecutive_failures += 1
                         if isinstance(exc, TimeoutError):
+                            timed_out_targets += 1
                             self.discovery_status["timed_out_targets"] = int(
                                 self.discovery_status.get("timed_out_targets", 0)
                             ) + 1
+                        if not breaker_tripped and consecutive_failures >= max_consecutive_failures:
+                            breaker_tripped = True
+                            logger.warning(
+                                "%s LinkedIn circuit breaker tripped after %d consecutive target "
+                                "failures; no further targets will be submitted (%d/%d attempted so far)",
+                                target_tag,
+                                consecutive_failures,
+                                attempted_targets,
+                                total_targets,
+                            )
                         continue
+
+                    consecutive_failures = 0
+                    succeeded_targets += 1
+                    rows_collected += 0 if rows is None else len(rows)
 
                     if run_stop_requested():
                         logger.debug("%s stop requested after jobspy fetch; ending scrape", target_tag)
+                        self.discovery_status["complete"] = False
                         break
 
                     if rows is None or len(rows) == 0:
@@ -486,6 +527,7 @@ class LinkedInScraper(BaseJobScraper):
                         )
                         if run_stop_requested():
                             logger.debug("[LinkedIn] stop requested; ending scrape")
+                            self.discovery_status["complete"] = False
                             break
                         record = normalize_jobspy_record(
                             row,
@@ -523,6 +565,7 @@ class LinkedInScraper(BaseJobScraper):
                         )
                     if run_stop_requested():
                         logger.debug("%s stop requested after row review; ending scrape", target_tag)
+                        self.discovery_status["complete"] = False
                         break
         except Exception as exc:
             raise PartialSourceResultsError(
@@ -533,11 +576,32 @@ class LinkedInScraper(BaseJobScraper):
                 original_error=exc,
             ) from exc
 
-        self.discovery_status["all_targets_timed_out"] = bool(
-            total_targets > 0
-            and not self.discovery_capture
-            and int(self.discovery_status.get("timed_out_targets", 0)) == total_targets
+        elapsed_seconds = time.monotonic() - run_started_at
+        full_failure = attempted_targets > 0 and succeeded_targets == 0 and failed_targets > 0
+        if run_stop_requested():
+            final_status = "stopped"
+        elif full_failure:
+            final_status = "full_failure"
+        elif failed_targets > 0 or skipped_after_breaker > 0:
+            final_status = "partial_failure"
+        else:
+            final_status = "healthy"
+
+        self.discovery_status.update(
+            {
+                "total_targets": total_targets,
+                "attempted_targets": attempted_targets,
+                "succeeded_targets": succeeded_targets,
+                "timed_out_targets": timed_out_targets,
+                "failed_targets": failed_targets,
+                "skipped_after_breaker": skipped_after_breaker,
+                "circuit_breaker_tripped": breaker_tripped,
+                "rows_collected": rows_collected,
+                "elapsed_seconds": elapsed_seconds,
+                "final_status": final_status,
+            }
         )
+
         logger.debug(
             format_debug_marker(
                 "BOARD_END",
@@ -549,7 +613,22 @@ class LinkedInScraper(BaseJobScraper):
                 },
             )
         )
-        logger.info("[LinkedIn] done | kept=%d audit=%d", len(kept_records), len(audit_rows))
+        logger.info(
+            format_log_block(
+                "LinkedIn][SOURCE_SUMMARY",
+                {
+                    "attempted": attempted_targets,
+                    "succeeded": succeeded_targets,
+                    "timed_out": timed_out_targets,
+                    "failed": failed_targets,
+                    "skipped_after_breaker": skipped_after_breaker,
+                    "rows_collected": rows_collected,
+                    "kept": len(kept_records),
+                    "elapsed_seconds": round(elapsed_seconds, 1),
+                    "final_status": final_status,
+                },
+            )
+        )
         set_run_progress_state(
             "LinkedIn complete",
             stage="source_collection",

@@ -216,6 +216,10 @@
       "linkedin_failure_backoff_minutes": {
         "min": 1,
         "max": 1440
+      },
+      "linkedin_max_consecutive_target_failures": {
+        "min": 1,
+        "max": 24
       }
     }
   },
@@ -252,7 +256,8 @@
     "occupation_title_cache_max_age_days": 365,
     "source_discovery_cache_max_entries": 10000,
     "source_discovery_cache_max_age_minutes": 60,
-    "linkedin_failure_backoff_minutes": 15
+    "linkedin_failure_backoff_minutes": 15,
+    "linkedin_max_consecutive_target_failures": 6
   },
   "description_trust_settings": {
     "min_trusted_description_length": 600

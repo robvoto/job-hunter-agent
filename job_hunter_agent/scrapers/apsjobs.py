@@ -567,6 +567,7 @@ class APSJobsScraper(BaseJobScraper):
             return kept_records, audit_rows, skill_observations
 
         PLAYWRIGHT_USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
+        collection_complete = True
         total_targets = len(targets)
         logger.debug(
             format_debug_marker(
@@ -592,6 +593,7 @@ class APSJobsScraper(BaseJobScraper):
                 try:
                     for target_index, target in enumerate(targets, start=1):
                         if run_stop_requested():
+                            collection_complete = False
                             break
                         target_tag = f"[APSJobs target {target_index}/{total_targets}]"
                         target_state = _normalize_apsjobs_location_filter(target["location"])
@@ -689,6 +691,7 @@ class APSJobsScraper(BaseJobScraper):
                             logger.debug("%s candidate_links=%d", target_tag, len(candidate_links))
                             for link in candidate_links:
                                 if run_stop_requested():
+                                    collection_complete = False
                                     break
                                 scanned_title = compact_whitespace(link.get("text") or "") or "APSJobs listing"
                                 scanned_titles.append(scanned_title)
@@ -793,6 +796,7 @@ class APSJobsScraper(BaseJobScraper):
             )
         )
         logger.info("[APSJobs] done | kept=%d audit=%d", len(kept_records), len(audit_rows))
+        self.discovery_status["complete"] = collection_complete
         set_run_progress_state(
             "APSJobs complete",
             stage="source_collection",

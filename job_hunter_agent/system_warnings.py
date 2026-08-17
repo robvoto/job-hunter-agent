@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -180,10 +181,7 @@ def record_system_warning(
     context_json = _warning_context_json(context)
     now_iso = _now_iso()
 
-    with db_conn(db_path) as conn:
-        ensure_system_warnings_schema(conn)
-        conn.execute(
-            """
+    insert_sql = """
             INSERT INTO system_warnings (
                 severity, category, source, message, fingerprint, status,
                 job_key, run_id, context_json, first_seen_at, last_seen_at, count
@@ -209,21 +207,33 @@ def record_system_warning(
                 -- Every recurrence is a fresh incident, regardless of the prior
                 -- reviewed/dismissed status or any caller-supplied insert status.
                 status = 'unresolved'
-            """,
-            (
-                severity_text,
-                category_text,
-                source_text,
-                message_text,
-                fingerprint_text,
-                status_text,
-                job_key_text or None,
-                run_id_text or None,
-                context_json,
-                now_iso,
-                now_iso,
-            ),
-        )
+            """
+    insert_params = (
+        severity_text,
+        category_text,
+        source_text,
+        message_text,
+        fingerprint_text,
+        status_text,
+        job_key_text or None,
+        run_id_text or None,
+        context_json,
+        now_iso,
+        now_iso,
+    )
+
+    with db_conn(db_path) as conn:
+        ensure_system_warnings_schema(conn, db_path=db_path)
+        try:
+            conn.execute(insert_sql, insert_params)
+        except sqlite3.OperationalError:
+            # The memoized schema-ensure above assumes the table, once
+            # created for this db path, stays put -- reasonable for the
+            # normal per-warning hot path, but not guaranteed (e.g. a table
+            # dropped out from under a long-lived process). Force a re-check
+            # and retry once before giving up.
+            ensure_system_warnings_schema(conn, db_path=db_path, force=True)
+            conn.execute(insert_sql, insert_params)
         row = conn.execute(
             """
             SELECT
@@ -255,7 +265,7 @@ def list_system_warnings(
         limit_clause = " LIMIT ?"
         params.append(limit_value)
     with db_conn(db_path) as conn:
-        ensure_system_warnings_schema(conn)
+        ensure_system_warnings_schema(conn, db_path=db_path)
         rows = conn.execute(
             """
             SELECT
@@ -287,7 +297,7 @@ def update_system_warning_status(
     if status_text not in _SYSTEM_WARNING_STATUSES:
         raise ValueError(f"Unsupported system warning status: {status_text!r}")
     with db_conn(db_path) as conn:
-        ensure_system_warnings_schema(conn)
+        ensure_system_warnings_schema(conn, db_path=db_path)
         conn.execute(
             "UPDATE system_warnings SET status = ? WHERE id = ?",
             (status_text, int(warning_id)),

@@ -314,10 +314,29 @@ def _apply_requirement_importance_migration(conn: sqlite3.Connection) -> None:
     )
 
 
-def ensure_system_warnings_schema(conn: sqlite3.Connection) -> None:
-    """Create the system warnings table/indexes if they do not already exist."""
+_system_warnings_schema_ensured_paths: set[str] = set()
 
+
+def ensure_system_warnings_schema(
+    conn: sqlite3.Connection, *, db_path: Path | None = None, force: bool = False
+) -> None:
+    """Create the system warnings table/indexes if they do not already exist.
+
+    record_system_warning() calls this on every warning, and init_db() already
+    creates this schema once at startup, so re-running the (idempotent)
+    executescript per warning is pure waste -- measured via profiling a
+    247-record cached SEEK repeat search as ~5s across just 20 warnings.
+    Memoized per resolved db path (not a single process-wide flag) because
+    tests repoint JOB_HUNTER_DB_PATH at different isolated databases within
+    the same process while still calling with db_path=None. Pass force=True
+    to bypass the memo, e.g. after the table unexpectedly went missing.
+    """
+
+    resolved_path = str(db_path) if db_path is not None else str(_default_db_path())
+    if not force and resolved_path in _system_warnings_schema_ensured_paths:
+        return
     conn.executescript(_SYSTEM_WARNINGS_SCHEMA)
+    _system_warnings_schema_ensured_paths.add(resolved_path)
 
 
 def _apply_migrations(conn: sqlite3.Connection) -> None:
@@ -346,7 +365,7 @@ def init_db(db_path: Path | None = None) -> None:
     with db_conn(path) as conn:
         _apply_migrations(conn)
         conn.executescript(_SCHEMA)
-        ensure_system_warnings_schema(conn)
+        ensure_system_warnings_schema(conn, db_path=db_path)
 
 
 EXPECTED_TABLES = {

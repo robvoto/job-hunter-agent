@@ -479,12 +479,26 @@ def load_parsing_rules() -> Dict[str, Any]:
     return get_knowledge("parsing_rules") or {}
 
 
+_last_validated_ui_labels_payload: Dict[str, Any] | None = None
+
+
 def load_ui_labels() -> Dict[str, Any]:
+    """Return the managed ui_labels knowledge payload, validated once per revision.
+
+    get_knowledge("ui_labels") already caches the parsed payload in-process and
+    returns the same object until set_knowledge("ui_labels", ...) replaces it,
+    so re-running the recursive mojibake validation on every call (this is
+    called per job record during review) was pure waste; skip it whenever the
+    payload object is unchanged from the last validated one.
+    """
+    global _last_validated_ui_labels_payload
     from job_hunter_agent.knowledge_store import get_knowledge
     from job_hunter_agent.knowledge_store import validate_ui_labels_payload
 
     payload = get_knowledge("ui_labels") or {}
-    validate_ui_labels_payload(payload)
+    if payload is not _last_validated_ui_labels_payload:
+        validate_ui_labels_payload(payload)
+        _last_validated_ui_labels_payload = payload
     return payload
 
 

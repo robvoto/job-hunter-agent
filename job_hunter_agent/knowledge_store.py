@@ -77,11 +77,39 @@ def validate_ui_labels_payload(payload: Any) -> None:
                 )
 
 
+_KNOWLEDGE_CACHE: dict[tuple[str, str], Any] = {}
+_KNOWLEDGE_CACHE_MISS = object()
+
+
+def _resolve_default_db_path() -> str:
+    from job_hunter_agent.paths import get_db_path
+
+    return str(get_db_path())
+
+
 def get_knowledge(key: str, db_path: Path | None = None) -> Any | None:
-    """Return parsed knowledge for key, or None if not seeded."""
+    """Return parsed knowledge for key, or None if not seeded.
+
+    Knowledge rows are static for the life of a given database except through
+    set_knowledge, so reads are cached in-process keyed by (resolved db path,
+    key): filter/scoring code calls this per job record, and a cold
+    sqlite3.connect() + query per call was measured (via profiling a
+    247-record cached SEEK repeat search) as the dominant cost of "instant"
+    cache-hit review passes. Resolving the path (rather than trusting a
+    single process-wide default) matters because tests repoint
+    JOB_HUNTER_DB_PATH at different isolated databases within the same
+    process while still calling with db_path=None.
+    """
+    resolved_path = str(db_path) if db_path is not None else _resolve_default_db_path()
+    cache_key = (resolved_path, key)
+    cached = _KNOWLEDGE_CACHE.get(cache_key, _KNOWLEDGE_CACHE_MISS)
+    if cached is not _KNOWLEDGE_CACHE_MISS:
+        return cached
     with db_conn(db_path) as conn:
         row = conn.execute("SELECT data FROM knowledge WHERE key = ?", (key,)).fetchone()
-    return json.loads(row["data"]) if row else None
+    value = json.loads(row["data"]) if row else None
+    _KNOWLEDGE_CACHE[cache_key] = value
+    return value
 
 
 def set_knowledge(key: str, data: Any, db_path: Path | None = None) -> None:
@@ -97,6 +125,8 @@ def set_knowledge(key: str, data: Any, db_path: Path | None = None) -> None:
             """,
             (key, json.dumps(data, ensure_ascii=False)),
         )
+    resolved_path = str(db_path) if db_path is not None else _resolve_default_db_path()
+    _KNOWLEDGE_CACHE.pop((resolved_path, key), None)
 
 
 def _is_additive_knowledge(data: dict) -> bool:

@@ -947,3 +947,159 @@ def test_run_seek_source_uses_non_empty_warning_message_for_blank_exception(monk
     assert isinstance(result.error, TimeoutError)
     assert recorded
     assert recorded[0]["message"] == "TimeoutError"
+
+
+# ---------------------------------------------------------------------------
+# LinkedIn circuit-breaker: truthful reporting + backoff-decoupling regressions
+# ---------------------------------------------------------------------------
+
+
+def _install_fake_linkedin_scraper(monkeypatch, discovery_status_updates: dict, kept=None, audit=None, skills=None):
+    class FakeLinkedInScraper:
+        def __init__(self, **kwargs):
+            self._discovery_status = kwargs["discovery_status"]
+
+        def scrape(self):
+            self._discovery_status.update(discovery_status_updates)
+            return kept or [], audit or [], skills or []
+
+    monkeypatch.setattr(source_runner, "LinkedInScraper", FakeLinkedInScraper, raising=False)
+    monkeypatch.setattr(
+        __import__("job_hunter_agent.scrapers.linkedin", fromlist=["LinkedInScraper"]),
+        "LinkedInScraper",
+        FakeLinkedInScraper,
+    )
+
+
+def test_run_linkedin_source_full_failure_reports_error_and_backoff(monkeypatch):
+    context = _make_context([SOURCE_LINKEDIN])
+    warnings: list[dict] = []
+    monkeypatch.setattr(
+        source_runner,
+        "record_system_warning",
+        lambda **kwargs: warnings.append(kwargs) or kwargs,
+    )
+    _install_fake_linkedin_scraper(
+        monkeypatch,
+        {
+            "complete": False,
+            "total_targets": 3,
+            "attempted_targets": 3,
+            "succeeded_targets": 0,
+            "timed_out_targets": 3,
+            "failed_targets": 3,
+            "skipped_after_breaker": 0,
+            "circuit_breaker_tripped": False,
+            "rows_collected": 0,
+            "elapsed_seconds": 45.0,
+            "final_status": "full_failure",
+        },
+    )
+
+    result = source_runner._run_linkedin_source(context)
+
+    assert result.error is not None
+    assert result.source_failure_backoff is True
+    assert warnings
+    assert warnings[0]["category"] == "source_failure"
+
+
+def test_run_linkedin_source_healthy_zero_rows_reports_no_error(monkeypatch):
+    context = _make_context([SOURCE_LINKEDIN])
+    warnings: list[dict] = []
+    monkeypatch.setattr(
+        source_runner,
+        "record_system_warning",
+        lambda **kwargs: warnings.append(kwargs) or kwargs,
+    )
+    _install_fake_linkedin_scraper(
+        monkeypatch,
+        {
+            "complete": True,
+            "total_targets": 3,
+            "attempted_targets": 3,
+            "succeeded_targets": 3,
+            "timed_out_targets": 0,
+            "failed_targets": 0,
+            "skipped_after_breaker": 0,
+            "circuit_breaker_tripped": False,
+            "rows_collected": 0,
+            "elapsed_seconds": 5.0,
+            "final_status": "healthy",
+        },
+    )
+
+    result = source_runner._run_linkedin_source(context)
+
+    assert result.error is None
+    assert result.source_failure_backoff is False
+    assert warnings == []
+
+
+def test_run_enabled_sources_writes_backoff_state_despite_error(monkeypatch):
+    """Regression test: an errored LinkedIn result must still trigger
+    save_source_failure_state when source_failure_backoff is set, even though
+    result.error is not None. This is the exact bug that previously caused the
+    commit loop to silently skip persisting backoff state on full failure."""
+    context = _make_context([SOURCE_LINKEDIN])
+    committed: list[tuple] = []
+
+    monkeypatch.setattr(
+        source_runner,
+        "_run_linkedin_source",
+        lambda ctx: _li_result(
+            error=RuntimeError("LinkedIn source failed"),
+            source_failure_backoff=True,
+            source_cache_status="MISS",
+            source_cache_signature="sig",
+            discovery_records=[],
+        ),
+    )
+    monkeypatch.setattr(
+        source_runner,
+        "save_source_failure_state",
+        lambda source, signature: committed.append(("failure", source, signature)),
+    )
+    monkeypatch.setattr(
+        source_runner,
+        "save_source_discovery_snapshot",
+        lambda *args: committed.append(("snapshot",) + args),
+    )
+
+    run_enabled_sources(context)
+
+    assert committed == [("failure", SOURCE_LINKEDIN, "sig")]
+
+
+def test_run_enabled_sources_skips_snapshot_for_non_backoff_error(monkeypatch):
+    """A generic (non-LinkedIn-breaker-style) error must not write a success
+    snapshot, and must not write backoff state either since source_failure_backoff
+    is False."""
+    context = _make_context([SOURCE_LINKEDIN])
+    committed: list[tuple] = []
+
+    monkeypatch.setattr(
+        source_runner,
+        "_run_linkedin_source",
+        lambda ctx: _li_result(
+            error=RuntimeError("some unrelated failure"),
+            source_failure_backoff=False,
+            source_cache_status="MISS",
+            source_cache_signature="sig",
+            discovery_records=[],
+        ),
+    )
+    monkeypatch.setattr(
+        source_runner,
+        "save_source_failure_state",
+        lambda source, signature: committed.append(("failure", source, signature)),
+    )
+    monkeypatch.setattr(
+        source_runner,
+        "save_source_discovery_snapshot",
+        lambda *args: committed.append(("snapshot",) + args),
+    )
+
+    run_enabled_sources(context)
+
+    assert committed == []

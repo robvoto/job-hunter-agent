@@ -40,9 +40,16 @@ def test_fetch_seek_job_detail_async_stores_apply_method(monkeypatch):
         seek_runner, "fetch_job_details_payload_async", fake_fetch_job_details_payload_async
     )
 
+    class _FakeLocator:
+        async def count(self):
+            return 0
+
     class _FakePage:
         async def evaluate(self, script):
             return None
+
+        def locator(self, selector):
+            return _FakeLocator()
 
     record = {
         RECORD_JOB_KEY: "job-1",
@@ -69,9 +76,16 @@ def test_fetch_seek_job_detail_async_stores_external_apply_url(monkeypatch):
         seek_runner, "fetch_job_details_payload_async", fake_fetch_job_details_payload_async
     )
 
+    class _FakeLocator:
+        async def count(self):
+            return 0
+
     class _FakePage:
         async def evaluate(self, script):
             return None
+
+        def locator(self, selector):
+            return _FakeLocator()
 
     record = {
         RECORD_JOB_KEY: "job-1",

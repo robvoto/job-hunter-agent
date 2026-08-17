@@ -86,6 +86,7 @@ export const JobHunterAdminSettings = (function () {
     cache_source_discovery_cache_max_entries: ['cache_settings', 'source_discovery_cache_max_entries'],
     cache_source_discovery_cache_max_age_minutes: ['cache_settings', 'source_discovery_cache_max_age_minutes'],
     cache_linkedin_failure_backoff_minutes: ['cache_settings', 'linkedin_failure_backoff_minutes'],
+    cache_linkedin_max_consecutive_target_failures: ['cache_settings', 'linkedin_max_consecutive_target_failures'],
     description_trust_min_trusted_description_length: ['description_trust_settings', 'min_trusted_description_length'],
     source_document_allowed_suffixes: ['source_document_settings', 'allowed_suffixes'],
     onboarding_extraction_lookback_years: ['onboarding_settings', 'extraction_lookback_years'],
@@ -303,6 +304,7 @@ export const JobHunterAdminSettings = (function () {
     setFieldValue('cache_source_discovery_cache_max_entries', cacheSettings.source_discovery_cache_max_entries);
     setFieldValue('cache_source_discovery_cache_max_age_minutes', cacheSettings.source_discovery_cache_max_age_minutes);
     setFieldValue('cache_linkedin_failure_backoff_minutes', cacheSettings.linkedin_failure_backoff_minutes);
+    setFieldValue('cache_linkedin_max_consecutive_target_failures', cacheSettings.linkedin_max_consecutive_target_failures);
     setFieldValue('onboarding_extraction_lookback_years', onboarding.extraction_lookback_years);
     setFieldValue('onboarding_title_extraction_min_months', onboarding.title_extraction_min_months);
     setFieldValue('onboarding_max_target_patterns', onboarding.max_target_patterns);
@@ -541,6 +543,10 @@ export const JobHunterAdminSettings = (function () {
         linkedin_failure_backoff_minutes: readNumber(
           'cache_linkedin_failure_backoff_minutes',
           currentCacheSettings.linkedin_failure_backoff_minutes,
+        ),
+        linkedin_max_consecutive_target_failures: readNumber(
+          'cache_linkedin_max_consecutive_target_failures',
+          currentCacheSettings.linkedin_max_consecutive_target_failures,
         ),
       },
       description_trust_settings: {

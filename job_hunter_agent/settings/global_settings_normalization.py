@@ -97,6 +97,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_SOURCE_DISCOVERY_CACHE_MAX_ENTRIES,
     KEY_SOURCE_DISCOVERY_CACHE_MAX_AGE_MINUTES,
     KEY_LINKEDIN_FAILURE_BACKOFF_MINUTES,
+    KEY_LINKEDIN_MAX_CONSECUTIVE_TARGET_FAILURES,
     KEY_PLAYWRIGHT_BROWSER_MODE,
     KEY_PLAYWRIGHT_HEADLESS,
     KEY_PLAYWRIGHT_SELECTOR_TIMEOUT,
@@ -958,6 +959,13 @@ def normalize_global_settings(
             DEFAULT_CACHE_SETTINGS[KEY_LINKEDIN_FAILURE_BACKOFF_MINUTES],
             normalized_cache_limits[KEY_LINKEDIN_FAILURE_BACKOFF_MINUTES]["min"],
             normalized_cache_limits[KEY_LINKEDIN_FAILURE_BACKOFF_MINUTES]["max"],
+        ),
+        KEY_LINKEDIN_MAX_CONSECUTIVE_TARGET_FAILURES: _require_int(
+            cache_source,
+            KEY_LINKEDIN_MAX_CONSECUTIVE_TARGET_FAILURES,
+            DEFAULT_CACHE_SETTINGS[KEY_LINKEDIN_MAX_CONSECUTIVE_TARGET_FAILURES],
+            normalized_cache_limits[KEY_LINKEDIN_MAX_CONSECUTIVE_TARGET_FAILURES]["min"],
+            normalized_cache_limits[KEY_LINKEDIN_MAX_CONSECUTIVE_TARGET_FAILURES]["max"],
         ),
     }
 

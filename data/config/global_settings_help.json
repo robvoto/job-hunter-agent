@@ -93,7 +93,8 @@
         "occupation_title_cache_max_age_days": "Allowed min/max age for occupation-title classification cache rows before pruning.",
         "source_discovery_cache_max_entries": "Allowed min/max number of source discovery snapshots retained per user.",
         "source_discovery_cache_max_age_minutes": "Allowed min/max freshness window for successful source discovery snapshots.",
-        "linkedin_failure_backoff_minutes": "Allowed min/max temporary backoff window after a fully timed-out identical LinkedIn search."
+        "linkedin_failure_backoff_minutes": "Allowed min/max temporary backoff window after a fully timed-out identical LinkedIn search.",
+        "linkedin_max_consecutive_target_failures": "Allowed min/max consecutive LinkedIn target failures before the run stops submitting further searches."
       }
     },
     "preference_weights": {
@@ -142,7 +143,8 @@
         "occupation_title_cache_max_age_days": "Maximum age for saved occupation-title classification cache rows before pruning.",
         "source_discovery_cache_max_entries": "Maximum number of saved source discovery snapshots kept per user.",
         "source_discovery_cache_max_age_minutes": "How many minutes a successful source discovery snapshot can be reused.",
-        "linkedin_failure_backoff_minutes": "How many minutes a fully timed-out identical LinkedIn search is suppressed before retrying."
+        "linkedin_failure_backoff_minutes": "How many minutes a fully timed-out identical LinkedIn search is suppressed before retrying.",
+        "linkedin_max_consecutive_target_failures": "How many consecutive LinkedIn target failures (timeouts or errors) are allowed in one run before the circuit breaker stops submitting further searches."
       }
     },
     "description_trust_settings": {

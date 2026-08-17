@@ -45,6 +45,7 @@ KEY_OCCUPATION_TITLE_CACHE_MAX_AGE_DAYS = "occupation_title_cache_max_age_days"
 KEY_SOURCE_DISCOVERY_CACHE_MAX_ENTRIES = "source_discovery_cache_max_entries"
 KEY_SOURCE_DISCOVERY_CACHE_MAX_AGE_MINUTES = "source_discovery_cache_max_age_minutes"
 KEY_LINKEDIN_FAILURE_BACKOFF_MINUTES = "linkedin_failure_backoff_minutes"
+KEY_LINKEDIN_MAX_CONSECUTIVE_TARGET_FAILURES = "linkedin_max_consecutive_target_failures"
 KEY_REPEATED_LISTING_MIN_TIMES_SEEN = "repeated_listing_min_times_seen"
 KEY_REPEATED_LISTING_MIN_SPAN_DAYS = "repeated_listing_min_span_days"
 KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS = "multi_listing_red_flag_min_listings"
@@ -185,6 +186,7 @@ CACHE_SETTING_LIMITS: dict[str, tuple[int, int]] = {
     KEY_SOURCE_DISCOVERY_CACHE_MAX_ENTRIES: (100, 100_000),
     KEY_SOURCE_DISCOVERY_CACHE_MAX_AGE_MINUTES: (1, 10_080),
     KEY_LINKEDIN_FAILURE_BACKOFF_MINUTES: (1, 1_440),
+    KEY_LINKEDIN_MAX_CONSECUTIVE_TARGET_FAILURES: (1, 24),
 }
 DEFAULT_DESCRIPTION_TRUST_SETTINGS = dict(
     _MANAGED_GLOBAL_SETTINGS_SEED.get(KEY_DESCRIPTION_TRUST_SETTINGS, {})

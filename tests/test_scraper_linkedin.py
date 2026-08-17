@@ -795,3 +795,199 @@ def test_linkedin_progress_producer_emits_target_and_job_counts(monkeypatch):
         "item_current": 4,
         "item_total": 6,
     }
+
+
+def _target(term: str, **overrides) -> dict:
+    target = {
+        "search_term": term,
+        "location": "Sydney, Australia",
+        "results_wanted": 1,
+        "hours_old": 168,
+        "sort_newest_first": False,
+        "easy_apply": None,
+    }
+    target.update(overrides)
+    return target
+
+
+class _EmptyRows:
+    def sort_values(self, **_kwargs):
+        return self
+
+    def iterrows(self):
+        return iter(())
+
+    def __len__(self):
+        return 0
+
+
+def test_linkedin_healthy_search_with_zero_rows_is_not_a_failure(monkeypatch):
+    scraper = LinkedInScraper(
+        profile={},
+        llm_cache={},
+        job_history={},
+        applied_job_keys=set(),
+        hidden_job_keys=set(),
+        run_iso="2026-06-22T09:00:00+10:00",
+    )
+
+    monkeypatch.setattr(scraper, "_build_search_targets", lambda _settings: [_target("no results role")])
+    monkeypatch.setattr(scraper, "_fetch_jobspy", lambda _target: _EmptyRows())
+
+    kept_records, audit_rows, skill_observations = scraper.scrape()
+
+    assert kept_records == []
+    assert audit_rows == []
+    assert skill_observations == []
+    assert scraper.discovery_status["final_status"] == "healthy"
+    assert scraper.discovery_status["succeeded_targets"] == 1
+    assert scraper.discovery_status["failed_targets"] == 0
+    assert scraper.discovery_status["attempted_targets"] == 1
+
+
+def test_linkedin_timeout_increments_failure_counters(monkeypatch):
+    scraper = LinkedInScraper(
+        profile={},
+        llm_cache={},
+        job_history={},
+        applied_job_keys=set(),
+        hidden_job_keys=set(),
+        run_iso="2026-06-22T09:00:00+10:00",
+    )
+
+    monkeypatch.setattr(scraper, "_build_search_targets", lambda _settings: [_target("slow role")])
+
+    def _fake_fetch(_target):
+        raise TimeoutError("LinkedIn jobspy fetch exceeded 20s for 'slow role'")
+
+    monkeypatch.setattr(scraper, "_fetch_jobspy", _fake_fetch)
+
+    kept_records, _, _ = scraper.scrape()
+
+    assert kept_records == []
+    assert scraper.discovery_status["timed_out_targets"] == 1
+    assert scraper.discovery_status["failed_targets"] == 1
+    assert scraper.discovery_status["succeeded_targets"] == 0
+    assert scraper.discovery_status["final_status"] == "full_failure"
+    assert scraper.discovery_status["complete"] is False
+
+
+def test_linkedin_circuit_breaker_trips_and_skips_remaining_targets(monkeypatch):
+    from job_hunter_agent.scrapers import linkedin as linkedin_module
+
+    scraper = LinkedInScraper(
+        profile={"search_settings": {"linkedin_parallel_search_workers": 1}},
+        llm_cache={},
+        job_history={},
+        applied_job_keys=set(),
+        hidden_job_keys=set(),
+        run_iso="2026-06-22T09:00:00+10:00",
+    )
+
+    monkeypatch.setattr(
+        linkedin_module,
+        "get_linkedin_max_consecutive_target_failures",
+        lambda: 2,
+    )
+    monkeypatch.setattr(
+        scraper,
+        "_build_search_targets",
+        lambda _settings: [_target(f"role-{idx}") for idx in range(5)],
+    )
+
+    fetched_terms: list[str] = []
+
+    def _fake_fetch(target):
+        fetched_terms.append(target["search_term"])
+        if target["search_term"] in {"role-0", "role-1"}:
+            raise TimeoutError(f"timed out for {target['search_term']!r}")
+        return _EmptyRows()
+
+    monkeypatch.setattr(scraper, "_fetch_jobspy", _fake_fetch)
+
+    kept_records, _, _ = scraper.scrape()
+
+    assert kept_records == []
+    # Targets 3 and 4 must never even be submitted once the breaker trips after
+    # two consecutive failures (role-0, role-1); only role-2, already in flight
+    # when the breaker tripped, is drained.
+    assert fetched_terms == ["role-0", "role-1", "role-2"]
+    status = scraper.discovery_status
+    assert status["circuit_breaker_tripped"] is True
+    assert status["attempted_targets"] == 3
+    assert status["failed_targets"] == 2
+    assert status["timed_out_targets"] == 2
+    assert status["succeeded_targets"] == 1
+    assert status["skipped_after_breaker"] == 2
+    assert status["final_status"] == "partial_failure"
+
+
+def test_linkedin_partial_success_preserves_kept_jobs_after_later_failure(monkeypatch):
+    from job_hunter_agent.scrapers import linkedin as linkedin_module
+
+    scraper = LinkedInScraper(
+        profile={"search_settings": {"linkedin_parallel_search_workers": 1}},
+        llm_cache={},
+        job_history={},
+        applied_job_keys=set(),
+        hidden_job_keys=set(),
+        run_iso="2026-06-22T09:00:00+10:00",
+    )
+
+    class _Rows:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def sort_values(self, **_kwargs):
+            return self
+
+        def iterrows(self):
+            return enumerate(self._rows)
+
+        def __len__(self):
+            return len(self._rows)
+
+    monkeypatch.setattr(
+        scraper,
+        "_build_search_targets",
+        lambda _settings: [_target("healthy role"), _target("flaky role")],
+    )
+
+    def _fake_fetch(target):
+        if target["search_term"] == "flaky role":
+            raise TimeoutError("timed out for 'flaky role'")
+        return _Rows(
+            [
+                {
+                    "id": "li-healthy",
+                    "title": "Healthy Role",
+                    "company": "Example Co",
+                    "location": "Sydney",
+                    "job_url": "https://www.linkedin.com/jobs/view/healthy",
+                    "description": "Example description",
+                }
+            ]
+        )
+
+    monkeypatch.setattr(scraper, "_fetch_jobspy", _fake_fetch)
+    monkeypatch.setattr(scraper, "_detect_closed_job_signals", lambda _record: [])
+    monkeypatch.setattr(
+        linkedin_module,
+        "review_pre_detail_normalized_job",
+        lambda record, _context: ({"decision": "KEEP"}, record, [], True),
+    )
+    monkeypatch.setattr(
+        linkedin_module,
+        "review_post_detail_normalized_job",
+        lambda record, _context, hooks=None: ({"decision": "KEEP"}, record, []),
+    )
+
+    kept_records, _, _ = scraper.scrape()
+
+    assert len(kept_records) == 1
+    assert kept_records[0]["job_key"] == "linkedin:li-healthy"
+    status = scraper.discovery_status
+    assert status["succeeded_targets"] == 1
+    assert status["failed_targets"] == 1
+    assert status["final_status"] == "partial_failure"
+    assert status["complete"] is False
