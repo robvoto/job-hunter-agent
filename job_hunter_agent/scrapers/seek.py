@@ -14,6 +14,7 @@ from job_hunter_agent.job_types import load_job_type
 from job_hunter_agent.knowledge_store import get_knowledge
 from job_hunter_agent.locations import resolve_location
 from job_hunter_agent.profile_store import get_search_settings
+from job_hunter_agent.search_terms import ordered_profile_search_terms
 from job_hunter_agent.record_schema import (
     APPLY_METHOD_EXTERNAL_APPLY,
     APPLY_METHOD_QUICK_APPLY,
@@ -163,11 +164,8 @@ def build_seek_search_targets(
     profile: dict, configured_date_range: int, sort_newest_first: bool
 ) -> List[dict]:
     search_settings = get_search_settings(profile)
-    preferred_roles = [
-        str(value).strip() for value in (profile.get("target_roles") or []) if str(value).strip()
-    ]
-    keywords = preferred_roles[0] if preferred_roles else str(search_settings.get("keywords") or "").strip()
-    if not keywords:
+    search_terms = ordered_profile_search_terms(search_settings, profile)
+    if not search_terms:
         raise ValueError(
             "No preferred role is configured. Please complete onboarding and add a preferred role before running."
         )
@@ -177,21 +175,22 @@ def build_seek_search_targets(
 
     targets: List[dict] = []
     for location in locations:
-        search_url = SEEK_JOBS_BASE_URL
-        search_url = set_query_param(search_url, "keywords", keywords)
-        if location:
-            search_location = to_seek(resolve_location(location))
-            search_url = set_query_param(search_url, "where", search_location)
-        search_url = set_query_param(search_url, "daterange", configured_date_range)
-        if sort_newest_first:
-            search_url = set_query_param(search_url, "sortMode", "ListedDate")
-        targets.append(
-            {
-                "keywords": keywords,
-                "location": search_location if location else "",
-                "url": search_url,
-            }
-        )
+        search_location = to_seek(resolve_location(location)) if location else ""
+        for keywords in search_terms:
+            search_url = SEEK_JOBS_BASE_URL
+            search_url = set_query_param(search_url, "keywords", keywords)
+            if search_location:
+                search_url = set_query_param(search_url, "where", search_location)
+            search_url = set_query_param(search_url, "daterange", configured_date_range)
+            if sort_newest_first:
+                search_url = set_query_param(search_url, "sortMode", "ListedDate")
+            targets.append(
+                {
+                    "keywords": keywords,
+                    "location": search_location,
+                    "url": search_url,
+                }
+            )
     return targets
 
 

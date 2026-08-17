@@ -1,6 +1,7 @@
 """Tests for APSJobs scraper helpers."""
 
 from datetime import date
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -371,6 +372,14 @@ def test_extract_job_payload_marks_browser_interstitial_as_challenge_page(monkey
     assert payload["teaser"] == ""
 
 
+def test_build_apsjobs_search_url_applies_term_and_state_directly():
+    url = apsjobs_module._build_apsjobs_search_url("Business Analyst", "NSW")
+
+    query = parse_qs(urlparse(url).query)
+    assert query["searchString"] == ["Business Analyst"]
+    assert query["state"] == ["NSW"]
+
+
 def test_build_apsjobs_search_targets_uses_configured_default_when_unset():
     keywords, targets = apsjobs_module.build_apsjobs_search_targets(
         {"keywords": "data analyst", "locations": []}
@@ -388,14 +397,54 @@ def test_build_apsjobs_search_targets_uses_configured_default_when_unset():
     ]
 
 
-def test_build_apsjobs_search_targets_prefers_profile_role_over_legacy_keyword():
+def test_build_apsjobs_search_targets_uses_all_distinct_profile_role_terms():
     keywords, targets = apsjobs_module.build_apsjobs_search_targets(
         {"keywords": "legacy keyword", "locations": ["NSW"]},
-        {"target_roles": ["Senior Systems Analyst"]},
+        {
+            "target_roles": ["Senior Systems Analyst", "Business Analyst"],
+            "also_consider_roles": ["AI Business Analyst"],
+            "target_occupation_queries": [
+                "Senior Business Analyst",
+                "business analyst",
+                "Systems Analyst",
+            ],
+        },
     )
 
     assert keywords == "Senior Systems Analyst"
-    assert all(target["search_term"] == "Senior Systems Analyst" for target in targets)
+    assert [target["search_term"] for target in targets] == [
+        "Senior Systems Analyst",
+        "Business Analyst",
+        "AI Business Analyst",
+        "Senior Business Analyst",
+        "Systems Analyst",
+    ]
+
+
+def test_new_candidate_links_deduplicates_same_aps_job_across_search_targets():
+    seen_job_keys: set[str] = set()
+    first = apsjobs_module._new_candidate_links(
+        [
+            {
+                "url": "https://www.apsjobs.gov.au/s/job-details?title=it-business-analyst&Id=a05OY00000QBti9YAD",
+                "text": "IT Business Analyst",
+            }
+        ],
+        seen_job_keys,
+    )
+    second = apsjobs_module._new_candidate_links(
+        [
+            {
+                "url": "https://www.apsjobs.gov.au/s/job-details?title=it-business-analyst&Id=a05OY00000QBti9YAD",
+                "text": "IT Business Analyst",
+            }
+        ],
+        seen_job_keys,
+    )
+
+    assert len(first) == 1
+    assert second == []
+    assert seen_job_keys == {"apsjobs:a05oy00000qbti9yad"}
 
 
 def test_build_apsjobs_search_targets_honours_override_per_location():

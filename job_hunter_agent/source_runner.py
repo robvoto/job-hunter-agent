@@ -224,6 +224,7 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
             discovery_records=cached_records,
             discovery_capture=captured_records,
             discovery_status=failure_state,
+            search_plan_signature=signature,
         )
         try:
             kept, audit, skills = seek_scrape_to_records(**_seek_kwargs, headless=headless)

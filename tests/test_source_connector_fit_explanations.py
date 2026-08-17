@@ -504,9 +504,11 @@ def test_seek_search_targets_use_seek_location_code():
     assert parse_qs(urlparse(targets[0]["url"]).query)["where"] == ["NSW"]
 
 
-def test_seek_search_targets_derive_search_seed_from_preferred_role_not_legacy_keyword():
+def test_seek_search_targets_use_all_distinct_profile_role_terms_not_legacy_keyword():
     profile = {
-        "target_roles": ["Senior Systems Analyst"],
+        "target_roles": ["Senior Systems Analyst", "Business Analyst"],
+        "also_consider_roles": ["AI Business Analyst"],
+        "target_occupation_queries": ["business analyst", "IT Business Analyst"],
         "search_settings": {
             "keywords": "legacy business analyst keyword",
             "locations": ["New South Wales"],
@@ -516,8 +518,18 @@ def test_seek_search_targets_derive_search_seed_from_preferred_role_not_legacy_k
 
     targets = build_seek_search_targets(profile, configured_date_range=7, sort_newest_first=True)
 
-    assert targets[0]["keywords"] == "Senior Systems Analyst"
-    assert parse_qs(urlparse(targets[0]["url"]).query)["keywords"] == ["Senior Systems Analyst"]
+    assert [target["keywords"] for target in targets] == [
+        "Senior Systems Analyst",
+        "Business Analyst",
+        "AI Business Analyst",
+        "IT Business Analyst",
+    ]
+    assert [parse_qs(urlparse(target["url"]).query)["keywords"][0] for target in targets] == [
+        "Senior Systems Analyst",
+        "Business Analyst",
+        "AI Business Analyst",
+        "IT Business Analyst",
+    ]
 
 
 def test_build_ad_learning_signals_does_not_infer_hard_blockers_from_raw_text(monkeypatch):
@@ -2054,6 +2066,14 @@ def test_render_job_card_requirement_coverage_shows_ad_wording_in_debug_mode():
     assert ">Capability<" not in html
     assert "Ad wording" in html
     assert "Lead end-to-end delivery within Agile squads" in html
+    assert (
+        '<span class="req-coverage-detail">'
+        '<span class="req-coverage-tag jh-badge">agile delivery</span>'
+        '<span class="req-coverage-tag jh-badge req-coverage-tag--muted">Ad wording</span>'
+        in html
+    )
+    assert "req-coverage-detail--capability" not in html
+    assert "req-coverage-detail--evidence" not in html
 
 
 def test_render_job_card_requirement_coverage_shows_role_duration_note_in_normal_mode():
@@ -4268,6 +4288,10 @@ def test_add_to_profile_button_carries_capability_data_attributes():
 
     assert 'data-action="confirm_have" data-capability-name="Stakeholder management"' in html
     assert 'data-action="confirm_do_not_have" data-capability-name="Stakeholder management"' in html
+    assert "Profile evidence:" in html
+    assert "Not confirmed" in html
+    assert "Add evidence" in html
+    assert html.count("jh-button--micro job-requirement-action gap-btn") == 2
     assert "Needs confirmation" not in html
 
 

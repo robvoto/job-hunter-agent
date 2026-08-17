@@ -41,11 +41,7 @@ from job_hunter_agent.job_types import load_job_type
 from job_hunter_agent.locations import resolve_location
 from job_hunter_agent.logging_utils import format_debug_marker, format_log_block
 from job_hunter_agent.profile_store import get_search_settings
-from job_hunter_agent.profile_store import (
-    KEY_PRIMARY_PATTERNS,
-    KEY_SECONDARY_PATTERNS,
-    KEY_TARGET_OCCUPATION_QUERIES,
-)
+from job_hunter_agent.search_terms import ordered_profile_search_terms
 from job_hunter_agent.record_schema import (
     APPLY_METHOD_EASY_APPLY,
     APPLY_METHOD_EXTERNAL_APPLY,
@@ -195,41 +191,11 @@ def classify_linkedin_apply_method(apply_url: str, canonical_url: str) -> str:
     return APPLY_METHOD_UNKNOWN
 
 
-def _ordered_unique_search_terms(search_settings: dict, profile: dict | None = None) -> list[str]:
-    ordered_terms: list[str] = []
-    seen_terms: set[str] = set()
-
-    candidates: list[str] = []
-    if isinstance(profile, dict):
-        for key in (
-            KEY_PRIMARY_PATTERNS,
-            KEY_SECONDARY_PATTERNS,
-            KEY_TARGET_OCCUPATION_QUERIES,
-        ):
-            values = profile.get(key) or []
-            if not isinstance(values, list):
-                continue
-            candidates.extend(str(value).strip() for value in values)
-    if not any(str(value).strip() for value in candidates):
-        candidates.append(str(search_settings.get("keywords") or "").strip())
-
-    for candidate in candidates:
-        normalized = " ".join(candidate.split()).strip()
-        if not normalized:
-            continue
-        dedupe_key = normalized.lower()
-        if dedupe_key in seen_terms:
-            continue
-        seen_terms.add(dedupe_key)
-        ordered_terms.append(normalized)
-    return ordered_terms
-
-
 def build_linkedin_search_targets(
     search_settings: dict,
     profile: dict | None = None,
 ) -> List[dict]:
-    search_terms = _ordered_unique_search_terms(search_settings, profile)
+    search_terms = ordered_profile_search_terms(search_settings, profile)
     locations = [str(loc).strip() for loc in search_settings.get("locations", []) if str(loc).strip()]
     hours_old = int(
         search_settings.get(

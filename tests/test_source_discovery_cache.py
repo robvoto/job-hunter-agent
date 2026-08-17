@@ -374,6 +374,39 @@ def test_seek_changed_discovery_settings_is_a_miss(monkeypatch):
     assert records2 is None
 
 
+def test_seek_added_profile_role_term_changes_discovery_signature():
+    """Search-plan inputs must include profile role terms, not just keywords:
+    adding a role to also_consider_roles must invalidate the SEEK signature
+    even when search_settings itself is unchanged."""
+    from job_hunter_agent import source_runner
+
+    _clear_cache()
+    first_context = _make_context()
+    first_context.enabled_sources = [SOURCE_SEEK]
+    first_context.profile = {
+        "search_settings": first_context.search_settings,
+        "target_roles": ["Business Analyst"],
+        "also_consider_roles": [],
+    }
+    signature1, status1, _ = source_runner._source_cache_lookup(first_context, SOURCE_SEEK)
+    assert status1 == "MISS"
+    save_source_discovery_snapshot(SOURCE_SEEK, signature1, [{"job_key": "seek:1"}])
+
+    second_context = _make_context()
+    second_context.enabled_sources = [SOURCE_SEEK]
+    second_context.search_settings = dict(first_context.search_settings)
+    second_context.profile = {
+        "search_settings": second_context.search_settings,
+        "target_roles": ["Business Analyst"],
+        "also_consider_roles": ["Senior Business Analyst"],
+    }
+    signature2, status2, records2 = source_runner._source_cache_lookup(second_context, SOURCE_SEEK)
+
+    assert signature2 != signature1
+    assert status2 == "MISS"
+    assert records2 is None
+
+
 def test_seek_force_refresh_is_a_miss_at_source_boundary(monkeypatch):
     from job_hunter_agent import source_runner
 

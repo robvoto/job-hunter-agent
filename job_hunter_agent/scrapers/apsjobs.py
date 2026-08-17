@@ -10,6 +10,7 @@ from time import monotonic
 from typing import List
 from urllib.parse import urljoin, urlsplit
 
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
 from job_hunter_agent.detail_page_text import classify_captured_page_text
@@ -33,6 +34,8 @@ from job_hunter_agent.job_types import load_job_type
 from job_hunter_agent.paths import PLAYWRIGHT_USER_DATA_DIR
 from job_hunter_agent.posting_utils import parse_visible_posted_age_days
 from job_hunter_agent.profile_store import get_search_settings
+from job_hunter_agent.search_metrics import QueryYieldMetric, record_query_yield_metric
+from job_hunter_agent.search_terms import ordered_profile_search_terms
 from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
     RECORD_DESCRIPTION_SOURCE_KEY,
@@ -51,17 +54,23 @@ from job_hunter_agent.scrapers.base import (
     build_initial_flat_record,
     map_job_type,
 )
+from job_hunter_agent.settings.global_settings_defaults import (
+    DEFAULT_PLAYWRIGHT_SETTINGS,
+    KEY_PLAYWRIGHT_SELECTOR_TIMEOUT,
+)
 from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.logging_utils import format_debug_marker
 from job_hunter_agent.source_registry import SOURCE_APSJOBS
 from job_hunter_agent.source_errors import PartialSourceResultsError
 from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order
+from job_hunter_agent.utils import set_query_param
 from job_hunter_agent.work_mode_extraction import WORK_MODE_UNKNOWN, extract_from_text, log_work_mode_result
 
 logger = logging.getLogger(__name__)
 
 APSJOBS_ROOT_URL = "https://www.apsjobs.gov.au/s/"
 APSJOBS_JOB_SEARCH_URL = urljoin(APSJOBS_ROOT_URL, "job-search")
+APSJOBS_RESULT_LINK_SELECTOR = 'a[href*="job-details"][href*="Id="]'
 APSJOBS_SEARCH_INPUT_SELECTORS = (
     "input[type='search']",
     "input[placeholder*='search' i]",
@@ -277,6 +286,29 @@ def _collect_candidate_links(page, base_url: str, results_wanted: int) -> list[d
     return collected
 
 
+def _build_apsjobs_search_url(search_term: str, location: str) -> str:
+    """Build the source-native APSJobs results URL for one term/state target."""
+    url = set_query_param(APSJOBS_JOB_SEARCH_URL, "searchString", search_term)
+    if location:
+        url = set_query_param(url, "state", location)
+    return url
+
+
+def _new_candidate_links(
+    candidate_links: list[dict[str, str]], seen_job_keys: set[str]
+) -> list[dict[str, str]]:
+    """Keep each APS job only once across overlapping search targets."""
+    new_links: list[dict[str, str]] = []
+    for link in candidate_links:
+        job_key = normalize_job_key(link.get("url", ""), source=SOURCE_APSJOBS)
+        if job_key and job_key in seen_job_keys:
+            continue
+        if job_key:
+            seen_job_keys.add(job_key)
+        new_links.append(link)
+    return new_links
+
+
 def _extract_labeled_value(lines: list[str], labels: tuple[str, ...]) -> str:
     labels_lower = tuple(label.lower() for label in labels)
     for index, line in enumerate(lines):
@@ -486,18 +518,9 @@ def _extract_job_payload(page, *, job_url: str, anchor_text: str, run_iso: str) 
 
 
 def build_apsjobs_search_targets(search_settings: dict, profile: dict | None = None) -> tuple[str, list[dict]]:
-    """Build APSJobs search targets from search settings.
-
-    Returns the trimmed keywords string and one target per configured shared
-    location mapped to an APS state or territory filter. Duplicate mapped
-    states collapse to one target.
-    """
-    preferred_roles = [
-        str(value).strip()
-        for value in ((profile or {}).get("target_roles") or [])
-        if str(value).strip()
-    ]
-    keywords = preferred_roles[0] if preferred_roles else str(search_settings.get("keywords") or "").strip()
+    """Build APSJobs targets for every configured role term and mapped location."""
+    search_terms = ordered_profile_search_terms(search_settings, profile)
+    keywords = search_terms[0] if search_terms else ""
     raw_locations = [
         str(location).strip()
         for location in search_settings.get("locations", [])
@@ -511,7 +534,7 @@ def build_apsjobs_search_targets(search_settings: dict, profile: dict | None = N
             )
             if mapped
         ]
-    )
+    ) or [""]
     results_wanted = int(
         search_settings.get(
             KEY_APSJOBS_RESULTS_PER_SEARCH,
@@ -520,9 +543,10 @@ def build_apsjobs_search_targets(search_settings: dict, profile: dict | None = N
         or DEFAULT_SEARCH_SETTINGS[KEY_APSJOBS_RESULTS_PER_SEARCH]
     )
     targets = [
-        {"search_term": keywords, "location": location, "results_wanted": results_wanted}
+        {"search_term": search_term, "location": location, "results_wanted": results_wanted}
         for location in locations
-    ] or [{"search_term": keywords, "location": "", "results_wanted": results_wanted}]
+        for search_term in search_terms
+    ]
     return keywords, targets
 
 
@@ -538,6 +562,13 @@ class APSJobsScraper(BaseJobScraper):
 
         search_settings = get_search_settings(self.profile)
         keywords, targets = build_apsjobs_search_targets(search_settings, self.profile)
+        selector_timeout = int(
+            search_settings.get(
+                KEY_PLAYWRIGHT_SELECTOR_TIMEOUT,
+                DEFAULT_PLAYWRIGHT_SETTINGS[KEY_PLAYWRIGHT_SELECTOR_TIMEOUT],
+            )
+            or DEFAULT_PLAYWRIGHT_SETTINGS[KEY_PLAYWRIGHT_SELECTOR_TIMEOUT]
+        )
         if not keywords:
             logger.debug("[APSJobs] no search keywords configured; skipping")
             return kept_records, audit_rows, skill_observations
@@ -568,6 +599,7 @@ class APSJobsScraper(BaseJobScraper):
 
         PLAYWRIGHT_USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
         collection_complete = True
+        seen_discovered_job_keys: set[str] = set()
         total_targets = len(targets)
         logger.debug(
             format_debug_marker(
@@ -617,67 +649,47 @@ class APSJobsScraper(BaseJobScraper):
                             target["results_wanted"],
                         )
                         page = context.new_page()
+                        target_started_at = monotonic()
                         try:
-                            page.goto(APSJOBS_JOB_SEARCH_URL, wait_until="domcontentloaded")
-                            page.wait_for_timeout(2500)
-                            search_box = _first_visible_locator(page, APSJOBS_SEARCH_INPUT_SELECTORS)
-                            if search_box is None:
-                                raise RuntimeError(
-                                    "APSJobs job-search page did not expose a visible keyword search input"
-                                )
+                            search_url = _build_apsjobs_search_url(
+                                target["search_term"], target_state
+                            )
+                            page.goto(search_url, wait_until="domcontentloaded")
                             try:
-                                search_box.fill(target["search_term"], timeout=5000)
-                            except Exception as exc:
-                                raise RuntimeError(
-                                    f"APSJobs keyword search input could not be filled: {type(exc).__name__}: {exc}"
-                                ) from exc
-
-                            if target_state:
-                                state_select = _first_visible_locator(page, APSJOBS_STATE_SELECTORS)
-                                if state_select is None:
-                                    raise RuntimeError(
-                                        "APSJobs job-search page did not expose a visible state selector"
-                                    )
-                                try:
-                                    state_select.select_option(label=target_state, timeout=5000)
-                                except Exception as exc:
-                                    raise RuntimeError(
-                                        f"APSJobs state selector could not apply {target_state}: "
-                                        f"{type(exc).__name__}: {exc}"
-                                    ) from exc
-                            elif target["location"]:
-                                logger.debug(
-                                    "%s APSJobs has state-only location filtering; no state mapping for %r",
-                                    target_tag,
-                                    target["location"],
+                                page.wait_for_selector(
+                                    APSJOBS_RESULT_LINK_SELECTOR,
+                                    timeout=selector_timeout,
                                 )
-
-                            search_button = _first_visible_locator(page, APSJOBS_SEARCH_BUTTON_SELECTORS)
-                            if search_button is None:
-                                raise RuntimeError(
-                                    "APSJobs job-search page did not expose a visible search submit button"
-                                )
-                            try:
-                                search_button.click(timeout=5000)
-                            except Exception as exc:
-                                raise RuntimeError(
-                                    f"APSJobs search submit failed: {type(exc).__name__}: {exc}"
-                                ) from exc
-
-                            page.wait_for_timeout(5000)
+                            except PlaywrightTimeoutError:
+                                # A valid APS query may return zero jobs. Candidate collection below
+                                # distinguishes an empty result set without adding fixed sleeps.
+                                pass
                             logger.debug(
                                 "%s applied search_term=%r state_filter=%s final_url=%s",
                                 target_tag,
                                 target["search_term"],
                                 target_state or "(none)",
-                                page.url or APSJOBS_JOB_SEARCH_URL,
+                                page.url or search_url,
                             )
-                            if page.url:
-                                page.goto(page.url, wait_until="domcontentloaded")
-                                page.wait_for_timeout(3000)
 
-                            candidate_links = _collect_candidate_links(
+                            discovered_links = _collect_candidate_links(
                                 page, page.url or APSJOBS_JOB_SEARCH_URL, int(target["results_wanted"])
+                            )
+                            candidate_links = _new_candidate_links(
+                                discovered_links, seen_discovered_job_keys
+                            )
+                            record_query_yield_metric(
+                                QueryYieldMetric(
+                                    source=self.source_name,
+                                    search_term=target["search_term"],
+                                    location=target["location"],
+                                    elapsed_seconds=monotonic() - target_started_at,
+                                    discovered_count=len(discovered_links),
+                                    new_unique_job_count=len(candidate_links),
+                                    duplicate_job_count=len(discovered_links) - len(candidate_links),
+                                    pages_searched=1,
+                                    success=True,
+                                )
                             )
                             logger.debug(
                                 "%s candidate collection url=%s",

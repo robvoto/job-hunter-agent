@@ -49,6 +49,13 @@ from job_hunter_agent.run_control import (
     set_run_progress_state,
     step_through_enabled,
 )
+from job_hunter_agent.search_metrics import QueryYieldMetric, record_query_yield_metric
+from job_hunter_agent.search_plan_state import (
+    load_search_plan_state,
+    save_search_plan_observation,
+    select_query_cover,
+)
+from job_hunter_agent.search_terms import direct_profile_title_match_job_keys
 from job_hunter_agent.runtime_helpers import CLI_FLAG_DEBUG, has_cli_flag
 from job_hunter_agent.scrapers.base import _build_initial_source_metadata, build_initial_flat_record
 from job_hunter_agent.scrapers.seek import (
@@ -1186,6 +1193,7 @@ def seek_scrape_to_records(
     discovery_records: list[dict] | None = None,
     discovery_capture: list[dict] | None = None,
     discovery_status: dict[str, bool] | None = None,
+    search_plan_signature: str = "",
 ) -> tuple:
     """Collect, review and return SEEK records while publishing bounded stage progress.
 
@@ -1298,6 +1306,32 @@ def seek_scrape_to_records(
                 n_workers=n_detail_workers,
             )
             collection_complete = True
+            covered_probe_title_job_keys_by_location: dict[str, set[str]] = {}
+            probe_title_job_keys_by_location: dict[str, dict[str, set[str]]] = {}
+            probe_terms_by_location: dict[str, list[str]] = {}
+            historical_selected_terms_by_location: dict[str, set[str]] = {}
+            for target in search_targets:
+                location_key = str(target.get("location") or "")
+                term = str(target.get("keywords") or "").strip()
+                if term:
+                    probe_terms_by_location.setdefault(location_key, []).append(term)
+            if search_plan_signature:
+                for location_key, probe_terms in probe_terms_by_location.items():
+                    remembered = load_search_plan_state(
+                        source="seek",
+                        signature=search_plan_signature,
+                        location=location_key,
+                    )
+                    remembered_probe_terms = [
+                        str(term).strip() for term in remembered.get("probe_terms", []) if str(term).strip()
+                    ]
+                    if remembered_probe_terms == probe_terms:
+                        historical_selected_terms_by_location[location_key] = {
+                            str(term).strip()
+                            for term in remembered.get("selected_terms", [])
+                            if str(term).strip()
+                        }
+            seen_discovered_job_keys: set[str] = set()
             try:
                 total_targets = len(search_targets)
                 for target_index, search_target in enumerate(search_targets, start=1):
@@ -1311,6 +1345,14 @@ def seek_scrape_to_records(
                     classification_ids = ",".join(search_target.get("classification_ids", []))
                     current_page_num = 1
                     target_t0 = time.monotonic()
+                    expand_after_probe = True
+                    target_discovered_count = 0
+                    target_new_unique_count = 0
+                    target_pages_searched = 0
+                    target_direct_match_count: int | None = None
+                    target_new_direct_match_count: int | None = None
+                    target_failure_reason = ""
+                    target_success = True
 
                     logger.debug(
                         "\n"
@@ -1381,10 +1423,13 @@ def seek_scrape_to_records(
                             )
                             if failure_class in {SEEK_TIMEOUT_NO_CARDS, SEEK_UNKNOWN_FAILURE}:
                                 stop_target = True
+                                target_success = False
+                                target_failure_reason = failure_class
                         if stop_target:
                             break
 
                         job_cards = list_page.query_selector_all(SELECTOR_CARDS)
+                        target_pages_searched += 1
                         logger.debug("%s cards=%d", page_tag, len(job_cards))
 
                         if len(job_cards) == 0:
@@ -1393,7 +1438,10 @@ def seek_scrape_to_records(
 
                         filter_state = extract_seek_filter_panel_state(list_page)
 
-                        # Phase 1: extract all card records from DOM before any page navigation
+                        # Phase 1: extract all card records from DOM before any page navigation.
+                        # Keep the complete probe set for query-yield measurement, while only
+                        # sending each cross-query job key through the expensive review path once.
+                        probe_card_records: list[dict] = []
                         card_records: list[dict] = []
                         target_closed = False
                         for card in job_cards:
@@ -1407,15 +1455,25 @@ def seek_scrape_to_records(
                                 )
                                 record[rs.RECORD_PAGE_KEY] = current_page_num
                                 record["job_quality_signals"] = detect_broad_engagement_signal(record)
+                                probe_card_records.append(record)
+                                target_discovered_count += 1
+                                job_key = str(record.get(rs.RECORD_JOB_KEY) or "").strip()
+                                if job_key and job_key in seen_discovered_job_keys:
+                                    continue
+                                if job_key:
+                                    seen_discovered_job_keys.add(job_key)
                                 if discovery_capture is not None:
                                     discovery_capture.append(copy.deepcopy(record))
                                 card_records.append(record)
+                                target_new_unique_count += 1
                             except TargetClosedError:
                                 logger.warning(
                                     "%s browser target closed during card build; stopping page",
                                     page_tag,
                                 )
                                 target_closed = True
+                                target_success = False
+                                target_failure_reason = "target_closed"
                                 break
                             except Exception as exc:
                                 logger.warning(
@@ -1424,6 +1482,47 @@ def seek_scrape_to_records(
                                     type(exc).__name__,
                                     traceback.format_exc(),
                                 )
+
+                        if current_page_num == 1 and total_targets > 1:
+                            direct_match_job_keys = direct_profile_title_match_job_keys(
+                                probe_card_records, profile
+                            )
+                            location_key = search_location or ""
+                            probe_title_job_keys_by_location.setdefault(location_key, {})[
+                                search_keywords
+                            ] = set(direct_match_job_keys)
+                            covered_probe_title_job_keys = (
+                                covered_probe_title_job_keys_by_location.setdefault(
+                                    location_key, set()
+                                )
+                            )
+                            new_direct_match_job_keys = (
+                                direct_match_job_keys - covered_probe_title_job_keys
+                            )
+                            covered_probe_title_job_keys.update(direct_match_job_keys)
+                            remembered_selected_terms = historical_selected_terms_by_location.get(
+                                location_key
+                            )
+                            if remembered_selected_terms is not None:
+                                expand_after_probe = search_keywords in remembered_selected_terms
+                                plan_source = "remembered"
+                            else:
+                                # Bootstrap only: until a complete all-query probe has been
+                                # remembered, retain the conservative current-run behaviour.
+                                expand_after_probe = bool(new_direct_match_job_keys)
+                                plan_source = "bootstrap"
+                            target_direct_match_count = len(direct_match_job_keys)
+                            target_new_direct_match_count = len(new_direct_match_job_keys)
+                            logger.info(
+                                "%s [SEARCH_PROBE] keywords=%r direct_title_matches=%d "
+                                "new_direct_title_matches=%d expand=%s plan_source=%s",
+                                page_tag,
+                                search_keywords,
+                                len(direct_match_job_keys),
+                                len(new_direct_match_job_keys),
+                                expand_after_probe,
+                                plan_source,
+                            )
 
                         # Reuse already-extracted card records for progress detail.
                         # This avoids extra DOM queries that could fail or slow scraping.
@@ -1452,7 +1551,7 @@ def seek_scrape_to_records(
                         page_has_fresh_card = any(
                             (age := r.get(rs.RECORD_POSTED_AGE_DAYS_KEY)) is None
                             or age <= configured_date_range
-                            for r in card_records
+                            for r in probe_card_records
                         )
 
                         if step_through_enabled():
@@ -1549,7 +1648,62 @@ def seek_scrape_to_records(
                             collection_complete = False
                             break
 
+                        if current_page_num == 1 and total_targets > 1 and not expand_after_probe:
+                            logger.debug(
+                                "%s search probe added no new direct/adjacent title coverage; "
+                                "stopping this target after page 1",
+                                page_tag,
+                            )
+                            break
+
                         current_page_num += 1
+
+                    record_query_yield_metric(
+                        QueryYieldMetric(
+                            source="seek",
+                            search_term=search_keywords,
+                            location=search_location,
+                            elapsed_seconds=time.monotonic() - target_t0,
+                            discovered_count=target_discovered_count,
+                            new_unique_job_count=target_new_unique_count,
+                            duplicate_job_count=target_discovered_count - target_new_unique_count,
+                            pages_searched=target_pages_searched,
+                            success=target_success,
+                            direct_title_match_count=target_direct_match_count,
+                            new_direct_title_match_count=target_new_direct_match_count,
+                            failure_reason=target_failure_reason,
+                        )
+                    )
+
+                if search_plan_signature and collection_complete:
+                    for location_key, probe_terms in probe_terms_by_location.items():
+                        observed = probe_title_job_keys_by_location.get(location_key, {})
+                        if set(observed) != set(probe_terms):
+                            logger.warning(
+                                "[SEEK][SEARCH_PLAN] not updating remembered plan for location=%r; "
+                                "complete page-1 probe evidence was not collected",
+                                location_key or "(all)",
+                            )
+                            continue
+                        selected_terms = select_query_cover(observed)
+                        coverage_job_keys: set[str] = set()
+                        for job_keys in observed.values():
+                            coverage_job_keys.update(job_keys)
+                        remembered = save_search_plan_observation(
+                            source="seek",
+                            signature=search_plan_signature,
+                            location=location_key,
+                            probe_terms=probe_terms,
+                            selected_terms=selected_terms,
+                            coverage_job_count=len(coverage_job_keys),
+                        )
+                        logger.info(
+                            "[SEEK][SEARCH_PLAN] location=%r selected_terms=%r coverage_jobs=%d samples=%d",
+                            location_key or "(all)",
+                            selected_terms,
+                            len(coverage_job_keys),
+                            int(remembered.get("sample_count") or 0),
+                        )
                 set_run_progress_state(
                     "SEEK complete",
                     stage="source_collection",

@@ -207,6 +207,19 @@ CREATE TABLE IF NOT EXISTS source_discovery_cache (
 );
 CREATE INDEX IF NOT EXISTS idx_source_discovery_cache_lookup
     ON source_discovery_cache(user_id, source, signature, status, updated_at);
+
+-- Per-user, per-location remembered SEEK search-plan probe/selection history.
+CREATE TABLE IF NOT EXISTS search_plan_state (
+    user_id     TEXT NOT NULL REFERENCES users(user_id),
+    source      TEXT NOT NULL,
+    signature   TEXT NOT NULL,
+    location    TEXT NOT NULL,
+    data        TEXT NOT NULL,
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, source, signature, location)
+);
+CREATE INDEX IF NOT EXISTS idx_search_plan_state_lookup
+    ON search_plan_state(user_id, source, signature, location, updated_at);
 """
 
 _SYSTEM_WARNINGS_SCHEMA = """
@@ -387,6 +400,7 @@ EXPECTED_TABLES = {
     "system_warnings",
     "occupation_title_cache",
     "source_discovery_cache",
+    "search_plan_state",
 }
 
 
