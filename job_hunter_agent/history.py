@@ -22,6 +22,7 @@ from job_hunter_agent.record_schema import (
     RECORD_FIT_SCORE_BREAKDOWN_KEY,
     RECORD_FIT_SCORE_KEY,
     RECORD_FIT_TONE_CLASS_KEY,
+    RECORD_IS_REPOSTED_KEY,
     RECORD_JOB_REQUIREMENTS_KEY,
     RECORD_LLM_COST_USD_KEY,
     RECORD_LLM_ELAPSED_MS_KEY,
@@ -50,6 +51,7 @@ KEEP_SNAPSHOT_FIELDS = (
     RECORD_ORIGINAL_POSTED_DATE_KEY,
     RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY,
     RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY,
+    RECORD_IS_REPOSTED_KEY,
     "salary",
     "work_mode",
     "work_mode_source",
@@ -221,6 +223,8 @@ def apply_kept_job_reuse(record: dict, history_entry: dict) -> dict:
         record[RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY] = (
             snapshot.get(RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY) or ""
         )
+    if record.get(RECORD_IS_REPOSTED_KEY) is None and snapshot.get(RECORD_IS_REPOSTED_KEY) is not None:
+        record[RECORD_IS_REPOSTED_KEY] = snapshot.get(RECORD_IS_REPOSTED_KEY)
 
     if record.get("salary") in {None, "", "N/A"}:
         record["salary"] = snapshot.get("salary") or "N/A"

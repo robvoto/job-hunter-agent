@@ -38,6 +38,7 @@ from job_hunter_agent.record_schema import (
     RECORD_DETAILS_STATUS_KEY,
     RECORD_DETAILS_TEXT_KEY,
     RECORD_HARD_BLOCK_REASONS_KEY,
+    RECORD_IS_REPOSTED_KEY,
     RECORD_JOB_KEY,
     RECORD_LLM_COST_USD_KEY,
     RECORD_LLM_DECISION_KEY,
@@ -1123,10 +1124,11 @@ def test_sap_in_description_only_does_not_trigger_clean_title_blocker(monkeypatc
     assert updated_record[RECORD_TITLE_REASON_KEY] == "OK"
 
 
-def test_external_apply_stale_repost_rejects_before_llm(monkeypatch):
+def test_external_apply_verified_repost_is_kept_and_flagged(monkeypatch):
     record = _base_record("linkedin", "jobAdDetails", "card")
     record[RECORD_TITLE_REASON_KEY] = "OK"
     record[RECORD_APPLY_METHOD_KEY] = APPLY_METHOD_EXTERNAL_APPLY
+    record[RECORD_POSTED_AGE_DAYS_KEY] = 2.0
     record["source_metadata"] = {
         "apply_url": "https://jobs.example.com/apply/123",
         "raw_source_fields": {},
@@ -1143,20 +1145,15 @@ def test_external_apply_stale_repost_rejects_before_llm(monkeypatch):
             "</script>"
         ),
     )
-    monkeypatch.setattr(
-        job_review_pipeline,
-        "_evaluate_job_fit",
-        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("LLM should not run")),
-    )
 
     outcome, updated_record, _ = review_post_detail_normalized_job(record, context)
 
-    assert outcome[RECORD_DECISION_KEY] == "REJECT"
-    assert updated_record[RECORD_REJECT_REASON_KEY] == "STALE_REPOST"
+    assert outcome[RECORD_DECISION_KEY] == "KEEP"
+    assert updated_record.get(RECORD_REJECT_REASON_KEY) is None
     assert updated_record[RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY] == "verified"
     assert updated_record[RECORD_ORIGINAL_POSTED_DATE_KEY] == "2026-04-24"
     assert updated_record[RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY] == 32.0
-    assert "outside the 30-day search window" in updated_record[RECORD_DECISION_EXPLANATION_KEY]
+    assert updated_record[RECORD_IS_REPOSTED_KEY] is True
 
 
 def test_external_apply_unverified_original_date_does_not_reject(monkeypatch):
@@ -1183,6 +1180,37 @@ def test_external_apply_unverified_original_date_does_not_reject(monkeypatch):
     assert updated_record[RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY] == "unverified"
     assert updated_record[RECORD_ORIGINAL_POSTED_DATE_KEY] == ""
     assert updated_record[RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY] is None
+    assert updated_record[RECORD_IS_REPOSTED_KEY] is None
+
+
+def test_external_apply_verified_same_listing_date_is_not_reposted(monkeypatch):
+    record = _base_record("linkedin", "jobAdDetails", "card")
+    record[RECORD_TITLE_REASON_KEY] = "OK"
+    record[RECORD_APPLY_METHOD_KEY] = APPLY_METHOD_EXTERNAL_APPLY
+    record[RECORD_POSTED_AGE_DAYS_KEY] = 1.0
+    record["source_metadata"] = {
+        "apply_url": "https://jobs.example.com/apply/123",
+        "raw_source_fields": {},
+    }
+    context = _review_context("LINKEDIN")
+
+    _patch_llm_review_path(monkeypatch, _keep_review_payload())
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "fetch_external_html",
+        lambda _url: (
+            '<script type="application/ld+json">'
+            '{"@type":"JobPosting","datePosted":"2026-05-25"}'
+            "</script>"
+        ),
+    )
+
+    outcome, updated_record, _ = review_post_detail_normalized_job(record, context)
+
+    assert outcome[RECORD_DECISION_KEY] == "KEEP"
+    assert updated_record[RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY] == "verified"
+    assert updated_record[RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY] == 1.0
+    assert updated_record[RECORD_IS_REPOSTED_KEY] is False
 
 
 def _seed_reusable_kept_history(context, source: str) -> None:

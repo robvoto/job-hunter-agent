@@ -38,6 +38,7 @@ _SNAPSHOT = {
     "apply_method": APPLY_METHOD_EXTERNAL_APPLY,
     "original_posted_date_status": ORIGINAL_POSTED_DATE_STATUS_UNVERIFIED,
     "original_posted_date": "",
+    "is_reposted": True,
     "job_quality_signals": [
         {"kind": "date_mismatch", "evidence": "LinkedIn shows 2d old, external page shows 21d old."}
     ],
@@ -64,6 +65,7 @@ def test_build_history_workspace_record_carries_requirement_coverage():
     assert record[RECORD_SOURCE_METADATA_KEY] == _SNAPSHOT[RECORD_SOURCE_METADATA_KEY]
     assert record["apply_method"] == APPLY_METHOD_EXTERNAL_APPLY
     assert record["original_posted_date_status"] == ORIGINAL_POSTED_DATE_STATUS_UNVERIFIED
+    assert record["is_reposted"] is True
     assert record["job_quality_signals"] == _SNAPSHOT["job_quality_signals"]
     assert has_complete_llm_keep_data(record)
 
@@ -83,6 +85,7 @@ def test_build_hidden_workspace_record_carries_requirement_coverage():
     assert record[RECORD_SOURCE_METADATA_KEY] == _SNAPSHOT[RECORD_SOURCE_METADATA_KEY]
     assert record["apply_method"] == APPLY_METHOD_EXTERNAL_APPLY
     assert record["original_posted_date_status"] == ORIGINAL_POSTED_DATE_STATUS_UNVERIFIED
+    assert record["is_reposted"] is True
     assert record["job_quality_signals"] == _SNAPSHOT["job_quality_signals"]
     assert has_complete_llm_keep_data(record)
 
@@ -102,6 +105,7 @@ def test_build_applied_workspace_record_carries_requirement_coverage():
     assert record[RECORD_SOURCE_METADATA_KEY] == _SNAPSHOT[RECORD_SOURCE_METADATA_KEY]
     assert record["apply_method"] == APPLY_METHOD_EXTERNAL_APPLY
     assert record["original_posted_date_status"] == ORIGINAL_POSTED_DATE_STATUS_UNVERIFIED
+    assert record["is_reposted"] is True
     assert record["job_quality_signals"] == _SNAPSHOT["job_quality_signals"]
     assert has_complete_llm_keep_data(record)
 

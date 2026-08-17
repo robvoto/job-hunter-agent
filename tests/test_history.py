@@ -16,6 +16,7 @@ from job_hunter_agent.record_schema import (
     RECORD_DESCRIPTION_SOURCE_KEY,
     RECORD_DETAILS_STATUS_KEY,
     RECORD_DETAILS_TEXT_KEY,
+    RECORD_IS_REPOSTED_KEY,
     RECORD_JOB_KEY,
     RECORD_LAST_KEPT_SNAPSHOT_KEY,
     RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
@@ -129,6 +130,7 @@ def test_update_job_history_persists_posting_channel_and_source_metadata_in_snap
         "llm_decision": "KEEP",
         "llm_fit_grade": "STRONG",
         RECORD_REQUIREMENT_COVERAGE_KEY: [],
+        RECORD_IS_REPOSTED_KEY: True,
         RECORD_POSTING_CHANNEL_EVIDENCE_KEY: {
             "kind": "direct_employer",
             "source": "metadata_first",
@@ -150,6 +152,7 @@ def test_update_job_history_persists_posting_channel_and_source_metadata_in_snap
     snapshot = history["linkedin:li-1"][RECORD_LAST_KEPT_SNAPSHOT_KEY]
     assert snapshot[RECORD_POSTING_CHANNEL_EVIDENCE_KEY] == record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY]
     assert snapshot[RECORD_SOURCE_METADATA_KEY] == record[RECORD_SOURCE_METADATA_KEY]
+    assert snapshot[RECORD_IS_REPOSTED_KEY] is True
 
 
 def test_apply_kept_job_reuse_restores_posting_channel_and_source_metadata():
@@ -157,6 +160,7 @@ def test_apply_kept_job_reuse_restores_posting_channel_and_source_metadata():
         "llm_decision": "KEEP",
         "llm_fit_grade": "STRONG",
         RECORD_REQUIREMENT_COVERAGE_KEY: [],
+        RECORD_IS_REPOSTED_KEY: True,
         RECORD_POSTING_CHANNEL_EVIDENCE_KEY: {
             "kind": "agency_or_recruiter",
             "source": "metadata_first",
@@ -185,6 +189,7 @@ def test_apply_kept_job_reuse_restores_posting_channel_and_source_metadata():
 
     assert reused[RECORD_POSTING_CHANNEL_EVIDENCE_KEY] == snapshot[RECORD_POSTING_CHANNEL_EVIDENCE_KEY]
     assert reused[RECORD_SOURCE_METADATA_KEY] == snapshot[RECORD_SOURCE_METADATA_KEY]
+    assert reused[RECORD_IS_REPOSTED_KEY] is True
 
 
 def _fetched_record(fetched_text: str = "Full role description text.") -> dict:

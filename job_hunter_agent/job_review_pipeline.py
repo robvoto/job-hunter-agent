@@ -46,7 +46,6 @@ _REASON_LABELS: dict[str, str] = {
     "DUPLICATE_URL": "duplicate listing",
     "DUPLICATE_JOB_KEY": "duplicate listing",
     "JOB_CLOSED": "no longer accepting applications",
-    "STALE_REPOST": "stale repost outside the search age",
     "NO_JOB_KEY": "missing job ID",
     "NO_URL": "missing job URL",
     "OK": "passed",
@@ -180,6 +179,7 @@ from job_hunter_agent.record_schema import (
     RECORD_FIT_TONE_CLASS_KEY,
     RECORD_FULL_DESCRIPTION_KEY,
     RECORD_HARD_BLOCK_REASONS_KEY,
+    RECORD_IS_REPOSTED_KEY,
     RECORD_JOB_KEY,
     RECORD_JOB_QUALITY_SIGNALS_KEY,
     RECORD_JOB_REQUIREMENTS_KEY,
@@ -649,13 +649,10 @@ def _source_key(record: dict) -> str:
 
 
 def _defer_keep_reuse_until_post_detail(record: dict) -> bool:
-    # Reuse must wait for the post-detail stale-repost check whenever that check
-    # will actually run for this record, so a KEEP snapshot is never reused
-    # without first re-verifying the listing isn't a stale repost. Derived
-    # directly from _should_check_external_posting_date rather than kept as an
-    # independent source list, so the two can't drift apart again (this is what
-    # previously left SEEK deferred to post-detail long after SEEK was excluded
-    # from the external posting-date check itself).
+    # Reuse waits for post-detail external-date verification when that check runs,
+    # so repost evidence is refreshed before a previous KEEP snapshot is reused.
+    # Derive this directly from _should_check_external_posting_date so source
+    # routing and reuse cannot drift apart.
     return _should_check_external_posting_date(record)
 
 
@@ -673,14 +670,21 @@ def _mark_original_posted_date_unverified(record: dict) -> None:
     record[RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY] = ORIGINAL_POSTED_DATE_STATUS_UNVERIFIED
     record[RECORD_ORIGINAL_POSTED_DATE_KEY] = ""
     record[RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY] = None
+    record[RECORD_IS_REPOSTED_KEY] = None
 
 
-def _apply_external_posting_date_filter(
+def _apply_external_posting_date_evidence(
     record: dict,
     context: ReviewPipelineContext,
-) -> tuple[bool, str, str]:
+) -> None:
+    """Capture verified original-posting evidence without filtering the job.
+
+    A repost remains eligible for the workspace. ``is_reposted`` is only set when
+    the employer page supplies a verified original date and LinkedIn's current
+    listing age proves the board listing is newer.
+    """
     if not _should_check_external_posting_date(record):
-        return True, "", ""
+        return
 
     source_metadata = (
         record.get(RECORD_SOURCE_METADATA_KEY)
@@ -691,7 +695,7 @@ def _apply_external_posting_date_filter(
     canonical_url = str(record.get(RECORD_URL_KEY) or "").strip()
     if not apply_url or apply_url == canonical_url:
         _mark_original_posted_date_unverified(record)
-        return True, "", ""
+        return
 
     external_html = str(record.get("_external_apply_html") or "").strip()
     if not external_html:
@@ -700,7 +704,7 @@ def _apply_external_posting_date_filter(
             record["_external_apply_html"] = external_html
     if not external_html:
         _mark_original_posted_date_unverified(record)
-        return True, "", ""
+        return
 
     verification = extract_external_original_posting_date(
         external_html,
@@ -708,22 +712,29 @@ def _apply_external_posting_date_filter(
     )
     if verification is None:
         _mark_original_posted_date_unverified(record)
-        return True, "", ""
+        return
 
     original_age_days = float(verification["age_days"])
     record[RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY] = ORIGINAL_POSTED_DATE_STATUS_VERIFIED
     record[RECORD_ORIGINAL_POSTED_DATE_KEY] = str(verification["posted_on"])
     record[RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY] = original_age_days
-    if original_age_days > context.date_range_days:
-        return (
-            False,
-            "STALE_REPOST",
-            (
-                f"External apply page shows this role was originally posted on "
-                f"{verification['posted_on']}, outside the {context.date_range_days}-day search window."
-            ),
+
+    board_age_days = record.get(RECORD_POSTED_AGE_DAYS_KEY)
+    if board_age_days is None:
+        record[RECORD_IS_REPOSTED_KEY] = None
+        return
+    try:
+        normalized_board_age_days = float(board_age_days)
+    except (TypeError, ValueError):
+        logger.warning(
+            "Could not compare repost dates for job=%s because posted_age_days=%r is invalid",
+            record.get(RECORD_JOB_KEY, "<unknown>"),
+            board_age_days,
         )
-    return True, "", ""
+        record[RECORD_IS_REPOSTED_KEY] = None
+        return
+
+    record[RECORD_IS_REPOSTED_KEY] = original_age_days > normalized_board_age_days
 
 
 def _call_hook(
@@ -1449,12 +1460,7 @@ def review_post_detail_normalized_job(
 
     _call_hook(hooks, "after_preference_filters", record, context)
 
-    ok, reason, explanation = _apply_external_posting_date_filter(record, context)
-    if not ok:
-        record[RECORD_DECISION_KEY] = "REJECT"
-        record[RECORD_REJECT_REASON_KEY] = reason
-        _finalize_job_result(record, context, reason=reason, explanation=explanation)
-        return _build_outcome(record), record, skill_observations
+    _apply_external_posting_date_evidence(record, context)
 
     history_entry = context.job_history.get(str(record.get(RECORD_JOB_KEY) or ""), {})
     if can_reuse_kept_job(history_entry, record, profile):

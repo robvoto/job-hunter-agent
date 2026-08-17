@@ -43,6 +43,7 @@ from job_hunter_agent.record_schema import (
     RECORD_FIT_SOURCE_TEXT_KEY,
     RECORD_FIT_TONE_CLASS_KEY,
     RECORD_FULL_DESCRIPTION_KEY,
+    RECORD_IS_REPOSTED_KEY,
     RECORD_LLM_DECISION_KEY,
     RECORD_LLM_FIT_GRADE_KEY,
     RECORD_LLM_INPUT_TOKENS_KEY,
@@ -1486,15 +1487,84 @@ def test_job_card_shows_reposted_and_original_posted_dates_separately():
             RECORD_APPLY_METHOD_KEY: APPLY_METHOD_EXTERNAL_APPLY,
             RECORD_ORIGINAL_POSTED_DATE_KEY: "2026-06-24",
             RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY: ORIGINAL_POSTED_DATE_STATUS_VERIFIED,
+            RECORD_IS_REPOSTED_KEY: True,
         },
         _test_profile(),
     )
 
+    assert ">Reposted</span>" in html
     assert "LinkedIn reposted" in html
     assert "15 hours ago" in html
     assert "Originally posted" in html
     assert "24 Jun 2026" in html
     assert "<strong>Posted</strong>" not in html
+
+
+def test_applied_repost_does_not_show_repost_badge_or_repost_metadata():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-applied-repost",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://linkedin.com/jobs/view/3",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Contract",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "linkedin",
+            "posted": "15 hours ago",
+            "posted_age_days": 15 / 24,
+            "applied": True,
+            RECORD_APPLY_METHOD_KEY: APPLY_METHOD_EXTERNAL_APPLY,
+            RECORD_ORIGINAL_POSTED_DATE_KEY: "2026-06-24",
+            RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY: ORIGINAL_POSTED_DATE_STATUS_VERIFIED,
+            RECORD_IS_REPOSTED_KEY: True,
+        },
+        _test_profile(),
+    )
+
+    assert ">Reposted</span>" not in html
+    assert "LinkedIn reposted" not in html
+    assert "Originally posted" not in html
+    assert "15 hours ago" in html
+
+
+def test_verified_original_date_without_repost_uses_normal_posted_metadata():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-not-reposted",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://linkedin.com/jobs/view/4",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Contract",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "linkedin",
+            "posted": "1 day ago",
+            "posted_age_days": 1,
+            RECORD_APPLY_METHOD_KEY: APPLY_METHOD_EXTERNAL_APPLY,
+            RECORD_ORIGINAL_POSTED_DATE_KEY: "2026-08-16",
+            RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY: ORIGINAL_POSTED_DATE_STATUS_VERIFIED,
+            RECORD_IS_REPOSTED_KEY: False,
+        },
+        _test_profile(),
+    )
+
+    assert ">Reposted</span>" not in html
+    assert "LinkedIn reposted" not in html
+    assert "Originally posted" not in html
+    assert "1 day ago" in html
 
 
 def test_job_card_flags_unverified_linkedin_external_apply_freshness():

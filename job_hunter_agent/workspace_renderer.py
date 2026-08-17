@@ -86,6 +86,7 @@ from job_hunter_agent.record_schema import (
     RECORD_LLM_INPUT_TOKENS_KEY,
     RECORD_LLM_OUTPUT_TOKENS_KEY,
     RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY,
+    RECORD_IS_REPOSTED_KEY,
     RECORD_POTENTIAL_DUPLICATE_LINKS_KEY,
     RECORD_REJECT_REASON_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
@@ -1119,8 +1120,6 @@ def humanize_reject_reason(reason: Optional[str]) -> str:
         return f"Excluded role family: {cleaned_detail}"
     if prefix == "POSTED_TOO_OLD" and cleaned_detail:
         return f"Older than the search window ({cleaned_detail} days)"
-    if prefix == "STALE_REPOST":
-        return direct_map.get("STALE_REPOST", "Stale repost outside the search age")
     if prefix == "DESC_LOCATION" and cleaned_detail:
         return f"Location mismatch: {cleaned_detail}"
     if prefix == "DESC_CAPABILITY_LOW" and cleaned_detail:
@@ -1382,6 +1381,14 @@ def render_job_card(
             source=source_label
         )
     badges.append(render_badge(source_badge_label, f"badge-source-{source}", source_badge_tooltip))
+    if record.get(RECORD_IS_REPOSTED_KEY) is True and not applied_record:
+        badges.append(
+            render_badge(
+                _workspace_label("workspace_card_labels", "reposted_badge"),
+                "badge-warning",
+                _workspace_label("workspace_card_labels", "reposted_badge_tooltip"),
+            )
+        )
     channel_kind = channel_signal.get("kind", "unknown")
     if channel_kind == "agency_or_recruiter":
         if channel_signal.get("needs_review"):
@@ -1567,6 +1574,7 @@ def render_job_card(
         == ORIGINAL_POSTED_DATE_STATUS_VERIFIED
     )
     _linkedin_original_unverified = linkedin_original_posted_is_unverified(record)
+    _is_reposted = record.get(RECORD_IS_REPOSTED_KEY) is True
     _board_posted_display = board_posted_display_label(record) if _original_posted_verified else ""
     _original_posted_display = (
         original_posted_display_label(record) if _original_posted_verified else ""
@@ -1584,7 +1592,7 @@ def render_job_card(
         compact_whitespace(contract_duration_display).lower(),
     ).strip()
     meta_items = []
-    if _board_posted_display and _original_posted_display:
+    if _is_reposted and not applied_record and _board_posted_display and _original_posted_display:
         meta_items.append(
             f'<span class="job-meta-item"><strong>{safe_html(source_label)} {safe_html(_workspace_label("workspace_meta_labels", "reposted_suffix"))}</strong> {safe_html(str(_board_posted_display))}{posted_age_meta}</span>'
         )

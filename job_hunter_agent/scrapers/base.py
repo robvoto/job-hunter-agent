@@ -24,6 +24,7 @@ from job_hunter_agent.record_schema import (
     RECORD_FIT_SOURCE_TEXT_KEY,
     RECORD_FULL_DESCRIPTION_KEY,
     RECORD_HARD_BLOCK_REASONS_KEY,
+    RECORD_IS_REPOSTED_KEY,
     RECORD_JOB_KEY,
     RECORD_LLM_DECISION_KEY,
     RECORD_LLM_FIT_GRADE_KEY,
@@ -172,6 +173,7 @@ def _build_initial_review_state() -> dict:
         RECORD_ORIGINAL_POSTED_DATE_KEY: "",
         RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY: None,
         RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY: "",
+        RECORD_IS_REPOSTED_KEY: None,
     }
 
 

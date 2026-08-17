@@ -13,6 +13,7 @@ from job_hunter_agent.record_schema import (
     RECORD_FIRST_KEPT_AT_KEY,
     RECORD_FIRST_SEEN_AT_KEY,
     RECORD_FIRST_VIEWED_AT_KEY,
+    RECORD_IS_REPOSTED_KEY,
     RECORD_JOB_KEY,
     RECORD_JOB_REQUIREMENTS_KEY,
     RECORD_LAST_KEPT_AT_KEY,
@@ -120,6 +121,7 @@ def build_history_workspace_record(
             RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY
         )
         or "",
+        RECORD_IS_REPOSTED_KEY: snapshot.get(RECORD_IS_REPOSTED_KEY),
         RECORD_SALARY_KEY: snapshot.get(RECORD_SALARY_KEY) or "N/A",
         RECORD_LOCATION_KEY: snapshot.get(RECORD_LOCATION_KEY) or "N/A",
         RECORD_WORK_MODE_KEY: snapshot.get(RECORD_WORK_MODE_KEY) or "N/A",
@@ -243,6 +245,7 @@ def build_hidden_workspace_record(
             RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY
         )
         or "",
+        RECORD_IS_REPOSTED_KEY: snapshot.get(RECORD_IS_REPOSTED_KEY),
         RECORD_SALARY_KEY: snapshot.get(RECORD_SALARY_KEY) or "N/A",
         RECORD_LOCATION_KEY: snapshot.get(RECORD_LOCATION_KEY) or "N/A",
         RECORD_WORK_MODE_KEY: snapshot.get(RECORD_WORK_MODE_KEY) or "N/A",
@@ -355,6 +358,7 @@ def build_applied_workspace_record(
             RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY
         )
         or "",
+        RECORD_IS_REPOSTED_KEY: snapshot.get(RECORD_IS_REPOSTED_KEY),
         "salary": snapshot.get("salary") or "N/A",
         "location": snapshot.get("location") or "N/A",
         "work_mode": snapshot.get("work_mode") or "N/A",
