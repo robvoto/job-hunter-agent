@@ -8,6 +8,15 @@ from unittest.mock import MagicMock, patch
 from job_hunter_agent import workspace_rebuild_service, workspace_renderer, workspace_service
 
 
+def test_format_llm_usage_metric_compacts_token_counts_and_rounds_currency():
+    assert workspace_service.format_llm_usage_metric(999) == "999"
+    assert workspace_service.format_llm_usage_metric(84_188) == "84.2K"
+    assert workspace_service.format_llm_usage_metric(5_126_350) == "5.13M"
+    assert workspace_service.format_llm_usage_metric(2_000_000_000) == "2B"
+    assert workspace_service.format_llm_usage_metric(3.8084, currency=True) == "$3.81"
+    assert workspace_service.format_llm_usage_metric(0.0633, currency=True) == "$0.06"
+
+
 def test_results_page_uses_runtime_workspace_config():
     root = Path(__file__).resolve().parent.parent
     results_js = (root / "templates" / "static" / "results" / "results-page.js").read_text(
@@ -522,6 +531,14 @@ def test_rendered_workspace_html_content(tmp_path):
             return_value=mock_ui_labels_content,
         ),
         patch(
+            "job_hunter_agent.workspace_service.get_cost_summary",
+            return_value={
+                "grand_total_usd": 0.0633,
+                "grand_input_tokens": 1_140_569,
+                "grand_output_tokens": 2_000_000_000,
+            },
+        ),
+        patch(
             "job_hunter_agent.paths.RESULTS_TEMPLATE_PATH", new_callable=MagicMock
         ) as mock_results_template_path,
     ):
@@ -536,9 +553,9 @@ def test_rendered_workspace_html_content(tmp_path):
             date_range_days=7,
             sort_newest_first=True,
             run_stats={
-                "llm_total_cost_usd": 0.1234,
-                "llm_total_input_tokens": 1200,
-                "llm_total_output_tokens": 345,
+                "llm_total_cost_usd": 3.8084,
+                "llm_total_input_tokens": 84_188,
+                "llm_total_output_tokens": 5_126_350,
             },
             job_history={},
             applied_job_keys=set(),
@@ -569,11 +586,14 @@ def test_rendered_workspace_html_content(tmp_path):
         assert "Job details checked" in rendered_html
         assert "Total recorded LLM usage." in rendered_html
         assert "LLM cost" in rendered_html
-        assert "$0.1234" in rendered_html
+        assert "$3.81" in rendered_html
         assert "Input tokens" in rendered_html
-        assert ">1,200<" in rendered_html
+        assert ">84.2K<" in rendered_html
         assert "Output tokens" in rendered_html
-        assert ">345<" in rendered_html
+        assert ">5.13M<" in rendered_html
+        assert "$0.06" in rendered_html
+        assert ">1.14M<" in rendered_html
+        assert ">2B<" in rendered_html
         assert (
             '<span class="snapshot-meta-label">Work type</span><span class="snapshot-meta-value">Permanent</span>'
             in rendered_html

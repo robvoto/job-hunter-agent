@@ -430,6 +430,32 @@ def build_run_stats(
     )
 
 
+def format_llm_usage_metric(value: int | float, *, currency: bool = False) -> str:
+    """Format LLM usage for workspace cards without changing the source value."""
+    if currency:
+        return f"${float(value):.2f}"
+
+    token_count = int(value)
+    if token_count < 1_000:
+        return f"{token_count:,}"
+
+    for divisor, suffix in (
+        (1_000_000_000, "B"),
+        (1_000_000, "M"),
+        (1_000, "K"),
+    ):
+        if token_count < divisor:
+            continue
+        scaled = token_count / divisor
+        decimal_places = 2 if scaled < 10 else 1 if scaled < 100 else 0
+        formatted = f"{scaled:.{decimal_places}f}"
+        if float(formatted) >= 1_000 and suffix != "B":
+            continue
+        return f"{formatted.rstrip('0').rstrip('.')}{suffix}"
+
+    return f"{token_count:,}"
+
+
 def _render_summary_cards_html(card_specs: list[tuple[Any, str]]) -> str:
 
     return "".join(
@@ -582,15 +608,17 @@ def render_html(
                 ws_page_labels["LABEL_WS_LAST_RUN_REJECTED_LABEL"],
             ),
             (
-                f"${float(run_stats.get('llm_total_cost_usd', 0.0) or 0.0):.4f}",
+                format_llm_usage_metric(
+                    float(run_stats.get("llm_total_cost_usd", 0.0) or 0.0), currency=True
+                ),
                 ws_page_labels["LABEL_WS_LAST_RUN_LLM_COST_LABEL"],
             ),
             (
-                f"{int(run_stats.get('llm_total_input_tokens', 0) or 0):,}",
+                format_llm_usage_metric(int(run_stats.get("llm_total_input_tokens", 0) or 0)),
                 ws_page_labels["LABEL_WS_LAST_RUN_INPUT_TOKENS_LABEL"],
             ),
             (
-                f"{int(run_stats.get('llm_total_output_tokens', 0) or 0):,}",
+                format_llm_usage_metric(int(run_stats.get("llm_total_output_tokens", 0) or 0)),
                 ws_page_labels["LABEL_WS_LAST_RUN_OUTPUT_TOKENS_LABEL"],
             ),
         ]
@@ -600,15 +628,17 @@ def render_html(
     lifetime_cards_html = _render_summary_cards_html(
         [
             (
-                f"${float(lifetime_llm_usage.get('grand_total_usd', 0.0) or 0.0):.4f}",
+                format_llm_usage_metric(
+                    float(lifetime_llm_usage.get("grand_total_usd", 0.0) or 0.0), currency=True
+                ),
                 ws_page_labels["LABEL_WS_LIFETIME_LLM_COST_LABEL"],
             ),
             (
-                f"{int(lifetime_llm_usage.get('grand_input_tokens', 0) or 0):,}",
+                format_llm_usage_metric(int(lifetime_llm_usage.get("grand_input_tokens", 0) or 0)),
                 ws_page_labels["LABEL_WS_LIFETIME_INPUT_TOKENS_LABEL"],
             ),
             (
-                f"{int(lifetime_llm_usage.get('grand_output_tokens', 0) or 0):,}",
+                format_llm_usage_metric(int(lifetime_llm_usage.get("grand_output_tokens", 0) or 0)),
                 ws_page_labels["LABEL_WS_LIFETIME_OUTPUT_TOKENS_LABEL"],
             ),
         ]
