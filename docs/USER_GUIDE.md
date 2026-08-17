@@ -4,12 +4,13 @@
 
 This app helps a candidate build a profile once, review jobs against that profile, and keep a local shortlist that gets better over time.
 
-Current live job source:
+Current live job sources:
 
 - SEEK
 - LinkedIn
+- APSJobs
 
-That is the current source connector, not the final limit of the product.
+These are the current source connectors, not the final limit of the product.
 
 ## First-Time Use
 
@@ -121,6 +122,10 @@ It covers:
 - global display and search defaults
 - onboarding defaults and capability presets
 - shared learning and signal review
+- **System health**: unresolved operational failures that may need attention
+- optional **technical diagnostics**: read-only grouped uncertainty records for troubleshooting, not jobs for the user to resolve
+
+For System health, **Acknowledge** hides only the current operational occurrence; the same problem returns if it happens again. Source failures and timeouts can offer **Run scraper validation** when that check is supported.
 
 Changes here affect the app globally, but users do not edit them from their own Settings screen.
 

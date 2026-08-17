@@ -35,7 +35,7 @@ Primary modules:
   | -------------------- | ----------------------------------------------------------------------------------------------------------- |
   | `pages.py`           | `/` `/workspace` `/admin` `/profile` `/settings` `/start` `/onboarding` (redirects) `/demo`               |
   | `workspace_api.py`   | `GET /api/results-html` `/api/health` `/api/run-stats` `/api/run-status` `/api/review-data` `/api/job-history` |
-  | `profile_materials.py` | `GET/PATCH/PUT /api/profile` · `GET/PUT /api/source-materials` · `GET/PATCH /api/advance-settings`        |
+  | `profile_materials.py` | `GET/PATCH/PUT /api/profile` · `GET/PUT /api/source-materials` · `GET/PATCH /api/advance-settings` · `GET /api/admin/system-warnings` · `PATCH /api/admin/system-warnings/{warning_id}` · `POST /api/admin/scraper-config-validation` |
   | `agent_telegram.py`  | `GET /api/llm-costs` · `GET/PATCH /api/agent-settings` · `GET /api/telegram/connect-link` · `POST /api/telegram/sync` `/api/telegram/test-message` |
   | `signals.py`         | `GET/PATCH /api/signal-registry`                                                                            |
   | `review.py`          | `GET /api/rejection-suggestions` · `POST /api/tuning-decisions` `/api/skill-decisions` `/api/rule/phrase` `/api/rejection-feedback/required-blockers` `/api/rejection-rules` `/api/title-block-preview` `/api/review` · `DELETE /api/rule/title-block` |
@@ -50,7 +50,9 @@ Server logging:
 - raw dependency/API transport chatter (httpx/httpcore/openai wire-level detail) is dropped at every level; it's never written anywhere
 - `/api/debug/browser-log` is for browser-side JS logs only
 - debug/audit uncertainty events go to `output/uncertainty.jsonl`
-- reviewable runtime warnings go to SQLite `system_warnings`
+- runtime warning/diagnostic records go to SQLite `system_warnings`; backend classification decides whether each unresolved record is an operational System health problem or a read-only technical diagnostic
+- the default admin feed contains only operational problems; diagnostics are aggregated by category and source when explicitly requested
+- acknowledging an operational problem hides only that occurrence; recurrence of the same fingerprint reopens it
 - use `job_hunter_agent.runtime_helpers.build_uncertainty_entry()` and `append_uncertainty_log()` for reusable uncertainty records
 - keep the event shape stable: `ts`, `reason_code`, `stage`, `field`, `raw_value`, `normalized_value`, `detail`, `source`, `job_key`, `severity`
 

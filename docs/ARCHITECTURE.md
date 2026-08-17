@@ -67,7 +67,7 @@ Runtime events are stored in SQLite `system_warnings`. The admin **System health
 | Fit review and scoring | `job_hunter_agent/llm_gate.py`, `job_hunter_agent/source_learning.py`, `job_hunter_agent/fit_scoring.py`, `job_hunter_agent/capability_matching.py` | Builds LLM prompts, normalizes review payloads, and turns support evidence into explainable scores. |
 | Workspace UI | `job_hunter_agent/workspace_renderer.py`, `job_hunter_agent/workspace_service.py`, `templates/results.html` | Renders the shortlist, tabs, cards, filters, and workspace panel state. |
 | Settings and shared labels | `job_hunter_agent/server_helpers.py`, `job_hunter_agent/routes/pages.py`, `data/knowledge/ui_labels.json` | Loads centrally managed copy for settings, onboarding, and workspace labels. |
-| Runtime I/O and cache files | `job_hunter_agent/io_utils.py`, `job_hunter_agent/run_context.py`, `job_hunter_agent/scrape_finalize.py`, `job_hunter_agent/system_warnings.py` | Loads/saves run state, cache files, workspace outputs, and reviewable warnings. |
+| Runtime I/O and cache files | `job_hunter_agent/io_utils.py`, `job_hunter_agent/run_context.py`, `job_hunter_agent/scrape_finalize.py`, `job_hunter_agent/system_warnings.py` | Loads/saves run state, cache files, workspace outputs, and runtime warning/diagnostic records. |
 
 ---
 
