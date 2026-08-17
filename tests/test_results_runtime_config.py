@@ -51,21 +51,28 @@ def test_results_page_uses_runtime_workspace_config():
     assert "window.location.reload();" in results_js
 
 
-def test_workspace_pagination_footer_keeps_page_and_match_counts_visually_separate():
+def test_workspace_pagination_footer_aligns_with_panel_content_and_separates_counts():
     root = Path(__file__).resolve().parent.parent
     workspace_css = (
         root / "templates" / "static" / "workspace" / "workspace-page.css"
     ).read_text(encoding="utf-8")
 
     footer_rule = re.search(
+        r"\.results-pagination-footer \{(?P<body>.*?)\n\}",
+        workspace_css,
+        flags=re.DOTALL,
+    )
+    controls_rule = re.search(
         r"\.results-pagination-footer \.section-tools \{(?P<body>.*?)\n\}",
         workspace_css,
         flags=re.DOTALL,
     )
 
     assert footer_rule is not None
-    assert "display: flex;" in footer_rule.group("body")
-    assert "gap: var(--control-space-md);" in footer_rule.group("body")
+    assert "padding-inline: var(--surface-gap-lg);" in footer_rule.group("body")
+    assert controls_rule is not None
+    assert "display: flex;" in controls_rule.group("body")
+    assert "gap: var(--control-space-md);" in controls_rule.group("body")
 
 
 def test_render_section_uses_results_header_sibling_layout_for_tools_and_pagination():

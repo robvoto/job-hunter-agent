@@ -618,7 +618,11 @@ body {
   white-space: nowrap;
 }
 
-/* Local layout exception: footer repeats the pagination controls below the job grid. */
+/* Local layout exception: footer repeats pagination below the job grid and aligns with panel content. */
+.results-pagination-footer {
+  padding-inline: var(--surface-gap-lg);
+}
+
 .results-pagination-footer .section-tools {
   display: flex;
   align-items: center;
