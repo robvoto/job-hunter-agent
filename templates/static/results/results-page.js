@@ -1018,6 +1018,7 @@
       body.className = 'rejection-panel-body is-loading';
       body.textContent = WORKSPACE_CONTEXT.labels.rejectionLoadingSuggestions;
       document.getElementById('rejection-custom-list').innerHTML = '';
+      document.getElementById('rejection-other-preview').innerHTML = '';
       document.getElementById('rejection-other-input').value = '';
       document.getElementById('rejection-panel').removeAttribute('hidden');
       document.getElementById('rejection-overlay').removeAttribute('hidden');
@@ -1351,13 +1352,27 @@
     document.getElementById('rejection-other-add').addEventListener('click', () => {
       if (_rejectionStage !== 'select') return;
       const input = document.getElementById('rejection-other-input');
-      const cat = 'other';
+      const previewEl = document.getElementById('rejection-other-preview');
+      const addButton = document.getElementById('rejection-other-add');
       const val = input.value.trim();
       if (!val || val.length < 2) return;
-      _rejectionCustomTerms.push({ value: val, category: cat });
-      input.value = '';
-      _rejRenderCustomChips();
-      _rejUpdateSaveBtn();
+      const jobKey = _rejectionPendingButton?.dataset.jobKey || '';
+      addButton.disabled = true;
+      jobHunterFetch(
+        `${API_BASE_URL}/api/rejection-feedback/custom-blocker-preview?job_id=${encodeURIComponent(jobKey)}&term=${encodeURIComponent(val)}`
+      )
+        .then(r => r.json())
+        .catch(() => ({ ok: false, preview_html: '' }))
+        .then(data => {
+          addButton.disabled = false;
+          previewEl.innerHTML = (data && data.preview_html) ? data.preview_html : '';
+          if (data && data.ok) {
+            _rejectionCustomTerms.push({ value: data.canonical_requirement, category: 'other' });
+            input.value = '';
+            _rejRenderCustomChips();
+            _rejUpdateSaveBtn();
+          }
+        });
     });
 
     document.getElementById('rejection-other-input').addEventListener('keydown', e => {

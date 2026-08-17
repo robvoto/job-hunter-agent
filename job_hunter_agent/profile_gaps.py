@@ -9,9 +9,17 @@ from __future__ import annotations
 
 import re
 
-from job_hunter_agent.llm_protocol import LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES
+from job_hunter_agent.llm_protocol import (
+    LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES,
+    LLM_COVERAGE_IMPORTANCE_REQUIRED,
+)
 
 STATUS_UNKNOWN = "unknown"
+CUSTOM_BLOCKER_REASON_RESOLVED = "resolved"
+CUSTOM_BLOCKER_REASON_NO_MATCH = "no_match"
+CUSTOM_BLOCKER_REASON_AMBIGUOUS = "ambiguous"
+CUSTOM_BLOCKER_REASON_NOT_REQUIRED = "not_required"
+CUSTOM_BLOCKER_REASON_INVALID_INPUT = "invalid_input"
 STATUS_CONFIRMED_HAVE = "confirmed_have"
 STATUS_CONFIRMED_DO_NOT_HAVE = "confirmed_do_not_have"
 _CONFIRMABLE_REQUIREMENT_STATUSES = frozenset({"not_shown", "mismatch", "invalid"})
@@ -179,3 +187,92 @@ def compute_profile_gaps(
             }
         )
     return gaps
+
+
+def resolve_custom_blocker(raw_text: str, requirement_coverage: list[dict]) -> dict:
+    """Resolve free-text "Not For Me" blocker input against a job's requirement_coverage.
+
+    Custom blocker text must never be saved to must_not_require_skills as-is
+    (see job-filtering non-negotiables). This ties it to a structured, already
+    LLM-vetted requirement for the same job instead: only an exact match
+    (case/whitespace-insensitive) against a requirement_coverage item's
+    canonical_requirement/matched_job_text/requirement, where that item is
+    profile_action_allowed (canonical_requirement is a genuine single concept,
+    not just a display label) and importance == required, resolves. No
+    substring/fuzzy matching, so a broad or generic term cannot silently match
+    a specific requirement.
+    """
+    query_norm = _normalize_for_match(raw_text)
+    result = {
+        "ok": False,
+        "reason_code": CUSTOM_BLOCKER_REASON_INVALID_INPUT,
+        "raw_input": str(raw_text or "").strip(),
+        "canonical_requirement": "",
+        "requirement_type": "",
+        "importance": "",
+        "matched_job_text": "",
+    }
+    if len(query_norm) < 2:
+        return result
+
+    required_matches: dict[str, dict] = {}
+    non_required_match: dict | None = None
+    for item in requirement_coverage:
+        if not isinstance(item, dict):
+            continue
+        requirement_type = str(item.get("requirement_type") or "").strip().lower()
+        if requirement_type not in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES:
+            continue
+        if item.get("profile_action_allowed") is not True:
+            continue
+        canonical_requirement = str(item.get("canonical_requirement") or "").strip()
+        if not canonical_requirement:
+            continue
+        candidates_norm = {
+            _normalize_for_match(canonical_requirement),
+            _normalize_for_match(str(item.get("matched_job_text") or "")),
+            _normalize_for_match(str(item.get("requirement") or "")),
+        }
+        candidates_norm.discard("")
+        if query_norm not in candidates_norm:
+            continue
+        importance = str(item.get("importance") or "").strip().lower()
+        canonical_key = _normalize_for_match(canonical_requirement)
+        if importance == LLM_COVERAGE_IMPORTANCE_REQUIRED:
+            required_matches[canonical_key] = item
+        elif non_required_match is None:
+            non_required_match = item
+
+    if len(required_matches) > 1:
+        result["reason_code"] = CUSTOM_BLOCKER_REASON_AMBIGUOUS
+        return result
+    if len(required_matches) == 1:
+        item = next(iter(required_matches.values()))
+        result.update(
+            {
+                "ok": True,
+                "reason_code": CUSTOM_BLOCKER_REASON_RESOLVED,
+                "canonical_requirement": str(item.get("canonical_requirement") or "").strip(),
+                "requirement_type": str(item.get("requirement_type") or "").strip().lower(),
+                "importance": LLM_COVERAGE_IMPORTANCE_REQUIRED,
+                "matched_job_text": str(item.get("matched_job_text") or "").strip(),
+            }
+        )
+        return result
+    if non_required_match is not None:
+        result.update(
+            {
+                "reason_code": CUSTOM_BLOCKER_REASON_NOT_REQUIRED,
+                "canonical_requirement": str(
+                    non_required_match.get("canonical_requirement") or ""
+                ).strip(),
+                "requirement_type": str(
+                    non_required_match.get("requirement_type") or ""
+                ).strip().lower(),
+                "importance": str(non_required_match.get("importance") or "").strip().lower(),
+                "matched_job_text": str(non_required_match.get("matched_job_text") or "").strip(),
+            }
+        )
+        return result
+    result["reason_code"] = CUSTOM_BLOCKER_REASON_NO_MATCH
+    return result

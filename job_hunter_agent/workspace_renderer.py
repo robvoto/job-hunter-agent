@@ -53,6 +53,11 @@ from job_hunter_agent.preferences import (
     display_work_type_label,
 )
 from job_hunter_agent.profile_gaps import (
+    CUSTOM_BLOCKER_REASON_AMBIGUOUS,
+    CUSTOM_BLOCKER_REASON_INVALID_INPUT,
+    CUSTOM_BLOCKER_REASON_NOT_REQUIRED,
+    CUSTOM_BLOCKER_REASON_NO_MATCH,
+    CUSTOM_BLOCKER_REASON_RESOLVED,
     STATUS_CONFIRMED_DO_NOT_HAVE,
     STATUS_CONFIRMED_HAVE,
     STATUS_UNKNOWN,
@@ -61,6 +66,7 @@ from job_hunter_agent.profile_gaps import (
 from job_hunter_agent.profile_store import (
     ENGAGEMENT_TYPE_OPTIONS,
     KEY_CANDIDATE_QUALIFICATIONS,
+    KEY_MUST_NOT_REQUIRED_SKILLS,
     get_match_levels,
     get_scoring_rules,
     load_profile,
@@ -824,6 +830,89 @@ def _render_posted_age_meta(age_days: Optional[float]) -> str:
             _workspace_label("workspace_card_labels", "posted_age_meta_template")
         ).substitute(days=display_days)
     return f'<span class="job-posted-age"> · {safe_html(label)}</span>'
+
+
+def render_custom_blocker_preview(resolution: dict, debug_mode: bool = False) -> str:
+    """Render the save/reject preview for a custom "Not For Me" blocker term.
+
+    resolution is the dict returned by profile_gaps.resolve_custom_blocker.
+    Debug mode additionally surfaces the raw input, matched job evidence, and
+    the exact value that would be persisted, so a human can audit the
+    resolution without reading server logs.
+    """
+    reason_code = str(resolution.get("reason_code") or "")
+    canonical_requirement = str(resolution.get("canonical_requirement") or "")
+    requirement_type = str(resolution.get("requirement_type") or "")
+    importance = str(resolution.get("importance") or "")
+
+    is_resolved = bool(resolution.get("ok")) and reason_code == CUSTOM_BLOCKER_REASON_RESOLVED
+    preview_state_class = "custom-blocker-preview--resolved" if is_resolved else "custom-blocker-preview--rejected"
+    parts: List[str] = [f'<div class="custom-blocker-preview {preview_state_class}">']
+    if is_resolved:
+        requirement_type_label = _workspace_label(
+            "workspace_card_labels", f"custom_blocker_requirement_type_{requirement_type}"
+        )
+        importance_label = _workspace_label("workspace_card_labels", f"importance_{importance}")
+        heading = Template(
+            _workspace_label("workspace_card_labels", "custom_blocker_preview_heading_template")
+        ).substitute(importance=importance_label, requirement_type=requirement_type_label)
+        save_as_label = _workspace_label("workspace_card_labels", "custom_blocker_preview_save_as_label")
+        parts.append(f'<div class="custom-blocker-preview-name">{safe_html(canonical_requirement)}</div>')
+        parts.append(
+            f'<span class="jh-badge job-req-importance job-req-importance--{safe_html(importance)}">'
+            f"{safe_html(heading)}</span>"
+        )
+        parts.append(f'<div class="custom-blocker-preview-save-as">{safe_html(save_as_label)}</div>')
+    else:
+        if reason_code == CUSTOM_BLOCKER_REASON_NOT_REQUIRED:
+            importance_label = _workspace_label("workspace_card_labels", f"importance_{importance}")
+            reason_text = Template(
+                _workspace_label("workspace_card_labels", "custom_blocker_reason_not_required_template")
+            ).substitute(importance=importance_label)
+        elif reason_code == CUSTOM_BLOCKER_REASON_AMBIGUOUS:
+            reason_text = _workspace_label("workspace_card_labels", "custom_blocker_reason_ambiguous")
+        elif reason_code == CUSTOM_BLOCKER_REASON_INVALID_INPUT:
+            reason_text = _workspace_label("workspace_card_labels", "custom_blocker_reason_invalid_input")
+        else:
+            # CUSTOM_BLOCKER_REASON_NO_MATCH and any unexpected code both fall back here.
+            reason_text = _workspace_label("workspace_card_labels", "custom_blocker_reason_no_match")
+        parts.append(f'<div class="custom-blocker-preview-rejected">{safe_html(reason_text)}</div>')
+
+    if debug_mode:
+        raw_input_label = _workspace_label("workspace_card_labels", "custom_blocker_debug_raw_input_label")
+        resolved_label = _workspace_label("workspace_card_labels", "custom_blocker_debug_resolved_label")
+        requirement_type_debug_label = _workspace_label(
+            "workspace_card_labels", "custom_blocker_debug_requirement_type_label"
+        )
+        importance_debug_label = _workspace_label("workspace_card_labels", "custom_blocker_debug_importance_label")
+        matched_evidence_label = _workspace_label(
+            "workspace_card_labels", "custom_blocker_debug_matched_evidence_label"
+        )
+        validation_result_label = _workspace_label(
+            "workspace_card_labels", "custom_blocker_debug_validation_result_label"
+        )
+        profile_field_label = _workspace_label("workspace_card_labels", "custom_blocker_debug_profile_field_label")
+        persisted_value_label = _workspace_label(
+            "workspace_card_labels", "custom_blocker_debug_persisted_value_label"
+        )
+        persisted_value = canonical_requirement if resolution.get("ok") else ""
+        debug_rows = [
+            (raw_input_label, str(resolution.get("raw_input") or "")),
+            (resolved_label, canonical_requirement),
+            (requirement_type_debug_label, requirement_type),
+            (importance_debug_label, importance),
+            (matched_evidence_label, str(resolution.get("matched_job_text") or "")),
+            (validation_result_label, reason_code),
+            (profile_field_label, KEY_MUST_NOT_REQUIRED_SKILLS),
+            (persisted_value_label, persisted_value),
+        ]
+        parts.append('<dl class="custom-blocker-preview-debug">')
+        for row_label, row_value in debug_rows:
+            parts.append(f"<dt>{safe_html(row_label)}</dt><dd>{safe_html(row_value)}</dd>")
+        parts.append("</dl>")
+
+    parts.append("</div>")
+    return "".join(parts)
 
 
 def score_filter_option_label(threshold: int, scoring_profile: Optional[dict] = None) -> str:

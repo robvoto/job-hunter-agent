@@ -8,6 +8,7 @@ from fastapi import APIRouter, Body, Query
 
 from job_hunter_agent import llm_gate
 from job_hunter_agent import server_helpers as srv
+from job_hunter_agent.server_review import save_requirement_blockers_feedback
 from job_hunter_agent.io_utils import load_job_history
 from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.llm_protocol import (
@@ -19,6 +20,7 @@ from job_hunter_agent.profile_gaps import (
     STATUS_CONFIRMED_DO_NOT_HAVE,
     STATUS_CONFIRMED_HAVE,
     classify_requirement_status,
+    resolve_custom_blocker,
 )
 from job_hunter_agent.profile_item_names import normalize_profile_item_name
 from job_hunter_agent.profile_store import CAPABILITY_ICON_GENERIC
@@ -42,6 +44,7 @@ from job_hunter_agent.review_history_service import (
     save_not_for_me_feedback,
 )
 from job_hunter_agent.routes.responses import json_response
+from job_hunter_agent.workspace_renderer import render_custom_blocker_preview
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -149,24 +152,75 @@ def api_rejection_feedback_required_blockers(body: dict = Body(...)):  # type: i
         if not isinstance(approved_suggestion_tokens, dict):
             raise ValueError("approved_suggestion_tokens must be an object")
         resolved_job_id = str(body.get("job_id") or body.get("job_key") or "").strip()
+        raw_blockers = [str(item or "") for item in blockers]
         srv.SettingsHandler._validate_llm_suggestion_approvals(
             resolved_job_id,
-            [str(item or "") for item in blockers],
+            raw_blockers,
             approved_suggestion_tokens=approved_suggestion_tokens,
         )
-        result = srv.save_requirement_blockers_feedback(
+        suggested_phrases_norm = set()
+        cached_suggestions = srv._rejection_suggestions_cache.get(resolved_job_id)
+        if isinstance(cached_suggestions, dict):
+            for phrase in cached_suggestions.get("suggestions") or []:
+                suggested_phrases_norm.add(srv._normalize_suggestion_phrase(str(phrase or "")))
+        coverage = _profile_gap_requirement_coverage(resolved_job_id)
+        resolved_blockers: list[str] = []
+        rejected_custom_blockers: list[dict] = []
+        for raw_blocker in raw_blockers:
+            if srv._normalize_suggestion_phrase(raw_blocker) in suggested_phrases_norm:
+                # Already approved via _validate_llm_suggestion_approvals above.
+                resolved_blockers.append(raw_blocker)
+                continue
+            resolution = resolve_custom_blocker(raw_blocker, coverage)
+            if resolution["ok"]:
+                resolved_blockers.append(resolution["canonical_requirement"])
+            else:
+                rejected_custom_blockers.append(
+                    {"input": resolution["raw_input"], "reason": resolution["reason_code"]}
+                )
+        if raw_blockers and not resolved_blockers:
+            raise ValueError(
+                "No blockers were saved: custom terms could not be matched to a required "
+                "requirement for this job."
+            )
+        result = save_requirement_blockers_feedback(
             resolved_job_id,
             url=str(body.get("url") or "").strip(),
             title=str(body.get("job_title") or body.get("title") or "").strip(),
             company=str(body.get("company") or "").strip(),
             teaser=str(body.get("teaser") or "").strip(),
-            blockers=[str(item or "") for item in blockers],
+            blockers=resolved_blockers,
             title_block_phrases=[str(item or "") for item in title_block_phrases],
             description_block_phrases=[str(item or "") for item in description_block_phrases],
         )
+        if rejected_custom_blockers:
+            result["rejected_custom_blockers"] = rejected_custom_blockers
     except Exception as exc:
         return json_response({"error": str(exc)}, 400)
     return json_response(result)
+
+
+@router.get("/api/rejection-feedback/custom-blocker-preview")
+def api_rejection_feedback_custom_blocker_preview(
+    job_id: str = Query(""), term: str = Query("")
+):  # type: ignore[no-untyped-def]
+    job_id = job_id.strip()
+    term = term.strip()
+    if not job_id:
+        return json_response({"error": "job_id is required"}, 400)
+    coverage = _profile_gap_requirement_coverage(job_id)
+    resolution = resolve_custom_blocker(term, coverage)
+    preview_html = render_custom_blocker_preview(resolution, debug_mode=srv.DEBUG_MODE)
+    return json_response(
+        {
+            "ok": resolution["ok"],
+            "reason_code": resolution["reason_code"],
+            "canonical_requirement": resolution["canonical_requirement"],
+            "requirement_type": resolution["requirement_type"],
+            "importance": resolution["importance"],
+            "preview_html": preview_html,
+        }
+    )
 
 
 @router.post("/api/title-block-preview")
