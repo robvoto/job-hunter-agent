@@ -105,9 +105,15 @@ from job_hunter_agent.release_metadata import (
     load_app_release_metadata as load_app_release_metadata,
 )
 from job_hunter_agent.run_control import (
+    RunInterruptedError,
     begin_run_progress_scope,
+    clear_run_shutdown_request,
     clear_run_stop_request,
     end_run_progress_scope,
+    get_run_progress,
+    get_run_progress_detail,
+    request_run_shutdown,
+    run_shutdown_requested,
     run_stop_requested,
 )
 from job_hunter_agent.source_connector import scrape_jobs_direct
@@ -115,6 +121,7 @@ from job_hunter_agent.source_documents import (
     DEFAULT_SOURCE_MATERIALS,
     save_source_materials,
 )
+from job_hunter_agent.user_context import get_user_id, set_user_id
 from job_hunter_agent.user_settings import (
     DEFAULT_USER_SETTINGS,
     KEY_LLM,
@@ -133,12 +140,22 @@ RUN_STATUS_IDLE = "idle"
 RUN_STATUS_RUNNING = "running"
 RUN_STATUS_STOPPING = "stopping"
 RUN_STATUS_STOPPED = "stopped"
-_RUN_TERMINAL_STATUSES = frozenset({RUN_STATUS_IDLE, RUN_STATUS_STOPPED})
+RUN_STATUS_INTERRUPTED = "interrupted"
+RUN_INTERRUPTED_MESSAGE = (
+    "[RUN_INTERRUPTED] Server shutdown requested while job search is still running. "
+    "The current run did not complete and its results were not finalized."
+)
+_RUN_TERMINAL_STATUSES = frozenset(
+    {RUN_STATUS_IDLE, RUN_STATUS_STOPPED, RUN_STATUS_INTERRUPTED}
+)
 
 _run_in_progress = False
 _run_started_at: datetime | None = None
 _run_last_elapsed_seconds: int | None = None
 _run_terminal_status = RUN_STATUS_IDLE
+_run_active_id: str | None = None
+_run_active_user_id: str | None = None
+_shutdown_interruption_recorded = False
 _run_state_lock = threading.Lock()
 _rejection_suggestions_cache: dict[str, dict[str, Any]] = {}
 profile_review_status = _profile_store.profile_review_status
@@ -895,6 +912,11 @@ def _finish_run(terminal_status: str) -> None:
         raise ValueError(f"Invalid terminal run status: {terminal_status!r}")
     finished_at = datetime.now().astimezone()
     with _run_state_lock:
+        if (
+            _run_terminal_status == RUN_STATUS_INTERRUPTED
+            and terminal_status != RUN_STATUS_INTERRUPTED
+        ):
+            terminal_status = RUN_STATUS_INTERRUPTED
         if _run_started_at is not None:
             _run_last_elapsed_seconds = max(
                 0,
@@ -903,6 +925,7 @@ def _finish_run(terminal_status: str) -> None:
         _run_in_progress = False
         _run_started_at = None
         _run_terminal_status = terminal_status
+    _write_run_stats_field("run_status", terminal_status)
 
 
 def _is_run_in_progress() -> bool:
@@ -922,13 +945,90 @@ def _current_run_status() -> str:
 
 def _try_mark_run_started() -> bool:
     global _run_in_progress, _run_started_at, _run_terminal_status
+    global _run_active_id, _run_active_user_id, _shutdown_interruption_recorded
+    started_at = datetime.now().astimezone()
     with _run_state_lock:
         if _run_in_progress:
             return False
         _run_in_progress = True
-        _run_started_at = datetime.now().astimezone()
+        _run_started_at = started_at
         _run_terminal_status = RUN_STATUS_IDLE
-        return True
+        _run_active_id = started_at.isoformat(timespec="seconds")
+        _run_active_user_id = get_user_id()
+        _shutdown_interruption_recorded = False
+    clear_run_shutdown_request()
+    _write_run_stats_field("run_status", RUN_STATUS_RUNNING)
+    _write_run_stats_field("run_interrupted_at", None)
+    _write_run_stats_field("run_interruption_signal", None)
+    _write_run_stats_field("run_interruption_source", None)
+    _write_run_stats_field("run_interruption_progress", None)
+    _write_run_stats_field("run_interruption_reason", None)
+    return True
+
+
+def _signal_name(signal_number: int | None) -> str:
+    if signal_number is None:
+        return "unknown"
+    try:
+        import signal
+
+        return signal.Signals(signal_number).name
+    except (ValueError, TypeError):
+        return f"unknown({signal_number})"
+
+
+def _handle_server_shutdown(signal_number: int | None = None) -> bool:
+    """Record an active scrape interruption and request cooperative shutdown."""
+    global _run_in_progress, _run_started_at, _run_last_elapsed_seconds, _run_terminal_status
+    global _shutdown_interruption_recorded
+
+    shutdown_at = datetime.now().astimezone()
+    signal_label = _signal_name(signal_number)
+    with _run_state_lock:
+        if not _run_in_progress or _shutdown_interruption_recorded:
+            return False
+        _shutdown_interruption_recorded = True
+        run_id = _run_active_id or "unknown"
+        active_user_id = _run_active_user_id
+        started_at = _run_started_at
+        if started_at is not None:
+            _run_last_elapsed_seconds = max(
+                0,
+                int((shutdown_at - started_at).total_seconds()),
+            )
+        _run_in_progress = False
+        _run_started_at = None
+        _run_terminal_status = RUN_STATUS_INTERRUPTED
+
+    request_run_shutdown()
+
+    progress = get_run_progress() or "(not available)"
+    progress_detail = get_run_progress_detail() or {}
+    source = str(progress_detail.get("source") or "(not available)")
+    warning = RUN_INTERRUPTED_MESSAGE
+    logger.warning(
+        "%s run_id=%s source=%s progress=%s shutdown_at=%s signal=%s",
+        warning,
+        run_id,
+        source,
+        progress,
+        shutdown_at.isoformat(timespec="seconds"),
+        signal_label,
+    )
+
+    if active_user_id:
+        set_user_id(active_user_id)
+    _write_run_stats_field("run_status", RUN_STATUS_INTERRUPTED)
+    _write_run_stats_field("last_run_error", warning)
+    _write_run_stats_field("run_interrupted_at", shutdown_at.isoformat(timespec="seconds"))
+    _write_run_stats_field("run_interruption_signal", signal_label)
+    _write_run_stats_field("run_interruption_source", source)
+    _write_run_stats_field("run_interruption_progress", progress)
+    _write_run_stats_field(
+        "run_interruption_reason",
+        "Server shutdown requested before the scrape completed.",
+    )
+    return True
 
 
 def _current_run_elapsed_seconds() -> int | None:
@@ -1543,9 +1643,23 @@ def _run_scrape_job(*, force_refresh: bool = False) -> None:
     progress_scope = begin_run_progress_scope()
     try:
         scrape_jobs_direct(force_refresh=force_refresh)
+        if run_shutdown_requested():
+            raise RunInterruptedError("Server shutdown interrupted the scrape run.")
         _write_run_stats_field("last_run_error", None)
+    except RunInterruptedError:
+        _write_run_stats_field("run_status", RUN_STATUS_INTERRUPTED)
+        _write_run_stats_field("last_run_error", RUN_INTERRUPTED_MESSAGE)
+        logger.warning(
+            "[RUN_INTERRUPTED] Scrape worker exited without finalizing results after server shutdown."
+        )
     except Exception as exc:
-        if run_stop_requested():
+        if run_shutdown_requested():
+            _write_run_stats_field("run_status", RUN_STATUS_INTERRUPTED)
+            _write_run_stats_field("last_run_error", RUN_INTERRUPTED_MESSAGE)
+            logger.warning(
+                "[RUN_INTERRUPTED] Scrape worker exited without finalizing results after server shutdown."
+            )
+        elif run_stop_requested():
             logger.info("Scrape run stopped by request; preserving partial results.")
             _write_run_stats_field("last_run_error", None)
         else:
@@ -1553,9 +1667,17 @@ def _run_scrape_job(*, force_refresh: bool = False) -> None:
             logger.error("Scrape run failed: %s", msg)
             _write_run_stats_field("last_run_error", msg)
     finally:
+        interrupted = run_shutdown_requested() or _current_run_status() == RUN_STATUS_INTERRUPTED
         stopped = run_stop_requested()
-        _finish_run(RUN_STATUS_STOPPED if stopped else RUN_STATUS_IDLE)
+        _finish_run(
+            RUN_STATUS_INTERRUPTED
+            if interrupted
+            else RUN_STATUS_STOPPED
+            if stopped
+            else RUN_STATUS_IDLE
+        )
         end_run_progress_scope(progress_scope)
+        clear_run_shutdown_request()
         clear_run_stop_request()
 
 
@@ -1574,6 +1696,32 @@ def _rebuild_workspace_on_startup() -> None:
         except Exception as exc:
             logger.warning(
                 "Could not rebuild workspace on startup for %s: %s: %s",
+                user_id,
+                type(exc).__name__,
+                exc,
+            )
+        finally:
+            set_user_id(None)
+
+
+def _log_previous_interrupted_runs() -> None:
+    """Make persisted interrupted searches visible when the server starts."""
+    for user_id in list_user_setting_user_ids():
+        set_user_id(user_id)
+        try:
+            run_stats = load_run_stats()
+            if str(run_stats.get("run_status") or "").strip() != RUN_STATUS_INTERRUPTED:
+                continue
+            logger.warning(
+                "[RUN_INTERRUPTED][PREVIOUS] Previous search was interrupted before completion. "
+                "run_id=%s interrupted_at=%s signal=%s",
+                str(run_stats.get("last_run_attempt_at") or "unknown"),
+                str(run_stats.get("run_interrupted_at") or "unknown"),
+                str(run_stats.get("run_interruption_signal") or "unknown"),
+            )
+        except Exception as exc:
+            logger.warning(
+                "Could not inspect previous run state for %s: %s: %s",
                 user_id,
                 type(exc).__name__,
                 exc,

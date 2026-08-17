@@ -23,12 +23,14 @@ from job_hunter_agent.profile_store import (
     require_profile_ready_for_review,
 )
 from job_hunter_agent.run_control import (
+    RunInterruptedError,
     begin_run_progress_scope,
     clear_run_progress,
     clear_run_stop_request,
     enable_step_through,
     end_run_progress_scope,
     run_control_scope_active,
+    run_shutdown_requested,
     step_through_enabled,
 )
 from job_hunter_agent.runtime_helpers import (
@@ -143,6 +145,8 @@ def _scrape_jobs_direct_scoped(*, trigger_label: str, force_refresh: bool = Fals
     from job_hunter_agent.source_learning import reset_llm_truncation_count
 
     get_user_id_for_runtime()
+    if run_shutdown_requested():
+        raise RunInterruptedError("Server shutdown interrupted before source collection started.")
     clear_run_stop_request()
     clear_run_progress()
     context = build_scrape_run_context(sys.argv)
@@ -210,6 +214,8 @@ def _scrape_jobs_direct_scoped(*, trigger_label: str, force_refresh: bool = Fals
     )
     _log_search_plan(context)
     kept_records, audit_rows, skill_observations = run_enabled_sources(context)
+    if run_shutdown_requested():
+        raise RunInterruptedError("Server shutdown interrupted source collection.")
     return finalize_scrape_run(context, kept_records, audit_rows, skill_observations)
 
 

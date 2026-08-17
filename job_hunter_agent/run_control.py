@@ -22,6 +22,7 @@ from typing import Any
 from job_hunter_agent.logging_utils import format_debug_marker
 
 _RUN_STOP_REQUESTED = threading.Event()
+_RUN_SHUTDOWN_REQUESTED = threading.Event()
 _RUN_PROGRESS_LOCK = threading.Lock()
 _RUN_PROGRESS_TEXT = ""
 _RUN_PROGRESS_DETAIL: ProgressDetail | None = None
@@ -34,6 +35,26 @@ _RUN_STOP_EVENT_SCOPE: contextvars.ContextVar[threading.Event | None] = contextv
 _RUN_ACTIVE_PROGRESS_SCOPE: object | None = None
 _RUN_ACTIVE_STOP_EVENT: threading.Event | None = None
 logger = logging.getLogger(__name__)
+
+
+class RunInterruptedError(RuntimeError):
+    """Raised when server shutdown interrupts the active scrape lifecycle."""
+
+
+def request_run_shutdown() -> None:
+    """Mark the active run as interrupted and request cooperative source cleanup."""
+    _RUN_SHUTDOWN_REQUESTED.set()
+    request_run_stop()
+
+
+def clear_run_shutdown_request() -> None:
+    """Clear the process-local shutdown marker after the run worker has exited."""
+    _RUN_SHUTDOWN_REQUESTED.clear()
+
+
+def run_shutdown_requested() -> bool:
+    """Return whether server shutdown interrupted the current run."""
+    return _RUN_SHUTDOWN_REQUESTED.is_set()
 
 # Manual job-by-job review debug aid, enabled via --step: pauses the scrape loop
 # after every job's human summary is printed so it can be checked against the

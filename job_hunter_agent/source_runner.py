@@ -13,6 +13,7 @@ from job_hunter_agent.run_context import ScrapeRunContext
 from job_hunter_agent.run_control import (
     get_run_progress,
     run_stop_requested,
+    run_shutdown_requested,
     set_run_progress,
     set_run_progress_state,
     step_through_enabled,
@@ -1023,22 +1024,30 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
         for result in results
     }
 
+    # A server shutdown invalidates the whole in-flight run. Do not commit any
+    # source result gathered by that run, even if a worker returned a result
+    # while its cooperative stop was being processed.
+    if run_shutdown_requested():
+        logger.warning(
+            "[RUN_INTERRUPTED] Skipping source-discovery snapshot commits after server shutdown."
+        )
     # Commit only complete source snapshots after all source workers return. A
     # source exception, stop, or partial-result path therefore cannot replace a
     # known-good snapshot.
-    for result in results:
-        if result.source_cache_status != "MISS" or not result.source_cache_signature:
-            continue
-        if result.error is not None:
-            continue
-        if result.source_failure_backoff:
-            save_source_failure_state(result.source, result.source_cache_signature)
-        elif result.source_collection_complete:
-            save_source_discovery_snapshot(
-                result.source,
-                result.source_cache_signature,
-                result.discovery_records,
-            )
+    if not run_shutdown_requested():
+        for result in results:
+            if result.source_cache_status != "MISS" or not result.source_cache_signature:
+                continue
+            if result.error is not None:
+                continue
+            if result.source_failure_backoff:
+                save_source_failure_state(result.source, result.source_cache_signature)
+            elif result.source_collection_complete:
+                save_source_discovery_snapshot(
+                    result.source,
+                    result.source_cache_signature,
+                    result.discovery_records,
+                )
 
     # Collect outputs even from errored sources so partial current-run audit data survives.
     for result in results:

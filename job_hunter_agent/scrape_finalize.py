@@ -38,7 +38,12 @@ from job_hunter_agent.record_schema import (
 )
 from job_hunter_agent.review_insights import build_review_data
 from job_hunter_agent.run_context import ScrapeRunContext
-from job_hunter_agent.run_control import run_stop_requested, set_run_progress_state
+from job_hunter_agent.run_control import (
+    RunInterruptedError,
+    run_shutdown_requested,
+    run_stop_requested,
+    set_run_progress_state,
+)
 from job_hunter_agent.source_registry import get_source_display_label
 from job_hunter_agent.system_warnings import (
     make_system_warning_fingerprint,
@@ -527,6 +532,9 @@ def finalize_scrape_run(
 ) -> str:
     """Persist outputs, rebuild the workspace, and publish indeterminate internal stages."""
 
+    if run_shutdown_requested():
+        raise RunInterruptedError("Server shutdown interrupted scrape finalization.")
+
     from job_hunter_agent.llm_gate import get_session_cost_usd
     from job_hunter_agent.source_learning import get_llm_truncation_count
 
@@ -568,6 +576,8 @@ def finalize_scrape_run(
         run_stats["source_breakdown"] = _build_source_breakdown(context.enabled_sources, [])
         run_stats["source_discovery_cache"] = context.source_cache_stats or {}
 
+        if run_shutdown_requested():
+            raise RunInterruptedError("Server shutdown interrupted scrape finalization.")
         _log_run_summary(run_stats, [])
         _log_source_final_stats(run_stats)
         _print_run_summary(run_stats)
@@ -750,6 +760,8 @@ def finalize_scrape_run(
     )
     write_review_data(build_review_data(audit_rows, skill_observations, context.profile))
 
+    if run_shutdown_requested():
+        raise RunInterruptedError("Server shutdown interrupted scrape finalization.")
     _log_run_summary(run_stats, audit_rows)
     _log_source_final_stats(run_stats)
     _print_run_summary(run_stats, audit_rows)

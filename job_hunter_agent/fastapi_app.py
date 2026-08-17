@@ -361,6 +361,13 @@ async def _app_lifespan(_app: FastAPI):
     try:
         yield
     finally:
+        # This also covers ASGI lifespan shutdowns that are not attributable to
+        # an OS signal. The Uvicorn signal hook records SIGINT/SIGTERM when it
+        # can; this idempotent fallback deliberately reports the signal as
+        # unknown rather than guessing a cause.
+        from job_hunter_agent import server_helpers as srv
+
+        srv._handle_server_shutdown()
         if scheduler_enabled:
             _stop_shared_scheduled_agent_loop()
         if telegram_enabled:
@@ -498,6 +505,7 @@ if __name__ == "__main__":
 
     from job_hunter_agent import server_helpers as srv
 
+    srv._log_previous_interrupted_runs()
     if args.rebuild:
         srv._rebuild_workspace_on_startup()
 
@@ -511,11 +519,19 @@ if __name__ == "__main__":
     print(f"Docs API:    http://{HOST}:{PORT}/docs")
     print(f"Swagger UI:  http://{HOST}:{PORT}/swagger-ui")
 
-    uvicorn.run(
-        create_app(),
-        host=HOST,
-        port=PORT,
-        log_level="debug" if srv.DEBUG_MODE else "info",
-        access_log=srv.DEBUG_MODE,
-        log_config=None,
+    class _JobHunterUvicornServer(uvicorn.Server):
+        def handle_exit(self, sig, frame):  # type: ignore[no-untyped-def]
+            srv._handle_server_shutdown(sig)
+            super().handle_exit(sig, frame)
+
+    server = _JobHunterUvicornServer(
+        uvicorn.Config(
+            create_app(),
+            host=HOST,
+            port=PORT,
+            log_level="debug" if srv.DEBUG_MODE else "info",
+            access_log=srv.DEBUG_MODE,
+            log_config=None,
+        )
     )
+    server.run()

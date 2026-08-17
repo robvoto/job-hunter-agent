@@ -80,6 +80,38 @@ def test_seek_only_runs_when_seek_enabled(monkeypatch):
     assert li_called == []
 
 
+def test_shutdown_does_not_commit_incomplete_source_snapshot(monkeypatch):
+    context = _make_context([SOURCE_SEEK])
+    committed: list[str] = []
+
+    monkeypatch.setattr(source_runner, "run_stop_requested", lambda: False)
+    monkeypatch.setattr(source_runner, "run_shutdown_requested", lambda: True)
+    monkeypatch.setattr(source_runner, "step_through_enabled", lambda: True)
+    monkeypatch.setattr(
+        source_runner,
+        "_run_seek_source",
+        lambda ctx: _seek_result(
+            discovery_records=[{"job_key": "seek:1"}],
+            source_cache_status="MISS",
+            source_cache_signature="signature",
+        ),
+    )
+    monkeypatch.setattr(
+        source_runner,
+        "save_source_discovery_snapshot",
+        lambda *args: committed.append("snapshot"),
+    )
+    monkeypatch.setattr(
+        source_runner,
+        "save_source_failure_state",
+        lambda *args: committed.append("failure"),
+    )
+
+    run_enabled_sources(context)
+
+    assert committed == []
+
+
 # ---------------------------------------------------------------------------
 # 2. LinkedIn only runs when only LinkedIn is enabled
 # ---------------------------------------------------------------------------

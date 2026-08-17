@@ -13,6 +13,7 @@ from job_hunter_agent.record_schema import (
     RECORD_FIT_TONE_CLASS_KEY,
 )
 from job_hunter_agent.run_context import ScrapeRunContext
+from job_hunter_agent import run_control
 
 
 def _build_context() -> ScrapeRunContext:
@@ -43,6 +44,24 @@ def _build_context() -> ScrapeRunContext:
         dashboard_debug_mode=False,
         reset_new_to_you=False,
     )
+
+
+def test_interrupted_finalize_does_not_generate_success_summary(monkeypatch):
+    summaries: list[object] = []
+    monkeypatch.setattr(scrape_finalize, "_log_run_summary", lambda *args: summaries.append(args))
+    run_control.request_run_shutdown()
+    try:
+        try:
+            scrape_finalize.finalize_scrape_run(_build_context(), [], [], [])
+        except run_control.RunInterruptedError:
+            pass
+        else:
+            raise AssertionError("interrupted finalization should abort")
+    finally:
+        run_control.clear_run_shutdown_request()
+        run_control.clear_run_stop_request()
+
+    assert summaries == []
 
 
 def test_merge_into_pool_updates_non_score_fields_and_preserves_frozen_score():
