@@ -26,6 +26,11 @@ See `.skills/scraping/DETAILS.md` for detailed work-mode extraction, source-spec
 - Keep fallback heuristics data-driven in managed knowledge/config, not hardcoded in scraper code.
 - Normalise job identity consistently for dedup/history.
 - Surface partial or low-confidence descriptions; do not hide them.
+- Source worker completion is not the same as source health: a source may complete as `healthy`, `partial_failure`, `full_failure`, or `stopped`. Never report a fully failed source as successful merely because its worker returned.
+- A healthy source that returns zero jobs is still a valid success; distinguish zero results from transport/provider failure.
+- Partial, stopped, timed-out, or failed source collections must never replace a known-good source-discovery snapshot. Only a complete successful collection may write a success snapshot.
+- LinkedIn uses a bounded, configurable consecutive-target-failure circuit breaker. Do not increase concurrency to mask blocking/timeouts; when the breaker trips, preserve any successful partial results, mark the collection incomplete, and use the bounded failure-backoff path for full failure.
+- `SOURCE_COMPLETE` means the source worker finished. Use explicit health markers such as `SOURCE_FAILED` / `SOURCE_PARTIAL` and the structured source status to describe whether collection actually succeeded.
 - Do not treat search keywords as job-level work-mode proof.
 
 ## Ownership

@@ -539,6 +539,7 @@ The current managed defaults for history and cache retention live in `data/confi
 - `cache_settings.source_discovery_cache_max_entries`: `10000`
 - `cache_settings.source_discovery_cache_max_age_minutes`: `60`
 - `cache_settings.linkedin_failure_backoff_minutes`: `15`
+- `cache_settings.linkedin_max_consecutive_target_failures`: `6`
 
 Behavior:
 
@@ -546,8 +547,10 @@ Behavior:
 - The occupation-title cache is pruned by both age and count.
 - Source discovery snapshots are retained per account and reused only for a
   matching source signature within the configured freshness window.
-- A fully timed-out identical LinkedIn search records a temporary bounded
-  backoff state; it does not suppress future retries permanently.
+- A fully failed LinkedIn search records a temporary bounded backoff state; it does not suppress future retries permanently.
+- LinkedIn stops submitting new search targets after the configured number of consecutive target failures. Already-running bounded workers are drained, successful partial results are preserved, and an incomplete/failed collection is not written as a successful discovery snapshot.
+- A LinkedIn search that completes successfully with zero rows is `healthy`; zero rows alone are not a source failure.
+- Source health is explicit: `healthy`, `partial_failure`, `full_failure`, or `stopped`. `SOURCE_COMPLETE` means only that the source worker finished; `SOURCE_FAILED` / `SOURCE_PARTIAL` and the structured source result describe collection health.
 - The file-backed caches are pruned by both age and count.
 - Admin > Global settings also exposes maintenance actions to clear shared runtime caches or clear the current user search state immediately.
 - Clear current user search state also clears transient runtime caches, per-user agent state, the current workspace HTML, and recruiter/history review state so the next run regenerates from clean runtime state.
@@ -562,6 +565,20 @@ python -m job_hunter_agent.db_seed --overwrite
 `--overwrite` replaces all DB knowledge entries from the current bundled files. Use only for a full DB reset or corruption recovery — it will wipe any user-approved signal additions.
 
 `--upgrade` and `--overwrite` are mutually exclusive.
+
+---
+
+### Interrupted server shutdown during an active search
+
+If Uvicorn receives a shutdown request while a job search is active, Job Hunter records the run as `interrupted` before normal server shutdown continues. The terminal/server log emits a `[RUN_INTERRUPTED]` warning with the active run ID, current source/progress, timestamp, and SIGINT/SIGTERM when Uvicorn exposes the signal. For shutdown paths where no reliable signal is available, the signal is reported as unknown rather than guessed.
+
+Operational invariants:
+
+- an interrupted search is never reported as a successful completed run;
+- active run state is cleared so the UI does not remain stuck on `running`;
+- source-discovery snapshots collected by the interrupted run are not committed as successful snapshots;
+- the next server startup reports the previous interrupted run so the operator can see that the prior search did not finalize;
+- intentional Ctrl+C/SIGTERM still shuts the server down normally after the interruption is recorded. Job Hunter does not ignore or fight an explicit shutdown request.
 
 ---
 
