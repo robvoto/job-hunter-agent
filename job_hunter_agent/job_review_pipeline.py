@@ -1427,6 +1427,18 @@ def review_post_detail_normalized_job(
         _finalize_job_result(record, context, reason=reason)
         return _build_outcome(record), record, skill_observations
 
+    if _has_job_closed_signal(record):
+        reject_reason = "JOB_CLOSED"
+        record[RECORD_DECISION_KEY] = "REJECT"
+        record[RECORD_REJECT_REASON_KEY] = reject_reason
+        _finalize_job_result(
+            record,
+            context,
+            reason=reject_reason,
+            explanation="The listing appears to be closed and no longer accepting applications.",
+        )
+        return _build_outcome(record), record, skill_observations
+
     _apply_work_type_inference(record, details_text)
     _call_hook(hooks, "before_common_review", record, context)
     _call_hook(hooks, "after_description_loaded", record, context)

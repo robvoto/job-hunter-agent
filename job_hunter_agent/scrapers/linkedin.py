@@ -9,8 +9,10 @@ import re
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime
+from html.parser import HTMLParser
 from typing import List
 from urllib.error import URLError
+from urllib.parse import unquote
 from urllib.request import Request, urlopen
 
 logger = logging.getLogger(__name__)
@@ -62,7 +64,7 @@ from job_hunter_agent.record_schema import (
 from job_hunter_agent.run_control import run_stop_requested, set_run_progress_state
 from job_hunter_agent.runtime_helpers import CLI_FLAG_DEBUG, has_cli_flag
 from job_hunter_agent.salary import load_salary
-from job_hunter_agent.scrapers.base import BaseJobScraper, normalize_jobspy_record
+from job_hunter_agent.scrapers.base import BaseJobScraper, normalize_jobspy_record, _url_domain
 from job_hunter_agent.scrapers.location_adapters import to_linkedin_search_scope
 from job_hunter_agent.source_registry import SOURCE_LINKEDIN
 from job_hunter_agent.source_errors import PartialSourceResultsError
@@ -80,14 +82,35 @@ salary_rules = load_salary()
 job_type_rules = load_job_type()
 
 
+class _JobSpyNoticeHandler(logging.Handler):
+    """Captures JobSpy's own WARNING+/ERROR+ log lines from inside the spawned worker.
+
+    JobSpy logs to a "JobSpy:LinkedIn" logger with propagate=False, so messages
+    such as a 429/blocked response are otherwise invisible outside the subprocess
+    that made the request. This surfaces them back to the parent process's log.
+    """
+
+    def __init__(self, sink: list[str]) -> None:
+        super().__init__(level=logging.WARNING)
+        self._sink = sink
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self._sink.append(self.format(record))
+
+
 def _scrape_linkedin_jobs_worker(search_params: dict, send_conn) -> None:
+    jobspy_notices: list[str] = []
+    jobspy_logger = logging.getLogger("JobSpy:LinkedIn")
+    handler = _JobSpyNoticeHandler(jobspy_notices)
+    jobspy_logger.addHandler(handler)
     try:
         from jobspy import scrape_jobs  # noqa: PLC0415
 
-        send_conn.send(("ok", scrape_jobs(**search_params)))
+        send_conn.send(("ok", scrape_jobs(**search_params), jobspy_notices))
     except Exception as exc:  # pragma: no cover - exercised through parent helper
-        send_conn.send(("error", (type(exc).__name__, str(exc))))
+        send_conn.send(("error", (type(exc).__name__, str(exc)), jobspy_notices))
     finally:
+        jobspy_logger.removeHandler(handler)
         send_conn.close()
 
 
@@ -124,8 +147,10 @@ def _fetch_jobspy_with_timeout(search_params: dict, timeout_seconds: float):
         raise RuntimeError(
             f"LinkedIn jobspy worker exited without results (exitcode={worker.exitcode})"
         )
-    status, payload = recv_conn.recv()
+    status, payload, jobspy_notices = recv_conn.recv()
     recv_conn.close()
+    for notice in jobspy_notices:
+        logger.warning("[LinkedIn jobspy] %s", notice)
     if status == "ok":
         return payload
     error_type, error_message = payload
@@ -160,18 +185,70 @@ def _extract_linkedin_posted_age_days(html: str, run_date) -> float | None:
     return parse_visible_posted_age_days(visible_text, run_date)
 
 
-def _backfill_linkedin_posted_age(record: dict, run_iso: str) -> None:
-    if record.get(RECORD_POSTED_AGE_DAYS_KEY) is not None:
-        return
+_JOB_URL_DIRECT_CODE_RE = re.compile(r'<code[^>]*id="applyUrl"[^>]*>(.*?)</code>', re.I | re.S)
+_JOB_URL_DIRECT_VALUE_RE = re.compile(r"(?<=\?url=)[^\"&<]+")
 
-    html = _fetch_job_html(record)
+
+def _extract_linkedin_job_url_direct(html: str) -> str:
+    code_match = _JOB_URL_DIRECT_CODE_RE.search(html)
+    if not code_match:
+        return ""
+    value_match = _JOB_URL_DIRECT_VALUE_RE.search(code_match.group(1))
+    if not value_match:
+        return ""
+    return unquote(value_match.group())
+
+
+class _LinkedInDescriptionParser(HTMLParser):
+    """Extracts visible text from LinkedIn's job-description container.
+
+    Targets the same "show-more-less-html__markup" container JobSpy's own detail-page
+    parser reads, via the stdlib parser (matching the pattern this codebase already uses
+    for structured posting-date extraction) instead of adding a BeautifulSoup dependency.
+    """
+
+    _MARKUP_CLASS = "show-more-less-html__markup"
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._depth = 0
+        self._capture_from_depth: int | None = None
+        self._chunks: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        self._depth += 1
+        if self._capture_from_depth is None:
+            class_attr = str(dict(attrs).get("class") or "")
+            if self._MARKUP_CLASS in class_attr:
+                self._capture_from_depth = self._depth
+
+    def handle_startendtag(self, tag, attrs) -> None:
+        self.handle_starttag(tag, attrs)
+        self.handle_endtag(tag)
+
+    def handle_endtag(self, tag: str) -> None:
+        if self._capture_from_depth is not None and self._depth == self._capture_from_depth:
+            self._capture_from_depth = None
+        self._depth = max(0, self._depth - 1)
+
+    def handle_data(self, data: str) -> None:
+        if self._capture_from_depth is not None:
+            self._chunks.append(data)
+
+    @property
+    def description(self) -> str:
+        return re.sub(r"\s+", " ", " ".join(self._chunks)).strip()
+
+
+def _extract_linkedin_description(html: str) -> str:
     if not html:
-        return
-
-    run_date = datetime.fromisoformat(run_iso).date()
-    posted_age_days = _extract_linkedin_posted_age_days(html, run_date)
-    if posted_age_days is not None:
-        record[RECORD_POSTED_AGE_DAYS_KEY] = posted_age_days
+        return ""
+    parser = _LinkedInDescriptionParser()
+    try:
+        parser.feed(html)
+    except Exception:
+        return ""
+    return parser.description
 
 
 def classify_linkedin_apply_method(apply_url: str, canonical_url: str) -> str:
@@ -309,7 +386,6 @@ class LinkedInScraper(BaseJobScraper):
                     f"[LinkedIn cached job {index}/{len(self.discovery_records)}]",
                     kept_records,
                     skill_observations,
-                    check_closed_signals=False,
                 )
             self.discovery_status["complete"] = cached_collection_complete
             return kept_records, audit_rows, skill_observations
@@ -504,7 +580,6 @@ class LinkedInScraper(BaseJobScraper):
                             salary_rules=salary_rules,
                             job_type_rules=job_type_rules,
                         )
-                        _backfill_linkedin_posted_age(record, self.run_iso)
                         record[RECORD_DESCRIPTION_SOURCE_KEY] = "linkedin_full_description"
                         record[RECORD_DETAILS_TEXT_KEY] = str(record.get(RECORD_DETAILS_TEXT_KEY) or "")
                         logger.debug(
@@ -516,9 +591,6 @@ class LinkedInScraper(BaseJobScraper):
                             len(record[RECORD_DETAILS_TEXT_KEY]),
                         )
                         if self.discovery_capture is not None:
-                            closed_signals = self._detect_closed_job_signals(record)
-                            if closed_signals:
-                                record[RECORD_JOB_QUALITY_SIGNALS_KEY] = closed_signals
                             self.discovery_capture.append(copy.deepcopy(record))
                         self._review_discovered_record(
                             record,
@@ -527,7 +599,6 @@ class LinkedInScraper(BaseJobScraper):
                             target_tag,
                             kept_records,
                             skill_observations,
-                            check_closed_signals=False,
                         )
                     if run_stop_requested():
                         logger.debug("%s stop requested after row review; ending scrape", target_tag)
@@ -613,25 +684,28 @@ class LinkedInScraper(BaseJobScraper):
         target_tag: str,
         kept_records: list[dict],
         skill_observations: list[dict],
-        check_closed_signals: bool = True,
     ) -> None:
-        """Run current review logic on live or cached source evidence."""
+        """Run current review logic on live or cached source evidence.
+
+        No LinkedIn job-page network fetch happens above this point: native-ID dedup
+        (seen_job_keys) and the pre-detail gate must both clear a card before
+        _fetch_linkedin_detail_evidence performs the single bounded detail fetch.
+        """
         job_key = str(record.get(RECORD_JOB_KEY) or "").strip()
         if job_key and job_key in seen_job_keys:
             logger.debug("%s duplicate job_key=%s across LinkedIn targets; skipping", target_tag, job_key)
             return
         if job_key:
             seen_job_keys.add(job_key)
-        if check_closed_signals:
-            closed_signals = self._detect_closed_job_signals(record)
-            if closed_signals:
-                record[RECORD_JOB_QUALITY_SIGNALS_KEY] = closed_signals
         pre_outcome, record, _, should_fetch_details = review_pre_detail_normalized_job(
             record, review_context
         )
         outcome = pre_outcome
         record_skill_observations: list[dict] = []
         if pre_outcome["decision"] == "KEEP" and should_fetch_details:
+            closed_signals = self._fetch_linkedin_detail_evidence(record)
+            if closed_signals:
+                record[RECORD_JOB_QUALITY_SIGNALS_KEY] = closed_signals
             outcome, record, record_skill_observations = review_post_detail_normalized_job(
                 record, review_context, hooks=self._build_review_hooks()
             )
@@ -727,25 +801,55 @@ class LinkedInScraper(BaseJobScraper):
             before_preference_filters=_before_preference_filters,
         )
 
-    def _detect_closed_job_signals(self, record: dict) -> list[dict]:
+    def _fetch_linkedin_detail_evidence(self, record: dict) -> list[dict]:
+        """One bounded LinkedIn job-page fetch, reused for every field that needs it.
+
+        Only called once a card has survived native-ID dedup and the cheap
+        pre-detail gates (review_pre_detail_normalized_job returned
+        should_fetch_details=True) -- never during discovery/card review. JobSpy's
+        own discovery call runs with linkedin_fetch_description=False, so this is
+        the only per-job LinkedIn page fetch in the pipeline; its evidence is reused
+        for description, apply-method metadata, posted-age backfill, and closed-job
+        signals rather than independently re-fetching the same page multiple times.
+
+        Returns the closed-job signals found, if any; description/apply-url/posted-age
+        evidence is applied directly onto ``record``.
+        """
         from job_hunter_agent.job_quality import (  # noqa: PLC0415
             SIGNAL_KIND_JOB_CLOSED,
             detect_external_date_signals,
-            fetch_external_html,
             load_dodgy_job_rules,
         )
 
-        page_url = str(record.get(RECORD_URL_KEY) or "").strip()
-        if not page_url:
+        html = _fetch_job_html(record)
+        if not html:
             return []
 
-        page_html = fetch_external_html(page_url)
-        if not page_html:
-            return []
+        description = _extract_linkedin_description(html)
+        if description:
+            record[RECORD_DETAILS_TEXT_KEY] = description
+
+        job_url_direct = _extract_linkedin_job_url_direct(html)
+        if job_url_direct:
+            source_metadata = dict(record.get("source_metadata") or {})
+            source_metadata["apply_url"] = job_url_direct
+            source_metadata["apply_domain"] = _url_domain(job_url_direct)
+            source_metadata["ats_source"] = _url_domain(job_url_direct)
+            raw_fields = source_metadata.get("raw_source_fields")
+            if isinstance(raw_fields, dict):
+                raw_fields = dict(raw_fields)
+                raw_fields["job_url_direct"] = job_url_direct
+                source_metadata["raw_source_fields"] = raw_fields
+            record["source_metadata"] = source_metadata
+
+        run_date = datetime.fromisoformat(self.run_iso).date()
+        if record.get(RECORD_POSTED_AGE_DAYS_KEY) is None:
+            posted_age_days = _extract_linkedin_posted_age_days(html, run_date)
+            if posted_age_days is not None:
+                record[RECORD_POSTED_AGE_DAYS_KEY] = posted_age_days
 
         rules = load_dodgy_job_rules()
-        run_date = datetime.fromisoformat(self.run_iso).date()
-        signals = detect_external_date_signals(page_html, None, rules, run_date)
+        signals = detect_external_date_signals(html, None, rules, run_date)
         return [signal for signal in signals if signal.get("kind") == SIGNAL_KIND_JOB_CLOSED]
 
     def _fetch_jobspy(self, target: dict):
@@ -756,7 +860,7 @@ class LinkedInScraper(BaseJobScraper):
             "results_wanted": target["results_wanted"],
             "hours_old": target["hours_old"],
             "country_indeed": "Australia",
-            "linkedin_fetch_description": True,
+            "linkedin_fetch_description": False,
             "verbose": 0,
         }
         if target.get("distance") is not None:

@@ -80,7 +80,9 @@ def test_classify_linkedin_apply_method_unknown_when_apply_url_matches_canonical
     assert classify_linkedin_apply_method(url, url) == APPLY_METHOD_UNKNOWN
 
 
-def test_linkedin_closed_listing_signal_detects_no_longer_accepting_applications(monkeypatch):
+def test_linkedin_detail_fetch_detects_closed_listing_signal(monkeypatch):
+    from job_hunter_agent.scrapers import linkedin as linkedin_module
+
     scraper = LinkedInScraper(
         profile={},
         llm_cache={},
@@ -91,12 +93,12 @@ def test_linkedin_closed_listing_signal_detects_no_longer_accepting_applications
     )
 
     monkeypatch.setattr(
-        job_quality,
-        "fetch_external_html",
-        lambda url: "<html><body>No longer accepting applications</body></html>",
+        linkedin_module,
+        "_fetch_job_html",
+        lambda _record: "<html><body>No longer accepting applications</body></html>",
     )
 
-    signals = scraper._detect_closed_job_signals({RECORD_URL_KEY: "https://example.com/job/1"})
+    signals = scraper._fetch_linkedin_detail_evidence({RECORD_URL_KEY: "https://example.com/job/1"})
 
     assert any(signal.get("kind") == job_quality.SIGNAL_KIND_JOB_CLOSED for signal in signals)
 
@@ -345,7 +347,7 @@ def test_linkedin_deduplicates_cards_across_multiple_search_targets(monkeypatch)
             ]
         ),
     )
-    monkeypatch.setattr(scraper, "_detect_closed_job_signals", lambda _record: [])
+    monkeypatch.setattr(scraper, "_fetch_linkedin_detail_evidence", lambda _record: [])
     monkeypatch.setattr(
         linkedin_module,
         "review_pre_detail_normalized_job",
@@ -427,7 +429,7 @@ def test_linkedin_step_through_pauses_on_rejected_jobs(monkeypatch):
             ]
         ),
     )
-    monkeypatch.setattr(scraper, "_detect_closed_job_signals", lambda _record: [])
+    monkeypatch.setattr(scraper, "_fetch_linkedin_detail_evidence", lambda _record: [])
     monkeypatch.setattr(
         linkedin_module,
         "review_pre_detail_normalized_job",
@@ -520,7 +522,7 @@ def test_linkedin_stops_processing_rows_after_stop_request(monkeypatch):
         )
 
     monkeypatch.setattr(scraper, "_fetch_jobspy", _fake_fetch)
-    monkeypatch.setattr(scraper, "_detect_closed_job_signals", lambda _record: [])
+    monkeypatch.setattr(scraper, "_fetch_linkedin_detail_evidence", lambda _record: [])
     monkeypatch.setattr(linkedin_module, "run_stop_requested", lambda: stop_requested["value"])
     monkeypatch.setattr(
         linkedin_module,
@@ -621,7 +623,7 @@ def test_linkedin_prefetches_targets_concurrently_bounded_by_setting(monkeypatch
         )
 
     monkeypatch.setattr(scraper, "_fetch_jobspy", _fake_fetch)
-    monkeypatch.setattr(scraper, "_detect_closed_job_signals", lambda _record: [])
+    monkeypatch.setattr(scraper, "_fetch_linkedin_detail_evidence", lambda _record: [])
     monkeypatch.setattr(
         linkedin_module,
         "review_pre_detail_normalized_job",
@@ -710,7 +712,7 @@ def test_linkedin_scrape_isolates_failed_target_fetch(monkeypatch):
         )
 
     monkeypatch.setattr(scraper, "_fetch_jobspy", _fake_fetch)
-    monkeypatch.setattr(scraper, "_detect_closed_job_signals", lambda _record: [])
+    monkeypatch.setattr(scraper, "_fetch_linkedin_detail_evidence", lambda _record: [])
     monkeypatch.setattr(
         linkedin_module,
         "review_pre_detail_normalized_job",
@@ -764,6 +766,7 @@ def test_fetch_jobspy_with_timeout_uses_timeout_worker(monkeypatch):
 
     assert captured["timeout_seconds"] == 20.0
     assert captured["search_params"]["search_term"] == "project manager"
+    assert captured["search_params"]["linkedin_fetch_description"] is False
 
 
 def test_linkedin_progress_producer_emits_target_and_job_counts(monkeypatch):
@@ -970,7 +973,7 @@ def test_linkedin_partial_success_preserves_kept_jobs_after_later_failure(monkey
         )
 
     monkeypatch.setattr(scraper, "_fetch_jobspy", _fake_fetch)
-    monkeypatch.setattr(scraper, "_detect_closed_job_signals", lambda _record: [])
+    monkeypatch.setattr(scraper, "_fetch_linkedin_detail_evidence", lambda _record: [])
     monkeypatch.setattr(
         linkedin_module,
         "review_pre_detail_normalized_job",
@@ -991,3 +994,219 @@ def test_linkedin_partial_success_preserves_kept_jobs_after_later_failure(monkey
     assert status["failed_targets"] == 1
     assert status["final_status"] == "partial_failure"
     assert status["complete"] is False
+
+
+def test_linkedin_rejected_precheck_card_causes_zero_detail_fetches(monkeypatch):
+    from job_hunter_agent.scrapers import linkedin as linkedin_module
+
+    class _Rows:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def sort_values(self, **_kwargs):
+            return self
+
+        def iterrows(self):
+            return enumerate(self._rows)
+
+        def __len__(self):
+            return len(self._rows)
+
+    scraper = LinkedInScraper(
+        profile={},
+        llm_cache={},
+        job_history={},
+        applied_job_keys=set(),
+        hidden_job_keys=set(),
+        run_iso="2026-06-22T09:00:00+10:00",
+    )
+
+    monkeypatch.setattr(scraper, "_build_search_targets", lambda _settings: [_target("analyst")])
+    monkeypatch.setattr(
+        scraper,
+        "_fetch_jobspy",
+        lambda _target: _Rows(
+            [
+                {
+                    "id": "li-rejected",
+                    "title": "",
+                    "company": "Example Co",
+                    "location": "Sydney",
+                    "job_url": "https://www.linkedin.com/jobs/view/1",
+                }
+            ]
+        ),
+    )
+
+    def _fail_if_called(_record):
+        raise AssertionError("detail fetch must not run for a card rejected pre-detail")
+
+    monkeypatch.setattr(scraper, "_fetch_linkedin_detail_evidence", _fail_if_called)
+    monkeypatch.setattr(
+        linkedin_module,
+        "review_pre_detail_normalized_job",
+        lambda record, _context: (
+            {"decision": "REJECT", "reject_reason": "TITLE_EMPTY"},
+            record,
+            [],
+            False,
+        ),
+    )
+    monkeypatch.setattr(
+        linkedin_module,
+        "review_post_detail_normalized_job",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("unexpected detail review")),
+    )
+
+    kept_records, _, _ = scraper.scrape()
+
+    assert kept_records == []
+
+
+def test_linkedin_duplicate_native_id_causes_single_detail_fetch(monkeypatch):
+    from job_hunter_agent.scrapers import linkedin as linkedin_module
+
+    class _Rows:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def sort_values(self, **_kwargs):
+            return self
+
+        def iterrows(self):
+            return enumerate(self._rows)
+
+        def __len__(self):
+            return len(self._rows)
+
+    def _row():
+        return {
+            "id": "li-dup",
+            "title": "Scrum Master",
+            "company": "Example Co",
+            "location": "Sydney",
+            "job_url": "https://www.linkedin.com/jobs/view/1",
+        }
+
+    scraper = LinkedInScraper(
+        profile={},
+        llm_cache={},
+        job_history={},
+        applied_job_keys=set(),
+        hidden_job_keys=set(),
+        run_iso="2026-06-22T09:00:00+10:00",
+    )
+
+    monkeypatch.setattr(
+        scraper,
+        "_build_search_targets",
+        lambda _settings: [_target("scrum master"), _target("agile lead")],
+    )
+    monkeypatch.setattr(scraper, "_fetch_jobspy", lambda _target: _Rows([_row()]))
+
+    detail_fetch_calls: list[str] = []
+
+    def _fake_detail_fetch(record):
+        detail_fetch_calls.append(record.get("job_key"))
+        return []
+
+    monkeypatch.setattr(scraper, "_fetch_linkedin_detail_evidence", _fake_detail_fetch)
+    monkeypatch.setattr(
+        linkedin_module,
+        "review_pre_detail_normalized_job",
+        lambda record, _context: ({"decision": "KEEP"}, record, [], True),
+    )
+    monkeypatch.setattr(
+        linkedin_module,
+        "review_post_detail_normalized_job",
+        lambda record, _context, hooks=None: ({"decision": "KEEP"}, record, []),
+    )
+
+    kept_records, _, _ = scraper.scrape()
+
+    # Both target rows share the same native LinkedIn id: the second occurrence must
+    # be dropped by native-ID dedup before it ever reaches the detail fetch, so only
+    # the surviving first occurrence causes a (single) expensive detail-fetch path.
+    assert len(kept_records) == 1
+    assert detail_fetch_calls == ["linkedin:li-dup"]
+
+
+def test_extract_linkedin_description_reads_show_more_less_markup():
+    from job_hunter_agent.scrapers.linkedin import _extract_linkedin_description
+
+    html = (
+        "<html><body><div class=\"description__text\">"
+        '<div class="show-more-less-html__markup">'
+        "<p>We are looking for a <strong>Scrum Master</strong>.</p>"
+        "<p>5+ years experience required.</p>"
+        "</div></div></body></html>"
+    )
+
+    assert _extract_linkedin_description(html) == (
+        "We are looking for a Scrum Master . 5+ years experience required."
+    )
+
+
+def test_extract_linkedin_job_url_direct_reads_apply_code_element():
+    from job_hunter_agent.scrapers.linkedin import _extract_linkedin_job_url_direct
+
+    html = (
+        '<code id="applyUrl" style="display: none">'
+        '"https://www.linkedin.com/job-apply/redirect?url='
+        'https%3A%2F%2Femployer.example.com%2Fcareers%2F123"'
+        "</code>"
+    )
+
+    assert _extract_linkedin_job_url_direct(html) == "https://employer.example.com/careers/123"
+
+
+def test_fetch_jobspy_with_timeout_surfaces_jobspy_notices_as_warnings(monkeypatch, caplog):
+    from job_hunter_agent.scrapers import linkedin as linkedin_module
+
+    class _FakeConn:
+        def __init__(self, payload=None):
+            self._payload = payload
+
+        def close(self):
+            return None
+
+        def poll(self, _timeout):
+            return True
+
+        def recv(self):
+            return self._payload
+
+    class _FakeWorker:
+        def start(self):
+            return None
+
+        def join(self, _timeout):
+            return None
+
+        def is_alive(self):
+            return False
+
+    class _FakeContext:
+        def __init__(self):
+            self.recv_conn = _FakeConn(
+                ("ok", SimpleNamespace(), ["429 Response - Blocked by LinkedIn"])
+            )
+            self.send_conn = _FakeConn()
+            self.worker = _FakeWorker()
+
+        def Pipe(self, duplex=False):
+            assert duplex is False
+            return self.recv_conn, self.send_conn
+
+        def Process(self, **_kwargs):
+            return self.worker
+
+    monkeypatch.setattr(
+        linkedin_module.multiprocessing, "get_context", lambda _name: _FakeContext()
+    )
+    caplog.set_level(logging.WARNING, logger="job_hunter_agent.scrapers.linkedin")
+
+    result = _fetch_jobspy_with_timeout({"search_term": "project manager"}, timeout_seconds=20.0)
+
+    assert isinstance(result, SimpleNamespace)
+    assert "429 Response - Blocked by LinkedIn" in caplog.text
