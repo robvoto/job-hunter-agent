@@ -58,7 +58,7 @@ The hard gates in the title filter are:
 - The list should stay small or empty
 
 **Two independent systems — mismatch causes silent 0 results:**
-- `search_settings.keywords` — what is sent to SEEK/LinkedIn to fetch job listings
+- `search_settings.keywords` and the profile-driven search-term set — what the shared source-target builders send to SEEK, LinkedIn, and APSJobs to fetch job listings
 - `primary_job_title_pattern` + `secondary_title_patterns` — what `analyze_title_filters()` uses for scoring
 
 If keywords and title patterns diverge (e.g. keywords say "software developer" but pattern says "accounts officer"), every scraped job will still pass the title gate, but the LLM and scoring will correctly assess fit.

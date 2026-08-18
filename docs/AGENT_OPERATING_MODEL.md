@@ -84,7 +84,7 @@ The description is important because agent systems often discover skills from na
 | `dashboard-ui` | Workspace and settings UI, including workspace output sync. |
 | `history-dedup` | Job history, saved/viewed/applied/hidden state, duplicate identity. |
 | `instruction-maintenance` | AGENTS, adapter files, skills, and instruction docs. |
-| `mcp-tooling` | WSL/filesystem/Google connector access and MCP failure recovery. |
+| `mcp-tooling` | WSL/filesystem/Google connector access, Human MCP browser/Gmail access, and MCP failure recovery. |
 | `job-filtering` | Deterministic pass/fail filters, hard blockers, and reject reasons. |
 | `knowledge-management` | Managed knowledge/config/source-of-truth ownership. |
 | `no-hardcoding` | Config, schema, thresholds, labels, defaults, fallback values, rule IDs, and business-rule ownership. |
@@ -93,7 +93,7 @@ The description is important because agent systems often discover skills from na
 | `profile-extraction` | CV/profile extraction and normalization. |
 | `release-management` | Application versions, release preparation, release gates, Git tags, and publishing. |
 | `scoring-ranking` | Fit scoring, ranking, and score explanations. |
-| `scraping` | SEEK/LinkedIn scraping and source data shape. |
+| `scraping` | SEEK, LinkedIn, and APSJobs discovery/scraping, source health, caching, and source data shape. |
 | `signal-registry` | Signal lifecycle, approval, and governance. |
 | `suggested-tuning` | Settings > Optimise > Suggested Tuning workflow. |
 

@@ -13,7 +13,7 @@ Use before editing job history, viewed/applied/hidden state, posting timestamps,
 - Scrape run outputs (run_stats, audit_records, review_data, workspace_pool) are disposable; job history is not.
 - History retention is centrally managed through Admin/global settings, not hardcoded in feature code.
 - Current retention knobs live in `global_settings.history_settings` and `global_settings.cache_settings`.
-- Deduplication should be stable across SEEK and LinkedIn where possible.
+- Deduplication should be stable across SEEK, LinkedIn, and APSJobs where possible; prefer source-native IDs before expensive work and cross-source identity only where evidence is strong enough.
 - Job keys must not depend on unstable UI-only text when stronger identifiers exist.
 - Posting timestamps should be normalised consistently before ranking/filtering.
 

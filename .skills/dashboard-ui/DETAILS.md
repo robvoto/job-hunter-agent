@@ -39,10 +39,10 @@ Use before editing FastAPI routes, templates, workspace data, settings UI, or sc
 
 ## Onboarding / settings widget patterns
 
-### Source enable toggles (`seek_enabled`, `linkedin_enabled`)
+### Source enable toggles (`seek_enabled`, `linkedin_enabled`, `apsjobs_enabled`)
 - Both rendered as `<label class="toggle-switch">` wrapping `<input type="checkbox" role="switch">` with a `<span class="toggle-switch-state" id="*_state">` sibling.
 - JS reads/writes via `getToggleChecked(id)` / `setToggleChecked(id, bool)` / `setToggleStateText(stateId, bool)` from `settings-utils.js`.
-- `collectProfile()` builds `enabled_sources` using `getToggleChecked('seek_enabled')` and `getToggleChecked('linkedin_enabled')`.
+- `collectProfile()` builds `enabled_sources` from `seek_enabled`, `linkedin_enabled`, and `apsjobs_enabled` using the shared toggle helpers.
 - **Never use `.value === 'true'` for a checkbox toggle** — a checkbox's `.value` is `"on"`, not `"true"`.
 - When adding a new settings toggle near these controls, reuse the full owning structure, not just the switch classes in isolation. For search/settings source-style controls that means a real `search-source-panel` with a `search-source-panel-head`, not a loose row that happens to contain `toggle-switch--compact`.
 - For any persisted settings toggle, verify three things before handoff: the value is collected from the DOM, the API round-trips the saved value after reload, and a Playwright click test confirms the real browser save/reload path.

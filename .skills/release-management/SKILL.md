@@ -57,6 +57,7 @@ A release is blocked unless:
 7. The non-LLM Playwright E2E suite passes.
 8. The new version commit and annotated tag can be pushed atomically.
 9. Local `HEAD`, `origin/main`, and unrelated working files remain unchanged while release tests run; concurrent-agent changes block the release.
+10. Tracked text files are physically LF in the release worktree; `git ls-files --eol` must not report `w/crlf` or `w/mixed` for tracked text.
 
 Do not skip a failed gate, move an existing release tag, or force-push a release. Fix the cause and rerun the release command.
 

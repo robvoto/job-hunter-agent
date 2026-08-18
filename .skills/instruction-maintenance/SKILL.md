@@ -37,6 +37,12 @@ When cleaning instructions, check:
 - Does it conflict with `AGENTS.md`?
 - Does it accidentally encourage hardcoding, fallbacks, or broad rewrites?
 
+## File format
+- All tracked instruction Markdown uses UTF-8 with LF line endings. `.gitattributes` and `.editorconfig` own the policy.
+- Do not trust a clean Git status alone to prove the physical worktree format: `git ls-files --eol` can reveal `w/crlf` or `w/mixed` files whose normalized Git content is otherwise unchanged.
+- After editing instructions, check the affected instruction files with `git ls-files --eol`; normalize any `w/crlf` or `w/mixed` file to LF.
+- A repository-wide line-ending cleanup belongs in its own maintenance commit, separate from feature behaviour changes.
+
 ## Safe edit pattern
 1. Inspect current files first.
 2. Make small targeted edits.

@@ -1,6 +1,6 @@
 # Skill: Scraping
 
-Use before editing SEEK/LinkedIn scrapers or scraped job data shape.
+Use before editing SEEK, LinkedIn, or APSJobs discovery/scrapers or scraped job data shape.
 
 ## Rules
 - SEEK uses direct job pages only; do not restore pane scraping.
@@ -30,14 +30,44 @@ Use before editing SEEK/LinkedIn scrapers or scraped job data shape.
 
 Do not add filtering or scoring logic to Phases 1–3. Phase 4 is the only place that calls `fit_score_and_breakdown_displayed`.
 
+## Source discovery reliability
+
+### SEEK search-plan safety
+- Every configured term gets comparable page-1 probe evidence before a remembered plan is updated.
+- Bootstrap runs expand conservatively; query execution order must not decide which term gets deeper pagination.
+- Incomplete, stopped, or failed probe evidence must not update the remembered plan.
+- A remembered selected term is trusted for pruning only when its persisted `selection_counts[term]` meets the configured `seek_search_plan_min_corroboration_samples`; total `sample_count` alone is not corroboration.
+- Search-plan evidence remains isolated by material discovery signature and location.
+
+### LinkedIn two-stage discovery
+1. JobSpy performs card discovery with `linkedin_fetch_description=False`.
+2. Native LinkedIn job IDs are deduplicated before expensive work.
+3. `review_pre_detail_normalized_job()` runs with no LinkedIn detail-page network call.
+4. Only records returning `should_fetch_details=True` perform one bounded LinkedIn job-page fetch.
+5. That one page is reused for description, apply URL/domain, posted-age backfill, and closed-job evidence before post-detail review.
+
+Do not regress to full-description JobSpy discovery or pre-gate per-job page fetching; that caused broad LinkedIn targets to hit the outer per-target timeout.
+
+### LinkedIn cache and failure semantics
+- Complete successful discovery may write the known-good success snapshot. Partial/stopped/full-failure/fallback data may not replace it.
+- Fresh success is `HIT`; active failure suppression is `BACKOFF`; bounded last-known-good reuse is `STALE_FALLBACK` (or the same-run failure variant), never a fake live success.
+- During stale fallback, time-relative posting age must be advanced using a self-consistent age/reference-time pair so later age evaluation cannot double-count elapsed time.
+- Force refresh bypasses normal hit/backoff suppression and attempts the live source; if live refresh fails, diagnostics must still say so even when older data is displayed.
+
+### APSJobs
+- Use direct filtered APSJobs search URLs for configured profile-driven terms and supported locations where the source supports them.
+- Deduplicate native APS job IDs before expensive processing.
+- Zero rows from a valid query are a healthy result, not transport/source failure.
+
 ## Work type normalization
 Both Seek and LinkedIn normalize the raw work_type string through `map_job_type(raw, load_job_type())` from `scrapers/base.py` and `job_types.py`. The normalization mapping lives in `data/job_type.json` under the `"mapping"` key — no source-specific logic or hardcoded labels in scraper code. Unknown values are passed through and registered via the signal registry. The `"filter_groups"` key in the same file defines how canonical values map to workspace filter options; scrapers do not use filter_groups.
 
 ## Owners
 - `scrapers/seek_runner.py`: SEEK scrape loop, card review dispatch, parallel detail fetch, result collection.
 - `scrapers/seek.py`: SEEK low-level page helpers, selectors, URL building, detail payload fetch.
-- `scrapers/linkedin.py`: LinkedIn via python-jobspy.
-- `source_runner.py`: routes enabled sources (SEEK/LinkedIn) in a single run.
+- `scrapers/linkedin.py`: LinkedIn via python-jobspy card discovery plus the post-gate single-detail-fetch path.
+- `scrapers/apsjobs.py`: APSJobs direct filtered search and native-ID collection.
+- `source_runner.py`: routes enabled SEEK, LinkedIn, and APSJobs sources and owns discovery cache/backoff/fallback orchestration.
 - `source_connector.py`: orchestration entry point.
 - `job_identity.py`: cross-source identity/dedup.
 - `description_trust.py`: full-description confidence.
