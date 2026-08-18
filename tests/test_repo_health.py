@@ -655,3 +655,23 @@ def test_requirement_group_headings_and_summary_disclosure_have_clear_hierarchy(
     assert ".job-requirement-group-heading::before" in results_css
     assert ".job-summary-toggle-label {" in results_css
     assert "clip-path: inset(50%);" in results_css
+
+
+def test_tracked_text_files_use_lf_line_endings():
+    """Keep the physical worktree aligned with the repository's LF-only policy."""
+    result = subprocess.run(
+        ["git", "ls-files", "--eol"],
+        cwd=ROOT_DIR,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    bad = [
+        line
+        for line in result.stdout.splitlines()
+        if "w/crlf" in line or "w/mixed" in line
+    ]
+    assert not bad, (
+        "Tracked text files must use LF line endings. Normalize these files before committing:\n"
+        + "\n".join(bad)
+    )
