@@ -129,6 +129,28 @@ def test_title_judgment_cache_key_changes_when_relevant_inputs_change(monkeypatc
     assert strict_a == strict_b
 
 
+def test_fit_review_contract_version_does_not_invalidate_title_cache_key(monkeypatch):
+    monkeypatch.setattr(llm_gate, "_profile_fingerprint", lambda: "active-fp")
+    title_before = llm_gate.build_title_judgment_cache_key(
+        "Technology Delivery Specialist",
+        ["Business Analyst"],
+        [],
+    )
+
+    monkeypatch.setattr(llm_gate, "FIT_REVIEW_CACHE_CONTRACT_VERSION", 999)
+
+    fit_key = llm_gate.build_llm_cache_key("job description")
+    title_after = llm_gate.build_title_judgment_cache_key(
+        "Technology Delivery Specialist",
+        ["Business Analyst"],
+        [],
+    )
+
+    assert title_after == title_before
+    assert ":fit:v999:" in fit_key
+    assert ":title:v1:" in title_after
+
+
 def test_title_judgment_cache_entry_survives_current_profile_pruning(monkeypatch):
     monkeypatch.setattr(llm_gate, "_profile_fingerprint", lambda: "active-fp")
     key = llm_gate.build_title_judgment_cache_key(

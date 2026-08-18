@@ -320,6 +320,11 @@ class _LLMTitleJudgment(BaseModel):
 class _LLMExperienceComponent(BaseModel):
     kind: str
     text: str
+    # Semantic ownership stays with the LLM. Deterministic normalization only
+    # enforces this explicit judgement; it must not infer qualifier support from
+    # token overlap between job wording and candidate evidence.
+    profile_supported: bool = False
+    profile_evidence: list[str] = Field(default_factory=list)
 
 
 class _LLMRequirementCoverageItem(BaseModel):
@@ -769,21 +774,25 @@ def build_profile_storage_resolution_guidance() -> str:
     return "\n".join(f"- {line}" for line in PROFILE_STORAGE_RESOLUTION_DEFAULT_LINES)
 
 
-# Bump when the fit-review response shape changes so stale cache entries
-# (missing new fields) are treated as misses and re-reviewed by the LLM.
+# Shared cache namespace/profile lifecycle. Fit review and title judgement each
+# have their own contract version so changing one does not invalidate the other.
 LLM_CACHE_SCHEMA_VERSION = 3
+FIT_REVIEW_CACHE_CONTRACT_VERSION = 1
+TITLE_JUDGMENT_CACHE_CONTRACT_VERSION = 1
 
 
 def build_llm_cache_key(job_description_text: str) -> str:
     desc_hash = hashlib.sha256(
         str(job_description_text or "").encode("utf-8", errors="ignore")
     ).hexdigest()
-    return f"v{LLM_CACHE_SCHEMA_VERSION}:{_profile_fingerprint()}:{desc_hash}"
+    return (
+        f"v{LLM_CACHE_SCHEMA_VERSION}:{_profile_fingerprint()}:"
+        f"fit:v{FIT_REVIEW_CACHE_CONTRACT_VERSION}:{desc_hash}"
+    )
 
 
 # Title judgments have a separate contract version because their prompt/inputs can
 # evolve independently from the full fit-review payload schema above.
-TITLE_JUDGMENT_CACHE_CONTRACT_VERSION = 1
 
 
 def _canonical_title_cache_values(values: list[str] | None) -> list[str]:
@@ -1235,12 +1244,12 @@ def _has_meaningful_requirement_evidence(
     return False
 
 
-def _normalize_experience_components(value: Any) -> list[dict[str, str]]:
+def _normalize_experience_components(value: Any) -> list[dict[str, Any]]:
     """Keep the LLM's explicit experience decomposition structurally valid."""
     if not isinstance(value, list):
         return []
 
-    components: list[dict[str, str]] = []
+    components: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     for item in value:
         if not isinstance(item, dict):
@@ -1253,30 +1262,40 @@ def _normalize_experience_components(value: Any) -> list[dict[str, str]]:
         if identity in seen:
             continue
         seen.add(identity)
-        components.append({"kind": kind, "text": text})
+        raw_profile_evidence = item.get("profile_evidence")
+        profile_evidence = (
+            [
+                compact_whitespace(evidence)
+                for evidence in raw_profile_evidence
+                if compact_whitespace(evidence)
+            ]
+            if isinstance(raw_profile_evidence, list)
+            else []
+        )
+        components.append(
+            {
+                "kind": kind,
+                "text": text,
+                "profile_supported": item.get("profile_supported") is True,
+                "profile_evidence": profile_evidence,
+            }
+        )
     return components
 
 
-def _experience_qualifier_evidence_count(
-    experience_components: list[dict[str, str]],
-    matched_candidate_fact: str,
-    profile_support: list[str],
+def _experience_qualifier_support_count(
+    experience_components: list[dict[str, Any]],
 ) -> tuple[int, int]:
-    """Validate qualifier evidence independently from role-duration evidence."""
+    """Count explicit LLM-owned qualifier support; never infer it from token overlap."""
     qualifiers = [
-        component["text"]
+        component
         for component in experience_components
         if component.get("kind") == LLM_EXPERIENCE_COMPONENT_QUALIFIER
     ]
     supported = sum(
-        _has_meaningful_requirement_evidence(
-            qualifier,
-            "",
-            matched_candidate_fact,
-            profile_support,
-            [qualifier],
-        )
-        for qualifier in qualifiers
+        1
+        for component in qualifiers
+        if component.get("profile_supported") is True and component.get("profile_evidence")
     )
     return supported, len(qualifiers)
 
@@ -1795,10 +1814,8 @@ def normalize_llm_requirement_coverage(
                 profile_support = []
                 covered_requirement_elements = []
             else:
-                qualifier_supported, qualifier_count = _experience_qualifier_evidence_count(
+                qualifier_supported, qualifier_count = _experience_qualifier_support_count(
                     experience_components,
-                    matched_candidate_fact,
-                    profile_support,
                 )
                 if qualifier_count and not qualifier_supported:
                     _record_requirement_coverage_warning(

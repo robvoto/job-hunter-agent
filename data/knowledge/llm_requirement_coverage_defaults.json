@@ -1,8 +1,8 @@
 {
   "kind": "system_config",
   "name": "llm_requirement_coverage_defaults",
-  "version": 15,
-  "updated_at": "2026-08-13",
+  "version": 16,
+  "updated_at": "2026-08-17",
   "description": "Managed default guidance for LLM requirement coverage decomposition behaviour.",
   "lines": [
     "For requirement_coverage: semantically decompose capability and qualification requirements into atomic items. Return legal or formal entry gates separately in eligibility_requirements.",
@@ -24,8 +24,8 @@
     "When an ad states two or more distinct eligibility conditions joined together (e.g. 'hold a security clearance and be an Australian citizen'), emit one eligibility_requirements item per condition, each matched independently to its own profile eligibility fact — do not merge them into a single item that needs one combined fact to match.",
     "A citizenship, permanent residency, or existing work-rights/visa eligibility fact in the profile satisfies a requirement worded as work authorisation, work rights, or the right to work in that country — match it to that fact instead of leaving matched_candidate_fact empty just because the wording differs.",
     "A requirement that states a duration or years of experience in a field, tool, or role is capability even if the field itself sounds formal (e.g. years of experience in a regulated industry is still capability, not eligibility).",
-    "For every explicit duration or years-of-experience requirement, return experience_components that decompose the wording into short fragments with kind duration, role_or_activity, or qualifier. A qualifier is any substantive domain, industry, technology, methodology, product, environment, or other constraint beyond the duration and role/activity.",
-    "Role history can validate the duration and role/activity portion only. It must never be used as evidence for a qualifier. A requirement with qualifier components is supported only when candidate profile evidence supports every qualifier; if no qualifier is supported, use not_shown even when role history meets the duration. Use partially_supported only when candidate evidence proves at least one substantive qualifier or when the complete substantive content is supported but the duration is insufficient.",
+    "For every explicit duration or years-of-experience requirement, return experience_components that decompose the wording into short fragments with kind duration, role_or_activity, or qualifier. A qualifier is any substantive domain, industry, technology, methodology, product, environment, or other constraint beyond the duration and role/activity. For every component also return profile_supported and profile_evidence. profile_evidence must be concise evidence from the candidate profile that supports that component; leave it empty when profile_supported=false.",
+    "Role history can validate the duration and role/activity portion only. It must never be used as evidence for a qualifier. For each qualifier, profile_supported=true only when the candidate profile directly substantiates the full substantive qualifier. Shared geography, a broader parent industry, an adjacent domain, or generic occupation experience is not enough to prove a narrower qualifier. If support is uncertain, set profile_supported=false and profile_evidence=[] instead of inferring support. A requirement with qualifier components is supported only when candidate profile evidence supports every qualifier; if no qualifier is supported, use not_shown even when role history meets the duration. Use partially_supported only when candidate evidence proves at least one substantive qualifier or when the complete substantive content is supported but the duration is insufficient.",
     "Link capability requirements to the exact profile capability name, eligibility requirements to the exact profile eligibility fact, and qualification requirements to the exact profile qualification name.",
     "Use matched_candidate_fact for the matched profile fact and keep capability_name / eligibility_name aligned with the requirement_type.",
     "Leave matched_candidate_fact empty only for not_shown or mismatch items.",

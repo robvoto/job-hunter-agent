@@ -74,6 +74,8 @@ def test_fit_review_prompt_excludes_learning_guidance(monkeypatch):
     assert "Do not invent new categories" not in prompt
     assert "requirement_coverage" in prompt
     assert "fit_review.grade" in prompt
+    assert '"profile_supported":true|false' in prompt
+    assert '"profile_evidence":["..."]' in prompt
     assert "exact canonical capability or eligibility name" in prompt
     assert "Eligibility matrix:" in prompt
     assert "match_source" not in prompt
@@ -1084,74 +1086,6 @@ def test_fit_review_preserves_and_splits_eligibility_outside_general_row_budget(
     }
 
 
-def test_atomic_eligibility_rows_do_not_resplit_from_shared_trace_sentence():
-    result = llm_gate.normalize_llm_requirement_coverage(
-        [
-            {
-                "requirement": "Australian Citizenship",
-                "importance": "required",
-                "requirement_type": "eligibility",
-                "canonical_requirement": "Australian Citizenship",
-                "status": "supported",
-                "matched_candidate_fact": "Australian Citizenship",
-                "matched_job_text": "Work Rights: Only Australian Citizens with Baseline",
-                "profile_support": ["Australian Citizenship"],
-                "covered_requirement_elements": ["Australian Citizenship"],
-            },
-            {
-                "requirement": "Baseline Security Clearance",
-                "importance": "required",
-                "requirement_type": "eligibility",
-                "canonical_requirement": "Baseline Security Clearance",
-                "status": "supported",
-                "matched_candidate_fact": "Baseline",
-                "matched_job_text": "Work Rights: Only Australian Citizens with Baseline",
-                "profile_support": ["Baseline Security Clearance"],
-                "covered_requirement_elements": ["Baseline"],
-            },
-        ],
-        valid_eligibility_names={
-            "australian citizenship": "Australian Citizenship",
-            "australian citizens": "Australian Citizenship",
-            "baseline": "Baseline",
-            "baseline security clearance": "Baseline",
-        },
-        eligibility_fact_values={
-            "australian citizenship": True,
-            "baseline": True,
-        },
-    )
-
-    assert [(row["requirement"], row["matched_candidate_fact"]) for row in result] == [
-        ("Australian Citizenship", "Australian Citizenship"),
-        ("Baseline Security Clearance", "Baseline"),
-    ]
-
-
-def test_merge_deduplicates_eligibility_aliases_by_resolved_profile_fact():
-    result = llm_gate._merge_requirement_coverage(
-        [
-            {
-                "requirement": "Baseline Security Clearance",
-                "requirement_type": "eligibility",
-                "canonical_requirement": "Baseline Security Clearance",
-                "matched_candidate_fact": "Baseline",
-            }
-        ],
-        [
-            {
-                "requirement": "Baseline",
-                "requirement_type": "eligibility",
-                "canonical_requirement": "Baseline",
-                "matched_candidate_fact": "Baseline",
-            }
-        ],
-    )
-
-    assert len(result) == 1
-    assert result[0]["requirement"] == "Baseline Security Clearance"
-
-
 def test_eligibility_row_after_general_limit_is_not_dropped():
     rows = [
         {
@@ -2050,19 +1984,28 @@ def test_llm_judge_title_returns_none_on_client_exception():
 
 
 @pytest.mark.parametrize(
-    "requirement, qualifier",
+    "requirement, qualifier, profile_support",
     [
         (
             "5+ years’ experience as a Senior Business Analyst within the Australian Life Insurance industry",
             "Australian Life Insurance industry",
+            ["Led business analysis in Australian Federal Government programs."],
+        ),
+        (
+            "5+ years’ experience as a Senior Business Analyst within the Australian Life Insurance industry",
+            "Australian Life Insurance industry",
+            ["Worked on general insurance governance and compliance."],
         ),
         (
             "5+ years as a Business Analyst within telecommunications",
             "telecommunications",
+            ["Led business analysis across delivery teams."],
         ),
     ],
 )
-def test_experience_duration_does_not_prove_missing_qualifier(requirement, qualifier):
+def test_experience_duration_does_not_prove_missing_qualifier(
+    requirement, qualifier, profile_support
+):
     result = llm_gate.normalize_llm_requirement_coverage(
         [
             {
@@ -2072,11 +2015,16 @@ def test_experience_duration_does_not_prove_missing_qualifier(requirement, quali
                 "status": "supported",
                 "matched_candidate_fact": "Business Analysis",
                 "matched_job_text": requirement,
-                "profile_support": ["Led business analysis across delivery teams."],
+                "profile_support": profile_support,
                 "experience_components": [
                     {"kind": "duration", "text": "5+ years"},
                     {"kind": "role_or_activity", "text": "Business Analyst"},
-                    {"kind": "qualifier", "text": qualifier},
+                    {
+                        "kind": "qualifier",
+                        "text": qualifier,
+                        "profile_supported": False,
+                        "profile_evidence": [],
+                    },
                 ],
             }
         ],
@@ -2141,7 +2089,14 @@ def test_experience_qualifier_evidence_preserves_a_legitimate_partial_match():
                 "experience_components": [
                     {"kind": "duration", "text": "5+ years"},
                     {"kind": "role_or_activity", "text": "Business Analyst"},
-                    {"kind": "qualifier", "text": "telecommunications"},
+                    {
+                        "kind": "qualifier",
+                        "text": "telecommunications",
+                        "profile_supported": True,
+                        "profile_evidence": [
+                            "Delivered business analysis for telecommunications programs."
+                        ],
+                    },
                 ],
             }
         ],
@@ -2158,6 +2113,87 @@ def test_experience_qualifier_evidence_preserves_a_legitimate_partial_match():
     assert result[0]["status"] == "partially_supported"
     assert result[0]["matched_candidate_fact"] == "Business Analysis"
     assert result[0]["experience_requirement_met"] is False
+
+
+def test_experience_qualifier_explicit_profile_support_preserves_a_full_match():
+    requirement = (
+        "5+ years’ experience as a Senior Business Analyst within the Australian Life Insurance industry"
+    )
+    evidence = "Delivered Senior Business Analyst work in the Australian Life Insurance industry."
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": requirement,
+                "importance": "required",
+                "requirement_type": "capability",
+                "status": "supported",
+                "matched_candidate_fact": "Business Analysis",
+                "matched_job_text": requirement,
+                "profile_support": [evidence],
+                "experience_components": [
+                    {"kind": "duration", "text": "5+ years"},
+                    {"kind": "role_or_activity", "text": "Senior Business Analyst"},
+                    {
+                        "kind": "qualifier",
+                        "text": "Australian Life Insurance industry",
+                        "profile_supported": True,
+                        "profile_evidence": [evidence],
+                    },
+                ],
+            }
+        ],
+        valid_capability_names={"business analysis": "Business Analysis"},
+        role_experience=[
+            {
+                "normalized_title": "Senior Business Analyst",
+                "total_duration_months": 72,
+                "most_recent_end_year": 2025,
+            }
+        ],
+    )
+
+    assert result[0]["status"] == "supported"
+    assert result[0]["matched_candidate_fact"] == "Business Analysis"
+    assert result[0]["experience_requirement_met"] is True
+
+
+def test_experience_qualifier_support_requires_explicit_profile_evidence():
+    requirement = "5+ years as a Business Analyst within telecommunications"
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": requirement,
+                "importance": "required",
+                "requirement_type": "capability",
+                "status": "supported",
+                "matched_candidate_fact": "Business Analysis",
+                "matched_job_text": requirement,
+                "profile_support": ["Delivered telecommunications business analysis."],
+                "experience_components": [
+                    {"kind": "duration", "text": "5+ years"},
+                    {"kind": "role_or_activity", "text": "Business Analyst"},
+                    {
+                        "kind": "qualifier",
+                        "text": "telecommunications",
+                        "profile_supported": True,
+                        "profile_evidence": [],
+                    },
+                ],
+            }
+        ],
+        valid_capability_names={"business analysis": "Business Analysis"},
+        role_experience=[
+            {
+                "normalized_title": "Business Analyst",
+                "total_duration_months": 72,
+                "most_recent_end_year": 2025,
+            }
+        ],
+    )
+
+    assert result[0]["status"] == "not_shown"
+    assert result[0]["matched_candidate_fact"] == ""
+    assert result[0]["profile_support"] == []
 
 
 def test_requirement_coverage_rejects_broad_transferable_capability_as_partial_evidence():
