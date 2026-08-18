@@ -604,8 +604,10 @@ body {
   text-transform: uppercase;
 }
 
-.section-head-tools .jh-select {
-  min-width: 180px;
+/* Local layout exception: page size is a compact pagination preference, not a full-width filter. */
+.results-header .panel-select-control--page-size .jh-select {
+  width: auto;
+  min-width: 0;
 }
 
 .results-header .section-tools {
@@ -626,6 +628,7 @@ body {
 .results-pagination-footer .section-tools {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--control-space-md);
   white-space: nowrap;
 }

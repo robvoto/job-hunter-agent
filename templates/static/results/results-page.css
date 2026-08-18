@@ -7,7 +7,7 @@
   --card-accent: var(--border-strong);
   --card-accent-bg: var(--bg-muted);
   background: color-mix(in srgb, var(--bg-surface) 78%, var(--bg-page));
-  border: 1px solid var(--border-subtle);
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border-subtle));
   border-radius: 14px;
   padding: 22px 20px;
   box-shadow: none;
@@ -93,12 +93,12 @@
 [data-theme="dark-professional"] .job-card {
   padding: 20px 18px;
   background: color-mix(in srgb, var(--bg-surface) 66%, var(--bg-page));
-  border-color: color-mix(in srgb, var(--border-subtle) 84%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border-subtle));
 }
 
 [data-theme="dark-professional"] .job-card:hover {
   background-color: color-mix(in srgb, var(--bg-muted) 88%, var(--bg-page));
-  border-color: color-mix(in srgb, var(--border-strong) 58%, var(--border-subtle));
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border-strong));
 }
 
 [data-theme="dark-professional"] .job-badges {
@@ -547,34 +547,30 @@
 .job-insight-group strong {
   display: block;
   margin-bottom: 6px;
-  font-size: 0.92rem;
+  font-size: var(--text-role-status-font-size);
+  font-weight: var(--text-role-status-font-weight);
 }
 
 .job-requirements-empty {
   margin: 0;
   color: var(--text-muted);
-  font-size: 0.88rem;
-  line-height: 1.5;
+  font-size: var(--text-role-body-compact-font-size);
+  line-height: var(--text-role-body-compact-line-height);
 }
 
 .job-insight-group.is-secondary strong {
   color: var(--text-muted);
 }
 
-/* Same eyebrow treatment as the sidebar's SORT/FILTERS group labels, so the
-   Needs attention / Matched split reads as a real section break, not just
-   another muted line among the requirement rows. */
+/* Requirement status headings use the shared status typography role. */
 .job-requirement-group-heading {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 10px;
   color: var(--text-primary);
-  font-size: 0.9rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  line-height: 1.2;
-  text-transform: uppercase;
+  font-size: var(--text-role-status-font-size);
+  font-weight: var(--text-role-status-font-weight);
 }
 
 .job-requirement-group-heading::before {
@@ -627,12 +623,12 @@
   margin: 0;
   padding-left: 18px;
   color: var(--text-muted);
-  line-height: 1.45;
+  line-height: var(--text-role-body-compact-line-height);
 }
 
 .job-insight-group.is-secondary ul {
   color: var(--text-muted);
-  font-size: 0.92rem;
+  font-size: var(--text-role-body-compact-font-size);
 }
 
 .job-insight-group li {
@@ -718,7 +714,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--control-space-xs);
-  font-weight: 700;
+  font-weight: var(--text-role-status-font-weight);
 }
 
 .job-requirement-badges {
@@ -1463,26 +1459,6 @@
   border: 1px dashed var(--border-subtle);
   border-radius: 18px;
   color: var(--text-muted);
-}
-
-/* Compact profile-learning actions retain the gap-btn JS hook. */
-.gap-btn {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: var(--control-radius-pill);
-  font: inherit;
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background-color 120ms ease, border-color 120ms ease, opacity 120ms ease;
-  border: 1px solid transparent;
-}
-
-.gap-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
 }
 
 @media (max-width: 700px) {

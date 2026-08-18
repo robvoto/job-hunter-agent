@@ -1835,9 +1835,7 @@ def render_job_card(
             if level_label:
                 profile_detail = f"{profile_detail} ({level_label})"
             detail_html_parts.append(
-                '<span class="req-coverage-detail req-coverage-detail--capability">'
                 f'<span class="req-coverage-tag jh-badge">{safe_html(profile_detail)}</span>'
-                "</span>"
             )
         if (
             active_debug_mode
@@ -1845,12 +1843,14 @@ def render_job_card(
             and compact_whitespace(matched_text).lower() != req_text.lower()
         ):
             detail_html_parts.append(
-                '<span class="req-coverage-detail req-coverage-detail--evidence">'
                 f'<span class="req-coverage-tag jh-badge req-coverage-tag--muted">{safe_html(_workspace_label("workspace_card_labels", "job_requirements_ad_wording_badge"))}</span>'
                 f'<span class="req-coverage-detail-text">"{safe_html(matched_text)}"</span>'
-                "</span>"
             )
-        detail_html = "".join(detail_html_parts)
+        detail_html = (
+            '<span class="req-coverage-detail">' + "".join(detail_html_parts) + "</span>"
+            if detail_html_parts
+            else ""
+        )
         experience_note_html = ""
         if required_experience_months > 0:
             required_years = required_experience_months / 12.0
@@ -1876,7 +1876,7 @@ def render_job_card(
             if importance_label
             else ""
         )
-        add_to_profile_html = ""
+        profile_review_html = ""
         canonical_requirement = compact_whitespace(str(row.get("canonical_requirement") or ""))
         # profile_action_allowed (not canonical_requirement truthiness alone) is the
         # safety gate: an unresolved/vague group can still carry a display label
@@ -1908,8 +1908,8 @@ def render_job_card(
                     else "add_to_profile_action_title"
                 )
             )
-            add_to_profile_html = (
-                '<button type="button" class="jh-button jh-button--primary jh-button--compact job-requirement-action gap-btn" '
+            confirm_have_html = (
+                '<button type="button" class="jh-button jh-button--primary jh-button--micro job-requirement-action gap-btn" '
                 f'data-action="confirm_have" data-capability-name="{safe_html(canonical_requirement)}" '
                 f'title="{safe_html(_workspace_label("workspace_card_labels", action_title_key))}">'
                 '<span aria-hidden="true">+</span>'
@@ -1918,18 +1918,27 @@ def render_job_card(
             not_have_label = safe_html(
                 _workspace_label("workspace_card_labels", "gap_confirm_not_have_label")
             )
-            add_to_profile_html += (
-                f'<button type="button" class="jh-button jh-button--danger jh-button--compact job-requirement-action gap-btn" '
+            confirm_not_have_html = (
+                f'<button type="button" class="jh-button jh-button--danger jh-button--micro job-requirement-action gap-btn" '
                 f'data-action="confirm_do_not_have" data-capability-name="{safe_html(canonical_requirement)}">'
                 f"{not_have_label}</button>"
+            )
+            profile_review_html = (
+                '<span class="req-coverage-detail req-coverage-detail--profile-review">'
+                '<span class="req-coverage-detail-text">'
+                f'<strong>{safe_html(_workspace_label("workspace_card_labels", "profile_evidence_label"))}</strong> '
+                f'{safe_html(_workspace_label("workspace_card_labels", "profile_evidence_unconfirmed_label"))}'
+                '</span>'
+                f'{confirm_have_html}{confirm_not_have_html}'
+                '</span>'
             )
         html = (
             f'<li class="job-requirement-item job-requirement-item--{safe_html(css_modifier)}">'
             f'<span class="job-requirement-text">'
             f'<span class="job-requirement-title-line">'
-            f'{safe_html(req_text)}{importance_html}{add_to_profile_html}'
+            f'{safe_html(req_text)}{importance_html}'
             f'</span>'
-            f'{detail_html}{experience_note_html}'
+            f'{profile_review_html}{detail_html}{experience_note_html}'
             f"</span>"
             f"</li>"
         )
@@ -2461,19 +2470,33 @@ def render_section(
     panel_close = "</div>" if panelized else ""
     panel_body_open = '<div class="results-section-body">' if panelized else ""
     panel_body_close = "</div>" if panelized else ""
+    dom_id = section_dom_id(title)
+    section_data_attribute = f' data-section-id="{safe_html(dom_id)}"' if panelized else ""
+    pagination_match_count = '<span class="pagination-match-count"></span>'
+    pagination_page_label = '<span class="pagination-label pagination-page-label"></span>'
+    pagination_buttons = (
+        f'<button class="pagination-button" type="button" data-page-direction="prev">{safe_html(_workspace_label("workspace_card_labels", "pagination_prev_label"))}</button>'
+        f'<button class="pagination-button" type="button" data-page-direction="next">{safe_html(_workspace_label("workspace_card_labels", "pagination_next_label"))}</button>'
+    )
+    pagination_footer = (
+        '<div class="results-pagination-footer"><div class="section-tools">'
+        f'{pagination_page_label}{pagination_match_count}{pagination_buttons}'
+        '</div></div>'
+        if panelized
+        else ""
+    )
     if panelized:
         results_header = (
             '<div class="results-header">'
             '<div class="results-header__left">'
             f"<h2>{safe_html(title)}</h2>"
-            f"{header_tools}"
             f"{header_nav}"
             "</div>"
             '<div class="section-tools">'
-            '<span class="pagination-label pagination-page-label"></span>'
-            '<span class="pagination-match-count"></span>'
-            f'<button class="pagination-button" type="button" data-page-direction="prev">{safe_html(_workspace_label("workspace_card_labels", "pagination_prev_label"))}</button>'
-            f'<button class="pagination-button" type="button" data-page-direction="next">{safe_html(_workspace_label("workspace_card_labels", "pagination_next_label"))}</button>'
+            f"{pagination_match_count}"
+            f"{header_tools}"
+            f"{pagination_page_label}"
+            f"{pagination_buttons}"
             "</div>"
             "</div>"
         )
@@ -2487,14 +2510,14 @@ def render_section(
         )
     if not records:
         return (
-            f'<section class="{section_classes if panelized else "section"}">'
+            f'<section class="{section_classes if panelized else "section"}"'
+            f"{section_data_attribute}>"
             f"{panel_open}"
             f"{results_header}"
             f'<p class="empty-state">{safe_html(empty_message)}</p>'
             f"{panel_close}"
             f"</section>"
         )
-    dom_id = section_dom_id(title)
     cards = "".join(
         render_job_card(
             record,
@@ -2505,13 +2528,20 @@ def render_section(
         )
         for record in records
     )
+    filtered_empty_state = (
+        f'<p class="empty-state" hidden>{safe_html(empty_message)}</p>'
+        if panelized
+        else ""
+    )
     return (
         f'<section class="{section_classes}" data-section-id="{safe_html(dom_id)}">'
         f"{panel_open}"
         f"{results_header}"
         f"{panel_body_open}"
         f'<div class="job-grid">{cards}</div>'
+        f"{filtered_empty_state}"
         f"{panel_body_close}"
+        f"{pagination_footer}"
         f"{panel_close}"
         "</section>"
     )
@@ -2540,5 +2570,3 @@ def render_results_fragment(context: dict) -> str:
         )
 
     return rendered_html
-
-

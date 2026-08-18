@@ -387,7 +387,7 @@ def test_results_panel_styles_use_shared_outer_panel_and_inset_job_cards():
     job_card_block = re.search(r"\.job-card \{(?P<body>.*?)\n\}", results_css, re.S)
     assert job_card_block is not None
     body = job_card_block.group("body")
-    assert "border: 1px solid var(--border-subtle);" in body
+    assert "border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border-subtle));" in body
     assert "border-radius: 14px;" in body
     assert "border-bottom:" not in body
 

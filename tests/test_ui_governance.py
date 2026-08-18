@@ -355,3 +355,88 @@ def test_documented_local_exceptions_carry_an_exception_comment():
         "Documented local layout exception is missing its explanatory comment "
         f"(or the selector moved/was removed): {missing}"
     )
+
+
+# ---------------------------------------------------------------------------
+# 6. Job requirement typography must use the shared type scale
+# ---------------------------------------------------------------------------
+
+_RESULTS_CSS_PATH = REPO_ROOT / "templates" / "static" / "results" / "results-page.css"
+_JOB_REQUIREMENT_TYPOGRAPHY_EXPECTATIONS = {
+    ".job-insight-group strong": {
+        "font-size": "var(--text-role-status-font-size)",
+        "font-weight": "var(--text-role-status-font-weight)",
+    },
+    ".job-requirements-empty": {
+        "font-size": "var(--text-role-body-compact-font-size)",
+        "line-height": "var(--text-role-body-compact-line-height)",
+    },
+    ".job-requirement-group-heading": {
+        "font-size": "var(--text-role-status-font-size)",
+        "font-weight": "var(--text-role-status-font-weight)",
+    },
+    ".job-insight-group ul": {
+        "line-height": "var(--text-role-body-compact-line-height)",
+    },
+    ".job-insight-group.is-secondary ul": {
+        "font-size": "var(--text-role-body-compact-font-size)",
+    },
+    ".job-requirement-title-line": {
+        "font-weight": "var(--text-role-status-font-weight)",
+    },
+}
+_TYPOGRAPHY_PROPERTIES = {
+    "font-family",
+    "font-size",
+    "font-weight",
+    "line-height",
+    "letter-spacing",
+}
+
+
+def _css_rule_declarations(css_text: str, selector: str) -> dict[str, str]:
+    match = re.search(
+        rf"(?m)^\s*{re.escape(selector)}\s*\{{(?P<body>[^{{}}]*)\}}",
+        _strip_css_comments(css_text),
+    )
+    assert match, f"Expected governed CSS selector is missing: {selector}"
+    declarations: dict[str, str] = {}
+    for raw_declaration in match.group("body").split(";"):
+        if ":" not in raw_declaration:
+            continue
+        prop, value = raw_declaration.split(":", 1)
+        declarations[prop.strip()] = value.strip()
+    return declarations
+
+
+def test_job_requirement_typography_uses_shared_semantic_tokens():
+    """Requirement panels must use the shared type scale, not page-local typography literals.
+
+    Clearances, Eligibility, and Job Requirements all reuse these selectors. A
+    one-off font size/weight or uppercase eyebrow treatment therefore creates
+    visible drift across several job-card panels at once. Keep typography tied
+    to semantic tokens so every theme and future redesign changes consistently.
+    """
+    css = _RESULTS_CSS_PATH.read_text(encoding="utf-8")
+    violations = []
+
+    for selector, expected in _JOB_REQUIREMENT_TYPOGRAPHY_EXPECTATIONS.items():
+        declarations = _css_rule_declarations(css, selector)
+        for prop, expected_value in expected.items():
+            actual = declarations.get(prop)
+            if actual != expected_value:
+                violations.append((selector, prop, actual, expected_value))
+
+        for prop in _TYPOGRAPHY_PROPERTIES:
+            value = declarations.get(prop)
+            if value is not None and not value.startswith("var(--text-role-"):
+                violations.append((selector, prop, value, "shared --text-role-* token"))
+
+        if "text-transform" in declarations:
+            violations.append((selector, "text-transform", declarations["text-transform"], "absent"))
+
+    assert not violations, (
+        "Job requirement typography drifted from the shared semantic type scale. "
+        "Use --text-role-* tokens and keep status headings in normal title case: "
+        f"{violations}"
+    )

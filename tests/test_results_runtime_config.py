@@ -60,6 +60,23 @@ def test_results_page_uses_runtime_workspace_config():
     assert "window.location.reload();" in results_js
 
 
+def test_workspace_page_size_select_is_content_sized_in_pagination_cluster():
+    root = Path(__file__).resolve().parent.parent
+    workspace_css = (
+        root / "templates" / "static" / "workspace" / "workspace-page.css"
+    ).read_text(encoding="utf-8")
+
+    compact_rule = re.search(
+        r"\.results-header \.panel-select-control--page-size \.jh-select \{(?P<body>.*?)\n\}",
+        workspace_css,
+        flags=re.DOTALL,
+    )
+
+    assert compact_rule is not None
+    assert "width: auto;" in compact_rule.group("body")
+    assert "min-width: 0;" in compact_rule.group("body")
+
+
 def test_workspace_pagination_footer_aligns_with_panel_content_and_separates_counts():
     root = Path(__file__).resolve().parent.parent
     workspace_css = (
@@ -81,6 +98,7 @@ def test_workspace_pagination_footer_aligns_with_panel_content_and_separates_cou
     assert "padding-inline: var(--surface-gap-lg);" in footer_rule.group("body")
     assert controls_rule is not None
     assert "display: flex;" in controls_rule.group("body")
+    assert "justify-content: flex-end;" in controls_rule.group("body")
     assert "gap: var(--control-space-md);" in controls_rule.group("body")
 
 
@@ -108,9 +126,62 @@ def test_render_section_uses_results_header_sibling_layout_for_tools_and_paginat
     assert 'class="pagination-match-count"' in html
     assert 'section-head--with-tools' not in html
     assert re.search(
-        r'<div class="results-header"><div class="results-header__left">.*?class="section-head-tools".*?class="scope-tabs".*?</div><div class="section-tools">',
+        r'<div class="results-header"><div class="results-header__left">.*?class="scope-tabs".*?</div><div class="section-tools">.*?class="pagination-match-count".*?class="section-head-tools".*?class="pagination-label pagination-page-label"',
         html,
     )
+    assert 'class="results-pagination-footer"' in html
+    assert html.count('data-page-direction="prev"') == 2
+    assert html.count('data-page-direction="next"') == 2
+
+
+def test_render_empty_results_keeps_count_controls_but_omits_footer_pagination():
+    html = workspace_renderer.render_section(
+        "Job Results",
+        [],
+        "No jobs right now.",
+        header_tools_html=workspace_renderer.render_page_size_select_html(),
+        header_nav_html=workspace_renderer.render_workspace_tabs_html(0, 0, 0),
+    )
+
+    assert 'data-section-id="job-results"' in html
+    assert 'class="pagination-label pagination-page-label"' in html
+    assert 'class="pagination-match-count"' in html
+    assert 'data-page-direction="prev"' in html
+    assert 'data-page-direction="next"' in html
+    assert 'class="empty-state">No jobs right now.</p>' in html
+    assert 'class="results-pagination-footer"' not in html
+
+
+def test_render_results_includes_hidden_empty_state_for_filtered_zero_matches():
+    with patch(
+        "job_hunter_agent.workspace_renderer.render_job_card",
+        return_value='<article class="job-card">Card</article>',
+    ):
+        html = workspace_renderer.render_section(
+            "Job Results",
+            [{"job_key": "seek:1"}],
+            "No jobs match these filters.",
+            header_tools_html=workspace_renderer.render_page_size_select_html(),
+            header_nav_html=workspace_renderer.render_workspace_tabs_html(1, 0, 0),
+        )
+
+    assert '<p class="empty-state" hidden>No jobs match these filters.</p>' in html
+
+
+def test_pagination_hides_page_controls_at_zero_and_footer_on_single_page():
+    root = Path(__file__).resolve().parent.parent
+    results_js = (
+        root / "templates" / "static" / "results" / "results-page.js"
+    ).read_text(encoding="utf-8")
+
+    assert "const totalPages = matchingCards.length ? Math.ceil(matchingCards.length / pageSize) : 0;" in results_js
+    assert "pageLabel.hidden = matchingCards.length === 0;" in results_js
+    assert "prevButton.hidden = matchingCards.length === 0;" in results_js
+    assert "nextButton.hidden = matchingCards.length === 0;" in results_js
+    assert "emptyState.hidden = matchingCards.length !== 0;" in results_js
+    assert "footer.hidden = totalPages <= 1;" in results_js
+    assert "usedFooterPagination" in results_js
+    assert "firstVisibleCard.scrollIntoView({ block: 'start' });" in results_js
 
 
 def test_render_section_keeps_multiple_job_cards_inside_shared_results_panel():

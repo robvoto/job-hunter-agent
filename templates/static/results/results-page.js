@@ -266,20 +266,18 @@
 
     function applySectionPagination(section) {
       const grid = section.querySelector('.job-grid');
-      if (!grid) {
-        return;
-      }
-
       const sectionId = section.dataset.sectionId || 'matches';
-      const cards = Array.from(grid.querySelectorAll('.job-card'));
+      const cards = grid ? Array.from(grid.querySelectorAll('.job-card')) : [];
       const matchingCards = cards.filter(card => card.dataset.matchesFilters !== '0');
       const pageSize = Number(pageSizeSelect?.value || 12);
-      const totalPages = Math.max(Math.ceil(matchingCards.length / pageSize), 1);
+      const totalPages = matchingCards.length ? Math.ceil(matchingCards.length / pageSize) : 0;
 
       if (!paginationState[sectionId]) {
         paginationState[sectionId] = 1;
       }
-      paginationState[sectionId] = Math.min(Math.max(paginationState[sectionId], 1), totalPages);
+      paginationState[sectionId] = totalPages
+        ? Math.min(Math.max(paginationState[sectionId], 1), totalPages)
+        : 1;
 
       const currentPage = paginationState[sectionId];
       const startIndex = (currentPage - 1) * pageSize;
@@ -292,20 +290,31 @@
         card.hidden = false;
       });
 
-      const pageLabel = section.querySelector('.pagination-page-label');
-      if (pageLabel) {
-        pageLabel.textContent = `Page ${currentPage} of ${totalPages}`;
+      const emptyState = section.querySelector('.empty-state');
+      if (emptyState) {
+        emptyState.hidden = matchingCards.length !== 0;
       }
 
-      const matchCountLabel = section.querySelector('.pagination-match-count');
-      if (matchCountLabel) {
+      section.querySelectorAll('.pagination-page-label').forEach(pageLabel => {
+        pageLabel.hidden = matchingCards.length === 0;
+        pageLabel.textContent = matchingCards.length ? `Page ${currentPage} of ${totalPages}` : '';
+      });
+
+      section.querySelectorAll('.pagination-match-count').forEach(matchCountLabel => {
         matchCountLabel.textContent = `${matchingCards.length} matches`;
-      }
+      });
 
-      const prevButton = section.querySelector('[data-page-direction="prev"]');
-      const nextButton = section.querySelector('[data-page-direction="next"]');
-      if (prevButton) prevButton.disabled = currentPage <= 1 || matchingCards.length === 0;
-      if (nextButton) nextButton.disabled = currentPage >= totalPages || matchingCards.length === 0;
+      section.querySelectorAll('[data-page-direction="prev"]').forEach(prevButton => {
+        prevButton.hidden = matchingCards.length === 0;
+        prevButton.disabled = currentPage <= 1 || matchingCards.length === 0;
+      });
+      section.querySelectorAll('[data-page-direction="next"]').forEach(nextButton => {
+        nextButton.hidden = matchingCards.length === 0;
+        nextButton.disabled = currentPage >= totalPages || matchingCards.length === 0;
+      });
+      section.querySelectorAll('.results-pagination-footer').forEach(footer => {
+        footer.hidden = totalPages <= 1;
+      });
       saveWorkspacePagination();
     }
 
@@ -846,7 +855,14 @@
         const sectionId = section.dataset.sectionId || 'matches';
         const delta = pageButton.dataset.pageDirection === 'next' ? 1 : -1;
         paginationState[sectionId] = (paginationState[sectionId] || 1) + delta;
+        const usedFooterPagination = Boolean(pageButton.closest('.results-pagination-footer'));
         applySectionPagination(section);
+        if (usedFooterPagination) {
+          const firstVisibleCard = section.querySelector('.job-card:not([hidden])');
+          if (firstVisibleCard) {
+            firstVisibleCard.scrollIntoView({ block: 'start' });
+          }
+        }
         return;
       }
 

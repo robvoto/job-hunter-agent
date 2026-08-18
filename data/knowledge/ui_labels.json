@@ -1,8 +1,8 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 106,
-  "updated_at": "2026-08-14",
+  "version": 108,
+  "updated_at": "2026-08-17",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
     "remote_label": "Remote",
@@ -491,8 +491,10 @@
     "posting_channel_direct_employer_tooltip": "Posted directly by the employer.",
     "archive_badge_tooltip": "This role was saved from an earlier search and kept on your workspace.",
     "gap_confirm_not_have_label": "No, I don't have this",
-    "add_to_profile_action_label": "Add to profile",
-    "add_to_profile_action_title": "Add this to your capability profile",
+    "profile_evidence_label": "Profile evidence:",
+    "profile_evidence_unconfirmed_label": "Not confirmed",
+    "add_to_profile_action_label": "Add evidence",
+    "add_to_profile_action_title": "Confirm this capability and add it to your profile",
     "add_to_eligibility_action_label": "Add eligibility",
     "add_to_eligibility_action_title": "Add this eligibility fact to your profile",
     "add_to_qualification_action_label": "Add qualification",
