@@ -24,6 +24,7 @@ Keep always-loaded instructions small and reliable. Agents should load only the 
    - Point to `AGENTS.md`, `docs/PROJECT_CONTEXT.md`, the relevant skill owner, and any genuinely agent-specific context.
    - Must not redefine shared project rules, commands, architecture, backlog workflow, testing workflow, or Definition of Done.
    - Cline-specific durable context lives in `docs/CLINE_MEMORY.md` and is loaded only through `.clinerules/`.
+   - No separate Codex rule set is maintained. Codex tasks use `AGENTS.md` plus the same shared skills; task handoffs should explicitly tell Codex to read `AGENTS.md` when its runtime has not already loaded it.
 
 4. `.skills/*/SKILL.md`
    - Compact scoped instructions for one work area.
@@ -57,7 +58,7 @@ Examples of tools:
 - agent workflow and project-resource access
 - test execution
 
-A skill may state which tool type is needed, but must not pretend a tool exists if the current runtime does not provide it.
+A skill may state which tool type is needed, but must not pretend a tool exists if the current runtime does not provide it. Shared skills describe required capabilities first; runtime-specific tool namespaces belong only in explicitly scoped tooling instructions.
 
 ## Skill discovery rule
 
@@ -84,7 +85,7 @@ The description is important because agent systems often discover skills from na
 | `dashboard-ui` | Workspace and settings UI, including workspace output sync. |
 | `history-dedup` | Job history, saved/viewed/applied/hidden state, duplicate identity. |
 | `instruction-maintenance` | AGENTS, adapter files, skills, and instruction docs. |
-| `mcp-tooling` | WSL/filesystem/Google connector access, Human MCP browser/Gmail access, and MCP failure recovery. |
+| `mcp-tooling` | Repository/filesystem and connected-service access, including runtime-scoped Human MCP browser/Gmail tooling and failure recovery. |
 | `job-filtering` | Deterministic pass/fail filters, hard blockers, and reject reasons. |
 | `knowledge-management` | Managed knowledge/config/source-of-truth ownership. |
 | `no-hardcoding` | Config, schema, thresholds, labels, defaults, fallback values, rule IDs, and business-rule ownership. |
@@ -135,6 +136,7 @@ Local `docs/backlog/backlog_review.xlsx` is archive/export/reference only unless
 - Backlog workflow lives in `.skills/backlog-management/SKILL.md`.
 - Hardcoding/config/schema/default/fallback ownership lives in `.skills/no-hardcoding/SKILL.md`.
 - Skills use discovery frontmatter (`name` and `description`) so agents can route by skill metadata instead of hardcoded trigger lists in `AGENTS.md`.
+- Codex uses the shared `AGENTS.md` + skills model; no duplicate Codex rules are maintained.
 - `CLAUDE.md` is a thin Claude adapter only.
 - `.clinerules/` is the thin Cline adapter layer.
 - `docs/CLINE_MEMORY.md` is retained for Cline-specific durable context and must not be linked from shared `AGENTS.md`.

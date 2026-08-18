@@ -1,6 +1,6 @@
 ---
 name: mcp-tooling
-description: Use when accessing the Job Hunter repo, WSL, Human MCP, Google services, local browser control, or when an MCP/tool call fails or returns transport/encoding errors.
+description: Use for repository/filesystem access, connected Google/browser/Gmail tooling, or tool/transport failure recovery; apply runtime-specific MCP connector names only when that runtime exposes them.
 ---
 
 # Skill: MCP Tooling
@@ -9,9 +9,9 @@ Use for project filesystem/tool access and whenever MCP execution is unreliable.
 
 ## Source of truth
 - Job Hunter WSL repo: `/home/robvoto/projects/job-hunter-agent`.
-- Prefer `Local_Project_Files_Access` for repo/filesystem work.
-- If that connector fails, retry through `Human_MCP_Server` before claiming access is unavailable.
-- For the canonical backlog, prefer the authorised `Google_Drive` / Google Sheets connector when it is exposed in the current runtime. If that primary connector fails, attempt the approved `Human_MCP_Server` Google-service path before reporting the backlog unavailable. Never substitute stale local exports.
+- In a connector-based ChatGPT runtime, prefer `Local_Project_Files_Access` for repo/filesystem work; if it fails, retry through `Human_MCP_Server` before claiming access is unavailable.
+- In Codex, Claude Code, Cline, or another local coding runtime that already has direct repository shell/filesystem access, use that native access instead of pretending ChatGPT connector namespaces exist. The shared safety rules still apply.
+- For the canonical backlog, follow `.skills/backlog-management/SKILL.md`. In a ChatGPT connector runtime, use the authorised `Google_Drive` / Google Sheets connector and approved `Human_MCP_Server` fallback when exposed. In other runtimes, use their authorised live-Sheets capability if available. Never substitute stale local exports.
 
 ## Failure handling
 - One failed MCP call does **not** prove the connector or resource is unavailable.
@@ -32,10 +32,12 @@ Use for project filesystem/tool access and whenever MCP execution is unreliable.
 6. Report the exact failing layer: connector, command, path, encoding, permission, or application logic.
 
 ## Existing logged-in browser control
+This section is runtime-specific: it applies only when the Human MCP/browser bridge capability is exposed. Local Codex/Claude/Cline sessions must not assume they can control the signed-in browser merely because these tools exist in another runtime.
+
 - Human MCP server source: `E:\Programming\MCP-server\mcp_fileserver.py`.
 - Browser bridge extension source: `E:\Programming\MCP-server\chrome-human-mcp`.
 - Browser bridge design notes: `E:\Programming\MCP-server\docs\BROWSER_CONTROL.md`.
-- Rob uses his normal signed-in Chrome session for sites such as LinkedIn. Do not launch a clean automation profile, copy cookies, or ask him to log in again unless he explicitly requests a separate browser profile.
+- The human uses the normal signed-in Chrome session for sites such as LinkedIn. Do not launch a clean automation profile, copy cookies, or ask for another login unless the human explicitly requests a separate browser profile.
 - Current control path is the local Chrome extension bridge, not Chrome remote-debugging autoConnect. The extension bridge listens on `127.0.0.1:8766`, talks only to localhost, and preserves the existing signed-in session.
 - Human MCP exposes browser tools including `browser_status`, `browser_list_pages`, `browser_select_page`, `browser_navigate`, `browser_snapshot`, `browser_click`, `browser_fill`, and `browser_wait_for` after the connector catalogue refreshes.
 - In an already-open ChatGPT session the connector schema may be stale and not surface newly added browser tools. In that case, `Human_MCP_Server.run_command` may use a local FastMCP client against `http://127.0.0.1:8001/mcp` as a temporary catalogue bridge. A new ChatGPT session should discover the tools directly.
@@ -54,10 +56,10 @@ Use for project filesystem/tool access and whenever MCP execution is unreliable.
 
 ### Browser action safety
 - Read-only actions such as listing tabs, navigating, searching, opening profiles, and taking snapshots are allowed when they are part of the user's request.
-- Drafting text in ChatGPT is allowed. Avoid filling a browser message/form field unless Rob explicitly asks, because it can create accidental state even before submission.
-- **Never send a LinkedIn message, connection request, application, email, form submission, invitation acceptance, or other external action without Rob's explicit approval in the current turn.**
-- Do not interpret an earlier general request such as "contact people for me" as approval to click Send later. Show Rob the exact target and final wording first, then wait for explicit approval.
-- When there is any ambiguity about whether a click could submit, send, apply, connect, accept, delete, purchase, or otherwise create an external side effect, stop before the click and ask Rob.
+- Drafting text in chat is allowed. Avoid filling a browser message/form field unless the human explicitly asks, because it can create accidental state even before submission.
+- **Never send a LinkedIn message, connection request, application, email, form submission, invitation acceptance, or other external action without the human's explicit approval in the current turn.**
+- Do not interpret an earlier general request such as "contact people for me" as approval to click Send later. Show the human the exact target and final wording first, then wait for explicit approval.
+- When there is any ambiguity about whether a click could submit, send, apply, connect, accept, delete, purchase, or otherwise create an external side effect, stop before the click and ask the human.
 
 ## Do not
 - Do not test or depend on an ngrok hostname when the project connectors are available. If `Local_Project_Files_Access` reports an old ngrok 404, treat that as connector transport failure and switch to `Human_MCP_Server`; do not probe the hostname itself.

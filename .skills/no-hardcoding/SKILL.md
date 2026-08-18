@@ -12,6 +12,7 @@ Business judgement must not hide in feature code.
 Silent fallbacks are not acceptable. If required data is missing, surface an explicit error or fix the owner.
 Do not mask failures with fallback encoders, fallback parsers, fallback labels, default models, guessed config, alternate fields, broad exception swallowing, or compatibility shims. Stop and expose the failure unless the human explicitly approves the fallback with a stated reason.
 Any new heuristic or hardcoded business/display rule is a red flag and requires explicit human approval before implementation.
+Concrete examples in skills, tests, bug reports, or conversation are diagnostic examples only. Never promote a current user's title, company, location, profile fact, observed job phrase, or one reported record into generic product logic unless the human explicitly approves it as managed knowledge/config.
 
 ## Forbidden
 - Inline scoring maps, e.g. `{ "strong": 4, "working": 3 }`
@@ -31,6 +32,7 @@ Any new heuristic or hardcoded business/display rule is a red flag and requires 
 - Validate required config at the producer/normalizer boundary.
 - Consumers use canonical fields directly, e.g. `signal["label"]`.
 - If required data is missing, fix the producer; do not patch around it in consumers.
+- When a generic rule is changed because of one reported job/profile/example, add an unrelated regression case where practical so the implementation proves the contract rather than the example.
 - Do not add local fallback defaults for business values, decision labels, or display labels in feature code. If the owner does not provide the value, surface an explicit error or fix the owner.
 - If the same label or copy is reused across summary, tooltip, and debug views, put it in the owning JSON/data file once and read it from there.
 - Source-specific parsing and cleanup rules must live in data/config/knowledge and be loaded by the engine; do not embed them in Python constants.
@@ -48,15 +50,7 @@ Any new heuristic or hardcoded business/display rule is a red flag and requires 
 
 ## Enforcement — owner modules
 
-`tests/test_no_hardcoding.py` scans a fixed list of owner modules (currently
-`job_hunter_agent/profile_store.py`, `job_hunter_agent/workspace_renderer.py`) for
-inline `"label": "..."` literals and top-level ALL_CAPS constants assigned directly
-to a multi-word string. This check is unconditional — it runs in every `pytest`
-run regardless of whether the change "looks like" a labels change. This exists
-because the old rule ("load this skill if the change touches labels") depends on
-the change being recognized as label-related first, which is exactly what failed
-previously: an edit to a data-model file (not obviously "UI text") reintroduced a
-hardcoded label because nothing forced a check.
+`tests/test_no_hardcoding.py` owns the current `OWNER_MODULES` enforcement list. Do not duplicate that list or its count in this skill because it changes as modules are cleaned up. The test rejects inline `"label": "..."` literals and top-level ALL_CAPS constants assigned directly to multi-word user-facing text in those owners. This check is unconditional — it runs in every `pytest` run regardless of whether the change "looks like" a labels change. This exists because relying on an agent to notice that a change is label-related is not sufficient enforcement.
 
 When adding a new file whose whole job is holding profile/business constants
 (anything like `*_store.py`, `*_settings.py`, workspace/report renderers), add it

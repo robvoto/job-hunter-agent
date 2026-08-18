@@ -27,6 +27,13 @@ Keep agent instructions useful, small, current, and non-contradictory.
 - Preserve important project constraints: no hardcoding, Google Sheet backlog source of truth, Excel export compatibility only when explicitly used, Definition of Done, and do-not-pick-Done-items.
 - If unsure whether information is stale, mark it for review instead of rewriting as fact.
 
+## Cross-agent portability
+- Shared `AGENTS.md` and `.skills/*` rules must be usable by ChatGPT, Codex, Claude, Cline, or another coding agent. Describe the required capability/behaviour first; do not assume every runtime exposes the same tool namespace.
+- Runtime-specific tool names, connector names, local paths, or browser bridges are allowed only in the owning tooling/project-context instruction and must be explicitly scoped to the runtime where they exist.
+- A local coding agent already running in the repository may use its direct filesystem/shell. A connector-based runtime should use its authorised connector and documented fallback. Neither should be told to invoke a tool that runtime does not expose.
+- Do not create parallel copies of domain rules for Codex, Claude, or ChatGPT. Keep shared behaviour in `AGENTS.md`/skills and keep agent adapters thin.
+- Examples are explanatory only. Do not let an example title, company, user profile, location, threshold, or observed phrase become an implementation rule.
+
 ## Audit checklist
 When cleaning instructions, check:
 - Does this rule still match current architecture?
