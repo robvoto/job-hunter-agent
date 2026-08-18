@@ -315,6 +315,20 @@ def get_linkedin_failure_backoff_minutes() -> int:
     return int(load_global_settings()[KEY_CACHE_SETTINGS][KEY_LINKEDIN_FAILURE_BACKOFF_MINUTES])
 
 
+def get_seek_search_plan_min_corroboration_samples() -> int:
+    return int(
+        load_global_settings()[KEY_CACHE_SETTINGS][
+            KEY_SEEK_SEARCH_PLAN_MIN_CORROBORATION_SAMPLES
+        ]
+    )
+
+
+def get_linkedin_stale_fallback_max_age_minutes() -> int:
+    return int(
+        load_global_settings()[KEY_CACHE_SETTINGS][KEY_LINKEDIN_STALE_FALLBACK_MAX_AGE_MINUTES]
+    )
+
+
 def get_linkedin_max_consecutive_target_failures() -> int:
     return int(
         load_global_settings()[KEY_CACHE_SETTINGS][

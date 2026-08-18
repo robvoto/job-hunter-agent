@@ -27,7 +27,11 @@ from playwright.async_api import async_playwright as async_playwright_ctx
 from playwright.sync_api import sync_playwright
 
 import job_hunter_agent.record_schema as rs
-from job_hunter_agent.global_settings import KEY_SEEK_QUICK_APPLY_ONLY, get_playwright_browser_mode
+from job_hunter_agent.global_settings import (
+    KEY_SEEK_QUICK_APPLY_ONLY,
+    get_playwright_browser_mode,
+    get_seek_search_plan_min_corroboration_samples,
+)
 from job_hunter_agent.history import (
     apply_detail_evidence_reuse,
     build_detail_evidence_snapshot,
@@ -1325,12 +1329,30 @@ def seek_scrape_to_records(
                     remembered_probe_terms = [
                         str(term).strip() for term in remembered.get("probe_terms", []) if str(term).strip()
                     ]
-                    if remembered_probe_terms == probe_terms:
-                        historical_selected_terms_by_location[location_key] = {
-                            str(term).strip()
-                            for term in remembered.get("selected_terms", [])
-                            if str(term).strip()
-                        }
+                    remembered_selected_terms = [
+                        str(term).strip()
+                        for term in remembered.get("selected_terms", [])
+                        if str(term).strip()
+                    ]
+                    remembered_selection_counts = {
+                        str(term).strip(): int(count)
+                        for term, count in (remembered.get("selection_counts") or {}).items()
+                        if str(term).strip()
+                    }
+                    min_corroboration_samples = get_seek_search_plan_min_corroboration_samples()
+                    # sample_count alone only proves N complete probes happened; it says
+                    # nothing about whether *this* selection was picked more than once.
+                    # selection_counts tracks how many observations actually chose each
+                    # term, so corroboration must be checked per-term against the
+                    # currently remembered selection, not against the run count.
+                    is_corroborated = bool(remembered_selected_terms) and all(
+                        remembered_selection_counts.get(term, 0) >= min_corroboration_samples
+                        for term in remembered_selected_terms
+                    )
+                    if remembered_probe_terms == probe_terms and is_corroborated:
+                        historical_selected_terms_by_location[location_key] = set(
+                            remembered_selected_terms
+                        )
             seen_discovered_job_keys: set[str] = set()
             try:
                 total_targets = len(search_targets)
@@ -1474,6 +1496,12 @@ def seek_scrape_to_records(
                                 target_closed = True
                                 target_success = False
                                 target_failure_reason = "target_closed"
+                                # An interrupted card build can leave a page-1 probe with
+                                # incomplete evidence for this term without failing the
+                                # per-location completeness check (the term is still present
+                                # in `observed`). Treat it the same as a stop request: do not
+                                # let this run teach the remembered search plan.
+                                collection_complete = False
                                 break
                             except Exception as exc:
                                 logger.warning(
@@ -1508,8 +1536,12 @@ def seek_scrape_to_records(
                                 plan_source = "remembered"
                             else:
                                 # Bootstrap only: until a complete all-query probe has been
-                                # remembered, retain the conservative current-run behaviour.
-                                expand_after_probe = bool(new_direct_match_job_keys)
+                                # remembered for this signature/location, expand every query
+                                # past page 1. Deciding coverage from this run's own execution
+                                # order would make pruning depend on which term happened to run
+                                # first; new_direct_match_job_keys is still recorded below as a
+                                # diagnostic metric only.
+                                expand_after_probe = True
                                 plan_source = "bootstrap"
                             target_direct_match_count = len(direct_match_job_keys)
                             target_new_direct_match_count = len(new_direct_match_job_keys)

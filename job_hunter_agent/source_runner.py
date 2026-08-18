@@ -7,8 +7,11 @@ import logging
 import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, Callable, Sequence, cast
 
+from job_hunter_agent.posting_utils import current_posted_age_days
+from job_hunter_agent.record_schema import RECORD_POSTED_AGE_DAYS_KEY, RECORD_RUN_STARTED_AT_KEY
 from job_hunter_agent.run_context import ScrapeRunContext
 from job_hunter_agent.run_control import (
     get_run_progress,
@@ -27,6 +30,7 @@ from job_hunter_agent.global_settings import (
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
     KEY_SEEK_MAX_PAGES,
     KEY_SORT_NEWEST_FIRST,
+    get_linkedin_stale_fallback_max_age_minutes,
     get_seek_assisted_verification_enabled,
 )
 from job_hunter_agent.scrapers.apsjobs import APSJobsScraper
@@ -52,6 +56,7 @@ from job_hunter_agent.source_discovery_cache import (
     build_source_search_signature,
     load_linkedin_failure_backoff,
     load_source_discovery_snapshot,
+    load_source_discovery_stale_snapshot,
     save_source_discovery_snapshot,
     save_source_failure_state,
 )
@@ -151,6 +156,41 @@ def _source_search_signature(context: ScrapeRunContext, source: str) -> str:
     return build_source_search_signature(source, inputs)
 
 
+def _reevaluate_stale_posting_ages(
+    records: list[dict], captured_at: datetime, *, now: datetime | None = None
+) -> list[dict]:
+    """Return copies of stale-fallback records with posting age aged forward.
+
+    Each record's ``posted_age_days`` was accurate at capture time, not now.
+    Before these records are replayed through the shared ``POSTED_TOO_OLD``
+    date-range filter, their age must be brought up to date using the same
+    fractional-day contract the rest of the product uses for a record's
+    current age (``posting_utils.current_posted_age_days``), rather than a
+    second, coarser ageing calculation. A record without its own capture
+    timestamp falls back to the snapshot's own capture time.
+
+    The record's reference time is advanced to this evaluation instant
+    together with the materialised age, so the two stay self-consistent.
+    Otherwise a later call to ``current_posted_age_days`` would measure
+    elapsed time from the old reference time using the *already aged-forward*
+    ``posted_age_days``, re-applying the same elapsed interval a second time
+    and inflating the age further.
+    """
+    evaluated_at = now or datetime.now().astimezone()
+    adjusted: list[dict] = []
+    for record in records:
+        record = dict(record)
+        if record.get(RECORD_POSTED_AGE_DAYS_KEY) is not None:
+            if not record.get(RECORD_RUN_STARTED_AT_KEY):
+                record[RECORD_RUN_STARTED_AT_KEY] = captured_at.isoformat()
+            aged_age_days = current_posted_age_days(record, now=evaluated_at)
+            if aged_age_days is not None:
+                record[RECORD_POSTED_AGE_DAYS_KEY] = aged_age_days
+                record[RECORD_RUN_STARTED_AT_KEY] = evaluated_at.isoformat()
+        adjusted.append(record)
+    return adjusted
+
+
 def _source_cache_lookup(context: ScrapeRunContext, source: str) -> tuple[str, str, list[dict] | None]:
     signature = _source_search_signature(context, source)
     if context.force_source_refresh:
@@ -164,6 +204,16 @@ def _source_cache_lookup(context: ScrapeRunContext, source: str) -> tuple[str, s
         )
         return signature, "HIT", snapshot
     if source == SOURCE_LINKEDIN and load_linkedin_failure_backoff(source, signature):
+        stale = load_source_discovery_stale_snapshot(
+            source, signature, get_linkedin_stale_fallback_max_age_minutes()
+        )
+        if stale is not None:
+            stale_records = _reevaluate_stale_posting_ages(stale["records"], stale["updated_at"])
+            logger.warning(
+                "[%s][SOURCE_CACHE] STALE_FALLBACK records=%d captured_at=%s signature=%s",
+                source.upper(), len(stale_records), stale["updated_at"].isoformat(), signature[:12],
+            )
+            return signature, "STALE_FALLBACK", stale_records
         logger.warning(
             "[%s][SOURCE_CACHE] BACKOFF identical timed-out search signature=%s",
             source.upper(), signature[:12]
@@ -490,6 +540,31 @@ def _run_linkedin_source(context: ScrapeRunContext) -> SourceRunResult:
                 fingerprint_parts=("source_failure", SOURCE_LINKEDIN, reason),
             )
             error = RuntimeError(message)
+
+            stale = load_source_discovery_stale_snapshot(
+                SOURCE_LINKEDIN, signature, get_linkedin_stale_fallback_max_age_minutes()
+            )
+            if stale is not None:
+                stale_records = _reevaluate_stale_posting_ages(stale["records"], stale["updated_at"])
+                fallback_scraper = LinkedInScraper(
+                    profile=context.profile,
+                    llm_cache=llm_cache,
+                    job_history=job_history,
+                    applied_job_keys=context.applied_job_keys,
+                    hidden_job_keys=context.hidden_job_keys,
+                    run_iso=context.run_iso,
+                    discovery_records=stale_records,
+                    discovery_capture=None,
+                    discovery_status={},
+                )
+                kept, audit, skills = fallback_scraper.scrape()
+                cached_records = stale_records
+                cache_status = "STALE_FALLBACK_AFTER_FAILURE"
+                logger.warning(
+                    "[LINKEDIN][SOURCE_CACHE] STALE_FALLBACK_AFTER_FAILURE records=%d "
+                    "captured_at=%s signature=%s",
+                    len(stale_records), stale["updated_at"].isoformat(), signature[:12],
+                )
         elif final_status == "partial_failure":
             message = (
                 f"LinkedIn source partially collected: {succeeded}/{attempted} attempted "
@@ -1100,7 +1175,8 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
             "status": result.source_cache_status,
             "signature": result.source_cache_signature,
             "records": len(result.discovery_records),
-            "external_source_calls_avoided": result.source_cache_status in {"HIT", "BACKOFF"},
+            "external_source_calls_avoided": result.source_cache_status
+            in {"HIT", "BACKOFF", "STALE_FALLBACK"},
         }
         for result in results
     }
@@ -1117,11 +1193,24 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
     # known-good snapshot.
     if not run_shutdown_requested():
         for result in results:
-            if result.source_cache_status != "MISS" or not result.source_cache_signature:
+            if (
+                result.source_cache_status not in {"MISS", "STALE_FALLBACK", "STALE_FALLBACK_AFTER_FAILURE"}
+                or not result.source_cache_signature
+            ):
                 continue
             if result.source_failure_backoff:
+                # A same-run stale-fallback replay still reflects a live failure this run
+                # observed, so the failure/backoff state must still be recorded even
+                # though the served results came from the fallback snapshot.
                 save_source_failure_state(result.source, result.source_cache_signature)
-            elif result.error is None and result.source_collection_complete:
+            elif (
+                result.source_cache_status == "MISS"
+                and result.error is None
+                and result.source_collection_complete
+            ):
+                # Only a fresh live MISS may write a new success snapshot. A
+                # stale-fallback replay must never refresh or overwrite the
+                # existing snapshot it borrowed from.
                 save_source_discovery_snapshot(
                     result.source,
                     result.source_cache_signature,

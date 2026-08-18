@@ -418,6 +418,14 @@
             <input id="cache_linkedin_failure_backoff_minutes" type="number" min="1" max="1440" step="1">
             <div class="field-help">Temporary retry delay after every target in an identical LinkedIn search times out.</div>
 
+            <label for="cache_seek_search_plan_min_corroboration_samples">SEEK search plan min corroboration samples</label>
+            <input id="cache_seek_search_plan_min_corroboration_samples" type="number" min="1" max="10" step="1">
+            <div class="field-help">How many matching observations a remembered SEEK search plan must accumulate before its previously selected terms are trusted to skip deeper pagination for other terms. Below this, every configured term is expanded conservatively.</div>
+
+            <label for="cache_linkedin_stale_fallback_max_age_minutes">LinkedIn stale fallback max age (minutes)</label>
+            <input id="cache_linkedin_stale_fallback_max_age_minutes" type="number" min="1" max="10080" step="1">
+            <div class="field-help">How old a known-good LinkedIn snapshot may be and still be served when an identical live search is in backoff or just failed entirely.</div>
+
             <label for="cache_linkedin_max_consecutive_target_failures">LinkedIn max consecutive target failures</label>
             <input id="cache_linkedin_max_consecutive_target_failures" type="number" min="1" max="24" step="1">
             <div class="field-help">How many consecutive LinkedIn target failures are allowed in one run before the circuit breaker stops submitting further searches.</div>

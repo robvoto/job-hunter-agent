@@ -217,6 +217,14 @@
         "min": 1,
         "max": 1440
       },
+      "seek_search_plan_min_corroboration_samples": {
+        "min": 1,
+        "max": 10
+      },
+      "linkedin_stale_fallback_max_age_minutes": {
+        "min": 1,
+        "max": 10080
+      },
       "linkedin_max_consecutive_target_failures": {
         "min": 1,
         "max": 24
@@ -257,6 +265,8 @@
     "source_discovery_cache_max_entries": 10000,
     "source_discovery_cache_max_age_minutes": 60,
     "linkedin_failure_backoff_minutes": 15,
+    "seek_search_plan_min_corroboration_samples": 2,
+    "linkedin_stale_fallback_max_age_minutes": 1440,
     "linkedin_max_consecutive_target_failures": 6
   },
   "description_trust_settings": {

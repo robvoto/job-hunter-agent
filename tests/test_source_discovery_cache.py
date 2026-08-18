@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import importlib
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+
+import pytest
 
 from job_hunter_agent.database import db_conn
 from job_hunter_agent.run_context import ScrapeRunContext
@@ -485,3 +487,286 @@ def test_partial_seek_failure_does_not_replace_existing_good_snapshot(monkeypatc
     source_runner.run_enabled_sources(second)
 
     assert load_source_discovery_snapshot(SOURCE_SEEK, signature) == good_records
+
+
+def test_reevaluate_stale_posting_ages_ages_forward_conservatively():
+    """A record's posted_age_days was accurate at capture time only. Replaying
+    it later must age it forward (never leave it looking artificially fresh),
+    preferring the record's own run_started_at over the snapshot's capture
+    time, and must never invent an age for a record that never had one. This
+    must use the shared posting_utils.current_posted_age_days fractional-day
+    contract, not a second ageing algorithm."""
+    from job_hunter_agent import source_runner
+
+    now = datetime(2026, 8, 17, 9, 0, tzinfo=timezone.utc)
+    snapshot_captured_at = datetime(2026, 8, 16, 9, 0, tzinfo=timezone.utc)
+    records = [
+        {"posted_age_days": 1, "run_started_at": "2026-08-15T09:00:00+00:00"},
+        {"posted_age_days": 3},
+        {"posted_age_days": None},
+    ]
+
+    adjusted = source_runner._reevaluate_stale_posting_ages(
+        records, snapshot_captured_at, now=now
+    )
+
+    assert adjusted[0]["posted_age_days"] == 3  # 1 + exactly 2 days since its own run_started_at
+    assert adjusted[1]["posted_age_days"] == 4  # 3 + exactly 1 day since the snapshot's capture
+    assert adjusted[2]["posted_age_days"] is None
+    # Originals must not be mutated in place.
+    assert records[0]["posted_age_days"] == 1
+
+
+def test_reevaluate_stale_posting_ages_does_not_round_partial_days_up():
+    """A record only a few hours stale must gain a few hours of age, not a
+    full extra day. The old ceil(elapsed_days)-based algorithm made a job
+    almost one full day older than it really is; the shared
+    current_posted_age_days contract must age it forward fractionally."""
+    from job_hunter_agent import source_runner
+
+    now = datetime(2026, 8, 17, 9, 0, tzinfo=timezone.utc)
+    snapshot_captured_at = datetime(2026, 8, 17, 7, 0, tzinfo=timezone.utc)  # 2 hours ago
+    records = [{"posted_age_days": 2, "run_started_at": "2026-08-17T07:00:00+00:00"}]
+
+    adjusted = source_runner._reevaluate_stale_posting_ages(
+        records, snapshot_captured_at, now=now
+    )
+
+    aged_age_days = adjusted[0]["posted_age_days"]
+    # 2 hours elapsed is 2/24 of a day (~0.083), never a full extra day.
+    assert aged_age_days == pytest.approx(2 + 2 / 24, abs=1e-6)
+    assert aged_age_days < 3
+
+
+def test_reevaluate_stale_posting_ages_does_not_double_count_on_repeated_evaluation():
+    """Materialising a current age must advance the record's reference time
+    to match it. If the old reference time were left in place, a later
+    current_posted_age_days() call at the same `now` would measure elapsed
+    time from that stale reference using the *already aged-forward* value,
+    re-applying the same elapsed interval a second time and inflating the
+    age further -- exactly the double-counting bug this must prevent."""
+    from job_hunter_agent import source_runner
+    from job_hunter_agent.posting_utils import current_posted_age_days
+
+    now = datetime(2026, 8, 17, 9, 0, tzinfo=timezone.utc)
+    snapshot_captured_at = datetime(2026, 8, 16, 9, 0, tzinfo=timezone.utc)
+    records = [{"posted_age_days": 2, "run_started_at": "2026-08-15T09:00:00+00:00"}]
+
+    adjusted = source_runner._reevaluate_stale_posting_ages(
+        records, snapshot_captured_at, now=now
+    )
+    first_age = adjusted[0]["posted_age_days"]
+
+    # A second, independent evaluation at the exact same instant must return
+    # the same age, not a further-inflated one.
+    second_age = current_posted_age_days(adjusted[0], now=now)
+    assert second_age == pytest.approx(first_age, abs=1e-9)
+
+
+def test_linkedin_stale_snapshot_is_served_during_active_backoff(monkeypatch):
+    """A bounded, known-good LinkedIn snapshot should be served -- instead of
+    an empty BACKOFF result -- when a live search is unavailable because of
+    active failure backoff, with its posting ages conservatively aged forward."""
+    from job_hunter_agent.scrapers import linkedin
+    from job_hunter_agent import source_runner
+
+    _clear_cache()
+    calls = []
+
+    class FakeLinkedInScraper:
+        def __init__(self, **kwargs):
+            calls.append(kwargs)
+            self._discovery_records = kwargs["discovery_records"]
+            self._discovery_capture = kwargs["discovery_capture"]
+            self._discovery_status = kwargs["discovery_status"]
+
+        def scrape(self):
+            if self._discovery_records is not None:
+                self._discovery_status["complete"] = True
+                return list(self._discovery_records), [], []
+            record = {"job_key": "linkedin:1", "title": "Policy Officer", "posted_age_days": 1}
+            self._discovery_capture.append(dict(record))
+            self._discovery_status["complete"] = True
+            return [dict(record)], [], []
+
+    monkeypatch.setattr(linkedin, "LinkedInScraper", FakeLinkedInScraper)
+
+    first = _make_context()
+    first.enabled_sources = [SOURCE_LINKEDIN]
+    source_runner.run_enabled_sources(first)
+    assert first.source_cache_stats[SOURCE_LINKEDIN]["status"] == "MISS"
+    signature = first.source_cache_stats[SOURCE_LINKEDIN]["signature"]
+
+    # Age the saved snapshot past the normal freshness TTL but still within
+    # the bounded stale-fallback window, then force active failure backoff.
+    stale_updated_at = (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat(
+        timespec="seconds"
+    )
+    with db_conn() as conn:
+        conn.execute(
+            "UPDATE source_discovery_cache SET updated_at = ? WHERE source = ? AND signature = ? AND status = 'success'",
+            (stale_updated_at, SOURCE_LINKEDIN, signature),
+        )
+    save_source_failure_state(SOURCE_LINKEDIN, signature)
+
+    second = _make_context()
+    second.enabled_sources = [SOURCE_LINKEDIN]
+    kept, _audit, _skills = source_runner.run_enabled_sources(second)
+
+    stats = second.source_cache_stats[SOURCE_LINKEDIN]
+    assert stats["status"] == "STALE_FALLBACK"
+    assert stats["external_source_calls_avoided"] is True
+    # The first (live) call happened in `first`; active backoff must skip a
+    # second live attempt entirely and go straight to the stale replay.
+    assert len(calls) == 2
+    assert [item["job_key"] for item in kept] == ["linkedin:1"]
+    assert kept[0]["posted_age_days"] > 1
+
+    # A stale-fallback replay must never refresh the snapshot it borrowed from.
+    with db_conn() as conn:
+        row = conn.execute(
+            "SELECT updated_at FROM source_discovery_cache WHERE source = ? AND signature = ? AND status = 'success'",
+            (SOURCE_LINKEDIN, signature),
+        ).fetchone()
+    assert row["updated_at"] == stale_updated_at
+
+
+def test_linkedin_stale_snapshot_is_served_after_same_run_full_failure(monkeypatch):
+    """When a live LinkedIn attempt fails completely this run, a bounded
+    known-good snapshot should replace the empty result -- but the live
+    failure must still be recorded truthfully for future backoff decisions."""
+    from job_hunter_agent.scrapers import linkedin
+    from job_hunter_agent import source_runner
+
+    _clear_cache()
+    calls = []
+
+    class _ReplayOrFailLinkedInScraper:
+        live_final_status = "full_failure"
+
+        def __init__(self, **kwargs):
+            calls.append(kwargs)
+            self._discovery_records = kwargs["discovery_records"]
+            self._discovery_capture = kwargs["discovery_capture"]
+            self._discovery_status = kwargs["discovery_status"]
+
+        def scrape(self):
+            if self._discovery_records is not None:
+                self._discovery_status["complete"] = True
+                return list(self._discovery_records), [], []
+            if self.live_final_status == "success":
+                record = {"job_key": "linkedin:1", "title": "Policy Officer", "posted_age_days": 1}
+                self._discovery_capture.append(dict(record))
+                self._discovery_status["complete"] = True
+                return [dict(record)], [], []
+            self._discovery_status.update(
+                {
+                    "complete": False,
+                    "total_targets": 3,
+                    "attempted_targets": 3,
+                    "succeeded_targets": 0,
+                    "timed_out_targets": 3,
+                    "failed_targets": 3,
+                    "skipped_after_breaker": 0,
+                    "circuit_breaker_tripped": False,
+                    "rows_collected": 0,
+                    "elapsed_seconds": 60.0,
+                    "final_status": "full_failure",
+                }
+            )
+            return [], [], []
+
+    monkeypatch.setattr(linkedin, "LinkedInScraper", _ReplayOrFailLinkedInScraper)
+    _ReplayOrFailLinkedInScraper.live_final_status = "success"
+
+    first = _make_context()
+    first.enabled_sources = [SOURCE_LINKEDIN]
+    source_runner.run_enabled_sources(first)
+    assert first.source_cache_stats[SOURCE_LINKEDIN]["status"] == "MISS"
+    signature = first.source_cache_stats[SOURCE_LINKEDIN]["signature"]
+
+    stale_updated_at = (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat(
+        timespec="seconds"
+    )
+    with db_conn() as conn:
+        conn.execute(
+            "UPDATE source_discovery_cache SET updated_at = ? WHERE source = ? AND signature = ? AND status = 'success'",
+            (stale_updated_at, SOURCE_LINKEDIN, signature),
+        )
+
+    _ReplayOrFailLinkedInScraper.live_final_status = "full_failure"
+
+    second = _make_context()
+    second.enabled_sources = [SOURCE_LINKEDIN]
+    kept, _audit, _skills = source_runner.run_enabled_sources(second)
+
+    stats = second.source_cache_stats[SOURCE_LINKEDIN]
+    assert stats["status"] == "STALE_FALLBACK_AFTER_FAILURE"
+    # A live attempt was genuinely made and failed this run, so it must not be
+    # counted as an avoided external call even though it served fallback data.
+    assert stats["external_source_calls_avoided"] is False
+    assert [item["job_key"] for item in kept] == ["linkedin:1"]
+    assert kept[0]["posted_age_days"] > 1
+
+    # The live failure must still be recorded for future backoff decisions...
+    assert load_linkedin_failure_backoff(SOURCE_LINKEDIN, signature) is True
+    # ...and the borrowed snapshot itself must not have been refreshed.
+    with db_conn() as conn:
+        row = conn.execute(
+            "SELECT updated_at FROM source_discovery_cache WHERE source = ? AND signature = ? AND status = 'success'",
+            (SOURCE_LINKEDIN, signature),
+        ).fetchone()
+    assert row["updated_at"] == stale_updated_at
+
+
+def test_linkedin_stale_fallback_does_not_exceed_configured_max_age(monkeypatch):
+    """A snapshot older than linkedin_stale_fallback_max_age_minutes must not
+    be served as a fallback -- active backoff must still return empty results,
+    exactly as before the stale-fallback feature existed."""
+    from job_hunter_agent.scrapers import linkedin
+    from job_hunter_agent import source_runner
+    from job_hunter_agent.global_settings import get_linkedin_stale_fallback_max_age_minutes
+
+    _clear_cache()
+    calls = []
+
+    class FakeLinkedInScraper:
+        def __init__(self, **kwargs):
+            calls.append(kwargs)
+            self._discovery_records = kwargs["discovery_records"]
+            self._discovery_capture = kwargs["discovery_capture"]
+            self._discovery_status = kwargs["discovery_status"]
+
+        def scrape(self):
+            if self._discovery_records is not None:
+                self._discovery_status["complete"] = True
+                return list(self._discovery_records), [], []
+            record = {"job_key": "linkedin:1", "title": "Policy Officer", "posted_age_days": 1}
+            self._discovery_capture.append(dict(record))
+            self._discovery_status["complete"] = True
+            return [dict(record)], [], []
+
+    monkeypatch.setattr(linkedin, "LinkedInScraper", FakeLinkedInScraper)
+
+    first = _make_context()
+    first.enabled_sources = [SOURCE_LINKEDIN]
+    source_runner.run_enabled_sources(first)
+    signature = first.source_cache_stats[SOURCE_LINKEDIN]["signature"]
+
+    max_age_minutes = get_linkedin_stale_fallback_max_age_minutes()
+    too_old = (
+        datetime.now(timezone.utc) - timedelta(minutes=max_age_minutes + 60)
+    ).isoformat(timespec="seconds")
+    with db_conn() as conn:
+        conn.execute(
+            "UPDATE source_discovery_cache SET updated_at = ? WHERE source = ? AND signature = ? AND status = 'success'",
+            (too_old, SOURCE_LINKEDIN, signature),
+        )
+    save_source_failure_state(SOURCE_LINKEDIN, signature)
+
+    second = _make_context()
+    second.enabled_sources = [SOURCE_LINKEDIN]
+    kept, _audit, _skills = source_runner.run_enabled_sources(second)
+
+    assert second.source_cache_stats[SOURCE_LINKEDIN]["status"] == "BACKOFF"
+    assert kept == []

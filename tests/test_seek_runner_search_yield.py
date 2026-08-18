@@ -226,6 +226,8 @@ def test_seek_scrape_uses_remembered_all_probe_plan_for_deep_pagination(monkeypa
         lambda **kwargs: {
             "probe_terms": ["Business Analyst", "Senior Business Analyst"],
             "selected_terms": ["Senior Business Analyst"],
+            "sample_count": 2,
+            "selection_counts": {"Senior Business Analyst": 2},
         },
     )
     saved_observations: list[dict] = []
@@ -256,3 +258,176 @@ def test_seek_scrape_uses_remembered_all_probe_plan_for_deep_pagination(monkeypa
         "Business Analyst",
         "Senior Business Analyst",
     ]
+
+
+def test_seek_uncorroborated_remembered_plan_expands_every_probed_term(monkeypatch):
+    """A remembered plan with a matching probe set but too few corroborating
+    observations must not be trusted to prune deeper pagination -- every
+    configured term must still expand, exactly like the bootstrap case."""
+    list_page = _FakeListPage(
+        {
+            "target-a": [_FakeCard("seek:only-a")],
+            "target-b": [_FakeCard("seek:only-b")],
+        }
+    )
+    _patch_common_seek_internals(monkeypatch, list_page)
+    monkeypatch.setattr(
+        seek_runner,
+        "load_search_plan_state",
+        lambda **kwargs: {
+            "probe_terms": ["Business Analyst", "Senior Business Analyst"],
+            "selected_terms": ["Senior Business Analyst"],
+            "sample_count": 1,
+            "selection_counts": {"Senior Business Analyst": 1},
+        },
+    )
+    monkeypatch.setattr(
+        seek_runner,
+        "save_search_plan_observation",
+        lambda **kwargs: {"sample_count": 2},
+    )
+    recorded_metrics = []
+    monkeypatch.setattr(
+        seek_runner, "record_query_yield_metric", lambda metric: recorded_metrics.append(metric)
+    )
+
+    seek_runner.seek_scrape_to_records(
+        **_base_scrape_kwargs(
+            search_targets=_search_targets(),
+            configured_seek_max_pages=2,
+            discovery_capture=[],
+            search_plan_signature="signature-1",
+        )
+    )
+
+    by_term = {metric.search_term: metric for metric in recorded_metrics}
+    assert by_term["Business Analyst"].pages_searched == 2
+    assert by_term["Senior Business Analyst"].pages_searched == 2
+
+
+def test_seek_high_sample_count_does_not_substitute_for_selection_corroboration(monkeypatch):
+    """A high cumulative sample_count is not real corroboration by itself.
+
+    If observation 1 selected terms A+B and observation 2 selected different
+    terms C+D, sample_count reaches 2 but neither C nor D has actually been
+    picked more than once. The currently remembered selection (C+D) must
+    therefore still be treated as untrusted and every probed term must
+    expand -- pruning may only trust a selection once selection_counts shows
+    that exact selection was repeated at least the configured threshold."""
+    list_page = _FakeListPage(
+        {
+            "target-c": [_FakeCard("seek:only-c")],
+            "target-d": [_FakeCard("seek:only-d")],
+        }
+    )
+    _patch_common_seek_internals(monkeypatch, list_page)
+    monkeypatch.setattr(
+        seek_runner,
+        "load_search_plan_state",
+        lambda **kwargs: {
+            "probe_terms": ["Term C", "Term D"],
+            # Latest observation selected C+D, but the first observation (not
+            # reflected in "selected_terms") selected different terms A+B --
+            # so each of C and D has only ever been chosen once.
+            "selected_terms": ["Term C", "Term D"],
+            "sample_count": 2,
+            "selection_counts": {"Term A": 1, "Term B": 1, "Term C": 1, "Term D": 1},
+        },
+    )
+    monkeypatch.setattr(
+        seek_runner,
+        "save_search_plan_observation",
+        lambda **kwargs: {"sample_count": 3},
+    )
+    recorded_metrics = []
+    monkeypatch.setattr(
+        seek_runner, "record_query_yield_metric", lambda metric: recorded_metrics.append(metric)
+    )
+
+    seek_runner.seek_scrape_to_records(
+        **_base_scrape_kwargs(
+            search_targets=[
+                {
+                    "url": "https://seek.example/search?target-c",
+                    "location": "New South Wales",
+                    "keywords": "Term C",
+                    "classification_ids": [],
+                },
+                {
+                    "url": "https://seek.example/search?target-d",
+                    "location": "New South Wales",
+                    "keywords": "Term D",
+                    "classification_ids": [],
+                },
+            ],
+            configured_seek_max_pages=2,
+            discovery_capture=[],
+            search_plan_signature="signature-1",
+        )
+    )
+
+    by_term = {metric.search_term: metric for metric in recorded_metrics}
+    assert by_term["Term C"].pages_searched == 2
+    assert by_term["Term D"].pages_searched == 2
+
+
+def test_seek_bootstrap_expands_every_probed_term_regardless_of_run_order(monkeypatch):
+    """Before any plan has been remembered for a signature/location, every
+    probed query term must expand past page 1 -- coverage must not depend on
+    which term happened to execute first this run. Uses an unrelated nursing
+    profile (not BA/IT) to prove the fix is generic, not title-pattern-specific."""
+    profile = {"search_settings": {}, "target_roles": ["registered nurse"]}
+    targets_by_key = {
+        "a": {
+            "url": "https://seek.example/search?target-a",
+            "location": "Queensland",
+            "keywords": "Registered Nurse",
+            "classification_ids": [],
+        },
+        "b": {
+            "url": "https://seek.example/search?target-b",
+            "location": "Queensland",
+            "keywords": "Enrolled Nurse",
+            "classification_ids": [],
+        },
+    }
+
+    def _fake_build_shared_nurse_card_record(card, search_target, run_iso, page_num, filter_state):
+        # Both targets surface the same underlying job under their own
+        # search term, so whichever term runs first "claims" the new-match
+        # credit for it under the old (buggy) order-dependent bootstrap logic.
+        return {
+            rs.RECORD_JOB_KEY: card.job_key,
+            rs.RECORD_TITLE_KEY: "Registered Nurse",
+            rs.RECORD_COMPANY_KEY: "Metro Health",
+            rs.RECORD_POSTED_AGE_DAYS_KEY: 1,
+        }
+
+    for order in (["a", "b"], ["b", "a"]):
+        list_page = _FakeListPage(
+            {
+                "target-a": [_FakeCard("seek:shared")],
+                "target-b": [_FakeCard("seek:shared")],
+            }
+        )
+        _patch_common_seek_internals(monkeypatch, list_page)
+        monkeypatch.setattr(
+            seek_runner, "build_seek_card_record", _fake_build_shared_nurse_card_record
+        )
+        recorded_metrics = []
+        monkeypatch.setattr(
+            seek_runner, "record_query_yield_metric", lambda metric: recorded_metrics.append(metric)
+        )
+
+        seek_runner.seek_scrape_to_records(
+            **_base_scrape_kwargs(
+                profile=profile,
+                search_targets=[targets_by_key[key] for key in order],
+                configured_seek_max_pages=2,
+                discovery_capture=[],
+            )
+        )
+
+        by_term = {metric.search_term: metric for metric in recorded_metrics}
+        assert by_term["Registered Nurse"].pages_searched == 2, order
+        assert by_term["Enrolled Nurse"].pages_searched == 2, order

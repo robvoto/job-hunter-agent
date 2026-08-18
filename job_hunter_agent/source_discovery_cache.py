@@ -78,6 +78,27 @@ def load_source_discovery_snapshot(source: str, signature: str) -> list[dict] | 
     return [dict(item) for item in row["records"]]
 
 
+def load_source_discovery_stale_snapshot(
+    source: str, signature: str, max_age_minutes: int
+) -> dict[str, Any] | None:
+    """Return a bounded, expired-but-known-good snapshot without refreshing it.
+
+    Used only as a fallback when a live fetch is currently unavailable (active
+    failure backoff, or a same-run live failure). This never substitutes for
+    ``load_source_discovery_snapshot`` and never touches the stored row, so an
+    unused stale snapshot keeps aging out normally.
+    """
+    row = _load_row(source, signature, "success")
+    if row is None:
+        return None
+    if _utc_now() - row["updated_at"] > timedelta(minutes=max_age_minutes):
+        return None
+    return {
+        "records": [dict(item) for item in row["records"]],
+        "updated_at": row["updated_at"],
+    }
+
+
 def load_linkedin_failure_backoff(source: str, signature: str) -> bool:
     """Return whether an identical LinkedIn failure is still in its backoff window."""
     row = _load_row(source, signature, "failure")
