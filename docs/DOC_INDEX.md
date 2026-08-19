@@ -55,11 +55,7 @@ Runbooks are for live incident-style procedures. They should contain exact comma
 
 ## Backlog
 
-Backlog source of truth is the shared Google Sheet. Local backlog markdown files are historical references only and are not active planning sources.
-
-| File | Owner |
-|---|---|
-| `docs/backlog/README.md` | Stable extraction rules for the historical review CSV / archive workflow. Not an active planning source. |
+Backlog source of truth is the shared Google Sheet. `docs/backlog/` is intentionally gitignored and may contain local historical extraction/reference notes, but those files are not repository documentation and must not be required by repo-health tests.
 
 ## Skills
 

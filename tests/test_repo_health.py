@@ -456,20 +456,6 @@ def test_stop_state_copy_stays_intentional_and_non_failure():
     assert "not a failure" in shared["search_stopping_subcopy"]
 
 
-def test_backlog_extraction_notes_preserve_review_csv_rules():
-    backlog_notes = (ROOT_DIR / "docs" / "backlog" / "README.md").read_text(encoding="utf-8")
-
-    assert "backlog_review.csv" in backlog_notes
-    assert "Continue extraction from `JH-188`" in backlog_notes
-    assert "Do not regenerate a new-looking CSV" in backlog_notes
-    assert "general.md" in backlog_notes
-    assert "filtering.md" in backlog_notes
-    assert "learning.md" in backlog_notes
-    assert "ui.md" in backlog_notes
-    assert "product_backlog.md" in backlog_notes
-    assert "excluded" in backlog_notes
-
-
 def test_architecture_doc_has_core_file_map():
     architecture = (ROOT_DIR / "docs" / "ARCHITECTURE.md").read_text(encoding="utf-8")
 
