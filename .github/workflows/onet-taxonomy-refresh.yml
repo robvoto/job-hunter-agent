@@ -1,0 +1,81 @@
+name: O*NET taxonomy refresh
+
+on:
+  schedule:
+    - cron: "17 3 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh-onet-taxonomy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.16"
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Sync locked development environment
+        run: uv sync --locked --dev
+
+      - name: Refresh from the official current O*NET release
+        run: uv run python -m job_hunter_agent.onet_taxonomy_refresh --update
+
+      - name: Detect generated-data changes
+        id: changes
+        shell: bash
+        run: |
+          if git diff --quiet -- data/knowledge/occupation_taxonomy; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            release=$(uv run python -c 'import json; from pathlib import Path; data=json.loads(Path("data/knowledge/occupation_taxonomy/onet_index.json").read_text()); print(data["metadata"]["database_release"])')
+            echo "release=$release" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate refreshed taxonomy
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          uv run pytest tests/test_onet_taxonomy_import.py tests/test_onet_taxonomy_refresh.py tests/test_occupation_taxonomy.py tests/test_job_review_pipeline.py -q
+          uv run ruff check job_hunter_agent/onet_taxonomy_import.py job_hunter_agent/onet_taxonomy_refresh.py job_hunter_agent/occupation_taxonomy.py
+
+      - name: Commit refreshed reference data
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          RELEASE: ${{ steps.changes.outputs.release }}
+        run: |
+          branch="automation/onet-taxonomy-${RELEASE//./-}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C "$branch"
+          git add data/knowledge/occupation_taxonomy
+          git commit -m "Refresh O*NET taxonomy to ${RELEASE}"
+          git push --force-with-lease origin "HEAD:$branch"
+          echo "BRANCH=$branch" >> "$GITHUB_ENV"
+
+      - name: Open or reuse refresh pull request
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ steps.changes.outputs.release }}
+        run: |
+          existing=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -z "$existing" ]; then
+            gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title "Refresh O*NET taxonomy to ${RELEASE}" \
+              --body "Automated weekly refresh from the official O*NET Database JSON release. Generated taxonomy tests passed before this PR was opened."
+          else
+            echo "Refresh PR #$existing already exists; branch updated."
+          fi

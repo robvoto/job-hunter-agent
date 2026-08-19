@@ -2,8 +2,8 @@
 
 import pytest
 
-from job_hunter_agent.database import db_conn, init_db
 from job_hunter_agent import occupation_taxonomy
+from job_hunter_agent.database import init_db
 from job_hunter_agent.occupation_taxonomy import (
     RESULT_FAR,
     RESULT_NEAR,
@@ -296,6 +296,29 @@ def test_one_word_alternate_title_is_not_used_for_embedded_match(tmp_db):
     assert result.matched_phrase is None
 
 
+def test_senior_cloud_engineer_uses_current_style_multicode_phrase_and_returns_far(tmp_db):
+    index = dict(_TEST_INDEX)
+    index["cloud engineer"] = [
+        {
+            "occupation_code": code,
+            "occupation_title": occupation,
+            "matched_title": "Cloud Engineer",
+            "source": "job_title",
+        }
+        for code, occupation in [
+            ("15-1231.00", "Computer Network Support Specialists"),
+            ("15-1251.00", "Computer Programmers"),
+            ("15-1299.05", "Information Security Engineers"),
+            ("15-1299.08", "Computer Systems Engineers/Architects"),
+        ]
+    ]
+    result = classify_title("Senior Cloud Engineer", _ANALYST_PROFILE, db_path=tmp_db, _index=index)
+    assert result.result == RESULT_FAR
+    assert result.reason == RESULT_FAR
+    assert result.match_type == "onet_phrase"
+    assert result.matched_phrase == "Cloud Engineer"
+
+
 # ── no match → uncertain ──────────────────────────────────────────────────────
 
 
@@ -312,8 +335,16 @@ def test_no_match_returns_uncertain(tmp_db):
 # ── ambiguous match → uncertain ───────────────────────────────────────────────
 
 
-def test_ambiguous_match_returns_uncertain(tmp_db):
+def test_multicode_exact_match_all_outside_target_returns_far(tmp_db):
     result = classify_title("coordinator", _ANALYST_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
+    assert result.result == RESULT_FAR
+    assert result.reason == RESULT_FAR
+    assert result.matched_occupation_code is None
+
+
+def test_multicode_exact_match_mixed_target_returns_uncertain(tmp_db):
+    profile = {"target_occupation_queries": ["business analyst", "office administrator"]}
+    result = classify_title("coordinator", profile, db_path=tmp_db, _index=_TEST_INDEX)
     assert result.result == RESULT_UNCERTAIN
     assert result.reason == "ambiguous"
     assert result.matched_occupation_code is None
@@ -373,10 +404,76 @@ def test_profile_hash_changes_when_matcher_version_changes(monkeypatch):
     profile = {"target_occupation_queries": ["business analyst"]}
 
     original_hash = occupation_taxonomy._compute_profile_hash(profile)
-    monkeypatch.setattr(occupation_taxonomy, "LOOKUP_MATCHER_VERSION", "embedded-phrase-v99")
+    monkeypatch.setattr(occupation_taxonomy, "LOOKUP_MATCHER_VERSION", "job-titles-v99")
     updated_hash = occupation_taxonomy._compute_profile_hash(profile)
 
     assert updated_hash != original_hash
+
+
+def test_target_query_prefers_onet_curated_mapping_over_ambiguous_job_title():
+    index = {
+        "business analyst": [
+            {
+                "occupation_code": "13-1111.00",
+                "occupation_title": "Management Analysts",
+                "matched_title": "Business Analyst",
+                "source": "job_title",
+                "target_query_preferred": True,
+            },
+            {
+                "occupation_code": "15-2051.01",
+                "occupation_title": "Business Intelligence Analysts",
+                "matched_title": "Business Analyst",
+                "source": "job_title",
+            },
+        ]
+    }
+    codes = occupation_taxonomy._derive_target_occupation_codes(["Business Analyst"], index)
+    assert codes == {"13-1111.00"}
+
+
+def test_ambiguous_unpreferred_target_query_does_not_widen_target_family():
+    index = {
+        "data analyst": [
+            {
+                "occupation_code": "15-2051.00",
+                "occupation_title": "Data Scientists",
+                "matched_title": "Data Analyst",
+                "source": "job_title",
+            },
+            {
+                "occupation_code": "19-3022.00",
+                "occupation_title": "Survey Researchers",
+                "matched_title": "Data Analyst",
+                "source": "job_title",
+            },
+        ]
+    }
+    codes = occupation_taxonomy._derive_target_occupation_codes(["Data Analyst"], index)
+    assert codes == set()
+
+
+def test_cache_does_not_reuse_result_after_dataset_identity_changes(tmp_db):
+    identity_1 = occupation_taxonomy.TaxonomyIdentity("O*NET-SOC 2019", "30.3", "a" * 64)
+    identity_2 = occupation_taxonomy.TaxonomyIdentity("O*NET-SOC 2019", "30.4", "b" * 64)
+    first = classify_title(
+        "business analyst",
+        _ANALYST_PROFILE,
+        db_path=tmp_db,
+        _index=_TEST_INDEX,
+        _taxonomy_identity=identity_1,
+    )
+    assert first.result == RESULT_NEAR
+
+    second = classify_title(
+        "business analyst",
+        _ANALYST_PROFILE,
+        db_path=tmp_db,
+        _index={},
+        _taxonomy_identity=identity_2,
+    )
+    assert second.result == RESULT_UNCERTAIN
+    assert second.reason == "no_match"
 
 
 # ── no profile context → uncertain ───────────────────────────────────────────

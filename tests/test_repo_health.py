@@ -246,6 +246,7 @@ def _onet_algorithm_signature(source_text: str) -> tuple[str, str]:
             "_compute_profile_hash",
             "_derive_target_occupation_codes",
             "_select_embedded_phrase_match",
+            "_classify_codes",
             "_classify_embedded_phrase_codes",
             "classify_title",
         }:

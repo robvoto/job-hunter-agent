@@ -1,15 +1,17 @@
 {
   "metadata": {
-    "source": "O*NET OccupationalListings.zip",
+    "source": "O*NET Database JSON",
+    "source_url": "https://www.onetcenter.org/dl_files/database/db_30_3_json.zip",
     "taxonomy_version": "O*NET-SOC 2019",
-    "generated_from": [
-      "OccupationalListings/Taxonomies/2019_Occupations.xlsx",
-      "OccupationalListings/2019_Structure/2019_Alt_Titles.xlsx"
-    ],
+    "database_release": "30.3",
+    "dataset_fingerprint": "a321e0229d70f6cbff2dae24aeb7862cf52c6ccded0d453316f446cbe368e228",
+    "format": "fulldb_json",
     "record_counts": {
       "occupations": 1016,
-      "alternate_titles": 1680,
-      "normalized_title_keys": 2578
+      "job_title_rows": 57543,
+      "title_variants": 61529,
+      "normalized_title_keys": 50862,
+      "target_preferred_pairs": 3576
     }
   },
   "occupations": [
@@ -2879,7 +2881,7 @@
       "code": "29-2012.01",
       "title": "Histology Technicians",
       "normalized_title": "histology technicians",
-      "description": "Prepare histological slides from tissue sections for microscopic examination and diagnosis by pathologists.  May assist with research studies."
+      "description": "Prepare histological slides from tissue sections for microscopic examination and diagnosis by pathologists. May assist with research studies."
     },
     {
       "code": "29-2031.00",

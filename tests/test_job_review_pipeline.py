@@ -3,6 +3,8 @@
 import json
 import logging
 
+import pytest
+
 from job_hunter_agent import (
     job_review_pipeline,
     llm_gate,
@@ -28,6 +30,8 @@ from job_hunter_agent.occupation_taxonomy import (
 from job_hunter_agent.paths import SCORING_RULES_PATH
 from job_hunter_agent.record_schema import (
     APPLY_METHOD_EXTERNAL_APPLY,
+    POSTING_CHANNEL_CLASSIFIER_VERSION,
+    POSTING_CHANNEL_VERSION_KEY,
     RECORD_APPLY_METHOD_KEY,
     RECORD_CARD_SALARY_KEY,
     RECORD_COMPANY_KEY,
@@ -54,8 +58,6 @@ from job_hunter_agent.record_schema import (
     RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY,
     RECORD_POSTED_AGE_DAYS_KEY,
     RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
-    POSTING_CHANNEL_CLASSIFIER_VERSION,
-    POSTING_CHANNEL_VERSION_KEY,
     RECORD_REJECT_REASON_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
     RECORD_SALARY_KEY,
@@ -639,6 +641,11 @@ def test_seek_card_review_skips_detail_fetch_when_onet_confirms_far_occupation(m
         lambda title, profile: OccupationClassification(
             result=RESULT_FAR, matched_occupation_code="35-1011.00", confidence=0.9, reason="far"
         ),
+    )
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "llm_judge_title",
+        lambda *args, **kwargs: pytest.fail("title LLM must not run after O*NET FAR"),
     )
 
     outcome, updated_record, _, should_fetch = review_pre_detail_normalized_job(record, context)
