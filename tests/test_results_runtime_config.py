@@ -287,72 +287,10 @@ def test_candidate_application_history_loader_failure_returns_original_records(c
     assert "[candidate_application_history] unavailable: boom" in caplog.text
 
 
-def test_candidate_application_history_sync_runs_before_enrichment_when_enabled():
-    records = [{"job_key": "seek:1"}]
-    calls = []
-
-    def fake_sync():
-        calls.append("sync")
-
-    def fake_load():
-        calls.append("load")
-        return [
-            {
-                "llm_company": "Acme",
-                "llm_role": "Business Analyst",
-                "llm_is_rejection": True,
-                "llm_application_status": "rejection",
-                "llm_confidence": "high",
-                "llm_evidence": "Thanks for applying",
-                "llm_needs_review": False,
-            }
-        ]
-
-    def fake_enrich(items, history):
-        calls.append("enrich")
-        assert history
-        return [{**items[0], "candidate_application_history": history[0]}]
-
-    with (
-        patch(
-            "job_hunter_agent.workspace_service.is_candidate_application_history_enabled",
-            return_value=True,
-        ),
-        patch(
-            "job_hunter_agent.workspace_service.get_candidate_application_history_sync_before_run",
-            return_value=True,
-        ),
-        patch(
-            "job_hunter_agent.candidate_application_history.import_candidate_rejections_from_sheet",
-            side_effect=fake_sync,
-        ),
-        patch(
-            "job_hunter_agent.candidate_application_history.load_candidate_job_rejection_history",
-            side_effect=fake_load,
-        ),
-        patch(
-            "job_hunter_agent.candidate_application_history.enrich_records_with_application_history",
-            side_effect=fake_enrich,
-        ),
-    ):
-        result = workspace_service._enrich_records_with_candidate_application_history(records)
-
-    assert calls == ["sync", "load", "enrich"]
-    assert result[0]["candidate_application_history"]["llm_company"] == "Acme"
-
-
-def test_candidate_application_history_sync_is_skipped_when_disabled():
+def test_candidate_application_history_enrichment_never_syncs_from_sheet():
     records = [{"job_key": "seek:1"}]
 
     with (
-        patch(
-            "job_hunter_agent.workspace_service.is_candidate_application_history_enabled",
-            return_value=True,
-        ),
-        patch(
-            "job_hunter_agent.workspace_service.get_candidate_application_history_sync_before_run",
-            return_value=False,
-        ),
         patch(
             "job_hunter_agent.candidate_application_history.import_candidate_rejections_from_sheet"
         ) as mock_sync,
@@ -365,52 +303,6 @@ def test_candidate_application_history_sync_is_skipped_when_disabled():
 
     assert result is records
     assert not mock_sync.called
-
-
-def test_candidate_application_history_sync_failure_logs_warning_and_uses_local_store():
-    records = [{"job_key": "seek:1"}]
-
-    def fake_enrich(items, history):
-        return [{**items[0], "candidate_application_history": history[0]}]
-
-    with (
-        patch(
-            "job_hunter_agent.workspace_service.is_candidate_application_history_enabled",
-            return_value=True,
-        ),
-        patch(
-            "job_hunter_agent.workspace_service.get_candidate_application_history_sync_before_run",
-            return_value=True,
-        ),
-        patch(
-            "job_hunter_agent.candidate_application_history.import_candidate_rejections_from_sheet",
-            side_effect=RuntimeError("sheet unavailable"),
-        ),
-        patch(
-            "job_hunter_agent.candidate_application_history.load_candidate_job_rejection_history",
-            return_value=[
-                {
-                    "llm_company": "Acme",
-                    "llm_role": "Business Analyst",
-                    "llm_is_rejection": True,
-                    "llm_application_status": "rejection",
-                    "llm_confidence": "high",
-                    "llm_evidence": "Thanks for applying",
-                    "llm_needs_review": False,
-                }
-            ],
-        ),
-        patch(
-            "job_hunter_agent.candidate_application_history.enrich_records_with_application_history",
-            side_effect=fake_enrich,
-        ),
-        patch.object(workspace_service.logger, "warning") as mock_warning,
-    ):
-        result = workspace_service._enrich_records_with_candidate_application_history(records)
-
-    assert result[0]["candidate_application_history"]["llm_company"] == "Acme"
-    mock_warning.assert_called_once()
-    assert "sheet unavailable" in str(mock_warning.call_args.args[1])
 
 
 def test_rendered_workspace_html_content(tmp_path):

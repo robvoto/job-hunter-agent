@@ -11,7 +11,8 @@ fail() {
 command -v uv >/dev/null 2>&1 || fail "uv is not installed or not on PATH"
 [[ -f .env ]] || fail ".env not found"
 [[ -f data/app.db ]] || fail "data/app.db not found"
-[[ -f data/runtime/rob_candidate_application_history_import.local.json ]] || fail "local rejection-sheet override is missing"
+IMPORT_PATH="$PWD/data/imports/candidate_application_history_export.json"
+[[ -f "$IMPORT_PATH" ]] || fail "candidate application history export is missing: $IMPORT_PATH"
 
 export JOB_HUNTER_DB_PATH="${JOB_HUNTER_DB_PATH:-$PWD/data/app.db}"
 [[ -f "$JOB_HUNTER_DB_PATH" ]] || fail "JOB_HUNTER_DB_PATH does not exist: $JOB_HUNTER_DB_PATH"
@@ -22,21 +23,7 @@ from job_hunter_agent.user_context import set_user_context_from_admin_env, get_u
 set_user_context_from_admin_env()
 if not get_user_id():
     raise SystemExit("JOB_HUNTER_ADMIN_EMAIL is missing or could not establish CLI user context")
-
-from job_hunter_agent.global_settings import (
-    is_candidate_application_history_enabled,
-    get_candidate_application_history_spreadsheet_id,
-    get_candidate_application_history_tab_name,
-)
-
-if not is_candidate_application_history_enabled():
-    raise SystemExit("Candidate application history is disabled")
-if not get_candidate_application_history_spreadsheet_id().strip():
-    raise SystemExit("Candidate application history spreadsheet_id is empty")
-if not get_candidate_application_history_tab_name().strip():
-    raise SystemExit("Candidate application history tab_name is empty")
-
-print(f"[sync-job-rejections] Source configured: {get_candidate_application_history_tab_name()}")
+print("[sync-job-rejections] Source: local JSON export")
 PY
 
 # Remove only cached extraction failures from previous unauthenticated CLI runs.
@@ -65,10 +52,21 @@ PY
 
 echo "[sync-job-rejections] Importing latest rejection history..."
 uv run --env-file .env python - <<'PY'
+from pathlib import Path
+
 from job_hunter_agent.user_context import set_user_context_from_admin_env
 set_user_context_from_admin_env()
-from job_hunter_agent.candidate_application_history import main
-raise SystemExit(main(["import-from-sheet"]))
+from job_hunter_agent.candidate_application_history import import_candidate_rejections_from_json
+
+summary = import_candidate_rejections_from_json(
+    Path("data/imports/candidate_application_history_export.json")
+)
+print(
+    "[sync-job-rejections] Imported records: "
+    f"{summary['records_added']} added, "
+    f"{summary['records_updated']} updated, "
+    f"{summary['records_total']} total"
+)
 PY
 
 echo "[sync-job-rejections] Final local history status..."

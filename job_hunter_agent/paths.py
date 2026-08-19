@@ -61,6 +61,10 @@ def get_candidate_application_history_path() -> Path:
     return RUNTIME_DIR / "candidate_application_history.json"
 
 
+def get_candidate_application_history_import_path() -> Path:
+    return DATA_DIR / "imports" / "candidate_application_history_export.json"
+
+
 def get_db_path() -> Path:
     val = os.environ.get("JOB_HUNTER_DB_PATH")
     if not val:

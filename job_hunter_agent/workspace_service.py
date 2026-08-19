@@ -20,9 +20,7 @@ from job_hunter_agent.config import DEBUG_MODE, JOB_HUNTER_BASE_URL
 from job_hunter_agent.fit_scoring import fit_score_displayed
 from job_hunter_agent.global_settings import (
     get_archive_stale_after_days,
-    get_candidate_application_history_sync_before_run,
     get_hidden_review_days,
-    is_candidate_application_history_enabled,
 )
 from job_hunter_agent.history import (
     TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING,
@@ -200,22 +198,9 @@ def _enrich_records_with_candidate_application_history(records: list[dict]) -> l
 
     try:
         from job_hunter_agent.candidate_application_history import (
-            import_candidate_rejections_from_sheet,
             enrich_records_with_application_history,
             load_candidate_job_rejection_history,
         )
-
-        if (
-            is_candidate_application_history_enabled()
-            and get_candidate_application_history_sync_before_run()
-        ):
-            try:
-                import_candidate_rejections_from_sheet()
-            except Exception as exc:
-                logger.warning(
-                    "[candidate_application_history] sync before run failed; using local store: %s",
-                    exc,
-                )
 
         candidate_history = load_candidate_job_rejection_history()
 

@@ -1,7 +1,7 @@
 """Candidate application history storage and import helpers.
 
-Purpose: keep the local rejection-history store in sync with the reviewed sheet
-and normalise company/role matching for workspace use.
+Purpose: keep the local rejection-history store in sync with the explicit
+migration export and normalise company/role matching for workspace use.
 """
 
 import argparse
@@ -11,6 +11,7 @@ import io
 import json as _json
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 
 import requests
 
@@ -25,10 +26,11 @@ from job_hunter_agent.global_settings import (
     get_candidate_application_history_tab_name,
     is_candidate_application_history_enabled,
 )
-from job_hunter_agent.io_utils import load_json_list, save_json
 from job_hunter_agent.io_utils import (
     load_candidate_application_history_cache,
+    load_json_list,
     save_candidate_application_history_cache,
+    save_json,
 )
 from job_hunter_agent.llm_gate import (
     _log_llm_call,
@@ -40,6 +42,7 @@ from job_hunter_agent.llm_gate import (
 )
 from job_hunter_agent.paths import (
     CANDIDATE_APPLICATION_HISTORY_CACHE_PATH,
+    get_candidate_application_history_import_path,
     get_candidate_application_history_path,
 )
 from job_hunter_agent.text_processing import compact_whitespace
@@ -53,7 +56,9 @@ _CANDIDATE_APPLICATION_HISTORY_PATH = get_candidate_application_history_path()
 _CANDIDATE_HISTORY_STATUS_REJECTION = "rejection"
 _CANDIDATE_HISTORY_SOURCE_MANUAL = "manual"
 _CANDIDATE_HISTORY_SOURCE_SHEET_IMPORT = "sheet_import"
+_CANDIDATE_HISTORY_SOURCE_APPS_SCRIPT = "gmail_apps_script"
 _CLI_COMMAND_IMPORT_FROM_SHEET = "import-from-sheet"
+_CLI_COMMAND_IMPORT_FROM_JSON = "import-from-json"
 _CLI_COMMAND_STATUS = "status"
 _OUTPUT_PREFIX = "[candidate_application_history]"
 _SUMMARY_FIELD_ORDER = (
@@ -569,6 +574,7 @@ def _candidate_history_store_entry_to_runtime(entry: dict) -> dict:
     if normalized["source"] not in {
         _CANDIDATE_HISTORY_SOURCE_MANUAL,
         _CANDIDATE_HISTORY_SOURCE_SHEET_IMPORT,
+        _CANDIDATE_HISTORY_SOURCE_APPS_SCRIPT,
     }:
         raise ValueError(
             f"candidate history store entry has unsupported source: {normalized['source']!r}"
@@ -668,19 +674,7 @@ def add_candidate_rejection_record(record: dict) -> dict:
     return stored
 
 
-def _candidate_history_import_sheet_rows() -> tuple[list[dict], dict]:
-    if not is_candidate_application_history_enabled():
-        return [], {
-            "enabled": False,
-            "rows_fetched": 0,
-            "rows_loaded_from_cache": 0,
-            "rows_sent_to_llm": 0,
-            "rows_marked_rejection": 0,
-            "rows_needing_review": 0,
-            "failures": 0,
-        }
-
-    raw_rows = fetch_candidate_job_rejection_rows()
+def _candidate_history_import_rows(raw_rows: list[dict], *, source: str) -> tuple[list[dict], dict]:
     cache = _load_cache()
     updated = False
     imported_store_rows: list[dict] = []
@@ -704,16 +698,13 @@ def _candidate_history_import_sheet_rows() -> tuple[list[dict], dict]:
             cache[cache_key] = normalized_row
             updated = True
         imported_store_rows.append(
-            _candidate_history_sheet_row_to_store_entry(
-                normalized_row, source=_CANDIDATE_HISTORY_SOURCE_SHEET_IMPORT
-            )
+            _candidate_history_sheet_row_to_store_entry(normalized_row, source=source)
         )
 
     if updated:
         _save_cache(cache)
 
     summary = {
-        "enabled": True,
         "rows_fetched": len(raw_rows),
         "rows_loaded_from_cache": cache_hits,
         "rows_sent_to_llm": extracted_count,
@@ -728,16 +719,7 @@ def _candidate_history_import_sheet_rows() -> tuple[list[dict], dict]:
     return imported_store_rows, summary
 
 
-def import_candidate_rejections_from_sheet() -> dict:
-    imported_rows, summary = _candidate_history_import_sheet_rows()
-    if not summary["enabled"]:
-        logger.debug("Candidate application history import skipped: disabled")
-        return summary | {
-            "records_added": 0,
-            "records_updated": 0,
-            "records_total": len(load_candidate_application_history()),
-        }
-
+def _merge_candidate_history_import(imported_rows: list[dict], summary: dict) -> dict:
     existing_rows = load_candidate_application_history()
     existing_by_primary_key = {}
     existing_by_fallback_key = {}
@@ -778,12 +760,105 @@ def import_candidate_rejections_from_sheet() -> dict:
     }
 
 
+def _candidate_history_import_sheet_rows() -> tuple[list[dict], dict]:
+    if not is_candidate_application_history_enabled():
+        return [], {
+            "enabled": False,
+            "rows_fetched": 0,
+            "rows_loaded_from_cache": 0,
+            "rows_sent_to_llm": 0,
+            "rows_marked_rejection": 0,
+            "rows_needing_review": 0,
+            "failures": 0,
+        }
+
+    raw_rows = fetch_candidate_job_rejection_rows()
+    imported_rows, summary = _candidate_history_import_rows(
+        raw_rows, source=_CANDIDATE_HISTORY_SOURCE_SHEET_IMPORT
+    )
+    return imported_rows, summary | {"enabled": True}
+
+
+def import_candidate_rejections_from_sheet() -> dict:
+    imported_rows, summary = _candidate_history_import_sheet_rows()
+    if not summary["enabled"]:
+        logger.debug("Candidate application history import skipped: disabled")
+    return _merge_candidate_history_import(imported_rows, summary)
+
+
+def import_candidate_rejections_from_json(input_path: str | Path | None = None) -> dict:
+    """Import canonical records from the explicit Apps Script migration export."""
+    path = (
+        Path(input_path)
+        if input_path is not None
+        else get_candidate_application_history_import_path()
+    )
+    if not path.is_file():
+        raise FileNotFoundError(f"Candidate application history export not found: {path}")
+
+    payload = _json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, list) or not all(isinstance(row, dict) for row in payload):
+        raise ValueError("Candidate application history export must be a JSON list of objects")
+
+    imported_rows = []
+    for record in payload:
+        date = _clean(record.get("date"))
+        company = _clean(record.get("company"))
+        status = _clean(record.get("status")).lower()
+        source = _clean(record.get("source"))
+        if not date or not company:
+            raise ValueError(
+                "Candidate application history export record is missing date or company"
+            )
+        if status != _CANDIDATE_HISTORY_STATUS_REJECTION:
+            raise ValueError(
+                f"Candidate application history export has unsupported status: {status!r}"
+            )
+        if source != _CANDIDATE_HISTORY_SOURCE_APPS_SCRIPT:
+            raise ValueError(
+                f"Candidate application history export has unsupported source: {source!r}"
+            )
+
+        now = _candidate_history_now()
+        message_id = _clean(record.get("message_id")) or None
+        store_entry = {
+            "id": _clean(record.get("id"))
+            or message_id
+            or _candidate_history_store_entry_id(record),
+            "message_id": message_id,
+            "date": date,
+            "company": company,
+            "role": _clean(record.get("role")),
+            "status": status,
+            "recruiter": record.get("recruiter") if record.get("recruiter") is not None else None,
+            "source": source,
+            "evidence": _clean(record.get("evidence")),
+            "job_key": record.get("job_key") if record.get("job_key") is not None else None,
+            "created_at": _clean(record.get("created_at")) or now,
+            "updated_at": now,
+            "confidence": _clean(record.get("confidence")).lower(),
+            "needs_review": bool(record.get("needs_review", False)),
+            "review_reason": _clean(record.get("review_reason")) or None,
+        }
+        imported_rows.append(store_entry)
+
+    summary = {
+        "rows_fetched": len(payload),
+        "rows_loaded_from_cache": 0,
+        "rows_sent_to_llm": 0,
+        "rows_marked_rejection": len(imported_rows),
+        "rows_needing_review": sum(1 for row in imported_rows if bool(row.get("needs_review"))),
+        "failures": 0,
+    }
+    return _merge_candidate_history_import(imported_rows, summary)
+
+
 def load_candidate_job_rejection_history() -> list[dict]:
     """
     Load candidate application history from the local runtime store.
 
-    Google Sheets are no longer the startup source of truth. Use the explicit
-    import command to refresh the local store from the configured sheet.
+    The local JSON store is the runtime source of truth. Explicit migration
+    imports are separate from this read path.
     """
     if not is_candidate_application_history_enabled():
         logger.debug("Candidate application history load skipped: disabled")
@@ -837,8 +912,8 @@ def _print_summary(summary: dict, field_order: tuple[str, ...]) -> None:
 def _build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Inspect the local candidate application history store or sync it "
-            "from the configured Job_Rejections Google Sheet."
+            "Inspect the local candidate application history store or import "
+            "an explicit local migration export."
         )
     )
     subparsers = parser.add_subparsers(dest="command")
@@ -849,6 +924,13 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         help="Refresh the local JSON store from the configured Job_Rejections sheet.",
     )
     import_parser.set_defaults(command=_CLI_COMMAND_IMPORT_FROM_SHEET)
+
+    json_import_parser = subparsers.add_parser(
+        _CLI_COMMAND_IMPORT_FROM_JSON,
+        help="Import the local candidate application history migration export.",
+    )
+    json_import_parser.add_argument("input_path", type=Path)
+    json_import_parser.set_defaults(command=_CLI_COMMAND_IMPORT_FROM_JSON)
 
     status_parser = subparsers.add_parser(
         _CLI_COMMAND_STATUS,
@@ -882,12 +964,20 @@ def _print_import_summary() -> dict:
     return summary
 
 
+def _print_json_import_summary(input_path: Path) -> dict:
+    summary = import_candidate_rejections_from_json(input_path)
+    _print_summary(summary, _SUMMARY_FIELD_ORDER)
+    return summary
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _build_argument_parser()
     args = parser.parse_args(argv)
     try:
         if args.command == _CLI_COMMAND_IMPORT_FROM_SHEET:
             _print_import_summary()
+        elif args.command == _CLI_COMMAND_IMPORT_FROM_JSON:
+            _print_json_import_summary(args.input_path)
         else:
             _print_local_store_summary()
     except Exception as exc:
