@@ -32,8 +32,12 @@ from job_hunter_agent.record_schema import (
     RECORD_ORIGINAL_POSTED_DATE_KEY,
     RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY,
     RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
+    POSTING_CHANNEL_CLASSIFIER_VERSION,
+    POSTING_CHANNEL_VERSION_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
     RECORD_SOURCE_METADATA_KEY,
+    SOURCE_METADATA_SCHEMA_VERSION,
+    SOURCE_METADATA_VERSION_KEY,
 )
 from job_hunter_agent.runtime_helpers import CLI_FLAG_RESET_NEW_TO_YOU
 from job_hunter_agent.signal_detection import hard_block_reasons
@@ -149,9 +153,20 @@ def can_reuse_detail_evidence(history_entry: dict, max_age_days: int, run_iso: s
 
 
 def apply_detail_evidence_reuse(record: dict, history_entry: dict) -> dict:
+    """Reuse fetched detail text without reviving obsolete source metadata."""
     evidence = history_entry.get("detail_evidence") or {}
     for field in DETAIL_EVIDENCE_FIELDS:
+        if field == RECORD_SOURCE_METADATA_KEY:
+            continue
         record[field] = evidence.get(field)
+
+    cached_source_metadata = evidence.get(RECORD_SOURCE_METADATA_KEY)
+    if (
+        isinstance(cached_source_metadata, dict)
+        and cached_source_metadata.get(SOURCE_METADATA_VERSION_KEY) == SOURCE_METADATA_SCHEMA_VERSION
+    ):
+        record[RECORD_SOURCE_METADATA_KEY] = cached_source_metadata
+
     record["_raw_source_payload"] = evidence.get("raw_source_payload")
     record["_raw_html"] = None
     return record
@@ -178,15 +193,21 @@ def can_reuse_kept_job(history_entry: dict, record: dict, profile: Optional[dict
         return False
 
     posting_channel = snapshot.get(RECORD_POSTING_CHANNEL_EVIDENCE_KEY)
-    posting_channel_source = (
-        compact_whitespace(posting_channel.get("source") or "")
-        if isinstance(posting_channel, dict)
-        else ""
-    )
-    # Old keep snapshots can contain the scraper's blank source state even when
-    # fit data is complete. Re-review those once so the LLM/source classifier
-    # can populate a real posting-channel result instead of reusing "unclear" forever.
+    if not isinstance(posting_channel, dict):
+        return False
+    # Posting-channel output is derived data. Re-run the review whenever its
+    # classifier contract changes so an old confident-but-wrong badge cannot live
+    # forever in history just because the fit decision itself is reusable.
+    if posting_channel.get(POSTING_CHANNEL_VERSION_KEY) != POSTING_CHANNEL_CLASSIFIER_VERSION:
+        return False
+    posting_channel_source = compact_whitespace(posting_channel.get("source") or "")
     if not posting_channel_source or posting_channel_source == "insufficient_evidence":
+        return False
+
+    source_metadata = snapshot.get(RECORD_SOURCE_METADATA_KEY)
+    if not isinstance(source_metadata, dict):
+        return False
+    if source_metadata.get(SOURCE_METADATA_VERSION_KEY) != SOURCE_METADATA_SCHEMA_VERSION:
         return False
 
     if not record.get("job_key"):

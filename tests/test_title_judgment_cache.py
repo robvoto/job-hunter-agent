@@ -148,7 +148,19 @@ def test_fit_review_contract_version_does_not_invalidate_title_cache_key(monkeyp
 
     assert title_after == title_before
     assert ":fit:v999:" in fit_key
+    assert f":posting:v{llm_gate.POSTING_CHANNEL_CLASSIFIER_VERSION}:" in fit_key
     assert ":title:v1:" in title_after
+
+
+def test_posting_channel_contract_version_invalidates_fit_cache_key(monkeypatch):
+    monkeypatch.setattr(llm_gate, "_profile_fingerprint", lambda: "active-fp")
+    before = llm_gate.build_llm_cache_key("job description")
+
+    monkeypatch.setattr(llm_gate, "POSTING_CHANNEL_CLASSIFIER_VERSION", 999)
+    after = llm_gate.build_llm_cache_key("job description")
+
+    assert before != after
+    assert ":posting:v999:" in after
 
 
 def test_title_judgment_cache_entry_survives_current_profile_pruning(monkeypatch):

@@ -27,8 +27,10 @@ from job_hunter_agent.record_schema import (
     RECORD_FIT_SOURCE_TEXT_KEY,
     RECORD_FULL_DESCRIPTION_KEY,
     RECORD_JOB_KEY,
+    RECORD_SOURCE_METADATA_KEY,
     RECORD_TITLE_KEY,
     RECORD_TITLE_REASON_KEY,
+    SOURCE_POSTER_COMPANY_INDUSTRY_KEY,
 )
 from job_hunter_agent.scoring_utils import (
     get_deterministic_review_thresholds,
@@ -290,6 +292,32 @@ def register_pending_learning_signals(signals: list[dict[str, Any]]) -> None:
         register_signals(filtered)
 
 
+def _fit_review_source_context(record: dict) -> list[str]:
+    """Return factual publisher context for posting-channel interpretation.
+
+    These lines describe source metadata only; they do not decide whether the
+    publisher is the employer or an agency. That semantic decision stays with
+    the posting-channel LLM contract.
+    """
+    company = compact_whitespace(record.get(RECORD_COMPANY_KEY) or "")
+    metadata = record.get(RECORD_SOURCE_METADATA_KEY)
+    metadata = metadata if isinstance(metadata, dict) else {}
+    poster_company = compact_whitespace(metadata.get("poster_company") or "")
+    hiring_company = compact_whitespace(metadata.get("hiring_company") or "")
+    poster_industry = compact_whitespace(metadata.get(SOURCE_POSTER_COMPANY_INDUSTRY_KEY) or "")
+
+    lines: list[str] = []
+    if company:
+        lines.append(f"Source-listed company/advertiser: {company}")
+    if poster_company and poster_company != company:
+        lines.append(f"Source-listed poster company: {poster_company}")
+    if poster_industry:
+        lines.append(f"Source-listed poster industry: {poster_industry}")
+    if hiring_company:
+        lines.append(f"Source-listed explicit hiring company: {hiring_company}")
+    return lines
+
+
 def resolve_llm_review_payload(
     record: dict,
     llm_cache: dict,
@@ -321,12 +349,12 @@ def resolve_llm_review_payload(
         record.get(RECORD_FIT_SOURCE_TEXT_KEY) or record.get(RECORD_FULL_DESCRIPTION_KEY) or ""
     )
 
-    # Fit review needs the board-displayed company/advertiser as factual context for
-    # posting-channel classification. Learning-only calls stay description-only so
-    # company identity cannot become a learned job requirement or capability signal.
-    company_text = f"Source-listed company/advertiser: {company.strip()}" if not learning_only and company.strip() else ""
+    # Fit review gets canonical source facts as context for posting-channel
+    # interpretation. Learning-only calls remain title/description-only so source
+    # identity cannot become a learned requirement or candidate capability.
+    source_context = [] if learning_only else _fit_review_source_context(record)
     llm_input_text = "\n".join(
-        part for part in [title_text, company_text, str(body_text).strip()] if part
+        part for part in [title_text, *source_context, str(body_text).strip()] if part
     )
 
     max_llm_chars = get_llm_max_chars()

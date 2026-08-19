@@ -20,6 +20,9 @@ RECORD_PAGE_KEY = "page"
 RECORD_SOURCE_NAME_KEY = "source_name"
 RECORD_SOURCE_KEY = "source"
 RECORD_SOURCE_METADATA_KEY = "source_metadata"
+SOURCE_METADATA_VERSION_KEY = "schema_version"
+SOURCE_METADATA_SCHEMA_VERSION = 1
+SOURCE_POSTER_COMPANY_INDUSTRY_KEY = "poster_company_industry"
 RECORD_SOURCE_PLATFORM_JOB_ID_KEY = "platform_job_id"
 RECORD_SOURCE_ATS_REQUISITION_ID_KEY = "ats_requisition_id"
 RECORD_SOURCE_CANONICAL_URL_KEY = "canonical_url"
@@ -67,6 +70,10 @@ RECORD_MISSING_PROFILE_SUPPORT_KEY = "missing_profile_support"
 RECORD_MISSING_CLEARANCE_SUPPORT_KEY = "missing_clearance_support"
 RECORD_REVIEWED_SIGNAL_MATCHES_KEY = "reviewed_signal_matches"
 RECORD_POSTING_CHANNEL_EVIDENCE_KEY = "posting_channel_evidence"
+POSTING_CHANNEL_VERSION_KEY = "classifier_version"
+# Bump whenever posting-channel metadata precedence or its managed LLM contract changes.
+# History reuse and fit-review cache keys depend on this value.
+POSTING_CHANNEL_CLASSIFIER_VERSION = 3
 RECORD_JOB_QUALITY_SIGNALS_KEY = "job_quality_signals"
 RECORD_REQUIREMENT_COVERAGE_KEY = "requirement_coverage"
 RECORD_OCCUPATION_ALIGNMENT_KEY = "occupation_alignment"

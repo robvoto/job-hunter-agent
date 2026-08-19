@@ -18,6 +18,7 @@ from job_hunter_agent.posting_utils import (
     posted_age_badge_threshold,
 )
 from job_hunter_agent.profile_store import load_profile
+from job_hunter_agent.role_analysis import posting_channel_evidence_is_current
 from job_hunter_agent.source_registry import get_source_display_label
 from job_hunter_agent.system_warnings import make_system_warning_fingerprint, record_system_warning
 from job_hunter_agent.text_processing import dedupe_preserve_order
@@ -98,7 +99,7 @@ def _build_badges(record: dict, workspace_state: str) -> list[str]:
     badges.append(get_source_display_label(str(record.get("source") or "unknown")))
 
     channel_signal = record.get("posting_channel_evidence")
-    if not isinstance(channel_signal, dict):
+    if not posting_channel_evidence_is_current(channel_signal):
         channel_signal = {}
     channel_kind = str(channel_signal.get("kind") or "").strip().lower()
     if channel_kind == "agency_or_recruiter":
@@ -120,7 +121,7 @@ def _build_badges(record: dict, workspace_state: str) -> list[str]:
         badges.append(
             _workspace_label("workspace_card_labels", "posting_channel_direct_employer_badge")
         )
-    else:
+    elif channel_kind:
         badges.append(
             _workspace_label("workspace_card_labels", "posting_channel_unknown_badge")
         )

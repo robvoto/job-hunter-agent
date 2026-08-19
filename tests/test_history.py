@@ -20,8 +20,12 @@ from job_hunter_agent.record_schema import (
     RECORD_JOB_KEY,
     RECORD_LAST_KEPT_SNAPSHOT_KEY,
     RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
+    POSTING_CHANNEL_CLASSIFIER_VERSION,
+    POSTING_CHANNEL_VERSION_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
     RECORD_SOURCE_METADATA_KEY,
+    SOURCE_METADATA_SCHEMA_VERSION,
+    SOURCE_METADATA_VERSION_KEY,
     RECORD_URL_KEY,
 )
 
@@ -40,9 +44,14 @@ def test_history_reuse_with_url_variation():
             {"requirement": "Business analysis", "importance": "required", "status": "supported"}
         ],
         RECORD_POSTING_CHANNEL_EVIDENCE_KEY: {
+            POSTING_CHANNEL_VERSION_KEY: POSTING_CHANNEL_CLASSIFIER_VERSION,
             "kind": "direct_employer",
             "source": "llm_classifier",
             "text_evidence": ["The ad describes the employer's own team."],
+        },
+        RECORD_SOURCE_METADATA_KEY: {
+            SOURCE_METADATA_VERSION_KEY: SOURCE_METADATA_SCHEMA_VERSION,
+            "platform": "seek",
         },
         "title": "Software Engineer",
         "company": "Tech Corp",
@@ -74,16 +83,47 @@ def test_history_reuse_rechecks_jobs_with_unclassified_posting_channel():
                 {"requirement": "Business analysis", "importance": "required", "status": "supported"}
             ],
             RECORD_POSTING_CHANNEL_EVIDENCE_KEY: {
+                POSTING_CHANNEL_VERSION_KEY: POSTING_CHANNEL_CLASSIFIER_VERSION,
                 "kind": "unknown",
                 "source": "insufficient_evidence",
                 "trusted_metadata": [],
                 "text_evidence": [],
+            },
+            RECORD_SOURCE_METADATA_KEY: {
+                SOURCE_METADATA_VERSION_KEY: SOURCE_METADATA_SCHEMA_VERSION,
+                "platform": "seek",
             },
         },
     }
     record = {RECORD_JOB_KEY: "seek:12345"}
 
     assert can_reuse_kept_job(entry, record) is False
+
+
+def test_history_reuse_rechecks_old_confident_posting_channel_contract():
+    entry = {
+        "times_kept": 1,
+        RECORD_LAST_KEPT_SNAPSHOT_KEY: {
+            "llm_decision": "KEEP",
+            "llm_fit_grade": "STRONG",
+            RECORD_REQUIREMENT_COVERAGE_KEY: [
+                {"requirement": "Business analysis", "importance": "required", "status": "supported"}
+            ],
+            RECORD_POSTING_CHANNEL_EVIDENCE_KEY: {
+                POSTING_CHANNEL_VERSION_KEY: POSTING_CHANNEL_CLASSIFIER_VERSION - 1,
+                "kind": "direct_employer",
+                "source": "metadata_first",
+                "trusted_metadata": ["job_url_direct"],
+                "text_evidence": [],
+            },
+            RECORD_SOURCE_METADATA_KEY: {
+                SOURCE_METADATA_VERSION_KEY: SOURCE_METADATA_SCHEMA_VERSION,
+                "platform": "linkedin",
+            },
+        },
+    }
+
+    assert can_reuse_kept_job(entry, {RECORD_JOB_KEY: "linkedin:12345"}) is False
 
 
 def test_history_reuse_requires_complete_llm_keep_data():
@@ -197,7 +237,10 @@ def _fetched_record(fetched_text: str = "Full role description text.") -> dict:
         RECORD_JOB_KEY: "seek:12345",
         RECORD_DETAILS_TEXT_KEY: fetched_text,
         RECORD_DETAILS_STATUS_KEY: "ok",
-        RECORD_SOURCE_METADATA_KEY: {"platform": "seek"},
+        RECORD_SOURCE_METADATA_KEY: {
+            SOURCE_METADATA_VERSION_KEY: SOURCE_METADATA_SCHEMA_VERSION,
+            "platform": "seek",
+        },
         RECORD_DESCRIPTION_SOURCE_KEY: "seek_detail_page",
         RECORD_APPLY_METHOD_KEY: "direct_apply",
         "_raw_source_payload": {"jobDetails": {"id": "12345"}},
@@ -226,6 +269,14 @@ def test_can_reuse_detail_evidence_false_when_stale():
     assert can_reuse_detail_evidence(entry, max_age_days=7, run_iso="2026-06-20T00:00:00+10:00") is False
 
 
+def test_can_reuse_detail_evidence_even_when_cached_source_metadata_contract_is_old():
+    snapshot = build_detail_evidence_snapshot(_fetched_record(), "2026-06-01T00:00:00+10:00")
+    snapshot[RECORD_SOURCE_METADATA_KEY][SOURCE_METADATA_VERSION_KEY] = SOURCE_METADATA_SCHEMA_VERSION - 1
+    entry = {"detail_evidence": snapshot}
+
+    assert can_reuse_detail_evidence(entry, max_age_days=7, run_iso="2026-06-05T00:00:00+10:00") is True
+
+
 def test_can_reuse_detail_evidence_false_when_fetch_produced_no_text():
     entry = {
         "detail_evidence": build_detail_evidence_snapshot(
@@ -250,5 +301,31 @@ def test_apply_detail_evidence_reuse_restores_fetched_fields_without_raw_html():
     assert reused[RECORD_DETAILS_TEXT_KEY] == "Full role description text."
     assert reused[RECORD_DETAILS_STATUS_KEY] == "ok"
     assert reused[RECORD_APPLY_METHOD_KEY] == "direct_apply"
+    assert reused[RECORD_SOURCE_METADATA_KEY] == fetched[RECORD_SOURCE_METADATA_KEY]
     assert reused["_raw_source_payload"] == {"jobDetails": {"id": "12345"}}
     assert reused["_raw_html"] is None
+
+
+def test_apply_detail_evidence_reuse_preserves_fresh_source_metadata_when_cached_version_is_old():
+    fetched = _fetched_record()
+    snapshot = build_detail_evidence_snapshot(fetched, "2026-06-01T00:00:00+10:00")
+    snapshot[RECORD_SOURCE_METADATA_KEY] = {
+        SOURCE_METADATA_VERSION_KEY: SOURCE_METADATA_SCHEMA_VERSION - 1,
+        "platform": "seek",
+        "hiring_company": "Old inferred company",
+    }
+    entry = {"detail_evidence": snapshot}
+    fresh_metadata = {
+        SOURCE_METADATA_VERSION_KEY: SOURCE_METADATA_SCHEMA_VERSION,
+        "platform": "seek",
+        "hiring_company": "",
+    }
+    record = {
+        RECORD_JOB_KEY: "seek:12345",
+        RECORD_SOURCE_METADATA_KEY: fresh_metadata,
+    }
+
+    reused = apply_detail_evidence_reuse(record, entry)
+
+    assert reused[RECORD_DETAILS_TEXT_KEY] == "Full role description text."
+    assert reused[RECORD_SOURCE_METADATA_KEY] == fresh_metadata

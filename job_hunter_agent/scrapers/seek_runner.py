@@ -617,13 +617,22 @@ def _seek_source_metadata(
     company_profile_name = _seek_string_value(
         combined_payload, ("normalisedOrganisationName", "companyProfileName")
     )
+    company_profile_block = _seek_nested_value(combined_payload, ("companyProfile",))
+    poster_company_industry = (
+        _seek_string_value(company_profile_block, ("industry",))
+        if isinstance(company_profile_block, dict)
+        else ""
+    )
     advertiser_block = _seek_nested_value(combined_payload, ("advertiser",))
     if isinstance(advertiser_block, dict):
         poster_company = _seek_string_value(advertiser_block, ("name", "label", "value"))
     else:
         poster_company = _seek_string_value(combined_payload, ("advertiser", "name"))
-    hiring_company = _seek_string_value(
-        combined_payload, ("normalisedOrganisationName", "companyProfileName", "name")
+    hirer_block = _seek_nested_value(combined_payload, ("hirer",))
+    hiring_company = (
+        _seek_string_value(hirer_block, ("name", "normalisedOrganisationName", "label", "value"))
+        if isinstance(hirer_block, dict)
+        else ""
     )
     raw_source_fields = {}
     for key in [
@@ -645,12 +654,9 @@ def _seek_source_metadata(
     ats_requisition_id = str(
         _seek_string_value(combined_payload, ("seekHirerJobReference",)) or ""
     ).strip()
-    platform_job_id = str(
-        _seek_string_value(combined_payload, ("seekPostingSourceCode",)) or ""
-    ).strip()
-    # Fall back to the numeric job ID embedded in the listing URL when payload lacks it.
-    if not platform_job_id and url:
-        platform_job_id = _seek_job_id_from_url(url)
+    # SEEK's posting-source code describes how the ad was posted; it is not the
+    # platform job identity. The canonical numeric job ID comes from the listing URL.
+    platform_job_id = _seek_job_id_from_url(url) if url else ""
     canonical_url = _seek_canonical_url(url) if url else ""
     advertiser_id = _seek_advertiser_id_from_payload(combined_payload)
     metadata = _build_initial_source_metadata(
@@ -662,6 +668,7 @@ def _seek_source_metadata(
         company_profile_name=company_profile_name,
         advertiser_id=advertiser_id,
         poster_company=poster_company,
+        poster_company_industry=poster_company_industry,
         hiring_company=hiring_company,
         platform_job_id=platform_job_id,
         ats_requisition_id=ats_requisition_id,

@@ -102,6 +102,7 @@ from job_hunter_agent.llm_protocol import (
     LLM_UNCERTAIN_COVERAGE_REQUIREMENT_TYPE,
 )
 from job_hunter_agent.paths import LLM_COSTS_PATH as _LLM_COSTS_PATH
+from job_hunter_agent.record_schema import POSTING_CHANNEL_CLASSIFIER_VERSION
 
 # Import at module level to allow monkeypatching in tests
 from job_hunter_agent.profile_item_names import normalize_profile_item_name
@@ -787,7 +788,8 @@ def build_llm_cache_key(job_description_text: str) -> str:
     ).hexdigest()
     return (
         f"v{LLM_CACHE_SCHEMA_VERSION}:{_profile_fingerprint()}:"
-        f"fit:v{FIT_REVIEW_CACHE_CONTRACT_VERSION}:{desc_hash}"
+        f"fit:v{FIT_REVIEW_CACHE_CONTRACT_VERSION}:"
+        f"posting:v{POSTING_CHANNEL_CLASSIFIER_VERSION}:{desc_hash}"
     )
 
 

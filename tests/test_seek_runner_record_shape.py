@@ -291,12 +291,14 @@ def test_seek_server_state_parser_preserves_nested_employer_metadata():
 
     assert metadata["advertiser_id"] == "44935084"
     assert metadata["poster_company"] == "Volkswagen Financial Services Australia Pty Limited"
-    assert metadata["hiring_company"] == "Volkswagen Financial Services Australia Pty Limited"
+    # SEEK's advertiser/company profile identifies the publisher. It must not be
+    # promoted to hiring_company unless SEEK provides an explicit hirer fact.
+    assert metadata["hiring_company"] == ""
     assert metadata["company_profile_url"].startswith("https://au.seek.com/Volkswagen-")
     assert metadata[RECORD_SOURCE_PLATFORM_JOB_ID_KEY] == "93915767"
 
 
-def test_seek_source_metadata_preserves_platform_and_ats_ids():
+def test_seek_source_metadata_uses_url_job_id_and_preserves_ats_id():
     metadata, _ = _seek_source_metadata(
         _FakeDetailPage(),
         {
@@ -304,9 +306,11 @@ def test_seek_source_metadata_preserves_platform_and_ats_ids():
             "seekHirerJobReference": "REQ-9",
             "shareLink": "https://www.seek.com.au/job/1",
         },
+        url="https://www.seek.com.au/job/1?tracking=abc",
     )
 
-    assert metadata[RECORD_SOURCE_PLATFORM_JOB_ID_KEY] == "PLAT-1"
+    assert metadata[RECORD_SOURCE_PLATFORM_JOB_ID_KEY] == "1"
+    assert metadata["raw_source_fields"]["seekPostingSourceCode"] == "PLAT-1"
     assert metadata[RECORD_SOURCE_ATS_REQUISITION_ID_KEY] == "REQ-9"
 
 
@@ -318,9 +322,11 @@ def test_seek_source_metadata_omits_blank_ats_id():
             "seekHirerJobReference": "",
             "shareLink": "https://www.seek.com.au/job/1",
         },
+        url="https://www.seek.com.au/job/1",
     )
 
-    assert metadata[RECORD_SOURCE_PLATFORM_JOB_ID_KEY] == "PLAT-1"
+    assert metadata[RECORD_SOURCE_PLATFORM_JOB_ID_KEY] == "1"
+    assert metadata["raw_source_fields"]["seekPostingSourceCode"] == "PLAT-1"
     assert RECORD_SOURCE_ATS_REQUISITION_ID_KEY not in metadata
 
 

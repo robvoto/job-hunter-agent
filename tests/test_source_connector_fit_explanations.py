@@ -51,6 +51,8 @@ from job_hunter_agent.record_schema import (
     RECORD_ORIGINAL_POSTED_DATE_KEY,
     ORIGINAL_POSTED_DATE_STATUS_UNVERIFIED,
     ORIGINAL_POSTED_DATE_STATUS_VERIFIED,
+    POSTING_CHANNEL_CLASSIFIER_VERSION,
+    POSTING_CHANNEL_VERSION_KEY,
     RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
 )
@@ -152,32 +154,39 @@ _ORIGINAL_RENDER_JOB_CARD = workspace_renderer.render_job_card
 workspace_renderer.render_job_card = _render_job_card
 
 
-def test_infer_posting_channel_uses_trusted_metadata_before_text():
+def test_infer_posting_channel_does_not_treat_recruiter_owned_direct_urls_as_employer_proof():
     channel = role_analysis.infer_posting_channel(
         {
+            "company": "Peoplebank",
             "source_metadata": {
                 "platform": "linkedin",
-                "apply_url": "https://jobs.lever.co/acme/123",
-                "apply_domain": "jobs.lever.co",
-                "company_profile_url": "https://acme.com.au",
-                "company_profile_name": "Acme",
-                "poster_company": "Acme",
-                "hiring_company": "Acme",
-                "ats_source": "jobs.lever.co",
+                "apply_url": "https://peoplebank.com.au/job/271673",
+                "apply_domain": "peoplebank.com.au",
+                "company_profile_url": "https://linkedin.com/company/peoplebank",
+                "company_profile_name": "Peoplebank",
+                "poster_company": "Peoplebank",
+                "poster_company_industry": "Staffing and Recruiting",
+                "hiring_company": "",
+                "ats_source": "peoplebank.com.au",
                 "raw_source_fields": {
-                    "job_url_direct": "https://jobs.lever.co/acme/123",
-                    "company_url_direct": "https://acme.com.au",
+                    "job_url_direct": "https://peoplebank.com.au/job/271673",
+                    "company_url_direct": "https://peoplebank.com.au",
                 },
-            }
+            },
         },
-        None,
+        {
+            "kind": "agency_or_recruiter",
+            "confident": True,
+            "evidence": "We are expert recruiters; our Federal Government Client is seeking...",
+        },
     )
 
-    assert channel["kind"] == "direct_employer"
-    assert channel["source"] == "metadata_first"
+    assert channel["kind"] == "agency_or_recruiter"
+    assert channel["source"] == "llm_classifier"
     assert channel["needs_review"] is False
     assert "job_url_direct" in channel["trusted_metadata"]
-
+    assert "company_url_direct" in channel["trusted_metadata"]
+    assert "poster industry = Staffing and Recruiting" in channel["trusted_metadata"]
 
 def test_infer_posting_channel_does_not_treat_linkedin_publisher_profile_as_employer_proof():
     channel = role_analysis.infer_posting_channel(
@@ -1831,6 +1840,7 @@ def test_render_job_card_shows_source_unclear_badge_for_unknown_posting_channel(
             "fit_highlights": [],
             "source": "seek",
             "posting_channel_evidence": {
+                POSTING_CHANNEL_VERSION_KEY: POSTING_CHANNEL_CLASSIFIER_VERSION,
                 "kind": "unknown",
                 "source": "insufficient_evidence",
                 "trusted_metadata": [],
@@ -1842,6 +1852,36 @@ def test_render_job_card_shows_source_unclear_badge_for_unknown_posting_channel(
     )
 
     assert "Source unclear" in html
+
+
+def test_render_job_card_suppresses_stale_posting_channel_badge():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-posting-channel-stale",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Business analysis support across delivery teams.",
+            "fit_highlights": [],
+            "source": "seek",
+            "posting_channel_evidence": {
+                POSTING_CHANNEL_VERSION_KEY: POSTING_CHANNEL_CLASSIFIER_VERSION - 1,
+                "kind": "direct_employer",
+                "source": "metadata_first",
+            },
+        },
+        _test_profile(),
+    )
+
+    assert "Direct employer" not in html
+    assert "Source unclear" not in html
 
 
 def test_infer_posting_channel_keeps_unknown_without_trusted_linkedin_employer_metadata():

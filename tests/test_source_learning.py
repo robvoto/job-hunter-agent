@@ -5,7 +5,9 @@ from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
     RECORD_FULL_DESCRIPTION_KEY,
     RECORD_JOB_KEY,
+    RECORD_SOURCE_METADATA_KEY,
     RECORD_TITLE_KEY,
+    SOURCE_POSTER_COMPANY_INDUSTRY_KEY,
 )
 from job_hunter_agent.signal_schema import TITLE_REASON_POTENTIAL_MATCH
 
@@ -205,6 +207,47 @@ def test_resolve_llm_review_payload_cache_miss_calls_llm(monkeypatch):
     # A cache MISS must be written back so a later equivalent job hits the cache.
     assert llm_fp in llm_cache
     assert llm_cache[llm_fp]["fit_review"] == {"decision": "KEEP", "grade": "SOLID"}
+
+
+def test_resolve_llm_review_payload_includes_canonical_publisher_industry(monkeypatch):
+    record = _build_record(
+        title="2 Business Analysts",
+        company="Peoplebank",
+        description="We are expert recruiters. Our Federal Government Client is seeking a Business Analyst.",
+    )
+    record[RECORD_SOURCE_METADATA_KEY] = {
+        "poster_company": "Peoplebank",
+        SOURCE_POSTER_COMPANY_INDUSTRY_KEY: "Staffing and Recruiting",
+        "hiring_company": "",
+    }
+    called = {"input": ""}
+
+    def fake_llm(review_input, *_args, **_kwargs):
+        called["input"] = review_input
+        return {
+            "fit_review": {"decision": "MAYBE", "grade": "WEAK"},
+            "learning_candidates": [],
+            "contextual_capability_matches": [],
+            "job_requirements": [],
+            "requirement_coverage": [],
+            "posting_channel": {
+                "kind": "agency_or_recruiter",
+                "confident": True,
+                "evidence": "Our Federal Government Client is seeking...",
+            },
+        }
+
+    monkeypatch.setattr(source_learning, "llm_is_enabled", lambda: True)
+    monkeypatch.setattr(source_learning, "llm_should_consider_with_learning", fake_llm)
+
+    source_learning.resolve_llm_review_payload(record, {})
+
+    assert called["input"] == (
+        "2 Business Analysts\n"
+        "Source-listed company/advertiser: Peoplebank\n"
+        "Source-listed poster industry: Staffing and Recruiting\n"
+        "We are expert recruiters. Our Federal Government Client is seeking a Business Analyst."
+    )
 
 
 def test_resolve_llm_review_payload_second_equivalent_call_hits_cache(monkeypatch):

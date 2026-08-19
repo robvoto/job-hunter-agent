@@ -3,6 +3,11 @@
 import re
 from typing import Any
 
+from job_hunter_agent.record_schema import (
+    POSTING_CHANNEL_CLASSIFIER_VERSION,
+    POSTING_CHANNEL_VERSION_KEY,
+    SOURCE_POSTER_COMPANY_INDUSTRY_KEY,
+)
 from job_hunter_agent.text_processing import compact_whitespace
 
 
@@ -74,7 +79,7 @@ def _dedupe_strings(values: list[str]) -> list[str]:
     return result
 
 
-def _collect_trusted_posting_channel_metadata(record: dict) -> tuple[list[str], bool, bool]:
+def _collect_trusted_posting_channel_metadata(record: dict) -> tuple[list[str], bool]:
 
     metadata = _source_metadata(record)
 
@@ -82,16 +87,16 @@ def _collect_trusted_posting_channel_metadata(record: dict) -> tuple[list[str], 
 
     trusted_metadata: list[str] = []
 
-    recruiter_keys = (
-        "seekPostingSourceCode",
-        "seekPartnerMetadata",
+    explicit_recruiter_keys = (
         "recruiter_badge",
         "recruiterBadge",
         "agency_specific_reference",
         "agencySpecificReferences",
     )
 
-    employer_keys = (
+    non_decisive_source_keys = (
+        "seekPostingSourceCode",
+        "seekPartnerMetadata",
         "seekHirerJobReference",
         "hirer",
         "hirer_relationship",
@@ -100,17 +105,25 @@ def _collect_trusted_posting_channel_metadata(record: dict) -> tuple[list[str], 
         "job_url_direct",
     )
 
-    for key in recruiter_keys:
+    for key in explicit_recruiter_keys:
         value = raw_fields.get(key)
 
         if value is not None and compact_whitespace(value):
             trusted_metadata.append(key)
 
-    for key in employer_keys:
+    # These are useful source facts, but none proves that the publisher is the
+    # end employer. Recruiters can own ATS/application URLs and hirer references,
+    # so semantic classification stays with the LLM unless the board exposes an
+    # explicit recruiter/agency marker.
+    for key in non_decisive_source_keys:
         value = raw_fields.get(key)
 
         if value is not None and compact_whitespace(value):
             trusted_metadata.append(key)
+
+    poster_industry = compact_whitespace(metadata.get(SOURCE_POSTER_COMPANY_INDUSTRY_KEY) or "")
+    if poster_industry:
+        trusted_metadata.append(f"poster industry = {poster_industry}")
 
     apply_domain = compact_whitespace(metadata.get("apply_domain") or "")
 
@@ -125,40 +138,34 @@ def _collect_trusted_posting_channel_metadata(record: dict) -> tuple[list[str], 
     trusted_metadata = _dedupe_strings(trusted_metadata)
 
     trusted_recruiter = any(
-        key in raw_fields and compact_whitespace(raw_fields.get(key)) for key in recruiter_keys
+        key in raw_fields and compact_whitespace(raw_fields.get(key))
+        for key in explicit_recruiter_keys
     )
 
-    trusted_employer = any(
-        key in raw_fields and compact_whitespace(raw_fields.get(key)) for key in employer_keys
-    )
+    return trusted_metadata, trusted_recruiter
 
-    return trusted_metadata, trusted_recruiter, trusted_employer
+
+def posting_channel_evidence_is_current(value: object) -> bool:
+    """Return whether derived posting-channel evidence matches the active contract."""
+    return (
+        isinstance(value, dict)
+        and value.get(POSTING_CHANNEL_VERSION_KEY) == POSTING_CHANNEL_CLASSIFIER_VERSION
+    )
 
 
 def infer_posting_channel(record: dict, llm_posting_channel: dict[str, Any] | None) -> dict[str, Any]:
-    """Decide who posted this ad: direct employer, agency/recruiter, or unknown.
+    """Decide who posted this ad without inventing employer identity from URLs.
 
-    Structured publisher metadata (e.g. SEEK's own recruiter/hirer fields) is trusted first
-    since it is factual, not inferred. Everything else — including the old company-name and
-    ad-copy keyword matching — is delegated to the LLM fit review, which reads the actual ad
-    text and isn't fooled by agencies with generic-sounding names (e.g. "Talenza").
+    Only explicit recruiter/agency metadata may decide deterministically. Publisher
+    URLs, company profiles, industries, and hirer references remain factual evidence,
+    but ambiguous meaning is delegated to the LLM review.
     """
-    trusted_metadata, trusted_recruiter, trusted_employer = (
-        _collect_trusted_posting_channel_metadata(record)
-    )
+    trusted_metadata, trusted_recruiter = _collect_trusted_posting_channel_metadata(record)
 
     if trusted_recruiter:
         return {
+            POSTING_CHANNEL_VERSION_KEY: POSTING_CHANNEL_CLASSIFIER_VERSION,
             "kind": "agency_or_recruiter",
-            "source": "metadata_first",
-            "trusted_metadata": trusted_metadata,
-            "text_evidence": [],
-            "needs_review": False,
-        }
-
-    if trusted_employer:
-        return {
-            "kind": "direct_employer",
             "source": "metadata_first",
             "trusted_metadata": trusted_metadata,
             "text_evidence": [],
@@ -171,6 +178,7 @@ def infer_posting_channel(record: dict, llm_posting_channel: dict[str, Any] | No
 
     if llm_kind in {"agency_or_recruiter", "direct_employer"}:
         return {
+            POSTING_CHANNEL_VERSION_KEY: POSTING_CHANNEL_CLASSIFIER_VERSION,
             "kind": llm_kind,
             "source": "llm_classifier",
             "trusted_metadata": trusted_metadata,
@@ -179,6 +187,7 @@ def infer_posting_channel(record: dict, llm_posting_channel: dict[str, Any] | No
         }
 
     return {
+        POSTING_CHANNEL_VERSION_KEY: POSTING_CHANNEL_CLASSIFIER_VERSION,
         "kind": "unknown",
         "source": "llm_classifier" if llm_signal else "insufficient_evidence",
         "trusted_metadata": trusted_metadata,

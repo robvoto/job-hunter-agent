@@ -1,12 +1,14 @@
 {
   "kind": "system_config",
   "name": "llm_posting_channel_defaults",
-  "version": 2,
-  "updated_at": "2026-08-13",
+  "version": 3,
+  "updated_at": "2026-08-19",
   "description": "Managed default guidance for LLM posting-channel classification behaviour (agency/recruiter vs direct employer).",
   "lines": [
     "Decide who is actually posting this ad: the employer that will hire the candidate directly, or a recruitment agency/staffing firm posting on behalf of a client.",
     "Judge this from the substance of the ad, not from the poster's company name alone — many agencies have generic-sounding brand names (e.g. a name with no word like 'recruitment' or 'staffing' in it) and many direct employers use words like 'talent' in their team names.",
+    "Source-listed publisher/company and industry fields are factual context, not automatic proof of the hiring relationship. A staffing/recruiting industry strongly supports agency classification when the ad is filling a role for a separate client, but staffing firms can also advertise their own internal roles.",
+    "An external application URL, ATS domain, company profile link, hirer reference, or publisher-owned careers page is not by itself proof of direct employment; recruiters can own and operate those systems too.",
     "agency_or_recruiter: the ad describes itself as representing, partnering with, or working on behalf of a separate hiring organisation (e.g. 'our client', 'on behalf of', 'partnering with a leading [industry] organisation', 'one of our clients', 'searching on behalf of'), or the poster is a named recruitment/staffing/executive-search agency and the employer is described only vaguely or anonymously.",
     "direct_employer: the ad speaks as the organisation that will employ the candidate, with no separate client represented. Treat first-person employer language such as 'our employees', 'our people', 'our business', 'our team', 'we offer', or 'join us' as direct-employer evidence when the ad describes that organisation's own workplace, benefits, culture, or operations. Do not require the literal phrase 'we are the employer'.",
     "unknown: use this only when the ad genuinely gives no usable signal either way — do not guess or default to unknown just because the company name is unfamiliar.",

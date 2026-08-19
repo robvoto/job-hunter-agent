@@ -37,6 +37,8 @@ from job_hunter_agent.record_schema import (
     RECORD_POSTED_AGE_DAYS_KEY,
     RECORD_POSTED_KEY,
     RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
+    POSTING_CHANNEL_CLASSIFIER_VERSION,
+    POSTING_CHANNEL_VERSION_KEY,
     RECORD_REJECT_REASON_KEY,
     RECORD_REVIEWED_SIGNAL_MATCHES_KEY,
     RECORD_ROLE_SNAPSHOT_KEY,
@@ -52,6 +54,9 @@ from job_hunter_agent.record_schema import (
     RECORD_SOURCE_KEY,
     RECORD_SOURCE_METADATA_KEY,
     RECORD_SOURCE_PLATFORM_JOB_ID_KEY,
+    SOURCE_METADATA_SCHEMA_VERSION,
+    SOURCE_METADATA_VERSION_KEY,
+    SOURCE_POSTER_COMPANY_INDUSTRY_KEY,
     RECORD_TEASER_KEY,
     RECORD_TITLE_KEY,
     RECORD_TITLE_MATCH_METADATA_KEY,
@@ -96,7 +101,9 @@ JOBSPY_JOB_URL_KEY = "job_url"
 
 
 def blank_source_metadata(source: str) -> dict:
+    """Return the canonical source-fact envelope for one scraped job."""
     return {
+        SOURCE_METADATA_VERSION_KEY: SOURCE_METADATA_SCHEMA_VERSION,
         "platform": source,
         "apply_url": "",
         "apply_domain": "",
@@ -105,6 +112,7 @@ def blank_source_metadata(source: str) -> dict:
         "company_profile_name": "",
         RECORD_SOURCE_ADVERTISER_ID_KEY: "",
         "poster_company": "",
+        SOURCE_POSTER_COMPANY_INDUSTRY_KEY: "",
         "hiring_company": "",
         "ats_source": "",
         RECORD_SOURCE_ATS_REQUISITION_ID_KEY: "",
@@ -115,6 +123,7 @@ def blank_source_metadata(source: str) -> dict:
 
 def blank_posting_channel_evidence() -> dict:
     return {
+        POSTING_CHANNEL_VERSION_KEY: POSTING_CHANNEL_CLASSIFIER_VERSION,
         "kind": "unknown",
         "source": "insufficient_evidence",
         "trusted_metadata": [],
@@ -133,6 +142,7 @@ def _build_initial_source_metadata(
     company_profile_name: str = "",
     advertiser_id: str = "",
     poster_company: str = "",
+    poster_company_industry: str = "",
     hiring_company: str = "",
     platform_job_id: str = "",
     ats_requisition_id: str = "",
@@ -148,7 +158,11 @@ def _build_initial_source_metadata(
             "company_profile_name": company_profile_name,
             RECORD_SOURCE_ADVERTISER_ID_KEY: advertiser_id,
             "poster_company": poster_company or company_profile_name,
-            "hiring_company": hiring_company or company_profile_name,
+            SOURCE_POSTER_COMPANY_INDUSTRY_KEY: poster_company_industry,
+            # A board/company profile identifies the publisher, not necessarily the
+            # organisation that will employ the candidate. Only explicit hirer facts
+            # may populate hiring_company.
+            "hiring_company": hiring_company,
             "ats_source": _url_domain(apply_url) if ats_source is None else ats_source,
             RECORD_SOURCE_PLATFORM_JOB_ID_KEY: platform_job_id,
             "raw_source_fields": raw_source_fields,
@@ -505,7 +519,8 @@ def normalize_jobspy_record(
         company_profile_url=company_profile_url,
         company_profile_name=company_profile_name,
         poster_company=company_profile_name,
-        hiring_company=company_profile_name,
+        poster_company_industry=_safe_str(_get("company_industry"), ""),
+        hiring_company="",
         platform_job_id=raw_id,
         ats_requisition_id=_safe_str(_get(RECORD_SOURCE_ATS_REQUISITION_ID_KEY), ""),
     )

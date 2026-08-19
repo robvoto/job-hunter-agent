@@ -11,6 +11,11 @@ from job_hunter_agent.record_schema import (
     RECORD_SOURCE_CANONICAL_URL_KEY,
     RECORD_SOURCE_METADATA_KEY,
     RECORD_SOURCE_PLATFORM_JOB_ID_KEY,
+    POSTING_CHANNEL_CLASSIFIER_VERSION,
+    POSTING_CHANNEL_VERSION_KEY,
+    SOURCE_METADATA_SCHEMA_VERSION,
+    SOURCE_METADATA_VERSION_KEY,
+    SOURCE_POSTER_COMPANY_INDUSTRY_KEY,
 )
 from job_hunter_agent.scrapers.base import normalize_jobspy_record
 
@@ -33,6 +38,7 @@ def test_normalize_jobspy_record_sets_expected_shape():
         job_url_direct="https://jobs.lever.co/acme/123",
         company_url="https://www.linkedin.com/company/acme/",
         company_url_direct="https://acme.com.au",
+        company_industry="Software Development",
     )
 
     record = normalize_jobspy_record(
@@ -70,6 +76,7 @@ def test_normalize_jobspy_record_sets_expected_shape():
         "unresolved": [],
     }
     assert record["source_metadata"] == {
+        SOURCE_METADATA_VERSION_KEY: SOURCE_METADATA_SCHEMA_VERSION,
         "platform": "linkedin",
         "apply_url": "https://jobs.lever.co/acme/123",
         "apply_domain": "jobs.lever.co",
@@ -78,7 +85,8 @@ def test_normalize_jobspy_record_sets_expected_shape():
         "company_profile_name": "Acme",
         RECORD_SOURCE_ADVERTISER_ID_KEY: "",
         "poster_company": "Acme",
-        "hiring_company": "Acme",
+        SOURCE_POSTER_COMPANY_INDUSTRY_KEY: "Software Development",
+        "hiring_company": "",
         "ats_source": "jobs.lever.co",
         RECORD_SOURCE_PLATFORM_JOB_ID_KEY: "123",
         "raw_source_fields": {
@@ -98,10 +106,12 @@ def test_normalize_jobspy_record_sets_expected_shape():
             "job_url_direct": "https://jobs.lever.co/acme/123",
             "company_url": "https://www.linkedin.com/company/acme/",
             "company_url_direct": "https://acme.com.au",
+            "company_industry": "Software Development",
         },
     }
     assert RECORD_SOURCE_ATS_REQUISITION_ID_KEY not in record["source_metadata"]
     assert record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY] == {
+        POSTING_CHANNEL_VERSION_KEY: POSTING_CHANNEL_CLASSIFIER_VERSION,
         "kind": "unknown",
         "source": "insufficient_evidence",
         "trusted_metadata": [],

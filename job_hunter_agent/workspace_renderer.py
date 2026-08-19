@@ -71,6 +71,7 @@ from job_hunter_agent.profile_store import (
     get_scoring_rules,
     load_profile,
 )
+from job_hunter_agent.role_analysis import posting_channel_evidence_is_current
 from job_hunter_agent.record_schema import (
     APPLY_METHOD_EASY_APPLY,
     APPLY_METHOD_QUICK_APPLY,
@@ -1276,7 +1277,10 @@ def render_job_card(
     teaser_attr = safe_html(teaser_text)
     card_sector = "unknown"
     channel_signal = display_record.get("posting_channel_evidence")
-    if not isinstance(channel_signal, dict):
+    if not posting_channel_evidence_is_current(channel_signal):
+        # Saved workspace rows can outlive the classifier contract that produced
+        # their badge. Do not present stale derived classification as current;
+        # the next job review will repopulate it under the active contract.
         channel_signal = {}
     job_requirements = [
         compact_whitespace(item)
@@ -1389,7 +1393,7 @@ def render_job_card(
                 _workspace_label("workspace_card_labels", "reposted_badge_tooltip"),
             )
         )
-    channel_kind = channel_signal.get("kind", "unknown")
+    channel_kind = channel_signal.get("kind", "")
     if channel_kind == "agency_or_recruiter":
         if channel_signal.get("needs_review"):
             badges.append(
@@ -1427,7 +1431,7 @@ def render_job_card(
                 _workspace_label("workspace_card_labels", "posting_channel_direct_employer_tooltip"),
             )
         )
-    else:
+    elif channel_kind:
         badges.append(
             render_badge(
                 _workspace_label(

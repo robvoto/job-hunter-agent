@@ -54,6 +54,8 @@ from job_hunter_agent.record_schema import (
     RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY,
     RECORD_POSTED_AGE_DAYS_KEY,
     RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
+    POSTING_CHANNEL_CLASSIFIER_VERSION,
+    POSTING_CHANNEL_VERSION_KEY,
     RECORD_REJECT_REASON_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
     RECORD_SALARY_KEY,
@@ -62,6 +64,8 @@ from job_hunter_agent.record_schema import (
     RECORD_URL_KEY,
     RECORD_WORK_MODE_KEY,
     RECORD_WORK_TYPE_KEY,
+    SOURCE_METADATA_SCHEMA_VERSION,
+    SOURCE_METADATA_VERSION_KEY,
 )
 from job_hunter_agent.signal_schema import (
     CATEGORY_REQUIREMENT_CLASSIFICATION_REVIEW,
@@ -150,6 +154,7 @@ def _base_record(source: str, description_source: str, work_mode_source: str) ->
         RECORD_POSTED_AGE_DAYS_KEY: 1,
         "source": source,
         "source_metadata": {
+            SOURCE_METADATA_VERSION_KEY: SOURCE_METADATA_SCHEMA_VERSION,
             "source": source,
             "raw_source_fields": {"source": source},
         },
@@ -234,7 +239,7 @@ def _patch_llm_review_path(monkeypatch, payload):
     )
 
 
-def test_apply_source_metadata_to_record_preserves_direct_employer_kind():
+def test_apply_source_metadata_to_record_uses_llm_for_direct_employer_when_urls_are_not_proof():
     record = _base_record("linkedin", "jobAdDetails", "card")
     record["source_metadata"] = {
         "platform": "linkedin",
@@ -243,7 +248,7 @@ def test_apply_source_metadata_to_record_preserves_direct_employer_kind():
         "company_profile_url": "https://acme.com.au",
         "company_profile_name": "Acme",
         "poster_company": "Acme",
-        "hiring_company": "Acme",
+        "hiring_company": "",
         "ats_source": "jobs.lever.co",
         "raw_source_fields": {
             "job_url_direct": "https://jobs.lever.co/acme/123",
@@ -251,18 +256,25 @@ def test_apply_source_metadata_to_record_preserves_direct_employer_kind():
         },
     }
 
-    job_review_pipeline._apply_source_metadata_to_record(record, None)
+    job_review_pipeline._apply_source_metadata_to_record(
+        record,
+        {
+            "kind": "direct_employer",
+            "confident": True,
+            "evidence": "The ad describes Acme's own team and employee benefits.",
+        },
+    )
 
     channel = record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY]
+    assert channel[POSTING_CHANNEL_VERSION_KEY] == POSTING_CHANNEL_CLASSIFIER_VERSION
     assert channel["kind"] == "direct_employer"
-    assert channel["source"] == "metadata_first"
+    assert channel["source"] == "llm_classifier"
     assert channel["needs_review"] is False
     assert "job_url_direct" in channel["trusted_metadata"]
     assert "company_url_direct" in channel["trusted_metadata"]
     assert "apply domain = jobs.lever.co" in channel["trusted_metadata"]
     assert "company profile link = https://acme.com.au" in channel["trusted_metadata"]
-    assert channel["text_evidence"] == []
-
+    assert channel["text_evidence"] == ["The ad describes Acme's own team and employee benefits."]
 
 def test_apply_source_metadata_to_record_preserves_agency_recruiter_kind():
     record = _base_record("seek", "jobAdDetails", "card")
@@ -276,7 +288,7 @@ def test_apply_source_metadata_to_record_preserves_agency_recruiter_kind():
         "hiring_company": "",
         "ats_source": "",
         "raw_source_fields": {
-            "seekPostingSourceCode": "agency",
+            "recruiter_badge": "Recruiter",
         },
     }
 
@@ -286,7 +298,8 @@ def test_apply_source_metadata_to_record_preserves_agency_recruiter_kind():
     assert channel["kind"] == "agency_or_recruiter"
     assert channel["source"] == "metadata_first"
     assert channel["needs_review"] is False
-    assert "seekPostingSourceCode" in channel["trusted_metadata"]
+    assert channel[POSTING_CHANNEL_VERSION_KEY] == POSTING_CHANNEL_CLASSIFIER_VERSION
+    assert "recruiter_badge" in channel["trusted_metadata"]
 
 
 def test_apply_source_metadata_to_record_stores_review_signal_shape(monkeypatch):
@@ -295,6 +308,7 @@ def test_apply_source_metadata_to_record_stores_review_signal_shape(monkeypatch)
         job_review_pipeline,
         "infer_posting_channel",
         lambda record, llm_posting_channel: {
+            POSTING_CHANNEL_VERSION_KEY: POSTING_CHANNEL_CLASSIFIER_VERSION,
             "kind": "unknown",
             "source": "",
             "trusted_metadata": [],
@@ -308,6 +322,7 @@ def test_apply_source_metadata_to_record_stores_review_signal_shape(monkeypatch)
     )
 
     assert record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY] == {
+        POSTING_CHANNEL_VERSION_KEY: POSTING_CHANNEL_CLASSIFIER_VERSION,
         "kind": "unknown",
         "source": "",
         "trusted_metadata": [],
@@ -322,6 +337,7 @@ def test_apply_source_metadata_to_record_stores_unknown_without_review_when_no_e
         job_review_pipeline,
         "infer_posting_channel",
         lambda record, llm_posting_channel: {
+            POSTING_CHANNEL_VERSION_KEY: POSTING_CHANNEL_CLASSIFIER_VERSION,
             "kind": "unknown",
             "source": "",
             "trusted_metadata": [],
@@ -333,6 +349,7 @@ def test_apply_source_metadata_to_record_stores_unknown_without_review_when_no_e
     job_review_pipeline._apply_source_metadata_to_record(record, None)
 
     assert record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY] == {
+        POSTING_CHANNEL_VERSION_KEY: POSTING_CHANNEL_CLASSIFIER_VERSION,
         "kind": "unknown",
         "source": "",
         "trusted_metadata": [],
@@ -379,7 +396,7 @@ def test_apply_source_metadata_to_record_then_render_job_card_shows_recruiter_ba
         "hiring_company": "",
         "ats_source": "",
         "raw_source_fields": {
-            "seekPostingSourceCode": "agency",
+            "recruiter_badge": "Recruiter",
         },
     }
 
@@ -1222,6 +1239,7 @@ def _seed_reusable_kept_history(context, source: str) -> None:
         {"requirement": "Stakeholder engagement", "importance": "required", "status": "supported"}
     ]
     kept_record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY] = {
+        POSTING_CHANNEL_VERSION_KEY: POSTING_CHANNEL_CLASSIFIER_VERSION,
         "kind": "direct_employer",
         "source": "llm_classifier",
         "text_evidence": ["The ad describes the employer's own team."],

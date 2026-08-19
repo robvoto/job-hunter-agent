@@ -202,6 +202,7 @@ from job_hunter_agent.record_schema import (
     RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY,
     RECORD_POSTED_AGE_DAYS_KEY,
     RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
+    POSTING_CHANNEL_VERSION_KEY,
     RECORD_REJECT_REASON_KEY,
     RECORD_REVIEW_SOURCE_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
@@ -829,6 +830,7 @@ def _apply_detail_payload_to_record(
 def _apply_source_metadata_to_record(record: dict, llm_posting_channel: dict | None) -> None:
     channel_signal = infer_posting_channel(record, llm_posting_channel)
     record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY] = {
+        POSTING_CHANNEL_VERSION_KEY: int(channel_signal[POSTING_CHANNEL_VERSION_KEY]),
         "kind": str(channel_signal.get("kind") or "unknown"),
         "source": str(channel_signal.get("source") or ""),
         "trusted_metadata": list(channel_signal.get("trusted_metadata") or []),

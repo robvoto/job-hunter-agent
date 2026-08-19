@@ -4,6 +4,10 @@ import json
 
 import job_hunter_agent.job_review_pipeline as job_review_pipeline
 import job_hunter_agent.workspace_export as workspace_export
+from job_hunter_agent.record_schema import (
+    POSTING_CHANNEL_CLASSIFIER_VERSION,
+    POSTING_CHANNEL_VERSION_KEY,
+)
 
 
 def test_export_workspace_jobs_merges_existing_export(tmp_path, monkeypatch):
@@ -92,6 +96,7 @@ def test_workspace_export_uses_agency_recruiter_badge():
         {
             "source": "seek",
             "posting_channel_evidence": {
+                POSTING_CHANNEL_VERSION_KEY: POSTING_CHANNEL_CLASSIFIER_VERSION,
                 "kind": "agency_or_recruiter",
                 "source": "metadata_first",
             },
@@ -114,7 +119,7 @@ def test_workspace_export_badges_use_preserved_posting_channel_classification():
             "company_profile_url": "https://acme.com.au",
             "company_profile_name": "Acme",
             "poster_company": "Acme",
-            "hiring_company": "Acme",
+            "hiring_company": "",
             "ats_source": "jobs.lever.co",
             "raw_source_fields": {
                 "job_url_direct": "https://jobs.lever.co/acme/123",
@@ -135,12 +140,19 @@ def test_workspace_export_badges_use_preserved_posting_channel_classification():
             "hiring_company": "",
             "ats_source": "",
             "raw_source_fields": {
-                "seekPostingSourceCode": "agency",
+                "recruiter_badge": "Recruiter",
             },
         },
     }
 
-    job_review_pipeline._apply_source_metadata_to_record(direct_record, None)
+    job_review_pipeline._apply_source_metadata_to_record(
+        direct_record,
+        {
+            "kind": "direct_employer",
+            "confident": True,
+            "evidence": "The ad describes Acme's own team and employee benefits.",
+        },
+    )
     job_review_pipeline._apply_source_metadata_to_record(recruiter_record, None)
 
     direct_badges = workspace_export._build_badges(direct_record, "current")
@@ -155,6 +167,7 @@ def test_workspace_export_badges_use_preserved_posting_channel_classification():
 def test_export_badges_show_source_unclear_for_unknown_channel():
     record = {
         "posting_channel_evidence": {
+            POSTING_CHANNEL_VERSION_KEY: POSTING_CHANNEL_CLASSIFIER_VERSION,
             "kind": "unknown",
             "source": "insufficient_evidence",
             "trusted_metadata": [],
@@ -166,6 +179,21 @@ def test_export_badges_show_source_unclear_for_unknown_channel():
     badges = workspace_export._build_badges(record, "current")
 
     assert "Source unclear" in badges
+
+
+def test_export_badges_suppress_stale_posting_channel_classification():
+    record = {
+        "posting_channel_evidence": {
+            POSTING_CHANNEL_VERSION_KEY: POSTING_CHANNEL_CLASSIFIER_VERSION - 1,
+            "kind": "direct_employer",
+            "source": "metadata_first",
+        }
+    }
+
+    badges = workspace_export._build_badges(record, "current")
+
+    assert "Direct employer" not in badges
+    assert "Source unclear" not in badges
 
 
 def test_export_badges_use_managed_posted_age_thresholds():
