@@ -43,6 +43,7 @@ Project-specific skills live in `docs/PROJECT_CONTEXT.md`.
 - Keep changes small and scoped.
 - Repository text files use LF line endings. `.gitattributes` and `.editorconfig` are authoritative; do not preserve or introduce CRLF. Before every commit, run `git diff --check` and inspect staged/touched text files with `git ls-files --eol`; any `w/crlf` or `w/mixed` touched file must be normalized to LF. Broad repository-wide normalization is a separate maintenance change and must not be mixed into unrelated dirty feature work.
 - Assume multiple clients or agents may be editing this worktree in parallel. Before editing, tell the user, inspect `git status`, and preserve unexpected changes; do not overwrite, revert, stash, or commit another client's work without explicit coordination.
+- When multiple agents/sessions may work on the same repo concurrently, isolate each code change in its own git branch + worktree (not the shared/main checkout); delete both once the change is merged or abandoned.
 - Do not add hidden fallbacks, dead paths, compatibility shims, or broad exception swallowing unless explicitly approved.
 - Do not silently drop, default, or reclassify required data into invisibility; if a match cannot be proven, keep the item visible with an explicit unresolved status or fail loudly if the pipeline requires a hard stop.
 - Do not hardcode business behaviour when config, schema, profile, or knowledge should own it.

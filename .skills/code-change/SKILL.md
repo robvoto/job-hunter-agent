@@ -8,6 +8,7 @@ description: Use for any code/test/runtime implementation change. Do NOT use for
 Use before modifying existing code.
 
 ## Rules
+- Before starting any code change, work in an isolated git branch + worktree dedicated to that change (not the shared/main worktree), so multiple agents/sessions can work on this repo concurrently without touching each other's uncommitted files. Delete the branch and worktree once the change is merged or abandoned — do not let them accumulate.
 - Inspect the target file before editing.
 - Touch only files required for the task.
 - Keep changes small and scoped.
