@@ -663,6 +663,44 @@ _GLOBAL_SETTINGS_LABEL_KEYS = (
     *_SYSTEM_HEALTH_LABEL_KEYS,
 )
 
+_SIGNAL_REGISTRY_LABEL_KEYS = (
+    "category_capability_label",
+    "category_capability_description",
+    "category_capability_examples",
+    "category_capability_warning",
+    "category_cv_farming_label",
+    "category_cv_farming_description",
+    "category_cv_farming_examples",
+    "category_cv_farming_warning",
+    "category_hard_blocker_label",
+    "category_hard_blocker_description",
+    "category_hard_blocker_examples",
+    "category_hard_blocker_warning",
+    "category_job_type_label",
+    "category_job_type_description",
+    "category_job_type_examples",
+    "category_job_type_warning",
+    "category_profile_section_label",
+    "category_profile_section_description",
+    "category_profile_section_examples",
+    "category_profile_section_warning",
+    "category_requirement_review_label",
+    "category_requirement_review_description",
+    "category_requirement_review_examples",
+    "category_requirement_review_warning",
+    "requirement_type_field_label",
+    "requirement_type_capability_label",
+    "requirement_type_eligibility_label",
+    "requirement_type_qualification_label",
+)
+
+_SIGNAL_REGISTRY_EXAMPLE_KEYS = tuple(
+    key for key in _SIGNAL_REGISTRY_LABEL_KEYS if key.endswith("_examples")
+)
+_SIGNAL_REGISTRY_WARNING_KEYS = tuple(
+    key for key in _SIGNAL_REGISTRY_LABEL_KEYS if key.endswith("_warning")
+)
+
 
 def _load_required_ui_labels(group_name: str, keys: tuple[str, ...]) -> dict[str, str]:
     labels = load_ui_labels().get(group_name, {})
@@ -672,6 +710,45 @@ def _load_required_ui_labels(group_name: str, keys: tuple[str, ...]) -> dict[str
     if missing:
         raise ValueError(f"ui_labels.json is missing {group_name} values: {', '.join(missing)}")
     return {key: str(labels[key]).strip() for key in keys}
+
+
+def load_signal_registry_labels() -> dict[str, Any]:
+    """Return the validated managed display contract for the Signals inbox."""
+    labels = load_ui_labels().get("signal_registry_labels", {})
+    if not isinstance(labels, dict):
+        raise ValueError("ui_labels.json is missing signal_registry_labels")
+
+    missing = [
+        key
+        for key in _SIGNAL_REGISTRY_LABEL_KEYS
+        if key not in labels
+        or (
+            key not in _SIGNAL_REGISTRY_WARNING_KEYS
+            and not str(labels.get(key, "")).strip()
+        )
+    ]
+    if missing:
+        raise ValueError(
+            f"ui_labels.json is missing signal_registry_labels values: {', '.join(missing)}"
+        )
+
+    for key in _SIGNAL_REGISTRY_EXAMPLE_KEYS:
+        examples = labels[key]
+        if not isinstance(examples, list) or not examples or any(
+            not isinstance(example, str) or not example.strip() for example in examples
+        ):
+            raise ValueError(
+                f"ui_labels.json signal_registry_labels.{key} must be a non-empty list of strings"
+            )
+
+    for key in _SIGNAL_REGISTRY_WARNING_KEYS:
+        warning = labels[key]
+        if warning is not None and (not isinstance(warning, str) or not warning.strip()):
+            raise ValueError(
+                f"ui_labels.json signal_registry_labels.{key} must be null or a non-empty string"
+            )
+
+    return {key: labels[key] for key in _SIGNAL_REGISTRY_LABEL_KEYS}
 
 
 def load_onboarding_title_tier_labels() -> dict[str, str]:

@@ -2,12 +2,82 @@
 
 from __future__ import annotations
 
+import pytest
+
 from job_hunter_agent import (
     capability_knowledge,
     hard_blocker_rules,
     signal_registry,
     title_normalization_rules,
 )
+
+
+@pytest.mark.parametrize("classification", ["qualification", "eligibility", "capability"])
+def test_approve_requirement_classification_requires_and_persists_explicit_type(
+    isolated_db, classification
+):
+    from job_hunter_agent.requirement_classification import load_requirement_classification_overrides
+
+    requirement = "Bachelor's degree with relevant experience"
+    signal_registry.save_registry(
+        {
+            requirement.lower(): {
+                "signal": requirement,
+                "normalized_key": requirement.lower(),
+                "suggested_category": "requirement_classification_review",
+                "suggested_values": ["eligibility"],
+            }
+        }
+    )
+
+    updated = signal_registry.approve_signal(
+        requirement.lower(),
+        category="requirement_classification_review",
+        classification=classification,
+    )
+
+    assert updated["category"] == "requirement_classification_review"
+    assert load_requirement_classification_overrides()[requirement.lower()] == classification
+
+
+def test_approve_requirement_classification_rejects_missing_type(isolated_db):
+    signal_registry.save_registry(
+        {
+            "uncertain requirement": {
+                "signal": "Uncertain requirement",
+                "normalized_key": "uncertain requirement",
+                "suggested_category": "requirement_classification_review",
+                "suggested_values": ["eligibility"],
+            }
+        }
+    )
+
+    with pytest.raises(ValueError, match="Requirement classification is required"):
+        signal_registry.approve_signal(
+            "uncertain requirement",
+            category="requirement_classification_review",
+        )
+
+    assert "uncertain requirement" in signal_registry.load_registry()
+
+
+def test_approve_requirement_classification_rejects_invalid_type(isolated_db):
+    signal_registry.save_registry(
+        {
+            "uncertain requirement": {
+                "signal": "Uncertain requirement",
+                "normalized_key": "uncertain requirement",
+                "suggested_category": "requirement_classification_review",
+            }
+        }
+    )
+
+    with pytest.raises(ValueError, match="Invalid requirement classification"):
+        signal_registry.approve_signal(
+            "uncertain requirement",
+            category="requirement_classification_review",
+            classification="not_a_requirement_type",
+        )
 
 
 def test_load_capability_knowledge_normalizes_entries(isolated_db):
@@ -352,19 +422,27 @@ def test_load_hard_blocker_rules_normalizes_without_writing(isolated_db):
     assert saved == original_data
 
 
-def test_signal_category_metadata_is_complete_and_user_facing():
+def test_managed_signal_registry_labels_are_complete_and_valid(isolated_db):
+    from job_hunter_agent.server_helpers import load_signal_registry_labels
 
-    from job_hunter_agent.signal_registry import CATEGORY_METADATA, VALID_SIGNAL_CATEGORIES
+    labels = load_signal_registry_labels()
 
-    assert set(CATEGORY_METADATA) == set(VALID_SIGNAL_CATEGORIES)
+    for prefix in (
+        "capability",
+        "cv_farming",
+        "hard_blocker",
+        "job_type",
+        "profile_section",
+        "requirement_review",
+    ):
+        assert labels[f"category_{prefix}_label"]
+        assert labels[f"category_{prefix}_description"]
+        assert labels[f"category_{prefix}_examples"]
+        assert all(isinstance(example, str) and example for example in labels[f"category_{prefix}_examples"])
+        warning = labels[f"category_{prefix}_warning"]
+        assert warning is None or isinstance(warning, str)
 
-    for category, meta in CATEGORY_METADATA.items():
-        assert meta.get("label"), f"Missing label for {category}"
-
-        assert meta.get("description"), f"Missing description for {category}"
-
-        assert isinstance(meta.get("examples"), list), f"Examples must be a list for {category}"
-
-        assert all(isinstance(example, str) and example for example in meta["examples"])
-
-        assert meta.get("warning") is None or isinstance(meta.get("warning"), str)
+    assert labels["requirement_type_field_label"]
+    assert labels["requirement_type_capability_label"]
+    assert labels["requirement_type_eligibility_label"]
+    assert labels["requirement_type_qualification_label"]

@@ -78,6 +78,32 @@
       return srCategoryOptions().find(item => item.key === category) || null;
     }
 
+    /* An LLM suggestion may preselect the visible selector, but approval always submits the human-visible selected value. */
+    function srRequirementTypeOptions(category) {
+      const meta = srCategoryMetadata(category);
+      return Array.isArray(meta?.requirement_type_options) ? meta.requirement_type_options : [];
+    }
+
+    function srRequirementTypeValue(signal, options) {
+      const suggestedValues = Array.isArray(signal?.suggested_values) ? signal.suggested_values : [];
+      const suggested = String(suggestedValues[0] || '').trim().toLowerCase();
+      return options.some(option => String(option?.value || '').trim() === suggested) ? suggested : '';
+    }
+
+    function srRequirementTypeControlHtml(signal, category, isBusy) {
+      const meta = srCategoryMetadata(category);
+      const options = srRequirementTypeOptions(category);
+      if (!meta || !options.length) return '';
+      const selectedValue = srRequirementTypeValue(signal, options);
+      return `
+    <label class="signal-requirement-type-field">
+      <span class="signal-requirement-type-label">${escapeHtml(meta.requirement_type_label || '')}</span>
+      <select class="signal-requirement-type-select jh-select" data-sr-key="${escapeHtml(srSignalKey(signal))}"${selectedValue ? '' : ' data-sr-unselected="true"'}${isBusy ? ' disabled' : ''} aria-label="${escapeHtml(meta.requirement_type_label || '')}">
+        ${options.map(option => `<option value="${escapeHtml(option.value)}"${String(option.value) === selectedValue ? ' selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
+      </select>
+    </label>`;
+    }
+
     function srIsPatternCategory(category) {
       return Array.isArray(_srPatternCategories) && _srPatternCategories.includes(category);
     }
@@ -292,23 +318,29 @@
             const isPatternCat = srIsPatternCategory(category);
             const currentValue = signal.signal || '';
             const patternValid = srPatternValueValid(category, currentValue);
-            const approveDisabled = isBusy || !category || !patternValid;
+            const requirementTypeOptions = srRequirementTypeOptions(category);
+            const requirementType = srRequirementTypeValue(signal, requirementTypeOptions);
+            const approveDisabled = isBusy || !category || !patternValid
+              || (requirementTypeOptions.length > 0 && !requirementType);
             return `
 <article class="signal-row${statusClass}" data-sr-key="${escapeHtml(key)}">
   <div class="signal-row-title">
     <div class="signal-value-field">
-      <input type="text" class="signal-value-input" data-sr-key="${escapeHtml(key)}" value="${escapeHtml(currentValue)}" placeholder="Signal value"${isBusy ? ' disabled' : ''} aria-label="Signal value">
+      <textarea class="signal-value-input" data-sr-key="${escapeHtml(key)}" rows="2" placeholder="Signal value"${isBusy ? ' disabled' : ''} aria-label="Signal value">${escapeHtml(currentValue)}</textarea>
       ${isPatternCat ? '<span class="signal-pattern-hint">Use [*] as wildcard — e.g. <code>Head of [*]</code></span>' : ''}
     </div>
     ${statusText ? `<span class="signal-inline-status${inlineState ? ` is-${escapeHtml(inlineState.kind)}` : ''}">${escapeHtml(statusText)}</span>` : ''}
     ${srSignalContextHtml(signal)}
   </div>
   <div class="signal-category-wrapper">
-    <select class="signal-category-select jh-select" data-sr-key="${escapeHtml(key)}"${isBusy ? ' disabled' : ''}>
-      <option value="">Choose category</option>
-      ${categoryOptions.map(option => `<option value="${escapeHtml(option.key)}"${category === option.key ? ' selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
-    </select>
-    ${category ? srCategoryHelpHtml(category) : ''}
+    <div class="signal-category-control">
+      <select class="signal-category-select jh-select" data-sr-key="${escapeHtml(key)}"${isBusy ? ' disabled' : ''}>
+        <option value="">Choose category</option>
+        ${categoryOptions.map(option => `<option value="${escapeHtml(option.key)}"${category === option.key ? ' selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
+      </select>
+      ${category ? srCategoryHelpHtml(category) : ''}
+    </div>
+    ${srRequirementTypeControlHtml(signal, category, isBusy)}
   </div>
   <div class="signal-row-actions">
     <button class="signal-action-btn signal-approve" type="button" data-sr-key="${escapeHtml(key)}"${approveDisabled ? ' disabled' : ''} title="Approve" aria-label="Approve">&#10003;</button>
@@ -347,6 +379,10 @@
   </select>
 </div>
 <div class="sr-list">${cardsHtml}${pagerHtml}</div>`;
+
+      panel.querySelectorAll('.signal-requirement-type-select[data-sr-unselected="true"]').forEach(select => {
+        select.selectedIndex = -1;
+      });
 
       panel.querySelector('#sr_search')?.addEventListener('input', event => {
         const cursor = typeof event.target.selectionStart === 'number'
@@ -425,7 +461,9 @@
             const currentVal = valueInput ? valueInput.value.trim() : '';
             const approveBtn = article.querySelector('.signal-approve');
             if (approveBtn) {
-              approveBtn.disabled = !newCategory || !srPatternValueValid(newCategory, currentVal);
+              const requirementTypeSelect = article.querySelector('.signal-requirement-type-select');
+              approveBtn.disabled = !newCategory || !srPatternValueValid(newCategory, currentVal)
+                || (srRequirementTypeOptions(newCategory).length > 0 && !requirementTypeSelect?.value);
             }
             // Show/hide pattern hint when category changes
             const existingHint = article.querySelector('.signal-pattern-hint');
@@ -448,7 +486,25 @@
           const category = signal ? srSignalCategory(signal) : '';
           const approveBtn = article.querySelector('.signal-approve');
           if (approveBtn) {
-            approveBtn.disabled = !category || !srPatternValueValid(category, input.value.trim());
+            const requirementTypeSelect = article.querySelector('.signal-requirement-type-select');
+            approveBtn.disabled = !category || !srPatternValueValid(category, input.value.trim())
+              || (srRequirementTypeOptions(category).length > 0 && !requirementTypeSelect?.value);
+          }
+        });
+      });
+
+      panel.querySelectorAll('.signal-requirement-type-select').forEach(select => {
+        select.addEventListener('change', () => {
+          const article = select.closest('.signal-row');
+          if (!article) return;
+          const signal = all.find(item => srSignalKey(item) === (select.dataset.srKey || ''));
+          const category = signal ? srSignalCategory(signal) : '';
+          const valueInput = article.querySelector('.signal-value-input');
+          const approveBtn = article.querySelector('.signal-approve');
+          if (approveBtn) {
+            approveBtn.disabled = !category
+              || !srPatternValueValid(category, valueInput?.value.trim() || '')
+              || !select.value;
           }
         });
       });
@@ -463,7 +519,15 @@
           const valueInput = article ? article.querySelector('.signal-value-input') : null;
           const value = valueInput ? valueInput.value.trim() : (signal.signal || '');
           if (!srPatternValueValid(category, value)) return;
-          await srPatchSignal(key, { key, action: 'approve', category, value }, 'Approved');
+          const requirementTypeOptions = srRequirementTypeOptions(category);
+          const requirementTypeSelect = article?.querySelector('.signal-requirement-type-select');
+          const classification = requirementTypeSelect?.value.trim() || '';
+          if (requirementTypeOptions.length > 0 && !classification) return;
+          const payload = { key, action: 'approve', category, value };
+          if (requirementTypeOptions.length > 0) {
+            payload.classification = classification;
+          }
+          await srPatchSignal(key, payload, 'Approved');
         });
       });
 

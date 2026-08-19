@@ -20,6 +20,7 @@ from job_hunter_agent.hard_blocker_rules import (
 from job_hunter_agent.job_quality import upsert_cv_farming_rule
 from job_hunter_agent.job_types import load_job_type, save_job_type, upsert_job_type_entry
 from job_hunter_agent.knowledge_store import get_knowledge, set_knowledge
+from job_hunter_agent.llm_protocol import LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES
 from job_hunter_agent.parsing_schema import (
     KEY_P_ROUTING,
     KEY_P_ROUTING_PRIMARY,
@@ -60,82 +61,6 @@ from job_hunter_agent.signal_schema import (
 from job_hunter_agent.text_processing import compact_whitespace
 
 logger = logging.getLogger(__name__)
-
-CATEGORY_LABELS = {
-    CATEGORY_CAPABILITY_CONCEPT: "Capability",
-    CATEGORY_CV_FARMING_PATTERN: "CV farming pattern",
-    CATEGORY_HARD_BLOCKER_PATTERN: "Hard blocker pattern",
-    CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE: "Job type",
-    CATEGORY_PROFILE_SECTION_LABEL: "Profile section label",
-    CATEGORY_REQUIREMENT_CLASSIFICATION_REVIEW: "Requirement classification",
-}
-
-CATEGORY_METADATA = {
-    CATEGORY_CAPABILITY_CONCEPT: {
-        "label": "Capability",
-        "description": "Skills, tools, methods, or domain concepts used for fit scoring. Approved capabilities help match job requirements to candidate profiles.",
-        "examples": ["BPMN", "Jira", "SQL", "Azure", "Power BI", "SAP", "ServiceNow"],
-        "warning": None,
-    },
-    CATEGORY_CV_FARMING_PATTERN: {
-        "label": "CV farming pattern",
-        "description": "Wording that suggests recruiter spam, resume harvesting, fake/pipeline jobs, or low-trust ads. These phrases indicate the role may not be a real hire.",
-        "examples": [
-            "expression of interest",
-            "talent pool",
-            "future opportunities",
-            "upload CV",
-            "register your details",
-            "keep your profile active",
-        ],
-        "warning": "⚠️ Approving CV farming patterns will cause matching jobs to be rejected.",
-    },
-    CATEGORY_HARD_BLOCKER_PATTERN: {
-        "label": "Hard blocker pattern",
-        "description": "Strong rejection patterns that disqualify a job. Hard blockers are required dealbreakers that block matching jobs from processing.",
-        "examples": [
-            "must hold CPA",
-            "active NV2 required",
-            "on-site 5 days required",
-            "requires current driving licence",
-            "willing to work weekends",
-        ],
-        "warning": "⚠️ DANGER: Wrong approvals here can reject valid jobs. Only approve if the phrase is an absolute required blocker.",
-    },
-    CATEGORY_JOB_TYPE_NORMALIZATION_CANDIDATE: {
-        "label": "Job type",
-        "description": "Employment structure and engagement terms. Helps normalize contract, permanent, casual, and part-time work arrangements.",
-        "examples": [
-            "contract",
-            "permanent",
-            "casual",
-            "part-time",
-            "full-time",
-            "fixed-term",
-            "temporary",
-        ],
-        "warning": None,
-    },
-    CATEGORY_PROFILE_SECTION_LABEL: {
-        "label": "Profile section label",
-        "description": "CV section headings that route profile text to primary, secondary, or supplementary profile support tiers. The suggested bucket shows where the LLM classified the section.",
-        "examples": [
-            "Career History → primary",
-            "Older Roles → secondary",
-            "Certifications → supplementary",
-        ],
-        "warning": None,
-    },
-    CATEGORY_REQUIREMENT_CLASSIFICATION_REVIEW: {
-        "label": "Requirement classification",
-        "description": "Job requirements where deterministic validation could not confidently confirm whether the requirement is a capability (skills, experience, seniority) or an eligibility gate (citizenship, work rights, clearance, licence, qualification). Approving sets the correct classification for future matching jobs.",
-        "examples": [
-            "5+ years in a security-cleared environment",
-            "current registration required for this specialty",
-        ],
-        "warning": None,
-    },
-}
 
 # Maps signal categories to knowledge store keys.
 _CATEGORY_KNOWLEDGE_PATHS = {
@@ -630,7 +555,17 @@ def upsert_profile_section_label(word: str, bucket: str) -> None:
     logger.info("Auto-added profile section label '%s' to %s", word, list_key)
 
 
-def approve_signal(key: str, category: str = "", value: str = "") -> dict[str, Any] | None:
+def approve_signal(
+    key: str,
+    category: str = "",
+    value: str = "",
+    classification: str = "",
+) -> dict[str, Any] | None:
+    """Promote a reviewed signal into its owning knowledge store.
+
+    Requirement-type review is an explicit human classification; never infer or
+    default that classification from an LLM suggestion.
+    """
     key = _signal_key(key)
     if not key:
         return None
@@ -669,10 +604,16 @@ def approve_signal(key: str, category: str = "", value: str = "") -> dict[str, A
         upsert_profile_section_label(value, suggested[0] if suggested else "primary")
     elif category_key == CATEGORY_REQUIREMENT_CLASSIFICATION_REVIEW:
         value = explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
-        suggested = _clean_text_list(record.get(LEARNING_SUGGESTED_VALUES_KEY))
-        upsert_requirement_classification_override(
-            value, suggested[0] if suggested else "capability"
-        )
+        classification_key = _clean_term(classification)
+        if not classification_key:
+            raise ValueError(
+                "Requirement classification is required; choose capability, eligibility, or qualification."
+            )
+        if classification_key not in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES:
+            raise ValueError(
+                f"Invalid requirement classification '{classification_key}'; choose capability, eligibility, or qualification."
+            )
+        upsert_requirement_classification_override(value, classification_key)
     else:
         value = explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
         _append_knowledge_entry(_CATEGORY_KNOWLEDGE_PATHS[category_key], value, aliases)

@@ -1,8 +1,8 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 108,
-  "updated_at": "2026-08-17",
+  "version": 109,
+  "updated_at": "2026-08-19",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
     "remote_label": "Remote",
@@ -43,6 +43,73 @@
     "search_keyword_example": "e.g. Business Analyst",
     "explore_adjacent_roles_label": "Explore adjacent roles",
     "explore_adjacent_roles_help": "Let unfamiliar but plausible titles reach description review. Turn this off to keep title matching strict."
+  },
+  "signal_registry_labels_description": "Display labels, help text, examples, warnings, and requirement-type review copy for the Signals inbox.",
+  "signal_registry_labels": {
+    "category_capability_label": "Capability",
+    "category_capability_description": "Skills, tools, methods, or domain concepts used for fit scoring. Approved capabilities help match job requirements to candidate profiles.",
+    "category_capability_examples": [
+      "BPMN",
+      "Jira",
+      "SQL",
+      "Azure",
+      "Power BI",
+      "SAP",
+      "ServiceNow"
+    ],
+    "category_capability_warning": null,
+    "category_cv_farming_label": "CV farming pattern",
+    "category_cv_farming_description": "Wording that suggests recruiter spam, resume harvesting, fake/pipeline jobs, or low-trust ads. These phrases indicate the role may not be a real hire.",
+    "category_cv_farming_examples": [
+      "expression of interest",
+      "talent pool",
+      "future opportunities",
+      "upload CV",
+      "register your details",
+      "keep your profile active"
+    ],
+    "category_cv_farming_warning": "⚠️ Approving CV farming patterns will cause matching jobs to be rejected.",
+    "category_hard_blocker_label": "Hard blocker pattern",
+    "category_hard_blocker_description": "Strong rejection patterns that disqualify a job. Hard blockers are required dealbreakers that block matching jobs from processing.",
+    "category_hard_blocker_examples": [
+      "must hold CPA",
+      "active NV2 required",
+      "on-site 5 days required",
+      "requires current driving licence",
+      "willing to work weekends"
+    ],
+    "category_hard_blocker_warning": "⚠️ DANGER: Wrong approvals here can reject valid jobs. Only approve if the phrase is an absolute required blocker.",
+    "category_job_type_label": "Job type",
+    "category_job_type_description": "Employment structure and engagement terms. Helps normalize contract, permanent, casual, and part-time work arrangements.",
+    "category_job_type_examples": [
+      "contract",
+      "permanent",
+      "casual",
+      "part-time",
+      "full-time",
+      "fixed-term",
+      "temporary"
+    ],
+    "category_job_type_warning": null,
+    "category_profile_section_label": "Profile section label",
+    "category_profile_section_description": "CV section headings that route profile text to primary, secondary, or supplementary profile support tiers. The suggested bucket shows where the LLM classified the section.",
+    "category_profile_section_examples": [
+      "Career History → primary",
+      "Older Roles → secondary",
+      "Certifications → supplementary"
+    ],
+    "category_profile_section_warning": null,
+    "category_requirement_review_label": "Requirement type review",
+    "category_requirement_review_description": "Choose how Job Hunter should treat the same requirement when it appears again. Capability = skill, experience, responsibility or seniority. Eligibility = citizenship, work rights, clearance, licence or registration. Qualification = degree, certification or formal qualification. Approval teaches Job Hunter this treatment for future matching jobs.",
+    "category_requirement_review_examples": [
+      "5+ years in a security-cleared environment",
+      "current registration required for this specialty"
+    ],
+    "category_requirement_review_warning": null,
+    "requirement_type_field_label": "Requirement type",
+    "requirement_type_capability_label": "Capability",
+    "requirement_type_eligibility_label": "Eligibility",
+    "requirement_type_qualification_label": "Qualification"
   },
   "capability_ui_labels_description": "Display labels and help text for capability review and editing screens.",
   "capability_ui_labels": {

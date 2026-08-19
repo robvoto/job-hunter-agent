@@ -2016,3 +2016,18 @@ def test_build_requirement_classification_review_signals_dedupes_by_requirement_
     signals = job_review_pipeline._build_requirement_classification_review_signals(record)
 
     assert len(signals) == 1
+
+
+def test_build_requirement_classification_review_signals_keeps_missing_proposal_unset():
+    record = {
+        RECORD_REQUIREMENT_COVERAGE_KEY: [
+            {
+                "requirement": "A formal qualification and relevant experience",
+                "requirement_type": "uncertain",
+            }
+        ]
+    }
+
+    signals = job_review_pipeline._build_requirement_classification_review_signals(record)
+
+    assert signals[0][LEARNING_SUGGESTED_VALUES_KEY] == []

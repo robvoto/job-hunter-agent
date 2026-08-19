@@ -937,8 +937,9 @@ def _build_requirement_classification_review_signals(record: dict) -> list[dict]
 
     These never contribute to scoring or an "Add eligibility" prompt (see
     normalize_llm_requirement_coverage / workspace_renderer) — they only
-    become a pending Learning/Needs Review signal so a human can confirm
-    capability vs eligibility.
+    become a pending Learning/Needs Review signal so a human can classify the
+    requirement as capability, eligibility, or qualification. If the LLM did
+    not propose a type, the proposal remains absent rather than being guessed.
     """
     signals: list[dict] = []
     seen: set[str] = set()
@@ -952,13 +953,13 @@ def _build_requirement_classification_review_signals(record: dict) -> list[dict]
         if not requirement or key in seen:
             continue
         seen.add(key)
-        proposed_type = str(item.get("llm_proposed_requirement_type") or "capability").strip()
+        proposed_type = str(item.get("llm_proposed_requirement_type") or "").strip()
         signals.append(
             {
                 LEARNING_SIGNAL_KEY: requirement,
                 LEARNING_SUGGESTED_CATEGORY_KEY: CATEGORY_REQUIREMENT_CLASSIFICATION_REVIEW,
                 LEARNING_ORIGINAL_TEXTS_KEY: [requirement],
-                LEARNING_SUGGESTED_VALUES_KEY: [proposed_type],
+                LEARNING_SUGGESTED_VALUES_KEY: [proposed_type] if proposed_type else [],
             }
         )
     return signals

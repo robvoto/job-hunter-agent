@@ -17,6 +17,7 @@ OWNER_MODULES = [
     REPO_ROOT / "job_hunter_agent" / "profile_store.py",
     REPO_ROOT / "job_hunter_agent" / "qualification_profile.py",
     REPO_ROOT / "job_hunter_agent" / "workspace_renderer.py",
+    REPO_ROOT / "job_hunter_agent" / "signal_registry.py",
 ]
 
 # A dict literal like {"value": X, "label": "Some Text"} — the label text should
