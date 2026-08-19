@@ -9,7 +9,7 @@ Use for project filesystem/tool access and whenever MCP execution is unreliable.
 
 ## Source of truth
 - Job Hunter WSL repo: `/home/robvoto/projects/job-hunter-agent`.
-- In a connector-based ChatGPT runtime, prefer `Local_Project_Files_Access` for repo/filesystem work; if it fails, retry through `Human_MCP_Server` before claiming access is unavailable.
+- In a connector-based ChatGPT runtime, use `Human_MCP_Server` as the canonical Job Hunter repo/filesystem connector when it is exposed. Do not use `Local_Project_Files_Access` for Job Hunter repo access; it is deprecated/unstable and may point at stale tunnel transport. If `Human_MCP_Server` is not exposed, discover the authorised connectors available in the current runtime before claiming filesystem access is unavailable.
 - In Codex, Claude Code, Cline, or another local coding runtime that already has direct repository shell/filesystem access, use that native access instead of pretending ChatGPT connector namespaces exist. The shared safety rules still apply.
 - For the canonical backlog, follow `.skills/backlog-management/SKILL.md`. In a ChatGPT connector runtime, use the authorised `Google_Drive` / Google Sheets connector and approved `Human_MCP_Server` fallback when exposed. In other runtimes, use their authorised live-Sheets capability if available. Never substitute stale local exports.
 
