@@ -690,7 +690,7 @@ def test_pytest_unit_discovery_is_scoped_to_repo_tests():
     assert 'testpaths = ["tests"]' in pyproject
     assert 'norecursedirs = ["tests/e2e"]' in pyproject
 
-def test_release_parallelizes_unit_tests_but_keeps_e2e_sequential():
+def test_release_runs_complete_unit_and_e2e_gates_concurrently():
     release_script = RELEASE_SCRIPT.read_text(encoding="utf-8")
     pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
 
@@ -698,3 +698,9 @@ def test_release_parallelizes_unit_tests_but_keeps_e2e_sequential():
     assert "uv run pytest -n 6" in release_script
     assert "./scripts/run-e2e.sh -q" in release_script
     assert "run-e2e.sh -q -n" not in release_script
+    assert 'unit_pid=$!' in release_script
+    assert 'e2e_pid=$!' in release_script
+    assert 'wait "$unit_pid"' in release_script
+    assert 'wait "$e2e_pid"' in release_script
+    assert '((unit_status == 0))' in release_script
+    assert '((e2e_status == 0))' in release_script
