@@ -146,6 +146,11 @@ def test_settings_save_confirmation_shows_linkedin_before_and_after(candidate_pa
 
     results_input = page.locator("#linkedin_results_per_search")
     results_input.wait_for(state="visible")
+    # The control exists before the asynchronous profile load finishes. Wait for
+    # hydration rather than treating DOM visibility as proof that data is ready.
+    page.wait_for_function(
+        "() => document.getElementById('linkedin_results_per_search')?.value !== ''"
+    )
     before = int(results_input.input_value())
     after = before - 1 if before > 5 else before + 1
     results_input.fill(str(after))
