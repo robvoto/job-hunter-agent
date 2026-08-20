@@ -34,8 +34,11 @@ def test_shared_footer_renderer_resolves_managed_labels():
 
     assert 'class="job-hunter-app-footer"' in html
     assert "© 2025–2026 Roberto Hernan Voto. All rights reserved." in html
-    assert "Built by Rob Voto" in html
+    assert "robvoto.com" in html
+    assert "Built by Rob Voto" not in html
     assert 'href="https://robvoto.com/"' in html
+    assert 'target="_blank"' in html
+    assert 'rel="noopener noreferrer"' in html
     assert "__JOB_HUNTER_APP_FOOTER_" not in html
 
 
@@ -49,6 +52,13 @@ def test_login_has_no_legacy_login_only_copyright():
     assert "login-copyright" not in login_css
     assert "© 2025 Rob Voto" not in login_html
     assert "All rights reserved." not in login_html
+
+
+def test_login_footer_is_page_level_sibling_of_auth_content():
+    login_html = (REPO_ROOT / "templates" / "login.html").read_text(encoding="utf-8")
+
+    assert '<div class="login-auth__content">' in login_html
+    assert "        <div id=\"error-container\"></div>\n      </div>\n      __JOB_HUNTER_APP_FOOTER__" in login_html
 
 
 def test_shared_footer_is_documented_as_central_component():

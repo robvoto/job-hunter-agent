@@ -48,12 +48,19 @@
 }
 
 .login-auth {
-  display: grid;
-  align-items: start;
-  justify-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
   padding-top: clamp(132px, 15vh, 176px);
   border-left: 1px solid color-mix(in srgb, var(--border-subtle) 48%, transparent);
   background: transparent;
+}
+
+.login-auth__content {
+  width: 100%;
+  display: grid;
+  justify-items: center;
 }
 
 .login-brand {

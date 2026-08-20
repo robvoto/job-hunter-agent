@@ -1,8 +1,8 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 114,
-  "updated_at": "2026-08-20",
+  "version": 115,
+  "updated_at": "2026-08-21",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
     "remote_label": "Remote",
@@ -203,7 +203,7 @@
     "account_menu_reset_user_label": "Reset User",
     "account_menu_reset_user_warning_label": "Warning: clears your profile, CV, review feedback, and history.",
     "app_footer_copyright_label": "© 2025–2026 Roberto Hernan Voto. All rights reserved.",
-    "app_footer_creator_label": "Built by Rob Voto",
+    "app_footer_creator_label": "robvoto.com",
     "app_footer_creator_url": "https://robvoto.com/",
     "app_footer_legal_title": "This repository and its source code, documentation, and other original materials are proprietary. No permission is granted to copy, modify, distribute, sublicense, commercialise, or otherwise use this software or substantial portions of it without prior written permission from the copyright owner.",
     "add_button_label": "+",
