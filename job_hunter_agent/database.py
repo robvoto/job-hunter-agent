@@ -368,6 +368,10 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE occupation_title_cache ADD COLUMN matched_phrase TEXT")
         if "match_type" not in columns:
             conn.execute("ALTER TABLE occupation_title_cache ADD COLUMN match_type TEXT")
+    if "users" in tables:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+        if "blocked_at" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN blocked_at TEXT")
     _apply_requirement_importance_migration(conn)
 
 
@@ -423,6 +427,23 @@ def ensure_user_row(
             """,
             (user_id, email or None, display_name or None),
         )
+
+
+def is_user_blocked(email: str, db_path: "Path | None" = None) -> bool:
+    """Return True if this email has been blocked from signing in.
+
+    Blocking never deletes the users row -- created_at/last_seen_at/display_name
+    stay intact so the account remains visible for admin/DB inspection.
+    """
+    email = (email or "").strip().lower()
+    if not email:
+        return False
+    with db_conn(db_path) as conn:
+        row = conn.execute(
+            "SELECT blocked_at FROM users WHERE lower(email) = ?",
+            (email,),
+        ).fetchone()
+    return bool(row and row["blocked_at"])
 
 
 def get_table_names(db_path: Path | None = None) -> set[str]:
