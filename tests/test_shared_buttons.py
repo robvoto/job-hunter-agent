@@ -176,3 +176,5 @@ def test_micro_utility_action_is_smaller_than_compact_actions():
     assert "font-size: 0.74rem;" in block
     assert "title-block-btn workspace-text-action workspace-text-action--muted" in renderer
     assert ".title-block-btn.jh-button {" not in widgets
+    assert ".gap-btn.jh-button:not(.jh-button--micro) {" in primitives
+    assert ".gap-btn.jh-button {" not in primitives
