@@ -125,4 +125,8 @@ The repository excludes developer profiles, uploaded CV files, per-user runtime 
 
 ## Licence
 
-Licensed under the MIT License. See [`LICENSE`](LICENSE).
+Copyright © 2026 Roberto Hernan Voto. All rights reserved.
+
+This project is proprietary software. No permission is granted to copy, modify, distribute, sublicense, commercialise, or create derivative works from the current repository without prior written permission from the copyright owner. See [`LICENSE`](LICENSE) for the full terms.
+
+Versions lawfully obtained while this project was distributed under the MIT License remain subject to the rights granted for those copies under that licence.
