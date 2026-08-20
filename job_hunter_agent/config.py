@@ -42,6 +42,8 @@ LOGOUT_PATH = "/logout"
 GLOBAL_SETTINGS_PATH = "/global-settings"
 AWS_BROWSER_SESSION_PATH = "/aws-browser-session"
 AWS_NOVNC_PROXY_PATH = "/aws-novnc"
+WAITLIST_PATH = "/waitlist"
+ACCESS_DENIED_PATH = "/access-denied"
 
 NOVNC_PORT = int(os.getenv("NOVNC_PORT", "7900"))
 
@@ -69,6 +71,8 @@ CSRF_TOKEN_CONTEXT = "job_hunter_csrf"
 SESSION_COOKIE_PATH = "/"
 
 SESSION_COOKIE_DEFAULT_NAME = "job_hunter_session"
+
+USER_ACCESS_STATUSES = frozenset({"pending", "approved", "blocked"})
 
 
 # Allowed documentation paths for the API

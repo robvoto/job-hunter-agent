@@ -24,6 +24,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.requests import HTTPConnection
 
 from job_hunter_agent.config import (
+    ACCESS_DENIED_PATH,
     AUTH_ALGO_SHA256,
     AUTH_ENCODING,
     CSRF_TOKEN_CONTEXT,
@@ -34,6 +35,8 @@ from job_hunter_agent.config import (
     LOGOUT_PATH,
     SESSION_COOKIE_DEFAULT_NAME,
     SESSION_COOKIE_PATH,
+    USER_ACCESS_STATUSES,
+    WAITLIST_PATH,
 )
 
 OPEN_PATHS = {
@@ -104,8 +107,22 @@ def get_or_create_user(
     user_id = user_id_from_email(email)
     # Role is always re-derived from env — admin_email may change without a DB update.
     role = "admin" if admin_email and email == admin_email.strip().lower() else "candidate"
-    ensure_user_row(user_id, email=email, display_name=display_name or None)
-    return {"user_id": user_id, "email": email, "role": role}
+    access_status = "approved" if role == "admin" else None
+    ensure_user_row(
+        user_id,
+        email=email,
+        display_name=display_name or None,
+        access_status=access_status,
+    )
+    from job_hunter_agent.database import get_user_access_status
+
+    return {
+        "user_id": user_id,
+        "email": email,
+        "role": role,
+        "access_status": get_user_access_status(user_id) or "pending",
+        "name": display_name or "",
+    }
 
 
 def build_google_auth_url(config: GoogleOAuthConfig, state: str) -> str:
@@ -212,14 +229,30 @@ def read_session_user(request: HTTPConnection) -> dict | None:
     if not user_id or not email:
         logger.warning("[AUTH][WARN] Rejected session cookie payload missing user_id or email.")
         return None
+    from job_hunter_agent.database import get_user_access_status
+
+    access_status = get_user_access_status(user_id)
+    # A signed session without a corresponding account row is still an
+    # authenticated identity, but it cannot enter the application until the
+    # account exists and is explicitly approved.
+    if access_status is None:
+        access_status = "pending"
     # Always re-derive role from env so admin_email changes take effect without re-login.
     role = (
         "admin"
         if config.admin_email and email.lower() == config.admin_email.strip().lower()
         else "candidate"
     )
+    if role == "admin":
+        access_status = "approved"
     name = str(payload.get("name") or "").strip()
-    return {"user_id": user_id, "email": email, "role": role, "name": name}
+    return {
+        "user_id": user_id,
+        "email": email,
+        "role": role,
+        "access_status": access_status,
+        "name": name,
+    }
 
 
 def is_authenticated(request: HTTPConnection) -> bool:
@@ -299,6 +332,29 @@ def auth_required_response(next_path: str, accepts_html: bool) -> RedirectRespon
     return JSONResponse(
         status_code=401,
         content={"ok": False, "error": "Authentication required"},
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
+
+
+def access_gate_response(
+    access_status: str,
+    next_path: str,
+    accepts_html: bool,
+) -> RedirectResponse | JSONResponse:
+    """Return the central response for an authenticated but unauthorized user."""
+    if access_status not in USER_ACCESS_STATUSES:
+        raise RuntimeError(f"Invalid access status: {access_status}")
+    if accepts_html:
+        destination = WAITLIST_PATH if access_status == "pending" else ACCESS_DENIED_PATH
+        return RedirectResponse(destination, status_code=302)
+    message = (
+        "Access approval is pending"
+        if access_status == "pending"
+        else "Access to Job Hunter has been blocked"
+    )
+    return JSONResponse(
+        status_code=403,
+        content={"ok": False, "error": message},
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
     )
 

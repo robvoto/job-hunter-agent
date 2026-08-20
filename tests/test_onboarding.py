@@ -45,7 +45,12 @@ def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
     monkeypatch.setattr(
         _fa,
         "read_session_user",
-        lambda request: {"user_id": "test-user", "email": "test@example.com", "role": "candidate"},
+        lambda request: {
+            "user_id": "test-user",
+            "email": "test@example.com",
+            "role": "candidate",
+            "access_status": "approved",
+        },
     )
     monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: False)
     monkeypatch.setattr(_pages, "get_user_id_for_runtime", lambda: "test-user")
@@ -182,7 +187,12 @@ def test_onboarding_privacy_copy_links_to_docs(monkeypatch):
     monkeypatch.setattr(
         _fa,
         "read_session_user",
-        lambda request: {"user_id": "test-user", "email": "test@example.com", "role": "candidate"},
+        lambda request: {
+            "user_id": "test-user",
+            "email": "test@example.com",
+            "role": "candidate",
+            "access_status": "approved",
+        },
     )
     monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: False)
     monkeypatch.setattr(_pages, "get_user_id_for_runtime", lambda: "test-user")

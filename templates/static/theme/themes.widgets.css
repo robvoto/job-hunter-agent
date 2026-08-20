@@ -2672,3 +2672,81 @@
   font-weight: var(--text-role-status-font-weight);
   line-height: var(--chip-line-height);
 }
+
+/* Global Admin user access directory cards. */
+.user-access-list {
+  display: grid;
+  gap: var(--surface-gap-md);
+}
+
+.user-access-card {
+  display: grid;
+  gap: var(--surface-gap-sm);
+  padding: var(--surface-pad-block-md) var(--surface-pad-inline-md);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--control-radius-md);
+  background: var(--bg-surface);
+}
+
+.user-access-card__head,
+.user-access-card__meta,
+.user-access-card__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--surface-gap-sm);
+}
+
+.user-access-card__head {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.user-access-card__name,
+.user-access-card__email {
+  margin: 0;
+}
+
+.user-access-card__name {
+  color: var(--text-primary);
+  font-size: var(--text-role-panel-title-font-size);
+  font-weight: var(--text-role-panel-title-font-weight);
+}
+
+.user-access-card__email,
+.user-access-card__meta,
+.user-access-admin-label {
+  color: var(--text-muted);
+  font-size: var(--text-role-caption-font-size);
+  line-height: var(--text-role-caption-line-height);
+}
+
+.user-access-card__meta {
+  flex-wrap: wrap;
+}
+
+.user-access-card__status {
+  flex: 0 0 auto;
+  padding: var(--control-pad-block-sm) var(--control-pad-inline-sm);
+  border: 1px solid var(--state-neutral-border);
+  border-radius: var(--control-radius-pill);
+  background: var(--state-neutral-bg);
+  color: var(--state-neutral-text);
+  font-size: var(--text-role-chip-font-size);
+  font-weight: var(--text-role-chip-font-weight);
+}
+
+.user-access-card__status--approved {
+  border-color: var(--state-success-border);
+  background: var(--state-success-bg);
+  color: var(--state-success-text);
+}
+
+.user-access-card__status--blocked {
+  border-color: var(--state-error-border);
+  background: var(--state-error-bg);
+  color: var(--state-error-text);
+}
+
+.user-access-card__actions {
+  flex-wrap: wrap;
+}

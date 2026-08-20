@@ -53,7 +53,12 @@ def test_settings_page_renders_keyword_label_and_location_field(monkeypatch):
     monkeypatch.setattr(
         _fa,
         "read_session_user",
-        lambda request: {"user_id": "test-user", "email": "test@example.com", "role": "candidate"},
+        lambda request: {
+            "user_id": "test-user",
+            "email": "test@example.com",
+            "role": "candidate",
+            "access_status": "approved",
+        },
     )
 
     monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: True)

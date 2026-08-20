@@ -40,6 +40,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from job_hunter_agent import config as app_config
 from job_hunter_agent.auth import (
     OPEN_PATHS,
+    access_gate_response,
     configure_auth,
     read_session_user,
     verify_csrf_token,
@@ -50,6 +51,8 @@ from job_hunter_agent.config import (
     LOGOUT_PATH,
     ONBOARDING_DEBUG_ALIAS_PATH,
     ONBOARDING_PATH,
+    ACCESS_DENIED_PATH,
+    WAITLIST_PATH,
 )
 from job_hunter_agent.logging_utils import render_server_session_start_block, setup_logging
 from job_hunter_agent.user_context import set_user_id
@@ -447,7 +450,8 @@ def create_app() -> FastAPI:
         path = request.url.path
         if path in OPEN_PATHS or path == "/favicon.ico" or path.startswith("/static/"):
             return await call_next(request)
-        if read_session_user(request) is None:
+        user = read_session_user(request)
+        if user is None:
             if path.startswith("/api/"):
                 return JSONResponse(
                     {"ok": False, "error": "Authentication required"},
@@ -457,6 +461,27 @@ def create_app() -> FastAPI:
             return RedirectResponse(
                 f"{LOGIN_PATH}?next={quote(path, safe='')}",
                 status_code=302,
+            )
+        access_status = str(user.get("access_status") or "").strip().lower()
+        if not access_status and user.get("role") == "admin":
+            access_status = "approved"
+        if not access_status:
+            access_status = "pending"
+        if path == WAITLIST_PATH:
+            if access_status == "pending":
+                return await call_next(request)
+            destination = ACCESS_DENIED_PATH if access_status == "blocked" else "/"
+            return RedirectResponse(destination, status_code=302)
+        if path == ACCESS_DENIED_PATH:
+            if access_status == "blocked":
+                return await call_next(request)
+            destination = WAITLIST_PATH if access_status == "pending" else "/"
+            return RedirectResponse(destination, status_code=302)
+        if access_status != "approved":
+            return access_gate_response(
+                access_status,
+                path,
+                accepts_html=not path.startswith("/api/"),
             )
         return await call_next(request)
 

@@ -7,6 +7,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from job_hunter_agent.auth import _get_session_cookie_params, issue_csrf_token, set_session_cookie
+from job_hunter_agent.database import ensure_user_row
 from job_hunter_agent.fastapi_app import create_app
 from job_hunter_agent.routes import profile_materials
 
@@ -34,6 +35,7 @@ def _csrf_request(app, cookie_header: str, scheme: str = "http") -> Request:
 
 
 def _session_cookie_and_token(app, scheme: str = "http") -> tuple[str, str, str]:
+    ensure_user_row("alice", email="alice@example.com", access_status="approved")
     request = _csrf_request(app, "", scheme=scheme)
     response = Response()
     set_session_cookie(

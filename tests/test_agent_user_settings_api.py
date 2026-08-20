@@ -9,7 +9,12 @@ from job_hunter_agent.fastapi_app import create_app
 def test_user_settings_schedule_enabled_round_trips(monkeypatch, isolated_db):
     monkeypatch.setattr(
         "job_hunter_agent.fastapi_app.read_session_user",
-        lambda request: {"user_id": "test-user", "email": "test@example.com", "role": "candidate"},
+        lambda request: {
+            "user_id": "test-user",
+            "email": "test@example.com",
+            "role": "candidate",
+            "access_status": "approved",
+        },
     )
     monkeypatch.setattr(
         "job_hunter_agent.fastapi_app.verify_csrf_token", lambda request, token: True
@@ -51,7 +56,12 @@ def test_user_settings_schedule_enabled_round_trips(monkeypatch, isolated_db):
 def test_source_materials_round_trip(monkeypatch, isolated_db):
     monkeypatch.setattr(
         "job_hunter_agent.fastapi_app.read_session_user",
-        lambda request: {"user_id": "test-user", "email": "test@example.com", "role": "candidate"},
+        lambda request: {
+            "user_id": "test-user",
+            "email": "test@example.com",
+            "role": "candidate",
+            "access_status": "approved",
+        },
     )
     monkeypatch.setattr(
         "job_hunter_agent.fastapi_app.verify_csrf_token", lambda request, token: True

@@ -18,8 +18,18 @@ import job_hunter_agent.routes.profile_materials as _profile_materials
 from job_hunter_agent import io_utils
 from job_hunter_agent.fastapi_app import _cors_origin, create_app
 
-_FAKE_USER = {"user_id": "test", "email": "test@example.com", "role": "admin"}
-_CANDIDATE_USER = {"user_id": "candidate", "email": "candidate@example.com", "role": "candidate"}
+_FAKE_USER = {
+    "user_id": "test",
+    "email": "test@example.com",
+    "role": "admin",
+    "access_status": "approved",
+}
+_CANDIDATE_USER = {
+    "user_id": "candidate",
+    "email": "candidate@example.com",
+    "role": "candidate",
+    "access_status": "approved",
+}
 
 
 def test_fastapi_health_and_unknown_route_json_errors(monkeypatch):
@@ -322,6 +332,8 @@ def test_global_settings_page_allows_admin(monkeypatch):
     assert response.status_code == 200
     assert 'data-page-mode="admin"' in response.text
     assert 'id="section-admin"' in response.text
+    assert 'id="user_access_management_panel"' in response.text
+    assert "User Access Management" in response.text
 
 
 def test_global_settings_api_requires_admin(monkeypatch):

@@ -1180,6 +1180,130 @@ export const JobHunterAdminSettings = (function () {
     );
   }
 
+  function initUserAccessControls(showStatus) {
+    const panel = document.getElementById('user_access_management_panel');
+    const list = document.getElementById('user_access_list');
+    const statusEl = document.getElementById('user_access_status');
+    const labels = window.__JOB_HUNTER_GLOBAL_SETTINGS_LABELS__;
+    if (!panel || !list || !statusEl || !labels || typeof window.jobHunterFetch !== 'function') {
+      return;
+    }
+    if (panel.dataset.bound === 'true') {
+      return;
+    }
+    panel.dataset.bound = 'true';
+
+    const statusLabels = {
+      pending: labels.user_access_status_pending,
+      approved: labels.user_access_status_approved,
+      blocked: labels.user_access_status_blocked,
+    };
+
+    const setStatus = (message, kind) => {
+      statusEl.textContent = String(message || '');
+      statusEl.className = kind ? `field-help sync-status sync-status--${kind}` : 'field-help';
+      if (typeof showStatus === 'function') {
+        showStatus(message, kind);
+      }
+    };
+
+    const formatUserDate = (value) => {
+      const text = String(value || '').trim();
+      return text || labels.user_access_unknown_value;
+    };
+
+    const renderUser = (user) => {
+      const userId = String(user?.user_id || '').trim();
+      const email = String(user?.email || '').trim();
+      const displayName = String(user?.display_name || '').trim() || labels.user_access_unknown_value;
+      const accessStatus = String(user?.access_status || '').trim().toLowerCase();
+      if (!userId || !email || !Object.prototype.hasOwnProperty.call(statusLabels, accessStatus)) {
+        throw new Error(labels.user_access_load_error);
+      }
+      const isAdmin = user?.is_admin === true;
+      const actions = isAdmin
+        ? `<span class="user-access-admin-label">${escapeHtml(labels.user_access_admin_label)}</span>`
+        : `
+          <button type="button" class="jh-button jh-button--primary jh-button--compact" data-user-access-status="approved" data-user-id="${escapeHtml(userId)}">${escapeHtml(labels.user_access_approve_label)}</button>
+          <button type="button" class="jh-button jh-button--neutral jh-button--compact" data-user-access-status="pending" data-user-id="${escapeHtml(userId)}">${escapeHtml(labels.user_access_pending_label)}</button>
+          <button type="button" class="jh-button jh-button--danger jh-button--compact" data-user-access-status="blocked" data-user-id="${escapeHtml(userId)}">${escapeHtml(labels.user_access_block_label)}</button>
+        `;
+      return `
+        <article class="user-access-card" data-user-id="${escapeHtml(userId)}">
+          <div class="user-access-card__head">
+            <div>
+              <h3 class="user-access-card__name">${escapeHtml(displayName)}</h3>
+              <p class="user-access-card__email">${escapeHtml(email)}</p>
+            </div>
+            <span class="user-access-card__status user-access-card__status--${escapeHtml(accessStatus)}">${escapeHtml(statusLabels[accessStatus])}</span>
+          </div>
+          <div class="user-access-card__meta">
+            <span><strong>${escapeHtml(labels.user_access_created_label)}:</strong> ${escapeHtml(formatUserDate(user.created_at))}</span>
+            <span><strong>${escapeHtml(labels.user_access_last_activity_label)}:</strong> ${escapeHtml(formatUserDate(user.last_seen_at))}</span>
+          </div>
+          <div class="user-access-card__actions">${actions}</div>
+        </article>
+      `;
+    };
+
+    const renderUsers = (users) => {
+      if (!users.length) {
+        list.innerHTML = `<p class="field-help">${escapeHtml(labels.user_access_empty)}</p>`;
+        return;
+      }
+      list.innerHTML = users.map(renderUser).join('');
+    };
+
+    const loadUsers = async () => {
+      try {
+        const response = await window.jobHunterFetch('/api/admin/user-access');
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.error || labels.user_access_load_error);
+        }
+        const users = Array.isArray(payload.users) ? payload.users : null;
+        if (!users) {
+          throw new Error(labels.user_access_load_error);
+        }
+        renderUsers(users);
+        setStatus('', '');
+      } catch (error) {
+        list.innerHTML = '';
+        setStatus(error.message || labels.user_access_load_error, 'error');
+      }
+    };
+
+    list.addEventListener('click', async (event) => {
+      const button = event.target.closest('[data-user-access-status]');
+      if (!button) return;
+      const userId = String(button.dataset.userId || '').trim();
+      const nextStatus = String(button.dataset.userAccessStatus || '').trim();
+      if (!userId || !Object.prototype.hasOwnProperty.call(statusLabels, nextStatus)) return;
+      const originalLabel = button.textContent;
+      button.disabled = true;
+      try {
+        const response = await window.jobHunterFetch(`/api/admin/user-access/${encodeURIComponent(userId)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: nextStatus }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.error || labels.user_access_action_error);
+        }
+        await loadUsers();
+        setStatus(labels.user_access_updated_status, 'success');
+      } catch (error) {
+        setStatus(error.message || labels.user_access_action_error, 'error');
+      } finally {
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+    });
+
+    loadUsers();
+  }
+
   return {
     fillGlobalForm,
     collectGlobalSettings,
@@ -1190,5 +1314,6 @@ export const JobHunterAdminSettings = (function () {
     initRejectionHistorySyncControls,
     initScraperValidationControls,
     initSystemWarningsControls,
+    initUserAccessControls,
   };
 }());

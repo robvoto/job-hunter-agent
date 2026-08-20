@@ -148,7 +148,12 @@ def test_aws_browser_session_page_redirects_non_admin(monkeypatch):
     monkeypatch.setattr(
         _fa,
         "read_session_user",
-        lambda request: {"user_id": "test", "email": "test@example.com", "role": "candidate"},
+        lambda request: {
+            "user_id": "test",
+            "email": "test@example.com",
+            "role": "candidate",
+            "access_status": "approved",
+        },
     )
     monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: True)
     monkeypatch.setattr(_pages, "issue_csrf_token", lambda request: "csrf-token")
