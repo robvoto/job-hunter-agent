@@ -16,7 +16,8 @@ Never add agent-specific memory or session history to this shared loader.
 2. If project context is needed, read `docs/PROJECT_CONTEXT.md`.
 3. If changing project setup, docs, AGENTS.md, skills, config, runtime commands, tests, env examples, packaging, templates, AI model/provider defaults, cost logging, approval workflows, or long-running workflows, read `docs/STANDARDS_INDEX.md` first.
 4. Load the relevant skill or smallest necessary combination of skills from `.skills/`. Use one domain skill plus reusable skills such as `code-change`, `no-hardcoding`, or `css-design-system` when the task crosses those boundaries.
-5. Read only linked details, docs, code, or git history needed for the task.
+5. Before any branch/worktree, commit, push, PR, merge, or `main`-integration action, load `.skills/git-lifecycle/SKILL.md`.
+6. Read only linked details, docs, code, or git history needed for the task.
 
 Do not read every skill, every doc, or the whole repo.
 
@@ -31,6 +32,7 @@ Reusable defaults:
 - `no-hardcoding`: config, schema, thresholds, labels, defaults, fallback values, business rules.
 - `css-design-system`: CSS, spacing, layout, reusable components, theme tokens.
 - `mcp-tooling`: repository/filesystem and connected-service access plus tool/transport failure recovery; runtime-specific connector names are scoped inside that skill.
+- `git-lifecycle`: branch/worktree, commit, push, PR, merge, and verified `main` integration.
 
 ### UI task routing (required, not optional)
 
