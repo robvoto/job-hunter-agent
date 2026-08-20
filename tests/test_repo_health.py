@@ -370,7 +370,7 @@ def test_workspace_title_block_copy_is_managed_and_explains_impact():
 
     assert card_labels["title_block_button_label"] == "Hide similar titles"
     assert "exact phrases you choose" in card_labels["title_block_button_tooltip"]
-    assert "Enter the exact phrase you want blocked" in card_labels["title_block_guidance_copy"]
+    assert "checks this phrase against job titles" in card_labels["title_block_guidance_copy"]
     assert "_workspace_label(\"workspace_card_labels\", \"title_block_guidance_copy\"" in renderer
 
 

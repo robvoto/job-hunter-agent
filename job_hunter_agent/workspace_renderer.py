@@ -2364,19 +2364,19 @@ def render_job_card(
         + (
             f'<button class="title-block-btn workspace-text-action workspace-text-action--muted" type="button" data-review-action="block_similar" {button_data_attrs} aria-expanded="false" aria-controls="{safe_html(title_block_panel_id)}" title="{safe_html(_workspace_label("workspace_card_labels", "title_block_button_tooltip"))}">{safe_html(_workspace_label("workspace_card_labels", "title_block_button_label"))}</button>'
             f'<div id="{safe_html(title_block_panel_id)}" class="block-confirm" data-block-confirm hidden>'
+            f'<p class="block-confirm-heading">{safe_html(_workspace_label("workspace_card_labels", "title_block_button_label"))}</p>'
             f'<p class="block-confirm-copy">{safe_html(_workspace_label("workspace_card_labels", "title_block_prompt_copy"))}</p>'
+            '<div class="block-manual-row">'
+            f'<label class="block-manual-label" for="{safe_html(title_block_panel_id)}-input">{safe_html(_workspace_label("workspace_card_labels", "exact_title_phrase_label"))}</label>'
+            f'<input id="{safe_html(title_block_panel_id)}-input" class="block-manual-input" type="text" data-block-manual-input placeholder="e.g. sap, payroll, contract management" value="{block_title_hint}">'
+            f'<span class="block-manual-help">{safe_html(_workspace_label("workspace_card_labels", "title_block_manual_help"))}</span>'
+            f'<p class="block-example-copy">{safe_html(_workspace_label("workspace_card_labels", "title_block_example_copy"))}</p>'
+            "</div>"
+            '<p class="block-impact" data-block-impact></p>'
             '<details class="block-confirm-help">'
             f'<summary>{safe_html(_workspace_label("workspace_card_labels", "title_block_help_summary"))}</summary>'
             f'<p>{safe_html(_workspace_label("workspace_card_labels", "title_block_guidance_copy"))}</p>'
             "</details>"
-            f'<p class="block-confirm-copy">{safe_html(_workspace_label("workspace_card_labels", "current_title_prefix_label"))} <strong>{title}</strong></p>'
-            '<div class="block-manual-row">'
-            f'<span class="block-manual-label">{safe_html(_workspace_label("workspace_card_labels", "exact_title_phrase_label"))}</span>'
-            f'<input class="block-manual-input" type="text" data-block-manual-input placeholder="e.g. sap, payroll, contract management" value="{block_title_hint}">'
-            f'<span class="block-manual-help">{safe_html(_workspace_label("workspace_card_labels", "title_block_manual_help"))}</span>'
-            "</div>"
-            '<p class="block-impact" data-block-impact></p>'
-            f'<p class="block-confirm-sub">{safe_html(_workspace_label("workspace_card_labels", "title_block_strong_filter_copy"))}</p>'
             '<div class="block-confirm-actions">'
             f'<button class="jh-button jh-button--primary jh-button--compact" type="button" data-confirm-block disabled>{safe_html(_workspace_label("workspace_card_labels", "action_block_matching_titles_label"))}</button>'
             f'<button class="jh-button jh-button--secondary jh-button--compact" type="button" data-cancel-block>{safe_html(_workspace_label("workspace_card_labels", "action_cancel_label"))}</button>'

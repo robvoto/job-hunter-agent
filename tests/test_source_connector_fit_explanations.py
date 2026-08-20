@@ -2286,7 +2286,7 @@ def test_workspace_review_buttons_and_title_block_keep_semantic_hooks():
         'type="button" data-review-action="block_similar"'
     ) in html
     assert ">Hide similar titles<" in html
-    assert 'Exact title phrase' in html
+    assert 'Phrase to block' in html
     assert 'data-job-key="test-hooks"' in html
     assert 'data-job-title="Senior Business Analyst (Contract Management)"' in html
     assert 'data-job-url="https://example.com/job"' in html
