@@ -60,6 +60,19 @@ def test_results_page_uses_runtime_workspace_config():
     assert "window.location.reload();" in results_js
 
 
+def test_results_page_related_card_action_focuses_existing_workspace_card():
+    root = Path(__file__).resolve().parent.parent
+    results_js = (root / "templates" / "static" / "results" / "results-page.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert "function focusRelatedCard(action)" in results_js
+    assert "data-related-card-target" in results_js
+    assert "setActiveWorkspace(targetWorkspace, true, false)" in results_js
+    assert "target.scrollIntoView({ behavior: 'smooth', block: 'start' })" in results_js
+    assert "target.classList.add('is-related-target')" in results_js
+
+
 def test_workspace_page_size_select_is_content_sized_in_pagination_cluster():
     root = Path(__file__).resolve().parent.parent
     workspace_css = (

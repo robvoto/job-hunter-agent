@@ -346,6 +346,68 @@
   border-color: color-mix(in srgb, var(--border-strong) 55%, var(--border-subtle));
 }
 
+.job-card.is-related-target {
+  background-color: color-mix(in srgb, var(--selection-accent) 12%, var(--bg-surface));
+  border-color: var(--selection-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--selection-accent) 28%, transparent);
+}
+
+.job-related-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.job-related-card-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--control-space-md);
+  padding: var(--surface-pad-block-xs) 0;
+}
+
+.job-related-card-row + .job-related-card-row {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.job-related-card-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.job-related-card-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-size: var(--text-role-body-compact-font-size);
+  font-weight: var(--text-role-status-font-weight);
+  line-height: var(--text-role-body-compact-line-height);
+}
+
+.job-related-card-company {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+  font-size: var(--text-role-body-compact-font-size);
+  line-height: var(--text-role-body-compact-line-height);
+}
+
+.job-related-card-action {
+  justify-self: end;
+}
+
+@media (max-width: 560px) {
+  .job-related-card-row {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .job-related-card-action {
+    justify-self: start;
+  }
+}
+
 .job-note {
   margin: 0 0 14px;
   border-radius: 16px;
