@@ -975,6 +975,9 @@
       grid-template-columns: 1fr;
       gap: var(--surface-gap-sm);
     }
+    .eligibility-card {
+      align-items: center;
+    }
     .eligibility-card-copy {
       display: grid;
       gap: 4px;
