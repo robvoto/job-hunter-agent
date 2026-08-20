@@ -1,21 +1,24 @@
-MIT License
+Proprietary Software — All Rights Reserved
 
-Copyright (c) 2026 Roberto Hernan Voto
+Copyright © 2026 Roberto Hernan Voto. All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This repository and the software, source code, documentation, user-interface materials,
+prompts, configuration, workflows, and other original materials contained in it are
+proprietary and protected by applicable copyright law.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+No permission is granted to copy, reproduce, modify, adapt, distribute, publish,
+sublicense, sell, commercialise, create derivative works from, or otherwise use this
+software or substantial portions of it without prior written permission from the
+copyright owner, except where such use is expressly permitted by law.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Public availability of this repository does not grant any licence or other right to use
+the software.
+
+Third-party software and dependencies remain subject to their own respective licences.
+
+Historical licence notice
+-------------------------
+Versions of this project that were lawfully obtained while they were distributed under
+the MIT License remain subject to the rights granted under that MIT License for those
+copies. This proprietary licence applies to the current version of the repository and
+subsequent versions unless another licence is expressly provided in writing.
