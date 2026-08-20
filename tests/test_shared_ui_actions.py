@@ -71,6 +71,18 @@ def test_eligibility_and_qualification_share_editor_stack_spacing():
     assert ".jh-editor-entry > .field-help:empty" in theme_css
 
 
+def test_eligibility_and_qualification_actions_are_vertically_centered():
+    settings_css = _read("templates/static/settings/shared/settings-page.css")
+    eligibility = _read("templates/static/settings/shared/settings-eligibility-editor.js")
+    qualification = _read("templates/static/settings/shared/settings-qualification-editor.js")
+
+    block = re.search(r"\.eligibility-card \{(?P<body>.*?)\n    \}", settings_css, re.DOTALL)
+    assert block, "Shared eligibility-card layout rule is missing"
+    assert "align-items: center;" in block.group("body")
+    assert 'class="capability-card eligibility-card"' in eligibility
+    assert 'class="capability-card eligibility-card"' in qualification
+
+
 def test_direct_remove_button_markup_is_limited_to_documented_exceptions():
     allowed_direct_patterns = (
         'data-review-bulk-action="remove"',
