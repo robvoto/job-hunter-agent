@@ -40,7 +40,17 @@ def test_approve_requirement_classification_requires_and_persists_explicit_type(
     assert load_requirement_classification_overrides()[requirement.lower()] == classification
 
 
-def test_approve_requirement_classification_rejects_missing_type(isolated_db):
+def test_approve_requirement_classification_rejects_missing_type(isolated_db, monkeypatch):
+    monkeypatch.setattr(
+        signal_registry,
+        "load_ui_labels",
+        lambda: {
+            "signal_registry_labels": {
+                "requirement_type_required_error": "Managed missing classification message",
+                "requirement_type_invalid_error": "Managed invalid classification: {classification}",
+            }
+        },
+    )
     signal_registry.save_registry(
         {
             "uncertain requirement": {
@@ -52,7 +62,7 @@ def test_approve_requirement_classification_rejects_missing_type(isolated_db):
         }
     )
 
-    with pytest.raises(ValueError, match="Requirement classification is required"):
+    with pytest.raises(ValueError, match="Managed missing classification message"):
         signal_registry.approve_signal(
             "uncertain requirement",
             category="requirement_classification_review",
@@ -61,7 +71,17 @@ def test_approve_requirement_classification_rejects_missing_type(isolated_db):
     assert "uncertain requirement" in signal_registry.load_registry()
 
 
-def test_approve_requirement_classification_rejects_invalid_type(isolated_db):
+def test_approve_requirement_classification_rejects_invalid_type(isolated_db, monkeypatch):
+    monkeypatch.setattr(
+        signal_registry,
+        "load_ui_labels",
+        lambda: {
+            "signal_registry_labels": {
+                "requirement_type_required_error": "Managed missing classification message",
+                "requirement_type_invalid_error": "Managed invalid classification: {classification}",
+            }
+        },
+    )
     signal_registry.save_registry(
         {
             "uncertain requirement": {
@@ -72,7 +92,7 @@ def test_approve_requirement_classification_rejects_invalid_type(isolated_db):
         }
     )
 
-    with pytest.raises(ValueError, match="Invalid requirement classification"):
+    with pytest.raises(ValueError, match="Managed invalid classification: not_a_requirement_type"):
         signal_registry.approve_signal(
             "uncertain requirement",
             category="requirement_classification_review",
@@ -446,3 +466,5 @@ def test_managed_signal_registry_labels_are_complete_and_valid(isolated_db):
     assert labels["requirement_type_capability_label"]
     assert labels["requirement_type_eligibility_label"]
     assert labels["requirement_type_qualification_label"]
+    assert labels["requirement_type_required_error"]
+    assert "{classification}" in labels["requirement_type_invalid_error"]

@@ -109,7 +109,9 @@
     "requirement_type_field_label": "Requirement type",
     "requirement_type_capability_label": "Capability",
     "requirement_type_eligibility_label": "Eligibility",
-    "requirement_type_qualification_label": "Qualification"
+    "requirement_type_qualification_label": "Qualification",
+    "requirement_type_required_error": "Requirement classification is required; choose capability, eligibility, or qualification.",
+    "requirement_type_invalid_error": "Invalid requirement classification '{classification}'; choose capability, eligibility, or qualification."
   },
   "capability_ui_labels_description": "Display labels and help text for capability review and editing screens.",
   "capability_ui_labels": {

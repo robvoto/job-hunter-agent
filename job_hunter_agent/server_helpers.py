@@ -702,6 +702,8 @@ _SIGNAL_REGISTRY_LABEL_KEYS = (
     "requirement_type_capability_label",
     "requirement_type_eligibility_label",
     "requirement_type_qualification_label",
+    "requirement_type_required_error",
+    "requirement_type_invalid_error",
 )
 
 _SIGNAL_REGISTRY_EXAMPLE_KEYS = tuple(

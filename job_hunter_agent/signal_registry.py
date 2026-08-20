@@ -17,6 +17,7 @@ from job_hunter_agent.hard_blocker_rules import (
     save_hard_blocker_rules,
     upsert_hard_blocker_rule,
 )
+from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent.job_quality import upsert_cv_farming_rule
 from job_hunter_agent.job_types import load_job_type, save_job_type, upsert_job_type_entry
 from job_hunter_agent.knowledge_store import get_knowledge, set_knowledge
@@ -88,6 +89,13 @@ def _clean_text(value: Any) -> str:
 
 def _clean_term(value: Any) -> str:
     return _clean_text(value).lower()
+
+
+def _signal_registry_label(key: str) -> str:
+    labels = load_ui_labels().get("signal_registry_labels")
+    if not isinstance(labels, dict) or not str(labels.get(key, "")).strip():
+        raise ValueError(f"Missing required ui_labels.json entry: signal_registry_labels.{key}")
+    return str(labels[key]).strip()
 
 
 def _clean_text_list(values: Any) -> list[str]:
@@ -606,12 +614,12 @@ def approve_signal(
         value = explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
         classification_key = _clean_term(classification)
         if not classification_key:
-            raise ValueError(
-                "Requirement classification is required; choose capability, eligibility, or qualification."
-            )
+            raise ValueError(_signal_registry_label("requirement_type_required_error"))
         if classification_key not in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES:
             raise ValueError(
-                f"Invalid requirement classification '{classification_key}'; choose capability, eligibility, or qualification."
+                _signal_registry_label("requirement_type_invalid_error").format(
+                    classification=classification_key
+                )
             )
         upsert_requirement_classification_override(value, classification_key)
     else:
