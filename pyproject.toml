@@ -34,6 +34,7 @@ dev = [
 package = false
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
 markers = [
     "llm_e2e: real-LLM end-to-end test, costs money and is skipped unless explicitly opted into (see tests/e2e/README.md)",
 ]
