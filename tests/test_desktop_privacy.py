@@ -52,6 +52,7 @@ def test_desktop_mode_blocks_cv_learning_signal_registration(monkeypatch):
                 "level": "strong",
                 "aliases": [],
                 "icon_key": "analysis_requirements",
+                "atomic_concept": True,
                 "needs_review": False,
             },
             {
@@ -59,6 +60,7 @@ def test_desktop_mode_blocks_cv_learning_signal_registration(monkeypatch):
                 "level": "working",
                 "aliases": ["mystery platform"],
                 "icon_key": "systems_platforms",
+                "atomic_concept": True,
                 "needs_review": True,
             }
         ],

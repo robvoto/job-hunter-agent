@@ -5,25 +5,30 @@ from datetime import datetime, timedelta, timezone
 from job_hunter_agent import io_utils, llm_gate
 
 
-def test_prune_llm_cache_for_current_profile_keeps_only_active_schema_and_fingerprint(monkeypatch):
+def test_prune_llm_cache_for_current_profile_keeps_only_active_contracts(monkeypatch):
     monkeypatch.setattr(llm_gate, "_profile_fingerprint", lambda: "active-fp")
 
-    active_one = llm_gate.build_llm_cache_key("one")
-    active_three = llm_gate.build_llm_cache_key("three")
+    active_fit = llm_gate.build_llm_cache_key("one")
+    active_title = llm_gate.build_title_judgment_cache_key(
+        "Business Analyst", ["Business Analyst"], []
+    )
     current_version = llm_gate.LLM_CACHE_SCHEMA_VERSION
+    stale_fit_version = llm_gate.FIT_REVIEW_CACHE_CONTRACT_VERSION - 1
     cache = {
-        active_one: {"value": 1},
-        f"v{current_version}:stale-fp:two": {"value": 2},
-        active_three: {"value": 3},
-        f"v{current_version - 1}:active-fp:old-schema": {"value": 4},
+        active_fit: {"value": 1},
+        active_title: {"value": 2},
+        f"v{current_version}:stale-fp:fit:v{llm_gate.FIT_REVIEW_CACHE_CONTRACT_VERSION}:old": {"value": 3},
+        f"v{current_version - 1}:active-fp:fit:v{llm_gate.FIT_REVIEW_CACHE_CONTRACT_VERSION}:old": {"value": 4},
+        f"v{current_version}:active-fp:fit:v{stale_fit_version}:posting:v{llm_gate.POSTING_CHANNEL_CLASSIFIER_VERSION}:old": {"value": 5},
+        f"v{current_version}:active-fp:legacy-hash-only": {"value": 6},
     }
 
     pruned, removed = io_utils.prune_llm_cache_for_current_profile(cache)
 
-    assert removed == 2
+    assert removed == 4
     assert pruned == {
-        active_one: {"value": 1},
-        active_three: {"value": 3},
+        active_fit: {"value": 1},
+        active_title: {"value": 2},
     }
 
 

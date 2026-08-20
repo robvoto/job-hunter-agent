@@ -776,7 +776,7 @@ def build_profile_storage_resolution_guidance() -> str:
 # Shared cache namespace/profile lifecycle. Fit review and title judgement each
 # have their own contract version so changing one does not invalidate the other.
 LLM_CACHE_SCHEMA_VERSION = 3
-FIT_REVIEW_CACHE_CONTRACT_VERSION = 1
+FIT_REVIEW_CACHE_CONTRACT_VERSION = 2
 TITLE_JUDGMENT_CACHE_CONTRACT_VERSION = 1
 
 
@@ -788,6 +788,15 @@ def build_llm_cache_key(job_description_text: str) -> str:
         f"v{LLM_CACHE_SCHEMA_VERSION}:{_profile_fingerprint()}:"
         f"fit:v{FIT_REVIEW_CACHE_CONTRACT_VERSION}:"
         f"posting:v{POSTING_CHANNEL_CLASSIFIER_VERSION}:{desc_hash}"
+    )
+
+
+def active_llm_cache_prefixes() -> tuple[str, str]:
+    """Return the only cache namespaces valid for the active profile/contracts."""
+    base = f"v{LLM_CACHE_SCHEMA_VERSION}:{_profile_fingerprint()}:"
+    return (
+        f"{base}fit:v{FIT_REVIEW_CACHE_CONTRACT_VERSION}:posting:v{POSTING_CHANNEL_CLASSIFIER_VERSION}:",
+        f"{base}title:v{TITLE_JUDGMENT_CACHE_CONTRACT_VERSION}:",
     )
 
 

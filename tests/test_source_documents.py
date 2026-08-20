@@ -43,6 +43,7 @@ def test_run_onboarding_uses_llm_titles_without_parser(monkeypatch):
                     "level": "strong",
                     "aliases": ["scrum"],
                     "icon_key": "delivery_project",
+                    "atomic_concept": True,
                     "needs_review": False,
                 },
                 {
@@ -50,6 +51,7 @@ def test_run_onboarding_uses_llm_titles_without_parser(monkeypatch):
                     "level": "working",
                     "aliases": [],
                     "icon_key": "communication_stakeholders",
+                    "atomic_concept": True,
                     "needs_review": False,
                 },
             ],
@@ -124,6 +126,7 @@ def test_run_onboarding_uses_llm_titles_without_parser(monkeypatch):
                         "level": "strong",
                         "aliases": [],
                         "icon_key": "delivery_project",
+                        "atomic_concept": True,
                         "needs_review": False,
                     },
                 ],
