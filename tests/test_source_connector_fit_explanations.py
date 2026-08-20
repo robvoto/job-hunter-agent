@@ -2692,6 +2692,12 @@ def test_candidate_application_history_renders_expanded_details_section():
     assert "Evidence: Thank you for your recent application" in html
     assert "Review reason: Company mismatch needs a manual check." in html
 
+    risk_start = html.index('<details class="job-insights job-risk-panel">')
+    risk_end = html.index("</details>", risk_start)
+    risk_panel_html = html[risk_start:risk_end]
+    assert "Candidate application history" in risk_panel_html
+    assert '<details class="job-candidate-history">' not in html
+
 
 def test_candidate_application_history_diagnostics_are_debug_only():
     record = {

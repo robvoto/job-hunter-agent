@@ -642,6 +642,31 @@ def _workspace_label(group: str, key: str) -> str:
     raise ValueError(f"ui_labels.json is missing {group}.{key}")
 
 
+def _render_job_insights_panel(
+    summary_label: str,
+    body_html: str,
+    *,
+    modifier_class: str = "",
+) -> str:
+    """Render the shared expandable panel shell used inside job cards.
+
+    Panel-specific styling belongs in modifier classes such as
+    ``job-risk-panel``; the structural markup stays identical.
+    """
+    if not body_html:
+        return ""
+    classes = "job-insights"
+    modifier = compact_whitespace(modifier_class)
+    if modifier:
+        classes = f"{classes} {modifier}"
+    return (
+        f'<details class="{safe_html(classes)}">'
+        f"<summary>{safe_html(summary_label)}</summary>"
+        f"{body_html}"
+        "</details>"
+    )
+
+
 ARCHIVE_LABEL = _workspace_label("workspace_page_labels", "archive_label")
 ARCHIVE_BADGE_TOOLTIP = _workspace_label("workspace_card_labels", "archive_badge_tooltip")
 
@@ -1496,11 +1521,10 @@ def render_job_card(
                 "</a>"
                 "</div>"
             )
-        related_cards_html = (
-            '<details class="job-insights job-related-cards-panel">'
-            f'<summary>{safe_html(_workspace_label("duplicate_labels", "potential_badge"))}</summary>'
-            f'<div class="job-related-card-list">{"".join(related_rows)}</div>'
-            "</details>"
+        related_cards_html = _render_job_insights_panel(
+            _workspace_label("duplicate_labels", "potential_badge"),
+            f'<div class="job-related-card-list">{"".join(related_rows)}</div>',
+            modifier_class="job-related-cards-panel",
         )
     job_quality_signals = [
         s for s in (record.get("job_quality_signals") or []) if isinstance(s, dict)
@@ -2113,54 +2137,38 @@ def render_job_card(
         )
 
         if requirement_sections_html:
-            job_requirements_html = (
-                '<details class="job-insights job-requirements-panel">'
-                f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'job_requirements_summary'))}</summary>"
-                f"{requirement_sections_html}"
-                "</details>"
+            job_requirements_html = _render_job_insights_panel(
+                _workspace_label("workspace_card_labels", "job_requirements_summary"),
+                requirement_sections_html,
+                modifier_class="job-requirements-panel",
             )
         else:
-            job_requirements_html = (
-                '<details class="job-insights job-requirements-panel">'
-                f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'job_requirements_summary'))}</summary>"
+            job_requirements_html = _render_job_insights_panel(
+                _workspace_label("workspace_card_labels", "job_requirements_summary"),
                 '<div class="job-insight-group is-secondary">'
                 f'<p class="job-requirements-empty">{safe_html(_workspace_label("workspace_card_labels", "job_requirements_empty_state"))}</p>'
-                '</div>'
-                "</details>"
+                "</div>",
+                modifier_class="job-requirements-panel",
             )
 
     check_items_html = "".join(f"<li>{safe_html(item)}</li>" for item in check_items)
-
-    risk_html = (
-        '<details class="job-insights job-risk-panel">'
-        f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'risk_panel_summary'))}</summary>"
-        f'<div class="job-insight-group job-insight-warning"><ul>{check_items_html}</ul></div>'
-        "</details>"
-        if check_items_html
-        else ""
-    )
+    risk_html = ""
 
     clearance_sections_html = _render_requirement_sections_html(
         eligibility_coverage_order, eligibility_coverage_rows
     )
-    clearance_html = (
-        '<details class="job-insights job-clearance-panel">'
-        f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'clearance_panel_summary'))}</summary>"
-        f"{clearance_sections_html}"
-        "</details>"
-        if clearance_sections_html
-        else ""
+    clearance_html = _render_job_insights_panel(
+        _workspace_label("workspace_card_labels", "clearance_panel_summary"),
+        clearance_sections_html,
+        modifier_class="job-clearance-panel",
     )
     eligibility_sections_html = _render_requirement_sections_html(
         generic_eligibility_coverage_order, generic_eligibility_coverage_rows
     )
-    eligibility_html = (
-        '<details class="job-insights job-eligibility-panel">'
-        f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'eligibility_panel_summary'))}</summary>"
-        f"{eligibility_sections_html}"
-        "</details>"
-        if eligibility_sections_html
-        else ""
+    eligibility_html = _render_job_insights_panel(
+        _workspace_label("workspace_card_labels", "eligibility_panel_summary"),
+        eligibility_sections_html,
+        modifier_class="job-eligibility-panel",
     )
 
     llm_review_html = ""
@@ -2262,11 +2270,10 @@ def render_job_card(
                 debug_mode=active_debug_mode,
             )
         )
-        llm_review_html = (
-            '<details class="job-insights job-llm-review">'
-            f"<summary>{safe_html(_workspace_label('scoring_audit_labels', 'debug_llm_review_summary'))}</summary>"
-            f"{''.join(llm_review_parts)}"
-            "</details>"
+        llm_review_html = _render_job_insights_panel(
+            _workspace_label("scoring_audit_labels", "debug_llm_review_summary"),
+            "".join(llm_review_parts),
+            modifier_class="job-llm-review",
         )
 
     candidate_history_html = ""
@@ -2324,11 +2331,23 @@ def render_job_card(
                         f"{_cand_hist_review_reason}"
                     )
             candidate_history_html = (
-                '<details class="job-candidate-history">'
-                f"<summary>{safe_html(_workspace_label('candidate_history_labels', 'summary'))}</summary>"
+                '<div class="job-insight-group is-secondary job-candidate-history">'
+                f"<strong>{safe_html(_workspace_label('candidate_history_labels', 'summary'))}</strong>"
                 f"<ul>{''.join(f'<li>{safe_html(item)}</li>' for item in _ch_items)}</ul>"
-                "</details>"
+                "</div>"
             )
+
+    risk_body_html = ""
+    if check_items_html:
+        risk_body_html += (
+            f'<div class="job-insight-group job-insight-warning"><ul>{check_items_html}</ul></div>'
+        )
+    risk_body_html += candidate_history_html
+    risk_html = _render_job_insights_panel(
+        _workspace_label("workspace_card_labels", "risk_panel_summary"),
+        risk_body_html,
+        modifier_class="job-risk-panel",
+    )
 
     if applied_record:
         actions_html = (
@@ -2414,7 +2433,6 @@ def render_job_card(
         f"{eligibility_html}"
         f"{job_requirements_html}"
         f"{llm_review_html}"
-        f"{candidate_history_html}"
         f"{context_html}"
         f"{actions_html}"
         "</article>"
