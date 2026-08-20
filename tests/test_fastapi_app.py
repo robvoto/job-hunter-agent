@@ -15,6 +15,7 @@ import job_hunter_agent.fastapi_app as _fa
 import job_hunter_agent.routes.auth_google as _auth_google
 import job_hunter_agent.routes.pages as _pages
 import job_hunter_agent.routes.profile_materials as _profile_materials
+from job_hunter_agent import io_utils
 from job_hunter_agent.fastapi_app import _cors_origin, create_app
 
 _FAKE_USER = {"user_id": "test", "email": "test@example.com", "role": "admin"}
@@ -464,6 +465,37 @@ def test_admin_runtime_maintenance_routes(monkeypatch):
     )
     assert response.status_code == 200
     assert response.json() == {"ok": True, "message": "Current user search state cleared."}
+
+
+def test_admin_clear_candidate_application_history_route_removes_history_files(tmp_path, monkeypatch):
+    history_cache_path = tmp_path / "candidate_application_history_cache.json"
+    history_json_path = tmp_path / "candidate_application_history.json"
+    history_cache_path.write_text("cache", encoding="utf-8")
+    history_json_path.write_text("history", encoding="utf-8")
+
+    monkeypatch.setattr(_fa, "read_session_user", lambda request: _FAKE_USER)
+    monkeypatch.setattr(_fa, "verify_csrf_token", lambda request, token: True)
+    monkeypatch.setattr(_profile_materials, "is_admin", lambda request: True)
+    monkeypatch.setattr(io_utils, "CANDIDATE_APPLICATION_HISTORY_CACHE_PATH", history_cache_path)
+    monkeypatch.setattr(io_utils, "get_candidate_application_history_path", lambda: history_json_path)
+
+    client = TestClient(create_app())
+    response = client.post(
+        "/api/admin/clear-candidate-application-history",
+        headers={"X-CSRF-Token": "token"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "ok": True,
+        "cleared_files": [
+            "candidate_application_history_cache.json",
+            "candidate_application_history.json",
+        ],
+        "message": "Candidate application rejection history and extraction cache cleared.",
+    }
+    assert not history_cache_path.exists()
+    assert not history_json_path.exists()
 
 
 def test_admin_scraper_validation_route(monkeypatch):
