@@ -27,15 +27,26 @@ from job_hunter_agent.text_processing import compact_whitespace
 
 logger = logging.getLogger(__name__)
 
+_TIMESTAMP_INPUT_FORMATS = (
+    "%m/%d/%Y %H:%M:%S",
+    "%m/%d/%Y %H:%M",
+    "%m/%d/%Y",
+)
+
 
 def parse_timestamp(value: Optional[str]) -> Optional[datetime]:
     if not value:
         return None
     try:
         return datetime.fromisoformat(value)
-    except Exception as exc:
-        logger.warning("Failed to parse timestamp %s: %s", value, exc)
-        return None
+    except (TypeError, ValueError):
+        for input_format in _TIMESTAMP_INPUT_FORMATS:
+            try:
+                return datetime.strptime(value, input_format)
+            except (TypeError, ValueError):
+                continue
+    logger.warning("Failed to parse timestamp %s", value)
+    return None
 
 
 def days_since(value: Optional[str], reference: datetime) -> Optional[int]:
@@ -64,14 +75,15 @@ def get_manual_skip_sets(profile: dict) -> tuple[Set[str], Set[str]]:
     return applied, hidden
 
 
-def format_timestamp_label(value: Optional[str]) -> str:
+def format_timestamp_label(value: Optional[str], *, include_time: bool = True) -> str:
     if not value:
         return "N/A"
-    try:
-        return datetime.fromisoformat(value).strftime("%d %b %Y %I:%M %p")
-    except Exception as exc:
-        logger.warning("Failed to format timestamp %s: %s", value, exc)
+    timestamp = parse_timestamp(value)
+    if timestamp is None:
         return value
+    if not include_time:
+        return f"{timestamp.day} {timestamp.strftime('%b %Y')}"
+    return timestamp.strftime("%d %b %Y %I:%M %p")
 
 
 def posted_datetime_from_age(

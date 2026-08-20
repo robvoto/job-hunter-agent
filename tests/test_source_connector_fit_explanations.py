@@ -2667,7 +2667,7 @@ def test_candidate_application_history_renders_expanded_details_section():
                 "llm_needs_review": True,
                 "llm_company": "MUFG Pension & Market Services",
                 "llm_role": "Technical Analyst",
-                "run_date": "2026-05-07",
+                "run_date": "5/7/2026 18:37:57",
                 "_match_confidence": "medium",
                 "_company_match_reason": "Company token-overlap match",
                 "llm_evidence": "Thank you for your recent application for the Technical Analyst role within MUFG Pension & Market Services. "
@@ -2681,6 +2681,7 @@ def test_candidate_application_history_renders_expanded_details_section():
 
     assert "Candidate application history" in html
     assert "MUFG Pension &amp; Market Services — 7 May 2026" in html
+    assert "5/7/2026 18:37:57" not in html
     assert "Role: Technical Analyst" in html
     assert "Confidence: high" in html
     assert "Company match confidence: medium" in html

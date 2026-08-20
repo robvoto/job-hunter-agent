@@ -2271,14 +2271,11 @@ def render_job_card(
             _ch_evidence = (
                 _ch_evidence_raw[:100] + "..." if len(_ch_evidence_raw) > 100 else _ch_evidence_raw
             )
-            _ch_formatted_date = _ch_run_date
-            for _fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
-                try:
-                    _dt = datetime.strptime(_ch_run_date, _fmt)
-                    _ch_formatted_date = f"{_dt.day} {_dt.strftime('%B %Y')}"
-                    break
-                except ValueError:
-                    pass
+            _ch_formatted_date = (
+                format_timestamp_label(_ch_run_date, include_time=False)
+                if _ch_run_date
+                else ""
+            )
             _ch_items = []
             _ch_header_parts = [p for p in [_ch_company, _ch_formatted_date] if p]
             if _ch_header_parts:
