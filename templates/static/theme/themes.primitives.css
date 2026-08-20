@@ -236,9 +236,10 @@ textarea {
   background: color-mix(in srgb, var(--text-primary) 10%, var(--bg-muted));
 }
 
-/* Results keeps .gap-btn as a JavaScript hook. These combined selectors outrank
-   the legacy page-local .gap-btn geometry without moving behaviour ownership. */
-.gap-btn.jh-button {
+/* Results keeps .gap-btn as a JavaScript hook. This combined selector outranks
+   the legacy page-local .gap-btn geometry for normal buttons while preserving
+   explicit shared size modifiers such as --micro. */
+.gap-btn.jh-button:not(.jh-button--micro) {
   min-height: var(--control-height-sm);
   padding: var(--control-pad-block-sm) var(--control-pad-inline-md);
   border-radius: var(--control-radius-lg);
