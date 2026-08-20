@@ -1522,11 +1522,10 @@ def render_job_card(
                 "</a>"
                 "</div>"
             )
-        related_cards_html = (
-            '<details class="job-insights job-related-cards-panel">'
-            f'<summary>{safe_html(_workspace_label("duplicate_labels", "potential_badge"))}</summary>'
-            f'<div class="job-related-card-list">{"".join(related_rows)}</div>'
-            "</details>"
+        related_cards_html = _render_job_insights_panel(
+            _workspace_label("duplicate_labels", "potential_badge"),
+            f'<div class="job-related-card-list">{"".join(related_rows)}</div>',
+            modifier_class="job-related-cards-panel",
         )
     job_quality_signals = [
         s for s in (record.get("job_quality_signals") or []) if isinstance(s, dict)
