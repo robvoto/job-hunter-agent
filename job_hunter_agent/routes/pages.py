@@ -665,6 +665,7 @@ def _render_template_with_locations(
 
     return (
         html.replace("__JOB_HUNTER_DEBUG_MODE_BOOL__", "true" if srv.DEBUG_MODE else "false")
+        .replace("__JOB_HUNTER_APP_FOOTER__", srv.render_app_footer_html())
         .replace("__JOB_HUNTER_ADD_BUTTON_LABEL__", shared_labels["add_button_label"])
         .replace("__JOB_HUNTER_ADD_BUTTON_ARIA_LABEL__", shared_labels["add_button_aria_label"])
         .replace("__JOB_HUNTER_ADD_BUTTON_TITLE__", shared_labels["add_button_title"])

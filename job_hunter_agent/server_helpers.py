@@ -236,6 +236,10 @@ _SHARED_UI_LABEL_KEYS = (
     "account_menu_clean_search_label",
     "account_menu_reset_user_label",
     "account_menu_reset_user_warning_label",
+    "app_footer_copyright_label",
+    "app_footer_creator_label",
+    "app_footer_creator_url",
+    "app_footer_legal_title",
     "add_button_label",
     "add_button_aria_label",
     "add_button_title",
@@ -1170,6 +1174,21 @@ def _enforce_salary_caps(value: int, *, label: str, limit_key: str) -> int:
 
 def _render_template(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="ignore")
+
+
+def render_app_footer_html() -> str:
+    """Render the shared application footer from managed UI labels."""
+    labels = load_shared_ui_labels()
+    template = _render_template(ROOT_DIR / "templates" / "partials" / "app-footer.html")
+    replacements = {
+        "__JOB_HUNTER_APP_FOOTER_COPYRIGHT__": escape(labels["app_footer_copyright_label"]),
+        "__JOB_HUNTER_APP_FOOTER_CREATOR_LABEL__": escape(labels["app_footer_creator_label"]),
+        "__JOB_HUNTER_APP_FOOTER_CREATOR_URL__": escape(labels["app_footer_creator_url"], quote=True),
+        "__JOB_HUNTER_APP_FOOTER_LEGAL_TITLE__": escape(labels["app_footer_legal_title"], quote=True),
+    }
+    for token, value in replacements.items():
+        template = template.replace(token, value)
+    return template
 
 
 def _account_scope_token(value: str) -> str:

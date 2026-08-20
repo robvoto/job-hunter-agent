@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 111,
+  "version": 112,
   "updated_at": "2026-08-20",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -197,6 +197,10 @@
     "account_menu_clean_search_label": "Clean Search",
     "account_menu_reset_user_label": "Reset User",
     "account_menu_reset_user_warning_label": "Warning: clears your profile, CV, review feedback, and history.",
+    "app_footer_copyright_label": "© 2026 Rob Voto",
+    "app_footer_creator_label": "Built by Rob Voto",
+    "app_footer_creator_url": "https://robvoto.com/",
+    "app_footer_legal_title": "This software and its source code are proprietary. No permission is granted to copy, modify, distribute, sublicense, commercialise, or use this software or substantial portions of it without prior written permission.",
     "add_button_label": "+",
     "add_button_aria_label": "Add item",
     "add_button_title": "+",
