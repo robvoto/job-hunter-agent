@@ -1036,6 +1036,7 @@ def test_requirement_coverage_prompt_reserves_dedicated_eligibility_output():
     assert "eligibility_requirements are separate and do not consume this limit" in guidance
     assert '"eligibility_requirements"' in llm_gate.LLM_FIT_REVIEW_PROMPT_SHAPE
     assert '"classification_reviewable":true|false' in llm_gate.LLM_FIT_REVIEW_PROMPT_SHAPE
+    assert '"requirement_subtype":"..."' in llm_gate.LLM_FIT_REVIEW_PROMPT_SHAPE
 
 
 def test_fit_review_preserves_and_splits_eligibility_outside_general_row_budget():
@@ -1725,6 +1726,59 @@ def test_normalize_coverage_marks_conflicting_classification_uncertain(monkeypat
     assert warnings
     assert warnings[0]["context"]["reason"] == "deterministic_classification_uncertain"
     assert warnings[0]["context"]["requirement_type_after"] == "uncertain"
+
+
+def test_normalize_coverage_preserves_managed_eligibility_subtype_without_extra_llm_call():
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "Ability to obtain Baseline security clearance",
+                "importance": "required",
+                "requirement_type": "eligibility",
+                "status": "not_shown",
+                "matched_candidate_fact": "",
+            }
+        ]
+    )
+
+    assert result[0]["requirement_type"] == "eligibility"
+    assert result[0]["requirement_subtype"] == "clearance"
+
+
+def test_normalize_coverage_keeps_valid_llm_other_eligibility_subtype():
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "Must satisfy a formal entry condition",
+                "importance": "required",
+                "requirement_type": "eligibility",
+                "requirement_subtype": "other",
+                "status": "not_shown",
+                "matched_candidate_fact": "",
+            }
+        ]
+    )
+
+    assert result[0]["requirement_subtype"] == "other"
+
+
+def test_normalize_coverage_drops_eligibility_subtype_from_qualification():
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "CBAP certification",
+                "importance": "preferred",
+                "requirement_type": "qualification",
+                "requirement_subtype": "clearance",
+                "status": "not_shown",
+                "matched_candidate_fact": "",
+            }
+        ],
+        valid_qualification_names={},
+    )
+
+    assert result[0]["requirement_type"] == "qualification"
+    assert "requirement_subtype" not in result[0]
 
 
 def test_normalize_coverage_legacy_payload_is_not_classification_reviewable():

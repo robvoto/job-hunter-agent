@@ -87,3 +87,53 @@ def test_upsert_requirement_classification_override_rejects_invalid_classificati
         assert False, "expected ValueError"
     except ValueError:
         pass
+
+
+def test_security_clearance_requirement_preserves_clearance_subtype():
+    assert (
+        requirement_classification.classify_requirement_subtype(
+            "Ability to obtain Baseline security clearance"
+        )
+        == "clearance"
+    )
+
+
+def test_right_to_work_requirement_preserves_work_rights_subtype():
+    assert requirement_classification.classify_requirement_subtype("Right to work in Australia") == "work_rights"
+
+
+def test_compound_eligibility_subtypes_are_not_guessed():
+    assert (
+        requirement_classification.classify_requirement_subtype(
+            "Must be an Australian citizen and hold NV1 clearance"
+        )
+        == ""
+    )
+
+
+def test_human_approved_eligibility_subtype_is_persisted(isolated_db):
+    text = "Right to work in Australia"
+    requirement_classification.upsert_requirement_classification_override(
+        text,
+        "eligibility",
+        "work_rights",
+    )
+
+    assert requirement_classification.load_requirement_subtype_overrides()[text.lower()] == "work_rights"
+    assert requirement_classification.classify_requirement_subtype(text) == "work_rights"
+
+
+def test_llm_other_eligibility_subtype_is_kept_when_terms_do_not_resolve_one():
+    assert (
+        requirement_classification.classify_requirement_subtype(
+            "Must satisfy a formal entry condition",
+            llm_requirement_subtype="other",
+        )
+        == "other"
+    )
+
+
+def test_default_eligibility_subtype_is_managed():
+    default_subtype = requirement_classification.load_default_eligibility_subtype()
+    assert default_subtype == "other"
+    assert default_subtype in requirement_classification.load_eligibility_subtypes()

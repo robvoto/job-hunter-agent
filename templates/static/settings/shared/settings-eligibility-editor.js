@@ -61,10 +61,14 @@ export const JobHunterEligibilityEditor = (function () {
   }
 
   function render() {
+    const groupTitle = document.getElementById('eligibility_group_title');
+    const groupHelp = document.getElementById('eligibility_group_help');
     const title = document.getElementById('eligibility_editor_title');
     const help = document.getElementById('eligibility_editor_help');
     const addInput = document.getElementById('eligibility_name_add');
     const addButton = document.getElementById('eligibility_add');
+    if (groupTitle) groupTitle.textContent = labels.eligibility_group_title;
+    if (groupHelp) groupHelp.textContent = labels.eligibility_group_help_text;
     if (title) title.textContent = labels.eligibility_settings_title;
     if (help) help.textContent = labels.eligibility_help_text;
     if (addInput) addInput.placeholder = labels.eligibility_name_placeholder;

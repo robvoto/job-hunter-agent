@@ -81,39 +81,51 @@
                 <textarea id="candidate_capabilities" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
               </section>
 
-              <section class="subpanel search-settings-subcard">
+              <section class="subpanel search-settings-subcard eligibility-settings-card">
                 <div class="settings-subpanel-head">
                   <div class="field-label-row">
-                    <h3 id="clearance_editor_title">Clearances</h3>
+                    <h3 id="eligibility_group_title"></h3>
                     <details class="field-info-drawer">
                       <summary class="field-info" aria-label="Help">i</summary>
-                      <div class="field-info-panel" id="clearance_editor_help"></div>
+                      <div class="field-info-panel" id="eligibility_group_help"></div>
                     </details>
                   </div>
                 </div>
 
-                <div id="clearance_editor" class="capability-editor"></div>
-                <textarea id="candidate_eligibility" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
-              </section>
+                <div class="eligibility-settings-sections">
+                  <section class="eligibility-settings-section">
+                    <div class="settings-subpanel-head">
+                      <div class="field-label-row">
+                        <h4 id="clearance_editor_title"></h4>
+                        <details class="field-info-drawer">
+                          <summary class="field-info" aria-label="Help">i</summary>
+                          <div class="field-info-panel" id="clearance_editor_help"></div>
+                        </details>
+                      </div>
+                    </div>
+                    <div id="clearance_editor" class="capability-editor"></div>
+                    <textarea id="candidate_eligibility" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
+                  </section>
 
-              <section class="subpanel search-settings-subcard">
-                <div class="settings-subpanel-head">
-                  <div class="field-label-row">
-                    <h3 id="eligibility_editor_title"></h3>
-                    <details class="field-info-drawer">
-                      <summary class="field-info" aria-label="Help">i</summary>
-                      <div class="field-info-panel" id="eligibility_editor_help"></div>
-                    </details>
-                  </div>
+                  <section class="eligibility-settings-section">
+                    <div class="settings-subpanel-head">
+                      <div class="field-label-row">
+                        <h4 id="eligibility_editor_title"></h4>
+                        <details class="field-info-drawer">
+                          <summary class="field-info" aria-label="Help">i</summary>
+                          <div class="field-info-panel" id="eligibility_editor_help"></div>
+                        </details>
+                      </div>
+                    </div>
+                    <div class="badge-editor-form token-input-group">
+                      <input id="eligibility_name_add" class="token-input-field" type="text" placeholder="">
+                      <button class="btn-add token-input-action" id="eligibility_add" type="button"></button>
+                    </div>
+                    <p class="field-help" id="eligibility_add_status" aria-live="polite"></p>
+                    <div id="eligibility_editor" class="capability-editor"></div>
+                    <textarea id="candidate_eligibility_facts" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
+                  </section>
                 </div>
-
-                <div class="badge-editor-form token-input-group">
-                  <input id="eligibility_name_add" class="token-input-field" type="text" placeholder="">
-                  <button class="btn-add token-input-action" id="eligibility_add" type="button"></button>
-                </div>
-                <p class="field-help" id="eligibility_add_status" aria-live="polite"></p>
-                <div id="eligibility_editor" class="capability-editor"></div>
-                <textarea id="candidate_eligibility_facts" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
               </section>
 
               <section class="subpanel search-settings-subcard">

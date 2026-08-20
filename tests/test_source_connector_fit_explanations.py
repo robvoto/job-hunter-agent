@@ -412,6 +412,33 @@ def test_render_job_card_gap_button_carries_the_capability_name_not_requirement_
     assert "data-requirement=" not in html
 
 
+def test_capability_coverage_uses_capabilities_panel_heading():
+    html = workspace_renderer.render_job_card(
+        {
+            **_test_profile(),
+            "job_requirements": [],
+            "requirement_coverage": [
+                {
+                    "requirement": "Stakeholder engagement",
+                    "importance": "required",
+                    "requirement_type": "capability",
+                    "status": "supported",
+                    "matched_candidate_fact": "stakeholder engagement",
+                    "capability_name": "stakeholder engagement",
+                    "matched_job_text": "Strong stakeholder engagement",
+                    "profile_support": ["stakeholder engagement"],
+                }
+            ],
+            "source": "seek",
+        },
+        _capability_profile(),
+    )
+
+    assert "job-requirements-panel" in html
+    assert ">Capabilities<" in html
+    assert ">Job Requirements<" not in html
+
+
 def test_render_job_card_omits_gap_actions_for_vague_or_alternative_requirement():
     # A clause the LLM only resolved to named_alternatives (e.g. "CBAP or
     # equivalent") never gets profile_action_allowed=True. It must stay
@@ -436,6 +463,9 @@ def test_render_job_card_omits_gap_actions_for_vague_or_alternative_requirement(
     )
 
     assert html.count(requirement) >= 1
+    assert "job-qualification-panel" in html
+    assert ">Qualifications<" in html
+    assert "job-requirements-panel" not in html
     assert "Needs confirmation" not in html
     assert "gap-btn" not in html
 
@@ -1158,6 +1188,7 @@ def test_eligibility_coverage_renders_in_clearance_panel_when_supported():
                     "requirement": "Security Clearance: NV1 / Baseline / As per role",
                     "importance": "required",
                     "requirement_type": "eligibility",
+                    "requirement_subtype": "clearance",
                     "status": "supported",
                     "eligibility_name": "Baseline clearance",
                     "matched_job_text": "Security Clearance: NV1 / Baseline / As per role",
@@ -1169,7 +1200,9 @@ def test_eligibility_coverage_renders_in_clearance_panel_when_supported():
         _capability_profile(),
     )
 
-    assert "job-clearance-panel" in html
+    assert "job-clearance-panel" not in html
+    assert "job-eligibility-panel" in html
+    assert "Clearance" in html
     assert "job-requirement-item--supported" in html
     assert "Security Clearance: NV1 / Baseline / As per role" in html
     assert "Missing required requirement" not in html
@@ -1183,6 +1216,7 @@ def test_eligibility_mismatch_renders_in_clearance_panel_not_checks_before_apply
             "requirement": "Security Clearance: NV1 only, no alternatives accepted",
             "importance": "required",
             "requirement_type": "eligibility",
+            "requirement_subtype": "clearance",
             "status": "mismatch",
             "eligibility_name": "NV1",
             "matched_job_text": "Security Clearance: NV1 only, no alternatives accepted",
@@ -1200,7 +1234,9 @@ def test_eligibility_mismatch_renders_in_clearance_panel_not_checks_before_apply
         _capability_profile(),
     )
 
-    assert "job-clearance-panel" in html
+    assert "job-clearance-panel" not in html
+    assert "job-eligibility-panel" in html
+    assert "Clearance" in html
     assert "NV1" in html
 
     checks = workspace_renderer._build_checks_before_applying_items(
@@ -2158,6 +2194,7 @@ def test_render_job_card_requirement_coverage_shows_eligibility_details_in_debug
                     "requirement": "Hold PV security clearance",
                     "importance": "required",
                     "requirement_type": "eligibility",
+                    "requirement_subtype": "clearance",
                     "status": "supported",
                     "matched_candidate_fact": "PV clearance",
                     "eligibility_name": "PV clearance",
@@ -2172,7 +2209,9 @@ def test_render_job_card_requirement_coverage_shows_eligibility_details_in_debug
         debug_mode=True,
     )
 
-    assert "job-clearance-panel" in html
+    assert "job-clearance-panel" not in html
+    assert "job-eligibility-panel" in html
+    assert "Clearance" in html
     assert "req-coverage-detail" in html
     assert "PV clearance" in html
 

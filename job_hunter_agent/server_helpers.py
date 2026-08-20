@@ -344,6 +344,8 @@ _SETTINGS_CLEARANCES_LABEL_KEYS = (
     "remove_button_aria_label",
     "eligibility_add_error_message",
     "eligibility_add_loading_message",
+    "eligibility_group_title",
+    "eligibility_group_help_text",
     "eligibility_settings_title",
     "eligibility_help_text",
     "eligibility_name_label",
@@ -698,12 +700,15 @@ _SIGNAL_REGISTRY_LABEL_KEYS = (
     "category_requirement_review_description",
     "category_requirement_review_examples",
     "category_requirement_review_warning",
-    "requirement_type_field_label",
-    "requirement_type_capability_label",
-    "requirement_type_eligibility_label",
-    "requirement_type_qualification_label",
+    "signal_field_label",
+    "requirement_field_label",
+    "category_field_label",
+    "category_help_aria_label",
+    "requirement_type_help_aria_label",
     "requirement_type_required_error",
     "requirement_type_invalid_error",
+    "requirement_subtype_required_error",
+    "requirement_subtype_invalid_error",
 )
 
 _SIGNAL_REGISTRY_EXAMPLE_KEYS = tuple(
@@ -722,6 +727,43 @@ def _load_required_ui_labels(group_name: str, keys: tuple[str, ...]) -> dict[str
     if missing:
         raise ValueError(f"ui_labels.json is missing {group_name} values: {', '.join(missing)}")
     return {key: str(labels[key]).strip() for key in keys}
+
+
+_REQUIREMENT_TAXONOMY_SCALAR_LABEL_KEYS = (
+    "type_field_label",
+    "type_capability_label",
+    "type_eligibility_label",
+    "type_qualification_label",
+    "capability_panel_label",
+    "eligibility_panel_label",
+    "qualification_panel_label",
+    "eligibility_subtype_field_label",
+)
+
+
+def load_requirement_taxonomy_labels() -> dict[str, Any]:
+    """Return the shared requirement type/subtype display vocabulary."""
+    labels = load_ui_labels().get("requirement_taxonomy_labels", {})
+    if not isinstance(labels, dict):
+        raise ValueError("ui_labels.json is missing requirement_taxonomy_labels")
+    missing = [
+        key for key in _REQUIREMENT_TAXONOMY_SCALAR_LABEL_KEYS
+        if not str(labels.get(key, "")).strip()
+    ]
+    subtype_labels = labels.get("eligibility_subtype_labels")
+    if not isinstance(subtype_labels, dict) or not subtype_labels:
+        missing.append("eligibility_subtype_labels")
+    if missing:
+        raise ValueError(
+            f"ui_labels.json is missing requirement_taxonomy_labels values: {', '.join(missing)}"
+        )
+    cleaned = {key: str(labels[key]).strip() for key in _REQUIREMENT_TAXONOMY_SCALAR_LABEL_KEYS}
+    cleaned["eligibility_subtype_labels"] = {
+        str(key).strip(): str(value).strip()
+        for key, value in subtype_labels.items()
+        if str(key).strip() and str(value).strip()
+    }
+    return cleaned
 
 
 def load_signal_registry_labels() -> dict[str, Any]:
