@@ -650,3 +650,12 @@ def test_global_settings_js_required_elements_exist_in_rendered_page(monkeypatch
     assert not missing, (
         f"Elements required by settings-admin.js are missing from /global-settings: {missing}"
     )
+
+def test_admin_hydrates_parallel_worker_limit_inputs_before_save():
+    js = SETTINGS_ADMIN_JS_PATH.read_text(encoding="utf-8")
+
+    assert "setFieldValue('search_limit_linkedin_parallel_search_workers_min', searchLimits.linkedin_parallel_search_workers?.min);" in js
+    assert "setFieldValue('search_limit_linkedin_parallel_search_workers_max', searchLimits.linkedin_parallel_search_workers?.max);" in js
+    assert "min: readNumber('search_limit_linkedin_parallel_search_workers_min'" in js
+    assert "max: readNumber('search_limit_linkedin_parallel_search_workers_max'" in js
+
