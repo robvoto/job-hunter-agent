@@ -261,7 +261,8 @@ export const JobHunterCapabilityEditor = (function () {
               ${remainingAliases.length ? `
                 <details class="capability-alias-drawer"${expandedCapabilityRows.has(index) ? ' open' : ''}>
                   <summary class="cap-alias-summary">
-                    <span class="capability-summary-label">${escapeHtml(formatLabel(capabilityLabels.related_skills_summary, { count: aliasCount }))}</span>
+                    <span class="capability-summary-label capability-summary-label--closed">${escapeHtml(formatLabel(capabilityLabels.related_skills_show_more, { count: remainingAliases.length }))}</span>
+                    <span class="capability-summary-label capability-summary-label--open">${escapeHtml(capabilityLabels.related_skills_show_less)}</span>
                   </summary>
                   <div class="cap-alias-chips" aria-label="${escapeHtml(capabilityLabels.related_skills_label)}">${aliasChips}</div>
                 </details>

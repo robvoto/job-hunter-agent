@@ -187,13 +187,14 @@ def test_capability_alias_preview_uses_related_skills_copy(candidate_page):
     expect(preview).to_contain_text("lean delivery")
     assert preview.locator(".cap-alias-chip--preview").count() == 2
 
-    summary = card.locator(".capability-summary-label")
-    expect(summary).to_have_text("View 6 related skills")
+    summary = card.locator(".capability-summary-label--closed")
+    expect(summary).to_have_text("Show 4 more")
     assert "+4 more" not in (card.text_content() or "")
 
     drawer = card.locator("details.capability-alias-drawer")
     card.locator(".cap-alias-summary").click()
     expect(drawer).to_have_attribute("open", "")
+    expect(card.locator(".capability-summary-label--open")).to_have_text("Show less")
     expanded_aliases = drawer.locator(".cap-alias-chips")
     expect(expanded_aliases.locator(".cap-alias-chip-label")).to_have_text(
         [
@@ -203,6 +204,46 @@ def test_capability_alias_preview_uses_related_skills_copy(candidate_page):
             "scrum master",
         ]
     )
+    card.locator(".cap-alias-summary").click()
+    expect(drawer).not_to_have_attribute("open", "")
+    expect(summary).to_have_text("Show 4 more")
+
+
+def test_capability_related_skills_disclosure_hides_only_actual_remaining_skills(candidate_page):
+    _seed_candidate_capabilities(
+        "candidate@e2e.test",
+        [
+            {
+                "name": "no hidden skills",
+                "level": "strong",
+                "aliases": ["skill one", "skill two"],
+                "icon_key": "delivery_project",
+            },
+            {
+                "name": "one hidden skill",
+                "level": "working",
+                "aliases": ["skill one", "skill two", "skill three"],
+                "icon_key": "delivery_project",
+            },
+        ],
+    )
+
+    page = candidate_page
+    page.goto("/settings#section-matrix")
+    cards = page.locator("#capability_matrix_editor .capability-card")
+    cards.first.wait_for(state="visible")
+
+    no_hidden_card = page.locator(
+        'input.capability-card-name[value="No Hidden Skills"]'
+    ).locator("xpath=ancestor::article[contains(@class, 'capability-card')]")
+    expect(no_hidden_card.locator(".capability-alias-preview .cap-alias-chip")).to_have_count(2)
+    expect(no_hidden_card.locator("details.capability-alias-drawer")).to_have_count(0)
+
+    one_hidden_card = page.locator(
+        'input.capability-card-name[value="One Hidden Skill"]'
+    ).locator("xpath=ancestor::article[contains(@class, 'capability-card')]")
+    expect(one_hidden_card.locator(".capability-alias-preview .cap-alias-chip")).to_have_count(2)
+    expect(one_hidden_card.locator(".capability-summary-label--closed")).to_have_text("Show 1 more")
 
 
 def test_capability_related_skills_beyond_alias_limit_survive_settings_save(candidate_page):
@@ -257,8 +298,8 @@ def test_capability_related_skills_beyond_alias_limit_survive_settings_save(cand
     reloaded_card = page.locator("#capability_matrix_editor .capability-card").first
     reloaded_card.wait_for(state="visible")
 
-    summary = reloaded_card.locator(".capability-summary-label")
-    expect(summary).to_have_text(f"View {len(related_skills)} related skills")
+    summary = reloaded_card.locator(".capability-summary-label--closed")
+    expect(summary).to_have_text(f"Show {len(related_skills) - 2} more")
 
     drawer = reloaded_card.locator("details.capability-alias-drawer")
     reloaded_card.locator(".cap-alias-summary").click()
