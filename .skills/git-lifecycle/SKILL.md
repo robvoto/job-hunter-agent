@@ -36,6 +36,7 @@ The human should not need to remember Git mechanics.
 
 1. Confirm the exact task commit SHA and that validation passed.
 2. Fetch `origin` again and compare the task branch with current `origin/main`.
+   - Capture exact commit IDs with `git rev-parse`; never reconstruct or guess a full SHA from a short display SHA when guarding integration state.
 3. If `origin/main` advanced since the task branch was cut, do not blindly push, force-push, or pretend it is a fast-forward.
 4. Build the integration result from the **current** `origin/main` plus the task branch, using the repository's documented merge strategy. If none is documented, prefer a normal non-force merge that preserves both histories.
 5. If there are conflicts, unrelated-history surprises, unclear ownership, failed tests, or ambiguity about how to reconcile changes, stop and ask the human instead of improvising.
