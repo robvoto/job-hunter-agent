@@ -40,6 +40,10 @@ from unittest.mock import patch
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT))
 
+from job_hunter_agent.runtime_helpers import load_repo_dotenv  # noqa: E402
+
+load_repo_dotenv()
+
 BENCHMARK_MODEL = "gpt-5.6-luna"
 REASONING_EFFORTS = ("none", "low")
 

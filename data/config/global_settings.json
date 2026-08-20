@@ -358,6 +358,9 @@
     "reasoning_effort_by_model": {
       "gpt-5.6-luna": "low"
     },
+    "model_overrides_by_purpose": {
+      "rejection_suggestions": "gpt-5.6-luna"
+    },
     "pricing_per_1m": {
       "gpt-5.6-luna": {
         "input": 0.2,

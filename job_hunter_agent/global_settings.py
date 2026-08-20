@@ -108,6 +108,16 @@ def get_llm_reasoning_effort(model: str) -> str | None:
     return effort_by_model.get(model) or None
 
 
+def get_llm_model_override_for_purpose(purpose: str) -> str | None:
+    """Return the model pinned for `purpose`, or None to use the account's configured model.
+
+    Lets a single purpose be migrated to a different model ahead of the rest,
+    based on per-purpose benchmark evidence, without changing the global default.
+    """
+    overrides_by_purpose = load_global_settings()[KEY_LLM_SETTINGS][KEY_LLM_MODEL_OVERRIDES_BY_PURPOSE]
+    return overrides_by_purpose.get(purpose) or None
+
+
 def get_llm_request_timeout_seconds() -> float:
     """Per-request timeout (seconds) for the OpenAI client.
 

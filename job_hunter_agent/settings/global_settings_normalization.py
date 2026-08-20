@@ -63,6 +63,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_LLM_REQUEST_TIMEOUT_SECONDS,
     KEY_LLM_PRICING_PER_1M,
     KEY_LLM_REASONING_EFFORT_BY_MODEL,
+    KEY_LLM_MODEL_OVERRIDES_BY_PURPOSE,
     KEY_LLM_PROMPT_CAPABILITY_NAMING_ALIASES_MAX_ITEMS,
     KEY_LLM_PROMPT_CAPABILITY_NAMING_MAX_OUTPUT_TOKENS,
     KEY_LLM_PROMPT_CAPABILITY_RULE_ALIASES_MAX_ITEMS,
@@ -256,6 +257,30 @@ def _normalize_llm_reasoning_effort_map(
                 f"must be one of {sorted(_ALLOWED_LLM_REASONING_EFFORTS)}, got {raw_effort!r}"
             )
         normalized[model] = effort
+    if not normalized:
+        normalized = copy.deepcopy(defaults)
+    return normalized
+
+
+def _normalize_llm_model_overrides_by_purpose_map(
+    source: dict[str, Any], defaults: dict[str, str]
+) -> dict[str, str]:
+    """Validate purpose -> model overrides.
+
+    Deliberately not cross-checked against model_options: like pricing_per_1m and
+    reasoning_effort_by_model, these reference specific model ids that may not (yet)
+    be in the account-wide selectable model_options dropdown, so the two lists are
+    allowed to evolve independently rather than needing to be seeded in lockstep.
+    """
+    normalized: dict[str, str] = {}
+    for purpose, raw_model in source.items():
+        model = str(raw_model or "").strip()
+        if not model:
+            raise ValueError(
+                f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_MODEL_OVERRIDES_BY_PURPOSE}.{purpose} "
+                f"must be a non-empty model id, got {raw_model!r}"
+            )
+        normalized[purpose] = model
     if not normalized:
         normalized = copy.deepcopy(defaults)
     return normalized
@@ -731,6 +756,15 @@ def normalize_global_settings(
     normalized_llm_reasoning_effort = _normalize_llm_reasoning_effort_map(
         reasoning_effort_source,
         DEFAULT_LLM_SETTINGS.get(KEY_LLM_REASONING_EFFORT_BY_MODEL, {}),
+    )
+    model_overrides_source = llm_source.get(KEY_LLM_MODEL_OVERRIDES_BY_PURPOSE, {})
+    if not isinstance(model_overrides_source, dict):
+        raise ValueError(
+            f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_MODEL_OVERRIDES_BY_PURPOSE} must be a dict"
+        )
+    normalized_llm_model_overrides_by_purpose = _normalize_llm_model_overrides_by_purpose_map(
+        model_overrides_source,
+        DEFAULT_LLM_SETTINGS.get(KEY_LLM_MODEL_OVERRIDES_BY_PURPOSE, {}),
     )
     pricing_metadata_source = llm_source.get(
         "pricing_metadata", DEFAULT_LLM_SETTINGS.get("pricing_metadata", {})
@@ -1262,6 +1296,7 @@ def normalize_global_settings(
             KEY_MODEL_OPTIONS: normalized_model_options,
             KEY_LLM_PRICING_PER_1M: normalized_llm_pricing,
             KEY_LLM_REASONING_EFFORT_BY_MODEL: normalized_llm_reasoning_effort,
+            KEY_LLM_MODEL_OVERRIDES_BY_PURPOSE: normalized_llm_model_overrides_by_purpose,
             "pricing_metadata": normalized_pricing_metadata,
             KEY_LLM_MAX_CHARS_LIMITS: normalized_max_chars_limits,
             KEY_LLM_PROMPT_SETTINGS: normalized_llm_prompt_settings,

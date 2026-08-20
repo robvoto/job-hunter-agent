@@ -36,6 +36,7 @@ from job_hunter_agent.global_settings import (
     get_llm_learning_candidates_max_items,
     get_llm_learning_candidates_max_output_tokens,
     get_llm_max_retries,
+    get_llm_model_override_for_purpose,
     get_llm_raw_output_log_max_chars,
     get_llm_reasoning_effort,
     get_llm_rejection_blocker_suggestions_max_items,
@@ -2288,7 +2289,11 @@ def llm_suggest_rejection_blockers(
     )
 
     try:
-        model = benchmark_model or _log_llm_model_once()
+        model = (
+            benchmark_model
+            or get_llm_model_override_for_purpose("rejection_suggestions")
+            or _log_llm_model_once()
+        )
         _desc_limit = get_llm_job_description_max_chars()
         _desc_truncated = description[:_desc_limit]
         logger.debug(
