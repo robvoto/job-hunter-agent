@@ -25,6 +25,13 @@ The human should not need to remember Git mechanics.
 3. Preserve unrelated dirty work. Never stash, reset, overwrite, or commit another agent's changes without explicit coordination.
 4. When concurrent work is possible, use an isolated task branch + worktree based on current `origin/main`; do not code in the shared `main` checkout.
 
+## Failure handling
+
+- Any failed tool call, shell command, merge, or validation is a stop condition: report the failure immediately and do not silently continue down the same line of work.
+- Diagnose the root cause before retrying. If the human has already authorised fixing the task, fix the root cause and add a durable guard/instruction/test when the failure reveals a repeatable process gap.
+- In WSL worktrees, use the repository runtime (`uv run python`) rather than assuming a bare `python` executable exists.
+- For browser JavaScript that uses ES-module syntax in a repo where `.js` is not declared as Node ESM, validate with `node --input-type=module --check < path/to/file.js`; do not run plain `node --check path/to/file.js`, which will misparse valid `export`/`import` syntax as CommonJS.
+
 ## Before integration
 
 1. Confirm the exact task commit SHA and that validation passed.
@@ -32,8 +39,9 @@ The human should not need to remember Git mechanics.
 3. If `origin/main` advanced since the task branch was cut, do not blindly push, force-push, or pretend it is a fast-forward.
 4. Build the integration result from the **current** `origin/main` plus the task branch, using the repository's documented merge strategy. If none is documented, prefer a normal non-force merge that preserves both histories.
 5. If there are conflicts, unrelated-history surprises, unclear ownership, failed tests, or ambiguity about how to reconcile changes, stop and ask the human instead of improvising.
-6. Re-run the required validation on the integrated result before updating `main`.
-7. Push `main` without force. If the remote moved again and rejects the push, fetch and reassess; never bypass the rejection with force.
+6. Before validation, inspect any versioned managed JSON changed by both sides. If merged content differs from current `origin/main`, its integrated `version` must be strictly greater than the version on current `origin/main`; independent branches can legitimately collide on the same version number.
+7. Re-run the required validation on the integrated result before updating `main`.
+8. Push `main` without force. If the remote moved again and rejects the push, fetch and reassess; never bypass the rejection with force.
 
 ## Required verification
 

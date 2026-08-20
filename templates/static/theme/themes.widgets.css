@@ -965,6 +965,31 @@
   margin: 0;
 }
 
+/* Shared add-row + feedback + editable-list stack. Standard spacing belongs here,
+   not on one panel or on an empty status element. */
+.jh-editor-stack {
+  display: grid;
+  gap: var(--field-stack-gap);
+  margin-top: var(--surface-gap-sm);
+}
+
+.jh-editor-entry {
+  display: grid;
+  gap: var(--surface-gap-sm);
+}
+
+.jh-editor-entry > .badge-editor-form.token-input-group {
+  margin-top: 0;
+}
+
+.jh-editor-entry > .field-help {
+  margin: 0;
+}
+
+.jh-editor-entry > .field-help:empty {
+  display: none;
+}
+
 /* Shared summary card heading + label/value list used by onboarding check/setup cards. */
 .summary-card-title {
   margin: 0;
@@ -2263,6 +2288,26 @@
 .jh-icon-button:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring-color-subtle);
   outline-offset: var(--focus-ring-offset);
+}
+
+.jh-icon-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.jh-icon-button--destructive {
+  color: var(--state-error-text);
+}
+
+.jh-icon-button--destructive:hover:not(:disabled) {
+  background: var(--state-error-bg);
+  color: var(--state-error-text);
+}
+
+.jh-icon-button--trash svg {
+  width: var(--icon-size-md);
+  height: var(--icon-size-md);
+  display: block;
 }
 
 .jh-icon-button--close svg {

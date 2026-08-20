@@ -1,3 +1,4 @@
+import { formatRemoveItemLabel } from '../../common/action-buttons.js';
 import { escapeHtml, toLines, rulesToText, textToRules, settingsField } from './settings-utils.js';
 
 const titleTierLabels = window.__JOB_HUNTER_TITLE_TIER_LABELS__ || {};
@@ -132,7 +133,7 @@ export const JobHunterChipEditor = (function () {
       const title = isRule ? (item[editor.key] || label) : item;
       return `<span class="rule-chip">
         <span title="${escapeHtml(title)}">${escapeHtml(label || title)}</span>
-        <button type="button" data-remove-chip="${escapeHtml(id)}" data-chip-index="${index}" title="Remove ${escapeHtml(label || title)}">&#215;</button>
+        <button type="button" data-remove-chip="${escapeHtml(id)}" data-chip-index="${index}" title="${escapeHtml(formatRemoveItemLabel(label || title))}" aria-label="${escapeHtml(formatRemoveItemLabel(label || title))}">&#215;</button>
       </span>`;
     }).join('');
   }

@@ -1,4 +1,5 @@
-﻿import { escapeHtml, settingsField } from './settings-utils.js';
+﻿import { renderTrashActionButton } from '../../common/action-buttons.js';
+import { escapeHtml, settingsField } from './settings-utils.js';
 import * as capabilityUi from '../../common/capability-ui.js';
 
 export const JobHunterCapabilityEditor = (function () {
@@ -314,13 +315,10 @@ export const JobHunterCapabilityEditor = (function () {
                 </div>
               </div>
               <div class="capability-card-actions" role="group" aria-label="Capability actions">
-                <button class="cap-remove-btn capability-remove-btn" type="button" data-remove-capability="${index}"
-                        aria-label="Remove ${escapeHtml(rule.name || 'capability')}"
-                        title="Remove capability">
-                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="cap-remove-icon">
-                    <path d="M9 3.5h6l1 1.5H19v2H5v-2h3l1-1.5Zm-1 5h8l-.6 9.3A2 2 0 0 1 13.4 20H10.6a2 2 0 0 1-1.99-1.7L8 8.5Zm2 2v6m4-6v6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path>
-                  </svg>
-                </button>
+                ${renderTrashActionButton({
+                  itemName: rule.name,
+                  dataAttributes: { 'data-remove-capability': index },
+                })}
               </div>
             </article>
           `;
@@ -462,8 +460,8 @@ export const JobHunterCapabilityEditor = (function () {
 
     document.getElementById('capability_matrix_editor')?.addEventListener('click', (event) => {
       if (!capabilityBulkEditMode) return;
-      // Skip if clicking delete button or inside a form control
-      if (event.target.closest('.cap-remove-btn, input, label, details')) return;
+      // Skip if clicking the shared item-remove action or inside a form control.
+      if (event.target.closest('[data-remove-capability], input, label, details')) return;
       const card = event.target.closest('[data-capability-index]');
       if (!card) return;
       const index = Number(card.dataset.capabilityIndex);

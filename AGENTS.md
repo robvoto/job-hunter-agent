@@ -1,5 +1,12 @@
 # Agent Instructions
 
+## Failure handling invariant
+
+- Any failed tool call, shell command, merge, or validation is a stop condition. Tell the human immediately; do not silently continue or substitute another path.
+- Diagnose the root cause before retrying. When the human has already authorised the work, fix the root cause and add/update the owning skill, guard, or regression test when the failure exposes a repeatable process gap.
+- For repository Python commands in WSL, prefer `uv run python` / `uv run pytest`; do not assume bare `python` is installed.
+- Validate ES-module browser JavaScript with module-aware syntax checking (for example `node --input-type=module --check < file.js`) rather than plain `node --check file.js` when Node would otherwise treat `.js` as CommonJS.
+
 ## Purpose
 
 Always-loaded agent loader. Keep this file project-agnostic and small.
@@ -36,7 +43,7 @@ Reusable defaults:
 
 ### UI task routing (required, not optional)
 
-Any task touching templates, CSS, JS, or a rendered screen must load the UI-domain skill (`dashboard-ui` or `onboarding-ui`, whichever owns the surface) **together with** `css-design-system`, not either alone. If the page also has its own skill, load that too. Before writing a new selector, class, or component markup, check `docs/UI_COMPONENT_MAP.md` for an existing pattern to reuse. A missing reusable pattern is a reason to add it centrally (theme file + map entry), not to invent a page-local one-off.
+Any task touching templates, CSS, JS, or a rendered screen must load the UI-domain skill (`dashboard-ui` or `onboarding-ui`, whichever owns the surface) **together with** `css-design-system`, not either alone. If the page also has its own skill, load that too. Before writing a new selector, class, or component markup, check `docs/UI_COMPONENT_MAP.md` for an existing pattern to reuse. A missing reusable pattern is a reason to add it centrally (theme file + map entry), not to invent a page-local one-off. If no shared pattern fits or the correct central extension is unclear, stop and ask the human before creating a page-specific visual exception.
 
 Project-specific skills live in `docs/PROJECT_CONTEXT.md`.
 

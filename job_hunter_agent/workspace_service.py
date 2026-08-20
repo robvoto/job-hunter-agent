@@ -573,6 +573,11 @@ def render_html(
     )
 
     ws_page_labels = load_workspace_page_labels()
+    # Shared UI copy stays owned by ui_labels.json/server_helpers rather than
+    # being duplicated in this workspace-only renderer.
+    from job_hunter_agent.server_helpers import load_shared_ui_labels
+
+    shared_ui_labels = load_shared_ui_labels()
 
     last_run_cards_html = _render_summary_cards_html(
         [
@@ -631,6 +636,7 @@ def render_html(
 
     workspace_config_labels = {
         "rejectionLoadingSuggestions": ws_page_labels.get("rejection_loading_suggestions"),
+        "removeItemLabel": shared_ui_labels["remove_item_label"],
         "profileGapAddedLabel": ws_page_labels["LABEL_WS_PROFILE_GAP_ADDED_LABEL"],
         "profileGapNotHaveSavedLabel": ws_page_labels["LABEL_WS_PROFILE_GAP_NOT_HAVE_SAVED_LABEL"],
         "profileGapErrorLabel": ws_page_labels["LABEL_WS_PROFILE_GAP_ERROR_LABEL"],

@@ -1,4 +1,5 @@
-﻿import { escapeHtml } from '../shared/settings-utils.js';
+﻿import { renderTrashActionButton } from '../../common/action-buttons.js';
+import { escapeHtml } from '../shared/settings-utils.js';
 
     let _srData = null;
     let _srLoaded = false;
@@ -355,7 +356,14 @@
   </div>
   <div class="signal-row-actions">
     <button class="signal-action-btn signal-approve" type="button" data-sr-key="${escapeHtml(key)}"${approveDisabled ? ' disabled' : ''} title="Approve" aria-label="Approve">&#10003;</button>
-    <button class="signal-action-btn signal-remove" type="button" data-sr-key="${escapeHtml(key)}"${isBusy ? ' disabled' : ''} title="Remove" aria-label="Remove">&#215;</button>
+    ${renderTrashActionButton({
+      itemName: currentValue,
+      dataAttributes: {
+        'data-signal-action': 'remove',
+        'data-sr-key': key,
+      },
+      disabled: isBusy,
+    })}
   </div>
 </article>`;
           }).join('');
@@ -544,7 +552,7 @@
         });
       });
 
-      panel.querySelectorAll('.signal-remove').forEach(button => {
+      panel.querySelectorAll('[data-signal-action="remove"]').forEach(button => {
         button.addEventListener('click', async () => {
           const key = button.dataset.srKey || '';
           await srPatchSignal(key, { key, action: 'ignore' }, 'Ignored');

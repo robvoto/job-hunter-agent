@@ -271,12 +271,9 @@ def test_settings_exposes_adjacent_role_exploration_switch():
     assert '__JOB_HUNTER_TITLE_TIER_EXPLORE_ADJACENT_ROLES_HELP__' in html
     assert '<details class="field-info-drawer">' in html
     assert '<span class="field-help">__JOB_HUNTER_TITLE_TIER_EXPLORE_ADJACENT_ROLES_HELP__</span>' not in html
-    assert 'id="explore_adjacent_roles_state"' in html
+    assert 'toggle-switch-state' not in html
     assert "explore_adjacent_roles: getToggleChecked('explore_adjacent_roles')" in js
     assert "setToggleChecked('explore_adjacent_roles', Boolean(profile.explore_adjacent_roles))" in js
-    assert "setToggleStateText(" in js
-    assert "sharedUiLabels.settings_value_on" in js
-    assert "sharedUiLabels.settings_value_off" in js
 
 
 def test_role_history_uses_single_readonly_panel():

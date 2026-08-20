@@ -277,6 +277,8 @@ _SHARED_UI_LABEL_KEYS = (
     "select_shown_label",
     "clear_selection_label",
     "remove_selected_label",
+    "remove_item_label",
+    "remove_item_fallback_label",
 )
 _SEARCH_SOURCE_LABEL_KEYS = (
     "section_title",
@@ -354,7 +356,6 @@ _SETTINGS_CLEARANCES_LABEL_KEYS = (
     "eligibility_empty_text",
     "eligibility_prefill_added_message",
     "eligibility_prefill_exists_message",
-    "eligibility_remove_button_label",
     "qualification_add_error_message",
     "qualification_settings_title",
     "qualification_help_text",
@@ -364,7 +365,6 @@ _SETTINGS_CLEARANCES_LABEL_KEYS = (
     "qualification_empty_text",
     "qualification_prefill_added_message",
     "qualification_prefill_exists_message",
-    "qualification_remove_button_label",
 )
 
 _ROLE_HISTORY_LABEL_KEYS = (
@@ -485,8 +485,6 @@ _ONBOARDING_FLOW_LABEL_KEYS = (
     "capability_rows_label_one",
     "capability_rows_label_many",
     "capability_actions_for_label",
-    "capability_remove_label",
-    "capability_remove_title",
     "capability_untitled_label",
     "capability_show_more_label",
     "capability_show_fewer_label",

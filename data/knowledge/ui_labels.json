@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 110,
+  "version": 111,
   "updated_at": "2026-08-20",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -162,7 +162,6 @@
     "eligibility_empty_text": "No generic eligibility facts added yet.",
     "eligibility_prefill_added_message": "Draft eligibility fact added: ${name}. Review it and save when ready.",
     "eligibility_prefill_exists_message": "This eligibility fact is already in your profile: ${name}.",
-    "eligibility_remove_button_label": "Remove",
     "qualification_add_error_message": "Could not save this qualification. Check your connection and try again.",
     "qualification_settings_title": "Qualifications",
     "qualification_help_text": "Add education, degrees, certifications, and formal qualifications as concise reusable profile concepts.",
@@ -171,8 +170,7 @@
     "qualification_add_button_label": "Add qualification",
     "qualification_empty_text": "No qualifications added yet.",
     "qualification_prefill_added_message": "Draft qualification added: ${name}. Review it and save when ready.",
-    "qualification_prefill_exists_message": "This qualification is already in your profile: ${name}.",
-    "qualification_remove_button_label": "Remove"
+    "qualification_prefill_exists_message": "This qualification is already in your profile: ${name}."
   },
   "role_history_labels_description": "Display labels for the read-only captured role history panel in Settings.",
   "role_history_labels": {
@@ -239,7 +237,9 @@
     "schedule_section_copy": "These controls use your current search settings. Set the time here, then use the main Save Settings button. If the scheduler is already running, changes apply automatically without a restart.",
     "select_shown_label": "Select shown",
     "clear_selection_label": "Clear selection",
-    "remove_selected_label": "Remove selected"
+    "remove_selected_label": "Remove selected",
+    "remove_item_label": "Remove {name}",
+    "remove_item_fallback_label": "Remove item"
   },
   "onboarding_import_summary_labels_description": "Display labels for the onboarding import helper summary.",
   "onboarding_import_summary_labels": {
@@ -362,8 +362,6 @@
     "capability_rows_label_one": "1 capability row",
     "capability_rows_label_many": "{count} capability rows",
     "capability_actions_for_label": "Actions for {name}",
-    "capability_remove_label": "Remove {name}",
-    "capability_remove_title": "Remove {name}",
     "capability_untitled_label": "Untitled capability",
     "capability_show_more_label": "Show {count} more",
     "capability_show_fewer_label": "Show fewer",

@@ -925,29 +925,6 @@
       background: color-mix(in srgb, var(--selection-accent) 12%, var(--bg-surface));
       color: var(--selection-accent);
     }
-    .capability-remove-btn {
-      flex: 0 0 auto;
-      width: 28px;
-      height: 28px;
-      padding: 0;
-      border: 0;
-      border-radius: 999px;
-      background: transparent;
-      color: var(--state-error-text);
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .capability-remove-btn:hover {
-      background: var(--state-error-bg);
-      color: var(--state-error-text);
-    }
-    .cap-remove-icon {
-      width: 16px;
-      height: 16px;
-      display: block;
-    }
     .capability-card-meta {
       display: flex;
       flex-direction: column;
@@ -1905,11 +1882,6 @@
       border-color: var(--state-success-border);
       color: var(--state-success-text);
       background: color-mix(in srgb, var(--state-success-text) 10%, transparent);
-    }
-    .signal-action-btn.signal-remove:hover:not(:disabled) {
-      border-color: var(--state-error-border);
-      color: var(--state-error-text);
-      background: color-mix(in srgb, var(--state-error-text) 10%, transparent);
     }
     .signal-inline-status.is-ok {
       color: var(--state-success-text);
