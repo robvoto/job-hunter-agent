@@ -688,32 +688,6 @@ body {
   pointer-events: auto;
 }
 
-.review-capability-action {
-  width: 34px;
-  height: 34px;
-  min-width: 34px;
-  padding: 0;
-  border-radius: 999px;
-  border: 0;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.review-capability-action:hover {
-  background: color-mix(in srgb, var(--state-error-text) 10%, transparent);
-}
-
-.review-capability-action-icon {
-  width: 18px;
-  height: 18px;
-}
-
-.review-capability-action-danger {
-  color: var(--text-muted);
-  background: transparent;
-}
-
 .review-capability-footer {
   display: flex;
   justify-content: flex-start;

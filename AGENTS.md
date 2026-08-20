@@ -36,7 +36,7 @@ Reusable defaults:
 
 ### UI task routing (required, not optional)
 
-Any task touching templates, CSS, JS, or a rendered screen must load the UI-domain skill (`dashboard-ui` or `onboarding-ui`, whichever owns the surface) **together with** `css-design-system`, not either alone. If the page also has its own skill, load that too. Before writing a new selector, class, or component markup, check `docs/UI_COMPONENT_MAP.md` for an existing pattern to reuse. A missing reusable pattern is a reason to add it centrally (theme file + map entry), not to invent a page-local one-off.
+Any task touching templates, CSS, JS, or a rendered screen must load the UI-domain skill (`dashboard-ui` or `onboarding-ui`, whichever owns the surface) **together with** `css-design-system`, not either alone. If the page also has its own skill, load that too. Before writing a new selector, class, or component markup, check `docs/UI_COMPONENT_MAP.md` for an existing pattern to reuse. A missing reusable pattern is a reason to add it centrally (theme file + map entry), not to invent a page-local one-off. If no shared pattern fits or the correct central extension is unclear, stop and ask the human before creating a page-specific visual exception.
 
 Project-specific skills live in `docs/PROJECT_CONTEXT.md`.
 

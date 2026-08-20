@@ -1,4 +1,5 @@
-﻿import * as onboardingPage from './onboarding-page.js';
+﻿import { formatRemoveItemLabel, renderTrashActionButton } from '../common/action-buttons.js';
+import * as onboardingPage from './onboarding-page.js';
 import { setSelectedLocations, hydrateSearchBasics } from './onboarding-search.js';
 import * as onboardingStorage from './onboarding-storage.js';
 import * as onboardingUpload from './onboarding-upload.js';
@@ -316,7 +317,7 @@ function renderReviewChipList(containerKey, values, emptyLabel, removeAttribute,
     <span class="chip-item">
       <span>${escapeHtml(value)}</span>
       <button type="button" ${moveAttribute}="${index}" aria-label="${escapeHtml(formatLabel(moveAriaPrefix, { name: value }))}" title="${escapeHtml(formatLabel(moveAriaPrefix, { name: value }))}">${CHIP_MOVE_ICON}</button>
-      <button type="button" ${removeAttribute}="${index}" aria-label="${escapeHtml(formatLabel(onboardingFlowLabels.capability_remove_label, { name: value }))}">&#215;</button>
+      <button type="button" ${removeAttribute}="${index}" aria-label="${escapeHtml(formatRemoveItemLabel(value))}">&#215;</button>
     </span>
   `).join('');
 }
@@ -510,12 +511,13 @@ function renderReviewCapabilities() {
           ${aliasHtml}
         </div>
         <div class="review-capability-actions" role="group" aria-label="${escapeHtml(formatLabel(onboardingFlowLabels.capability_actions_for_label, { name: displayName }))}">
-          <button class="review-capability-action review-capability-action-danger" type="button" data-review-capability-action="remove" data-review-capability-index="${index}" aria-label="${escapeHtml(formatLabel(onboardingFlowLabels.capability_remove_label, { name: displayName }))}" title="${escapeHtml(formatLabel(onboardingFlowLabels.capability_remove_title, { name: displayName }))}">
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="review-capability-action-icon">
-              <path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm1 7h2v8h-2v-8Zm4 0h2v8h-2v-8ZM7 10h2v8H7v-8Zm1 11h8a2 2 0 0 0 2-2V8H6v11a2 2 0 0 0 2 2Z" fill="currentColor"/>
-            </svg>
-            <span class="sr-only">${escapeHtml(onboardingFlowLabels.capability_remove_label.replace('{name}', displayName))}</span>
-          </button>
+          ${renderTrashActionButton({
+            itemName: displayName,
+            dataAttributes: {
+              'data-review-capability-action': 'remove',
+              'data-review-capability-index': index,
+            },
+          })}
         </div>
       </article>
     `;

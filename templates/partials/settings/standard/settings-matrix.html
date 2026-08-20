@@ -106,12 +106,16 @@
                   </div>
                 </div>
 
-                <div class="badge-editor-form token-input-group">
-                  <input id="eligibility_name_add" class="token-input-field" type="text" placeholder="">
-                  <button class="btn-add token-input-action" id="eligibility_add" type="button"></button>
+                <div class="jh-editor-stack">
+                  <div class="jh-editor-entry">
+                    <div class="badge-editor-form token-input-group">
+                      <input id="eligibility_name_add" class="token-input-field" type="text" placeholder="">
+                      <button class="btn-add token-input-action" id="eligibility_add" type="button"></button>
+                    </div>
+                    <p class="field-help" id="eligibility_add_status" aria-live="polite"></p>
+                  </div>
+                  <div id="eligibility_editor" class="capability-editor"></div>
                 </div>
-                <p class="field-help" id="eligibility_add_status" aria-live="polite"></p>
-                <div id="eligibility_editor" class="capability-editor"></div>
                 <textarea id="candidate_eligibility_facts" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
               </section>
 
@@ -125,11 +129,15 @@
                     </details>
                   </div>
                 </div>
-                <div class="badge-editor-form token-input-group">
-                  <input id="qualification_name_add" class="token-input-field" type="text" placeholder="">
-                  <button class="btn-add token-input-action" id="qualification_add" type="button"></button>
+                <div class="jh-editor-stack">
+                  <div class="jh-editor-entry">
+                    <div class="badge-editor-form token-input-group">
+                      <input id="qualification_name_add" class="token-input-field" type="text" placeholder="">
+                      <button class="btn-add token-input-action" id="qualification_add" type="button"></button>
+                    </div>
+                  </div>
+                  <div id="qualification_editor" class="capability-editor"></div>
                 </div>
-                <div id="qualification_editor" class="capability-editor"></div>
                 <textarea id="candidate_qualifications" class="technical-rule-source" aria-hidden="true" tabindex="-1"></textarea>
               </section>
 

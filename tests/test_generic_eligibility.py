@@ -112,8 +112,9 @@ def test_eligibility_normalizer_rejects_non_boolean_value():
 def test_eligibility_editor_reuses_shared_trash_action():
     source = (_STATIC_DIR / "settings-eligibility-editor.js").read_text(encoding="utf-8")
 
-    assert 'class="cap-remove-btn capability-remove-btn"' in source
-    assert 'class="cap-remove-icon"' in source
+    assert "renderTrashActionButton" in source
+    assert "'data-eligibility-field': 'remove'" in source
+    assert 'cap-remove-btn' not in source
     assert 'jh-button--danger jh-button--compact' not in source
 
 

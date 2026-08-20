@@ -1000,6 +1000,12 @@
       }[ch]));
     }
 
+    function _rejRemoveItemLabel(value) {
+      const template = String(WORKSPACE_CONTEXT.labels?.removeItemLabel || '').trim();
+      if (!template) throw new Error('Missing shared remove-item label.');
+      return template.replace('{name}', String(value || '').trim());
+    }
+
     function _rejResetPanelChrome() {
       _rejectionStage = 'select';
       _rejectionSavedBlockers = [];
@@ -1353,8 +1359,9 @@
       const list = document.getElementById('rejection-custom-list');
       list.innerHTML = _rejectionCustomTerms.map((t, i) => {
         const value = _rejEscapeHtml(t.value);
+        const removeLabel = _rejEscapeHtml(_rejRemoveItemLabel(t.value));
         return `<span class="rejection-custom-chip">${value}` +
-          `<button type="button" data-idx="${i}" aria-label="Remove">&times;</button></span>`;
+          `<button type="button" data-idx="${i}" aria-label="${removeLabel}" title="${removeLabel}">&times;</button></span>`;
       }).join('');
       list.querySelectorAll('button').forEach(btn => {
         btn.addEventListener('click', () => {

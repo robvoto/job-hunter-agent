@@ -1,3 +1,4 @@
+import { renderTrashActionButton } from '../../common/action-buttons.js';
 import { escapeHtml, settingsField } from './settings-utils.js';
 
 export const JobHunterQualificationEditor = (function () {
@@ -62,7 +63,13 @@ export const JobHunterQualificationEditor = (function () {
           <label class="toggle-switch toggle-switch--compact" for="${toggleId}">
             <span class="toggle-switch-control"><input id="${toggleId}" type="checkbox" role="switch" data-qualification-field="value" data-qualification-index="${index}"${item.value ? ' checked' : ''}><span class="toggle-switch-ui"></span></span>
           </label>
-          <button class="jh-button jh-button--danger jh-button--compact" type="button" data-qualification-field="remove" data-qualification-index="${index}">${escapeHtml(labels.qualification_remove_button_label)}</button>
+          ${renderTrashActionButton({
+            itemName: item.name,
+            dataAttributes: {
+              'data-qualification-field': 'remove',
+              'data-qualification-index': index,
+            },
+          })}
         </div>
       </article>`;
     }).join('');
