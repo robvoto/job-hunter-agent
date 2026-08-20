@@ -249,7 +249,8 @@ def test_onboarding_capability_cards_use_one_shared_generic_icon():
     assert "review-capability-title-row" in onboarding_flow_js
     assert "capability-alias-preview" in onboarding_flow_js
     assert "settings_selected_label" in onboarding_flow_js
-    assert "related_skills_summary" in onboarding_flow_js
+    assert "related_skills_show_more" in onboarding_flow_js
+    assert "related_skills_show_less" in onboarding_flow_js
     assert "const extractedSkillPreview" not in onboarding_flow_js
     assert '<p class="help">${extractedSkillPreview}</p>' not in onboarding_flow_js
     assert "cap-alias-chip--more" not in onboarding_flow_js

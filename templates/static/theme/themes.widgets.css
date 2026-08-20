@@ -1397,6 +1397,15 @@
   display: none;
 }
 
+.capability-summary-label--open,
+.capability-alias-drawer[open] .capability-summary-label--closed {
+  display: none;
+}
+
+.capability-alias-drawer[open] .capability-summary-label--open {
+  display: inline;
+}
+
 .cap-alias-chips {
   display: flex;
   flex-wrap: wrap;
