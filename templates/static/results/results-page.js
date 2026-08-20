@@ -526,6 +526,40 @@
       }
     }
 
+    function focusRelatedCard(action) {
+      const targetId = String(action.dataset.relatedCardTarget || '').trim();
+      const target = targetId ? document.getElementById(targetId) : null;
+      if (!target) {
+        return false;
+      }
+
+      const targetPanel = target.closest('[data-workspace-panel]');
+      const targetWorkspace = targetPanel?.dataset.workspacePanel || '';
+      if (targetWorkspace && targetWorkspace !== getActiveWorkspace()) {
+        setActiveWorkspace(targetWorkspace, true, false);
+      }
+
+      // Pagination and filters can hide a valid destination; reveal only the
+      // requested card so the action always lands on the matching workspace item.
+      target.hidden = false;
+      target.classList.remove('is-related-target');
+      void target.offsetWidth;
+      target.classList.add('is-related-target');
+      const hadTabIndex = target.hasAttribute('tabindex');
+      if (!hadTabIndex) {
+        target.setAttribute('tabindex', '-1');
+      }
+      target.focus({ preventScroll: true });
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      window.setTimeout(() => {
+        target.classList.remove('is-related-target');
+        if (!hadTabIndex) {
+          target.removeAttribute('tabindex');
+        }
+      }, 1800);
+      return true;
+    }
+
     function markCardViewed(link) {
       const card = link.closest('.job-card');
       if (!card) return;
@@ -862,6 +896,14 @@
           if (firstVisibleCard) {
             firstVisibleCard.scrollIntoView({ block: 'start' });
           }
+        }
+        return;
+      }
+
+      const relatedCardAction = event.target.closest('[data-related-card-target]');
+      if (relatedCardAction) {
+        if (focusRelatedCard(relatedCardAction)) {
+          event.preventDefault();
         }
         return;
       }

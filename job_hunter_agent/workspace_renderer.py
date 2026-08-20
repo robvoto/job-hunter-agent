@@ -1452,41 +1452,56 @@ def render_job_card(
             )
         badges.append(
             render_badge(
-                _workspace_label("duplicate_labels", "potential_badge"),
+                f'{_workspace_label("duplicate_labels", "potential_badge")} ({_pd_count})',
                 "badge-warning",
                 potential_tooltip,
             )
         )
-    potential_duplicate_callout = ""
+    related_cards_html = ""
     if potential_duplicate_links:
-        related = potential_duplicate_links[0]
-        related_title = str(related.get("related_title") or "").strip()
-        related_company = (
-            normalize_company_name(str(related.get("related_company") or ""))
-            or str(related.get("related_company") or "").strip()
-        )
-        related_job_key = str(related.get("related_job_key") or "").strip()
-        related_url = str(related.get("related_url") or "").strip()
-        related_label_parts = [
-            part
-            for part in [related_title, f"@ {related_company}" if related_company else ""]
-            if part
-        ]
-        related_label = " ".join(related_label_parts).strip()
-        if related_label and related_job_key:
-            related_label_html = f'<a href="#{safe_html(_workspace_job_card_id(related_job_key))}">{safe_html(related_label)}</a>'
-        elif related_label and related_url:
-            related_label_html = f'<a href="{safe_html(related_url)}" target="_blank" rel="noopener noreferrer">{safe_html(related_label)}</a>'
-        else:
-            related_label_html = safe_html(related_label)
-        if related_label_html:
-            potential_duplicate_callout = (
-                '<div class="job-duplicate-callout">'
-                f"<strong>{safe_html(_workspace_label('duplicate_labels', 'potential_badge'))}</strong> "
-                f"{safe_html(_workspace_label('duplicate_labels', 'callout_prefix'))} {related_label_html}. "
-                f'<span class="duplicate-help-text">{safe_html(_workspace_label("duplicate_labels", "help_text"))}</span>'
+        related_rows: list[str] = []
+        for related in potential_duplicate_links:
+            related_title = str(related.get("related_title") or "").strip()
+            related_company = (
+                normalize_company_name(str(related.get("related_company") or ""))
+                or str(related.get("related_company") or "").strip()
+            )
+            related_job_key = str(related.get("related_job_key") or "").strip()
+            related_url = str(related.get("related_url") or "").strip()
+            related_card_target = _workspace_job_card_id(related_job_key) if related_job_key else ""
+            if related_card_target:
+                related_href = f"#{related_card_target}"
+                related_action_attrs = (
+                    f' data-related-card-target="{safe_html(related_card_target)}"'
+                )
+                related_external_attrs = ""
+            elif related_url:
+                related_href = related_url
+                related_action_attrs = ""
+                related_external_attrs = ' target="_blank" rel="noopener noreferrer"'
+            else:
+                related_href = "#"
+                related_action_attrs = ""
+                related_external_attrs = ""
+            related_rows.append(
+                '<div class="job-related-card-row">'
+                '<div class="job-related-card-copy">'
+                f'<strong class="job-related-card-title">{safe_html(related_title)}</strong>'
+                f'<span class="job-related-card-company">{safe_html(related_company)}</span>'
+                "</div>"
+                f'<a class="jh-button jh-button--secondary jh-button--compact job-related-card-action" '
+                f'href="{safe_html(related_href)}"{related_action_attrs}{related_external_attrs}>'
+                f'{safe_html(_workspace_label("duplicate_labels", "callout_prefix"))}'
+                '<span aria-hidden="true">&#8594;</span>'
+                "</a>"
                 "</div>"
             )
+        related_cards_html = (
+            '<details class="job-insights job-related-cards-panel">'
+            f'<summary>{safe_html(_workspace_label("duplicate_labels", "potential_badge"))}</summary>'
+            f'<div class="job-related-card-list">{"".join(related_rows)}</div>'
+            "</details>"
+        )
     job_quality_signals = [
         s for s in (record.get("job_quality_signals") or []) if isinstance(s, dict)
     ]
@@ -2392,8 +2407,8 @@ def render_job_card(
         f"{score_html}"
         "</div>"
         f"{summary_html}"
-        f"{potential_duplicate_callout}"
         f'<div class="job-meta">{"".join(meta_items)}</div>'
+        f"{related_cards_html}"
         f"{risk_html}"
         f"{clearance_html}"
         f"{eligibility_html}"

@@ -2807,7 +2807,7 @@ def test_job_card_formats_opened_by_you_as_date_only():
     assert "Opened by you 17 Aug 2026 01:05 PM" not in html
 
 
-def test_potential_duplicate_card_shows_visible_callout_and_help_text():
+def test_potential_duplicate_card_shows_compact_related_cards_section():
     html = workspace_renderer.render_job_card(
         {
             "job_key": "seek:new-role",
@@ -2839,11 +2839,56 @@ def test_potential_duplicate_card_shows_visible_callout_and_help_text():
         _test_profile(),
     )
 
-    assert "Related cards" in html
+    assert 'Related cards (1)' in html
+    assert 'job-related-cards-panel' in html
+    assert html.index('class="job-meta"') < html.index('job-related-cards-panel')
+    assert html.count('class="job-related-card-row"') == 1
+    assert 'class="job-related-card-title">Senior Business Analyst</strong>' in html
+    assert 'class="job-related-card-company">acme' in html
     assert "Open matching card" in html
-    assert "This is the matching card in your workspace" in html
+    assert "&#8594;" in html
     assert 'href="#job-card-linkedin-2"' in html
-    assert "senior business analyst @ acme" in html.lower()
+    assert 'data-related-card-target="job-card-linkedin-2"' in html
+
+
+def test_potential_duplicate_card_renders_all_related_cards_in_one_disclosure():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "seek:new-role",
+            "title": "Senior Business Analyst",
+            "company": "Acme Pty Ltd",
+            "url": "https://example.com/new-role",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "seek",
+            "potential_duplicate_links": [
+                {
+                    "related_job_key": "linkedin:2",
+                    "related_title": "Senior Business Analyst",
+                    "related_company": "Acme Pty Ltd",
+                },
+                {
+                    "related_job_key": "apsjobs:3",
+                    "related_title": "Senior Business Analyst",
+                    "related_company": "Acme Pty Ltd",
+                },
+            ],
+        },
+        _test_profile(),
+    )
+
+    assert 'Related cards (2)' in html
+    assert html.count('class="job-related-card-row"') == 2
+    assert 'href="#job-card-linkedin-2"' in html
+    assert 'href="#job-card-apsjobs-3"' in html
+    assert html.count('Open matching card') == 2
 
 
 def test_positive_note_does_not_repeat_first_why_it_fits_bullet():
