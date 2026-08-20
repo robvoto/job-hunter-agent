@@ -312,7 +312,7 @@ def test_build_review_data_keeps_clear_title_hard_block_suggestions_when_bucket_
     assert rules[0]["count"] == 1
 
 
-def test_build_review_data_turns_repeated_job_requirements_into_capability_tuning(monkeypatch):
+def test_build_review_data_turns_repeated_requirement_coverage_into_capability_tuning(monkeypatch):
     monkeypatch.setattr(
         "job_hunter_agent.review_insights.get_review_settings",
         lambda: {
@@ -333,9 +333,9 @@ def test_build_review_data_turns_repeated_job_requirements_into_capability_tunin
                 "title": "Operations Lead",
                 "company": "Example Co",
                 "search_location": "Sydney",
-                "job_requirements": [
-                    "Native or near-native level Chinese language proficiency required",
-                    "Minimum 1-2 years of project coordination experience required",
+                "requirement_coverage": [
+                    {"requirement": "Native or near-native level Chinese language proficiency required", "requirement_type": "capability"},
+                    {"requirement": "Minimum 1-2 years of project coordination experience required", "requirement_type": "capability"},
                 ],
             },
             {
@@ -344,8 +344,8 @@ def test_build_review_data_turns_repeated_job_requirements_into_capability_tunin
                 "title": "Program Coordinator",
                 "company": "Example Co",
                 "search_location": "Sydney",
-                "job_requirements": [
-                    "Chinese language proficiency required",
+                "requirement_coverage": [
+                    {"requirement": "Chinese language proficiency required", "requirement_type": "capability"},
                 ],
             },
         ],

@@ -75,7 +75,6 @@ KEY_LLM_PROMPT_TEMPLATES = "match_preference_templates"
 KEY_LLM_PROMPT_EVIDENCE_TIERS = "evidence_tiers"
 KEY_LLM_PROMPT_FIT_DECISION_MAX_OUTPUT_TOKENS = "fit_decision_max_output_tokens"
 KEY_LLM_PROMPT_LEARNING_CANDIDATES_MAX_OUTPUT_TOKENS = "learning_candidates_max_output_tokens"
-KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_OUTPUT_TOKENS = "job_requirements_max_output_tokens"
 KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_OUTPUT_TOKENS = (
     "rejection_blocker_suggestions_max_output_tokens"
 )
@@ -91,7 +90,7 @@ KEY_LLM_PROMPT_FIT_GUIDANCE_MAX_CHARS = "fit_guidance_max_chars"
 KEY_LLM_PROMPT_CAPABILITY_NAMING_ALIASES_MAX_ITEMS = "capability_naming_aliases_max_items"
 KEY_LLM_PROMPT_RAW_OUTPUT_LOG_MAX_CHARS = "raw_output_log_max_chars"
 KEY_LLM_PROMPT_LEARNING_MAX_ITEMS = "learning_candidates_max_items"
-KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_ITEMS = "job_requirements_max_items"
+KEY_LLM_PROMPT_REQUIREMENT_COVERAGE_MAX_ITEMS = "requirement_coverage_max_items"
 KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS = "rejection_blocker_suggestions_max_items"
 KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS = "rejection_blocker_suggestions_max_words"
 KEY_LLM_PROMPT_FIT_REVIEW_DEBUG_MATCH_DIAGNOSTICS_ENABLED = (

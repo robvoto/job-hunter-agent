@@ -74,8 +74,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_LLM_PROMPT_FIT_DECISION_MAX_OUTPUT_TOKENS,
     KEY_LLM_PROMPT_FIT_GUIDANCE_MAX_CHARS,
     KEY_LLM_PROMPT_JOB_DESCRIPTION_MAX_CHARS,
-    KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_ITEMS,
-    KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_OUTPUT_TOKENS,
+    KEY_LLM_PROMPT_REQUIREMENT_COVERAGE_MAX_ITEMS,
     KEY_LLM_PROMPT_LEARNING_CANDIDATES_MAX_OUTPUT_TOKENS,
     KEY_LLM_PROMPT_LEARNING_MAX_ITEMS,
     KEY_LLM_PROMPT_PROFILE_EXTRACTION_MAX_OUTPUT_TOKENS,
@@ -346,12 +345,6 @@ def _normalize_llm_prompt_settings(
         minimum=100,
         maximum=2_000,
     )
-    job_requirements_max_output_tokens = _prompt_int(
-        KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_OUTPUT_TOKENS,
-        KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_OUTPUT_TOKENS,
-        minimum=50,
-        maximum=1_000,
-    )
     rejection_blocker_max_output_tokens = _prompt_int(
         KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_OUTPUT_TOKENS,
         KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_OUTPUT_TOKENS,
@@ -424,9 +417,9 @@ def _normalize_llm_prompt_settings(
         minimum=100,
         maximum=5_000,
     )
-    job_requirements_max_items = _prompt_int(
-        KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_ITEMS,
-        KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_ITEMS,
+    requirement_coverage_max_items = _prompt_int(
+        KEY_LLM_PROMPT_REQUIREMENT_COVERAGE_MAX_ITEMS,
+        KEY_LLM_PROMPT_REQUIREMENT_COVERAGE_MAX_ITEMS,
         minimum=1,
         maximum=20,
     )
@@ -485,7 +478,6 @@ def _normalize_llm_prompt_settings(
         KEY_LLM_PROMPT_EVIDENCE_TIERS: evidence_tiers,
         KEY_LLM_PROMPT_FIT_DECISION_MAX_OUTPUT_TOKENS: fit_decision_max_output_tokens,
         KEY_LLM_PROMPT_LEARNING_CANDIDATES_MAX_OUTPUT_TOKENS: learning_candidates_max_output_tokens,
-        KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_OUTPUT_TOKENS: job_requirements_max_output_tokens,
         KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_OUTPUT_TOKENS: rejection_blocker_max_output_tokens,
         KEY_LLM_PROMPT_CAPABILITY_NAMING_MAX_OUTPUT_TOKENS: capability_naming_max_output_tokens,
         KEY_LLM_PROMPT_TITLE_JUDGMENT_MAX_OUTPUT_TOKENS: title_judgment_max_output_tokens,
@@ -507,7 +499,7 @@ def _normalize_llm_prompt_settings(
                 ]
             ),
         ),
-        KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_ITEMS: job_requirements_max_items,
+        KEY_LLM_PROMPT_REQUIREMENT_COVERAGE_MAX_ITEMS: requirement_coverage_max_items,
         KEY_LLM_PROMPT_LEARNING_MAX_ITEMS: learning_max_items,
         KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS: rejection_blocker_max_items,
         KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS: rejection_blocker_max_words,

@@ -321,7 +321,7 @@ Current derivation rules:
 - For explicit duration requirements, stored onboarding `role_experience` can force a downgrade from `supported` to `partially_supported` when the saved role-title history does not prove the stated years/months threshold.
 - `not_shown` contributes zero but still counts against the maximum possible score.
 - `mismatch` contributes zero and caps the grade at WEAK if there is any coverage.
-- Missing coverage items from `job_requirements` are treated as uncovered preferred-weight items.
+- `requirement_coverage` is the only source of requirement rows used for grading; missing structured coverage is treated as incomplete review data rather than reconstructed from a second flat list.
 - If there are no covered items, the grade becomes MISMATCH when a mismatch exists, otherwise POOR.
 - Full support across all requirements gives EXCELLENT only when there are at least 3 requirements; otherwise STRONG.
 - Strong coverage ratio can produce STRONG.

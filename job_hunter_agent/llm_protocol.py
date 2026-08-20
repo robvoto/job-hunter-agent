@@ -64,7 +64,6 @@ LLM_FIT_REVIEW_PROMPT_SHAPE = (
     '{"fit_review":{"decision":"KEEP|REJECT|MAYBE","grade":"EXCELLENT|STRONG|SOLID|WEAK|POOR|MISMATCH"},'
     '"occupation_alignment":"same|adjacent|different","occupation_alignment_reason":"...",'
     '"posting_channel":{"kind":"agency_or_recruiter|direct_employer|unknown","confident":true|false,"evidence":"..."},'
-    '"job_requirements":["..."],'
     '"eligibility_requirements":[{"requirement":"...","importance":"required|expected|preferred|bonus",'
     '"requirement_type":"eligibility","canonical_requirement":"...","named_alternatives":["..."],"profile_fact_resolved":true|false,"classification_reviewable":true|false,"status":"supported|partially_supported|not_shown|mismatch",'
     '"matched_candidate_fact":"...","matched_job_text":"...","profile_support":["..."],"covered_requirement_elements":["..."],"experience_components":[{"kind":"duration|role_or_activity|qualifier","text":"...","profile_supported":true|false,"profile_evidence":["..."]}],"role_defining":true|false,"role_defining_group":"..."}],'
@@ -77,7 +76,6 @@ LLM_FIT_REVIEW_DEBUG_PROMPT_SHAPE = (
     '{"fit_review":{"decision":"KEEP|REJECT|MAYBE","grade":"EXCELLENT|STRONG|SOLID|WEAK|POOR|MISMATCH"},'
     '"occupation_alignment":"same|adjacent|different","occupation_alignment_reason":"...",'
     '"posting_channel":{"kind":"agency_or_recruiter|direct_employer|unknown","confident":true|false,"evidence":"..."},'
-    '"job_requirements":["..."],'
     '"eligibility_requirements":[{"requirement":"...","importance":"required|expected|preferred|bonus",'
     '"requirement_type":"eligibility","canonical_requirement":"...","named_alternatives":["..."],"profile_fact_resolved":true|false,"classification_reviewable":true|false,"status":"supported|partially_supported|not_shown|mismatch",'
     '"matched_candidate_fact":"...","matched_job_text":"...","profile_support":["..."],"covered_requirement_elements":["..."],"experience_components":[{"kind":"duration|role_or_activity|qualifier","text":"...","profile_supported":true|false,"profile_evidence":["..."]}],"role_defining":true|false,"role_defining_group":"..."}],'
@@ -101,9 +99,6 @@ LLM_LEARNING_ONLY_PROMPT_SHAPE = (
     '{"learning_candidates":[{"signal":"...","suggested_category":"...","suggested_values":["..."],'
     '"context_terms":["..."],"confidence":"high|medium|low|ambiguous","needs_review":true,"original_texts":["..."]}]}'
 )
-
-LLM_JOB_REQUIREMENTS_PROMPT_SHAPE = '{"job_requirements":["..."]}'
-
 
 LLM_PROMPT_CAPABILITY_LEVELS_HEADER = "Capability matrix:"
 LLM_PROMPT_ROLE_EXPERIENCE_HEADER = "Role experience matrix:"

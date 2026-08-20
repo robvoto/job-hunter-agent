@@ -1,8 +1,7 @@
 """Profile gap detection for capability-like requirement coverage only.
 
-The workspace confirmation flow should only surface uncertain capability
-requirements from requirement_coverage. Raw job_requirements remain available
-for display/debug, but they must not drive confirmation or profile writes.
+The workspace confirmation flow only surfaces uncertain capability
+requirements from requirement_coverage, which is the canonical reviewed source.
 """
 
 from __future__ import annotations

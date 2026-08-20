@@ -351,7 +351,14 @@ def build_requirement_tuning_suggestions(
         if not isinstance(row, dict) or row.get("decision") != "KEEP":
             continue
         row_seen: set[str] = set()
-        for requirement in row.get("job_requirements") or []:
+        for coverage_item in row.get("requirement_coverage") or []:
+            if not isinstance(coverage_item, dict):
+                continue
+            if str(coverage_item.get("requirement_type") or "").strip().lower() != "capability":
+                continue
+            requirement = compact_whitespace(str(coverage_item.get("requirement") or ""))
+            if not requirement:
+                continue
             label, alias = _requirement_entry_from_label(requirement, requirement)
             normalized = _normalize_term(label)
             if not label or not normalized or normalized in known_terms or normalized in row_seen:

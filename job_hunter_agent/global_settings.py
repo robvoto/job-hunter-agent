@@ -133,11 +133,6 @@ def get_llm_learning_candidates_max_output_tokens() -> int:
     return get_llm_prompt_setting_int(KEY_LLM_PROMPT_LEARNING_CANDIDATES_MAX_OUTPUT_TOKENS)
 
 
-def get_llm_job_requirements_max_output_tokens() -> int:
-    """Max tokens for the job-requirements response."""
-    return get_llm_prompt_setting_int(KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_OUTPUT_TOKENS)
-
-
 def get_llm_rejection_blocker_suggestions_max_output_tokens() -> int:
     """Max tokens for blocker-term suggestions."""
     return get_llm_prompt_setting_int(KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_OUTPUT_TOKENS)
@@ -159,9 +154,10 @@ def get_llm_profile_extraction_max_output_tokens() -> int:
 
 
 def get_llm_job_description_max_chars() -> int:
-    """Max description-only chars for secondary sidebar calls: rejection-blocker suggestions and
-    job-requirements extraction. Higher than get_llm_max_chars() because these calls have
-    lightweight system prompts (no candidate profile context).
+    """Max description-only chars for rejection-blocker suggestion calls.
+
+    Higher than get_llm_max_chars() because this call has a lightweight system prompt
+    without candidate profile context.
     """
     return get_llm_prompt_setting_int(KEY_LLM_PROMPT_JOB_DESCRIPTION_MAX_CHARS)
 
@@ -205,9 +201,9 @@ def get_llm_learning_candidates_max_items() -> int:
     return get_llm_prompt_setting_int(KEY_LLM_PROMPT_LEARNING_MAX_ITEMS)
 
 
-def get_llm_job_requirements_max_items() -> int:
-    """Max job_requirements returned by the LLM."""
-    return get_llm_prompt_setting_int(KEY_LLM_PROMPT_JOB_REQUIREMENTS_MAX_ITEMS)
+def get_llm_requirement_coverage_max_items() -> int:
+    """Max capability/qualification requirement coverage rows returned by the LLM."""
+    return get_llm_prompt_setting_int(KEY_LLM_PROMPT_REQUIREMENT_COVERAGE_MAX_ITEMS)
 
 
 def get_llm_rejection_blocker_suggestions_max_items() -> int:

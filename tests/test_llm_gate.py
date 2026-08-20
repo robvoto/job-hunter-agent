@@ -36,13 +36,6 @@ def test_build_capability_naming_guidance_uses_managed_defaults_only():
     assert "skip" not in prompt
 
 
-def test_build_job_requirements_prompt_excludes_work_type_from_job_requirements():
-    prompt = llm_gate.build_job_requirements_prompt()
-
-    assert "Do not include work type, contract length" in prompt
-    assert "structured work_type metadata" in prompt
-
-
 def test_posting_channel_guidance_treats_employer_voice_as_direct_evidence():
     prompt = llm_gate.build_posting_channel_guidance()
 
@@ -189,10 +182,6 @@ def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
             "learning_candidates": [
                 {"signal": "platform engineer", "suggested_category": "capability_concept"},
             ],
-            "job_requirements": [
-                "Stakeholder engagement",
-                "Process mapping",
-            ],
             "requirement_coverage": [
                 {
                     "requirement": "Stakeholder engagement",
@@ -252,7 +241,6 @@ def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
                 "profile_support": ["process mapping"],
             },
         ],
-        "job_requirements": ["Stakeholder engagement", "Process mapping"],
     }
 
 
@@ -264,7 +252,6 @@ def test_normalize_llm_review_payload_rejects_keep_without_requirement_coverage(
         llm_gate.normalize_llm_review_payload(
             {
                 "fit_review": {"decision": "KEEP", "grade": "STRONG"},
-                "job_requirements": ["Stakeholder engagement"],
                 "requirement_coverage": [],
             }
         )
@@ -275,7 +262,6 @@ def test_normalize_llm_review_payload_downgrades_supported_when_role_duration_is
         {
             "decision": "KEEP",
             "grade": "EXCELLENT",
-            "job_requirements": ["5+ years experience as a Business Analyst"],
             "requirement_coverage": [
                 {
                     "requirement": "5+ years experience as a Business Analyst",
@@ -314,7 +300,6 @@ def test_normalize_llm_review_payload_downgrades_supported_when_years_requiremen
         {
             "decision": "KEEP",
             "grade": "EXCELLENT",
-            "job_requirements": ["5+ years Python backend development"],
             "requirement_coverage": [
                 {
                     "requirement": "5+ years Python backend development",
@@ -351,7 +336,6 @@ def test_normalize_llm_review_payload_matches_years_requirement_against_role_var
         {
             "decision": "KEEP",
             "grade": "EXCELLENT",
-            "job_requirements": ["5+ years experience as BA"],
             "requirement_coverage": [
                 {
                     "requirement": "5+ years experience as BA",
@@ -412,7 +396,6 @@ def test_normalize_llm_review_payload_falls_back_to_model_grade_without_coverage
         {
             "decision": "REJECT",
             "grade": "MISMATCH",
-            "job_requirements": [],
             "requirement_coverage": [],
         }
     )
@@ -425,7 +408,6 @@ def test_normalize_llm_review_payload_debug_reason_is_capped():
         {
             "fit_review": {"decision": "KEEP", "grade": "STRONG"},
             "debug_reason": "  A" * 200,
-            "job_requirements": ["Stakeholder engagement"],
             "requirement_coverage": [
                 {
                     "requirement": "Stakeholder engagement",
@@ -445,7 +427,6 @@ def test_normalize_llm_review_payload_debug_reason_is_capped():
 def _keep_payload_with_alignment(**overrides):
     base = {
         "fit_review": {"decision": "KEEP", "grade": "STRONG"},
-        "job_requirements": ["Stakeholder engagement"],
         "requirement_coverage": [
             {
                 "requirement": "Stakeholder engagement",
@@ -516,7 +497,6 @@ def test_request_learning_payload_uses_single_llm_call(monkeypatch):
         def model_dump(self):
             return {
                 "fit_review": {"decision": "KEEP", "grade": "SOLID"},
-                "job_requirements": ["Stakeholder engagement"],
                 "requirement_coverage": [
                     {
                         "requirement": "Stakeholder engagement",
@@ -563,7 +543,6 @@ def test_request_learning_payload_uses_debug_fit_review_schema_when_enabled(monk
         def model_dump(self):
             return {
                 "fit_review": {"decision": "KEEP", "grade": "SOLID"},
-                "job_requirements": ["Stakeholder engagement"],
                 "requirement_coverage": [
                     {
                         "requirement": "Stakeholder engagement",
@@ -623,10 +602,6 @@ def test_normalize_llm_review_payload_distinguishes_capability_name_and_related_
     payload = llm_gate.normalize_llm_review_payload(
         {
             "fit_review": {"decision": "KEEP", "grade": "STRONG"},
-            "job_requirements": [
-                "Stakeholder engagement",
-                "Requirements traceability",
-            ],
             "requirement_coverage": [
                 {
                     "requirement": "Stakeholder engagement",
@@ -671,7 +646,6 @@ def test_request_learning_payload_retries_once_on_invalid_json(monkeypatch, capl
         def model_dump(self):
             return {
                 "fit_review": {"decision": "KEEP", "grade": "SOLID"},
-                "job_requirements": ["Stakeholder engagement"],
                 "requirement_coverage": [
                     {
                         "requirement": "Stakeholder engagement",
@@ -735,7 +709,6 @@ def test_request_learning_payload_returns_usage_summary(monkeypatch):
         def model_dump(self):
             return {
                 "fit_review": {"decision": "KEEP", "grade": "SOLID"},
-                "job_requirements": ["Stakeholder engagement"],
                 "requirement_coverage": [
                     {
                         "requirement": "Stakeholder engagement",
@@ -785,7 +758,6 @@ def test_strong_grade_requires_requirement_capability_evidence():
     payload = llm_gate.normalize_llm_review_payload(
         {
             "fit_review": {"decision": "KEEP", "grade": "STRONG"},
-            "job_requirements": ["Stakeholder engagement", "Process mapping"],
             "requirement_coverage": [
                 {
                     "requirement": "Stakeholder engagement",
@@ -814,11 +786,6 @@ def test_prospend_style_partial_coverage_does_not_become_strong():
     payload = llm_gate.normalize_llm_review_payload(
         {
             "fit_review": {"decision": "KEEP", "grade": "STRONG"},
-            "job_requirements": [
-                "Stakeholder engagement",
-                "Process mapping",
-                "UAT support",
-            ],
             "requirement_coverage": [
                 {
                     "requirement": "Stakeholder engagement",
@@ -1053,7 +1020,6 @@ def test_fit_review_preserves_and_splits_eligibility_outside_general_row_budget(
     result = llm_gate.normalize_llm_review_payload(
         {
             "fit_review": {"decision": "MAYBE", "grade": "WEAK"},
-            "job_requirements": [row["requirement"] for row in general_rows],
             "requirement_coverage": general_rows,
             "eligibility_requirements": [
                 {
@@ -1787,12 +1753,6 @@ def test_build_requirement_coverage_guidance_includes_key_phrases():
     assert "Do not mark every row required" in guidance
 
 
-def test_build_job_requirements_guidance_excludes_work_types_from_requirements():
-    guidance = llm_gate.build_job_requirements_guidance()
-    assert "Do not include work type, contract length" in guidance
-    assert "structured work_type metadata" in guidance
-
-
 def test_build_fit_review_grade_guidance_includes_key_phrase():
     guidance = llm_gate.build_fit_review_grade_guidance()
     assert "fit_review.grade" in guidance
@@ -1955,7 +1915,6 @@ def test_normalize_review_rejects_model_keep_when_derived_grade_is_mismatch():
     payload = llm_gate.normalize_llm_review_payload(
         {
             "fit_review": {"decision": "KEEP", "grade": "STRONG"},
-            "job_requirements": ["Must have Salesforce"],
             "requirement_coverage": [
                 {
                     "requirement": "Must have Salesforce",
