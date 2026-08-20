@@ -359,6 +359,11 @@ class _LLMRequirementCoverageItem(BaseModel):
     # equality — it only trusts the flag. Missing/false keeps the row
     # visible but blocks profile-learning actions on it.
     profile_fact_resolved: bool = False
+    # Separate semantic judgement for requirement-type learning. True means the
+    # entire requirement can safely be assigned one reusable type without
+    # discarding another independently required dimension. Legacy cache rows
+    # default false so old output is suppressed rather than re-called or guessed.
+    classification_reviewable: bool = False
     status: str
     matched_candidate_fact: str = Field(
         default="",
@@ -1541,6 +1546,7 @@ def normalize_llm_requirement_coverage(
         # text equality (e.g. "Java" legitimately equals its own canonical
         # name). Trust the LLM's own explicit judgement instead.
         profile_fact_resolved = bool(item.get("profile_fact_resolved"))
+        classification_reviewable = bool(item.get("classification_reviewable"))
         # canonical_requirement is a display/interpretation label only — it is
         # not proof the row is one safe factual profile candidate. Per the
         # named_alternatives field contract, ANY named alternative (not just
@@ -1866,6 +1872,7 @@ def normalize_llm_requirement_coverage(
             # Renderer must gate Add-to-profile / future "I don't have this"
             # actions on this, not on canonical_requirement truthiness alone.
             "profile_action_allowed": profile_action_allowed,
+            "classification_reviewable": classification_reviewable,
             "status": status,
             "matched_candidate_fact": matched_candidate_fact,
             "capability_name": capability_name,

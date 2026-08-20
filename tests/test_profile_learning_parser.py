@@ -43,6 +43,7 @@ _LLM_FIXTURE = {
             "fit": "core",
             "aliases": ["stakeholder management"],
             "icon_key": "communication_stakeholders",
+            "atomic_concept": True,
         },
         {
             "name": "process mapping",
@@ -50,6 +51,7 @@ _LLM_FIXTURE = {
             "fit": "core",
             "aliases": [],
             "icon_key": "operations_process",
+            "atomic_concept": True,
         },
         {
             "name": "requirements analysis",
@@ -57,6 +59,7 @@ _LLM_FIXTURE = {
             "fit": "core",
             "aliases": ["requirements gathering"],
             "icon_key": "analysis_requirements",
+            "atomic_concept": True,
         },
     ],
     "role_experience": [
@@ -141,6 +144,7 @@ def test_build_learning_patch_groups_role_experience_by_normalized_title():
                 "level": "strong",
                 "aliases": [],
                 "icon_key": "communication_stakeholders",
+                "atomic_concept": True,
                 "needs_review": False,
             },
         ],
@@ -189,6 +193,7 @@ def test_build_learning_patch_groups_role_experience_by_canonical_title_and_pres
                 "level": "strong",
                 "aliases": [],
                 "icon_key": "communication_stakeholders",
+                "atomic_concept": True,
                 "needs_review": False,
             },
         ],
@@ -265,6 +270,7 @@ def test_build_learning_patch_groups_role_experience_by_canonical_title_and_pres
                         "level": "strong",
                         "aliases": [],
                         "icon_key": "communication_stakeholders",
+                        "atomic_concept": True,
                         "needs_review": False,
                     },
                 ],
@@ -295,6 +301,7 @@ def test_build_learning_patch_groups_role_experience_by_canonical_title_and_pres
                         "level": "strong",
                         "aliases": [],
                         "icon_key": "communication_stakeholders",
+                        "atomic_concept": True,
                         "needs_review": False,
                     },
                 ],
@@ -345,6 +352,7 @@ def test_build_learning_patch_raises_when_llm_omits_required_fields(fixture, exp
                     "level": "strong",
                     "aliases": [],
                     "icon_key": "not_real",
+                    "atomic_concept": True,
                     "needs_review": False,
                 },
             ],
@@ -384,6 +392,7 @@ def test_build_learning_patch_does_not_register_title_normalization_candidate_si
                         "level": "working",
                         "aliases": [],
                         "icon_key": "analysis_requirements",
+                        "atomic_concept": True,
                         "needs_review": False,
                     },
                 ],
@@ -417,6 +426,7 @@ def test_build_learning_patch_routes_uncertain_capabilities_to_signal_registry()
                 "level": "strong",
                 "aliases": [],
                 "icon_key": "analysis_requirements",
+                "atomic_concept": True,
                 "needs_review": False,
             },
             {
@@ -424,6 +434,7 @@ def test_build_learning_patch_routes_uncertain_capabilities_to_signal_registry()
                 "level": "working",
                 "aliases": ["mystery platform"],
                 "icon_key": "systems_platforms",
+                "atomic_concept": True,
                 "needs_review": True,
             },
             {
@@ -431,6 +442,7 @@ def test_build_learning_patch_routes_uncertain_capabilities_to_signal_registry()
                 "level": "basic",
                 "aliases": [],
                 "icon_key": "technical_build",
+                "atomic_concept": True,
                 "needs_review": True,
             },
         ],
@@ -488,6 +500,7 @@ def test_build_learning_patch_does_not_emit_hard_blocker_pattern():
                 "level": "working",
                 "aliases": [],
                 "icon_key": "systems_platforms",
+                "atomic_concept": True,
                 "needs_review": False,
             },
         ],
@@ -545,6 +558,62 @@ def test_update_job_history_does_not_write_sightings():
 # CV extraction disk cache (regression: in-memory cache lost on server restart)
 
 
+def test_split_learning_capabilities_suppresses_vague_parent_and_filters_known_atomic_concept(monkeypatch):
+    def fake_known(_category, name, _aliases):
+        return (name == "jira", "Jira" if name == "jira" else "")
+
+    monkeypatch.setattr(profile_learning, "signal_in_approved_knowledge", fake_known)
+
+    approved, review_signals = profile_learning._split_learning_capabilities(
+        [
+            {
+                "name": "technical tools proficiency",
+                "level": "working",
+                "aliases": ["sql", "azure devops", "jira"],
+                "icon_key": "technical_tools",
+                "atomic_concept": False,
+                "needs_review": True,
+            },
+            {
+                "name": "azure devops",
+                "level": "working",
+                "aliases": ["ado"],
+                "icon_key": "technical_tools",
+                "atomic_concept": True,
+                "needs_review": True,
+            },
+            {
+                "name": "jira",
+                "level": "working",
+                "aliases": [],
+                "icon_key": "technical_tools",
+                "atomic_concept": True,
+                "needs_review": True,
+            },
+        ]
+    )
+
+    assert [item["signal"] for item in review_signals] == ["azure devops"]
+    assert [item["name"] for item in approved] == ["jira"]
+    assert "atomic_concept" not in approved[0]
+
+
+def test_validate_capabilities_requires_atomic_concept_judgement():
+    with pytest.raises(ValueError, match="atomic_concept"):
+        profile_learning._validate_capabilities(
+            [
+                {
+                    "name": "workflow design",
+                    "level": "working",
+                    "aliases": [],
+                    "icon_key": "operations_process",
+                    "needs_review": True,
+                }
+            ],
+            alias_limit=4,
+        )
+
+
 def _reset_cv_extraction_cache():
     profile_learning._cv_extraction_cache.clear()
     profile_learning._cv_extraction_cache_loaded = False
@@ -554,7 +623,7 @@ def test_llm_extract_from_cv_cache_hit_skips_save(caplog):
     """A cache hit must return the stored result without calling save."""
     cv_text = "Test CV for cache-hit test"
     lookback, alias_limit = 5, 3
-    cache_key = _hashlib.sha256(f"role-tier-v1:{lookback}:{alias_limit}:{cv_text}".encode()).hexdigest()[
+    cache_key = _hashlib.sha256(f"role-tier-v{profile_learning._CV_EXTRACTION_CACHE_CONTRACT_VERSION}:{lookback}:{alias_limit}:{cv_text}".encode()).hexdigest()[
         :16
     ]
     fake_result = {
@@ -598,7 +667,7 @@ def test_llm_extract_from_cv_loads_disk_cache_before_calling_llm():
     """Simulates server restart: disk cache has a prior result; LLM must not be called."""
     cv_text = "My CV content for disk restore test"
     lookback, alias_limit = 5, 3
-    cache_key = _hashlib.sha256(f"role-tier-v1:{lookback}:{alias_limit}:{cv_text}".encode()).hexdigest()[
+    cache_key = _hashlib.sha256(f"role-tier-v{profile_learning._CV_EXTRACTION_CACHE_CONTRACT_VERSION}:{lookback}:{alias_limit}:{cv_text}".encode()).hexdigest()[
         :16
     ]
     prior_result = {

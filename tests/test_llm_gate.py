@@ -229,6 +229,7 @@ def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
                 "requirement_type": "capability",
                 "canonical_requirement": "",
                 "profile_action_allowed": False,
+                "classification_reviewable": False,
                 "status": "supported",
                 "matched_candidate_fact": "Stakeholder Engagement",
                 "capability_name": "Stakeholder Engagement",
@@ -242,6 +243,7 @@ def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
                 "requirement_type": "capability",
                 "canonical_requirement": "",
                 "profile_action_allowed": False,
+                "classification_reviewable": False,
                 "status": "partially_supported",
                 "matched_candidate_fact": "Process Mapping",
                 "capability_name": "Process Mapping",
@@ -1033,6 +1035,7 @@ def test_requirement_coverage_prompt_reserves_dedicated_eligibility_output():
     guidance = llm_gate.build_requirement_coverage_guidance()
     assert "eligibility_requirements are separate and do not consume this limit" in guidance
     assert '"eligibility_requirements"' in llm_gate.LLM_FIT_REVIEW_PROMPT_SHAPE
+    assert '"classification_reviewable":true|false' in llm_gate.LLM_FIT_REVIEW_PROMPT_SHAPE
 
 
 def test_fit_review_preserves_and_splits_eligibility_outside_general_row_budget():
@@ -1708,6 +1711,7 @@ def test_normalize_coverage_marks_conflicting_classification_uncertain(monkeypat
                 "requirement": "5+ years working in a security clearance environment",
                 "importance": "required",
                 "requirement_type": "capability",
+                "classification_reviewable": True,
                 "status": "supported",
                 "matched_candidate_fact": "",
             }
@@ -1715,11 +1719,28 @@ def test_normalize_coverage_marks_conflicting_classification_uncertain(monkeypat
     )
 
     assert result[0]["requirement_type"] == "uncertain"
+    assert result[0]["classification_reviewable"] is True
     assert result[0]["status"] == "invalid"
     assert result[0]["llm_proposed_requirement_type"] == "capability"
     assert warnings
     assert warnings[0]["context"]["reason"] == "deterministic_classification_uncertain"
     assert warnings[0]["context"]["requirement_type_after"] == "uncertain"
+
+
+def test_normalize_coverage_legacy_payload_is_not_classification_reviewable():
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "Unresolved requirement from an older cached review",
+                "importance": "required",
+                "requirement_type": "capability",
+                "status": "not_shown",
+                "matched_candidate_fact": "",
+            }
+        ]
+    )
+
+    assert result[0]["classification_reviewable"] is False
 
 
 def test_normalize_coverage_preserves_malformed_required_requirement():

@@ -94,6 +94,7 @@ def _cap_log(msg: str) -> None:
 
 _BULLET_PREFIX_RE = re.compile(r"^[\-*•–—]+\s*")
 
+_CV_EXTRACTION_CACHE_CONTRACT_VERSION = 2
 _cv_extraction_cache: dict[str, dict[str, Any]] = {}
 _cv_extraction_cache_loaded = False
 
@@ -105,6 +106,9 @@ class _CapabilityExtraction(BaseModel):
     level: Literal["strong", "working", "basic"]
     aliases: list[str] = Field(default_factory=list)
     icon_key: str
+    # Semantic ownership stays with the extraction LLM. False means the row is
+    # an umbrella/mixed concept and must never become reusable capability knowledge.
+    atomic_concept: bool
     needs_review: bool = False
 
 
@@ -297,7 +301,10 @@ def _llm_extract_from_cv(
     """Single LLM call: extract capabilities, title patterns, and match preferences from CV text."""
     _ensure_cv_extraction_cache_loaded()
     cache_key = hashlib.sha256(
-        f"role-tier-v1:{lookback_years}:{alias_limit}:{source_text}".encode()
+        (
+            f"role-tier-v{_CV_EXTRACTION_CACHE_CONTRACT_VERSION}:"
+            f"{lookback_years}:{alias_limit}:{source_text}"
+        ).encode()
     ).hexdigest()[:16]
     if benchmark_model is None and cache_key in _cv_extraction_cache:
         cached = _cv_extraction_cache[cache_key]
@@ -347,12 +354,14 @@ def _llm_extract_from_cv(
         "- Treat the raw CV text as the source of truth.\n"
         "- capabilities: extract 8–15 transferable professional skills when the CV supports them. "
         "Not company names, employer names, job titles, or raw phrase fragments. "
-        "Each capability must be a named skill or practice area grounded in the CV bullets, skills section, summary, or experience text. "
+        "Each capability must be one atomic reusable skill or practice area grounded in the CV bullets, skills section, summary, or experience text. "
+        "Do not use an umbrella label to group distinct tools, products, methods, or skills; return those concrete concepts as separate capability rows when the CV supports them. "
+        "Set atomic_concept=true only when the row names one reusable concept. If you cannot isolate one concept confidently, set atomic_concept=false and needs_review=true; that umbrella row will not be learned. "
         "Set level='strong' only for current or recent strengths that are repeated and clearly senior. "
         "Older evidence should usually be 'working' or 'basic' unless the CV still shows current depth. "
-        "Set needs_review=true when the capability is plausible but you are not confident it belongs in the final profile. "
+        "Set needs_review=true when the atomic capability is plausible but you are not confident it belongs in the final profile. "
         f"For each capability include up to {alias_limit} aliases: known abbreviations, acronyms, and recruiter synonyms "
-        "that refer to the same skill (e.g. for 'business process modeling': ['bpmn', 'process mapping', 'workflow design']). "
+        "that refer to the same capability. Never place a different tool, product, method, or skill in aliases merely because it appeared beside the capability in the CV. "
         "Only include aliases that are grounded in the evidence or are widely recognised industry synonyms.\n"
         f"For each capability, set icon_key to exactly one of: {', '.join(sorted(VALID_CAPABILITY_ICON_KEYS))}.\n"
         "- match_preferences: infer only from explicit statements; leave fields empty or null when not stated.\n"
@@ -445,6 +454,9 @@ def _validate_capabilities(raw: list[Any], *, alias_limit: int) -> list[dict[str
         if not name:
             rejected.append("<empty name>")
             continue
+        atomic_concept = item.get("atomic_concept")
+        if not isinstance(atomic_concept, bool):
+            raise ValueError(f"LLM capability {name!r} is missing atomic_concept judgement.")
         needs_review = bool(item.get(KEY_NEEDS_REVIEW))
         result.append(
             {
@@ -452,6 +464,7 @@ def _validate_capabilities(raw: list[Any], *, alias_limit: int) -> list[dict[str
                 KEY_LEVEL: level if level in _VALID_LEVELS else CapabilityLevel.BASIC,
                 KEY_ALIASES: aliases[:alias_limit],
                 KEY_ICON_KEY: icon_key,
+                "atomic_concept": atomic_concept,
                 KEY_NEEDS_REVIEW: needs_review,
             }
         )
@@ -662,6 +675,11 @@ def _split_learning_capabilities(
             str(alias).strip() for alias in (item.get(KEY_ALIASES) or []) if str(alias).strip()
         ]
         needs_review = bool(item.get(KEY_NEEDS_REVIEW))
+        atomic_concept = bool(item.get("atomic_concept"))
+        if not atomic_concept:
+            # The LLM could not reduce this row to one reusable concept. The
+            # concrete atomic rows it emitted separately remain eligible for review.
+            continue
         known_signal, knowledge_match = signal_in_approved_knowledge(CAT_CAPABILITY, name, aliases)
 
         if needs_review and not known_signal:
@@ -681,6 +699,7 @@ def _split_learning_capabilities(
             continue
 
         cleaned = dict(item)
+        cleaned.pop("atomic_concept", None)
         cleaned[KEY_NEEDS_REVIEW] = False if known_signal else needs_review
         if knowledge_match:
             cleaned[LEARNING_KNOWLEDGE_MATCH_KEY] = knowledge_match

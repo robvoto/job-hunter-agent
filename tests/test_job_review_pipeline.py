@@ -1972,6 +1972,7 @@ def test_build_requirement_classification_review_signals_surfaces_uncertain_item
                 "requirement": "5+ years working in a security clearance environment",
                 "importance": "required",
                 "requirement_type": "uncertain",
+                "classification_reviewable": True,
                 "status": "invalid",
                 "llm_proposed_requirement_type": "capability",
             },
@@ -1997,17 +1998,34 @@ def test_build_requirement_classification_review_signals_surfaces_uncertain_item
     ]
 
 
+def test_build_requirement_classification_review_signals_suppresses_mixed_compound_requirement():
+    record = {
+        RECORD_REQUIREMENT_COVERAGE_KEY: [
+            {
+                "requirement": "A degree plus several years of relevant experience",
+                "requirement_type": "uncertain",
+                "classification_reviewable": False,
+                "llm_proposed_requirement_type": "qualification",
+            }
+        ]
+    }
+
+    assert job_review_pipeline._build_requirement_classification_review_signals(record) == []
+
+
 def test_build_requirement_classification_review_signals_dedupes_by_requirement_text():
     record = {
         RECORD_REQUIREMENT_COVERAGE_KEY: [
             {
                 "requirement": "5+ years working in a security clearance environment",
                 "requirement_type": "uncertain",
+                "classification_reviewable": True,
                 "llm_proposed_requirement_type": "eligibility",
             },
             {
                 "requirement": "5+ years working in a security clearance environment",
                 "requirement_type": "uncertain",
+                "classification_reviewable": True,
                 "llm_proposed_requirement_type": "eligibility",
             },
         ]
@@ -2022,8 +2040,9 @@ def test_build_requirement_classification_review_signals_keeps_missing_proposal_
     record = {
         RECORD_REQUIREMENT_COVERAGE_KEY: [
             {
-                "requirement": "A formal qualification and relevant experience",
+                "requirement": "A single unresolved professional requirement",
                 "requirement_type": "uncertain",
+                "classification_reviewable": True,
             }
         ]
     }

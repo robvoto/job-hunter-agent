@@ -938,8 +938,10 @@ def _build_requirement_classification_review_signals(record: dict) -> list[dict]
     These never contribute to scoring or an "Add eligibility" prompt (see
     normalize_llm_requirement_coverage / workspace_renderer) — they only
     become a pending Learning/Needs Review signal so a human can classify the
-    requirement as capability, eligibility, or qualification. If the LLM did
-    not propose a type, the proposal remains absent rather than being guessed.
+    requirement as capability, eligibility, or qualification. Compound/mixed
+    rows are suppressed unless the LLM explicitly marks the whole requirement
+    safe for one reusable classification. If the LLM did not propose a type,
+    the proposal remains absent rather than being guessed.
     """
     signals: list[dict] = []
     seen: set[str] = set()
@@ -947,6 +949,10 @@ def _build_requirement_classification_review_signals(record: dict) -> list[dict]
         if not isinstance(item, dict):
             continue
         if item.get("requirement_type") != LLM_UNCERTAIN_COVERAGE_REQUIREMENT_TYPE:
+            continue
+        if not bool(item.get("classification_reviewable")):
+            # The requirement mixes or preserves semantics that cannot be safely
+            # represented by one reusable capability/eligibility/qualification override.
             continue
         requirement = str(item.get("requirement") or "").strip()
         key = requirement.lower()
