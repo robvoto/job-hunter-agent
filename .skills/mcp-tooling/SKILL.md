@@ -9,7 +9,7 @@ Use for project filesystem/tool access and whenever MCP execution is unreliable.
 
 ## Source of truth
 - Job Hunter WSL repo: `/home/robvoto/projects/job-hunter-agent`.
-- In a connector-based ChatGPT runtime, use `Human_MCP_Server` as the canonical Job Hunter repo/filesystem connector when it is exposed. Do not use `Local_Project_Files_Access` for Job Hunter repo access; it is deprecated/unstable and may point at stale tunnel transport. If `Human_MCP_Server` is not exposed, discover the authorised connectors available in the current runtime before claiming filesystem access is unavailable.
+- In a connector-based ChatGPT runtime, use `Human_MCP_Server` as the canonical Job Hunter repo/filesystem connector. Do not use `Local_Project_Files_Access` for Job Hunter repo access; it is deprecated/unstable and may point at stale tunnel transport. If `Human_MCP_Server` is not exposed, confirm the current session's authorised connector catalogue; if it is still unavailable, report that specific Human MCP registration/runtime failure and stop. Do not substitute another Job Hunter repo connector.
 - In Codex, Claude Code, Cline, or another local coding runtime that already has direct repository shell/filesystem access, use that native access instead of pretending ChatGPT connector namespaces exist. The shared safety rules still apply.
 - In Claude Code specifically, the same Human MCP server is exposed as `rob-human` (tools appear as `mcp__rob-human__*`). It sometimes shows as "still connecting" for the first tool call or two in a session; retry rather than concluding it is unavailable. Use it for local PC filesystem/command access outside this WSL repo checkout (`read_directory`, `list_all_files`, `file_info`, `write_file`, `patch_file`, `apply_patch`, `move_file`, `delete_file`, `run_command`), plus `search`/`fetch` and `google_auth_info`. For files inside this repo, prefer native Claude Code file tools over `rob-human` filesystem tools.
 - For the canonical backlog, follow `.skills/backlog-management/SKILL.md`. In a ChatGPT connector runtime, use the authorised `Google_Drive` / Google Sheets connector and approved `Human_MCP_Server` fallback when exposed. In other runtimes, use their authorised live-Sheets capability if available. Never substitute stale local exports.
@@ -22,15 +22,21 @@ Use for project filesystem/tool access and whenever MCP execution is unreliable.
 - Avoid broad `grep` over binary caches or huge generated files. Exclude `__pycache__`, binary files, generated workspace HTML, and other noisy paths unless they are the target.
 - Keep command output bounded (`head`, focused `sed`, exact paths, small Python summaries). Large output increases MCP transport/decoding risk.
 - If a command produces a wrapper-side `NoneType` error after a decode/thread failure, fix the output encoding/size and retry; do not interpret the wrapper error as project failure.
-- Only report access failure after both the primary connector and approved fallback have been attempted with a minimal diagnostic command.
+- Only report Job Hunter repo access failure after the authorised `Human_MCP_Server` connector has been attempted with a minimal diagnostic command.
 
 ## Safe command pattern
 1. Start with a tiny command such as `pwd`, `git status --short`, or a focused `sed`/Python query.
 2. Confirm the expected repo/path.
 3. Run the smallest command that answers the question.
 4. If output may contain arbitrary Unicode, make it ASCII-safe or escaped.
-5. If the connector fails, retry through the approved fallback.
+5. If `Human_MCP_Server` fails, retry once with a smaller/minimal diagnostic through the same connector. Do not switch Job Hunter repo connectors.
 6. Report the exact failing layer: connector, command, path, encoding, permission, or application logic.
+
+## Human MCP contract stability
+- Treat exposed Human MCP action names and schemas as a stable versioned interface for ChatGPT.
+- Do not rename or remove an existing action, change an existing required argument, or change an existing argument type without an explicit versioned migration.
+- Prefer backward-compatible changes: add optional arguments, add new actions, or change only the internal Python implementation behind an existing action contract.
+- Internal implementation may evolve freely as long as the published v1 tool contract remains compatible.
 
 ## Existing logged-in browser control
 This section is runtime-specific: it applies only when the Human MCP/browser bridge capability is exposed. Local Codex/Claude/Cline sessions must not assume they can control the signed-in browser merely because these tools exist in another runtime.
@@ -63,7 +69,7 @@ This section is runtime-specific: it applies only when the Human MCP/browser bri
 - When there is any ambiguity about whether a click could submit, send, apply, connect, accept, delete, purchase, or otherwise create an external side effect, stop before the click and ask the human.
 
 ## Do not
-- Do not test or depend on an ngrok hostname when the project connectors are available. If `Local_Project_Files_Access` reports an old ngrok 404, treat that as connector transport failure and switch to `Human_MCP_Server`; do not probe the hostname itself.
+- Do not test or depend on an ngrok hostname when the project connectors are available. Do not invoke `Local_Project_Files_Access` for Job Hunter, even as a diagnostic fallback. If an old ngrok/Local Project reference appears in legacy configuration or logs, treat it as obsolete and continue only through `Human_MCP_Server`.
 - Do not say WSL, Google Drive, the backlog, Human MCP, or browser control is unavailable without attempting the relevant connector/tool path.
 - Do not replace live connected data with memory or stale local copies after a connector error.
 - Do not repeat a known failing broad-output command unchanged.
