@@ -1384,7 +1384,7 @@ def test_normalize_coverage_accepts_profile_capability_aliases():
 
 def test_normalize_coverage_allows_profile_action_for_clear_single_fact():
     # A requirement that resolves to exactly one named concept, with no
-    # competing alternatives, and an explicit profile_fact_resolved=True
+    # competing alternatives, and an explicit canonical_fact_resolved=True
     # judgement, is safe to offer as an Add-to-profile action.
     result = llm_gate.normalize_llm_requirement_coverage(
         [
@@ -1393,7 +1393,7 @@ def test_normalize_coverage_allows_profile_action_for_clear_single_fact():
                 "importance": "required",
                 "requirement_type": "qualification",
                 "canonical_requirement": "CBAP",
-                "profile_fact_resolved": True,
+                "canonical_fact_resolved": True,
                 "status": "not_shown",
                 "matched_job_text": "CBAP certification is required.",
                 "profile_support": [],
@@ -1410,7 +1410,7 @@ def test_normalize_coverage_allows_profile_action_for_clear_single_fact():
 def test_normalize_coverage_allows_short_atomic_requirement_echoing_its_own_text():
     # A short atomic requirement's canonical name can legitimately equal the
     # requirement text verbatim (e.g. "Java"). The LLM owns that semantic
-    # judgement via profile_fact_resolved; deterministic code must not guess
+    # judgement via canonical_fact_resolved; deterministic code must not guess
     # it from text equality.
     result = llm_gate.normalize_llm_requirement_coverage(
         [
@@ -1419,7 +1419,7 @@ def test_normalize_coverage_allows_short_atomic_requirement_echoing_its_own_text
                 "importance": "required",
                 "requirement_type": "capability",
                 "canonical_requirement": "Java",
-                "profile_fact_resolved": True,
+                "canonical_fact_resolved": True,
                 "status": "not_shown",
                 "matched_job_text": "Java",
                 "profile_support": [],
@@ -1432,9 +1432,9 @@ def test_normalize_coverage_allows_short_atomic_requirement_echoing_its_own_text
     assert result[0]["profile_action_allowed"] is True
 
 
-def test_normalize_coverage_blocks_profile_action_when_profile_fact_resolved_is_missing():
+def test_normalize_coverage_blocks_profile_action_when_canonical_fact_resolved_is_missing():
     # A canonical label alone is not a profile-learning decision. Missing the
-    # LLM-owned profile_fact_resolved judgement fails closed.
+    # LLM-owned canonical_fact_resolved judgement fails closed.
     result = llm_gate.normalize_llm_requirement_coverage(
         [
             {
@@ -1543,7 +1543,7 @@ def test_normalize_coverage_keeps_and_joined_requirements_independently_actionab
                 "importance": "required",
                 "requirement_type": "eligibility",
                 "canonical_requirement": "Australian Citizenship",
-                "profile_fact_resolved": True,
+                "canonical_fact_resolved": True,
                 "status": "not_shown",
                 "matched_job_text": "Australian Citizenship is required",
                 "profile_support": [],
@@ -1553,7 +1553,7 @@ def test_normalize_coverage_keeps_and_joined_requirements_independently_actionab
                 "importance": "required",
                 "requirement_type": "eligibility",
                 "canonical_requirement": "NV2",
-                "profile_fact_resolved": True,
+                "canonical_fact_resolved": True,
                 "status": "not_shown",
                 "matched_job_text": "NV2 Security Clearance is required",
                 "profile_support": [],
@@ -1772,9 +1772,9 @@ def test_build_rejection_suggestions_guidance_includes_key_phrase():
 
 def test_build_profile_storage_guidance_binds_mutations_to_atomic_canonical_fact():
     guidance = llm_gate.build_profile_storage_resolution_guidance()
-    assert "one atomic canonical fact represented by canonical_hint" in guidance
-    assert "domain or industry experience" in guidance
-    assert "Banking and Insurance must not be added" in guidance
+    assert "one atomic candidate fact represented by canonical_hint" in guidance
+    assert "only fact that may be persisted" in guidance
+    assert "Financial Services Experience must not be placed under Governance" in guidance
 
 
 # ── llm_judge_title ────────────────────────────────────────────────────────────
@@ -2252,7 +2252,7 @@ def test_normalize_profile_storage_resolution_existing_requires_profile_owned_ta
     # plausible-sounding name must fail closed, not write.
     with pytest.raises(ValueError, match="not profile-owned"):
         llm_gate.normalize_llm_profile_storage_resolution(
-            {"resolution": "existing", "existing_name": "Java", "related_terms": []},
+            {"resolution": "existing", "existing_name": "Java"},
             profile=_storage_profile(),
             requirement_type="capability",
         )
@@ -2260,54 +2260,37 @@ def test_normalize_profile_storage_resolution_existing_requires_profile_owned_ta
 
 def test_normalize_profile_storage_resolution_existing_matches_via_any_alias():
     resolved_via_first_alias = llm_gate.normalize_llm_profile_storage_resolution(
-        {"resolution": "existing", "existing_name": "Requirements Analysis", "related_terms": []},
+        {"resolution": "existing", "existing_name": "Requirements Analysis"},
         profile=_storage_profile(),
         requirement_type="capability",
     )
     assert resolved_via_first_alias["profile_target"] == "Business Analysis"
 
     resolved_via_second_alias = llm_gate.normalize_llm_profile_storage_resolution(
-        {"resolution": "existing", "existing_name": "User stories", "related_terms": []},
+        {"resolution": "existing", "existing_name": "User stories"},
         profile=_storage_profile(),
         requirement_type="capability",
     )
     assert resolved_via_second_alias["profile_target"] == "Business Analysis"
 
 
-def test_normalize_profile_storage_resolution_rejects_related_term_owned_elsewhere():
-    profile = _storage_profile()
-    profile["candidate_capabilities"].append(
-        {"name": "Stakeholder Management", "level": "strong", "aliases": ["Communication"]}
-    )
-    with pytest.raises(ValueError, match="already owned by a different profile item"):
+def test_normalize_profile_storage_resolution_rejects_model_generated_related_terms():
+    with pytest.raises(ValueError, match="unsupported fields"):
         llm_gate.normalize_llm_profile_storage_resolution(
             {
                 "resolution": "existing",
                 "existing_name": "Business Analysis",
                 "related_terms": ["Communication"],
             },
-            profile=profile,
-            requirement_type="capability",
-        )
-
-
-def test_normalize_profile_storage_resolution_rejects_related_terms_for_non_capability():
-    with pytest.raises(ValueError, match="only supported for capability requirements"):
-        llm_gate.normalize_llm_profile_storage_resolution(
-            {
-                "resolution": "existing",
-                "existing_name": "CBAP",
-                "related_terms": ["Something"],
-            },
             profile=_storage_profile(),
-            requirement_type="qualification",
+            requirement_type="capability",
         )
 
 
 def test_normalize_profile_storage_resolution_new_rejects_name_collision():
     with pytest.raises(ValueError, match="duplicates an existing profile name or alias"):
         llm_gate.normalize_llm_profile_storage_resolution(
-            {"resolution": "new", "new_name": "requirements analysis", "related_terms": []},
+            {"resolution": "new", "new_name": "requirements analysis"},
             profile=_storage_profile(),
             requirement_type="capability",
         )
@@ -2315,34 +2298,33 @@ def test_normalize_profile_storage_resolution_new_rejects_name_collision():
 
 def test_normalize_profile_storage_resolution_new_accepts_genuinely_new_name():
     resolved = llm_gate.normalize_llm_profile_storage_resolution(
-        {"resolution": "new", "new_name": "Java", "related_terms": []},
+        {"resolution": "new", "new_name": "Java"},
         profile=_storage_profile(),
         requirement_type="capability",
     )
-    assert resolved == {"resolution": "new", "profile_target": "Java", "related_terms": []}
+    assert resolved == {"resolution": "new", "profile_target": "Java"}
 
 
 def test_normalize_profile_storage_resolution_unresolved_rejects_any_proposed_change():
     with pytest.raises(ValueError, match="must not propose profile changes"):
         llm_gate.normalize_llm_profile_storage_resolution(
-            {"resolution": "unresolved", "new_name": "Java", "related_terms": []},
+            {"resolution": "unresolved", "new_name": "Java"},
             profile=_storage_profile(),
             requirement_type="capability",
         )
 
     resolved = llm_gate.normalize_llm_profile_storage_resolution(
-        {"resolution": "unresolved", "related_terms": []},
+        {"resolution": "unresolved"},
         profile=_storage_profile(),
         requirement_type="capability",
     )
-    assert resolved == {"resolution": "unresolved", "profile_target": "", "related_terms": []}
+    assert resolved == {"resolution": "unresolved", "profile_target": ""}
 
 
 class _FakeProfileStorageParsed:
     def __init__(self, **fields):
-        # Mirrors _LLMProfileStorageResolution's pydantic defaults so model_dump()
-        # always yields all four keys, matching the real parsed response shape.
-        self._fields = {"existing_name": "", "new_name": "", "related_terms": [], **fields}
+        # Mirrors _LLMProfileStorageResolution's pydantic defaults.
+        self._fields = {"existing_name": "", "new_name": "", **fields}
 
     def model_dump(self):
         return dict(self._fields)
@@ -2365,6 +2347,48 @@ class _FakeProfileStorageClient:
         return self._Responses(self._parsed)
 
 
+def test_llm_resolve_profile_storage_uses_profile_storage_purpose_model_override(monkeypatch):
+    calls = []
+
+    class _Parsed:
+        def model_dump(self):
+            return {"resolution": "new", "existing_name": "", "new_name": "Java"}
+
+    class _Responses:
+        def parse(self, **kwargs):
+            calls.append(kwargs)
+            return type("_Resp", (), {"output_parsed": _Parsed(), "usage": None})()
+
+    class _Client:
+        responses = _Responses()
+
+    monkeypatch.setattr(llm_gate, "_log_llm_call", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        llm_gate,
+        "get_llm_model_override_for_purpose",
+        lambda purpose: "gpt-5.6-luna" if purpose == "profile_storage_resolution" else None,
+    )
+    monkeypatch.setattr(
+        llm_gate,
+        "_log_llm_model_once",
+        lambda: (_ for _ in ()).throw(AssertionError("account model fallback must not be used")),
+    )
+
+    result = llm_gate.llm_resolve_profile_storage(
+        {
+            "requirement_type": "capability",
+            "requirement": "Java development experience",
+            "matched_job_text": "Java development experience",
+            "canonical_requirement": "Java",
+        },
+        _storage_profile(),
+        llm_client=_Client(),
+    )
+
+    assert result == {"resolution": "new", "profile_target": "Java"}
+    assert calls[0]["model"] == "gpt-5.6-luna"
+
+
 def test_llm_resolve_profile_storage_returns_validated_existing_resolution(monkeypatch):
     monkeypatch.setattr(llm_gate, "_log_llm_call", lambda *args, **kwargs: None)
     client = _FakeProfileStorageClient(resolution="existing", existing_name="Business Analysis")
@@ -2383,7 +2407,6 @@ def test_llm_resolve_profile_storage_returns_validated_existing_resolution(monke
     assert result == {
         "resolution": "existing",
         "profile_target": "Business Analysis",
-        "related_terms": [],
     }
 
 
@@ -2461,7 +2484,7 @@ def test_llm_resolve_profile_storage_returns_unresolved_without_calling_llm_when
         llm_client=_FailingClient(),
     )
 
-    assert result == {"resolution": "unresolved", "profile_target": "", "related_terms": []}
+    assert result == {"resolution": "unresolved", "profile_target": ""}
 
 
 def test_profile_storage_lookup_folds_all_aliases():

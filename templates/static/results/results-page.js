@@ -1519,9 +1519,33 @@
             showRowStatus(data.error || WORKSPACE_CONTEXT.labels.profileGapErrorLabel);
             return;
           }
-          const savedLabel = action === 'confirm_do_not_have'
-            ? WORKSPACE_CONTEXT.labels.profileGapNotHaveSavedLabel
-            : WORKSPACE_CONTEXT.labels.profileGapAddedLabel;
+          const fact = String(data.confirmed_fact || capabilityName).trim();
+          const target = String(data.profile_target || fact).trim();
+          const formatLabel = function(template, values) {
+            return Object.entries(values).reduce(
+              (text, entry) => text.split(`{${entry[0]}}`).join(entry[1]),
+              String(template || ''),
+            );
+          };
+          let savedLabel = '';
+          if (action === 'confirm_do_not_have') {
+            savedLabel = formatLabel(WORKSPACE_CONTEXT.labels.profileGapNotHaveSavedTemplate, { fact });
+          } else if (data.change_kind === 'related_skill_added') {
+            savedLabel = formatLabel(
+              WORKSPACE_CONTEXT.labels.profileGapAddedExistingTemplate,
+              { fact, target },
+            );
+          } else if (data.change_kind === 'new_item_added') {
+            savedLabel = formatLabel(
+              WORKSPACE_CONTEXT.labels.profileGapAddedNewTemplate,
+              { fact, target },
+            );
+          } else {
+            savedLabel = formatLabel(
+              WORKSPACE_CONTEXT.labels.profileGapAlreadyPresentTemplate,
+              { fact },
+            );
+          }
           replaceRowActionsWithBadge(savedLabel, allBtns);
         });
       }).catch(function() {

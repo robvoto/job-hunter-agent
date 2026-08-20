@@ -370,8 +370,10 @@ def _profile_gap_confirmable_item(job_key: str, value: str) -> dict:
         raw_requirement_type = str(item.get("requirement_type") or "").strip().lower()
         if raw_requirement_type and raw_requirement_type not in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES:
             continue
-        coverage_name = _profile_gap_coverage_name(item)
-        if _profile_gap_name_key(coverage_name) != target_name:
+        canonical_requirement = str(item.get("canonical_requirement") or "").strip()
+        if not canonical_requirement:
+            continue
+        if _profile_gap_name_key(canonical_requirement) != target_name:
             continue
         return dict(item)
     return {}
@@ -414,17 +416,11 @@ def _matches_managed_clearance(name: str) -> bool:
 
 
 def _resolve_and_confirm_requirement(canonical_item: dict, profile: dict) -> dict:
-    """Turn a user-confirmed job requirement into a candidate profile write.
-
-    Delegates the existing/new/unresolved storage decision to the dedicated
-    click-time LLM resolver (llm_gate.llm_resolve_profile_storage) rather than
-    blindly appending a new top-level profile item. Raises ValueError with a
-    user-facing message on unresolved or failed resolution — the caller must
-    not fall back to a blind append. Reloading the profile on every call and
-    resolving `existing` to a no-op (or an idempotent aliases merge) makes
-    repeating the same confirmation safe to call more than once.
-    """
+    """Persist exactly one user-confirmed canonical fact in the resolved destination."""
     requirement_type = str(canonical_item.get("requirement_type") or "capability").strip().lower()
+    confirmed_fact = normalize_profile_item_name(canonical_item.get("canonical_requirement"))
+    if not confirmed_fact:
+        raise ValueError("This requirement does not have one resolved profile fact to confirm.")
     try:
         resolved = llm_gate.llm_resolve_profile_storage(canonical_item, profile)
     except llm_gate.LLMCallError as exc:
@@ -434,33 +430,46 @@ def _resolve_and_confirm_requirement(canonical_item: dict, profile: dict) -> dic
     profile_target = resolved["profile_target"]
 
     if resolution == LLM_PROFILE_RESOLUTION_EXISTING:
-        related_terms = resolved.get("related_terms") or []
-        if requirement_type == "capability" and related_terms:
-            capabilities = list(profile.get(KEY_CANDIDATE_CAPABILITIES) or [])
-            target_key = normalize_profile_item_name(profile_target).casefold()
-            for idx, item in enumerate(capabilities):
-                if not isinstance(item, dict):
-                    continue
-                if normalize_profile_item_name(item.get("name")).casefold() != target_key:
-                    continue
-                existing_aliases = list(item.get("aliases") or [])
-                seen_aliases = {
-                    normalize_profile_item_name(alias).casefold() for alias in existing_aliases
+        if requirement_type != "capability":
+            return {
+                "ok": True,
+                "resolution": resolution,
+                "profile_target": profile_target,
+                "confirmed_fact": confirmed_fact,
+                "change_kind": "already_present",
+            }
+
+        capabilities = list(profile.get(KEY_CANDIDATE_CAPABILITIES) or [])
+        target_key = normalize_profile_item_name(profile_target).casefold()
+        fact_key = confirmed_fact.casefold()
+        for idx, item in enumerate(capabilities):
+            if not isinstance(item, dict):
+                continue
+            if normalize_profile_item_name(item.get("name")).casefold() != target_key:
+                continue
+            existing_aliases = list(item.get("aliases") or [])
+            existing_keys = {normalize_profile_item_name(alias).casefold() for alias in existing_aliases}
+            if fact_key == target_key or fact_key in existing_keys:
+                return {
+                    "ok": True,
+                    "resolution": resolution,
+                    "profile_target": profile_target,
+                    "confirmed_fact": confirmed_fact,
+                    "change_kind": "already_present",
                 }
-                merged_aliases = list(existing_aliases)
-                for term in related_terms:
-                    term_key = normalize_profile_item_name(term).casefold()
-                    if not term_key or term_key in seen_aliases:
-                        continue
-                    seen_aliases.add(term_key)
-                    merged_aliases.append(term)
-                merged = dict(item)
-                merged["aliases"] = merged_aliases
-                capabilities[idx] = merged
-                profile[KEY_CANDIDATE_CAPABILITIES] = capabilities
-                srv.save_profile(profile)
-                break
-        return {"ok": True, "resolution": resolution, "profile_target": profile_target}
+            merged = dict(item)
+            merged["aliases"] = [*existing_aliases, confirmed_fact]
+            capabilities[idx] = merged
+            profile[KEY_CANDIDATE_CAPABILITIES] = capabilities
+            srv.save_profile(profile)
+            return {
+                "ok": True,
+                "resolution": resolution,
+                "profile_target": profile_target,
+                "confirmed_fact": confirmed_fact,
+                "change_kind": "related_skill_added",
+            }
+        raise ValueError("Resolved profile target is no longer present in the candidate profile.")
 
     if resolution == LLM_PROFILE_RESOLUTION_NEW:
         if requirement_type == "qualification":
@@ -517,14 +526,20 @@ def _resolve_and_confirm_requirement(canonical_item: dict, profile: dict) -> dic
             )
             profile[KEY_CANDIDATE_CAPABILITIES] = capabilities
         srv.save_profile(profile)
-        return {"ok": True, "resolution": resolution, "profile_target": profile_target}
+        return {
+            "ok": True,
+            "resolution": resolution,
+            "profile_target": profile_target,
+            "confirmed_fact": confirmed_fact,
+            "change_kind": "new_item_added",
+        }
 
     raise ValueError("This requirement is not specific enough to safely add to your profile.")
 
 
 @router.post("/api/profile-gap")
 def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
-    """Record a user response to a 'Needs confirmation' gap on a job card.
+    """Record a profile-learning response from an actionable requirement row.
 
     confirm_have        → add the canonical profile item to the matching profile bucket
     confirm_do_not_have → add the canonical negative profile signal to the matching bucket
@@ -546,21 +561,8 @@ def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
             raise ValueError(
                 "capability_name is not a confirmable requirement coverage item for this job"
             )
-        canonical_item_name = _profile_gap_coverage_name(canonical_item)
+        canonical_item_name = str(canonical_item["canonical_requirement"]).strip()
         requirement_type = str(canonical_item.get("requirement_type") or "capability").strip().lower()
-        if requirement_type == "qualification" and not str(
-            canonical_item.get("canonical_requirement") or ""
-        ).strip():
-            # matched_candidate_fact is not vetted for a single-concept name (only
-            # canonical_requirement is, gated by profile_action_allowed — see
-            # llm_gate.normalize_llm_requirement_coverage). _profile_gap_confirmable_item
-            # already requires profile_action_allowed is True, so canonical_requirement
-            # should always be resolved here. No fallback to the unvetted name: a
-            # stale or malformed historical job record missing canonical_requirement
-            # must be rejected, not silently trusted.
-            raise ValueError(
-                "qualification requirement coverage item is missing a resolved canonical_requirement"
-            )
 
         profile = srv.load_profile()
         current_status = classify_requirement_status(
@@ -575,7 +577,13 @@ def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
 
         if action == "confirm_have":
             if current_status == STATUS_CONFIRMED_HAVE:
-                return json_response({"ok": True})
+                return json_response(
+                    {
+                        "ok": True,
+                        "confirmed_fact": canonical_item_name,
+                        "change_kind": "already_present",
+                    }
+                )
             if requirement_type == "capability" and current_status == STATUS_CONFIRMED_DO_NOT_HAVE:
                 raise ValueError("capability_name is already saved as must_not_require_skills")
             result = _resolve_and_confirm_requirement(canonical_item, profile)
@@ -583,7 +591,13 @@ def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
 
         elif action == "confirm_do_not_have":
             if current_status == STATUS_CONFIRMED_DO_NOT_HAVE:
-                return json_response({"ok": True})
+                return json_response(
+                    {
+                        "ok": True,
+                        "confirmed_fact": canonical_item_name,
+                        "change_kind": "negative_already_present",
+                    }
+                )
             if requirement_type == "qualification":
                 qualifications = list(profile.get(KEY_CANDIDATE_QUALIFICATIONS) or [])
                 lookup = _profile_gap_qualification_index(profile)
@@ -643,6 +657,13 @@ def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
                     skills.append(canonical_item_name)
                     profile["must_not_require_skills"] = skills
                     srv.save_profile(profile)
+            return json_response(
+                {
+                    "ok": True,
+                    "confirmed_fact": canonical_item_name,
+                    "change_kind": "negative_saved",
+                }
+            )
 
     except Exception as exc:
         return json_response({"error": str(exc)}, 400)

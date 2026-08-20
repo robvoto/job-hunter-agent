@@ -637,8 +637,18 @@ def render_html(
     workspace_config_labels = {
         "rejectionLoadingSuggestions": ws_page_labels.get("rejection_loading_suggestions"),
         "removeItemLabel": shared_ui_labels["remove_item_label"],
-        "profileGapAddedLabel": ws_page_labels["LABEL_WS_PROFILE_GAP_ADDED_LABEL"],
-        "profileGapNotHaveSavedLabel": ws_page_labels["LABEL_WS_PROFILE_GAP_NOT_HAVE_SAVED_LABEL"],
+        "profileGapAddedNewTemplate": ws_page_labels[
+            "LABEL_WS_PROFILE_GAP_ADDED_NEW_TEMPLATE"
+        ],
+        "profileGapAddedExistingTemplate": ws_page_labels[
+            "LABEL_WS_PROFILE_GAP_ADDED_EXISTING_TEMPLATE"
+        ],
+        "profileGapAlreadyPresentTemplate": ws_page_labels[
+            "LABEL_WS_PROFILE_GAP_ALREADY_PRESENT_TEMPLATE"
+        ],
+        "profileGapNotHaveSavedTemplate": ws_page_labels[
+            "LABEL_WS_PROFILE_GAP_NOT_HAVE_SAVED_TEMPLATE"
+        ],
         "profileGapErrorLabel": ws_page_labels["LABEL_WS_PROFILE_GAP_ERROR_LABEL"],
     }
 

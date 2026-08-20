@@ -4456,7 +4456,7 @@ def test_add_to_profile_button_carries_capability_data_attributes():
     assert "Needs confirmation" not in html
 
 
-def test_profile_fact_resolved_true_flows_through_to_add_to_profile_button():
+def test_canonical_fact_resolved_true_flows_through_to_add_to_profile_button():
     coverage = llm_gate.normalize_llm_requirement_coverage(
         [
             {
@@ -4464,7 +4464,7 @@ def test_profile_fact_resolved_true_flows_through_to_add_to_profile_button():
                 "importance": "required",
                 "requirement_type": "capability",
                 "canonical_requirement": "Responsible AI",
-                "profile_fact_resolved": True,
+                "canonical_fact_resolved": True,
                 "status": "not_shown",
                 "matched_job_text": "Working knowledge of responsible AI principles",
                 "profile_support": [],
@@ -4497,7 +4497,7 @@ def test_profile_fact_resolved_true_flows_through_to_add_to_profile_button():
     assert 'data-action="confirm_have" data-capability-name="Responsible AI"' in html
 
 
-def test_profile_fact_resolved_false_suppresses_add_to_profile_button():
+def test_canonical_fact_resolved_false_suppresses_add_to_profile_button():
     coverage = llm_gate.normalize_llm_requirement_coverage(
         [
             {
@@ -4505,7 +4505,7 @@ def test_profile_fact_resolved_false_suppresses_add_to_profile_button():
                 "importance": "required",
                 "requirement_type": "capability",
                 "canonical_requirement": "User stories and acceptance criteria",
-                "profile_fact_resolved": False,
+                "canonical_fact_resolved": False,
                 "status": "not_shown",
                 "matched_job_text": "Write testable user stories and acceptance criteria",
                 "profile_support": [],

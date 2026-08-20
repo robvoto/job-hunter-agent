@@ -351,13 +351,26 @@ class _LLMRequirementCoverageItem(BaseModel):
     # ["IIBA","CBAP","CCBA","CSPO","PSM"]), empty for an atomic requirement.
     # Normalization gates profile-learning actions on this, not on whether
     # canonical_requirement merely happens to be non-empty.
-    named_alternatives: list[str] = Field(default_factory=list)
+    named_alternatives: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Only genuine alternative ways to satisfy the requirement. Exclude optional examples, "
+            "preferences, and narrower subdomains when one clear core fact still exists."
+        ),
+    )
     # Explicit LLM judgement: true only when canonical_requirement names a
     # single reusable profile concept the model actually resolved, not the
     # ad sentence restated. Deterministic code must not guess this from text
     # equality — it only trusts the flag. Missing/false keeps the row
     # visible but blocks profile-learning actions on it.
-    profile_fact_resolved: bool = False
+    canonical_fact_resolved: bool = Field(
+        default=False,
+        description=(
+            "True only when canonical_requirement is one clear reusable atomic candidate fact. "
+            "When canonical_requirement is clear and there are no genuine named alternatives, "
+            "this must be true even if the source sentence contains optional examples or preferences."
+        ),
+    )
     # Separate semantic judgement for requirement-type learning. True means the
     # entire requirement can safely be assigned one reusable type without
     # discarding another independently required dimension. Legacy cache rows
@@ -386,7 +399,6 @@ class _LLMProfileStorageResolution(BaseModel):
     resolution: str
     existing_name: str = ""
     new_name: str = ""
-    related_terms: list[str] = Field(default_factory=list)
 
 
 class _LLMReviewPayload(BaseModel):
@@ -776,7 +788,7 @@ def build_profile_storage_resolution_guidance() -> str:
 # Shared cache namespace/profile lifecycle. Fit review and title judgement each
 # have their own contract version so changing one does not invalidate the other.
 LLM_CACHE_SCHEMA_VERSION = 3
-FIT_REVIEW_CACHE_CONTRACT_VERSION = 2
+FIT_REVIEW_CACHE_CONTRACT_VERSION = 3
 TITLE_JUDGMENT_CACHE_CONTRACT_VERSION = 1
 
 
@@ -1541,18 +1553,18 @@ def normalize_llm_requirement_coverage(
         # not a structural one — deterministic code must not guess it from
         # text equality (e.g. "Java" legitimately equals its own canonical
         # name). Trust the LLM's own explicit judgement instead.
-        profile_fact_resolved = bool(item.get("profile_fact_resolved"))
+        canonical_fact_resolved = bool(item.get("canonical_fact_resolved"))
         classification_reviewable = bool(item.get("classification_reviewable"))
         # canonical_requirement is a display/interpretation label only — it is
         # not proof the row is one safe factual profile candidate. Per the
         # named_alternatives field contract, ANY named alternative (not just
         # more than one) means the ad posed a disjunctive/example clause
-        # rather than one atomic concept. profile_fact_resolved is the LLM's
+        # rather than one atomic concept. canonical_fact_resolved is the LLM's
         # own explicit confirmation that canonical_requirement is a genuinely
         # resolved concept, not restated ad prose. All three must hold for
         # profile-learning actions to be safe.
         profile_action_allowed = (
-            bool(canonical_requirement) and not named_alternatives and profile_fact_resolved
+            bool(canonical_requirement) and not named_alternatives and canonical_fact_resolved
         )
         matched_candidate_fact_raw = item.get("matched_candidate_fact") or item.get("profile_name")
         if not matched_candidate_fact_raw:
@@ -2402,12 +2414,11 @@ def normalize_llm_profile_storage_resolution(
     profile: dict[str, Any],
     requirement_type: str,
 ) -> dict[str, Any]:
-    """Validate the LLM storage decision using exact profile ownership only.
+    """Validate an LLM destination decision using exact profile ownership only.
 
-    Semantic grouping belongs to the dedicated LLM call. This boundary only
-    verifies the returned existing target is profile-owned, a proposed new name
-    is not already an exact name/alias, and related terms do not collide with a
-    different existing profile item.
+    The LLM chooses only existing/new/unresolved. It never proposes additional
+    candidate facts: the already-confirmed canonical_requirement is the sole
+    fact the mutation layer may persist.
     """
 
     if requirement_type not in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES:
@@ -2415,25 +2426,14 @@ def normalize_llm_profile_storage_resolution(
     if not isinstance(value, dict):
         raise ValueError("Profile storage resolution must be an object")
 
+    unexpected_fields = set(value) - {"resolution", "existing_name", "new_name"}
+    if unexpected_fields:
+        raise ValueError(
+            f"Profile storage resolution contains unsupported fields: {sorted(unexpected_fields)}"
+        )
     resolution = compact_whitespace(value.get("resolution")).lower()
     existing_name = normalize_profile_item_name(value.get("existing_name"))
     new_name = normalize_profile_item_name(value.get("new_name"))
-    raw_related_terms = value.get("related_terms")
-    if not isinstance(raw_related_terms, list):
-        raise ValueError("Profile storage related_terms must be a list")
-
-    related_terms: list[str] = []
-    seen_related: set[str] = set()
-    for raw_term in raw_related_terms:
-        term = normalize_profile_item_name(raw_term)
-        key = term.casefold()
-        if not key or key in seen_related:
-            continue
-        seen_related.add(key)
-        related_terms.append(term)
-    if related_terms and requirement_type != "capability":
-        raise ValueError("related_terms is only supported for capability requirements")
-
     lookup = _profile_storage_lookup(profile, requirement_type)
 
     if resolution == LLM_PROFILE_RESOLUTION_EXISTING:
@@ -2442,23 +2442,13 @@ def normalize_llm_profile_storage_resolution(
         canonical = lookup.get(existing_name.casefold())
         if not canonical:
             raise ValueError("Existing profile resolution target is not profile-owned")
-        novel_terms: list[str] = []
-        for term in related_terms:
-            term_key = term.casefold()
-            owned_by = lookup.get(term_key)
-            if owned_by and owned_by.casefold() != canonical.casefold():
-                raise ValueError("Related term is already owned by a different profile item")
-            if owned_by or term_key == canonical.casefold():
-                continue
-            novel_terms.append(term)
         return {
             "resolution": LLM_PROFILE_RESOLUTION_EXISTING,
             "profile_target": canonical,
-            "related_terms": novel_terms,
         }
 
     if resolution == LLM_PROFILE_RESOLUTION_NEW:
-        if existing_name or related_terms or not new_name:
+        if existing_name or not new_name:
             raise ValueError("New profile resolution requires new_name only")
         existing_target = lookup.get(new_name.casefold())
         if existing_target:
@@ -2466,16 +2456,14 @@ def normalize_llm_profile_storage_resolution(
         return {
             "resolution": LLM_PROFILE_RESOLUTION_NEW,
             "profile_target": new_name,
-            "related_terms": [],
         }
 
     if resolution == LLM_PROFILE_RESOLUTION_UNRESOLVED:
-        if existing_name or new_name or related_terms:
+        if existing_name or new_name:
             raise ValueError("Unresolved profile resolution must not propose profile changes")
         return {
             "resolution": LLM_PROFILE_RESOLUTION_UNRESOLVED,
             "profile_target": "",
-            "related_terms": [],
         }
 
     raise ValueError(f"Invalid profile storage resolution: {resolution!r}")
@@ -2510,7 +2498,6 @@ def llm_resolve_profile_storage(
         return {
             "resolution": LLM_PROFILE_RESOLUTION_UNRESOLVED,
             "profile_target": "",
-            "related_terms": [],
         }
 
     payload = {
@@ -2520,7 +2507,11 @@ def llm_resolve_profile_storage(
         "canonical_hint": canonical_hint,
         "existing_profile_items": _profile_storage_items(profile, requirement_type),
     }
-    model = benchmark_model or _log_llm_model_once()
+    model = (
+        benchmark_model
+        or get_llm_model_override_for_purpose("profile_storage_resolution")
+        or _log_llm_model_once()
+    )
     try:
         resp = active_client.responses.parse(
             model=model,
@@ -2573,11 +2564,10 @@ def llm_resolve_profile_storage(
         requirement_type=requirement_type,
     )
     logger.debug(
-        "[LLM][RESULT] purpose=profile_storage_resolution requirement_type=%s resolution=%s target=%r related_terms=%s",
+        "[LLM][RESULT] purpose=profile_storage_resolution requirement_type=%s resolution=%s target=%r",
         requirement_type,
         normalized["resolution"],
         normalized["profile_target"],
-        normalized["related_terms"],
     )
     return normalized
 

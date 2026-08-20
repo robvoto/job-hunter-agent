@@ -441,8 +441,10 @@ def test_rendered_workspace_html_content(tmp_path):
             "rejection_cancel_button": "Cancel",
             "rejection_admin_tip_prefix": "Need to edit saved rules? ",
             "rejection_admin_tip_link_text": "Open Settings",
-            "profile_gap_added_label": "Added to profile",
-            "profile_gap_not_have_saved_label": "Saved as not required",
+            "profile_gap_added_new_template": "Added {target} to your profile",
+            "profile_gap_added_existing_template": "Added {fact} under {target}",
+            "profile_gap_already_present_template": "{fact} is already in your profile",
+            "profile_gap_not_have_saved_template": "Marked {fact} as not in your profile",
             "profile_gap_error_label": "Could not update profile.",
         }
     }

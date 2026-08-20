@@ -31,7 +31,7 @@ def _job_history_with_requirement_coverage(job_key, coverage_items):
     }
 
 
-def _mock_profile_storage_resolution(monkeypatch, resolution, profile_target, related_terms=None):
+def _mock_profile_storage_resolution(monkeypatch, resolution, profile_target):
     # confirm_have is routed through the dedicated click-time LLM resolver
     # (llm_gate.llm_resolve_profile_storage); these tests exercise the route's
     # persistence logic given a resolution, not the LLM call itself.
@@ -40,7 +40,6 @@ def _mock_profile_storage_resolution(monkeypatch, resolution, profile_target, re
         lambda canonical_item, profile: {
             "resolution": resolution,
             "profile_target": profile_target,
-            "related_terms": list(related_terms or []),
         },
     )
 
@@ -75,6 +74,7 @@ def test_profile_gap_confirm_have_adds_canonical_capability(client, monkeypatch)
                     "requirement": "Cloud computing (AWS) experience",
                     "status": "not_shown",
                     "capability_name": "Cloud computing (AWS)",
+                    "canonical_requirement": "Cloud computing (AWS)",
                     "matched_job_text": "AWS platform experience",
                     "profile_action_allowed": True,
                 }
@@ -106,6 +106,8 @@ def test_profile_gap_confirm_have_adds_canonical_capability(client, monkeypatch)
     )
     assert resp.status_code == 200
     assert resp.json()["ok"] is True
+    assert resp.json()["confirmed_fact"] == "Cloud computing (AWS)"
+    assert resp.json()["change_kind"] == "new_item_added"
     assert saved_profiles, "profile must have been saved"
     rules = saved_profiles[0]["candidate_capabilities"]
     added = next(r for r in rules if r["name"] == "Cloud computing (AWS)")
@@ -125,6 +127,7 @@ def test_profile_gap_confirm_have_is_idempotent(client, monkeypatch):
                     "requirement": "Cloud computing (AWS) experience",
                     "status": "not_shown",
                     "capability_name": "Cloud computing (AWS)",
+                    "canonical_requirement": "Cloud computing (AWS)",
                     "matched_job_text": "AWS platform experience",
                     "profile_action_allowed": True,
                 }
@@ -296,6 +299,7 @@ def test_profile_gap_confirm_do_not_have_adds_to_must_not_require(client, monkey
                     "requirement": "AHPRA registration",
                     "status": "not_shown",
                     "capability_name": "AHPRA registration",
+                    "canonical_requirement": "AHPRA registration",
                     "matched_job_text": "AHPRA registration",
                     "profile_action_allowed": True,
                 }
@@ -324,6 +328,8 @@ def test_profile_gap_confirm_do_not_have_adds_to_must_not_require(client, monkey
     )
     assert resp.status_code == 200
     assert resp.json()["ok"] is True
+    assert resp.json()["confirmed_fact"] == "AHPRA registration"
+    assert resp.json()["change_kind"] == "negative_saved"
     assert "AHPRA registration" in saved_profiles[0]["must_not_require_skills"]
 
 
@@ -338,6 +344,7 @@ def test_profile_gap_confirm_do_not_have_is_idempotent(client, monkeypatch):
                     "requirement": "AHPRA registration",
                     "status": "not_shown",
                     "capability_name": "AHPRA registration",
+                    "canonical_requirement": "AHPRA registration",
                     "matched_job_text": "AHPRA registration",
                     "profile_action_allowed": True,
                 }
@@ -380,6 +387,7 @@ def test_profile_gap_confirm_have_adds_candidate_eligibility(client, monkeypatch
                     "status": "not_shown",
                     "requirement_type": "eligibility",
                     "matched_candidate_fact": "PV clearance",
+                    "canonical_requirement": "PV clearance",
                     "matched_job_text": "Must hold a PV clearance",
                     "profile_action_allowed": True,
                 }
@@ -428,6 +436,7 @@ def test_profile_gap_confirm_do_not_have_adds_candidate_eligibility_false(client
                     "status": "not_shown",
                     "requirement_type": "eligibility",
                     "matched_candidate_fact": "PV clearance",
+                    "canonical_requirement": "PV clearance",
                     "matched_job_text": "Must hold a PV clearance",
                     "profile_action_allowed": True,
                 }
@@ -560,7 +569,7 @@ def test_profile_gap_rejects_qualification_item_missing_canonical_requirement(cl
         },
     )
     assert resp.status_code == 400
-    assert "canonical_requirement" in resp.json()["error"]
+    assert "not a confirmable requirement coverage item" in resp.json()["error"]
     assert saved_profiles == []
 
 
@@ -599,7 +608,7 @@ def test_profile_gap_rejects_item_missing_profile_action_allowed_flag(client, mo
     assert saved_profiles == []
 
 
-def test_profile_gap_confirm_have_existing_resolution_merges_related_terms_into_aliases_without_growing_capability_count(
+def test_profile_gap_confirm_have_existing_resolution_adds_exact_canonical_fact_as_related_skill(
     client, monkeypatch
 ):
     job_key = "job-existing"
@@ -633,9 +642,7 @@ def test_profile_gap_confirm_have_existing_resolution_merges_related_terms_into_
     monkeypatch.setattr(
         "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
     )
-    _mock_profile_storage_resolution(
-        monkeypatch, "existing", "Business Analysis", related_terms=["User stories"]
-    )
+    _mock_profile_storage_resolution(monkeypatch, "existing", "Business Analysis")
 
     resp = client.post(
         "/api/profile-gap",
@@ -651,6 +658,9 @@ def test_profile_gap_confirm_have_existing_resolution_merges_related_terms_into_
     assert len(capabilities) == 1, "existing resolution must never create a new top-level item"
     assert capabilities[0]["name"] == "Business Analysis"
     assert capabilities[0]["aliases"] == ["User stories"]
+    assert resp.json()["confirmed_fact"] == "User stories"
+    assert resp.json()["profile_target"] == "Business Analysis"
+    assert resp.json()["change_kind"] == "related_skill_added"
 
 
 def test_profile_gap_confirm_have_existing_resolution_is_idempotent_on_repeat_confirmation(
@@ -694,9 +704,7 @@ def test_profile_gap_confirm_have_existing_resolution_is_idempotent_on_repeat_co
 
     monkeypatch.setattr("job_hunter_agent.server_helpers.load_profile", _load_profile)
     monkeypatch.setattr("job_hunter_agent.server_helpers.save_profile", _save_profile)
-    _mock_profile_storage_resolution(
-        monkeypatch, "existing", "Business Analysis", related_terms=["User stories"]
-    )
+    _mock_profile_storage_resolution(monkeypatch, "existing", "Business Analysis")
 
     payload = {
         "job_key": job_key,
@@ -779,6 +787,7 @@ def test_profile_gap_confirm_have_new_resolution_is_idempotent_on_repeat_confirm
                     "requirement_type": "capability",
                     "status": "not_shown",
                     "capability_name": "Cloud computing (AWS)",
+                    "canonical_requirement": "Cloud computing (AWS)",
                     "matched_job_text": "AWS platform experience",
                     "profile_action_allowed": True,
                 }
@@ -802,7 +811,7 @@ def test_profile_gap_confirm_have_new_resolution_is_idempotent_on_repeat_confirm
     monkeypatch.setattr(
         "job_hunter_agent.llm_gate.llm_resolve_profile_storage",
         lambda canonical_item, profile: resolver_calls.append(1)
-        or {"resolution": "new", "profile_target": "Cloud computing (AWS)", "related_terms": []},
+        or {"resolution": "new", "profile_target": "Cloud computing (AWS)"},
     )
 
     payload = {
@@ -837,6 +846,7 @@ def test_profile_gap_confirm_have_unresolved_resolution_fails_closed_without_sav
                     "requirement_type": "capability",
                     "status": "not_shown",
                     "capability_name": "Cloud computing (AWS)",
+                    "canonical_requirement": "Cloud computing (AWS)",
                     "matched_job_text": "AWS platform experience",
                     "profile_action_allowed": True,
                 }

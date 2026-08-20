@@ -70,13 +70,12 @@ Used for:
 - Showing candidate-visible gaps when a job requires something not found in the profile.
 
 Design decision:
-- Show missing required items in the job card.
-- User choices:
-  - Yes, I have this
-  - No, I don’t have this
-  - Decide later
-- Yes adds to candidate profile data.
-- No adds to must_not_require_skills.
+- Show unresolved/missing profile evidence once, on the relevant job-requirement row.
+- For one safe atomic fact, the row may offer `Add evidence` and `No, I don’t have this`.
+- Both actions operate on the same LLM-resolved `canonical_requirement`; optional examples or qualifiers are not separate user confirmations.
+- `Add evidence` stores exactly that confirmed fact in the resolved profile destination.
+- `No, I don’t have this` keeps the existing negative-learning behaviour; for capability facts it adds that exact canonical fact to `must_not_require_skills`.
+- Partial matches, matched requirements, and vague/compound unresolved requirements do not expose profile-learning actions.
 - Unknown gaps are visible, not silently hidden.
 
 Limit:

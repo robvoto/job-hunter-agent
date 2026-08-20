@@ -167,7 +167,7 @@ def _raw_item(case: CapturedRequirement) -> dict:
         # Simulated LLM output: a resolved canonical concept is only trusted
         # when the fixture actually supplies one, matching how a real LLM
         # response would leave this false for an unresolved/compound clause.
-        "profile_fact_resolved": bool(case.canonical_requirement),
+        "canonical_fact_resolved": bool(case.canonical_requirement),
         "status": case.status,
         "matched_candidate_fact": case.matched_candidate_fact,
         "matched_job_text": case.matched_job_text or case.wording,

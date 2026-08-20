@@ -590,8 +590,10 @@ _WORKSPACE_PAGE_LABEL_KEYS = (
     "rejection_cancel_button",
     "rejection_admin_tip_prefix",
     "rejection_admin_tip_link_text",
-    "profile_gap_added_label",
-    "profile_gap_not_have_saved_label",
+    "profile_gap_added_new_template",
+    "profile_gap_added_existing_template",
+    "profile_gap_already_present_template",
+    "profile_gap_not_have_saved_template",
     "profile_gap_error_label",
 )
 
