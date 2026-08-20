@@ -230,11 +230,6 @@ function getToggleChecked(id) {
   return Boolean(document.getElementById(id)?.checked);
 }
 
-function setToggleStateText(stateId, checked, checkedLabel, uncheckedLabel) {
-  const state = document.getElementById(stateId);
-  if (state) state.textContent = checked ? checkedLabel : uncheckedLabel;
-}
-
 function syncSourcePanelDisabledState(toggleId) {
   const toggleInput = document.getElementById(toggleId);
   const panel = toggleInput?.closest('.search-source-panel');
@@ -334,7 +329,6 @@ export {
   setSectorPreferenceValues,
   setToggleChecked,
   getToggleChecked,
-  setToggleStateText,
   syncSourcePanelDisabledState,
   setChoiceGroupValue,
   getChoiceGroupValue,

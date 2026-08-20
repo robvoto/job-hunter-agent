@@ -169,14 +169,13 @@ def test_settings_utils_review_normaliser_preserves_icon_key():
     assert "return { name, level, aliases, icon_key };" in js_text
 
 
-def test_settings_utils_exports_toggle_state_text_helper():
+def test_settings_utils_does_not_add_redundant_toggle_state_text():
     repo_root = Path(__file__).resolve().parents[1]
     js_text = (
         repo_root / "templates" / "static" / "settings" / "shared" / "settings-utils.js"
     ).read_text(encoding="utf-8")
 
-    assert "function setToggleStateText(stateId, checked, checkedLabel, uncheckedLabel)" in js_text
-    assert "  setToggleStateText," in js_text
+    assert "setToggleStateText" not in js_text
 
 
 def test_admin_settings_script_exposes_system_warnings_controls():

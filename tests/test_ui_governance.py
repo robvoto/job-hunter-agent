@@ -145,7 +145,6 @@ _CENTRAL_ONLY_COMPONENT_SELECTORS = [
     ".toggle-switch-title",
     ".toggle-switch-control",
     ".toggle-switch-ui",
-    ".toggle-switch-state",
     ".choice-card--work-mode",
     ".badge-editor",
     ".badge-editor-list",

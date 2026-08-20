@@ -40,8 +40,8 @@ Use before editing FastAPI routes, templates, workspace data, settings UI, or sc
 ## Onboarding / settings widget patterns
 
 ### Source enable toggles (`seek_enabled`, `linkedin_enabled`, `apsjobs_enabled`)
-- Both rendered as `<label class="toggle-switch">` wrapping `<input type="checkbox" role="switch">` with a `<span class="toggle-switch-state" id="*_state">` sibling.
-- JS reads/writes via `getToggleChecked(id)` / `setToggleChecked(id, bool)` / `setToggleStateText(stateId, bool)` from `settings-utils.js`.
+- Render as `<label class="toggle-switch">` wrapping `<input type="checkbox" role="switch">` and the shared slider UI. Do not add a visible `On` / `Off` / `Enabled` / `Disabled` text sibling; the switch position already communicates state.
+- JS reads/writes via `getToggleChecked(id)` / `setToggleChecked(id, bool)` from `settings-utils.js`.
 - `collectProfile()` builds `enabled_sources` from `seek_enabled`, `linkedin_enabled`, and `apsjobs_enabled` using the shared toggle helpers.
 - **Never use `.value === 'true'` for a checkbox toggle** — a checkbox's `.value` is `"on"`, not `"true"`.
 - When adding a new settings toggle near these controls, reuse the full owning structure, not just the switch classes in isolation. For search/settings source-style controls that means a real `search-source-panel` with a `search-source-panel-head`, not a loose row that happens to contain `toggle-switch--compact`.
