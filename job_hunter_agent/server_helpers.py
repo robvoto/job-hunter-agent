@@ -45,6 +45,7 @@ from job_hunter_agent.global_settings import (
 from job_hunter_agent.io_utils import (
     clear_agent_state,
     clear_audit_rows,
+    clear_candidate_application_history_runtime,
     clear_job_history,
     clear_review_data,
     clear_run_stats,
@@ -660,6 +661,15 @@ _GLOBAL_SETTINGS_LABEL_KEYS = (
     "capability_presets_heading",
     "capability_presets_copy",
     "capability_presets_empty_help",
+    "rejection_history_clear_label",
+    "rejection_history_clear_help",
+    "rejection_history_clear_confirm",
+    "rejection_history_clear_loading",
+    "rejection_history_clear_success",
+    "rejection_history_clear_error",
+    "runtime_maintenance_copy",
+    "clear_runtime_caches_help",
+    "clear_current_user_search_state_help",
     *_SYSTEM_HEALTH_LABEL_KEYS,
 )
 

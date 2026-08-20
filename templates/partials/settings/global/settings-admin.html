@@ -47,17 +47,27 @@
             </div>
             <button id="rejection_history_sync_button" type="button" class="jh-button jh-button--secondary">Sync rejection history</button>
             <div id="rejection_history_sync_status" class="field-help">Click once. Fetches the latest rows from your Job_Rejections sheet and updates the local store.</div>
+            <button
+              id="clear_candidate_application_history_button"
+              type="button"
+              class="jh-button jh-button--danger"
+              data-loading-message="__JOB_HUNTER_GLOBAL_SETTINGS_REJECTION_HISTORY_CLEAR_LOADING__"
+              data-success-message="__JOB_HUNTER_GLOBAL_SETTINGS_REJECTION_HISTORY_CLEAR_SUCCESS__"
+              data-error-message="__JOB_HUNTER_GLOBAL_SETTINGS_REJECTION_HISTORY_CLEAR_ERROR__"
+              data-confirm-message="__JOB_HUNTER_GLOBAL_SETTINGS_REJECTION_HISTORY_CLEAR_CONFIRM__"
+            >__JOB_HUNTER_GLOBAL_SETTINGS_REJECTION_HISTORY_CLEAR_LABEL__</button>
+            <div id="clear_candidate_application_history_status" class="field-help">__JOB_HUNTER_GLOBAL_SETTINGS_REJECTION_HISTORY_CLEAR_HELP__</div>
           </section>
 
           <section class="panel" id="runtime_maintenance_panel">
             <div class="panel-header">
               <h2>Runtime Maintenance</h2>
-              <p class="panel-copy">Use these admin actions to clear transient runtime data without resetting the full app. Cache clearing affects shared runtime caches. Search-state clearing affects only the current signed-in user.</p>
+              <p class="panel-copy">__JOB_HUNTER_GLOBAL_SETTINGS_RUNTIME_MAINTENANCE_COPY__</p>
             </div>
             <button id="clear_runtime_caches_button" type="button" class="jh-button jh-button--secondary">Clear runtime caches</button>
-            <div id="clear_runtime_caches_status" class="field-help">Clears shared runtime cache files and the occupation-title lookup cache.</div>
+            <div id="clear_runtime_caches_status" class="field-help">__JOB_HUNTER_GLOBAL_SETTINGS_CLEAR_RUNTIME_CACHES_HELP__</div>
             <button id="clear_current_user_search_state_button" type="button" class="jh-button jh-button--secondary">Clear current user search state</button>
-            <div id="clear_current_user_search_state_status" class="field-help">Clears this user&apos;s saved job history, workspace results, applied jobs, hidden jobs, and current search-state records.</div>
+            <div id="clear_current_user_search_state_status" class="field-help">__JOB_HUNTER_GLOBAL_SETTINGS_CLEAR_CURRENT_USER_SEARCH_STATE_HELP__</div>
           </section>
 
           <section class="panel">

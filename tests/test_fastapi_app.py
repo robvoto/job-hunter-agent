@@ -401,6 +401,13 @@ def test_admin_system_warnings_api_requires_admin(monkeypatch):
     assert response.json() == {"ok": False, "error": "Authentication required"}
 
     response = client.post(
+        "/api/admin/clear-candidate-application-history",
+        headers={"X-CSRF-Token": "token"},
+    )
+    assert response.status_code == 401
+    assert response.json() == {"ok": False, "error": "Authentication required"}
+
+    response = client.post(
         "/api/admin/clear-current-user-search-state",
         headers={"X-CSRF-Token": "token"},
     )
@@ -423,6 +430,14 @@ def test_admin_runtime_maintenance_routes(monkeypatch):
     )
     monkeypatch.setattr(
         _profile_materials.srv,
+        "clear_candidate_application_history_runtime",
+        lambda: {
+            "ok": True,
+            "message": "Candidate application rejection history and extraction cache cleared.",
+        },
+    )
+    monkeypatch.setattr(
+        _profile_materials.srv,
         "clear_current_user_search_state",
         lambda: {"ok": True, "message": "Current user search state cleared."},
     )
@@ -432,6 +447,16 @@ def test_admin_runtime_maintenance_routes(monkeypatch):
     response = client.post("/api/admin/clear-runtime-caches", headers={"X-CSRF-Token": "token"})
     assert response.status_code == 200
     assert response.json() == {"ok": True, "message": "Runtime caches cleared."}
+
+    response = client.post(
+        "/api/admin/clear-candidate-application-history",
+        headers={"X-CSRF-Token": "token"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {
+        "ok": True,
+        "message": "Candidate application rejection history and extraction cache cleared.",
+    }
 
     response = client.post(
         "/api/admin/clear-current-user-search-state",
