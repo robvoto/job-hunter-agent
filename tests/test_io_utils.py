@@ -251,21 +251,40 @@ def test_clear_runtime_caches_removes_transient_files_and_occupation_cache(isola
         [
             "llm_cache.json",
             "cv_extraction_cache.json",
-            "candidate_application_history_cache.json",
-            "candidate_application_history.json",
             "job_hunter.db",
         ]
     )
     for path in (
         llm_cache_path,
         cv_cache_path,
-        history_cache_path,
-        history_json_path,
         legacy_runtime_db_path,
     ):
         assert not path.exists()
+    assert history_cache_path.exists()
+    assert history_json_path.exists()
 
     with db_conn(isolated_db) as conn:
         count = conn.execute("SELECT COUNT(*) FROM occupation_title_cache").fetchone()[0]
 
     assert count == 0
+
+
+def test_clear_candidate_application_history_runtime_removes_only_history_files(
+    tmp_path, monkeypatch
+):
+    history_cache_path = tmp_path / "candidate_application_history_cache.json"
+    history_json_path = tmp_path / "candidate_application_history.json"
+    history_cache_path.write_text("cache", encoding="utf-8")
+    history_json_path.write_text("history", encoding="utf-8")
+
+    monkeypatch.setattr(io_utils, "CANDIDATE_APPLICATION_HISTORY_CACHE_PATH", history_cache_path)
+    monkeypatch.setattr(io_utils, "get_candidate_application_history_path", lambda: history_json_path)
+
+    result = io_utils.clear_candidate_application_history_runtime()
+
+    assert result["ok"] is True
+    assert sorted(result["cleared_files"]) == sorted(
+        ["candidate_application_history_cache.json", "candidate_application_history.json"]
+    )
+    assert not history_cache_path.exists()
+    assert not history_json_path.exists()

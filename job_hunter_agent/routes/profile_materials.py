@@ -277,6 +277,16 @@ def api_admin_clear_runtime_caches(request: Request):  # type: ignore[no-untyped
         return json_response({"error": str(exc)}, 400)
 
 
+@router.post("/api/admin/clear-candidate-application-history")
+def api_admin_clear_candidate_application_history(request: Request):  # type: ignore[no-untyped-def]
+    if not is_admin(request):
+        return auth_required_response("/api/admin/clear-candidate-application-history", False)
+    try:
+        return json_response(srv.clear_candidate_application_history_runtime())
+    except Exception as exc:
+        return json_response({"error": str(exc)}, 400)
+
+
 @router.post("/api/admin/clear-current-user-search-state")
 def api_admin_clear_current_user_search_state(
     request: Request,

@@ -665,6 +665,7 @@ export const JobHunterAdminSettings = (function () {
         button.textContent = originalLabel;
       }
     });
+
   }
 
   function initRejectionHistorySyncControls(showStatus) {
@@ -706,6 +707,46 @@ export const JobHunterAdminSettings = (function () {
       } finally {
         button.disabled = false;
         button.textContent = originalLabel;
+      }
+    });
+
+    const clearButton = document.getElementById('clear_candidate_application_history_button');
+    const clearStatus = document.getElementById('clear_candidate_application_history_status');
+    if (!clearButton || !clearStatus || clearButton.dataset.bound === 'true') {
+      return;
+    }
+    clearButton.dataset.bound = 'true';
+
+    clearButton.addEventListener('click', async () => {
+      const confirmed = window.confirm(clearButton.dataset.confirmMessage || '');
+      if (!confirmed) return;
+
+      const originalLabel = clearButton.textContent;
+      clearButton.disabled = true;
+      clearButton.textContent = clearButton.dataset.loadingMessage || originalLabel;
+      clearStatus.textContent = clearButton.dataset.loadingMessage || '';
+      clearStatus.className = 'field-help sync-status sync-status--loading';
+      try {
+        const response = await window.jobHunterFetch(
+          '/api/admin/clear-candidate-application-history',
+          { method: 'POST' },
+        );
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.error || clearButton.dataset.errorMessage || '');
+        }
+        const message = payload.message || clearButton.dataset.successMessage || '';
+        clearStatus.textContent = message;
+        clearStatus.className = 'field-help sync-status sync-status--success';
+        if (typeof showStatus === 'function') showStatus(message, 'success');
+      } catch (error) {
+        const message = error.message || clearButton.dataset.errorMessage || '';
+        clearStatus.textContent = message;
+        clearStatus.className = 'field-help sync-status sync-status--error';
+        if (typeof showStatus === 'function') showStatus(message, 'error');
+      } finally {
+        clearButton.disabled = false;
+        clearButton.textContent = originalLabel;
       }
     });
   }

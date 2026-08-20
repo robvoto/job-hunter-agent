@@ -399,6 +399,71 @@ Purpose:
 * inspect current saved state
 * avoid scrape overhead
 
+## Candidate Application History Sync
+
+The Rejection History control in Admin > Global settings imports rows from the
+configured Google Sheet so previous rejection information is available when
+the workspace renders job cards. This is an explicit sync operation; opening
+Global settings or loading the workspace does not fetch the sheet.
+
+The runtime flow is:
+
+1. The browser sends `POST /api/admin/rejection-history-sync`.
+2. The server reads the configured sheet as CSV. The sheet must be shared so
+   its CSV export is readable by the application.
+3. Each row not already in the extraction cache is sent to the constrained LLM
+   extraction path (`purpose=rejection_email_extraction`).
+4. After the complete batch finishes, the server writes the extraction cache
+   and the canonical local history store.
+5. Workspace rendering reads the local history store and annotates matching
+   job records; normal workspace startup does not use the Google Sheet or the
+   extraction cache.
+
+Current delta boundary: the Google CSV endpoint provides a full sheet
+snapshot, so every sync downloads all sheet rows in order to detect changes.
+The extraction cache is the delta optimisation: unchanged row-content hashes
+reuse their prior structured extraction and are not sent to the LLM again.
+New or changed rows are currently extracted sequentially. This is not yet a
+true delta transport or bounded parallel batch.
+
+Runtime files:
+
+| File | Role |
+| ---- | ---- |
+| `data/runtime/candidate_application_history.json` | Canonical local rejection-history records used by the workspace |
+| `data/runtime/candidate_application_history_cache.json` | Cached LLM extraction results used to avoid repeating row extraction |
+| `data/runtime/rob_candidate_application_history_import.local.json` | Local-only sheet ID/tab override; never commit it |
+
+The runtime files are intentionally gitignored. A missing
+`candidate_application_history_cache.json` warning means the sync is starting
+with an empty cache, normally on the first import. It is not itself a sync
+failure. With an empty cache, the first import can take several minutes because
+rows are processed sequentially and the browser shows only `Syncing...` while
+the request is open. The cache and local history store are written after the
+batch completes, so stopping the server during this phase interrupts the
+import and leaves no completed import to display. On the first import, the
+same missing-cache warning can also appear during the final save because the
+save path reads the absent cache before creating it; the HTTP response and
+persisted files are the authoritative completion signals.
+
+Useful log interpretation:
+
+* `Missing JSON dictionary ... candidate_application_history_cache.json`:
+  first-use empty-cache initialization.
+* Repeated `purpose=rejection_email_extraction` lines:
+  active row-by-row LLM processing; the reported `session_cost_usd` is the
+  running cost for this sync.
+* The browser message `Synced rejection history: <new> new, <total> total.`
+  together with a successful `POST /api/admin/rejection-history-sync` response:
+  the import completed.
+* The two runtime files above appearing or updating after completion:
+  the imported data and extraction cache were persisted.
+
+For a first sync, leave the server running until the browser reports the
+success message. If it is interrupted, retrying is safe: existing completed
+cache entries are reused, while rows that were not persisted are processed
+again.
+
 ---
 
 # Settings Runtime Model
@@ -555,7 +620,7 @@ Behavior:
 - The file-backed caches are pruned by both age and count.
 - Admin > Global settings also exposes maintenance actions to clear shared runtime caches or clear the current user search state immediately.
 - Clear current user search state also clears transient runtime caches, per-user agent state, the current workspace HTML, and recruiter/history review state so the next run regenerates from clean runtime state.
-- Clear runtime caches also deletes the transient candidate-application history JSON snapshot and any stale runtime-sidecar SQLite file under `data/runtime/`.
+- Clear runtime caches does not delete the imported candidate-application rejection-history JSON or its extraction cache. The dedicated Rejection History deletion action is the only maintenance action that removes those files; the next sync will reprocess the sheet and may incur significant LLM cost.
 
 ### Hard reset (wipes user-approved additions)
 
