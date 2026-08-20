@@ -212,11 +212,6 @@ def read_session_user(request: HTTPConnection) -> dict | None:
     if not user_id or not email:
         logger.warning("[AUTH][WARN] Rejected session cookie payload missing user_id or email.")
         return None
-    from job_hunter_agent.database import is_user_blocked
-
-    if is_user_blocked(email):
-        logger.info("AUTH | session rejected | user=%s | reason=blocked", email)
-        return None
     # Always re-derive role from env so admin_email changes take effect without re-login.
     role = (
         "admin"
