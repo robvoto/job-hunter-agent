@@ -343,6 +343,7 @@ class Diagnostics:
     page_errors: list[str] = field(default_factory=list)
     failed_requests: list[str] = field(default_factory=list)
     failed_responses: list[str] = field(default_factory=list)
+    teardown_started: bool = False
 
     ALLOWLIST = ("/favicon.ico",)
 
@@ -378,6 +379,11 @@ def _wire_diagnostics(page) -> Diagnostics:
         diag.page_errors.append(f"{exc} ({page.url})")
 
     def _on_requestfailed(request):
+        # Closing the browser context intentionally aborts any request still in
+        # flight. Those teardown cancellations are not application failures; real
+        # request failures that happen before teardown remain diagnostic errors.
+        if diag.teardown_started:
+            return
         if request.failure:
             diag.failed_requests.append(f"{request.method} {request.url} -> {request.failure}")
 
@@ -406,6 +412,7 @@ def _authenticated_page(browser, base_url: str, request, cookie: dict | None):
     yield page
 
     request.node._e2e_diagnostics = diag
+    diag.teardown_started = True
     context.close()
     if not diag.is_clean():
         pytest.fail(diag.describe())
