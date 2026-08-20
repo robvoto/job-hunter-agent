@@ -187,7 +187,6 @@ def _build_export_job(record: dict, workspace_state: str, profile: dict[str, Any
         "missing_clearance_support": list(record.get("missing_clearance_support") or []),
         "competitive_signals": list(record.get("competitive_signals") or []),
         "job_quality_signals": list(record.get("job_quality_signals") or []),
-        "job_requirements": list(record.get("job_requirements") or []),
         "title_reason": _first_non_empty(record.get("title_reason")),
         "content_reason": _first_non_empty(record.get("content_reason")),
         "llm_decision": _first_non_empty(record.get("llm_decision")),

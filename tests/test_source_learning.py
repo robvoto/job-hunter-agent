@@ -32,7 +32,6 @@ def test_resolve_llm_review_payload_fit_review_cache_hit_skips_llm(monkeypatch):
             "fit_review": {"decision": "KEEP", "grade": "SOLID"},
             "learning_candidates": [],
             "contextual_capability_matches": [],
-            "job_requirements": ["Stakeholder engagement", "Process mapping"],
             "requirement_coverage": [
                 {
                     "requirement": "Stakeholder engagement",
@@ -114,7 +113,6 @@ def test_resolve_llm_review_payload_cache_hit_uses_role_experience_for_years_req
         llm_fp: {
             "fit_review": {"decision": "KEEP", "grade": "EXCELLENT"},
             "learning_candidates": [],
-            "job_requirements": ["5+ years experience as a Business Analyst"],
             "requirement_coverage": [
                 {
                     "requirement": "5+ years experience as a Business Analyst",
@@ -176,7 +174,6 @@ def test_resolve_llm_review_payload_cache_miss_calls_llm(monkeypatch):
             "fit_review": {"decision": "KEEP", "grade": "SOLID"},
             "learning_candidates": [],
             "contextual_capability_matches": [],
-            "job_requirements": ["Stakeholder engagement", "Process mapping"],
             "requirement_coverage": [
                 {
                     "requirement": "Stakeholder engagement",
@@ -228,7 +225,6 @@ def test_resolve_llm_review_payload_includes_canonical_publisher_industry(monkey
             "fit_review": {"decision": "MAYBE", "grade": "WEAK"},
             "learning_candidates": [],
             "contextual_capability_matches": [],
-            "job_requirements": [],
             "requirement_coverage": [],
             "posting_channel": {
                 "kind": "agency_or_recruiter",
@@ -264,7 +260,6 @@ def test_resolve_llm_review_payload_second_equivalent_call_hits_cache(monkeypatc
             "fit_review": {"decision": "KEEP", "grade": "SOLID"},
             "learning_candidates": [],
             "contextual_capability_matches": [],
-            "job_requirements": ["Stakeholder engagement"],
             "requirement_coverage": [
                 {
                     "requirement": "Stakeholder engagement",
@@ -314,7 +309,6 @@ def test_resolve_llm_review_payload_partial_cache_calls_llm(monkeypatch):
             "fit_review": {"decision": "KEEP", "grade": "STRONG"},
             "learning_candidates": [],
             "contextual_capability_matches": [],
-            "job_requirements": ["Stakeholder engagement", "Process mapping", "UAT support"],
             "requirement_coverage": [
                 {
                     "requirement": "Stakeholder engagement",
@@ -365,7 +359,6 @@ def test_resolve_llm_review_payload_counts_truncations(monkeypatch):
         lambda *_: {
             "fit_review": {"decision": "KEEP", "grade": "SOLID"},
             "learning_candidates": [],
-            "job_requirements": [],
         },
     )
 

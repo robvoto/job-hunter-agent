@@ -444,33 +444,33 @@ def _load_managed_global_settings_payload() -> dict:
     return json.loads(GLOBAL_SETTINGS_PATH.read_text(encoding="utf-8-sig"))
 
 
-def test_managed_global_settings_requires_job_requirements_output_tokens():
+def test_managed_global_settings_requires_requirement_coverage_max_items():
     payload = _load_managed_global_settings_payload()
-    del payload["llm_settings"]["llm_prompt_settings"]["job_requirements_max_output_tokens"]
+    del payload["llm_settings"]["llm_prompt_settings"]["requirement_coverage_max_items"]
 
-    with pytest.raises(ValueError, match=r"job_requirements_max_output_tokens is required"):
+    with pytest.raises(ValueError, match=r"requirement_coverage_max_items is required"):
         normalize_global_settings(payload, strict_managed=True)
 
 
-def test_managed_global_settings_rejects_invalid_job_requirements_output_tokens():
+def test_managed_global_settings_rejects_invalid_requirement_coverage_max_items():
     payload = _load_managed_global_settings_payload()
-    payload["llm_settings"]["llm_prompt_settings"]["job_requirements_max_output_tokens"] = 0
+    payload["llm_settings"]["llm_prompt_settings"]["requirement_coverage_max_items"] = 0
 
     with pytest.raises(
-        ValueError, match=r"job_requirements_max_output_tokens must be between 50 and 1000"
+        ValueError, match=r"requirement_coverage_max_items must be between 1 and 20"
     ):
         normalize_global_settings(payload, strict_managed=True)
 
 
-def test_managed_global_settings_accepts_valid_job_requirements_output_tokens():
+def test_managed_global_settings_accepts_valid_requirement_coverage_max_items():
     payload = _load_managed_global_settings_payload()
-    payload["llm_settings"]["llm_prompt_settings"]["job_requirements_max_output_tokens"] = 300
+    payload["llm_settings"]["llm_prompt_settings"]["requirement_coverage_max_items"] = 8
 
     normalized = normalize_global_settings(payload, strict_managed=True)
 
     assert (
-        normalized["llm_settings"]["llm_prompt_settings"]["job_requirements_max_output_tokens"]
-        == 300
+        normalized["llm_settings"]["llm_prompt_settings"]["requirement_coverage_max_items"]
+        == 8
     )
 
 

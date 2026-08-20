@@ -60,7 +60,6 @@ class _FakeParsingResponses:
             return _FakeParseResponse(
                 {
                     "fit_review": {"decision": "KEEP", "grade": "SOLID"},
-                    "job_requirements": ["Stakeholder engagement", "Process mapping"],
                     "requirement_coverage": [
                         {
                             "requirement": "Stakeholder engagement",
@@ -349,10 +348,6 @@ def test_normalize_llm_review_payload_fit_review_shape():
         {
             "decision": "KEEP",
             "grade": "SOLID",
-            "job_requirements": [
-                "Strong stakeholder engagement",
-                "Strong stakeholder engagement",
-            ],
             "requirement_coverage": [
                 {
                     "requirement": "Strong stakeholder engagement",
@@ -379,6 +374,7 @@ def test_normalize_llm_review_payload_fit_review_shape():
                 "requirement_type": "capability",
                 "canonical_requirement": "",
                 "profile_action_allowed": False,
+                "classification_reviewable": False,
                 "status": "supported",
                 "matched_candidate_fact": "Stakeholder engagement",
                 "capability_name": "Stakeholder engagement",
@@ -387,7 +383,6 @@ def test_normalize_llm_review_payload_fit_review_shape():
                 "profile_support": ["stakeholder management"],
             }
         ],
-        "job_requirements": ["Strong stakeholder engagement"],
     }
 
 
@@ -430,6 +425,7 @@ def test_request_learning_payload_uses_fit_review_only_schema(monkeypatch):
                     "requirement_type": "capability",
                     "canonical_requirement": "",
                     "profile_action_allowed": False,
+                    "classification_reviewable": False,
                     "status": "supported",
                     "matched_candidate_fact": "stakeholder management",
                     "capability_name": "stakeholder management",
@@ -443,6 +439,7 @@ def test_request_learning_payload_uses_fit_review_only_schema(monkeypatch):
                     "requirement_type": "capability",
                     "canonical_requirement": "",
                     "profile_action_allowed": False,
+                    "classification_reviewable": False,
                     "status": "partially_supported",
                     "matched_candidate_fact": "process mapping",
                     "capability_name": "process mapping",
@@ -451,6 +448,5 @@ def test_request_learning_payload_uses_fit_review_only_schema(monkeypatch):
                     "profile_support": ["process mapping"],
                 },
         ],
-        "job_requirements": ["Stakeholder engagement", "Process mapping"],
     }
     assert fake_client.responses.calls[0]["text_format"].__name__ == "_LLMFitReviewPayload"

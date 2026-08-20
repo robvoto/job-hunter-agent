@@ -58,14 +58,9 @@ from job_hunter_agent.profile_gaps import (
     CUSTOM_BLOCKER_REASON_NOT_REQUIRED,
     CUSTOM_BLOCKER_REASON_NO_MATCH,
     CUSTOM_BLOCKER_REASON_RESOLVED,
-    STATUS_CONFIRMED_DO_NOT_HAVE,
-    STATUS_CONFIRMED_HAVE,
-    STATUS_UNKNOWN,
-    classify_requirement_status,
 )
 from job_hunter_agent.profile_store import (
     ENGAGEMENT_TYPE_OPTIONS,
-    KEY_CANDIDATE_QUALIFICATIONS,
     KEY_MUST_NOT_REQUIRED_SKILLS,
     get_match_levels,
     get_scoring_rules,
@@ -79,7 +74,6 @@ from job_hunter_agent.record_schema import (
     RECORD_APPLY_METHOD_KEY,
     RECORD_DECISION_KEY,
     RECORD_DUPLICATE_LINKS_KEY,
-    RECORD_JOB_REQUIREMENTS_KEY,
     RECORD_LLM_COST_USD_KEY,
     RECORD_LLM_DECISION_KEY,
     RECORD_LLM_ELAPSED_MS_KEY,
@@ -1282,27 +1276,9 @@ def render_job_card(
         # their badge. Do not present stale derived classification as current;
         # the next job review will repopulate it under the active contract.
         channel_signal = {}
-    job_requirements = [
-        compact_whitespace(item)
-        for item in (display_record.get(RECORD_JOB_REQUIREMENTS_KEY) or [])
-        if compact_whitespace(item)
-    ]
     raw_coverage = display_record.get(RECORD_REQUIREMENT_COVERAGE_KEY)
     raw_coverage_is_list = isinstance(raw_coverage, list)
     coverage_rows = raw_coverage if isinstance(raw_coverage, list) else []
-    candidate_capabilities = active_profile.get("candidate_capabilities") or []
-    must_not_require_skills = active_profile.get("must_not_require_skills") or []
-    candidate_eligibility_facts = active_profile.get("candidate_eligibility_facts") or []
-    candidate_qualifications = active_profile.get(KEY_CANDIDATE_QUALIFICATIONS) or []
-    requirement_statuses = [
-        {
-            "requirement": item,
-            "status": classify_requirement_status(
-                item, candidate_capabilities, must_not_require_skills
-            ),
-        }
-        for item in job_requirements
-    ]
     duplicate_links = record.get(RECORD_DUPLICATE_LINKS_KEY)
     if not isinstance(duplicate_links, list):
         duplicate_links = []
@@ -1718,7 +1694,7 @@ def render_job_card(
     generic_eligibility_coverage_order: list[str] = []
     capability_level_lookup = _capability_level_lookup(active_profile)
     # When requirement_coverage is available, show only those rows (they are more
-    # detailed and LLM-verified). Skip the short job_requirements bullets to avoid
+    # detailed and LLM-verified). Use requirement_coverage as the only requirement source to avoid
     # showing the same requirements twice with different text.
     has_coverage = len(coverage_rows) > 0
     importance_label_keys = {
@@ -1767,7 +1743,6 @@ def render_job_card(
         return False
 
     def _css_modifier_for_row(row: dict[str, Any]) -> str:
-        profile_status = str(row.get("profile_status") or "").strip()
         coverage_status = str(row.get("coverage_status") or "").strip().lower()
         importance = str(row.get("importance") or "").strip().lower()
         if coverage_status == "supported":
@@ -1782,10 +1757,6 @@ def render_job_card(
             return "required-not-shown"
         if coverage_status == "not_shown":
             return "not-shown"
-        if profile_status == STATUS_CONFIRMED_HAVE:
-            return "confirmed-have"
-        if profile_status == STATUS_CONFIRMED_DO_NOT_HAVE:
-            return "confirmed-do-not-have"
         return "unknown"
 
     def _render_requirement_row_html(row: dict[str, Any]) -> tuple[str, bool]:
@@ -2022,7 +1993,7 @@ def render_job_card(
         )
 
     if has_coverage:
-        # Coverage path: one row per coverage entry, no job_requirements duplication.
+        # One row per canonical requirement_coverage entry.
         # Eligibility requirements (clearance, citizenship, work rights, etc.) get their
         # own Clearances panel below rather than mixing into the general list.
         for item in coverage_rows:
@@ -2099,17 +2070,6 @@ def render_job_card(
             row["experience_requirement_review_needed"] = bool(
                 item.get("experience_requirement_review_needed")
             )
-    else:
-        # Fallback: no coverage — show job_requirements with profile-match status
-        for item in requirement_statuses:
-            req_text = compact_whitespace(str(item.get("requirement") or ""))
-            if not req_text:
-                continue
-            key = _requirement_key(req_text)
-            if key not in merged_requirement_rows:
-                merged_requirement_rows[key] = {"requirement": req_text}
-                merged_requirement_order.append(key)
-            merged_requirement_rows[key]["profile_status"] = item.get("status")
 
     occupation_row_html = ""
     occupation_alignment = occupation_alignment_diagnostics(
@@ -2130,7 +2090,7 @@ def render_job_card(
             f'<span class="job-requirement-text">{safe_html(occ_text)}</span></li>'
         )
 
-    if requirement_statuses or raw_coverage_is_list or occupation_row_html:
+    if raw_coverage_is_list or occupation_row_html:
         requirement_sections_html = _render_requirement_sections_html(
             merged_requirement_order,
             merged_requirement_rows,

@@ -121,7 +121,6 @@ def _keep_review_payload(
     return {
         "fit_review": {"decision": "KEEP", "grade": grade},
         "debug_reason": debug_reason,
-        "job_requirements": [requirement],
         "requirement_coverage": [
             {
                 "requirement": requirement,
@@ -1325,7 +1324,6 @@ def test_llm_supported_specific_capability_without_valid_candidate_fact_gets_no_
     ]
     raw_payload = {
         "fit_review": {"decision": "KEEP", "grade": "EXCELLENT"},
-        "job_requirements": ["5+ years of Salesforce configuration experience required"],
         "requirement_coverage": [
             {
                 "requirement": "5+ years of Salesforce configuration experience required",
@@ -1485,7 +1483,6 @@ def test_llm_review_fields_persist_on_record(monkeypatch):
     payload = {
         "fit_review": {"decision": "KEEP", "grade": "STRONG"},
         "debug_reason": "Strong requirement coverage with capability support.",
-        "job_requirements": ["Stakeholder engagement"],
         "requirement_coverage": [
             {
                 "requirement": "Stakeholder engagement",
@@ -1550,7 +1547,6 @@ def test_invalid_keep_review_without_requirement_coverage_is_rejected(monkeypatc
     payload = {
         "fit_review": {"decision": "KEEP", "grade": "STRONG"},
         "debug_reason": "Model returned a grade without requirement coverage.",
-        "job_requirements": ["Governance collaboration"],
         "requirement_coverage": [],
         "llm_cost_usd": 0.0123,
     }
@@ -1599,7 +1595,6 @@ def test_frozen_requirement_fit_score_breakdown_is_stored_once(caplog, monkeypat
     payload = {
         "fit_review": {"decision": "KEEP", "grade": "STRONG"},
         "debug_reason": "Strong requirement coverage with capability support.",
-        "job_requirements": ["Stakeholder engagement"],
         "requirement_coverage": [
             {
                 "requirement": "Stakeholder engagement",
@@ -1631,7 +1626,6 @@ def test_fit_review_logs_shared_requirement_score_diagnostics(monkeypatch, caplo
     payload = {
         "fit_review": {"decision": "KEEP", "grade": "STRONG"},
         "debug_reason": "Requirement coverage returned for scoring diagnostics.",
-        "job_requirements": ["Stakeholder engagement", "Australian citizenship"],
         "requirement_coverage": [
             {
                 "requirement": "Stakeholder engagement",
@@ -1679,7 +1673,6 @@ def test_fit_review_logs_role_duration_requirement_diagnostics(monkeypatch, capl
     payload = {
         "fit_review": {"decision": "KEEP", "grade": "SOLID"},
         "debug_reason": "Years-on-role requirement checked against onboarding role history.",
-        "job_requirements": ["Minimum 5 years experience as Business Analyst"],
         "requirement_coverage": [
             {
                 "requirement": "Minimum 5 years experience as Business Analyst",

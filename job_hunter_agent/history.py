@@ -23,7 +23,6 @@ from job_hunter_agent.record_schema import (
     RECORD_FIT_SCORE_KEY,
     RECORD_FIT_TONE_CLASS_KEY,
     RECORD_IS_REPOSTED_KEY,
-    RECORD_JOB_REQUIREMENTS_KEY,
     RECORD_LLM_COST_USD_KEY,
     RECORD_LLM_ELAPSED_MS_KEY,
     RECORD_LLM_INPUT_TOKENS_KEY,
@@ -85,7 +84,6 @@ KEEP_SNAPSHOT_FIELDS = (
     "description_source",
     "role_snapshot",
     "fit_highlights",
-    RECORD_JOB_REQUIREMENTS_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
     "soft_risk_reasons",
     "missing_profile_support",
@@ -300,9 +298,6 @@ def apply_kept_job_reuse(record: dict, history_entry: dict) -> dict:
 
     if not record.get(RECORD_LLM_OUTPUT_TOKENS_KEY):
         record[RECORD_LLM_OUTPUT_TOKENS_KEY] = snapshot.get(RECORD_LLM_OUTPUT_TOKENS_KEY)
-
-    if not record.get(RECORD_JOB_REQUIREMENTS_KEY):
-        record[RECORD_JOB_REQUIREMENTS_KEY] = snapshot.get(RECORD_JOB_REQUIREMENTS_KEY) or []
 
     if not record.get("soft_risk_reasons"):
         record["soft_risk_reasons"] = snapshot.get("soft_risk_reasons") or []

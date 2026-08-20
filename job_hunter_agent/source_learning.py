@@ -436,7 +436,6 @@ def resolve_llm_review_payload(
         payload = {
             "fit_review": None,
             "learning_candidates": llm_should_consider_learning_candidates(truncated_input),
-            "job_requirements": [],
         }
 
     else:

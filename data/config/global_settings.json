@@ -496,7 +496,6 @@
       ],
       "fit_decision_max_output_tokens": 3000,
       "learning_candidates_max_output_tokens": 500,
-      "job_requirements_max_output_tokens": 300,
       "rejection_blocker_suggestions_max_output_tokens": 300,
       "capability_naming_max_output_tokens": 500,
       "title_judgment_max_output_tokens": 80,
@@ -511,7 +510,7 @@
     "capability_naming_aliases_max_items": 6,
     "raw_output_log_max_chars": 1200,
     "fit_review_debug_match_diagnostics_enabled": false,
-    "job_requirements_max_items": 8,
+    "requirement_coverage_max_items": 8,
     "learning_candidates_max_items": 6,
     "rejection_blocker_suggestions_max_items": 6,
       "rejection_blocker_suggestions_max_words": 6

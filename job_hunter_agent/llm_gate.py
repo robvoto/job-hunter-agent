@@ -31,8 +31,7 @@ from job_hunter_agent.global_settings import (
     get_llm_fit_decision_max_output_tokens,
     get_llm_fit_review_debug_match_diagnostics_enabled,
     get_llm_job_description_max_chars,
-    get_llm_job_requirements_max_items,
-    get_llm_job_requirements_max_output_tokens,
+    get_llm_requirement_coverage_max_items,
     get_llm_learning_candidates_max_items,
     get_llm_learning_candidates_max_output_tokens,
     get_llm_max_retries,
@@ -72,7 +71,6 @@ from job_hunter_agent.llm_protocol import (
     LLM_INVALID_COVERAGE_STATUS,
     LLM_INVALID_OCCUPATION_ALIGNMENT,
     LLM_INVALID_POSTING_CHANNEL_KIND,
-    LLM_JOB_REQUIREMENTS_PROMPT_SHAPE,
     LLM_LEARNING_ONLY_PROMPT_SHAPE,
     LLM_PROFILE_RESOLUTION_EXISTING,
     LLM_PROFILE_RESOLUTION_NEW,
@@ -383,9 +381,6 @@ class _LLMRequirementCoverageDebugItem(_LLMRequirementCoverageItem):
     matched_profile_term: str = ""
 
 
-class _LLMJobRequirementsPayload(BaseModel):
-    job_requirements: list[str] = Field(default_factory=list)
-
 
 class _LLMProfileStorageResolution(BaseModel):
     resolution: str
@@ -413,7 +408,6 @@ class _LLMFitReviewPayload(BaseModel):
     debug_reason: str = ""
     eligibility_requirements: list[_LLMRequirementCoverageItem] = Field(default_factory=list)
     requirement_coverage: list[_LLMRequirementCoverageItem] = Field(default_factory=list)
-    job_requirements: list[str] = Field(default_factory=list)
 
 
 class _LLMFitReviewDebugPayload(BaseModel):
@@ -424,7 +418,6 @@ class _LLMFitReviewDebugPayload(BaseModel):
     debug_reason: str = ""
     eligibility_requirements: list[_LLMRequirementCoverageDebugItem] = Field(default_factory=list)
     requirement_coverage: list[_LLMRequirementCoverageDebugItem] = Field(default_factory=list)
-    job_requirements: list[str] = Field(default_factory=list)
 
 
 class LLMCallError(RuntimeError):
@@ -498,7 +491,6 @@ def _load_managed_prompt_lines(key: str) -> tuple[str, ...]:
 
 FIT_REVIEW_DEFAULT_LINES = _load_managed_prompt_lines("llm_fit_review_defaults")
 CAPABILITY_NAMING_DEFAULT_LINES = _load_managed_prompt_lines("llm_capability_naming_defaults")
-JOB_REQUIREMENTS_DEFAULT_LINES = _load_managed_prompt_lines("llm_job_requirements_defaults")
 LEARNING_DEFAULT_LINES = _load_managed_prompt_lines("llm_learning_defaults")
 REJECTION_SUGGESTIONS_DEFAULT_LINES = _load_managed_prompt_lines(
     "llm_rejection_suggestions_defaults"
@@ -704,17 +696,6 @@ def build_profile_prompt_context() -> str:
     return "\n".join(part for part in parts if part)
 
 
-def build_job_requirements_prompt() -> str:
-    parts = [
-        LLM_PROMPT_JSON_ONLY,
-        LLM_PROMPT_DO_NOT_INVENT,
-        LLM_PROMPT_USE_VISIBLE_STRINGS,
-        build_job_requirements_guidance(),
-        f"Return exactly this shape: {LLM_JOB_REQUIREMENTS_PROMPT_SHAPE}",
-        f"Use at most {get_llm_job_requirements_max_items()} job_requirements.",
-    ]
-    return "\n".join(parts)
-
 
 def build_fit_review_guidance(profile: dict[str, Any] | None = None) -> str:
     parts = [LLM_PROMPT_DEFAULT_FIT_REVIEW_GUIDANCE_HEADER]
@@ -724,7 +705,7 @@ def build_fit_review_guidance(profile: dict[str, Any] | None = None) -> str:
 
 def build_requirement_coverage_guidance() -> str:
     parts = [
-        f"Use at most {get_llm_job_requirements_max_items()} capability/qualification requirement_coverage items. eligibility_requirements are separate and do not consume this limit.",
+        f"Use at most {get_llm_requirement_coverage_max_items()} capability/qualification requirement_coverage items. eligibility_requirements are separate and do not consume this limit.",
         "Classify each requirement as capability, eligibility, or qualification. Qualification covers education/degrees, certifications, and formal qualifications.",
         "For qualification rows, importance must be required or preferred.",
         "Use matched_candidate_fact for the exact canonical capability or eligibility name shown in the profile matrix, or the exact qualification name shown in the qualifications matrix; never put an evidence sentence there.",
@@ -745,9 +726,6 @@ def build_requirement_coverage_debug_guidance() -> str:
     ]
     return "\n".join(parts)
 
-
-def build_job_requirements_guidance() -> str:
-    return "\n".join(f"- {line}" for line in JOB_REQUIREMENTS_DEFAULT_LINES)
 
 
 def build_fit_review_grade_guidance() -> str:
@@ -1441,6 +1419,14 @@ def _merge_requirement_coverage(
     return merged
 
 
+def _clean_requirement_text(value: Any) -> str:
+    """Normalize requirement display text without interpreting its meaning."""
+    cleaned = compact_whitespace(value)
+    cleaned = re.sub(r"^[•\-–—]+\s*", "", cleaned).strip()
+    cleaned = re.sub(r"^\d+[.)]\s*", "", cleaned).strip()
+    return cleaned
+
+
 def normalize_llm_requirement_coverage(
     value: Any,
     valid_capability_names: dict[str, str] | None = None,
@@ -1452,7 +1438,7 @@ def normalize_llm_requirement_coverage(
     include_debug_match_diagnostics: bool = False,
 ) -> list[dict[str, Any]]:
     if max_items is None:
-        max_items = get_llm_job_requirements_max_items()
+        max_items = get_llm_requirement_coverage_max_items()
     if isinstance(value, dict):
         value = value.get("requirement_coverage") or value.get("coverage") or []
     if isinstance(value, str):
@@ -1472,7 +1458,7 @@ def normalize_llm_requirement_coverage(
     for item in value:
         if not isinstance(item, dict):
             continue
-        requirement = _clean_job_requirement_text(
+        requirement = _clean_requirement_text(
             item.get("requirement") or item.get("job_requirement") or item.get("text")
         )
         matched_job_text = compact_whitespace(
@@ -1926,10 +1912,7 @@ def normalize_llm_requirement_coverage(
     )
 
 
-def derive_fit_review_grade(
-    requirement_coverage: list[dict[str, Any]],
-    job_requirements: list[str] | None = None,
-) -> str:
+def derive_fit_review_grade(requirement_coverage: list[dict[str, Any]]) -> str:
     """Derive grade from importance-weighted requirement coverage.
 
     Importance weights: required=3, expected=2, preferred=1, bonus=0.25.
@@ -1939,7 +1922,7 @@ def derive_fit_review_grade(
     required eligibility fact must not be diluted away by unrelated supported requirements.
     Items without an importance field default to 'preferred' (weight 1.0).
     """
-    total_items = max(len(requirement_coverage), len(job_requirements or []))
+    total_items = len(requirement_coverage)
     if total_items <= 0:
         return "POOR"
 
@@ -1974,9 +1957,6 @@ def derive_fit_review_grade(
 
         max_score += weight
 
-    # Uncovered items (in job_requirements but absent from coverage) count at default weight.
-    uncovered = max(total_items - len(requirement_coverage), 0)
-    max_score += uncovered * _IMPORTANCE_WEIGHTS["preferred"]
 
     covered_count = supported_count + partial_count
 
@@ -2023,39 +2003,6 @@ def has_eligibility_mismatch(requirement_coverage: list[dict[str, Any]]) -> bool
         for item in requirement_coverage
     )
 
-
-def _clean_job_requirement_text(value: Any) -> str:
-    cleaned = compact_whitespace(value)
-    cleaned = re.sub(r"^[•\-\u2013\u2014]+\s*", "", cleaned).strip()
-    cleaned = re.sub(r"^\d+[.)]\s*", "", cleaned).strip()
-    return cleaned
-
-
-def normalize_llm_job_requirements(value: Any, max_items: int | None = None) -> list[str]:
-    if max_items is None:
-        max_items = get_llm_job_requirements_max_items()
-    if isinstance(value, dict):
-        value = value.get("job_requirements") or value.get("requirements") or []
-    if isinstance(value, str):
-        try:
-            value = _json_mod.loads(_strip_json_fence(value))
-        except Exception:
-            return []
-    if not isinstance(value, list):
-        return []
-
-    requirements: list[str] = []
-    seen: set[str] = set()
-    for item in value:
-        cleaned = _clean_job_requirement_text(item)
-        key = cleaned.lower()
-        if not cleaned or key in seen:
-            continue
-        seen.add(key)
-        requirements.append(cleaned)
-        if len(requirements) >= max_items:
-            break
-    return requirements
 
 
 def _normalize_llm_review_text(value: Any, *, max_chars: int) -> str:
@@ -2160,8 +2107,7 @@ def normalize_llm_review_payload(
                 eligibility_requirements,
                 requirement_coverage,
             )
-            job_requirements = normalize_llm_job_requirements(value.get("job_requirements"))
-            derived_grade = derive_fit_review_grade(requirement_coverage, job_requirements)
+            derived_grade = derive_fit_review_grade(requirement_coverage)
             fit_review_normalized = _require_fit_review(fit_review)
             _require_complete_keep_requirement_coverage(
                 fit_review_normalized, requirement_coverage
@@ -2230,7 +2176,6 @@ def normalize_llm_review_payload(
                     value.get("debug_reason"), max_chars=300
                 ),
                 "requirement_coverage": requirement_coverage,
-                "job_requirements": job_requirements,
             }
 
         if "learning_candidates" in value or value.get("learning_only") or "fit_review" in value:
@@ -2240,7 +2185,6 @@ def normalize_llm_review_payload(
                     value.get("learning_candidates")
                 ),
                 "requirement_coverage": [],
-                "job_requirements": [],
             }
 
         raise ValueError("LLM review payload is missing fit_review")
@@ -2661,8 +2605,6 @@ def _build_learning_prompt(job_description_text: str, *, fit_review: bool) -> st
                 build_fit_review_grade_guidance(),
                 build_occupation_alignment_guidance(),
                 build_posting_channel_guidance(),
-                build_job_requirements_guidance(),
-                f"Use at most {get_llm_job_requirements_max_items()} job_requirements.",
             ]
         )
     else:
@@ -2829,60 +2771,6 @@ def _request_learning_payload(
             raise ValueError("LLM fit review payload is missing fit_review")
     return payload
 
-
-def llm_extract_job_requirements(
-    job_description_text: str, llm_client: Any = None, *, benchmark_model: str | None = None
-) -> list[str]:
-    active_client = llm_client or client
-    description = str(job_description_text or "").strip()
-    if active_client is None or not description:
-        return []
-
-    system_prompt = "\n".join(
-        [
-            "You extract only the explicit job requirements visible in the ad.",
-            build_job_requirements_prompt(),
-        ]
-    )
-
-    try:
-        model = benchmark_model or _log_llm_model_once()
-        _desc_limit = get_llm_job_description_max_chars()
-        _desc_truncated = description[:_desc_limit]
-        logger.debug(
-            "[LLM][REQUEST] purpose=job_requirements model=%s description_chars_fetched=%d"
-            " description_chars_sent_to_llm=%d truncation_applied=%s max_output_tokens=%d",
-            model,
-            len(description),
-            len(_desc_truncated),
-            str(len(description) > _desc_limit).lower(),
-            get_llm_job_requirements_max_output_tokens(),
-        )
-        resp = active_client.responses.parse(
-            model=model,
-            input=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": LLM_PROMPT_JOB_DESCRIPTION_PREFIX + _desc_truncated},
-            ],
-            max_output_tokens=get_llm_job_requirements_max_output_tokens(),
-            text_format=_LLMJobRequirementsPayload,
-            **_llm_reasoning_kwargs(model),
-        )
-        _log_llm_call(resp, "job_requirements", model)
-    except Exception as exc:
-        logger.error("[LLM][FAIL] purpose=job_requirements error=%s", exc)
-        return []
-
-    parsed = getattr(resp, "output_parsed", None)
-    if parsed is None:
-        return []
-    raw_output = str(getattr(resp, "output_text", "") or "").strip()
-    if raw_output:
-        logger.debug(
-            "[LLM][RESULT] purpose=job_requirements raw=%r",
-            raw_output[: get_llm_raw_output_log_max_chars()],
-        )
-    return normalize_llm_job_requirements(parsed.model_dump())
 
 
 def llm_should_consider_with_learning(

@@ -79,7 +79,7 @@ For LLM review data:
 There are two separate LLM calls with different schemas. Do not conflate them.
 
 **Fit review** (`_LLMFitReviewPayload`, `fit_review=True`):
-- Returns: `fit_review` (decision + grade), `job_requirements`, `requirement_coverage`, `debug_reason`, `occupation_alignment`, `occupation_alignment_reason`
+- Returns: `fit_review` (decision + grade), `requirement_coverage`, `debug_reason`, `occupation_alignment`, `occupation_alignment_reason`
 - No `learning_candidates` field; the fit-review path does not extract learning signals
 - `requirement_coverage` is the single source for capability support — entries must link to profile capability rule names for `supported`/`partially_supported` status
 - Do NOT include learning category guidance (`LLM_PROMPT_ROLE_TITLE_PATTERN_GUIDANCE`) in this prompt

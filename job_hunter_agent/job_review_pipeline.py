@@ -182,7 +182,6 @@ from job_hunter_agent.record_schema import (
     RECORD_IS_REPOSTED_KEY,
     RECORD_JOB_KEY,
     RECORD_JOB_QUALITY_SIGNALS_KEY,
-    RECORD_JOB_REQUIREMENTS_KEY,
     RECORD_LLM_COST_USD_KEY,
     RECORD_LLM_DEBUG_REASON_KEY,
     RECORD_LLM_DECISION_KEY,
@@ -1007,7 +1006,6 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         record[RECORD_MISSING_CLEARANCE_SUPPORT_KEY],
     )
     record["llm_learning_candidates"] = []
-    record[RECORD_JOB_REQUIREMENTS_KEY] = []
     record[RECORD_REQUIREMENT_COVERAGE_KEY] = []
     record[RECORD_OCCUPATION_ALIGNMENT_KEY] = ""
     record[RECORD_OCCUPATION_ALIGNMENT_REASON_KEY] = ""
@@ -1049,7 +1047,6 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         )
         review = payload["fit_review"]
         record["llm_learning_candidates"] = []
-        record[RECORD_JOB_REQUIREMENTS_KEY] = payload.get("job_requirements") or []
         record[RECORD_REQUIREMENT_COVERAGE_KEY] = payload.get("requirement_coverage") or []
         record[RECORD_OCCUPATION_ALIGNMENT_KEY] = str(payload.get("occupation_alignment") or "")
         record[RECORD_OCCUPATION_ALIGNMENT_REASON_KEY] = str(
@@ -1135,7 +1132,6 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         "_eligibility_gate_reason": (
             eligibility_gate.get("reason", "") if source != "rule" else ""
         ),
-        RECORD_JOB_REQUIREMENTS_KEY: record[RECORD_JOB_REQUIREMENTS_KEY],
         RECORD_REQUIREMENT_COVERAGE_KEY: record[RECORD_REQUIREMENT_COVERAGE_KEY],
         RECORD_OCCUPATION_ALIGNMENT_KEY: record[RECORD_OCCUPATION_ALIGNMENT_KEY],
         RECORD_OCCUPATION_ALIGNMENT_REASON_KEY: record[RECORD_OCCUPATION_ALIGNMENT_REASON_KEY],
@@ -1579,7 +1575,6 @@ def review_post_detail_normalized_job(
         return _build_outcome(record), record, skill_observations
 
     record.update(fit_eval)
-    record[RECORD_JOB_REQUIREMENTS_KEY] = record.get(RECORD_JOB_REQUIREMENTS_KEY) or []
     _apply_source_metadata_to_record(record, record.pop("posting_channel", None))
 
     if record[RECORD_DECISION_KEY] == "REJECT":

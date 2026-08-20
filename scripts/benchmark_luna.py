@@ -315,7 +315,7 @@ def main() -> int:
     print(f"Loaded {len(records)} job records for the active user.")
     print(f"Purposes discovered from _log_llm_call(...) call sites: {', '.join(sorted(purposes))}")
     print(
-        "job_review_with_learning / job_learning_candidates / job_requirements / "
+        "job_review_with_learning / job_learning_candidates / "
         f"rejection_suggestions sample: {len(review_records)} records"
     )
     print(f"title_judgment sample: {len(title_records)} records")
@@ -396,29 +396,6 @@ def main() -> int:
                 stats.latency_delta_ms_total += luna.latency_ms - current.latency_ms
 
         if review_records:
-            stats = stats_by_purpose.setdefault("job_requirements", PurposeStats("job_requirements"))
-            for record in review_records:
-                text = build_description_text(
-                    record,
-                    fit_source_key=RECORD_FIT_SOURCE_TEXT_KEY,
-                    full_description_key=RECORD_FULL_DESCRIPTION_KEY,
-                )
-                if not text:
-                    continue
-                current = timed_call(
-                    llm_gate, llm_gate.llm_extract_job_requirements, text, benchmark_model=None
-                )
-                with forced_luna_reasoning(llm_gate, effort):
-                    luna = timed_call(
-                        llm_gate, llm_gate.llm_extract_job_requirements, text, benchmark_model=BENCHMARK_MODEL
-                    )
-                stats.n_records += 1
-                if not luna.ok:
-                    stats.n_errors += 1
-                stats.cost_delta_total += luna.cost_usd - current.cost_usd
-                stats.latency_delta_ms_total += luna.latency_ms - current.latency_ms
-
-        if review_records:
             stats = stats_by_purpose.setdefault("rejection_suggestions", PurposeStats("rejection_suggestions"))
             for record in review_records:
                 text = build_description_text(
@@ -485,7 +462,6 @@ def main() -> int:
     exercised_purposes = {
         "job_review_with_learning",
         "job_learning_candidates",
-        "job_requirements",
         "rejection_suggestions",
         "title_judgment",
     }

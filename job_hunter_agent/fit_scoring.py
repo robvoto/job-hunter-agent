@@ -34,7 +34,6 @@ from job_hunter_agent.profile_store import (
 from job_hunter_agent.record_schema import (
     RECORD_FIT_SCORE_BREAKDOWN_KEY,
     RECORD_FIT_SCORE_KEY,
-    RECORD_JOB_REQUIREMENTS_KEY,
     RECORD_OCCUPATION_ALIGNMENT_KEY,
     RECORD_OCCUPATION_ALIGNMENT_REASON_KEY,
     RECORD_RUN_STARTED_AT_KEY,
@@ -683,14 +682,6 @@ def format_requirement_fit_diagnostics_block(
 def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -> List[dict]:
     coverage = record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or []
     if not isinstance(coverage, list) or not coverage:
-        if record.get("review_source") == "llm" and record.get(RECORD_JOB_REQUIREMENTS_KEY):
-            return [
-                {
-                    "label": "Requirement Fit: requirement coverage not returned",
-                    "value": 0,
-                    "section": "requirement_fit",
-                }
-            ]
         return [{"label": "Requirement Fit: no requirements to score", "value": 0, "section": "requirement_fit"}]
 
     importance_weights = _requirement_importance_weights(scoring_rules)

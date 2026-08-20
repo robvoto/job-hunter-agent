@@ -329,7 +329,6 @@ def test_score_labels_and_tones_can_use_profile_match_levels():
 def test_render_job_card_does_not_create_needs_confirmation_from_raw_job_requirements_only():
     html = workspace_renderer.render_job_card(
         {
-            "job_requirements": ["Permanent full-time role", "Sydney", "Salary"],
             "requirement_coverage": [],
         },
         _test_profile(),
@@ -343,7 +342,6 @@ def test_render_job_card_keeps_unknown_required_requirement_visible_once():
     requirement = "Must hold an unfamiliar professional registration"
     html = workspace_renderer.render_job_card(
         {
-            "job_requirements": [requirement],
             "requirement_coverage": [
                 {
                     "requirement": requirement,
@@ -367,7 +365,6 @@ def test_render_job_card_shows_single_badge_for_uncertain_classification_and_no_
     requirement = "5+ years working in a security clearance environment"
     html = workspace_renderer.render_job_card(
         {
-            "job_requirements": [requirement],
             "requirement_coverage": [
                 {
                     "requirement": requirement,
@@ -392,7 +389,6 @@ def test_render_job_card_shows_single_badge_for_uncertain_classification_and_no_
 def test_render_job_card_gap_button_carries_the_capability_name_not_requirement_text():
     html = workspace_renderer.render_job_card(
         {
-            "job_requirements": ["AWS platform experience"],
             "requirement_coverage": [
                 {
                     "requirement": "Cloud computing (AWS) experience",
@@ -419,7 +415,6 @@ def test_render_job_card_omits_gap_actions_for_vague_or_alternative_requirement(
     requirement = "CBAP, Agile BA, or equivalent certifications"
     html = workspace_renderer.render_job_card(
         {
-            "job_requirements": [requirement],
             "requirement_coverage": [
                 {
                     "requirement": requirement,
@@ -1152,7 +1147,6 @@ def test_eligibility_coverage_renders_in_clearance_panel_when_supported():
     html = workspace_renderer.render_job_card(
         {
             **_test_profile(),
-            "job_requirements": [],
             "requirement_coverage": [
                 {
                     "requirement": "Security Clearance: NV1 / Baseline / As per role",
@@ -1193,7 +1187,6 @@ def test_eligibility_mismatch_renders_in_clearance_panel_not_checks_before_apply
     html = workspace_renderer.render_job_card(
         {
             **_test_profile(),
-            "job_requirements": [],
             "requirement_coverage": requirement_coverage,
             "source": "seek",
         },
@@ -1754,9 +1747,20 @@ def test_posting_channel_badge_uses_llm_classifier_review_class():
             "full_description": "Our client is seeking a business analyst. Contact our recruitment team for details. "
             * 20,
             "fit_highlights": [],
-            "job_requirements": [
-                "Strong stakeholder engagement and communication skills",
-                "Experience across end-to-end BA activities",
+            "requirement_coverage": [
+                {
+                    "requirement": "Strong stakeholder engagement and communication skills",
+                    "importance": "required",
+                    "requirement_type": "capability",
+                    "status": "supported",
+                    "matched_candidate_fact": "stakeholder engagement",
+                },
+                {
+                    "requirement": "Experience across end-to-end BA activities",
+                    "importance": "required",
+                    "requirement_type": "capability",
+                    "status": "mismatch",
+                },
             ],
             "source": "seek",
             "posting_channel_evidence": channel,
@@ -1779,8 +1783,8 @@ def test_posting_channel_badge_uses_llm_classifier_review_class():
     assert "In profile" not in html
     assert "Needs attention" in html
     assert "Not in profile" not in html
-    assert "job-requirement-item--confirmed-have" in html
-    assert "job-requirement-item--confirmed-do-not-have" in html
+    assert "job-requirement-item--supported" in html
+    assert "job-requirement-item--mismatch" in html
     assert "badge-sector-government" not in html
 
 
@@ -1971,7 +1975,6 @@ def test_render_job_card_requirement_coverage_omits_duplicate_matched_text():
     html = workspace_renderer.render_job_card(
         {
             **_test_profile(),
-            "job_requirements": [],
             "requirement_coverage": [
                 {
                     "requirement": requirement,
@@ -2001,7 +2004,6 @@ def test_render_job_card_requirement_coverage_shows_evidence_subtitles_in_normal
     html = workspace_renderer.render_job_card(
         {
             **_test_profile(),
-            "job_requirements": [],
             "requirement_coverage": [
                 {
                     "requirement": requirement,
@@ -2029,7 +2031,6 @@ def test_render_job_card_requirement_coverage_hides_capability_badge_in_normal_m
     html = workspace_renderer.render_job_card(
         {
             **_test_profile(),
-            "job_requirements": [],
             "requirement_coverage": [
                 {
                     "requirement": "Lead delivery across multiple initiatives",
@@ -2085,7 +2086,6 @@ def test_render_job_card_requirement_coverage_shows_ad_wording_in_debug_mode():
     html = workspace_renderer.render_job_card(
         {
             **_test_profile(),
-            "job_requirements": [],
             "requirement_coverage": [
                 {
                     "requirement": "Lead delivery across multiple initiatives",
@@ -2120,7 +2120,6 @@ def test_render_job_card_requirement_coverage_shows_role_duration_note_in_normal
     html = workspace_renderer.render_job_card(
         {
             **_test_profile(),
-            "job_requirements": [],
             "requirement_coverage": [
                 {
                     "requirement": "Minimum 5 years experience as Business Analyst",
@@ -2152,7 +2151,6 @@ def test_render_job_card_requirement_coverage_shows_eligibility_details_in_debug
     html = workspace_renderer.render_job_card(
         {
             **_test_profile(),
-            "job_requirements": [],
             "requirement_coverage": [
                 {
                     "requirement": "Hold PV security clearance",
@@ -2193,7 +2191,6 @@ def test_render_job_card_shows_empty_requirements_state_when_none_are_extracted(
             RECORD_FIT_SCORE_BREAKDOWN_KEY: [
                 {"label": "Base fit", "value": 65, "section": "llm_fit"}
             ],
-            "job_requirements": [],
             "requirement_coverage": [],
             "location": "Sydney NSW",
             "work_type": "Permanent",
