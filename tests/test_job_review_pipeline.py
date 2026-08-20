@@ -58,6 +58,8 @@ from job_hunter_agent.record_schema import (
     POSTING_CHANNEL_VERSION_KEY,
     RECORD_REJECT_REASON_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
+    RECORD_REQUIREMENT_COVERAGE_VERSION_KEY,
+    REQUIREMENT_COVERAGE_CONTRACT_VERSION,
     RECORD_SALARY_KEY,
     RECORD_TITLE_KEY,
     RECORD_TITLE_REASON_KEY,
@@ -1238,6 +1240,7 @@ def _seed_reusable_kept_history(context, source: str) -> None:
     kept_record[RECORD_REQUIREMENT_COVERAGE_KEY] = [
         {"requirement": "Stakeholder engagement", "importance": "required", "status": "supported"}
     ]
+    kept_record[RECORD_REQUIREMENT_COVERAGE_VERSION_KEY] = REQUIREMENT_COVERAGE_CONTRACT_VERSION
     kept_record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY] = {
         POSTING_CHANNEL_VERSION_KEY: POSTING_CHANNEL_CLASSIFIER_VERSION,
         "kind": "direct_employer",
@@ -1354,6 +1357,10 @@ def test_llm_supported_specific_capability_without_valid_candidate_fact_gets_no_
 
     assert outcome[RECORD_DECISION_KEY] == "KEEP"
     assert updated_record[RECORD_REQUIREMENT_COVERAGE_KEY][0]["status"] == "not_shown"
+    assert (
+        updated_record[RECORD_REQUIREMENT_COVERAGE_VERSION_KEY]
+        == REQUIREMENT_COVERAGE_CONTRACT_VERSION
+    )
     assert updated_record[RECORD_REQUIREMENT_COVERAGE_KEY][0]["matched_candidate_fact"] == ""
     assert updated_record["fit_score"] == 0
     assert updated_record[RECORD_LLM_FIT_GRADE_KEY] != "EXCELLENT"

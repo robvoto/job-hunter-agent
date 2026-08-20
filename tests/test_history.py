@@ -23,6 +23,8 @@ from job_hunter_agent.record_schema import (
     POSTING_CHANNEL_CLASSIFIER_VERSION,
     POSTING_CHANNEL_VERSION_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
+    RECORD_REQUIREMENT_COVERAGE_VERSION_KEY,
+    REQUIREMENT_COVERAGE_CONTRACT_VERSION,
     RECORD_SOURCE_METADATA_KEY,
     SOURCE_METADATA_SCHEMA_VERSION,
     SOURCE_METADATA_VERSION_KEY,
@@ -43,6 +45,7 @@ def test_history_reuse_with_url_variation():
         RECORD_REQUIREMENT_COVERAGE_KEY: [
             {"requirement": "Business analysis", "importance": "required", "status": "supported"}
         ],
+        RECORD_REQUIREMENT_COVERAGE_VERSION_KEY: REQUIREMENT_COVERAGE_CONTRACT_VERSION,
         RECORD_POSTING_CHANNEL_EVIDENCE_KEY: {
             POSTING_CHANNEL_VERSION_KEY: POSTING_CHANNEL_CLASSIFIER_VERSION,
             "kind": "direct_employer",
@@ -70,6 +73,40 @@ def test_history_reuse_with_url_variation():
         "company": "Tech Corp",
     }
     assert can_reuse_kept_job(entry, new_record) is True
+
+
+def test_history_reuse_rechecks_stale_requirement_coverage_contract():
+    entry = {
+        "times_kept": 1,
+        RECORD_LAST_KEPT_SNAPSHOT_KEY: {
+            "llm_decision": "KEEP",
+            "llm_fit_grade": "STRONG",
+            RECORD_REQUIREMENT_COVERAGE_KEY: [
+                {
+                    "requirement": "Finance background",
+                    "importance": "preferred",
+                    "status": "not_shown",
+                    "canonical_requirement": "finance domain knowledge",
+                    "profile_action_allowed": False,
+                }
+            ],
+            # Deliberately missing RECORD_REQUIREMENT_COVERAGE_VERSION_KEY:
+            # this mirrors persisted jobs reviewed before the current profile-
+            # learning contract and must force a fresh fit review.
+            RECORD_POSTING_CHANNEL_EVIDENCE_KEY: {
+                POSTING_CHANNEL_VERSION_KEY: POSTING_CHANNEL_CLASSIFIER_VERSION,
+                "kind": "direct_employer",
+                "source": "llm_classifier",
+                "text_evidence": ["Employer wording"],
+            },
+            RECORD_SOURCE_METADATA_KEY: {
+                SOURCE_METADATA_VERSION_KEY: SOURCE_METADATA_SCHEMA_VERSION,
+                "platform": "seek",
+            },
+        },
+    }
+
+    assert can_reuse_kept_job(entry, {RECORD_JOB_KEY: "seek:legacy"}) is False
 
 
 def test_history_reuse_rechecks_jobs_with_unclassified_posting_channel():

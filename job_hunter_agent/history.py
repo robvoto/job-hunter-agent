@@ -34,6 +34,8 @@ from job_hunter_agent.record_schema import (
     POSTING_CHANNEL_CLASSIFIER_VERSION,
     POSTING_CHANNEL_VERSION_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
+    RECORD_REQUIREMENT_COVERAGE_VERSION_KEY,
+    REQUIREMENT_COVERAGE_CONTRACT_VERSION,
     RECORD_SOURCE_METADATA_KEY,
     SOURCE_METADATA_SCHEMA_VERSION,
     SOURCE_METADATA_VERSION_KEY,
@@ -85,6 +87,7 @@ KEEP_SNAPSHOT_FIELDS = (
     "role_snapshot",
     "fit_highlights",
     RECORD_REQUIREMENT_COVERAGE_KEY,
+    RECORD_REQUIREMENT_COVERAGE_VERSION_KEY,
     "soft_risk_reasons",
     "missing_profile_support",
     "missing_clearance_support",
@@ -188,6 +191,15 @@ def can_reuse_kept_job(history_entry: dict, record: dict, profile: Optional[dict
         return False
 
     if not has_complete_llm_keep_data(snapshot):
+        return False
+
+    # Requirement coverage drives user-visible profile-learning actions. Reuse
+    # only coverage produced under the current contract; otherwise a kept job
+    # must receive a fresh fit review instead of preserving stale Add/No gates.
+    if (
+        snapshot.get(RECORD_REQUIREMENT_COVERAGE_VERSION_KEY)
+        != REQUIREMENT_COVERAGE_CONTRACT_VERSION
+    ):
         return False
 
     posting_channel = snapshot.get(RECORD_POSTING_CHANNEL_EVIDENCE_KEY)

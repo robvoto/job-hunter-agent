@@ -205,6 +205,8 @@ from job_hunter_agent.record_schema import (
     RECORD_REJECT_REASON_KEY,
     RECORD_REVIEW_SOURCE_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
+    RECORD_REQUIREMENT_COVERAGE_VERSION_KEY,
+    REQUIREMENT_COVERAGE_CONTRACT_VERSION,
     RECORD_REVIEWED_SIGNAL_MATCHES_KEY,
     RECORD_ROLE_SNAPSHOT_KEY,
     RECORD_SALARY_KEY,
@@ -1052,6 +1054,7 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         review = payload["fit_review"]
         record["llm_learning_candidates"] = []
         record[RECORD_REQUIREMENT_COVERAGE_KEY] = payload.get("requirement_coverage") or []
+        record[RECORD_REQUIREMENT_COVERAGE_VERSION_KEY] = REQUIREMENT_COVERAGE_CONTRACT_VERSION
         record[RECORD_OCCUPATION_ALIGNMENT_KEY] = str(payload.get("occupation_alignment") or "")
         record[RECORD_OCCUPATION_ALIGNMENT_REASON_KEY] = str(
             payload.get("occupation_alignment_reason") or ""

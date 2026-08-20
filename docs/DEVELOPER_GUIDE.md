@@ -229,6 +229,7 @@ Detail-page safety:
 
 - invalid detail fetches such as challenge pages are treated as unusable input, not as job descriptions
 - successful full-detail fetches now persist `fit_source_text` into saved snapshots so later workspace rebuilds and history reuse do not lose specialist gap evidence
+- kept-job reuse also requires the current `requirement_coverage_contract_version`; when the requirement/profile-learning contract changes, older saved coverage is re-reviewed instead of preserving stale Add/No actions
 
 ## Current Product Boundary
 
