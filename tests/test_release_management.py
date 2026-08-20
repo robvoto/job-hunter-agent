@@ -689,3 +689,12 @@ def test_pytest_unit_discovery_is_scoped_to_repo_tests():
 
     assert 'testpaths = ["tests"]' in pyproject
     assert 'norecursedirs = ["tests/e2e"]' in pyproject
+
+def test_release_parallelizes_unit_tests_but_keeps_e2e_sequential():
+    release_script = RELEASE_SCRIPT.read_text(encoding="utf-8")
+    pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+
+    assert "pytest-xdist>=3.8.0,<4" in pyproject
+    assert "uv run pytest -n 6" in release_script
+    assert "./scripts/run-e2e.sh -q" in release_script
+    assert "run-e2e.sh -q -n" not in release_script

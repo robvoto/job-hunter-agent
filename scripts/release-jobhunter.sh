@@ -129,7 +129,9 @@ echo "==> Planned release: v$current_version -> v$next_version"
 
 run_tests() {
   echo "==> Unit tests"
-  uv run pytest
+  # Unit tests are isolated and safe to parallelize; Playwright E2E remains
+  # deliberately sequential because its browser fixtures share candidate state.
+  uv run pytest -n 6
 
   echo "==> Playwright E2E tests (non-LLM by default)"
   ./scripts/run-e2e.sh -q
