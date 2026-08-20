@@ -16,15 +16,18 @@ from job_hunter_agent.auth import (
     read_session_user,
 )
 from job_hunter_agent.config import (
+    ACCESS_DENIED_PATH,
     AWS_BROWSER_SESSION_PATH,
     GLOBAL_SETTINGS_PATH,
     LOGOUT_PATH,
     ONBOARDING_DEBUG_ALIAS_PATH,
     ONBOARDING_PATH,
+    WAITLIST_PATH,
 )
 from job_hunter_agent.global_settings import KEY_SEEK_MAX_PAGES
 from job_hunter_agent.locations import default_location_value, load_location_options
 from job_hunter_agent.paths import (
+    TEMPLATES_DIR,
     GLOBAL_SETTINGS_HTML_PATH,
     AWS_BROWSER_SESSION_HTML_PATH,
     ONBOARDING_HTML_PATH,
@@ -57,6 +60,29 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 JOB_HUNTER_LOGO_SRC = "/static/assets/job_hunter_img.png"
+
+
+def _render_access_status_page(request: Request, template_name: str):
+    template_path = TEMPLATES_DIR / template_name
+    if not template_path.exists():
+        return html_response("<h1>Template missing</h1><p>Access status template is missing.</p>", 500)
+    html = template_path.read_text(encoding="utf-8").replace(
+        "__JOB_HUNTER_CSRF_TOKEN__",
+        _html_escape(issue_csrf_token(request) or ""),
+    )
+    return html_response(html)
+
+
+@router.get(WAITLIST_PATH)
+def page_waitlist(request: Request):  # type: ignore[no-untyped-def]
+    _log_page_event(request, "waitlist", "opened")
+    return _render_access_status_page(request, "waitlist.html")
+
+
+@router.get(ACCESS_DENIED_PATH)
+def page_access_denied(request: Request):  # type: ignore[no-untyped-def]
+    _log_page_event(request, "access denied", "opened")
+    return _render_access_status_page(request, "access-denied.html")
 
 
 def _describe_session_user(request: Request) -> str:

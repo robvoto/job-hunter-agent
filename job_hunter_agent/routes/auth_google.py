@@ -19,10 +19,12 @@ from job_hunter_agent.auth import (
     set_session_cookie,
 )
 from job_hunter_agent.config import (
+    ACCESS_DENIED_PATH,
     GOOGLE_AUTH_CALLBACK_PATH,
     GOOGLE_AUTH_PATH,
     LOGIN_PATH,
     LOGOUT_PATH,
+    WAITLIST_PATH,
 )
 from job_hunter_agent.paths import TEMPLATES_DIR
 
@@ -128,6 +130,11 @@ def google_callback(  # type: ignore[no-untyped-def]
     display_name = str(user_info.get("name") or "").strip() or None
     user = get_or_create_user(email, cfg.admin_email, display_name=display_name)
     next_path = _safe_next_path(request.query_params.get("next", "/"))
+    access_status = user["access_status"]
+    if access_status == "pending":
+        next_path = WAITLIST_PATH
+    elif access_status == "blocked":
+        next_path = ACCESS_DENIED_PATH
     _logger.info(
         "AUTH | signed in | user=%s (%s) | next=%s",
         email,

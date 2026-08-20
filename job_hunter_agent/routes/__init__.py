@@ -15,6 +15,7 @@ from job_hunter_agent.routes import (
     scrape_debug,
     signals,
     static_docs,
+    user_access,
     workspace_api,
 )
 
@@ -33,5 +34,6 @@ def register_routes(app: FastAPI) -> None:
         onboarding_api,
         scrape_debug,
         review,
+        user_access,
     ):
         app.include_router(mod.router)

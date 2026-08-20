@@ -20,7 +20,12 @@ from job_hunter_agent.io_utils import write_review_data
 def test_api_review_data_returns_saved_suggested_tuning(monkeypatch, isolated_db):
     monkeypatch.setattr(
         "job_hunter_agent.fastapi_app.read_session_user",
-        lambda request: {"user_id": "test_user", "email": "test@example.com", "role": "candidate"},
+        lambda request: {
+            "user_id": "test_user",
+            "email": "test@example.com",
+            "role": "candidate",
+            "access_status": "approved",
+        },
     )
     with db_conn() as conn:
         conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", ("test_user",))
@@ -508,7 +513,12 @@ def test_scrape_jobs_direct_rejects_missing_llm_provider_before_source_run(monke
 def test_run_status_and_stop_endpoint_report_stopping(monkeypatch):
     monkeypatch.setattr(
         "job_hunter_agent.fastapi_app.read_session_user",
-        lambda request: {"user_id": "test-user", "email": "test@example.com", "role": "candidate"},
+        lambda request: {
+            "user_id": "test-user",
+            "email": "test@example.com",
+            "role": "candidate",
+            "access_status": "approved",
+        },
     )
     monkeypatch.setattr(
         "job_hunter_agent.fastapi_app.verify_csrf_token", lambda request, token: True
@@ -584,7 +594,12 @@ def test_run_status_and_stop_endpoint_report_stopping(monkeypatch):
 def test_run_status_retains_terminal_stopped_state_and_total_elapsed(monkeypatch):
     monkeypatch.setattr(
         "job_hunter_agent.fastapi_app.read_session_user",
-        lambda request: {"user_id": "test-user", "email": "test@example.com", "role": "candidate"},
+        lambda request: {
+            "user_id": "test-user",
+            "email": "test@example.com",
+            "role": "candidate",
+            "access_status": "approved",
+        },
     )
     monkeypatch.setattr(
         "job_hunter_agent.fastapi_app.verify_csrf_token", lambda request, token: True
@@ -629,7 +644,12 @@ def test_run_status_retains_terminal_stopped_state_and_total_elapsed(monkeypatch
 def test_job_history_endpoint_uses_saved_history(monkeypatch):
     monkeypatch.setattr(
         "job_hunter_agent.fastapi_app.read_session_user",
-        lambda request: {"user_id": "test-user", "email": "test@example.com", "role": "candidate"},
+        lambda request: {
+            "user_id": "test-user",
+            "email": "test@example.com",
+            "role": "candidate",
+            "access_status": "approved",
+        },
     )
     monkeypatch.setattr(
         workspace_api,

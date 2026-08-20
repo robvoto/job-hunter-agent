@@ -1,6 +1,7 @@
 """SQLite database connection and schema management."""
 
 import json
+import os
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
@@ -73,6 +74,7 @@ CREATE TABLE IF NOT EXISTS users (
     user_id      TEXT PRIMARY KEY,
     email        TEXT,
     display_name TEXT,
+    access_status TEXT NOT NULL DEFAULT 'pending',
     created_at   TEXT NOT NULL DEFAULT (datetime('now')),
     last_seen_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -368,6 +370,18 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE occupation_title_cache ADD COLUMN matched_phrase TEXT")
         if "match_type" not in columns:
             conn.execute("ALTER TABLE occupation_title_cache ADD COLUMN match_type TEXT")
+    if "users" in tables:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+        if "access_status" not in columns:
+            conn.execute(
+                "ALTER TABLE users ADD COLUMN access_status TEXT NOT NULL DEFAULT 'pending'"
+            )
+        admin_email = os.getenv("JOB_HUNTER_ADMIN_EMAIL", "").strip().lower()
+        if admin_email:
+            conn.execute(
+                "UPDATE users SET access_status = 'approved' WHERE lower(email) = ?",
+                (admin_email,),
+            )
     _apply_requirement_importance_migration(conn)
 
 
@@ -408,21 +422,100 @@ def ensure_user_row(
     user_id: str,
     email: str | None = None,
     display_name: str | None = None,
+    access_status: str | None = None,
     db_path: "Path | None" = None,
 ) -> None:
     """Upsert a user row. Updates email, display_name, and last_seen_at when provided."""
     with db_conn(db_path) as conn:
+        if access_status is None:
+            conn.execute(
+                """
+                INSERT INTO users (user_id, email, display_name, last_seen_at)
+                VALUES (?, ?, ?, datetime('now'))
+                ON CONFLICT(user_id) DO UPDATE SET
+                    email         = COALESCE(excluded.email, email),
+                    display_name  = COALESCE(excluded.display_name, display_name),
+                    last_seen_at  = excluded.last_seen_at
+                """,
+                (user_id, email or None, display_name or None),
+            )
+            return
+        if access_status not in {"pending", "approved", "blocked"}:
+            raise ValueError(f"Unsupported user access status: {access_status}")
         conn.execute(
             """
-            INSERT INTO users (user_id, email, display_name, last_seen_at)
-            VALUES (?, ?, ?, datetime('now'))
+            INSERT INTO users (user_id, email, display_name, access_status, last_seen_at)
+            VALUES (?, ?, ?, ?, datetime('now'))
             ON CONFLICT(user_id) DO UPDATE SET
                 email         = COALESCE(excluded.email, email),
                 display_name  = COALESCE(excluded.display_name, display_name),
+                access_status = excluded.access_status,
                 last_seen_at  = excluded.last_seen_at
             """,
-            (user_id, email or None, display_name or None),
+            (user_id, email or None, display_name or None, access_status),
         )
+
+
+def get_user_access_status(user_id: str, db_path: "Path | None" = None) -> str | None:
+    """Read the persisted access status for one authenticated user."""
+    with db_conn(db_path) as conn:
+        row = conn.execute(
+            "SELECT access_status FROM users WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    status = str(row["access_status"] or "").strip().lower()
+    if status not in {"pending", "approved", "blocked"}:
+        raise RuntimeError(f"Invalid persisted user access status for {user_id}")
+    return status
+
+
+def list_users_with_access(db_path: "Path | None" = None) -> list[dict]:
+    """Return the user directory needed by Global Admin access management."""
+    with db_conn(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT user_id, email, display_name, access_status, created_at, last_seen_at
+            FROM users
+            ORDER BY created_at ASC, user_id ASC
+            """
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def update_user_access_status(
+    user_id: str,
+    status: str,
+    admin_email: str | None,
+    db_path: "Path | None" = None,
+) -> dict:
+    """Update one user's access status while protecting the configured admin."""
+    if status not in {"pending", "approved", "blocked"}:
+        raise ValueError(f"Unsupported user access status: {status}")
+    with db_conn(db_path) as conn:
+        row = conn.execute(
+            "SELECT user_id, email FROM users WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        if row is None:
+            raise LookupError("User not found")
+        target_email = str(row["email"] or "").strip().lower()
+        configured_admin = str(admin_email or "").strip().lower()
+        if configured_admin and target_email == configured_admin:
+            raise ValueError("The configured administrator access cannot be changed")
+        conn.execute(
+            "UPDATE users SET access_status = ?, last_seen_at = last_seen_at WHERE user_id = ?",
+            (status, user_id),
+        )
+        updated = conn.execute(
+            """
+            SELECT user_id, email, display_name, access_status, created_at, last_seen_at
+            FROM users WHERE user_id = ?
+            """,
+            (user_id,),
+        ).fetchone()
+    return dict(updated)
 
 
 def get_table_names(db_path: Path | None = None) -> set[str]:

@@ -669,6 +669,26 @@ _GLOBAL_SETTINGS_LABEL_KEYS = (
     "runtime_maintenance_copy",
     "clear_runtime_caches_help",
     "clear_current_user_search_state_help",
+    "user_access_heading",
+    "user_access_copy",
+    "user_access_name_label",
+    "user_access_email_label",
+    "user_access_status_label",
+    "user_access_created_label",
+    "user_access_last_activity_label",
+    "user_access_unknown_value",
+    "user_access_empty",
+    "user_access_loading",
+    "user_access_load_error",
+    "user_access_action_error",
+    "user_access_updated_status",
+    "user_access_approve_label",
+    "user_access_block_label",
+    "user_access_pending_label",
+    "user_access_status_pending",
+    "user_access_status_approved",
+    "user_access_status_blocked",
+    "user_access_admin_label",
     *_SYSTEM_HEALTH_LABEL_KEYS,
 )
 
@@ -1248,6 +1268,9 @@ def build_bootstrap_script(
     )
     parts.append(
         f"<script>window.__JOB_HUNTER_SYSTEM_HEALTH_LABELS__ = {json.dumps(load_system_health_labels(), ensure_ascii=True)};</script>"
+    )
+    parts.append(
+        f"<script>window.__JOB_HUNTER_GLOBAL_SETTINGS_LABELS__ = {json.dumps(load_global_settings_labels(), ensure_ascii=True)};</script>"
     )
     parts.append(
         f"<script>window.__JOB_HUNTER_SETTINGS_CLEARANCES_LABELS__ = {json.dumps(load_settings_clearances_labels(), ensure_ascii=True)};</script>"

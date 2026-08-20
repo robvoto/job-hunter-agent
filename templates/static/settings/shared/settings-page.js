@@ -116,6 +116,7 @@ if (isAdminPage && bootstrapGlobalSettings) {
   adminSettings.initKnowledgeSyncControls?.(showStatus);
   adminSettings.initRejectionHistorySyncControls?.(showStatus);
   adminSettings.initSystemWarningsControls?.(showStatus);
+  adminSettings.initUserAccessControls?.(showStatus);
   renderLlmModelOptions();
 }
 
