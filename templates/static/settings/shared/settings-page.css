@@ -190,6 +190,8 @@
     }
     .settings-main { flex: 1; min-width: 0; background: var(--bg-page); padding-bottom: 120px; }
     .settings-content-area { max-width: 1100px; margin: 0 auto; padding: 32px var(--surface-pad-inline-lg); }
+    /* Local layout exception: Signals uses the same wide content ceiling as Workspace when the monitor allows it. */
+    .settings-content-area:has(#section-learning.is-active) { max-width: var(--content-shell-max-width); }
     .settings-group { display: none; }
     .settings-group.is-active { display: block; animation: slideIn 0.25s cubic-bezier(0.2, 0.8, 0.2, 1); }
     .settings-group.is-search-result { display: block; animation: slideIn 0.25s cubic-bezier(0.2, 0.8, 0.2, 1); }
@@ -940,6 +942,21 @@
     .clearance-card {
       align-items: center;
     }
+    /* Local layout exception: managed clearances and free-form facts are subgroups of one Eligibility card. */
+    .eligibility-settings-sections {
+      display: grid;
+      gap: var(--surface-gap-lg);
+    }
+    .eligibility-settings-section {
+      display: grid;
+      gap: var(--surface-gap-md);
+      min-width: 0;
+    }
+    .eligibility-settings-section + .eligibility-settings-section {
+      padding-top: var(--surface-pad-block-lg);
+      border-top: 1px solid var(--border-subtle);
+    }
+
     .clearance-card-main {
       gap: 4px;
     }
@@ -1909,6 +1926,32 @@
       width: 100%;
       min-width: 0;
     }
+    .signal-field-label,
+    .signal-requirement-type-label {
+      color: var(--text-primary);
+      font-size: var(--text-role-label-font-size);
+      font-weight: var(--text-role-status-font-weight);
+      line-height: var(--text-role-label-line-height, 1.25);
+    }
+    .signal-field-label-row {
+      display: flex;
+      align-items: center;
+      gap: var(--surface-gap-sm);
+    }
+    .signal-category-field,
+    .signal-requirement-review-fields,
+    .signal-requirement-type-field,
+    .signal-requirement-subtype-field {
+      display: grid;
+      gap: var(--control-space-sm);
+      min-width: 0;
+    }
+    .signal-requirement-review-fields {
+      gap: var(--surface-gap-md);
+    }
+    .signal-requirement-subtype-field[hidden] {
+      display: none;
+    }
     .signal-category-control {
       display: flex;
       align-items: flex-start;
@@ -1926,12 +1969,12 @@
       width: auto;
       min-width: 0;
     }
-    .signal-requirement-type-field {
-      display: grid;
-      gap: var(--field-label-control-gap);
+    .signal-requirement-type-field,
+    .signal-requirement-subtype-field {
       margin: 0;
     }
-    .signal-requirement-type-select {
+    .signal-requirement-type-select,
+    .signal-requirement-subtype-select {
       width: 100%;
       min-width: 0;
     }

@@ -67,6 +67,7 @@ from job_hunter_agent.profile_store import (
     load_profile,
 )
 from job_hunter_agent.role_analysis import posting_channel_evidence_is_current
+from job_hunter_agent.requirement_classification import load_default_eligibility_subtype
 from job_hunter_agent.record_schema import (
     APPLY_METHOD_EASY_APPLY,
     APPLY_METHOD_QUICK_APPLY,
@@ -640,6 +641,31 @@ def _workspace_label(group: str, key: str) -> str:
         if value is not None and str(value).strip():
             return str(value)
     raise ValueError(f"ui_labels.json is missing {group}.{key}")
+
+
+def _render_job_insights_panel(
+    summary_label: str,
+    body_html: str,
+    *,
+    modifier_class: str = "",
+) -> str:
+    """Render the shared expandable panel shell used inside job cards.
+
+    Panel-specific styling belongs in modifier classes such as
+    ``job-risk-panel``; the structural markup stays identical.
+    """
+    if not body_html:
+        return ""
+    classes = "job-insights"
+    modifier = compact_whitespace(modifier_class)
+    if modifier:
+        classes = f"{classes} {modifier}"
+    return (
+        f'<details class="{safe_html(classes)}">'
+        f"<summary>{safe_html(summary_label)}</summary>"
+        f"{body_html}"
+        "</details>"
+    )
 
 
 ARCHIVE_LABEL = _workspace_label("workspace_page_labels", "archive_label")
@@ -1703,10 +1729,12 @@ def render_job_card(
     job_requirements_html = ""
     merged_requirement_rows: dict[str, dict[str, Any]] = {}
     merged_requirement_order: list[str] = []
-    eligibility_coverage_rows: dict[str, dict[str, Any]] = {}
-    eligibility_coverage_order: list[str] = []
-    generic_eligibility_coverage_rows: dict[str, dict[str, Any]] = {}
-    generic_eligibility_coverage_order: list[str] = []
+    qualification_coverage_rows: dict[str, dict[str, Any]] = {}
+    qualification_coverage_order: list[str] = []
+    eligibility_coverage_rows_by_subtype: dict[str, dict[str, dict[str, Any]]] = {}
+    eligibility_coverage_order_by_subtype: dict[str, list[str]] = {}
+    has_unclassified_coverage = False
+    taxonomy_payload: dict[str, Any] = {}
     capability_level_lookup = _capability_level_lookup(active_profile)
     # When requirement_coverage is available, show only those rows (they are more
     # detailed and LLM-verified). Use requirement_coverage as the only requirement source to avoid
@@ -1956,7 +1984,7 @@ def render_job_card(
     ) -> str:
         """Split rows into a 'needs attention' group (surfaced first) and a
         'matched' group, each internally sorted by importance tier. This keeps
-        Job Requirements, Eligibility, and Clearance panels consistent: gaps are
+        Job Requirements, Eligibility, and Qualifications panels consistent: gaps are
         always the first thing a user sees, regardless of which panel."""
         partial_keys: list[str] = []
         attention_keys: list[str] = []
@@ -2008,9 +2036,23 @@ def render_job_card(
         )
 
     if has_coverage:
-        # One row per canonical requirement_coverage entry.
-        # Eligibility requirements (clearance, citizenship, work rights, etc.) get their
-        # own Clearances panel below rather than mixing into the general list.
+        # Coverage path: one row per coverage entry, no job_requirements duplication.
+        # The top-level taxonomy is Capability/Eligibility/Qualification. Eligibility
+        # keeps its subtype so managed clearances remain visible without becoming a
+        # fourth top-level requirement type.
+        raw_taxonomy_payload = _workspace_ui_labels().get("requirement_taxonomy_labels", {})
+        taxonomy_payload = raw_taxonomy_payload if isinstance(raw_taxonomy_payload, dict) else {}
+        subtype_labels = taxonomy_payload.get("eligibility_subtype_labels", {})
+        if not isinstance(subtype_labels, dict) or not subtype_labels:
+            raise ValueError(
+                "ui_labels.json is missing requirement_taxonomy_labels.eligibility_subtype_labels"
+            )
+        default_eligibility_subtype = load_default_eligibility_subtype()
+        if default_eligibility_subtype not in subtype_labels:
+            raise ValueError(
+                "ui_labels.json is missing requirement_taxonomy_labels.eligibility_subtype_labels.other"
+            )
+
         for item in coverage_rows:
             if not isinstance(item, dict):
                 continue
@@ -2020,32 +2062,32 @@ def render_job_card(
             raw_requirement_type = compact_whitespace(
                 str(item.get("requirement_type") or "")
             ).lower()
-            is_eligibility = raw_requirement_type in {"eligibility", "invalid", "uncertain"}
+            is_eligibility = raw_requirement_type == "eligibility"
             is_qualification = raw_requirement_type == "qualification"
             classification_review = raw_requirement_type not in {"capability", "eligibility", "qualification"}
-            known_generic_terms = {
-                compact_whitespace(str(fact.get("name") or "")).lower()
-                for fact in (active_profile.get("candidate_eligibility_facts") or [])
-                if isinstance(fact, dict)
-            }
-            known_generic_terms.update(
-                compact_whitespace(str(alias or "")).lower()
-                for fact in (active_profile.get("candidate_eligibility_facts") or [])
-                if isinstance(fact, dict)
-                for alias in (fact.get("aliases") or [])
-            )
-            matched_key = compact_whitespace(
-                str(item.get("matched_candidate_fact") or item.get("eligibility_name") or "")
-            ).lower()
-            is_generic_eligibility = is_eligibility and (
-                classification_review or not matched_key or matched_key in known_generic_terms
-            )
-            target_rows = eligibility_coverage_rows if is_eligibility else merged_requirement_rows
-            if is_generic_eligibility:
-                target_rows = generic_eligibility_coverage_rows
-            target_order = eligibility_coverage_order if is_eligibility else merged_requirement_order
-            if is_generic_eligibility:
-                target_order = generic_eligibility_coverage_order
+            has_unclassified_coverage = has_unclassified_coverage or classification_review
+
+            if is_eligibility:
+                requirement_subtype = compact_whitespace(
+                    str(item.get("requirement_subtype") or "")
+                ).lower()
+                if requirement_subtype not in subtype_labels:
+                    requirement_subtype = default_eligibility_subtype
+                target_rows = eligibility_coverage_rows_by_subtype.setdefault(
+                    requirement_subtype, {}
+                )
+                target_order = eligibility_coverage_order_by_subtype.setdefault(
+                    requirement_subtype, []
+                )
+            elif is_qualification:
+                requirement_subtype = ""
+                target_rows = qualification_coverage_rows
+                target_order = qualification_coverage_order
+            else:
+                requirement_subtype = ""
+                target_rows = merged_requirement_rows
+                target_order = merged_requirement_order
+
             key = _requirement_key(req_text)
             if key not in target_rows:
                 target_rows[key] = {"requirement": req_text}
@@ -2053,6 +2095,7 @@ def render_job_card(
             row = target_rows[key]
             row["coverage_status"] = str(item.get("status") or "not_shown").strip().lower()
             row["requirement_type"] = raw_requirement_type
+            row["requirement_subtype"] = requirement_subtype
             row["canonical_requirement"] = compact_whitespace(str(item.get("canonical_requirement") or ""))
             # Set by normalize_llm_requirement_coverage: whether canonical_requirement
             # is one clear, candidate-confirmable fact and not a vague/invented group
@@ -2105,62 +2148,85 @@ def render_job_card(
             f'<span class="job-requirement-text">{safe_html(occ_text)}</span></li>'
         )
 
-    if raw_coverage_is_list or occupation_row_html:
+    show_job_requirements_panel = (
+        bool(merged_requirement_rows or occupation_row_html)
+        if has_coverage
+        else bool(raw_coverage_is_list or occupation_row_html)
+    )
+    if show_job_requirements_panel:
         requirement_sections_html = _render_requirement_sections_html(
             merged_requirement_order,
             merged_requirement_rows,
             attention_prefix_html=occupation_row_html,
         )
+        requirements_panel_label = _workspace_label(
+            "workspace_card_labels", "job_requirements_summary"
+        )
+        if has_coverage and not has_unclassified_coverage:
+            requirements_panel_label = str(taxonomy_payload.get("capability_panel_label") or "").strip()
+            if not requirements_panel_label:
+                raise ValueError(
+                    "ui_labels.json is missing requirement_taxonomy_labels.capability_panel_label"
+                )
 
-        if requirement_sections_html:
-            job_requirements_html = (
-                '<details class="job-insights job-requirements-panel">'
-                f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'job_requirements_summary'))}</summary>"
-                f"{requirement_sections_html}"
-                "</details>"
-            )
-        else:
-            job_requirements_html = (
-                '<details class="job-insights job-requirements-panel">'
-                f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'job_requirements_summary'))}</summary>"
-                '<div class="job-insight-group is-secondary">'
-                f'<p class="job-requirements-empty">{safe_html(_workspace_label("workspace_card_labels", "job_requirements_empty_state"))}</p>'
-                '</div>'
-                "</details>"
-            )
+        panel_body_html = requirement_sections_html or (
+            '<div class="job-insight-group is-secondary">'
+            f'<p class="job-requirements-empty">{safe_html(_workspace_label("workspace_card_labels", "job_requirements_empty_state"))}</p>'
+            "</div>"
+        )
+        job_requirements_html = _render_job_insights_panel(
+            requirements_panel_label,
+            panel_body_html,
+            modifier_class="job-requirements-panel",
+        )
 
     check_items_html = "".join(f"<li>{safe_html(item)}</li>" for item in check_items)
+    risk_html = ""
 
-    risk_html = (
-        '<details class="job-insights job-risk-panel">'
-        f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'risk_panel_summary'))}</summary>"
-        f'<div class="job-insight-group job-insight-warning"><ul>{check_items_html}</ul></div>'
-        "</details>"
-        if check_items_html
-        else ""
+    if not taxonomy_payload:
+        raw_taxonomy_payload = _workspace_ui_labels().get("requirement_taxonomy_labels", {})
+        taxonomy_payload = raw_taxonomy_payload if isinstance(raw_taxonomy_payload, dict) else {}
+    if not taxonomy_payload:
+        raise ValueError("ui_labels.json is missing requirement_taxonomy_labels")
+    subtype_labels = taxonomy_payload.get("eligibility_subtype_labels", {})
+    if not isinstance(subtype_labels, dict) or not subtype_labels:
+        raise ValueError(
+            "ui_labels.json is missing requirement_taxonomy_labels.eligibility_subtype_labels"
+        )
+
+    eligibility_subtype_blocks: list[str] = []
+    for subtype, subtype_label in subtype_labels.items():
+        subtype_rows = eligibility_coverage_rows_by_subtype.get(str(subtype), {})
+        subtype_order = eligibility_coverage_order_by_subtype.get(str(subtype), [])
+        subtype_sections_html = _render_requirement_sections_html(subtype_order, subtype_rows)
+        if not subtype_sections_html:
+            continue
+        eligibility_subtype_blocks.append(
+            '<section class="job-requirement-subtype">'
+            f'<strong class="job-requirement-subtype-heading">{safe_html(str(subtype_label))}</strong>'
+            f"{subtype_sections_html}"
+            "</section>"
+        )
+    eligibility_sections_html = "".join(eligibility_subtype_blocks)
+    eligibility_panel_label = str(taxonomy_payload.get("eligibility_panel_label") or "").strip()
+    if eligibility_sections_html and not eligibility_panel_label:
+        raise ValueError("ui_labels.json is missing requirement_taxonomy_labels.eligibility_panel_label")
+    eligibility_html = _render_job_insights_panel(
+        eligibility_panel_label,
+        eligibility_sections_html,
+        modifier_class="job-eligibility-panel",
     )
 
-    clearance_sections_html = _render_requirement_sections_html(
-        eligibility_coverage_order, eligibility_coverage_rows
+    qualification_sections_html = _render_requirement_sections_html(
+        qualification_coverage_order, qualification_coverage_rows
     )
-    clearance_html = (
-        '<details class="job-insights job-clearance-panel">'
-        f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'clearance_panel_summary'))}</summary>"
-        f"{clearance_sections_html}"
-        "</details>"
-        if clearance_sections_html
-        else ""
-    )
-    eligibility_sections_html = _render_requirement_sections_html(
-        generic_eligibility_coverage_order, generic_eligibility_coverage_rows
-    )
-    eligibility_html = (
-        '<details class="job-insights job-eligibility-panel">'
-        f"<summary>{safe_html(_workspace_label('workspace_card_labels', 'eligibility_panel_summary'))}</summary>"
-        f"{eligibility_sections_html}"
-        "</details>"
-        if eligibility_sections_html
-        else ""
+    qualification_panel_label = str(taxonomy_payload.get("qualification_panel_label") or "").strip()
+    if qualification_sections_html and not qualification_panel_label:
+        raise ValueError("ui_labels.json is missing requirement_taxonomy_labels.qualification_panel_label")
+    qualification_html = _render_job_insights_panel(
+        qualification_panel_label,
+        qualification_sections_html,
+        modifier_class="job-qualification-panel",
     )
 
     llm_review_html = ""
@@ -2262,11 +2328,10 @@ def render_job_card(
                 debug_mode=active_debug_mode,
             )
         )
-        llm_review_html = (
-            '<details class="job-insights job-llm-review">'
-            f"<summary>{safe_html(_workspace_label('scoring_audit_labels', 'debug_llm_review_summary'))}</summary>"
-            f"{''.join(llm_review_parts)}"
-            "</details>"
+        llm_review_html = _render_job_insights_panel(
+            _workspace_label("scoring_audit_labels", "debug_llm_review_summary"),
+            "".join(llm_review_parts),
+            modifier_class="job-llm-review",
         )
 
     candidate_history_html = ""
@@ -2324,11 +2389,23 @@ def render_job_card(
                         f"{_cand_hist_review_reason}"
                     )
             candidate_history_html = (
-                '<details class="job-candidate-history">'
-                f"<summary>{safe_html(_workspace_label('candidate_history_labels', 'summary'))}</summary>"
+                '<div class="job-insight-group is-secondary job-candidate-history">'
+                f"<strong>{safe_html(_workspace_label('candidate_history_labels', 'summary'))}</strong>"
                 f"<ul>{''.join(f'<li>{safe_html(item)}</li>' for item in _ch_items)}</ul>"
-                "</details>"
+                "</div>"
             )
+
+    risk_body_html = ""
+    if check_items_html:
+        risk_body_html += (
+            f'<div class="job-insight-group job-insight-warning"><ul>{check_items_html}</ul></div>'
+        )
+    risk_body_html += candidate_history_html
+    risk_html = _render_job_insights_panel(
+        _workspace_label("workspace_card_labels", "risk_panel_summary"),
+        risk_body_html,
+        modifier_class="job-risk-panel",
+    )
 
     if applied_record:
         actions_html = (
@@ -2410,11 +2487,10 @@ def render_job_card(
         f'<div class="job-meta">{"".join(meta_items)}</div>'
         f"{related_cards_html}"
         f"{risk_html}"
-        f"{clearance_html}"
-        f"{eligibility_html}"
         f"{job_requirements_html}"
+        f"{eligibility_html}"
+        f"{qualification_html}"
         f"{llm_review_html}"
-        f"{candidate_history_html}"
         f"{context_html}"
         f"{actions_html}"
         "</article>"

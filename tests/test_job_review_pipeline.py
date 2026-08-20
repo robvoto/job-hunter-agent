@@ -72,7 +72,8 @@ from job_hunter_agent.signal_schema import (
     LEARNING_ORIGINAL_TEXTS_KEY,
     LEARNING_SIGNAL_KEY,
     LEARNING_SUGGESTED_CATEGORY_KEY,
-    LEARNING_SUGGESTED_VALUES_KEY,
+    LEARNING_SUGGESTED_REQUIREMENT_SUBTYPE_KEY,
+    LEARNING_SUGGESTED_REQUIREMENT_TYPE_KEY,
 )
 
 
@@ -1986,7 +1987,7 @@ def test_build_requirement_classification_review_signals_surfaces_uncertain_item
             LEARNING_SIGNAL_KEY: "5+ years working in a security clearance environment",
             LEARNING_SUGGESTED_CATEGORY_KEY: CATEGORY_REQUIREMENT_CLASSIFICATION_REVIEW,
             LEARNING_ORIGINAL_TEXTS_KEY: ["5+ years working in a security clearance environment"],
-            LEARNING_SUGGESTED_VALUES_KEY: ["capability"],
+            LEARNING_SUGGESTED_REQUIREMENT_TYPE_KEY: "capability",
         }
     ]
 
@@ -2014,6 +2015,7 @@ def test_build_requirement_classification_review_signals_dedupes_by_requirement_
                 "requirement_type": "uncertain",
                 "classification_reviewable": True,
                 "llm_proposed_requirement_type": "eligibility",
+                "llm_proposed_requirement_subtype": "clearance",
             },
             {
                 "requirement": "5+ years working in a security clearance environment",
@@ -2027,6 +2029,8 @@ def test_build_requirement_classification_review_signals_dedupes_by_requirement_
     signals = job_review_pipeline._build_requirement_classification_review_signals(record)
 
     assert len(signals) == 1
+    assert signals[0][LEARNING_SUGGESTED_REQUIREMENT_TYPE_KEY] == "eligibility"
+    assert signals[0][LEARNING_SUGGESTED_REQUIREMENT_SUBTYPE_KEY] == "clearance"
 
 
 def test_build_requirement_classification_review_signals_keeps_missing_proposal_unset():
@@ -2042,4 +2046,5 @@ def test_build_requirement_classification_review_signals_keeps_missing_proposal_
 
     signals = job_review_pipeline._build_requirement_classification_review_signals(record)
 
-    assert signals[0][LEARNING_SUGGESTED_VALUES_KEY] == []
+    assert LEARNING_SUGGESTED_REQUIREMENT_TYPE_KEY not in signals[0]
+    assert LEARNING_SUGGESTED_REQUIREMENT_SUBTYPE_KEY not in signals[0]

@@ -117,7 +117,11 @@ from job_hunter_agent.profile_store import (
     load_clearance_ui_options,
     load_profile,
 )
-from job_hunter_agent.requirement_classification import classify_requirement_type
+from job_hunter_agent.requirement_classification import (
+    classify_requirement_subtype,
+    classify_requirement_type,
+    load_eligibility_subtypes,
+)
 from job_hunter_agent.runtime_helpers import (
     CLI_FLAG_NO_LLM,
     append_llm_cost_log,
@@ -345,6 +349,7 @@ class _LLMRequirementCoverageItem(BaseModel):
     requirement: str
     importance: str = "preferred"
     requirement_type: str = "capability"
+    requirement_subtype: str = ""
     canonical_requirement: str = ""
     # Structural signal for whether this row is one clear fact or a vague
     # group: the specific named alternatives/examples the ad lists (e.g.
@@ -704,9 +709,11 @@ def build_fit_review_guidance(profile: dict[str, Any] | None = None) -> str:
 
 
 def build_requirement_coverage_guidance() -> str:
+    eligibility_subtypes = load_eligibility_subtypes()
     parts = [
         f"Use at most {get_llm_requirement_coverage_max_items()} capability/qualification requirement_coverage items. eligibility_requirements are separate and do not consume this limit.",
         "Classify each requirement as capability, eligibility, or qualification. Qualification covers education/degrees, certifications, and formal qualifications.",
+        f"For eligibility rows, set requirement_subtype to exactly one of: {', '.join(eligibility_subtypes)}. Leave requirement_subtype empty for capability and qualification rows.",
         "For qualification rows, importance must be required or preferred.",
         "Use matched_candidate_fact for the exact canonical capability or eligibility name shown in the profile matrix, or the exact qualification name shown in the qualifications matrix; never put an evidence sentence there.",
         "Canonical qualification names must be concise reusable concepts such as CBAP, PRINCE2, Bachelor of Information Technology, or Diploma of Project Management — never the raw requirement sentence or an alternatives list.",
@@ -1481,6 +1488,7 @@ def normalize_llm_requirement_coverage(
         raw_requirement_type = compact_whitespace(
             item.get("requirement_type") or item.get("type")
         ).lower()
+        raw_requirement_subtype = compact_whitespace(item.get("requirement_subtype")).lower()
         requirement_type_before = raw_requirement_type or "capability"
         status_before = status
         if raw_requirement_type:
@@ -1522,6 +1530,13 @@ def normalize_llm_requirement_coverage(
         else:
             requirement_type = LLM_INVALID_COVERAGE_REQUIREMENT_TYPE
             requirement_type_is_valid = False
+        requirement_subtype = ""
+        if requirement_type_is_valid and requirement_type == "eligibility":
+            requirement_subtype = classify_requirement_subtype(
+                requirement,
+                matched_job_text,
+                raw_requirement_subtype,
+            )
         canonical_requirement = normalize_profile_item_name(item.get("canonical_requirement"))
         raw_named_alternatives = item.get("named_alternatives") or []
         if isinstance(raw_named_alternatives, str):
@@ -1878,6 +1893,8 @@ def normalize_llm_requirement_coverage(
         }
         if named_alternatives:
             normalized_item["named_alternatives"] = named_alternatives
+        if requirement_subtype:
+            normalized_item["requirement_subtype"] = requirement_subtype
         if qualification_name:
             normalized_item["qualification_name"] = qualification_name
         if covered_requirement_elements:
@@ -1892,6 +1909,13 @@ def normalize_llm_requirement_coverage(
             # Retained only so the pending-review signal can offer the LLM's
             # own (unverified) guess as the default suggested classification.
             normalized_item["llm_proposed_requirement_type"] = llm_requirement_type
+            proposed_subtype = classify_requirement_subtype(
+                requirement,
+                matched_job_text,
+                raw_requirement_subtype,
+            ) if llm_requirement_type == "eligibility" else ""
+            if proposed_subtype:
+                normalized_item["llm_proposed_requirement_subtype"] = proposed_subtype
         if include_debug_match_diagnostics:
             normalized_item["match_source"] = match_source
             normalized_item["matched_profile_term"] = matched_profile_term

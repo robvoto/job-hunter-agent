@@ -1,4 +1,4 @@
-﻿import { renderTrashActionButton } from '../../common/action-buttons.js';
+import { renderTrashActionButton } from '../../common/action-buttons.js';
 import { escapeHtml } from '../shared/settings-utils.js';
 
     let _srData = null;
@@ -90,30 +90,73 @@ import { escapeHtml } from '../shared/settings-utils.js';
       return srCategoryOptions().find(item => item.key === category) || null;
     }
 
-    /* An LLM suggestion may preselect the visible selector, but approval always submits the human-visible selected value. */
+    function srFieldLabel(key) {
+      return String(_srData?.field_labels?.[key] || '').trim();
+    }
+
+    /* An LLM suggestion may preselect visible selectors, but approval always submits the human-visible selections. */
     function srRequirementTypeOptions(category) {
       const meta = srCategoryMetadata(category);
       return Array.isArray(meta?.requirement_type_options) ? meta.requirement_type_options : [];
     }
 
+    function srRequirementSubtypeOptions(category) {
+      const meta = srCategoryMetadata(category);
+      return Array.isArray(meta?.requirement_subtype_options) ? meta.requirement_subtype_options : [];
+    }
+
+    function srRequirementSubtypeParentType(category) {
+      return String(srCategoryMetadata(category)?.requirement_subtype_parent_type || '').trim();
+    }
+
     function srRequirementTypeValue(signal, options) {
-      const suggestedValues = Array.isArray(signal?.suggested_values) ? signal.suggested_values : [];
-      const suggested = String(suggestedValues[0] || '').trim().toLowerCase();
+      const suggested = String(signal?.suggested_requirement_type || '').trim().toLowerCase();
       return options.some(option => String(option?.value || '').trim() === suggested) ? suggested : '';
+    }
+
+    function srRequirementSubtypeValue(signal, options) {
+      const suggested = String(signal?.suggested_requirement_subtype || '').trim().toLowerCase();
+      return options.some(option => String(option?.value || '').trim() === suggested) ? suggested : '';
+    }
+
+    function srRequirementReviewComplete(article, category) {
+      const typeOptions = srRequirementTypeOptions(category);
+      if (!typeOptions.length) return true;
+      const typeSelect = article?.querySelector('.signal-requirement-type-select');
+      const selectedType = String(typeSelect?.value || '').trim();
+      if (!selectedType) return false;
+      if (selectedType !== srRequirementSubtypeParentType(category)) return true;
+      const subtypeSelect = article?.querySelector('.signal-requirement-subtype-select');
+      return Boolean(String(subtypeSelect?.value || '').trim());
     }
 
     function srRequirementTypeControlHtml(signal, category, isBusy) {
       const meta = srCategoryMetadata(category);
-      const options = srRequirementTypeOptions(category);
-      if (!meta || !options.length) return '';
-      const selectedValue = srRequirementTypeValue(signal, options);
+      const typeOptions = srRequirementTypeOptions(category);
+      if (!meta || !typeOptions.length) return '';
+      const selectedType = srRequirementTypeValue(signal, typeOptions);
+      const subtypeOptions = srRequirementSubtypeOptions(category);
+      const selectedSubtype = srRequirementSubtypeValue(signal, subtypeOptions);
+      const subtypeParentType = srRequirementSubtypeParentType(category);
+      const subtypeVisible = selectedType === subtypeParentType;
       return `
-    <label class="signal-requirement-type-field">
-      <span class="signal-requirement-type-label">${escapeHtml(meta.requirement_type_label || '')}</span>
-      <select class="signal-requirement-type-select jh-select" data-sr-key="${escapeHtml(srSignalKey(signal))}"${selectedValue ? '' : ' data-sr-unselected="true"'}${isBusy ? ' disabled' : ''} aria-label="${escapeHtml(meta.requirement_type_label || '')}">
-        ${options.map(option => `<option value="${escapeHtml(option.value)}"${String(option.value) === selectedValue ? ' selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
-      </select>
-    </label>`;
+    <div class="signal-requirement-review-fields">
+      <label class="signal-requirement-type-field">
+        <span class="signal-field-label-row">
+          <span class="signal-field-label">${escapeHtml(meta.requirement_type_label || '')}</span>
+          ${srCategoryHelpHtml(category)}
+        </span>
+        <select class="signal-requirement-type-select jh-select" data-sr-key="${escapeHtml(srSignalKey(signal))}"${selectedType ? '' : ' data-sr-unselected="true"'}${isBusy ? ' disabled' : ''} aria-label="${escapeHtml(meta.requirement_type_label || '')}">
+          ${typeOptions.map(option => `<option value="${escapeHtml(option.value)}"${String(option.value) === selectedType ? ' selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
+        </select>
+      </label>
+      <label class="signal-requirement-subtype-field"${subtypeVisible ? '' : ' hidden'}>
+        <span class="signal-field-label">${escapeHtml(meta.requirement_subtype_label || '')}</span>
+        <select class="signal-requirement-subtype-select jh-select" data-sr-key="${escapeHtml(srSignalKey(signal))}"${selectedSubtype ? '' : ' data-sr-unselected="true"'}${isBusy ? ' disabled' : ''} aria-label="${escapeHtml(meta.requirement_subtype_label || '')}">
+          ${subtypeOptions.map(option => `<option value="${escapeHtml(option.value)}"${String(option.value) === selectedSubtype ? ' selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
+        </select>
+      </label>
+    </div>`;
     }
 
     function srIsPatternCategory(category) {
@@ -161,7 +204,10 @@ import { escapeHtml } from '../shared/settings-utils.js';
       }
 
       body += `</div>`;
-      return srHelpDrawerHtml('ii', 'Title meaning', body, 'sr-category-help-drawer');
+      const helpLabel = categoryKey === 'requirement_classification_review'
+        ? srFieldLabel('requirement_type_help')
+        : srFieldLabel('category_help');
+      return srHelpDrawerHtml('i', helpLabel, body, 'sr-category-help-drawer');
     }
 
     function srSignalContextHtml(signal) {
@@ -331,28 +377,39 @@ import { escapeHtml } from '../shared/settings-utils.js';
             const currentValue = signal.signal || '';
             const patternValid = srPatternValueValid(category, currentValue);
             const requirementTypeOptions = srRequirementTypeOptions(category);
+            const isRequirementReview = requirementTypeOptions.length > 0;
             const requirementType = srRequirementTypeValue(signal, requirementTypeOptions);
+            const requirementSubtype = srRequirementSubtypeValue(signal, srRequirementSubtypeOptions(category));
+            const subtypeRequired = requirementType === srRequirementSubtypeParentType(category);
             const approveDisabled = isBusy || !category || !patternValid
-              || (requirementTypeOptions.length > 0 && !requirementType);
+              || (isRequirementReview && (!requirementType || (subtypeRequired && !requirementSubtype)));
+            const valueFieldLabel = isRequirementReview ? srFieldLabel('requirement') : srFieldLabel('signal');
+            const categoryFieldHtml = isRequirementReview
+              ? srRequirementTypeControlHtml(signal, category, isBusy)
+              : `
+    <div class="signal-category-field">
+      <span class="signal-field-label">${escapeHtml(srFieldLabel('category'))}</span>
+      <div class="signal-category-control">
+        <select class="signal-category-select jh-select" data-sr-key="${escapeHtml(key)}"${isBusy ? ' disabled' : ''} aria-label="${escapeHtml(srFieldLabel('category'))}">
+          <option value="">Choose category</option>
+          ${categoryOptions.map(option => `<option value="${escapeHtml(option.key)}"${category === option.key ? ' selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
+        </select>
+        ${category ? srCategoryHelpHtml(category) : ''}
+      </div>
+    </div>`;
             return `
 <article class="signal-row${statusClass}" data-sr-key="${escapeHtml(key)}">
   <div class="signal-row-title">
-    <div class="signal-value-field">
-      <textarea class="signal-value-input" data-sr-key="${escapeHtml(key)}" rows="2" placeholder="Signal value"${isBusy ? ' disabled' : ''} aria-label="Signal value">${escapeHtml(currentValue)}</textarea>
+    <label class="signal-value-field">
+      <span class="signal-field-label">${escapeHtml(valueFieldLabel)}</span>
+      <textarea class="signal-value-input" data-sr-key="${escapeHtml(key)}" rows="2" placeholder="${escapeHtml(valueFieldLabel)}"${isBusy ? ' disabled' : ''} aria-label="${escapeHtml(valueFieldLabel)}">${escapeHtml(currentValue)}</textarea>
       ${isPatternCat ? '<span class="signal-pattern-hint">Use [*] as wildcard — e.g. <code>Head of [*]</code></span>' : ''}
-    </div>
+    </label>
     ${statusText ? `<span class="signal-inline-status${inlineState ? ` is-${escapeHtml(inlineState.kind)}` : ''}">${escapeHtml(statusText)}</span>` : ''}
     ${srSignalContextHtml(signal)}
   </div>
   <div class="signal-category-wrapper">
-    <div class="signal-category-control">
-      <select class="signal-category-select jh-select" data-sr-key="${escapeHtml(key)}"${isBusy ? ' disabled' : ''}>
-        <option value="">Choose category</option>
-        ${categoryOptions.map(option => `<option value="${escapeHtml(option.key)}"${category === option.key ? ' selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
-      </select>
-      ${category ? srCategoryHelpHtml(category) : ''}
-    </div>
-    ${srRequirementTypeControlHtml(signal, category, isBusy)}
+    ${categoryFieldHtml}
   </div>
   <div class="signal-row-actions">
     <button class="signal-action-btn signal-approve" type="button" data-sr-key="${escapeHtml(key)}"${approveDisabled ? ' disabled' : ''} title="Approve" aria-label="Approve">&#10003;</button>
@@ -400,6 +457,9 @@ import { escapeHtml } from '../shared/settings-utils.js';
 <div class="sr-list">${cardsHtml}${pagerHtml}</div>`;
 
       panel.querySelectorAll('.signal-requirement-type-select[data-sr-unselected="true"]').forEach(select => {
+        select.selectedIndex = -1;
+      });
+      panel.querySelectorAll('.signal-requirement-subtype-select[data-sr-unselected="true"]').forEach(select => {
         select.selectedIndex = -1;
       });
 
@@ -480,9 +540,8 @@ import { escapeHtml } from '../shared/settings-utils.js';
             const currentVal = valueInput ? valueInput.value.trim() : '';
             const approveBtn = article.querySelector('.signal-approve');
             if (approveBtn) {
-              const requirementTypeSelect = article.querySelector('.signal-requirement-type-select');
               approveBtn.disabled = !newCategory || !srPatternValueValid(newCategory, currentVal)
-                || (srRequirementTypeOptions(newCategory).length > 0 && !requirementTypeSelect?.value);
+                || !srRequirementReviewComplete(article, newCategory);
             }
             // Show/hide pattern hint when category changes
             const existingHint = article.querySelector('.signal-pattern-hint');
@@ -507,9 +566,8 @@ import { escapeHtml } from '../shared/settings-utils.js';
           const category = signal ? srSignalCategory(signal) : '';
           const approveBtn = article.querySelector('.signal-approve');
           if (approveBtn) {
-            const requirementTypeSelect = article.querySelector('.signal-requirement-type-select');
             approveBtn.disabled = !category || !srPatternValueValid(category, input.value.trim())
-              || (srRequirementTypeOptions(category).length > 0 && !requirementTypeSelect?.value);
+              || !srRequirementReviewComplete(article, category);
           }
         });
       });
@@ -520,12 +578,32 @@ import { escapeHtml } from '../shared/settings-utils.js';
           if (!article) return;
           const signal = all.find(item => srSignalKey(item) === (select.dataset.srKey || ''));
           const category = signal ? srSignalCategory(signal) : '';
+          const subtypeField = article.querySelector('.signal-requirement-subtype-field');
+          if (subtypeField) {
+            subtypeField.hidden = String(select.value || '').trim() !== srRequirementSubtypeParentType(category);
+          }
           const valueInput = article.querySelector('.signal-value-input');
           const approveBtn = article.querySelector('.signal-approve');
           if (approveBtn) {
             approveBtn.disabled = !category
               || !srPatternValueValid(category, valueInput?.value.trim() || '')
-              || !select.value;
+              || !srRequirementReviewComplete(article, category);
+          }
+        });
+      });
+
+      panel.querySelectorAll('.signal-requirement-subtype-select').forEach(select => {
+        select.addEventListener('change', () => {
+          const article = select.closest('.signal-row');
+          if (!article) return;
+          const signal = all.find(item => srSignalKey(item) === (select.dataset.srKey || ''));
+          const category = signal ? srSignalCategory(signal) : '';
+          const valueInput = article.querySelector('.signal-value-input');
+          const approveBtn = article.querySelector('.signal-approve');
+          if (approveBtn) {
+            approveBtn.disabled = !category
+              || !srPatternValueValid(category, valueInput?.value.trim() || '')
+              || !srRequirementReviewComplete(article, category);
           }
         });
       });
@@ -542,11 +620,16 @@ import { escapeHtml } from '../shared/settings-utils.js';
           if (!srPatternValueValid(category, value)) return;
           const requirementTypeOptions = srRequirementTypeOptions(category);
           const requirementTypeSelect = article?.querySelector('.signal-requirement-type-select');
+          const requirementSubtypeSelect = article?.querySelector('.signal-requirement-subtype-select');
           const classification = requirementTypeSelect?.value.trim() || '';
-          if (requirementTypeOptions.length > 0 && !classification) return;
+          const subtype = requirementSubtypeSelect?.value.trim() || '';
+          if (!srRequirementReviewComplete(article, category)) return;
           const payload = { key, action: 'approve', category, value };
           if (requirementTypeOptions.length > 0) {
             payload.classification = classification;
+            if (classification === srRequirementSubtypeParentType(category)) {
+              payload.subtype = subtype;
+            }
           }
           await srPatchSignal(key, payload, 'Approved');
         });

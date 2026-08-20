@@ -1,7 +1,7 @@
 {
   "kind": "system_config",
   "name": "llm_requirement_coverage_defaults",
-  "version": 17,
+  "version": 18,
   "updated_at": "2026-08-20",
   "description": "Managed default guidance for LLM requirement coverage decomposition behaviour.",
   "lines": [
@@ -21,6 +21,7 @@
     "Set classification_reviewable=true only when the entire requirement can be assigned one reusable requirement type without losing another independently required dimension. Set it false for mixed-type requirements, compound packages, or alternatives whose conditions span different types. Equivalent alternatives that all express the same type may still be reviewable as one whole requirement. This flag controls whether an uncertain classification may be shown to a human for reusable learning.",
     "capability covers skills, responsibilities, knowledge, domain experience, seniority, and years or duration of experience — e.g. '5+ years supporting client outcomes' is capability, not eligibility.",
     "eligibility covers legal entry gates such as citizenship, work rights, security clearances, licences, and registrations — e.g. 'ability to obtain a Baseline security clearance' is eligibility. Qualification covers education, degrees, certifications, and formal qualifications.",
+    "Preserve eligibility specificity with requirement_subtype. Use the managed eligibility subtype vocabulary supplied in the prompt; for example, a security-clearance gate stays requirement_type=eligibility with requirement_subtype=clearance rather than becoming a separate top-level type. Leave requirement_subtype empty for capability and qualification rows.",
     "Return every explicit eligibility gate in eligibility_requirements, one independently testable gate per item. Eligibility requirements are additional to requirement_coverage and must never be omitted to make room for capability or qualification rows. Do not duplicate eligibility rows in requirement_coverage.",
     "When an ad states two or more distinct eligibility conditions joined together (e.g. 'hold a security clearance and be an Australian citizen'), emit one eligibility_requirements item per condition, each matched independently to its own profile eligibility fact — do not merge them into a single item that needs one combined fact to match.",
     "A citizenship, permanent residency, or existing work-rights/visa eligibility fact in the profile satisfies a requirement worded as work authorisation, work rights, or the right to work in that country — match it to that fact instead of leaving matched_candidate_fact empty just because the wording differs.",

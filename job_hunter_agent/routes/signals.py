@@ -54,16 +54,20 @@ _SIGNAL_CATEGORY_LABEL_FIELDS = {
 }
 
 _REQUIREMENT_TYPE_LABEL_FIELDS = (
-    ("capability", "requirement_type_capability_label"),
-    ("eligibility", "requirement_type_eligibility_label"),
-    ("qualification", "requirement_type_qualification_label"),
+    ("capability", "type_capability_label"),
+    ("eligibility", "type_eligibility_label"),
+    ("qualification", "type_qualification_label"),
 )
 
 
 @router.get("/api/signal-registry")
 def api_signal_registry():  # type: ignore[no-untyped-def]
 
-    from job_hunter_agent.server_helpers import load_signal_registry_labels
+    from job_hunter_agent.requirement_classification import load_eligibility_subtypes
+    from job_hunter_agent.server_helpers import (
+        load_requirement_taxonomy_labels,
+        load_signal_registry_labels,
+    )
     from job_hunter_agent.signal_registry import (
         VALID_SIGNAL_CATEGORIES,
         load_registry,
@@ -74,6 +78,17 @@ def api_signal_registry():  # type: ignore[no-untyped-def]
 
     signals = sorted(registry.values(), key=lambda r: str(r.get("signal", "")).lower())
     labels = load_signal_registry_labels()
+    taxonomy_labels = load_requirement_taxonomy_labels()
+    eligibility_subtypes = load_eligibility_subtypes()
+    subtype_labels = taxonomy_labels["eligibility_subtype_labels"]
+    missing_subtype_labels = [
+        subtype for subtype in eligibility_subtypes if subtype not in subtype_labels
+    ]
+    if missing_subtype_labels:
+        raise ValueError(
+            "ui_labels.json is missing requirement taxonomy subtype labels: "
+            + ", ".join(missing_subtype_labels)
+        )
 
     def category_payload(category: str) -> dict:
         label_key, description_key, examples_key, warning_key = _SIGNAL_CATEGORY_LABEL_FIELDS[category]
@@ -86,10 +101,16 @@ def api_signal_registry():  # type: ignore[no-untyped-def]
             "warning": labels[warning_key],
         }
         if category == CATEGORY_REQUIREMENT_CLASSIFICATION_REVIEW:
-            payload["requirement_type_label"] = labels["requirement_type_field_label"]
+            payload["requirement_type_label"] = taxonomy_labels["type_field_label"]
             payload["requirement_type_options"] = [
-                {"value": value, "label": labels[label_key]}
+                {"value": value, "label": taxonomy_labels[label_key]}
                 for value, label_key in _REQUIREMENT_TYPE_LABEL_FIELDS
+            ]
+            payload["requirement_subtype_parent_type"] = "eligibility"
+            payload["requirement_subtype_label"] = taxonomy_labels["eligibility_subtype_field_label"]
+            payload["requirement_subtype_options"] = [
+                {"value": subtype, "label": subtype_labels[subtype]}
+                for subtype in eligibility_subtypes
             ]
         return payload
 
@@ -99,6 +120,13 @@ def api_signal_registry():  # type: ignore[no-untyped-def]
             "total": len(signals),
             "pattern_categories": sorted(PATTERN_SIGNAL_CATEGORIES),
             "categories": [category_payload(category) for category in sorted(VALID_SIGNAL_CATEGORIES)],
+            "field_labels": {
+                "signal": labels["signal_field_label"],
+                "requirement": labels["requirement_field_label"],
+                "category": labels["category_field_label"],
+                "category_help": labels["category_help_aria_label"],
+                "requirement_type_help": labels["requirement_type_help_aria_label"],
+            },
         },
     )
 
@@ -121,6 +149,8 @@ def api_signal_registry_patch(body: dict = Body(...)):  # type: ignore[no-untype
 
         classification = str(body.get("classification") or "").strip()
 
+        subtype = str(body.get("subtype") or "").strip()
+
         if not key:
             return json_response({"error": "key is required"}, 400)
 
@@ -132,6 +162,7 @@ def api_signal_registry_patch(body: dict = Body(...)):  # type: ignore[no-untype
                 category=category,
                 value=value,
                 classification=classification,
+                subtype=subtype,
             )
 
             if updated is None:
