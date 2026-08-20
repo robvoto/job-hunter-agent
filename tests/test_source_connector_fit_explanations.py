@@ -2522,7 +2522,9 @@ def test_candidate_application_history_warnings_stay_in_checks_panel_without_cha
     }
 
     plain_html = workspace_renderer.render_job_card(base_record, _test_profile())
-    history_html = workspace_renderer.render_job_card(with_history, _test_profile())
+    history_html = workspace_renderer.render_job_card(
+        with_history, _test_profile(), debug_mode=False
+    )
 
     assert 'data-fit-score="' in plain_html
     assert 'data-fit-score="' in history_html
@@ -2536,9 +2538,9 @@ def test_candidate_application_history_warnings_stay_in_checks_panel_without_cha
     assert "Needs review" not in history_html
     assert "Acme" in history_html
     assert "Role: Business Analyst" in history_html
-    assert "Confidence: high" in history_html
+    assert "Confidence: high" not in history_html
     assert "Evidence: We regret to inform you" in history_html
-    assert "Review reason: Company mismatch needs a manual check." in history_html
+    assert "Review reason: Company mismatch needs a manual check." not in history_html
 
 
 def test_attention_strip_shows_salary_below_target_when_it_is_the_last_remaining_issue():
@@ -2667,7 +2669,7 @@ def test_candidate_application_history_renders_expanded_details_section():
                 "llm_needs_review": True,
                 "llm_company": "MUFG Pension & Market Services",
                 "llm_role": "Technical Analyst",
-                "run_date": "2026-05-07",
+                "run_date": "5/7/2026 18:37:57",
                 "_match_confidence": "medium",
                 "_company_match_reason": "Company token-overlap match",
                 "llm_evidence": "Thank you for your recent application for the Technical Analyst role within MUFG Pension & Market Services. "
@@ -2677,16 +2679,64 @@ def test_candidate_application_history_renders_expanded_details_section():
             },
         },
         _test_profile(),
+        debug_mode=True,
     )
 
     assert "Candidate application history" in html
     assert "MUFG Pension &amp; Market Services — 7 May 2026" in html
+    assert "5/7/2026 18:37:57" not in html
     assert "Role: Technical Analyst" in html
     assert "Confidence: high" in html
     assert "Company match confidence: medium" in html
     assert "Company match reason: Company token-overlap match" in html
     assert "Evidence: Thank you for your recent application" in html
     assert "Review reason: Company mismatch needs a manual check." in html
+
+
+def test_candidate_application_history_diagnostics_are_debug_only():
+    record = {
+        "job_key": "test-candidate-history-diagnostics",
+        "title": "Technical Analyst",
+        "company": "Acme",
+        "url": "https://example.com/job",
+        "title_reason": "OK",
+        "content_reason": "OK",
+        "llm_fit_grade": "SOLID",
+        "location": "Sydney NSW",
+        "work_type": "Full Time",
+        "work_mode": "Hybrid",
+        "salary": "N/A",
+        "full_description": "Requirements elicitation across delivery teams. " * 40,
+        "fit_highlights": [],
+        "source": "seek",
+        "candidate_application_history": {
+            "llm_application_status": "rejection",
+            "llm_confidence": "high",
+            "llm_company": "Acme",
+            "llm_role": "Technical Analyst",
+            "run_date": "2026-05-07",
+            "_match_confidence": "medium",
+            "_company_match_reason": "Company token-overlap match",
+            "llm_evidence": "We regret to inform you",
+            "llm_review_reason": "Needs manual review",
+        },
+    }
+
+    normal_html = workspace_renderer.render_job_card(
+        record, _test_profile(), debug_mode=False
+    )
+    debug_html = workspace_renderer.render_job_card(record, _test_profile(), debug_mode=True)
+
+    assert "Role: Technical Analyst" in normal_html
+    assert "Evidence: We regret to inform you" in normal_html
+    for diagnostic in (
+        "Confidence: high",
+        "Company match confidence: medium",
+        "Company match reason: Company token-overlap match",
+        "Review reason: Needs manual review",
+    ):
+        assert diagnostic not in normal_html
+        assert diagnostic in debug_html
 
 
 def test_candidate_application_history_renders_escaped_values_safely():
@@ -2718,6 +2768,7 @@ def test_candidate_application_history_renders_escaped_values_safely():
             },
         },
         _test_profile(),
+        debug_mode=True,
     )
 
     assert "&lt;Acme &amp; Co&gt;" in html

@@ -2271,14 +2271,11 @@ def render_job_card(
             _ch_evidence = (
                 _ch_evidence_raw[:100] + "..." if len(_ch_evidence_raw) > 100 else _ch_evidence_raw
             )
-            _ch_formatted_date = _ch_run_date
-            for _fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
-                try:
-                    _dt = datetime.strptime(_ch_run_date, _fmt)
-                    _ch_formatted_date = f"{_dt.day} {_dt.strftime('%B %Y')}"
-                    break
-                except ValueError:
-                    pass
+            _ch_formatted_date = (
+                format_timestamp_label(_ch_run_date, include_time=False)
+                if _ch_run_date
+                else ""
+            )
             _ch_items = []
             _ch_header_parts = [p for p in [_ch_company, _ch_formatted_date] if p]
             if _ch_header_parts:
@@ -2289,25 +2286,28 @@ def render_job_card(
                 _ch_items.append(
                     f"{_workspace_label('candidate_history_labels', 'evidence_prefix')} {_ch_evidence}"
                 )
-            if _ch_confidence:
-                _ch_items.append(
-                    f"{_workspace_label('candidate_history_labels', 'confidence_prefix')} {_ch_confidence}"
-                )
-            if _ch_match_confidence:
-                _ch_items.append(
-                    f"{_workspace_label('candidate_history_labels', 'company_match_confidence_prefix')} "
-                    f"{_ch_match_confidence}"
-                )
-            if _ch_match_reason:
-                _ch_items.append(
-                    f"{_workspace_label('candidate_history_labels', 'company_match_reason_prefix')} "
-                    f"{_ch_match_reason}"
-                )
-            if _cand_hist_review_reason:
-                _ch_items.append(
-                    f"{_workspace_label('candidate_history_labels', 'review_reason_prefix')} "
-                    f"{_cand_hist_review_reason}"
-                )
+            # Keep application-history diagnostics in the record for debugging,
+            # but keep them out of the normal candidate-facing card details.
+            if active_debug_mode:
+                if _ch_confidence:
+                    _ch_items.append(
+                        f"{_workspace_label('candidate_history_labels', 'confidence_prefix')} {_ch_confidence}"
+                    )
+                if _ch_match_confidence:
+                    _ch_items.append(
+                        f"{_workspace_label('candidate_history_labels', 'company_match_confidence_prefix')} "
+                        f"{_ch_match_confidence}"
+                    )
+                if _ch_match_reason:
+                    _ch_items.append(
+                        f"{_workspace_label('candidate_history_labels', 'company_match_reason_prefix')} "
+                        f"{_ch_match_reason}"
+                    )
+                if _cand_hist_review_reason:
+                    _ch_items.append(
+                        f"{_workspace_label('candidate_history_labels', 'review_reason_prefix')} "
+                        f"{_cand_hist_review_reason}"
+                    )
             candidate_history_html = (
                 '<details class="job-candidate-history">'
                 f"<summary>{safe_html(_workspace_label('candidate_history_labels', 'summary'))}</summary>"
