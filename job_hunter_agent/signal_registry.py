@@ -29,6 +29,7 @@ from job_hunter_agent.parsing_schema import (
     KEY_P_ROUTING_SUPPLEMENTARY,
 )
 from job_hunter_agent.requirement_classification import (
+    load_eligibility_subtypes,
     upsert_requirement_classification_override,
 )
 from job_hunter_agent.signal_schema import (
@@ -55,6 +56,8 @@ from job_hunter_agent.signal_schema import (
     LEARNING_STATUS_IGNORED,
     LEARNING_STATUS_PENDING,
     LEARNING_SUGGESTED_CATEGORY_KEY,
+    LEARNING_SUGGESTED_REQUIREMENT_SUBTYPE_KEY,
+    LEARNING_SUGGESTED_REQUIREMENT_TYPE_KEY,
     LEARNING_SUGGESTED_VALUES_KEY,
     SIGNAL_ALIASES_KEY,
     VALID_SIGNAL_CATEGORIES,
@@ -185,6 +188,14 @@ def _clean_context_payload(record: dict[str, Any]) -> dict[str, Any]:
     suggested_values = _clean_text_list(record.get(LEARNING_SUGGESTED_VALUES_KEY))
     if suggested_values:
         cleaned[LEARNING_SUGGESTED_VALUES_KEY] = suggested_values
+
+    suggested_requirement_type = _clean_term(record.get(LEARNING_SUGGESTED_REQUIREMENT_TYPE_KEY))
+    if suggested_requirement_type:
+        cleaned[LEARNING_SUGGESTED_REQUIREMENT_TYPE_KEY] = suggested_requirement_type
+
+    suggested_requirement_subtype = _clean_term(record.get(LEARNING_SUGGESTED_REQUIREMENT_SUBTYPE_KEY))
+    if suggested_requirement_subtype:
+        cleaned[LEARNING_SUGGESTED_REQUIREMENT_SUBTYPE_KEY] = suggested_requirement_subtype
 
     return cleaned
 
@@ -568,6 +579,7 @@ def approve_signal(
     category: str = "",
     value: str = "",
     classification: str = "",
+    subtype: str = "",
 ) -> dict[str, Any] | None:
     """Promote a reviewed signal into its owning knowledge store.
 
@@ -621,7 +633,23 @@ def approve_signal(
                     classification=classification_key
                 )
             )
-        upsert_requirement_classification_override(value, classification_key)
+        subtype_key = _clean_term(subtype)
+        if classification_key == "eligibility":
+            if not subtype_key:
+                raise ValueError(_signal_registry_label("requirement_subtype_required_error"))
+            if subtype_key not in set(load_eligibility_subtypes()):
+                raise ValueError(
+                    _signal_registry_label("requirement_subtype_invalid_error").format(
+                        subtype=subtype_key
+                    )
+                )
+        elif subtype_key:
+            raise ValueError(
+                _signal_registry_label("requirement_subtype_invalid_error").format(
+                    subtype=subtype_key
+                )
+            )
+        upsert_requirement_classification_override(value, classification_key, subtype_key)
     else:
         value = explicit_value or _clean_text(record.get(LEARNING_SIGNAL_KEY) or key)
         _append_knowledge_entry(_CATEGORY_KNOWLEDGE_PATHS[category_key], value, aliases)

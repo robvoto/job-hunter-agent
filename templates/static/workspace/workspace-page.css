@@ -6,7 +6,7 @@
 
 :root {
   --workspace-shell-inline-padding: 22px;
-  --workspace-shell-max-width: 1360px;
+  --workspace-shell-max-width: var(--content-shell-max-width);
   --workspace-header-min-height: 54px;
 }
 

@@ -63,3 +63,14 @@ def test_workspace_label_raises_when_label_is_missing(monkeypatch):
             "workspace_card_labels",
             "job_requirements_summary",
         )
+
+
+def test_requirement_taxonomy_labels_keep_workspace_and_signals_consistent():
+    taxonomy = load_ui_labels()["requirement_taxonomy_labels"]
+
+    assert taxonomy["type_capability_label"] == "Capability"
+    assert taxonomy["type_eligibility_label"] == "Eligibility"
+    assert taxonomy["type_qualification_label"] == "Qualification"
+    assert taxonomy["eligibility_panel_label"] == "Eligibility"
+    assert taxonomy["qualification_panel_label"] == "Qualifications"
+    assert taxonomy["eligibility_subtype_labels"]["clearance"] == "Clearance"

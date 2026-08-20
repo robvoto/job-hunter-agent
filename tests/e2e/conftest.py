@@ -175,9 +175,19 @@ def _reset_fresh_onboarding_user(user_id: str) -> None:
 
 def _session_cookie(email: str, complete_onboarding: bool = True) -> dict:
     from job_hunter_agent.auth import _build_session_cookie_value, get_or_create_user
+    from job_hunter_agent.database import ensure_user_row
 
     admin_email = os.environ["JOB_HUNTER_ADMIN_EMAIL"]
     user = get_or_create_user(email, admin_email)
+    # E2E candidate fixtures exercise protected application pages, not the
+    # approval workflow itself. Keep them approved explicitly now that new
+    # candidate accounts default to pending access.
+    ensure_user_row(
+        user["user_id"],
+        email=user["email"],
+        access_status="approved",
+    )
+    user["access_status"] = "approved"
     if complete_onboarding:
         _mark_onboarding_complete(user["user_id"])
     else:
@@ -333,6 +343,7 @@ class Diagnostics:
     page_errors: list[str] = field(default_factory=list)
     failed_requests: list[str] = field(default_factory=list)
     failed_responses: list[str] = field(default_factory=list)
+    teardown_started: bool = False
 
     ALLOWLIST = ("/favicon.ico",)
 
@@ -368,6 +379,11 @@ def _wire_diagnostics(page) -> Diagnostics:
         diag.page_errors.append(f"{exc} ({page.url})")
 
     def _on_requestfailed(request):
+        # Closing the browser context intentionally aborts any request still in
+        # flight. Those teardown cancellations are not application failures; real
+        # request failures that happen before teardown remain diagnostic errors.
+        if diag.teardown_started:
+            return
         if request.failure:
             diag.failed_requests.append(f"{request.method} {request.url} -> {request.failure}")
 
@@ -396,6 +412,7 @@ def _authenticated_page(browser, base_url: str, request, cookie: dict | None):
     yield page
 
     request.node._e2e_diagnostics = diag
+    diag.teardown_started = True
     context.close()
     if not diag.is_clean():
         pytest.fail(diag.describe())

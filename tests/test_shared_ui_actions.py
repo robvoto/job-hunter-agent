@@ -134,4 +134,7 @@ def test_chip_remove_labels_use_shared_managed_copy():
     assert 'title="Remove ${' not in settings_chip_editor
     assert 'aria-label="Remove"' not in results_page
     assert "_rejRemoveItemLabel" in results_page
-    assert '"removeItemLabel": shared_ui_labels["remove_item_label"]' in workspace_service
+    assert 'load_ui_labels().get("shared_ui_labels", {})' in workspace_service
+    assert 'shared_ui_labels.get("remove_item_label")' in workspace_service
+    assert '"removeItemLabel": remove_item_label' in workspace_service
+    assert 'from job_hunter_agent.server_helpers import load_shared_ui_labels' not in workspace_service

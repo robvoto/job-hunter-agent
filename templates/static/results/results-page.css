@@ -611,6 +611,20 @@
   border-top: 1px solid var(--border-subtle);
 }
 
+.job-requirement-subtype + .job-requirement-subtype {
+  margin-top: var(--surface-gap-lg);
+  padding-top: var(--surface-pad-block-md);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.job-requirement-subtype-heading {
+  display: block;
+  margin-bottom: var(--surface-gap-sm);
+  color: var(--text-primary);
+  font-size: var(--text-role-label-font-size);
+  font-weight: var(--text-role-label-font-weight);
+}
+
 .job-insight-group.job-insight-warning strong {
   color: var(--state-error-text);
 }

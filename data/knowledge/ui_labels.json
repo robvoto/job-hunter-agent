@@ -100,18 +100,21 @@
     ],
     "category_profile_section_warning": null,
     "category_requirement_review_label": "Requirement type review",
-    "category_requirement_review_description": "Choose how Job Hunter should treat the same requirement when it appears again. Capability = skill, experience, responsibility or seniority. Eligibility = citizenship, work rights, clearance, licence or registration. Qualification = degree, certification or formal qualification. Approval teaches Job Hunter this treatment for future matching jobs.",
+    "category_requirement_review_description": "Teach Job Hunter how to treat the same requirement when it appears again. Choose the top-level requirement type first. When the type is Eligibility, also choose the specific eligibility subtype so clearances, work rights, licences and registrations keep their exact meaning.",
     "category_requirement_review_examples": [
       "5+ years in a security-cleared environment",
       "current registration required for this specialty"
     ],
     "category_requirement_review_warning": null,
-    "requirement_type_field_label": "Requirement type",
-    "requirement_type_capability_label": "Capability",
-    "requirement_type_eligibility_label": "Eligibility",
-    "requirement_type_qualification_label": "Qualification",
     "requirement_type_required_error": "Requirement classification is required; choose capability, eligibility, or qualification.",
-    "requirement_type_invalid_error": "Invalid requirement classification '{classification}'; choose capability, eligibility, or qualification."
+    "requirement_type_invalid_error": "Invalid requirement classification '{classification}'; choose capability, eligibility, or qualification.",
+    "signal_field_label": "Signal",
+    "requirement_field_label": "Requirement",
+    "category_field_label": "Category",
+    "requirement_subtype_required_error": "Eligibility subtype is required; choose the specific kind of eligibility.",
+    "requirement_subtype_invalid_error": "Invalid eligibility subtype '{subtype}'. Choose one of the available eligibility subtypes.",
+    "category_help_aria_label": "Category help",
+    "requirement_type_help_aria_label": "Requirement type help"
   },
   "capability_ui_labels_description": "Display labels and help text for capability review and editing screens.",
   "capability_ui_labels": {
@@ -153,10 +156,10 @@
     "remove_button_aria_label": "Remove clearance",
     "eligibility_add_error_message": "Could not save this eligibility fact. Check your connection and try again.",
     "eligibility_add_loading_message": "Adding eligibility fact...",
-    "eligibility_settings_title": "Eligibility",
-    "eligibility_help_text": "Add specific licences, registrations, qualifications, certifications, citizenship, work rights, or other eligibility facts. Clearances stay in the managed Clearances section above.",
+    "eligibility_settings_title": "Other eligibility",
+    "eligibility_help_text": "Add eligibility facts that are not managed clearances, such as citizenship, work rights, licences, permits, checks or professional registrations.",
     "eligibility_name_label": "Fact name",
-    "eligibility_name_placeholder": "e.g. AHPRA registration, Australian citizenship, working with children check, security clearance eligibility",
+    "eligibility_name_placeholder": "e.g. Australian citizenship, unrestricted work rights, AHPRA registration, working with children check",
     "eligibility_add_button_label": "Add eligibility",
     "eligibility_add_button_aria_label": "Add eligibility fact",
     "eligibility_empty_text": "No generic eligibility facts added yet.",
@@ -170,7 +173,9 @@
     "qualification_add_button_label": "Add qualification",
     "qualification_empty_text": "No qualifications added yet.",
     "qualification_prefill_added_message": "Draft qualification added: ${name}. Review it and save when ready.",
-    "qualification_prefill_exists_message": "This qualification is already in your profile: ${name}."
+    "qualification_prefill_exists_message": "This qualification is already in your profile: ${name}.",
+    "eligibility_group_title": "Eligibility",
+    "eligibility_group_help_text": "Eligibility covers pass/fail entry gates such as clearances, citizenship, work rights, licences and registrations. Clearances stay managed separately inside this section because higher Australian government clearance levels imply lower levels."
   },
   "role_history_labels_description": "Display labels for the read-only captured role history panel in Settings.",
   "role_history_labels": {
@@ -507,8 +512,6 @@
     "job_requirements_ad_wording_badge": "Ad wording",
     "occupation_alignment_row_label": "Job title match",
     "risk_panel_summary": "Checks before applying",
-    "clearance_panel_summary": "Clearances",
-    "eligibility_panel_summary": "Eligibility",
     "debug_only_badge": "Debug only",
     "debug_only_tooltip": "This role was filtered out in the normal workspace view, but stays visible in debug mode.",
     "hard_blocked_badge": "Hard blocked",
@@ -1032,5 +1035,23 @@
     "profile_review_blocking_reason_no_capabilities": "Your profile has no capability rules. Rebuild onboarding before reviewing jobs.",
     "search_keywords_length_error": "Please keep the primary search title between 2 and 120 characters.",
     "search_keywords_phrase_error": "Please use at least two words for the primary search title, or leave it blank."
+  },
+  "requirement_taxonomy_labels": {
+    "type_field_label": "Requirement type",
+    "type_capability_label": "Capability",
+    "type_eligibility_label": "Eligibility",
+    "type_qualification_label": "Qualification",
+    "capability_panel_label": "Capabilities",
+    "eligibility_panel_label": "Eligibility",
+    "qualification_panel_label": "Qualifications",
+    "eligibility_subtype_field_label": "Eligibility subtype",
+    "eligibility_subtype_labels": {
+      "citizenship": "Citizenship",
+      "work_rights": "Work rights",
+      "clearance": "Clearance",
+      "licence": "Licence / permit / check",
+      "registration": "Registration",
+      "other": "Other eligibility"
+    }
   }
 }

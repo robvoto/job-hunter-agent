@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from job_hunter_agent import (
@@ -12,11 +14,17 @@ from job_hunter_agent import (
 )
 
 
-@pytest.mark.parametrize("classification", ["qualification", "eligibility", "capability"])
+@pytest.mark.parametrize(
+    "classification, subtype",
+    [("qualification", ""), ("eligibility", "work_rights"), ("capability", "")],
+)
 def test_approve_requirement_classification_requires_and_persists_explicit_type(
-    isolated_db, classification
+    isolated_db, classification, subtype
 ):
-    from job_hunter_agent.requirement_classification import load_requirement_classification_overrides
+    from job_hunter_agent.requirement_classification import (
+        load_requirement_classification_overrides,
+        load_requirement_subtype_overrides,
+    )
 
     requirement = "Bachelor's degree with relevant experience"
     signal_registry.save_registry(
@@ -25,7 +33,8 @@ def test_approve_requirement_classification_requires_and_persists_explicit_type(
                 "signal": requirement,
                 "normalized_key": requirement.lower(),
                 "suggested_category": "requirement_classification_review",
-                "suggested_values": ["eligibility"],
+                "suggested_requirement_type": "eligibility",
+                "suggested_requirement_subtype": "work_rights",
             }
         }
     )
@@ -34,10 +43,15 @@ def test_approve_requirement_classification_requires_and_persists_explicit_type(
         requirement.lower(),
         category="requirement_classification_review",
         classification=classification,
+        subtype=subtype,
     )
 
     assert updated["category"] == "requirement_classification_review"
     assert load_requirement_classification_overrides()[requirement.lower()] == classification
+    if subtype:
+        assert load_requirement_subtype_overrides()[requirement.lower()] == subtype
+    else:
+        assert requirement.lower() not in load_requirement_subtype_overrides()
 
 
 def test_approve_requirement_classification_rejects_missing_type(isolated_db, monkeypatch):
@@ -69,6 +83,67 @@ def test_approve_requirement_classification_rejects_missing_type(isolated_db, mo
         )
 
     assert "uncertain requirement" in signal_registry.load_registry()
+
+
+def test_approve_requirement_classification_requires_eligibility_subtype(isolated_db, monkeypatch):
+    monkeypatch.setattr(
+        signal_registry,
+        "load_ui_labels",
+        lambda: {
+            "signal_registry_labels": {
+                "requirement_subtype_required_error": "Managed missing subtype message",
+            }
+        },
+    )
+    signal_registry.save_registry(
+        {
+            "right to work": {
+                "signal": "Right to work",
+                "normalized_key": "right to work",
+                "suggested_category": "requirement_classification_review",
+            }
+        }
+    )
+
+    with pytest.raises(ValueError, match="Managed missing subtype message"):
+        signal_registry.approve_signal(
+            "right to work",
+            category="requirement_classification_review",
+            classification="eligibility",
+        )
+
+    assert "right to work" in signal_registry.load_registry()
+
+
+def test_approve_requirement_classification_rejects_invalid_eligibility_subtype(
+    isolated_db, monkeypatch
+):
+    monkeypatch.setattr(
+        signal_registry,
+        "load_ui_labels",
+        lambda: {
+            "signal_registry_labels": {
+                "requirement_subtype_invalid_error": "Managed invalid subtype: {subtype}",
+            }
+        },
+    )
+    signal_registry.save_registry(
+        {
+            "right to work": {
+                "signal": "Right to work",
+                "normalized_key": "right to work",
+                "suggested_category": "requirement_classification_review",
+            }
+        }
+    )
+
+    with pytest.raises(ValueError, match="Managed invalid subtype: made_up"):
+        signal_registry.approve_signal(
+            "right to work",
+            category="requirement_classification_review",
+            classification="eligibility",
+            subtype="made_up",
+        )
 
 
 def test_approve_requirement_classification_rejects_invalid_type(isolated_db, monkeypatch):
@@ -442,10 +517,70 @@ def test_load_hard_blocker_rules_normalizes_without_writing(isolated_db):
     assert saved == original_data
 
 
+def test_signal_registry_api_exposes_requirement_type_and_eligibility_subtype_metadata(isolated_db):
+    from job_hunter_agent.routes.signals import api_signal_registry
+
+    response = api_signal_registry()
+    payload = json.loads(response.body)
+    requirement_review = next(
+        item
+        for item in payload["categories"]
+        if item["key"] == "requirement_classification_review"
+    )
+
+    assert payload["field_labels"]["requirement"] == "Requirement"
+    assert payload["field_labels"]["category"] == "Category"
+    assert [item["value"] for item in requirement_review["requirement_type_options"]] == [
+        "capability",
+        "eligibility",
+        "qualification",
+    ]
+    assert requirement_review["requirement_subtype_parent_type"] == "eligibility"
+    assert {item["value"] for item in requirement_review["requirement_subtype_options"]} >= {
+        "clearance",
+        "work_rights",
+        "licence",
+        "registration",
+    }
+
+
+def test_signal_registry_api_approval_persists_selected_eligibility_subtype(isolated_db):
+    from job_hunter_agent.requirement_classification import load_requirement_subtype_overrides
+    from job_hunter_agent.routes.signals import api_signal_registry_patch
+
+    signal_registry.save_registry(
+        {
+            "right to work in australia": {
+                "signal": "Right to work in Australia",
+                "normalized_key": "right to work in australia",
+                "suggested_category": "requirement_classification_review",
+            }
+        }
+    )
+
+    response = api_signal_registry_patch(
+        {
+            "key": "right to work in australia",
+            "action": "approve",
+            "category": "requirement_classification_review",
+            "value": "Right to work in Australia",
+            "classification": "eligibility",
+            "subtype": "work_rights",
+        }
+    )
+
+    assert response.status_code == 200
+    assert load_requirement_subtype_overrides()["right to work in australia"] == "work_rights"
+
+
 def test_managed_signal_registry_labels_are_complete_and_valid(isolated_db):
-    from job_hunter_agent.server_helpers import load_signal_registry_labels
+    from job_hunter_agent.server_helpers import (
+        load_requirement_taxonomy_labels,
+        load_signal_registry_labels,
+    )
 
     labels = load_signal_registry_labels()
+    taxonomy = load_requirement_taxonomy_labels()
 
     for prefix in (
         "capability",
@@ -462,9 +597,16 @@ def test_managed_signal_registry_labels_are_complete_and_valid(isolated_db):
         warning = labels[f"category_{prefix}_warning"]
         assert warning is None or isinstance(warning, str)
 
-    assert labels["requirement_type_field_label"]
-    assert labels["requirement_type_capability_label"]
-    assert labels["requirement_type_eligibility_label"]
-    assert labels["requirement_type_qualification_label"]
+    assert labels["signal_field_label"] == "Signal"
+    assert labels["requirement_field_label"] == "Requirement"
+    assert labels["category_field_label"] == "Category"
     assert labels["requirement_type_required_error"]
     assert "{classification}" in labels["requirement_type_invalid_error"]
+    assert labels["requirement_subtype_required_error"]
+    assert "{subtype}" in labels["requirement_subtype_invalid_error"]
+    assert taxonomy["type_field_label"] == "Requirement type"
+    assert taxonomy["type_capability_label"] == "Capability"
+    assert taxonomy["type_eligibility_label"] == "Eligibility"
+    assert taxonomy["type_qualification_label"] == "Qualification"
+    assert taxonomy["eligibility_subtype_labels"]["clearance"] == "Clearance"
+    assert taxonomy["eligibility_subtype_labels"]["work_rights"] == "Work rights"

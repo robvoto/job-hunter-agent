@@ -33,6 +33,9 @@
   --onboarding-dropzone-empty-hint-gap: 8px;
   --onboarding-progress-fill-width: 0%;
 
+  /* Shared page layout sizing */
+  --content-shell-max-width: 1360px;
+
   /* Shared onboarding layout sizing */
   --onboarding-shell-max-width: 980px;
   --onboarding-shell-padding-top: 24px;

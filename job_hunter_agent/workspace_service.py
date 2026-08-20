@@ -27,7 +27,7 @@ from job_hunter_agent.history import (
     build_history_cluster_index,
     viewed_by_user,
 )
-from job_hunter_agent.io_utils import load_audit_rows
+from job_hunter_agent.io_utils import load_audit_rows, load_ui_labels
 from job_hunter_agent.llm_gate import get_cost_summary
 from job_hunter_agent.job_identity import deduplicate_across_sources, normalize_job_key
 from job_hunter_agent.llm_review_state import has_complete_llm_keep_data
@@ -573,11 +573,15 @@ def render_html(
     )
 
     ws_page_labels = load_workspace_page_labels()
-    # Shared UI copy stays owned by ui_labels.json/server_helpers rather than
-    # being duplicated in this workspace-only renderer.
-    from job_hunter_agent.server_helpers import load_shared_ui_labels
-
-    shared_ui_labels = load_shared_ui_labels()
+    # Read the one shared action label this renderer needs through the low-level
+    # UI-label loader. Importing server_helpers here creates a service-layer
+    # cycle through source_connector/workspace rebuild paths.
+    shared_ui_labels = load_ui_labels().get("shared_ui_labels", {})
+    if not isinstance(shared_ui_labels, dict):
+        raise ValueError("ui_labels.json is missing shared_ui_labels")
+    remove_item_label = str(shared_ui_labels.get("remove_item_label") or "").strip()
+    if not remove_item_label:
+        raise ValueError("ui_labels.json is missing shared_ui_labels.remove_item_label")
 
     last_run_cards_html = _render_summary_cards_html(
         [
@@ -636,7 +640,7 @@ def render_html(
 
     workspace_config_labels = {
         "rejectionLoadingSuggestions": ws_page_labels.get("rejection_loading_suggestions"),
-        "removeItemLabel": shared_ui_labels["remove_item_label"],
+        "removeItemLabel": remove_item_label,
         "profileGapAddedNewTemplate": ws_page_labels[
             "LABEL_WS_PROFILE_GAP_ADDED_NEW_TEMPLATE"
         ],

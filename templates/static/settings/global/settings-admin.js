@@ -349,6 +349,8 @@ export const JobHunterAdminSettings = (function () {
     setFieldValue('search_limit_linkedin_results_per_search_max', searchLimits.linkedin_results_per_search?.max);
     setFieldValue('search_limit_linkedin_fetch_timeout_seconds_min', searchLimits.linkedin_fetch_timeout_seconds?.min);
     setFieldValue('search_limit_linkedin_fetch_timeout_seconds_max', searchLimits.linkedin_fetch_timeout_seconds?.max);
+    setFieldValue('search_limit_linkedin_parallel_search_workers_min', searchLimits.linkedin_parallel_search_workers?.min);
+    setFieldValue('search_limit_linkedin_parallel_search_workers_max', searchLimits.linkedin_parallel_search_workers?.max);
     setCurrencyFieldValue('salary_limit_minimum_salary_yearly_max', salaryLimits.minimum_salary_yearly?.max ?? '');
     setCurrencyFieldValue('salary_limit_minimum_daily_rate_max', salaryLimits.minimum_daily_rate?.max ?? '');
 

@@ -26,6 +26,8 @@ LEARNING_CONFIDENCE_KEY = "confidence"
 LEARNING_NOTES_KEY = "notes"
 LEARNING_SUGGESTED_CATEGORY_KEY = "suggested_category"
 LEARNING_SUGGESTED_VALUES_KEY = "suggested_values"
+LEARNING_SUGGESTED_REQUIREMENT_TYPE_KEY = "suggested_requirement_type"
+LEARNING_SUGGESTED_REQUIREMENT_SUBTYPE_KEY = "suggested_requirement_subtype"
 LEARNING_HISTORY_KEY = "history"
 
 COMPETITIVE_SIGNALS_KEY = "competitive_signals"

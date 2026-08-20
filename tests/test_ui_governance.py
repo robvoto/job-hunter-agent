@@ -16,6 +16,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 UI_LABELS_PATH = REPO_ROOT / "data" / "knowledge" / "ui_labels.json"
+WORKSPACE_RENDERER_PATH = REPO_ROOT / "job_hunter_agent" / "workspace_renderer.py"
 
 PAGE_CSS_FILES = [
     REPO_ROOT / "templates" / "static" / "settings" / "shared" / "settings-page.css",
@@ -412,6 +413,25 @@ def _css_rule_declarations(css_text: str, selector: str) -> dict[str, str]:
         prop, value = raw_declaration.split(":", 1)
         declarations[prop.strip()] = value.strip()
     return declarations
+
+
+def test_job_card_insight_panels_use_shared_renderer():
+    """Job-card panels must share one structural renderer; tone belongs in modifiers."""
+    source = WORKSPACE_RENDERER_PATH.read_text(encoding="utf-8")
+
+    assert "def _render_job_insights_panel(" in source
+    for modifier in (
+        "job-related-cards-panel",
+        "job-risk-panel",
+        "job-eligibility-panel",
+        "job-qualification-panel",
+        "job-requirements-panel",
+        "job-llm-review",
+    ):
+        assert f'modifier_class="{modifier}"' in source
+
+    assert '<details class="job-insights' not in source
+    assert '<details class="job-candidate-history">' not in source
 
 
 def test_job_requirement_typography_uses_shared_semantic_tokens():

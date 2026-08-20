@@ -234,7 +234,8 @@ from job_hunter_agent.signal_schema import (
     LEARNING_ORIGINAL_TEXTS_KEY,
     LEARNING_SIGNAL_KEY,
     LEARNING_SUGGESTED_CATEGORY_KEY,
-    LEARNING_SUGGESTED_VALUES_KEY,
+    LEARNING_SUGGESTED_REQUIREMENT_SUBTYPE_KEY,
+    LEARNING_SUGGESTED_REQUIREMENT_TYPE_KEY,
     TITLE_REASON_POTENTIAL_MATCH,
 )
 from job_hunter_agent.source_learning import (
@@ -959,14 +960,17 @@ def _build_requirement_classification_review_signals(record: dict) -> list[dict]
             continue
         seen.add(key)
         proposed_type = str(item.get("llm_proposed_requirement_type") or "").strip()
-        signals.append(
-            {
-                LEARNING_SIGNAL_KEY: requirement,
-                LEARNING_SUGGESTED_CATEGORY_KEY: CATEGORY_REQUIREMENT_CLASSIFICATION_REVIEW,
-                LEARNING_ORIGINAL_TEXTS_KEY: [requirement],
-                LEARNING_SUGGESTED_VALUES_KEY: [proposed_type] if proposed_type else [],
-            }
-        )
+        proposed_subtype = str(item.get("llm_proposed_requirement_subtype") or "").strip()
+        signal = {
+            LEARNING_SIGNAL_KEY: requirement,
+            LEARNING_SUGGESTED_CATEGORY_KEY: CATEGORY_REQUIREMENT_CLASSIFICATION_REVIEW,
+            LEARNING_ORIGINAL_TEXTS_KEY: [requirement],
+        }
+        if proposed_type:
+            signal[LEARNING_SUGGESTED_REQUIREMENT_TYPE_KEY] = proposed_type
+        if proposed_subtype:
+            signal[LEARNING_SUGGESTED_REQUIREMENT_SUBTYPE_KEY] = proposed_subtype
+        signals.append(signal)
     return signals
 
 

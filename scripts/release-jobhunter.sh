@@ -128,11 +128,38 @@ next_version="$(uv version --bump "$bump" --dry-run --short)"
 echo "==> Planned release: v$current_version -> v$next_version"
 
 run_tests() {
-  echo "==> Unit tests"
-  uv run pytest
+  echo "==> Run unit and Playwright E2E release gates"
+  # The two suites use isolated test state, so they can run concurrently. Unit
+  # tests use xdist internally; Playwright E2E itself remains sequential because
+  # its browser fixtures share candidate/workspace state within that suite.
+  unit_log="$(mktemp)"
+  e2e_log="$(mktemp)"
 
-  echo "==> Playwright E2E tests (non-LLM by default)"
-  ./scripts/run-e2e.sh -q
+  set +e
+  (
+    echo "==> Unit tests"
+    uv run pytest -n 6
+  ) >"$unit_log" 2>&1 &
+  unit_pid=$!
+
+  (
+    echo "==> Playwright E2E tests (non-LLM by default)"
+    ./scripts/run-e2e.sh -q
+  ) >"$e2e_log" 2>&1 &
+  e2e_pid=$!
+
+  wait "$unit_pid"
+  unit_status=$?
+  wait "$e2e_pid"
+  e2e_status=$?
+  set -e
+
+  cat "$unit_log"
+  cat "$e2e_log"
+  rm -f "$unit_log" "$e2e_log"
+
+  ((unit_status == 0)) || fail "Unit test release gate failed."
+  ((e2e_status == 0)) || fail "Playwright E2E release gate failed."
 }
 
 assert_release_base_unchanged() {

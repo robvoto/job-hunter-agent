@@ -189,6 +189,42 @@ def test_signal_registry_value_editor_fills_column_and_auto_grows():
     assert "window.addEventListener('resize', srResizeSignalValueInputs);" in js
 
 
+def test_signals_requirement_review_uses_consistent_labels_subtype_and_wide_layout():
+    css = SETTINGS_PAGE_CSS_PATH.read_text(encoding="utf-8")
+    js = SIGNAL_REGISTRY_JS_PATH.read_text(encoding="utf-8-sig")
+    tokens = (ROOT_DIR / "templates" / "static" / "theme" / "themes.tokens.css").read_text(
+        encoding="utf-8"
+    )
+
+    assert "--content-shell-max-width: 1360px;" in tokens
+    assert ".settings-content-area:has(#section-learning.is-active)" in css
+    assert "max-width: var(--content-shell-max-width);" in css
+    assert "signal-requirement-subtype-field" in css
+    assert "srRequirementReviewComplete(article, category)" in js
+    assert "suggested_requirement_type" in js
+    assert "suggested_requirement_subtype" in js
+    assert "signal-requirement-subtype-select" in js
+    assert "isRequirementReview" in js
+    assert "? srRequirementTypeControlHtml(signal, category, isBusy)" in js
+    assert "valueFieldLabel = isRequirementReview ? srFieldLabel('requirement') : srFieldLabel('signal')" in js
+
+
+def test_profile_settings_groups_clearances_under_eligibility_and_keeps_qualifications_separate():
+    html = (ROOT_DIR / "templates" / "partials" / "settings" / "standard" / "settings-matrix.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert html.count('class="subpanel search-settings-subcard eligibility-settings-card"') == 1
+    assert 'id="eligibility_group_title"' in html
+    assert 'id="clearance_editor"' in html
+    assert 'id="eligibility_editor"' in html
+    assert 'id="qualification_editor"' in html
+    eligibility_start = html.index('id="eligibility_group_title"')
+    qualification_start = html.index('id="qualification_editor_title"')
+    assert eligibility_start < html.index('id="clearance_editor"') < qualification_start
+    assert eligibility_start < html.index('id="eligibility_editor"') < qualification_start
+
+
 def test_global_settings_layout_css_prevents_panel_overflow():
 
     css = SETTINGS_PAGE_CSS_PATH.read_text(encoding="utf-8")
@@ -614,3 +650,12 @@ def test_global_settings_js_required_elements_exist_in_rendered_page(monkeypatch
     assert not missing, (
         f"Elements required by settings-admin.js are missing from /global-settings: {missing}"
     )
+
+def test_admin_hydrates_parallel_worker_limit_inputs_before_save():
+    js = SETTINGS_ADMIN_JS_PATH.read_text(encoding="utf-8")
+
+    assert "setFieldValue('search_limit_linkedin_parallel_search_workers_min', searchLimits.linkedin_parallel_search_workers?.min);" in js
+    assert "setFieldValue('search_limit_linkedin_parallel_search_workers_max', searchLimits.linkedin_parallel_search_workers?.max);" in js
+    assert "min: readNumber('search_limit_linkedin_parallel_search_workers_min'" in js
+    assert "max: readNumber('search_limit_linkedin_parallel_search_workers_max'" in js
+

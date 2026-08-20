@@ -683,3 +683,24 @@ def test_release_command_owns_bump_tests_tag_and_atomic_push():
     assert "git fetch --prune origin" in latest_script
     assert "python3 scripts/check-release-integrity.py" in latest_script
     assert "--expected-version" not in latest_script
+
+def test_pytest_unit_discovery_is_scoped_to_repo_tests():
+    pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+
+    assert 'testpaths = ["tests"]' in pyproject
+    assert 'norecursedirs = ["tests/e2e"]' in pyproject
+
+def test_release_runs_complete_unit_and_e2e_gates_concurrently():
+    release_script = RELEASE_SCRIPT.read_text(encoding="utf-8")
+    pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+
+    assert "pytest-xdist>=3.8.0,<4" in pyproject
+    assert "uv run pytest -n 6" in release_script
+    assert "./scripts/run-e2e.sh -q" in release_script
+    assert "run-e2e.sh -q -n" not in release_script
+    assert 'unit_pid=$!' in release_script
+    assert 'e2e_pid=$!' in release_script
+    assert 'wait "$unit_pid"' in release_script
+    assert 'wait "$e2e_pid"' in release_script
+    assert '((unit_status == 0))' in release_script
+    assert '((e2e_status == 0))' in release_script
