@@ -2286,25 +2286,28 @@ def render_job_card(
                 _ch_items.append(
                     f"{_workspace_label('candidate_history_labels', 'evidence_prefix')} {_ch_evidence}"
                 )
-            if _ch_confidence:
-                _ch_items.append(
-                    f"{_workspace_label('candidate_history_labels', 'confidence_prefix')} {_ch_confidence}"
-                )
-            if _ch_match_confidence:
-                _ch_items.append(
-                    f"{_workspace_label('candidate_history_labels', 'company_match_confidence_prefix')} "
-                    f"{_ch_match_confidence}"
-                )
-            if _ch_match_reason:
-                _ch_items.append(
-                    f"{_workspace_label('candidate_history_labels', 'company_match_reason_prefix')} "
-                    f"{_ch_match_reason}"
-                )
-            if _cand_hist_review_reason:
-                _ch_items.append(
-                    f"{_workspace_label('candidate_history_labels', 'review_reason_prefix')} "
-                    f"{_cand_hist_review_reason}"
-                )
+            # Keep application-history diagnostics in the record for debugging,
+            # but keep them out of the normal candidate-facing card details.
+            if active_debug_mode:
+                if _ch_confidence:
+                    _ch_items.append(
+                        f"{_workspace_label('candidate_history_labels', 'confidence_prefix')} {_ch_confidence}"
+                    )
+                if _ch_match_confidence:
+                    _ch_items.append(
+                        f"{_workspace_label('candidate_history_labels', 'company_match_confidence_prefix')} "
+                        f"{_ch_match_confidence}"
+                    )
+                if _ch_match_reason:
+                    _ch_items.append(
+                        f"{_workspace_label('candidate_history_labels', 'company_match_reason_prefix')} "
+                        f"{_ch_match_reason}"
+                    )
+                if _cand_hist_review_reason:
+                    _ch_items.append(
+                        f"{_workspace_label('candidate_history_labels', 'review_reason_prefix')} "
+                        f"{_cand_hist_review_reason}"
+                    )
             candidate_history_html = (
                 '<details class="job-candidate-history">'
                 f"<summary>{safe_html(_workspace_label('candidate_history_labels', 'summary'))}</summary>"
