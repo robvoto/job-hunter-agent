@@ -287,13 +287,19 @@ def _ensure_cv_extraction_cache_loaded() -> None:
         pass
 
 
-def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int) -> dict[str, Any]:
+def _llm_extract_from_cv(
+    source_text: str,
+    lookback_years: int,
+    alias_limit: int,
+    *,
+    benchmark_model: str | None = None,
+) -> dict[str, Any]:
     """Single LLM call: extract capabilities, title patterns, and match preferences from CV text."""
     _ensure_cv_extraction_cache_loaded()
     cache_key = hashlib.sha256(
         f"role-tier-v1:{lookback_years}:{alias_limit}:{source_text}".encode()
     ).hexdigest()[:16]
-    if cache_key in _cv_extraction_cache:
+    if benchmark_model is None and cache_key in _cv_extraction_cache:
         cached = _cv_extraction_cache[cache_key]
         _cap_log(
             "[ONBOARDING][LLM_CACHE_HIT] purpose=cv_extraction "
@@ -308,7 +314,12 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         return cached
 
     try:
-        from job_hunter_agent.llm_gate import _log_llm_call, client, get_llm_model
+        from job_hunter_agent.llm_gate import (
+            _llm_reasoning_kwargs,
+            _log_llm_call,
+            client,
+            get_llm_model,
+        )
     except Exception:
         return {}
 
@@ -373,12 +384,13 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
 
     _cap_log(f"[ONBOARDING][LLM_CALL_START] purpose=cv_extraction cache_key={cache_key}")
     try:
-        model = get_llm_model()
+        model = benchmark_model or get_llm_model()
         resp = client.responses.parse(
             model=model,
             input=[{"role": "user", "content": prompt}],
             text_format=_CvExtractionResponse,
             max_output_tokens=profile_extraction_max_output_tokens,
+            **_llm_reasoning_kwargs(model),
         )
         _log_llm_call(resp, "cv_extraction", model)
         parsed = resp.output_parsed
@@ -403,13 +415,14 @@ def _llm_extract_from_cv(source_text: str, lookback_years: int, alias_limit: int
         f"target_queries={len(result.get(KEY_TARGET_OCCUPATION_QUERIES, []) or [])}"
     )
 
-    _cv_extraction_cache[cache_key] = result
-    try:
-        from job_hunter_agent.io_utils import save_cv_extraction_cache
+    if benchmark_model is None:
+        _cv_extraction_cache[cache_key] = result
+        try:
+            from job_hunter_agent.io_utils import save_cv_extraction_cache
 
-        save_cv_extraction_cache(_cv_extraction_cache)
-    except Exception:
-        pass
+            save_cv_extraction_cache(_cv_extraction_cache)
+        except Exception:
+            pass
     return result
 
 

@@ -33,6 +33,7 @@ from job_hunter_agent.io_utils import (
     save_json,
 )
 from job_hunter_agent.llm_gate import (
+    _llm_reasoning_kwargs,
     _log_llm_call,
     _strip_json_fence,
     get_llm_model,
@@ -207,7 +208,7 @@ def _validate_llm_extraction(data: dict) -> dict:
     }
 
 
-def extract_job_rejection_with_llm(row: dict) -> dict:
+def extract_job_rejection_with_llm(row: dict, *, benchmark_model: str | None = None) -> dict:
     """
     Call the cheap LLM to extract rejection info from a normalized row.
 
@@ -223,7 +224,7 @@ def extract_job_rejection_with_llm(row: dict) -> dict:
     prompt = build_job_rejection_extraction_prompt(row)
 
     try:
-        model = get_llm_model()
+        model = benchmark_model or get_llm_model()
         resp = _llm_client.responses.create(
             model=model,
             input=[
@@ -231,6 +232,7 @@ def extract_job_rejection_with_llm(row: dict) -> dict:
                 {"role": "user", "content": prompt["user"]},
             ],
             max_output_tokens=256,
+            **_llm_reasoning_kwargs(model),
         )
         _log_llm_call(resp, "rejection_email_extraction", model)
     except Exception as exc:

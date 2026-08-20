@@ -62,6 +62,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_LLM_MAX_RETRIES,
     KEY_LLM_REQUEST_TIMEOUT_SECONDS,
     KEY_LLM_PRICING_PER_1M,
+    KEY_LLM_REASONING_EFFORT_BY_MODEL,
     KEY_LLM_PROMPT_CAPABILITY_NAMING_ALIASES_MAX_ITEMS,
     KEY_LLM_PROMPT_CAPABILITY_NAMING_MAX_OUTPUT_TOKENS,
     KEY_LLM_PROMPT_CAPABILITY_RULE_ALIASES_MAX_ITEMS,
@@ -234,6 +235,27 @@ def _normalize_llm_pricing_map(
                 raw_prices, "output", float(default_prices["output"]), 0.0, 10_000.0
             ),
         }
+    if not normalized:
+        normalized = copy.deepcopy(defaults)
+    return normalized
+
+
+# Values accepted by the OpenAI Responses API `reasoning.effort` parameter.
+_ALLOWED_LLM_REASONING_EFFORTS = frozenset({"none", "minimal", "low", "medium", "high", "xhigh"})
+
+
+def _normalize_llm_reasoning_effort_map(
+    source: dict[str, Any], defaults: dict[str, str]
+) -> dict[str, str]:
+    normalized: dict[str, str] = {}
+    for model, raw_effort in source.items():
+        effort = str(raw_effort or "").strip().lower()
+        if effort not in _ALLOWED_LLM_REASONING_EFFORTS:
+            raise ValueError(
+                f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_REASONING_EFFORT_BY_MODEL}.{model} "
+                f"must be one of {sorted(_ALLOWED_LLM_REASONING_EFFORTS)}, got {raw_effort!r}"
+            )
+        normalized[model] = effort
     if not normalized:
         normalized = copy.deepcopy(defaults)
     return normalized
@@ -700,6 +722,15 @@ def normalize_global_settings(
         )
     normalized_llm_pricing = _normalize_llm_pricing_map(
         pricing_source, DEFAULT_LLM_SETTINGS[KEY_LLM_PRICING_PER_1M]
+    )
+    reasoning_effort_source = llm_source.get(KEY_LLM_REASONING_EFFORT_BY_MODEL, {})
+    if not isinstance(reasoning_effort_source, dict):
+        raise ValueError(
+            f"global_settings.{KEY_LLM_SETTINGS}.{KEY_LLM_REASONING_EFFORT_BY_MODEL} must be a dict"
+        )
+    normalized_llm_reasoning_effort = _normalize_llm_reasoning_effort_map(
+        reasoning_effort_source,
+        DEFAULT_LLM_SETTINGS.get(KEY_LLM_REASONING_EFFORT_BY_MODEL, {}),
     )
     pricing_metadata_source = llm_source.get(
         "pricing_metadata", DEFAULT_LLM_SETTINGS.get("pricing_metadata", {})
@@ -1230,6 +1261,7 @@ def normalize_global_settings(
             "model": str(llm_source.get("model") or DEFAULT_LLM_SETTINGS.get("model")).strip(),
             KEY_MODEL_OPTIONS: normalized_model_options,
             KEY_LLM_PRICING_PER_1M: normalized_llm_pricing,
+            KEY_LLM_REASONING_EFFORT_BY_MODEL: normalized_llm_reasoning_effort,
             "pricing_metadata": normalized_pricing_metadata,
             KEY_LLM_MAX_CHARS_LIMITS: normalized_max_chars_limits,
             KEY_LLM_PROMPT_SETTINGS: normalized_llm_prompt_settings,

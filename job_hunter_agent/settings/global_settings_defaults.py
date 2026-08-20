@@ -70,6 +70,7 @@ KEY_SIGNAL_CLUSTER_DENSE_SNIPPET_ALIAS_HITS = "signal_cluster_dense_snippet_alia
 KEY_MODEL_OPTIONS = "model_options"
 KEY_LLM_MAX_CHARS_LIMITS = "max_llm_chars_limits"
 KEY_LLM_PRICING_PER_1M = "pricing_per_1m"
+KEY_LLM_REASONING_EFFORT_BY_MODEL = "reasoning_effort_by_model"
 KEY_LLM_PROMPT_TEMPLATES = "match_preference_templates"
 KEY_LLM_PROMPT_EVIDENCE_TIERS = "evidence_tiers"
 KEY_LLM_PROMPT_FIT_DECISION_MAX_OUTPUT_TOKENS = "fit_decision_max_output_tokens"

@@ -98,6 +98,16 @@ def get_llm_prompt_setting_int(key: str) -> int:
     return int(load_global_settings()[KEY_LLM_SETTINGS][KEY_LLM_PROMPT_SETTINGS][key])
 
 
+def get_llm_reasoning_effort(model: str) -> str | None:
+    """Return the configured reasoning effort for `model`, or None if unconfigured.
+
+    Only models with an explicit entry get a reasoning effort passed to the API;
+    other models omit the param and use the provider's own default.
+    """
+    effort_by_model = load_global_settings()[KEY_LLM_SETTINGS][KEY_LLM_REASONING_EFFORT_BY_MODEL]
+    return effort_by_model.get(model) or None
+
+
 def get_llm_request_timeout_seconds() -> float:
     """Per-request timeout (seconds) for the OpenAI client.
 

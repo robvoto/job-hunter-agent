@@ -37,6 +37,7 @@ from job_hunter_agent.global_settings import (
     get_llm_learning_candidates_max_output_tokens,
     get_llm_max_retries,
     get_llm_raw_output_log_max_chars,
+    get_llm_reasoning_effort,
     get_llm_rejection_blocker_suggestions_max_items,
     get_llm_rejection_blocker_suggestions_max_output_tokens,
     get_llm_rejection_blocker_suggestions_max_words,
@@ -196,6 +197,19 @@ def _get_llm_prompt_settings() -> dict[str, Any]:
     if not isinstance(prompt_settings, dict) or not prompt_settings:
         raise ValueError("No LLM prompt settings are configured in Admin.")
     return prompt_settings
+
+
+def _llm_reasoning_kwargs(model: str) -> dict[str, Any]:
+    """Build the explicit `reasoning` kwarg for a model, or {} to omit it.
+
+    Only models with a configured reasoning_effort_by_model entry get an explicit
+    effort; every other model omits the param and falls back to the provider's
+    own default, so this never changes behavior for models without an entry.
+    """
+    effort = get_llm_reasoning_effort(model)
+    if effort is None:
+        return {}
+    return {"reasoning": {"effort": effort}}
 
 
 def _log_llm_call(resp: Any, purpose: str, model: str) -> None:
@@ -2248,7 +2262,9 @@ def normalize_rejection_blocker_suggestions(value: Any, max_items: int | None = 
     )
 
 
-def llm_suggest_rejection_blockers(job_description_text: str, llm_client: Any = None) -> list[str]:
+def llm_suggest_rejection_blockers(
+    job_description_text: str, llm_client: Any = None, *, benchmark_model: str | None = None
+) -> list[str]:
     active_client = llm_client or client
     description = str(job_description_text or "").strip()
     if active_client is None or not description:
@@ -2265,7 +2281,7 @@ def llm_suggest_rejection_blockers(job_description_text: str, llm_client: Any = 
     )
 
     try:
-        model = _log_llm_model_once()
+        model = benchmark_model or _log_llm_model_once()
         _desc_limit = get_llm_job_description_max_chars()
         _desc_truncated = description[:_desc_limit]
         logger.debug(
@@ -2287,6 +2303,7 @@ def llm_suggest_rejection_blockers(job_description_text: str, llm_client: Any = 
                 },
             ],
             max_output_tokens=get_llm_rejection_blocker_suggestions_max_output_tokens(),
+            **_llm_reasoning_kwargs(model),
         )
         _log_llm_call(resp, "rejection_suggestions", model)
     except Exception as exc:
@@ -2309,7 +2326,9 @@ def llm_suggest_rejection_blockers(job_description_text: str, llm_client: Any = 
     return suggestions
 
 
-def name_capability_clusters(clusters: list[dict[str, Any]], llm_client: Any = None) -> list[str]:
+def name_capability_clusters(
+    clusters: list[dict[str, Any]], llm_client: Any = None, *, benchmark_model: str | None = None
+) -> list[str]:
     """Use the LLM only to label pre-selected deterministic capability clusters."""
     active_client = llm_client or client
     if active_client is None or not clusters:
@@ -2337,7 +2356,7 @@ def name_capability_clusters(clusters: list[dict[str, Any]], llm_client: Any = N
     prompt = build_capability_naming_guidance()
 
     try:
-        _model = get_llm_model()
+        _model = benchmark_model or get_llm_model()
         logger.debug(
             "[LLM][REQUEST] purpose=capability_naming model=%s input_clusters=%d max_output_tokens=%d",
             _model,
@@ -2350,6 +2369,7 @@ def name_capability_clusters(clusters: list[dict[str, Any]], llm_client: Any = N
                 {"role": "user", "content": prompt + _json_mod.dumps(payload, ensure_ascii=False)}
             ],
             max_output_tokens=get_llm_capability_naming_max_output_tokens(),
+            **_llm_reasoning_kwargs(_model),
         )
         _log_llm_call(resp, "capability_naming", _model)
         raw = (resp.output_text or "").strip()
@@ -2500,6 +2520,8 @@ def llm_resolve_profile_storage(
     requirement_row: dict[str, Any],
     profile: dict[str, Any],
     llm_client: Any = None,
+    *,
+    benchmark_model: str | None = None,
 ) -> dict[str, Any]:
     """Resolve one user-confirmed requirement into existing/new/unresolved storage."""
 
@@ -2533,7 +2555,7 @@ def llm_resolve_profile_storage(
         "canonical_hint": canonical_hint,
         "existing_profile_items": _profile_storage_items(profile, requirement_type),
     }
-    model = _log_llm_model_once()
+    model = benchmark_model or _log_llm_model_once()
     try:
         resp = active_client.responses.parse(
             model=model,
@@ -2549,6 +2571,7 @@ def llm_resolve_profile_storage(
             ],
             max_output_tokens=get_llm_capability_naming_max_output_tokens(),
             text_format=_LLMProfileStorageResolution,
+            **_llm_reasoning_kwargs(model),
         )
         _log_llm_call(resp, "profile_storage_resolution", model)
     except APITimeoutError as exc:
@@ -2651,7 +2674,9 @@ def _build_learning_prompt(job_description_text: str, *, fit_review: bool) -> st
     return "\n".join(part for part in parts if part)
 
 
-def _request_learning_payload(job_description_text: str, *, fit_review: bool) -> dict[str, Any]:
+def _request_learning_payload(
+    job_description_text: str, *, fit_review: bool, benchmark_model: str | None = None
+) -> dict[str, Any]:
     if client is None:
         raise RuntimeError("LLM review requested but no provider key is configured")
 
@@ -2697,7 +2722,7 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
     else:
         role_experience = None
 
-    model = _log_llm_model_once()
+    model = benchmark_model or _log_llm_model_once()
     purpose = "fit_review" if fit_review else "learning_candidates"
     max_output_tokens = (
         get_llm_fit_decision_max_output_tokens()
@@ -2737,6 +2762,7 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
                     if include_debug_match_diagnostics
                     else (_LLMFitReviewPayload if fit_review else _LLMReviewPayload)
                 ),
+                **_llm_reasoning_kwargs(model),
             )
             _log_llm_call(
                 resp, "job_review_with_learning" if fit_review else "job_learning_candidates", model
@@ -2792,7 +2818,9 @@ def _request_learning_payload(job_description_text: str, *, fit_review: bool) ->
     return payload
 
 
-def llm_extract_job_requirements(job_description_text: str, llm_client: Any = None) -> list[str]:
+def llm_extract_job_requirements(
+    job_description_text: str, llm_client: Any = None, *, benchmark_model: str | None = None
+) -> list[str]:
     active_client = llm_client or client
     description = str(job_description_text or "").strip()
     if active_client is None or not description:
@@ -2806,7 +2834,7 @@ def llm_extract_job_requirements(job_description_text: str, llm_client: Any = No
     )
 
     try:
-        model = _log_llm_model_once()
+        model = benchmark_model or _log_llm_model_once()
         _desc_limit = get_llm_job_description_max_chars()
         _desc_truncated = description[:_desc_limit]
         logger.debug(
@@ -2826,6 +2854,7 @@ def llm_extract_job_requirements(job_description_text: str, llm_client: Any = No
             ],
             max_output_tokens=get_llm_job_requirements_max_output_tokens(),
             text_format=_LLMJobRequirementsPayload,
+            **_llm_reasoning_kwargs(model),
         )
         _log_llm_call(resp, "job_requirements", model)
     except Exception as exc:
@@ -2844,17 +2873,27 @@ def llm_extract_job_requirements(job_description_text: str, llm_client: Any = No
     return normalize_llm_job_requirements(parsed.model_dump())
 
 
-def llm_should_consider_with_learning(job_description_text: str) -> dict[str, Any]:
-    return _request_learning_payload(job_description_text, fit_review=True)
+def llm_should_consider_with_learning(
+    job_description_text: str, *, benchmark_model: str | None = None
+) -> dict[str, Any]:
+    return _request_learning_payload(
+        job_description_text, fit_review=True, benchmark_model=benchmark_model
+    )
 
 
-def llm_should_consider_learning_candidates(job_description_text: str) -> list[dict[str, Any]]:
+def llm_should_consider_learning_candidates(
+    job_description_text: str, *, benchmark_model: str | None = None
+) -> list[dict[str, Any]]:
     return normalize_llm_review_payload(
-        _request_learning_payload(job_description_text, fit_review=False)
+        _request_learning_payload(
+            job_description_text, fit_review=False, benchmark_model=benchmark_model
+        )
     ).get("learning_candidates", [])
 
 
-def llm_classify_section_label(label: str, llm_client: Any = None) -> dict[str, Any] | None:
+def llm_classify_section_label(
+    label: str, llm_client: Any = None, *, benchmark_model: str | None = None
+) -> dict[str, Any] | None:
     """Classify an unknown CV section heading into primary/secondary/supplementary.
 
     Returns {"bucket": str, "confident": bool} or None if LLM unavailable or output unparseable.
@@ -2877,7 +2916,7 @@ def llm_classify_section_label(label: str, llm_client: Any = None) -> dict[str, 
     )
 
     try:
-        model = _log_llm_model_once()
+        model = benchmark_model or _log_llm_model_once()
         logger.debug(
             "[LLM][REQUEST] purpose=section_label_classification model=%s input_chars=%d max_output_tokens=%d",
             model,
@@ -2891,6 +2930,7 @@ def llm_classify_section_label(label: str, llm_client: Any = None) -> dict[str, 
                 {"role": "user", "content": f'Section heading: "{label}"'},
             ],
             max_output_tokens=50,
+            **_llm_reasoning_kwargs(model),
         )
         _log_llm_call(resp, "section_label_classification", model)
     except Exception as exc:
@@ -2930,6 +2970,7 @@ def llm_judge_title(
     *,
     explore_adjacent_roles: bool = False,
     llm_client: Any = None,
+    benchmark_model: str | None = None,
 ) -> dict[str, Any] | None:
     """Decide whether a near/uncertain title should reach full description review.
 
@@ -2984,7 +3025,7 @@ def llm_judge_title(
 
     max_output_tokens = get_llm_title_judgment_max_output_tokens()
     try:
-        model = _log_llm_model_once()
+        model = benchmark_model or _log_llm_model_once()
         logger.debug(
             "[LLM][REQUEST] purpose=title_judgment model=%s input_chars=%d max_output_tokens=%d",
             model,
@@ -2999,6 +3040,7 @@ def llm_judge_title(
             ],
             max_output_tokens=max_output_tokens,
             text_format=_LLMTitleJudgment,
+            **_llm_reasoning_kwargs(model),
         )
         _log_llm_call(resp, "title_judgment", model)
     except Exception as exc:
