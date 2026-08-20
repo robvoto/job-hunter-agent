@@ -1741,8 +1741,10 @@
     }
     .signal-value-field {
       display: flex;
+      flex: 1 1 auto;
       flex-direction: column;
       gap: 4px;
+      width: 100%;
       min-width: 0;
     }
     .signal-value-input {
@@ -1760,6 +1762,7 @@
       width: 100%;
       resize: vertical;
       overflow-x: hidden;
+      overflow-y: hidden;
       overflow-wrap: anywhere;
     }
     .signal-value-input:focus {

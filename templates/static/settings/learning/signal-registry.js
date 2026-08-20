@@ -19,6 +19,17 @@
       return String(signal.normalized_key || signal.signal || '').trim().toLowerCase();
     }
 
+    function srResizeSignalValueInput(input) {
+      if (!input) return;
+      input.style.height = 'auto';
+      input.style.height = `${input.scrollHeight}px`;
+    }
+
+    function srResizeSignalValueInputs() {
+      const panel = document.getElementById('signal_registry_panel');
+      panel?.querySelectorAll('.signal-value-input').forEach(srResizeSignalValueInput);
+    }
+
     function srSignalCategory(signal) {
       return String(signal?.category || signal?.suggested_category || '').trim();
     }
@@ -478,7 +489,9 @@
       });
 
       panel.querySelectorAll('.signal-value-input').forEach(input => {
+        srResizeSignalValueInput(input);
         input.addEventListener('input', () => {
+          srResizeSignalValueInput(input);
           const key = input.dataset.srKey || '';
           const article = input.closest('.signal-row');
           if (!article) return;
@@ -565,6 +578,7 @@
     export function initSignalRegistry() {
       if (_srInitialized) return;
       _srInitialized = true;
+      window.addEventListener('resize', srResizeSignalValueInputs);
       const learningNav = document.querySelector('.nav-item[data-section="section-learning"]');
       learningNav?.addEventListener('click', maybeLoadSignalRegistry);
       if (learningNav?.classList.contains('is-active')) {

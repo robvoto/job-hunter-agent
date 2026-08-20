@@ -18,6 +18,9 @@ SETTINGS_ADMIN_PARTIAL_PATH = (
 SETTINGS_PAGE_CSS_PATH = (
     ROOT_DIR / "templates" / "static" / "settings" / "shared" / "settings-page.css"
 )
+SIGNAL_REGISTRY_JS_PATH = (
+    ROOT_DIR / "templates" / "static" / "settings" / "learning" / "signal-registry.js"
+)
 THEME_WIDGETS_CSS_PATH = ROOT_DIR / "templates" / "static" / "theme" / "themes.widgets.css"
 SETTINGS_TEMPLATE_PATH = ROOT_DIR / "templates" / "settings.html"
 ONBOARDING_REVIEW_CSS_PATH = (
@@ -157,6 +160,28 @@ def test_aws_browser_session_page_redirects_non_admin(monkeypatch):
 
     assert response.status_code == 302
     assert "/login?next=%2Faws-browser-session" in response.headers["location"]
+
+
+def test_signal_registry_value_editor_fills_column_and_auto_grows():
+    css = SETTINGS_PAGE_CSS_PATH.read_text(encoding="utf-8")
+    js = SIGNAL_REGISTRY_JS_PATH.read_text(encoding="utf-8-sig")
+
+    value_field = re.search(r"\.signal-value-field \{(?P<body>.*?)\n    \}", css, re.S)
+    assert value_field is not None
+    assert "flex: 1 1 auto;" in value_field.group("body")
+    assert "width: 100%;" in value_field.group("body")
+
+    value_input = re.search(r"\.signal-value-input \{(?P<body>.*?)\n    \}", css, re.S)
+    assert value_input is not None
+    assert "width: 100%;" in value_input.group("body")
+    assert "resize: vertical;" in value_input.group("body")
+    assert "overflow-y: hidden;" in value_input.group("body")
+    assert "overflow-wrap: anywhere;" in value_input.group("body")
+
+    assert "function srResizeSignalValueInput(input)" in js
+    assert "input.style.height = 'auto';" in js
+    assert "input.style.height = `${input.scrollHeight}px`;" in js
+    assert "window.addEventListener('resize', srResizeSignalValueInputs);" in js
 
 
 def test_global_settings_layout_css_prevents_panel_overflow():
