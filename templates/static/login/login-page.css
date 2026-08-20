@@ -24,6 +24,7 @@
 .login-story,
 .login-auth {
   position: relative;
+  box-sizing: border-box;
   min-height: 100vh;
   padding: clamp(28px, 4vw, 52px);
 }
