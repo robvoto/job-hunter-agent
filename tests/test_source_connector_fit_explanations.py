@@ -2779,6 +2779,34 @@ def test_candidate_application_history_renders_escaped_values_safely():
     assert "<script>" not in html
 
 
+def test_job_card_formats_opened_by_you_as_date_only():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-opened-by-you-date",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "seek",
+            "times_viewed": 1,
+            "last_viewed_at": "2026-08-17T13:05:00+10:00",
+        },
+        _test_profile(),
+        debug_mode=False,
+    )
+
+    assert "Opened by you 17 Aug 2026" in html
+    assert "Opened by you 17 Aug 2026 01:05 PM" not in html
+
+
 def test_potential_duplicate_card_shows_visible_callout_and_help_text():
     html = workspace_renderer.render_job_card(
         {

@@ -1636,7 +1636,7 @@ def render_job_card(
     if seen_by_you and record.get("last_viewed_at"):
         context_bits.append(
             f"{_workspace_label('workspace_card_labels', 'opened_by_you_prefix')} "
-            f"{format_timestamp_label(record.get('last_viewed_at'))}"
+            f"{format_timestamp_label(record.get('last_viewed_at'), include_time=False)}"
         )
     if applied_record and record.get("last_applied_at"):
         context_bits.append(
