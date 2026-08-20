@@ -162,6 +162,8 @@ _CENTRAL_ONLY_COMPONENT_SELECTORS = [
     ".summary-field",
     ".summary-field__label",
     ".summary-field__value",
+    ".job-hunter-app-footer",
+    ".job-hunter-app-footer__separator",
 ]
 
 
