@@ -666,6 +666,7 @@ def test_run_onboarding_logs_read_summary(monkeypatch, capsys, caplog, tmp_path)
                 "level": "strong",
                 "aliases": [],
                 "icon_key": "analysis_requirements",
+                "atomic_concept": True,
                 "needs_review": False,
             },
         ],
@@ -1002,6 +1003,7 @@ def test_validate_capabilities_uses_managed_alias_limit():
                 "level": "working",
                 "aliases": ["one", "two", "three", "four"],
                 "icon_key": "generic_capability",
+                "atomic_concept": True,
             }
         ],
         alias_limit=2,
@@ -1081,6 +1083,7 @@ def test_run_onboarding_uses_saved_onboarding_settings_when_argument_missing(mon
                     "level": "working",
                     "aliases": [],
                     "icon_key": "delivery_project",
+                    "atomic_concept": True,
                     "needs_review": False,
                 }
             ],
