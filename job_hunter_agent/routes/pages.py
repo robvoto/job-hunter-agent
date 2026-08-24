@@ -22,8 +22,10 @@ from job_hunter_agent.config import (
     LOGOUT_PATH,
     ONBOARDING_DEBUG_ALIAS_PATH,
     ONBOARDING_PATH,
+    REQUEST_ACCESS_PATH,
     WAITLIST_PATH,
 )
+from job_hunter_agent.database import request_user_access
 from job_hunter_agent.global_settings import KEY_SEEK_MAX_PAGES
 from job_hunter_agent.locations import default_location_value, load_location_options
 from job_hunter_agent.paths import (
@@ -77,6 +79,22 @@ def _render_access_status_page(request: Request, template_name: str):
 def page_waitlist(request: Request):  # type: ignore[no-untyped-def]
     _log_page_event(request, "waitlist", "opened")
     return _render_access_status_page(request, "waitlist.html")
+
+
+@router.get(REQUEST_ACCESS_PATH)
+def page_request_access(request: Request):  # type: ignore[no-untyped-def]
+    _log_page_event(request, "request access", "opened")
+    return _render_access_status_page(request, "request-access.html")
+
+
+@router.post(REQUEST_ACCESS_PATH)
+def submit_access_request(request: Request):  # type: ignore[no-untyped-def]
+    user = read_session_user(request)
+    if not user:
+        return auth_required_response(REQUEST_ACCESS_PATH, True)
+    request_user_access(str(user["user_id"]))
+    _log_page_event(request, "request access", "submitted")
+    return RedirectResponse(WAITLIST_PATH, status_code=303)
 
 
 @router.get(ACCESS_DENIED_PATH)

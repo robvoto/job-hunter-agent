@@ -16,6 +16,7 @@ from job_hunter_agent.auth import (
 from job_hunter_agent.database import (
     db_conn,
     init_db,
+    request_user_access,
     update_user_access_status,
 )
 from job_hunter_agent.fastapi_app import create_app
@@ -24,7 +25,7 @@ ADMIN_EMAIL = "rob.voto.au@gmail.com"
 SESSION_SECRET = "approval-gate-test-secret"
 
 
-def _client_for_user(monkeypatch, isolated_db, email: str, status: str = "pending"):
+def _client_for_user(monkeypatch, isolated_db, email: str, status: str = "verified"):
     monkeypatch.setenv("JOB_HUNTER_ADMIN_EMAIL", ADMIN_EMAIL)
     monkeypatch.setenv("JOB_HUNTER_AUTH_SESSION_SECRET", SESSION_SECRET)
     monkeypatch.setenv("JOB_HUNTER_GOOGLE_CLIENT_ID", "test-client")
@@ -52,17 +53,17 @@ def _session_request(app, client: TestClient) -> Request:
     return Request(scope)
 
 
-def test_new_google_user_defaults_to_pending(isolated_db, monkeypatch):
+def test_new_google_user_defaults_to_verified(isolated_db, monkeypatch):
     monkeypatch.setenv("JOB_HUNTER_ADMIN_EMAIL", ADMIN_EMAIL)
     user = get_or_create_user("new-tester@example.com", ADMIN_EMAIL)
 
-    assert user["access_status"] == "pending"
+    assert user["access_status"] == "verified"
     with db_conn(isolated_db) as conn:
         row = conn.execute(
             "SELECT access_status FROM users WHERE user_id = ?",
             (user["user_id"],),
         ).fetchone()
-    assert row["access_status"] == "pending"
+    assert row["access_status"] == "verified"
 
 
 def test_existing_users_migrate_without_deleting_history(tmp_path, monkeypatch):
@@ -91,8 +92,41 @@ def test_existing_users_migrate_without_deleting_history(tmp_path, monkeypatch):
         ).fetchall()
     assert [(row["user_id"], row["access_status"]) for row in rows] == [
         ("admin-id", "approved"),
-        ("candidate-id", "pending"),
+        ("candidate-id", "verified"),
     ]
+
+
+def test_verified_user_must_explicitly_request_access(isolated_db, monkeypatch):
+    app, client, user = _client_for_user(
+        monkeypatch, isolated_db, "verified@example.com", "verified"
+    )
+
+    protected = client.get("/docs", follow_redirects=False)
+    assert protected.status_code == 302
+    assert protected.headers["location"] == "/request-access"
+
+    request_page = client.get("/request-access")
+    assert request_page.status_code == 200
+    assert "Request access" in request_page.text
+    assert "Access requested" not in request_page.text
+
+    csrf_token = issue_csrf_token(_session_request(app, client))
+    submitted = client.post(
+        "/request-access",
+        data={"csrf_token": csrf_token or ""},
+        follow_redirects=False,
+    )
+    assert submitted.status_code == 303
+    assert submitted.headers["location"] == "/waitlist"
+
+    session_user = read_session_user(_session_request(app, client))
+    assert session_user is not None
+    assert session_user["user_id"] == user["user_id"]
+    assert session_user["access_status"] == "pending"
+
+    waitlist = client.get("/waitlist")
+    assert waitlist.status_code == 200
+    assert "Access requested" in waitlist.text
 
 
 def test_pending_user_reaches_waitlist_and_cannot_reach_protected_page(
@@ -185,6 +219,11 @@ def test_user_access_management_is_admin_only_and_uses_csrf(
 
     app, admin_client, admin = _client_for_user(monkeypatch, isolated_db, ADMIN_EMAIL, "approved")
     target = get_or_create_user("access-target@example.com", ADMIN_EMAIL)
+    listing = admin_client.get("/api/admin/user-access")
+    assert listing.status_code == 200
+    assert target["user_id"] not in {item["user_id"] for item in listing.json()["users"]}
+
+    request_user_access(target["user_id"])
     listing = admin_client.get("/api/admin/user-access")
     assert listing.status_code == 200
     target_row = next(item for item in listing.json()["users"] if item["user_id"] == target["user_id"])

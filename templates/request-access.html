@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark-professional">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Request access — Job Hunter</title>
+  <link rel="stylesheet" href="/static/theme/themes.css">
+  <link rel="stylesheet" href="/static/login/login-page.css">
+</head>
+<body class="login-page">
+  <main class="login-shell" aria-label="Job Hunter access request">
+    <section class="login-auth" aria-labelledby="request_access_title">
+      <div class="login-card">
+        <img src="/static/assets/job_hunter_img.png" alt="" class="login-card__logo">
+        <h1 class="login-card__title" id="request_access_title">Request access</h1>
+        <p class="login-card__copy">Your Google account has been verified.</p>
+        <p class="login-card__copy">Job Hunter is currently available to approved early testers. Request access to join the approval queue.</p>
+        <form action="/request-access" method="post">
+          <input type="hidden" name="csrf_token" value="__JOB_HUNTER_CSRF_TOKEN__">
+          <button class="login-google-button" type="submit">Request access</button>
+        </form>
+        <form action="/logout" method="post">
+          <input type="hidden" name="csrf_token" value="__JOB_HUNTER_CSRF_TOKEN__">
+          <button class="jh-button jh-button--neutral" type="submit">Sign out</button>
+        </form>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

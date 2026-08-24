@@ -24,6 +24,10 @@ from job_hunter_agent.config import (
     GOOGLE_AUTH_PATH,
     LOGIN_PATH,
     LOGOUT_PATH,
+    REQUEST_ACCESS_PATH,
+    USER_ACCESS_BLOCKED,
+    USER_ACCESS_PENDING,
+    USER_ACCESS_VERIFIED,
     WAITLIST_PATH,
 )
 from job_hunter_agent.paths import TEMPLATES_DIR
@@ -135,9 +139,11 @@ def google_callback(  # type: ignore[no-untyped-def]
     user = get_or_create_user(email, cfg.admin_email, display_name=display_name)
     next_path = _safe_next_path(request.query_params.get("next", "/"))
     access_status = user["access_status"]
-    if access_status == "pending":
+    if access_status == USER_ACCESS_VERIFIED:
+        next_path = REQUEST_ACCESS_PATH
+    elif access_status == USER_ACCESS_PENDING:
         next_path = WAITLIST_PATH
-    elif access_status == "blocked":
+    elif access_status == USER_ACCESS_BLOCKED:
         next_path = ACCESS_DENIED_PATH
     _logger.info(
         "AUTH | signed in | user=%s (%s) | next=%s",

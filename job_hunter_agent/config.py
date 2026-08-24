@@ -43,6 +43,7 @@ GLOBAL_SETTINGS_PATH = "/global-settings"
 AWS_BROWSER_SESSION_PATH = "/aws-browser-session"
 AWS_NOVNC_PROXY_PATH = "/aws-novnc"
 WAITLIST_PATH = "/waitlist"
+REQUEST_ACCESS_PATH = "/request-access"
 ACCESS_DENIED_PATH = "/access-denied"
 
 NOVNC_PORT = int(os.getenv("NOVNC_PORT", "7900"))
@@ -72,7 +73,18 @@ SESSION_COOKIE_PATH = "/"
 
 SESSION_COOKIE_DEFAULT_NAME = "job_hunter_session"
 
-USER_ACCESS_STATUSES = frozenset({"pending", "approved", "blocked"})
+USER_ACCESS_VERIFIED = "verified"
+USER_ACCESS_PENDING = "pending"
+USER_ACCESS_APPROVED = "approved"
+USER_ACCESS_BLOCKED = "blocked"
+USER_ACCESS_STATUSES = frozenset(
+    {
+        USER_ACCESS_VERIFIED,
+        USER_ACCESS_PENDING,
+        USER_ACCESS_APPROVED,
+        USER_ACCESS_BLOCKED,
+    }
+)
 
 
 # Allowed documentation paths for the API

@@ -6,6 +6,14 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
+from job_hunter_agent.config import (
+    USER_ACCESS_APPROVED,
+    USER_ACCESS_BLOCKED,
+    USER_ACCESS_PENDING,
+    USER_ACCESS_STATUSES,
+    USER_ACCESS_VERIFIED,
+)
+
 
 def _default_db_path() -> Path:
     from job_hunter_agent.paths import get_db_path
@@ -74,7 +82,7 @@ CREATE TABLE IF NOT EXISTS users (
     user_id      TEXT PRIMARY KEY,
     email        TEXT,
     display_name TEXT,
-    access_status TEXT NOT NULL DEFAULT 'pending',
+    access_status TEXT NOT NULL DEFAULT 'verified',
     created_at   TEXT NOT NULL DEFAULT (datetime('now')),
     last_seen_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -248,6 +256,7 @@ CREATE INDEX IF NOT EXISTS idx_system_warnings_category
 """
 
 _REQUIREMENT_IMPORTANCE_MIGRATION = "requirement_importance_terminology_v1"
+_USER_ACCESS_REQUEST_MIGRATION = "user_access_request_state_v1"
 _REQUIREMENT_IMPORTANCE_RENAMES = {
     "mandatory": "required",
     "strongly_preferred": "expected",
@@ -329,6 +338,45 @@ def _apply_requirement_importance_migration(conn: sqlite3.Connection) -> None:
     )
 
 
+def _apply_user_access_request_migration(conn: sqlite3.Connection) -> None:
+    """Convert legacy auto-pending users to verified exactly once.
+
+    Before an explicit request action existed, every authenticated candidate was
+    stored as pending. That state did not prove the user had requested access.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            name       TEXT PRIMARY KEY,
+            applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    already_applied = conn.execute(
+        "SELECT 1 FROM schema_migrations WHERE name = ?",
+        (_USER_ACCESS_REQUEST_MIGRATION,),
+    ).fetchone()
+    if already_applied:
+        return
+
+    tables = {
+        row[0]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    }
+    if "users" in tables:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+        if "access_status" in columns:
+            conn.execute(
+                "UPDATE users SET access_status = ? WHERE access_status = ?",
+                (USER_ACCESS_VERIFIED, USER_ACCESS_PENDING),
+            )
+
+    conn.execute(
+        "INSERT INTO schema_migrations (name) VALUES (?)",
+        (_USER_ACCESS_REQUEST_MIGRATION,),
+    )
+
+
 _system_warnings_schema_ensured_paths: set[str] = set()
 
 
@@ -374,14 +422,15 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
         columns = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
         if "access_status" not in columns:
             conn.execute(
-                "ALTER TABLE users ADD COLUMN access_status TEXT NOT NULL DEFAULT 'pending'"
+                "ALTER TABLE users ADD COLUMN access_status TEXT NOT NULL DEFAULT 'verified'"
             )
         admin_email = os.getenv("JOB_HUNTER_ADMIN_EMAIL", "").strip().lower()
         if admin_email:
             conn.execute(
-                "UPDATE users SET access_status = 'approved' WHERE lower(email) = ?",
-                (admin_email,),
+                "UPDATE users SET access_status = ? WHERE lower(email) = ?",
+                (USER_ACCESS_APPROVED, admin_email),
             )
+    _apply_user_access_request_migration(conn)
     _apply_requirement_importance_migration(conn)
 
 
@@ -430,17 +479,17 @@ def ensure_user_row(
         if access_status is None:
             conn.execute(
                 """
-                INSERT INTO users (user_id, email, display_name, last_seen_at)
-                VALUES (?, ?, ?, datetime('now'))
+                INSERT INTO users (user_id, email, display_name, access_status, last_seen_at)
+                VALUES (?, ?, ?, ?, datetime('now'))
                 ON CONFLICT(user_id) DO UPDATE SET
                     email         = COALESCE(excluded.email, email),
                     display_name  = COALESCE(excluded.display_name, display_name),
                     last_seen_at  = excluded.last_seen_at
                 """,
-                (user_id, email or None, display_name or None),
+                (user_id, email or None, display_name or None, USER_ACCESS_VERIFIED),
             )
             return
-        if access_status not in {"pending", "approved", "blocked"}:
+        if access_status not in USER_ACCESS_STATUSES:
             raise ValueError(f"Unsupported user access status: {access_status}")
         conn.execute(
             """
@@ -466,7 +515,7 @@ def get_user_access_status(user_id: str, db_path: "Path | None" = None) -> str |
     if row is None:
         return None
     status = str(row["access_status"] or "").strip().lower()
-    if status not in {"pending", "approved", "blocked"}:
+    if status not in USER_ACCESS_STATUSES:
         raise RuntimeError(f"Invalid persisted user access status for {user_id}")
     return status
 
@@ -491,7 +540,7 @@ def update_user_access_status(
     db_path: "Path | None" = None,
 ) -> dict:
     """Update one user's access status while protecting the configured admin."""
-    if status not in {"pending", "approved", "blocked"}:
+    if status not in {USER_ACCESS_PENDING, USER_ACCESS_APPROVED, USER_ACCESS_BLOCKED}:
         raise ValueError(f"Unsupported user access status: {status}")
     with db_conn(db_path) as conn:
         row = conn.execute(
@@ -508,6 +557,33 @@ def update_user_access_status(
             "UPDATE users SET access_status = ?, last_seen_at = last_seen_at WHERE user_id = ?",
             (status, user_id),
         )
+        updated = conn.execute(
+            """
+            SELECT user_id, email, display_name, access_status, created_at, last_seen_at
+            FROM users WHERE user_id = ?
+            """,
+            (user_id,),
+        ).fetchone()
+    return dict(updated)
+
+
+def request_user_access(user_id: str, db_path: "Path | None" = None) -> dict:
+    """Move a verified candidate into the real approval queue."""
+    with db_conn(db_path) as conn:
+        row = conn.execute(
+            "SELECT user_id, email, display_name, access_status FROM users WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        if row is None:
+            raise LookupError("User not found")
+        status = str(row["access_status"] or "").strip().lower()
+        if status == USER_ACCESS_VERIFIED:
+            conn.execute(
+                "UPDATE users SET access_status = ? WHERE user_id = ?",
+                (USER_ACCESS_PENDING, user_id),
+            )
+        elif status != USER_ACCESS_PENDING:
+            raise ValueError("Only verified users can request access")
         updated = conn.execute(
             """
             SELECT user_id, email, display_name, access_status, created_at, last_seen_at

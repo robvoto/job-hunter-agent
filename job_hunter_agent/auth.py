@@ -33,9 +33,14 @@ from job_hunter_agent.config import (
     HEALTH_CHECK_PATH,
     LOGIN_PATH,
     LOGOUT_PATH,
+    REQUEST_ACCESS_PATH,
     SESSION_COOKIE_DEFAULT_NAME,
     SESSION_COOKIE_PATH,
+    USER_ACCESS_APPROVED,
+    USER_ACCESS_BLOCKED,
+    USER_ACCESS_PENDING,
     USER_ACCESS_STATUSES,
+    USER_ACCESS_VERIFIED,
     WAITLIST_PATH,
 )
 
@@ -107,7 +112,7 @@ def get_or_create_user(
     user_id = user_id_from_email(email)
     # Role is always re-derived from env — admin_email may change without a DB update.
     role = "admin" if admin_email and email == admin_email.strip().lower() else "candidate"
-    access_status = "approved" if role == "admin" else None
+    access_status = USER_ACCESS_APPROVED if role == "admin" else None
     ensure_user_row(
         user_id,
         email=email,
@@ -116,11 +121,14 @@ def get_or_create_user(
     )
     from job_hunter_agent.database import get_user_access_status
 
+    persisted_access_status = get_user_access_status(user_id)
+    if persisted_access_status is None:
+        raise RuntimeError(f"User row missing after authentication upsert: {user_id}")
     return {
         "user_id": user_id,
         "email": email,
         "role": role,
-        "access_status": get_user_access_status(user_id) or "pending",
+        "access_status": persisted_access_status,
         "name": display_name or "",
     }
 
@@ -236,7 +244,7 @@ def read_session_user(request: HTTPConnection) -> dict | None:
     # authenticated identity, but it cannot enter the application until the
     # account exists and is explicitly approved.
     if access_status is None:
-        access_status = "pending"
+        access_status = USER_ACCESS_VERIFIED
     # Always re-derive role from env so admin_email changes take effect without re-login.
     role = (
         "admin"
@@ -244,7 +252,7 @@ def read_session_user(request: HTTPConnection) -> dict | None:
         else "candidate"
     )
     if role == "admin":
-        access_status = "approved"
+        access_status = USER_ACCESS_APPROVED
     name = str(payload.get("name") or "").strip()
     return {
         "user_id": user_id,
@@ -345,13 +353,19 @@ def access_gate_response(
     if access_status not in USER_ACCESS_STATUSES:
         raise RuntimeError(f"Invalid access status: {access_status}")
     if accepts_html:
-        destination = WAITLIST_PATH if access_status == "pending" else ACCESS_DENIED_PATH
+        if access_status == USER_ACCESS_VERIFIED:
+            destination = REQUEST_ACCESS_PATH
+        elif access_status == USER_ACCESS_PENDING:
+            destination = WAITLIST_PATH
+        else:
+            destination = ACCESS_DENIED_PATH
         return RedirectResponse(destination, status_code=302)
-    message = (
-        "Access approval is pending"
-        if access_status == "pending"
-        else "Access to Job Hunter has been blocked"
-    )
+    if access_status == USER_ACCESS_VERIFIED:
+        message = "Access has not been requested"
+    elif access_status == USER_ACCESS_PENDING:
+        message = "Access approval is pending"
+    else:
+        message = "Access to Job Hunter has been blocked"
     return JSONResponse(
         status_code=403,
         content={"ok": False, "error": message},

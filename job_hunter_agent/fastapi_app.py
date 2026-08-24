@@ -52,6 +52,11 @@ from job_hunter_agent.config import (
     ONBOARDING_DEBUG_ALIAS_PATH,
     ONBOARDING_PATH,
     ACCESS_DENIED_PATH,
+    REQUEST_ACCESS_PATH,
+    USER_ACCESS_APPROVED,
+    USER_ACCESS_BLOCKED,
+    USER_ACCESS_PENDING,
+    USER_ACCESS_VERIFIED,
     WAITLIST_PATH,
 )
 from job_hunter_agent.logging_utils import render_server_session_start_block, setup_logging
@@ -437,7 +442,7 @@ def create_app() -> FastAPI:
         if read_session_user(request) is None:
             return await call_next(request)
         presented_token = request.headers.get("x-csrf-token")
-        if not presented_token and request.url.path == LOGOUT_PATH:
+        if not presented_token and request.url.path in {LOGOUT_PATH, REQUEST_ACCESS_PATH}:
             body = (await request.body()).decode("utf-8", errors="ignore")
             form_fields = dict(parse_qsl(body, keep_blank_values=True))
             presented_token = str(form_fields.get("csrf_token") or "")
@@ -464,20 +469,34 @@ def create_app() -> FastAPI:
             )
         access_status = str(user.get("access_status") or "").strip().lower()
         if not access_status and user.get("role") == "admin":
-            access_status = "approved"
+            access_status = USER_ACCESS_APPROVED
         if not access_status:
-            access_status = "pending"
-        if path == WAITLIST_PATH:
-            if access_status == "pending":
+            access_status = USER_ACCESS_VERIFIED
+        if path == REQUEST_ACCESS_PATH:
+            if access_status in {USER_ACCESS_VERIFIED, USER_ACCESS_PENDING}:
+                if access_status == USER_ACCESS_PENDING and request.method == "GET":
+                    return RedirectResponse(WAITLIST_PATH, status_code=302)
                 return await call_next(request)
-            destination = ACCESS_DENIED_PATH if access_status == "blocked" else "/"
+            destination = ACCESS_DENIED_PATH if access_status == USER_ACCESS_BLOCKED else "/"
+            return RedirectResponse(destination, status_code=302)
+        if path == WAITLIST_PATH:
+            if access_status == USER_ACCESS_PENDING:
+                return await call_next(request)
+            if access_status == USER_ACCESS_VERIFIED:
+                return RedirectResponse(REQUEST_ACCESS_PATH, status_code=302)
+            destination = ACCESS_DENIED_PATH if access_status == USER_ACCESS_BLOCKED else "/"
             return RedirectResponse(destination, status_code=302)
         if path == ACCESS_DENIED_PATH:
-            if access_status == "blocked":
+            if access_status == USER_ACCESS_BLOCKED:
                 return await call_next(request)
-            destination = WAITLIST_PATH if access_status == "pending" else "/"
+            if access_status == USER_ACCESS_VERIFIED:
+                destination = REQUEST_ACCESS_PATH
+            elif access_status == USER_ACCESS_PENDING:
+                destination = WAITLIST_PATH
+            else:
+                destination = "/"
             return RedirectResponse(destination, status_code=302)
-        if access_status != "approved":
+        if access_status != USER_ACCESS_APPROVED:
             return access_gate_response(
                 access_status,
                 path,
