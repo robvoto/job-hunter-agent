@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import secrets
 import logging
+from html import escape as _html_escape
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -27,7 +28,7 @@ from job_hunter_agent.config import (
     WAITLIST_PATH,
 )
 from job_hunter_agent.paths import TEMPLATES_DIR
-from job_hunter_agent.server_helpers import render_app_footer_html
+from job_hunter_agent.server_helpers import load_app_release_metadata, render_app_footer_html
 
 router = APIRouter()
 
@@ -62,9 +63,12 @@ def page_login(request: Request, error: str | None = None):  # type: ignore[no-u
         _logger.info("AUTH | login page opened | user=%s", _describe_request_user(request))
     login_html = TEMPLATES_DIR / "login.html"
     if login_html.exists():
-        html = login_html.read_text(encoding="utf-8").replace(
-            "__JOB_HUNTER_APP_FOOTER__", render_app_footer_html()
-        )
+        release_metadata = load_app_release_metadata()
+        html = login_html.read_text(encoding="utf-8")
+        html = html.replace(
+            "__JOB_HUNTER_APP_VERSION__",
+            _html_escape(release_metadata["version"]),
+        ).replace("__JOB_HUNTER_APP_FOOTER__", render_app_footer_html())
         return HTMLResponse(html)
     return HTMLResponse("<h1>Job Hunter</h1><p><a href='/login/google'>Sign in with Google</a></p>")
 
