@@ -1,8 +1,8 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 115,
-  "updated_at": "2026-08-21",
+  "version": 116,
+  "updated_at": "2026-08-25",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
     "remote_label": "Remote",
@@ -831,6 +831,8 @@
     "allowed_models_help": "Keep one model id per line. The runtime selector uses this list directly.",
     "maximum_llm_chars_label": "Maximum LLM chars",
     "maximum_llm_chars_help": "How much job text the LLM path keeps when it builds cache keys and review prompts. The allowed range comes from global settings.",
+    "llm_temperature_label": "Temperature",
+    "llm_temperature_help": "Controls sampling randomness when a Job Hunter LLM call is not using active reasoning. 0 is the most deterministic; valid range is 0 to 2. Calls with reasoning above none use reasoning effort instead.",
     "model_pricing_label": "Model pricing per 1M tokens",
     "model_pricing_help": "Managed pricing used for cost logging. Keep it as JSON keyed by model id with `input` and `output` rates.",
     "prompt_settings_label": "Prompt settings",

@@ -133,6 +133,11 @@ def get_llm_max_retries() -> int:
     return int(load_global_settings()[KEY_LLM_SETTINGS][KEY_LLM_MAX_RETRIES])
 
 
+def get_llm_temperature() -> float:
+    """Sampling temperature shared by Job Hunter LLM calls."""
+    return float(load_global_settings()[KEY_LLM_SETTINGS][KEY_LLM_TEMPERATURE])
+
+
 def get_llm_fit_decision_max_output_tokens() -> int:
     """Max tokens for the fit decision response."""
     return get_llm_prompt_setting_int(KEY_LLM_PROMPT_FIT_DECISION_MAX_OUTPUT_TOKENS)

@@ -42,6 +42,7 @@ from job_hunter_agent.global_settings import (
     get_llm_rejection_blocker_suggestions_max_output_tokens,
     get_llm_rejection_blocker_suggestions_max_words,
     get_llm_request_timeout_seconds,
+    get_llm_temperature,
     get_llm_title_judgment_max_output_tokens,
     load_global_settings,
 )
@@ -213,6 +214,19 @@ def _llm_reasoning_kwargs(model: str) -> dict[str, Any]:
     if effort is None:
         return {}
     return {"reasoning": {"effort": effort}}
+
+
+def _llm_generation_kwargs(model: str) -> dict[str, Any]:
+    """Build shared generation controls without mixing unverified sampling/reasoning modes."""
+    reasoning_kwargs = _llm_reasoning_kwargs(model)
+    reasoning = reasoning_kwargs.get("reasoning", {})
+    effort = reasoning.get("effort") if isinstance(reasoning, dict) else None
+    if effort and effort != "none":
+        return reasoning_kwargs
+    return {
+        "temperature": get_llm_temperature(),
+        **reasoning_kwargs,
+    }
 
 
 def _log_llm_call(resp: Any, purpose: str, model: str) -> None:
@@ -2304,7 +2318,7 @@ def llm_suggest_rejection_blockers(
                 },
             ],
             max_output_tokens=get_llm_rejection_blocker_suggestions_max_output_tokens(),
-            **_llm_reasoning_kwargs(model),
+            **_llm_generation_kwargs(model),
         )
         _log_llm_call(resp, "rejection_suggestions", model)
     except Exception as exc:
@@ -2370,7 +2384,7 @@ def name_capability_clusters(
                 {"role": "user", "content": prompt + _json_mod.dumps(payload, ensure_ascii=False)}
             ],
             max_output_tokens=get_llm_capability_naming_max_output_tokens(),
-            **_llm_reasoning_kwargs(_model),
+            **_llm_generation_kwargs(_model),
         )
         _log_llm_call(resp, "capability_naming", _model)
         raw = (resp.output_text or "").strip()
@@ -2551,7 +2565,7 @@ def llm_resolve_profile_storage(
             ],
             max_output_tokens=get_llm_capability_naming_max_output_tokens(),
             text_format=_LLMProfileStorageResolution,
-            **_llm_reasoning_kwargs(model),
+            **_llm_generation_kwargs(model),
         )
         _log_llm_call(resp, "profile_storage_resolution", model)
     except APITimeoutError as exc:
@@ -2739,7 +2753,7 @@ def _request_learning_payload(
                     if include_debug_match_diagnostics
                     else (_LLMFitReviewPayload if fit_review else _LLMReviewPayload)
                 ),
-                **_llm_reasoning_kwargs(model),
+                **_llm_generation_kwargs(model),
             )
             _log_llm_call(
                 resp, "job_review_with_learning" if fit_review else "job_learning_candidates", model
@@ -2853,7 +2867,7 @@ def llm_classify_section_label(
                 {"role": "user", "content": f'Section heading: "{label}"'},
             ],
             max_output_tokens=50,
-            **_llm_reasoning_kwargs(model),
+            **_llm_generation_kwargs(model),
         )
         _log_llm_call(resp, "section_label_classification", model)
     except Exception as exc:
@@ -2963,7 +2977,7 @@ def llm_judge_title(
             ],
             max_output_tokens=max_output_tokens,
             text_format=_LLMTitleJudgment,
-            **_llm_reasoning_kwargs(model),
+            **_llm_generation_kwargs(model),
         )
         _log_llm_call(resp, "title_judgment", model)
     except Exception as exc:

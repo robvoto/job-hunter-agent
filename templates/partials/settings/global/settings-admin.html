@@ -557,6 +557,10 @@
             <input id="llm_max_llm_chars" type="number" step="1">
             <div class="field-help">How much job text the LLM path keeps when it builds cache keys and review prompts. The allowed range comes from global settings.</div>
 
+            <label for="llm_temperature">__JOB_HUNTER_GLOBAL_SETTINGS_LLM_TEMPERATURE_LABEL__</label>
+            <input id="llm_temperature" type="number" min="0" max="2" step="0.1">
+            <div class="field-help">__JOB_HUNTER_GLOBAL_SETTINGS_LLM_TEMPERATURE_HELP__</div>
+
             <label for="llm_pricing_per_1m">Model pricing per 1M tokens</label>
             <textarea id="llm_pricing_per_1m" rows="8" placeholder='{"model-id": {"input": 0, "output": 0}}'></textarea>
             <div class="field-help">Managed pricing used for cost logging. Keep it as JSON keyed by model id with `input` and `output` rates.</div>

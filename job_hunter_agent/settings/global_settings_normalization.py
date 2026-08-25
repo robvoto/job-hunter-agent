@@ -60,6 +60,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_LLM_MAX_CHARS,
     KEY_LLM_MAX_CHARS_LIMITS,
     KEY_LLM_MAX_RETRIES,
+    KEY_LLM_TEMPERATURE,
     KEY_LLM_REQUEST_TIMEOUT_SECONDS,
     KEY_LLM_PRICING_PER_1M,
     KEY_LLM_REASONING_EFFORT_BY_MODEL,
@@ -827,6 +828,13 @@ def normalize_global_settings(
         0,
         5,
     )
+    llm_temperature = _require_float(
+        llm_source,
+        KEY_LLM_TEMPERATURE,
+        DEFAULT_LLM_SETTINGS[KEY_LLM_TEMPERATURE],
+        0.0,
+        2.0,
+    )
 
     preset_table_source = onboarding_source.get(KEY_CAPABILITY_STRENGTH_PRESETS, {})
     if not isinstance(preset_table_source, dict):
@@ -1295,6 +1303,7 @@ def normalize_global_settings(
             KEY_LLM_MAX_CHARS: max_llm_chars,
             KEY_LLM_REQUEST_TIMEOUT_SECONDS: llm_request_timeout_seconds,
             KEY_LLM_MAX_RETRIES: llm_max_retries,
+            KEY_LLM_TEMPERATURE: llm_temperature,
         },
         KEY_REVIEW_SETTINGS: {
             KEY_REVIEW_MAX_EXAMPLES_PER_SKILL: _require_int(

@@ -197,6 +197,7 @@
       "fields": {
         "model": "Default/current LLM model selection.",
         "model_options": "Models allowed in the runtime LLM selector.",
+        "temperature": "Sampling temperature applied when a Job Hunter LLM call is not using active reasoning. Lower values make structured classification and extraction more deterministic; valid range is 0 to 2. Calls with reasoning above none use reasoning effort instead.",
         "pricing_per_1m": "Input/output token pricing used for local cost logging.",
         "max_llm_chars_limits": "Validation bounds for max_llm_chars.",
         "max_llm_chars": "Maximum job text kept for LLM review cache keys and prompt construction.",
