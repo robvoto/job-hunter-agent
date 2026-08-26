@@ -24,6 +24,32 @@ def test_openai_environment_key_is_ignored_in_desktop_runtime(monkeypatch):
     assert llm_gate.llm_is_enabled() is False
 
 
+def test_llm_generation_kwargs_uses_reasoning_without_temperature_when_effort_is_active(monkeypatch):
+    monkeypatch.setattr(llm_gate, "get_llm_temperature", lambda: 0.0)
+    monkeypatch.setattr(llm_gate, "get_llm_reasoning_effort", lambda model: "low")
+
+    assert llm_gate._llm_generation_kwargs("gpt-5.6-luna") == {
+        "reasoning": {"effort": "low"},
+    }
+
+
+def test_llm_generation_kwargs_combines_temperature_with_reasoning_none(monkeypatch):
+    monkeypatch.setattr(llm_gate, "get_llm_temperature", lambda: 0.0)
+    monkeypatch.setattr(llm_gate, "get_llm_reasoning_effort", lambda model: "none")
+
+    assert llm_gate._llm_generation_kwargs("gpt-5.6-luna") == {
+        "temperature": 0.0,
+        "reasoning": {"effort": "none"},
+    }
+
+
+def test_llm_generation_kwargs_keeps_temperature_when_reasoning_is_unconfigured(monkeypatch):
+    monkeypatch.setattr(llm_gate, "get_llm_temperature", lambda: 0.2)
+    monkeypatch.setattr(llm_gate, "get_llm_reasoning_effort", lambda model: None)
+
+    assert llm_gate._llm_generation_kwargs("gpt-4.1-mini") == {"temperature": 0.2}
+
+
 def test_build_capability_naming_guidance_uses_managed_defaults_only():
     prompt = llm_gate.build_capability_naming_guidance()
 

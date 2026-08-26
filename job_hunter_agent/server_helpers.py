@@ -659,6 +659,8 @@ _GLOBAL_SETTINGS_LABEL_KEYS = (
     "allowed_models_help",
     "maximum_llm_chars_label",
     "maximum_llm_chars_help",
+    "llm_temperature_label",
+    "llm_temperature_help",
     "model_pricing_label",
     "model_pricing_help",
     "prompt_settings_label",

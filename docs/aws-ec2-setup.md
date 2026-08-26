@@ -1023,6 +1023,7 @@ scripts/ec2/deploy-jobhunter-latest.sh         # deploy latest main by default o
 scripts/ec2/jobhunter-status.sh        # concise health summary, optional verbose/follow logs
 scripts/ec2/install-helpers.sh         # install wrappers into /usr/local/bin
 scripts/ec2/enable-https-jobhunter.sh  # enable HTTPS with certbot/nginx for jobhunter.robvoto.com
+scripts/ec2/install-nginx-security.sh  # block secret-file/exploit probes and rate-limit public requests
 ```
 
 Install or refresh helper commands on EC2:

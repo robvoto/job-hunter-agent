@@ -322,6 +322,7 @@ export const JobHunterAdminSettings = (function () {
     setFieldValue('llm_model_options', (llmSettings.model_options || []).join('\n'));
     setBounds('llm_max_llm_chars', llmSettings.max_llm_chars_limits);
     setFieldValue('llm_max_llm_chars', llmSettings.max_llm_chars);
+    setFieldValue('llm_temperature', llmSettings.temperature);
     setFieldValue('llm_pricing_per_1m', JSON.stringify(llmSettings.pricing_per_1m || {}, null, 2));
     const promptTemplates = llmSettings.llm_prompt_settings?.match_preference_templates || {};
     requireElement('llm_prompt_fit_review_debug_match_diagnostics_enabled').checked =
@@ -594,6 +595,7 @@ export const JobHunterAdminSettings = (function () {
         ...currentLlmSettings,
         model_options: toLines(document.getElementById('llm_model_options').value),
         max_llm_chars: readNumber('llm_max_llm_chars', currentLlmSettings.max_llm_chars),
+        temperature: readNumber('llm_temperature', currentLlmSettings.temperature),
         pricing_per_1m: JSON.parse(document.getElementById('llm_pricing_per_1m').value.trim() || '{}'),
         llm_prompt_settings: {
           ...currentLlmPromptSettings,

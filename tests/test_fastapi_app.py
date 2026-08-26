@@ -307,6 +307,17 @@ def test_login_page_logs_human_activity(monkeypatch, caplog):
     )
 
 
+def test_login_page_renders_release_version_from_shared_metadata(monkeypatch):
+    monkeypatch.setattr(_auth_google, "load_app_release_metadata", lambda: {"version": "9.8.7"})
+
+    client = TestClient(create_app())
+    response = client.get("/login")
+
+    assert response.status_code == 200
+    assert 'class="job-hunter-page-utility__release-version">v9.8.7</span>' in response.text
+    assert "__JOB_HUNTER_APP_VERSION__" not in response.text
+
+
 def test_global_settings_page_requires_admin(monkeypatch):
     monkeypatch.setattr(_fa, "read_session_user", lambda request: _CANDIDATE_USER)
     monkeypatch.setattr(_pages.srv, "_onboarding_complete", lambda: True)

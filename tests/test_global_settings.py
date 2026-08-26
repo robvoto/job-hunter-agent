@@ -474,6 +474,24 @@ def test_managed_global_settings_accepts_valid_requirement_coverage_max_items():
     )
 
 
+def test_managed_global_settings_accepts_valid_temperature():
+    payload = _load_managed_global_settings_payload()
+    payload["llm_settings"]["temperature"] = 0.3
+
+    normalized = normalize_global_settings(payload, strict_managed=True)
+
+    assert normalized["llm_settings"]["temperature"] == 0.3
+
+
+@pytest.mark.parametrize("temperature", [-0.1, 2.1])
+def test_managed_global_settings_rejects_temperature_outside_api_range(temperature):
+    payload = _load_managed_global_settings_payload()
+    payload["llm_settings"]["temperature"] = temperature
+
+    with pytest.raises(ValueError, match=r"temperature must be between 0.0 and 2.0"):
+        normalize_global_settings(payload, strict_managed=True)
+
+
 def test_managed_global_settings_rejects_invalid_fit_decision_output_tokens():
     payload = _load_managed_global_settings_payload()
     payload["llm_settings"]["llm_prompt_settings"]["fit_decision_max_output_tokens"] = 0

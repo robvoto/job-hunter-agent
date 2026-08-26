@@ -54,6 +54,17 @@ def test_source_document_suffixes_are_rendered_read_only():
     assert "CV Files" in html
 
 
+def test_global_settings_admin_exposes_managed_llm_temperature():
+    html = SETTINGS_ADMIN_PARTIAL_PATH.read_text(encoding="utf-8")
+    js = SETTINGS_ADMIN_JS_PATH.read_text(encoding="utf-8")
+
+    assert 'id="llm_temperature"' in html
+    assert "__JOB_HUNTER_GLOBAL_SETTINGS_LLM_TEMPERATURE_LABEL__" in html
+    assert "__JOB_HUNTER_GLOBAL_SETTINGS_LLM_TEMPERATURE_HELP__" in html
+    assert "setFieldValue('llm_temperature', llmSettings.temperature)" in js
+    assert "temperature: readNumber('llm_temperature', currentLlmSettings.temperature)" in js
+
+
 def test_global_settings_admin_js_handles_seek_assisted_verification_toggle():
     js = SETTINGS_ADMIN_JS_PATH.read_text(encoding="utf-8")
 

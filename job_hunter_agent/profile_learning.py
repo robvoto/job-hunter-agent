@@ -322,7 +322,7 @@ def _llm_extract_from_cv(
 
     try:
         from job_hunter_agent.llm_gate import (
-            _llm_reasoning_kwargs,
+            _llm_generation_kwargs,
             _log_llm_call,
             client,
             get_llm_model,
@@ -399,7 +399,7 @@ def _llm_extract_from_cv(
             input=[{"role": "user", "content": prompt}],
             text_format=_CvExtractionResponse,
             max_output_tokens=profile_extraction_max_output_tokens,
-            **_llm_reasoning_kwargs(model),
+            **_llm_generation_kwargs(model),
         )
         _log_llm_call(resp, "cv_extraction", model)
         parsed = resp.output_parsed
