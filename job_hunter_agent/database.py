@@ -527,8 +527,17 @@ def list_users_with_access(db_path: "Path | None" = None) -> list[dict]:
             """
             SELECT user_id, email, display_name, access_status, created_at, last_seen_at
             FROM users
-            ORDER BY created_at ASC, user_id ASC
-            """
+            ORDER BY
+                CASE access_status
+                    WHEN ? THEN 0
+                    WHEN ? THEN 1
+                    WHEN ? THEN 2
+                    ELSE 3
+                END,
+                created_at ASC,
+                user_id ASC
+            """,
+            (USER_ACCESS_PENDING, USER_ACCESS_APPROVED, USER_ACCESS_BLOCKED),
         ).fetchall()
     return [dict(row) for row in rows]
 

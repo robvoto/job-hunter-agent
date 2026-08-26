@@ -1270,7 +1270,14 @@ export const JobHunterAdminSettings = (function () {
           throw new Error(labels.user_access_load_error);
         }
         renderUsers(users);
-        setStatus('', '');
+        const pendingCount = users.filter((user) => user?.access_status === 'pending').length;
+        if (pendingCount === 1) {
+          setStatus(labels.user_access_pending_summary_one, '');
+        } else if (pendingCount > 1) {
+          setStatus(labels.user_access_pending_summary_many.replace('{count}', String(pendingCount)), '');
+        } else {
+          setStatus('', '');
+        }
       } catch (error) {
         list.innerHTML = '';
         setStatus(error.message || labels.user_access_load_error, 'error');

@@ -109,6 +109,8 @@ def test_verified_user_must_explicitly_request_access(isolated_db, monkeypatch):
     assert request_page.status_code == 200
     assert "Request access" in request_page.text
     assert "Access requested" not in request_page.text
+    assert "© 2025–2026 Roberto Hernan Voto. All rights reserved." in request_page.text
+    assert "__JOB_HUNTER_" not in request_page.text
 
     csrf_token = issue_csrf_token(_session_request(app, client))
     submitted = client.post(
@@ -127,6 +129,8 @@ def test_verified_user_must_explicitly_request_access(isolated_db, monkeypatch):
     waitlist = client.get("/waitlist")
     assert waitlist.status_code == 200
     assert "Access requested" in waitlist.text
+    assert "© 2025–2026 Roberto Hernan Voto. All rights reserved." in waitlist.text
+    assert "__JOB_HUNTER_" not in waitlist.text
 
 
 def test_pending_user_reaches_waitlist_and_cannot_reach_protected_page(
@@ -193,6 +197,8 @@ def test_blocked_user_reaches_access_denied_page(isolated_db, monkeypatch):
     response = client.get("/access-denied")
     assert response.status_code == 200
     assert "Access unavailable" in response.text
+    assert "© 2025–2026 Roberto Hernan Voto. All rights reserved." in response.text
+    assert "__JOB_HUNTER_" not in response.text
 
 
 def test_admin_is_always_approved_and_cannot_be_blocked(isolated_db, monkeypatch):
@@ -226,7 +232,9 @@ def test_user_access_management_is_admin_only_and_uses_csrf(
     request_user_access(target["user_id"])
     listing = admin_client.get("/api/admin/user-access")
     assert listing.status_code == 200
-    target_row = next(item for item in listing.json()["users"] if item["user_id"] == target["user_id"])
+    listed_users = listing.json()["users"]
+    assert listed_users[0]["user_id"] == target["user_id"]
+    target_row = next(item for item in listed_users if item["user_id"] == target["user_id"])
     assert target_row["access_status"] == "pending"
 
     csrf_token = issue_csrf_token(_session_request(app, admin_client))

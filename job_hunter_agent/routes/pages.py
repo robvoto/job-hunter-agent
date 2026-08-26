@@ -68,10 +68,18 @@ def _render_access_status_page(request: Request, template_name: str):
     template_path = TEMPLATES_DIR / template_name
     if not template_path.exists():
         return html_response("<h1>Template missing</h1><p>Access status template is missing.</p>", 500)
-    html = template_path.read_text(encoding="utf-8").replace(
-        "__JOB_HUNTER_CSRF_TOKEN__",
-        _html_escape(issue_csrf_token(request) or ""),
+    labels = srv.load_access_status_ui_labels()
+    replacements = {
+        "__JOB_HUNTER_CSRF_TOKEN__": issue_csrf_token(request) or "",
+        "__JOB_HUNTER_APP_FOOTER__": srv.render_app_footer_html(),
+    }
+    replacements.update(
+        {f"__JOB_HUNTER_ACCESS_{key.upper()}__": value for key, value in labels.items()}
     )
+    html = template_path.read_text(encoding="utf-8")
+    for token, value in replacements.items():
+        replacement = value if token == "__JOB_HUNTER_APP_FOOTER__" else _html_escape(value)
+        html = html.replace(token, replacement)
     return html_response(html)
 
 

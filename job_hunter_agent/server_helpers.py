@@ -284,6 +284,23 @@ _SHARED_UI_LABEL_KEYS = (
     "remove_item_label",
     "remove_item_fallback_label",
 )
+_ACCESS_STATUS_LABEL_KEYS = (
+    "request_page_title",
+    "request_aria_label",
+    "request_heading",
+    "verified_copy",
+    "request_copy",
+    "request_button_label",
+    "waitlist_page_title",
+    "waitlist_aria_label",
+    "waitlist_heading",
+    "waitlist_copy",
+    "denied_page_title",
+    "denied_aria_label",
+    "denied_heading",
+    "denied_copy",
+    "sign_out_label",
+)
 _SEARCH_SOURCE_LABEL_KEYS = (
     "section_title",
     "section_copy",
@@ -697,6 +714,8 @@ _GLOBAL_SETTINGS_LABEL_KEYS = (
     "user_access_status_approved",
     "user_access_status_blocked",
     "user_access_admin_label",
+    "user_access_pending_summary_one",
+    "user_access_pending_summary_many",
     *_SYSTEM_HEALTH_LABEL_KEYS,
 )
 
@@ -897,6 +916,19 @@ def load_shared_ui_labels() -> dict[str, str]:
     if missing:
         raise ValueError(f"ui_labels.json is missing shared_ui_labels values: {', '.join(missing)}")
     return {key: str(labels[key]).strip() for key in _SHARED_UI_LABEL_KEYS}
+
+
+def load_access_status_ui_labels() -> dict[str, str]:
+    """Load managed copy shared by the request, waitlist, and denied pages."""
+    labels = load_ui_labels().get("access_status_labels", {})
+    if not isinstance(labels, dict):
+        raise ValueError("ui_labels.json is missing access_status_labels")
+    missing = [key for key in _ACCESS_STATUS_LABEL_KEYS if not str(labels.get(key) or "").strip()]
+    if missing:
+        raise ValueError(
+            f"ui_labels.json is missing access_status_labels values: {', '.join(missing)}"
+        )
+    return {key: str(labels[key]).strip() for key in _ACCESS_STATUS_LABEL_KEYS}
 
 
 
