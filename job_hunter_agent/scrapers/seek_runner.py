@@ -101,6 +101,21 @@ class BotChallengeDetected(Exception):
     def __init__(self, message: str, *, failure_class: str = "SEEK_UNKNOWN_FAILURE") -> None:
         super().__init__(message)
         self.failure_class = failure_class
+        self.kept_records: list[dict] = []
+        self.audit_rows: list[dict] = []
+        self.skill_observations: list[dict] = []
+
+    def attach_partial_results(
+        self,
+        *,
+        kept_records: list[dict],
+        audit_rows: list[dict],
+        skill_observations: list[dict],
+    ) -> None:
+        """Carry completed review work through a late challenge failure."""
+        self.kept_records = list(kept_records)
+        self.audit_rows = list(audit_rows)
+        self.skill_observations = list(skill_observations)
 
 # Chromium flags and init script applied to every browser launch to suppress the
 # navigator.webdriver fingerprint that automated browsers expose. Without these,
@@ -1256,7 +1271,12 @@ def seek_scrape_to_records(
                 kept_records,
                 skill_observations,
             )
-        except BotChallengeDetected:
+        except BotChallengeDetected as exc:
+            exc.attach_partial_results(
+                kept_records=kept_records,
+                audit_rows=audit_rows,
+                skill_observations=skill_observations,
+            )
             raise
         except Exception as exc:
             raise PartialSourceResultsError(
@@ -1756,7 +1776,12 @@ def seek_scrape_to_records(
                 context.close()
                 if discovery_status is not None:
                     discovery_status["complete"] = collection_complete
-    except BotChallengeDetected:
+    except BotChallengeDetected as exc:
+        exc.attach_partial_results(
+            kept_records=kept_records,
+            audit_rows=audit_rows,
+            skill_observations=skill_observations,
+        )
         raise
     except Exception as exc:
         raise PartialSourceResultsError(

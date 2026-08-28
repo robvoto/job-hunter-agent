@@ -461,6 +461,45 @@ def test_finalize_scrape_run_preserves_previous_workspace_when_no_audit_rows(
     assert "No fresh cards were captured in this run." in summary_text
 
 
+def test_finalize_scrape_run_preserves_kept_records_without_audit_rows(monkeypatch, tmp_path):
+    context = _build_context()
+    workspace_path = tmp_path / "workspace.html"
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(scrape_finalize, "get_workspace_results_path", lambda: workspace_path)
+    monkeypatch.setattr(scrape_finalize, "deduplicate_across_sources", lambda records: records)
+    monkeypatch.setattr(
+        scrape_finalize.workspace_service,
+        "build_run_stats",
+        lambda *args: {"run_started_at": context.run_iso, "cards_seen": 0},
+    )
+    monkeypatch.setattr(
+        scrape_finalize.workspace_service,
+        "build_workspace_record_sets",
+        lambda *args, **kwargs: {"shortlist_records": [], "current_records": []},
+    )
+    monkeypatch.setattr(
+        scrape_finalize.workspace_service,
+        "render_html",
+        lambda *args, **kwargs: captured.update({"records": args[1]}),
+    )
+    monkeypatch.setattr(scrape_finalize, "save_llm_cache", lambda payload: None)
+    monkeypatch.setattr(scrape_finalize, "save_job_history", lambda payload: None)
+    monkeypatch.setattr(scrape_finalize, "write_debug_json", lambda payload: None)
+    monkeypatch.setattr(scrape_finalize, "write_run_stats", lambda payload: None)
+    monkeypatch.setattr(scrape_finalize, "write_review_data", lambda payload: None)
+    monkeypatch.setattr(source_learning, "get_llm_truncation_count", lambda: 0)
+
+    scrape_finalize.finalize_scrape_run(
+        context,
+        kept_records=[{"job_key": "seek:partial-keep"}],
+        audit_rows=[],
+        skill_observations=[],
+    )
+
+    assert {record["job_key"] for record in captured["records"]} >= {"seek:partial-keep"}
+
+
 def test_finalize_scrape_run_marks_empty_first_run_as_error(monkeypatch, tmp_path, capsys, caplog):
     import logging as _logging
 
