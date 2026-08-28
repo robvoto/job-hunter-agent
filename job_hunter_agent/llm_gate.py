@@ -12,6 +12,7 @@ import logging
 import os
 import re
 import sys
+import threading
 from typing import Any, Dict
 
 from openai import APIStatusError, APITimeoutError, OpenAI
@@ -160,6 +161,11 @@ _profile_fingerprint_cache: str | None = None
 
 # Cost logging --------------------------------------------------------
 _session_cost_usd: float = 0.0
+_session_llm_calls: int = 0
+_session_llm_errors: int = 0
+_session_input_tokens: int = 0
+_session_output_tokens: int = 0
+_SESSION_USAGE_LOCK = threading.Lock()
 
 
 def _get_llm_pricing_per_1m() -> dict[str, dict[str, float]]:
@@ -230,7 +236,7 @@ def _llm_generation_kwargs(model: str) -> dict[str, Any]:
 
 
 def _log_llm_call(resp: Any, purpose: str, model: str) -> None:
-    global _session_cost_usd
+    global _session_cost_usd, _session_input_tokens, _session_output_tokens
     usage = getattr(resp, "usage", None)
     if usage is None:
         return
@@ -239,7 +245,11 @@ def _log_llm_call(resp: Any, purpose: str, model: str) -> None:
     tok_out = getattr(usage, "output_tokens", None) or getattr(usage, "completion_tokens", 0) or 0
     prices = _get_llm_pricing_per_1m()[model]
     cost = _calculate_llm_cost_usd(tok_in, tok_out, prices)
-    _session_cost_usd += cost
+    with _SESSION_USAGE_LOCK:
+        _session_input_tokens += int(tok_in)
+        _session_output_tokens += int(tok_out)
+        _session_cost_usd += cost
+        session_cost = _session_cost_usd
 
     entry = build_llm_cost_entry(
         purpose=purpose,
@@ -247,7 +257,7 @@ def _log_llm_call(resp: Any, purpose: str, model: str) -> None:
         tok_in=tok_in,
         tok_out=tok_out,
         cost_usd=cost,
-        session_usd=_session_cost_usd,
+        session_usd=session_cost,
     )
     append_llm_cost_log(_LLM_COSTS_PATH, entry)
     logger.debug(
@@ -257,8 +267,33 @@ def _log_llm_call(resp: Any, purpose: str, model: str) -> None:
         tok_in,
         tok_out,
         cost,
-        _session_cost_usd,
+        session_cost,
     )
+
+
+def record_llm_request() -> None:
+    """Count an attempted provider request for the current scrape session."""
+    global _session_llm_calls
+    with _SESSION_USAGE_LOCK:
+        _session_llm_calls += 1
+
+
+def record_llm_error() -> None:
+    """Count a provider/protocol failure for the current scrape session."""
+    global _session_llm_errors
+    with _SESSION_USAGE_LOCK:
+        _session_llm_errors += 1
+
+
+def get_session_usage_summary() -> dict[str, int]:
+    """Return run-scoped provider usage independent of persisted audit rows."""
+    with _SESSION_USAGE_LOCK:
+        return {
+            "llm_calls": _session_llm_calls,
+            "llm_errors": _session_llm_errors,
+            "llm_input_tokens": _session_input_tokens,
+            "llm_output_tokens": _session_output_tokens,
+        }
 
 
 def _llm_usage_summary(resp: Any, model: str) -> dict[str, Any]:
@@ -277,12 +312,19 @@ def _llm_usage_summary(resp: Any, model: str) -> dict[str, Any]:
 
 
 def get_session_cost_usd() -> float:
-    return round(_session_cost_usd, 6)
+    with _SESSION_USAGE_LOCK:
+        return round(_session_cost_usd, 6)
 
 
 def reset_session_cost() -> None:
-    global _session_cost_usd
-    _session_cost_usd = 0.0
+    global _session_cost_usd, _session_llm_calls, _session_llm_errors
+    global _session_input_tokens, _session_output_tokens
+    with _SESSION_USAGE_LOCK:
+        _session_cost_usd = 0.0
+        _session_llm_calls = 0
+        _session_llm_errors = 0
+        _session_input_tokens = 0
+        _session_output_tokens = 0
 
 
 def _profile_fingerprint() -> str:
@@ -346,7 +388,9 @@ class _LLMTitleJudgment(BaseModel):
     """Structured pre-detail title-gate response owned by llm_judge_title."""
 
     verdict: str
-    reason: str = ""
+    # The title gate only needs a short explanation. Bounding this field keeps
+    # the complete JSON response below the managed 80-token output budget.
+    reason: str = Field(default="", max_length=160)
 
 
 class _LLMExperienceComponent(BaseModel):
@@ -478,7 +522,13 @@ def _is_retryable_llm_payload_error(exc: Exception) -> bool:
     if isinstance(exc, ValidationError):
         return True
     message = str(exc).lower()
-    return "json_invalid" in message or "invalid json" in message or "eof while parsing" in message
+    return (
+        "json_invalid" in message
+        or "invalid json" in message
+        or "eof while parsing" in message
+        or "no parsed output" in message
+        or "invalid verdict" in message
+    )
 
 
 def _build_openai_client() -> OpenAI | None:
@@ -2724,6 +2774,7 @@ def _request_learning_payload(
     resp = None
     for attempt in range(1, max_attempts + 1):
         try:
+            record_llm_request()
             # job_description_text is already truncated by the caller
             # (source_learning.resolve_llm_review_payload). Log its length directly.
             logger.debug(
@@ -2760,6 +2811,7 @@ def _request_learning_payload(
             )
             break
         except APITimeoutError as exc:
+            record_llm_error()
             raise LLMCallError(
                 "APITimeoutError: Request timed out.",
                 purpose=purpose,
@@ -2767,6 +2819,7 @@ def _request_learning_payload(
                 is_timeout=True,
             ) from exc
         except APIStatusError as exc:
+            record_llm_error()
             raise LLMCallError(
                 f"HTTP {exc.status_code} — {exc.message}",
                 purpose=purpose,
@@ -2774,6 +2827,7 @@ def _request_learning_payload(
                 status_code=exc.status_code,
             ) from exc
         except Exception as exc:
+            record_llm_error()
             if fit_review and attempt < max_attempts and _is_retryable_llm_payload_error(exc):
                 logger.warning(
                     "[LLM][RETRY] purpose=%s model=%s attempt=%d/%d reason=%s",
@@ -2944,6 +2998,7 @@ def llm_judge_title(
                 "verdict=uncertain: use for unfamiliar or adjacent titles where the candidate's capabilities could plausibly transfer and the job description could change the answer.",
                 "Do not reject merely because the exact title is absent from the preferred/interesting role lists.",
                 "Judge only what the title supports. Do not invent duties that are not implied by the title.",
+                "Keep reason concise: no more than 160 characters.",
             ]
         )
     else:
@@ -2957,51 +3012,63 @@ def llm_judge_title(
                 "verdict=no_match: the title is for a distinctly different role or seniority/function, even if it shares generic words.",
                 "verdict=uncertain: title alone is not enough to tell — a job description could plausibly change the answer.",
                 "Judge on the title alone. Do not guess at duties not implied by the title.",
+                "Keep reason concise: no more than 160 characters.",
             ]
         )
 
     max_output_tokens = get_llm_title_judgment_max_output_tokens()
-    try:
-        model = benchmark_model or _log_llm_model_once()
-        logger.debug(
-            "[LLM][REQUEST] purpose=title_judgment model=%s input_chars=%d max_output_tokens=%d",
-            model,
-            len(title),
-            max_output_tokens,
-        )
-        resp = active_client.responses.parse(
-            model=model,
-            input=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f'Job title: "{title}"'},
-            ],
-            max_output_tokens=max_output_tokens,
-            text_format=_LLMTitleJudgment,
-            **_llm_generation_kwargs(model),
-        )
-        _log_llm_call(resp, "title_judgment", model)
-    except Exception as exc:
-        logger.error("[LLM][FAIL] purpose=title_judgment error=%s", exc)
-        return None
-
-    parsed = getattr(resp, "output_parsed", None)
-    if parsed is None:
-        logger.warning("[LLM][WARN] purpose=title_judgment parsed_output_missing")
-        return None
-
-    payload = normalize_llm_title_judgment(parsed.model_dump())
-    if payload is None:
-        raw_verdict = str(getattr(parsed, "verdict", "") or "").strip().lower()
-        logger.warning("[LLM][WARN] purpose=title_judgment invalid_verdict=%r", raw_verdict)
-        return None
-
-    logger.debug(
-        "[LLM][RESULT] purpose=title_judgment title=%r verdict=%s reason=%r",
-        title,
-        payload["verdict"],
-        payload["reason"],
-    )
-    return payload
+    model = benchmark_model or _log_llm_model_once()
+    max_attempts = 2
+    for attempt in range(1, max_attempts + 1):
+        try:
+            record_llm_request()
+            logger.debug(
+                "[LLM][REQUEST] purpose=title_judgment model=%s input_chars=%d "
+                "max_output_tokens=%d attempt=%d/%d",
+                model,
+                len(title),
+                max_output_tokens,
+                attempt,
+                max_attempts,
+            )
+            resp = active_client.responses.parse(
+                model=model,
+                input=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f'Job title: "{title}"'},
+                ],
+                max_output_tokens=max_output_tokens,
+                text_format=_LLMTitleJudgment,
+                **_llm_generation_kwargs(model),
+            )
+            _log_llm_call(resp, "title_judgment", model)
+            parsed = getattr(resp, "output_parsed", None)
+            if parsed is None:
+                raise ValueError("LLM title judgment returned no parsed output")
+            payload = normalize_llm_title_judgment(parsed.model_dump())
+            if payload is None:
+                raw_verdict = str(getattr(parsed, "verdict", "") or "").strip().lower()
+                raise ValueError(f"LLM title judgment returned invalid verdict {raw_verdict!r}")
+            logger.debug(
+                "[LLM][RESULT] purpose=title_judgment title=%r verdict=%s reason=%r",
+                title,
+                payload["verdict"],
+                payload["reason"],
+            )
+            return payload
+        except Exception as exc:
+            record_llm_error()
+            if attempt < max_attempts and _is_retryable_llm_payload_error(exc):
+                logger.warning(
+                    "[LLM][RETRY] purpose=title_judgment model=%s attempt=%d/%d reason=%s",
+                    model,
+                    attempt + 1,
+                    max_attempts,
+                    f"{type(exc).__name__}: {exc}",
+                )
+                continue
+            logger.error("[LLM][FAIL] purpose=title_judgment error=%s", exc)
+            return None
 
 
 def get_cost_summary() -> dict[str, Any]:

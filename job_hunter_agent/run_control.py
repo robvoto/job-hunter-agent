@@ -32,8 +32,12 @@ _RUN_PROGRESS_SCOPE: contextvars.ContextVar[object | None] = contextvars.Context
 _RUN_STOP_EVENT_SCOPE: contextvars.ContextVar[threading.Event | None] = contextvars.ContextVar(
     "job_hunter_run_stop_event", default=None
 )
+_RUN_SOURCE_TIMEOUT_EVENT_SCOPE: contextvars.ContextVar[threading.Event | None] = contextvars.ContextVar(
+    "job_hunter_source_timeout_event", default=None
+)
 _RUN_ACTIVE_PROGRESS_SCOPE: object | None = None
 _RUN_ACTIVE_STOP_EVENT: threading.Event | None = None
+_RUN_PROGRESS_BY_SOURCE: dict[str, tuple[str, ProgressDetail | None]] = {}
 logger = logging.getLogger(__name__)
 
 
@@ -142,6 +146,9 @@ def clear_run_stop_request() -> None:
 
 
 def run_stop_requested() -> bool:
+    source_timeout_event = _RUN_SOURCE_TIMEOUT_EVENT_SCOPE.get()
+    if source_timeout_event is not None and source_timeout_event.is_set():
+        return True
     scoped_event = _RUN_STOP_EVENT_SCOPE.get()
     if scoped_event is not None:
         return scoped_event.is_set()
@@ -165,7 +172,7 @@ def begin_run_progress_scope() -> object:
     merely because a later run clears or replaces the active event.
     """
     global _RUN_ACTIVE_PROGRESS_SCOPE, _RUN_ACTIVE_STOP_EVENT
-    global _RUN_PROGRESS_TEXT, _RUN_PROGRESS_DETAIL
+    global _RUN_PROGRESS_TEXT, _RUN_PROGRESS_DETAIL, _RUN_PROGRESS_BY_SOURCE
 
     scope = object()
     stop_event = threading.Event()
@@ -176,6 +183,7 @@ def begin_run_progress_scope() -> object:
         _RUN_ACTIVE_STOP_EVENT = stop_event
         _RUN_PROGRESS_TEXT = ""
         _RUN_PROGRESS_DETAIL = None
+        _RUN_PROGRESS_BY_SOURCE = {}
     _RUN_PROGRESS_SCOPE.set(scope)
     _RUN_STOP_EVENT_SCOPE.set(stop_event)
     return scope
@@ -184,7 +192,7 @@ def begin_run_progress_scope() -> object:
 def end_run_progress_scope(scope: object) -> None:
     """Close *scope* while leaving detached workers' scoped stop events intact."""
     global _RUN_ACTIVE_PROGRESS_SCOPE, _RUN_ACTIVE_STOP_EVENT
-    global _RUN_PROGRESS_TEXT, _RUN_PROGRESS_DETAIL
+    global _RUN_PROGRESS_TEXT, _RUN_PROGRESS_DETAIL, _RUN_PROGRESS_BY_SOURCE
 
     with _RUN_PROGRESS_LOCK:
         if _RUN_ACTIVE_PROGRESS_SCOPE is scope:
@@ -192,6 +200,7 @@ def end_run_progress_scope(scope: object) -> None:
             _RUN_ACTIVE_STOP_EVENT = None
             _RUN_PROGRESS_TEXT = ""
             _RUN_PROGRESS_DETAIL = None
+            _RUN_PROGRESS_BY_SOURCE = {}
     if _RUN_PROGRESS_SCOPE.get() is scope:
         _RUN_PROGRESS_SCOPE.set(None)
         _RUN_STOP_EVENT_SCOPE.set(None)
@@ -316,7 +325,7 @@ def set_run_progress_state(
     When *no* structured fields are supplied the stored detail is cleared (set
     to ``None``) so the UI knows there is no structured data to render.
     """
-    global _RUN_PROGRESS_TEXT, _RUN_PROGRESS_DETAIL
+    global _RUN_PROGRESS_TEXT, _RUN_PROGRESS_DETAIL, _RUN_PROGRESS_BY_SOURCE
 
     normalized_text = str(text or "").strip()
 
@@ -355,6 +364,8 @@ def set_run_progress_state(
         previous_detail = _RUN_PROGRESS_DETAIL
         _RUN_PROGRESS_TEXT = normalized_text
         _RUN_PROGRESS_DETAIL = detail_obj
+        if source is not None:
+            _RUN_PROGRESS_BY_SOURCE[source] = (normalized_text, detail_obj)
 
     if normalized_text == previous_text and detail_obj == previous_detail:
         return
@@ -388,7 +399,10 @@ def set_run_progress(text: str) -> None:
 
 def clear_run_progress() -> None:
     """Reset all run-progress state at the start or end of a run."""
+    global _RUN_PROGRESS_BY_SOURCE
     set_run_progress_state("")
+    with _RUN_PROGRESS_LOCK:
+        _RUN_PROGRESS_BY_SOURCE = {}
 
 
 def get_run_progress() -> str:
@@ -403,3 +417,33 @@ def get_run_progress_detail() -> dict[str, Any] | None:
         if _RUN_PROGRESS_DETAIL is None:
             return None
         return asdict(_RUN_PROGRESS_DETAIL)
+
+
+def get_run_progress_for_source(source: str) -> str:
+    """Return the latest progress emitted by *source*, without cross-source bleed."""
+    source_key = str(source or "").strip().lower()
+    with _RUN_PROGRESS_LOCK:
+        value = _RUN_PROGRESS_BY_SOURCE.get(source_key)
+        return value[0] if value is not None else ""
+
+
+def get_run_progress_by_source() -> dict[str, dict[str, Any]]:
+    """Return defensive per-source progress snapshots for diagnostics and the UI."""
+    with _RUN_PROGRESS_LOCK:
+        result: dict[str, dict[str, Any]] = {}
+        for source, (text, detail) in _RUN_PROGRESS_BY_SOURCE.items():
+            result[source] = {
+                "progress": text,
+                "progress_detail": asdict(detail) if detail is not None else None,
+            }
+        return result
+
+
+def set_source_timeout_event(event: threading.Event | None) -> object:
+    """Bind a cooperative source-timeout event to the current worker context."""
+    return _RUN_SOURCE_TIMEOUT_EVENT_SCOPE.set(event)
+
+
+def reset_source_timeout_event(token: object) -> None:
+    """Remove a worker's cooperative source-timeout binding."""
+    _RUN_SOURCE_TIMEOUT_EVENT_SCOPE.reset(token)

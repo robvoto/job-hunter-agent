@@ -274,7 +274,8 @@ class _SourceMetrics(TypedDict):
 def _build_source_breakdown(
     enabled_sources: list[str] | tuple[str, ...] | None,
     audit_rows: list[dict],
-) -> list[dict[str, int | str]]:
+    source_health: dict[str, dict[str, object]] | None = None,
+) -> list[dict[str, object]]:
     source_metrics: dict[str, _SourceMetrics] = {}
 
     for source in enabled_sources or []:
@@ -317,7 +318,7 @@ def _build_source_breakdown(
         elif decision in {"REJECT", "FILTERED"}:
             source_metrics[source_key]["rejected"] += 1
 
-    return [
+    breakdown: list[dict[str, object]] = [
         {
             "source": str(metrics["source"]),
             "seen": int(metrics["seen"]),
@@ -328,6 +329,16 @@ def _build_source_breakdown(
         }
         for metrics in source_metrics.values()
     ]
+    for item in breakdown:
+        source_key = str(item["source"]).strip().lower()
+        health = (source_health or {}).get(source_key)
+        if health:
+            item["health"] = str(health.get("health") or "unknown")
+            item["collection_complete"] = bool(health.get("collection_complete"))
+            error = str(health.get("error") or "").strip()
+            if error:
+                item["error"] = error
+    return breakdown
 
 
 def _log_source_final_stats(run_stats: dict) -> None:
@@ -342,6 +353,7 @@ def _log_source_final_stats(run_stats: dict) -> None:
                 pages=int(item.get("pages", 0) or 0),
                 kept=int(item.get("kept", 0) or 0),
                 rejected=int(item.get("rejected", 0) or 0),
+                health=str(item.get("health") or "") or None,
             )
         )
 
@@ -370,8 +382,8 @@ def _log_run_summary(run_stats: dict, audit_rows: list[dict]) -> None:
                 "card_rejected": metrics["card_rejected"],
                 "detail_fetches": run_stats.get("cards_read", run_stats.get("detail_fetches", 0)),
                 "detail_fetch_errors": metrics["detail_fetch_errors"],
-                "llm_calls": metrics["llm_calls"],
-                "llm_errors": metrics["llm_errors"],
+                "llm_calls": run_stats.get("llm_calls", metrics["llm_calls"]),
+                "llm_errors": run_stats.get("llm_errors", metrics["llm_errors"]),
                 "llm_cache_hits": metrics["llm_cache_hits"],
                 "llm_truncations": run_stats.get("llm_truncation_count", 0),
                 "final_keep": run_stats.get("kept_count", 0),
@@ -535,16 +547,27 @@ def finalize_scrape_run(
     if run_shutdown_requested():
         raise RunInterruptedError("Server shutdown interrupted scrape finalization.")
 
-    from job_hunter_agent.llm_gate import get_session_cost_usd
+    from job_hunter_agent.llm_gate import get_session_cost_usd, get_session_usage_summary
     from job_hunter_agent.source_learning import get_llm_truncation_count
 
     # Internal stages have no reliable total, so they remain indeterminate.
+    source_health = context.source_cache_stats or {}
+    unhealthy_sources = [
+        get_source_display_label(source)
+        for source, state in source_health.items()
+        if str(state.get("health") or "healthy") != "healthy"
+    ]
+    finalising_detail = (
+        "Source collection incomplete: " + ", ".join(unhealthy_sources)
+        if unhealthy_sources
+        else "Source collection complete"
+    )
     set_run_progress_state(
-        "Finalising results\nSource collection complete",
+        f"Finalising results\n{finalising_detail}",
         stage="finalising",
         source="generic",
         headline="Finalising results",
-        detail="Source collection complete",
+        detail=finalising_detail,
         determinate=False,
     )
     kept_records = deduplicate_across_sources(kept_records)
@@ -553,11 +576,15 @@ def finalize_scrape_run(
 
     pool_was_empty = len(pool) == 0
 
-    no_fresh_cards = not audit_rows
+    # A source may finish with kept records but no audit row after a late
+    # transport/browser failure. Preserve those records instead of taking the
+    # no-fresh-cards branch, which intentionally ignores the current inputs.
+    no_fresh_cards = not audit_rows and not kept_records
 
     if no_fresh_cards and context.previous_audit_rows:
         run_was_stopped = run_stop_requested()
 
+        session_usage = get_session_usage_summary()
         run_stats = {
             "page_count": 0,
             "cards_seen": 0,
@@ -569,12 +596,30 @@ def finalize_scrape_run(
             "llm_total_cost_usd": round(get_session_cost_usd(), 6),
             "llm_truncation_count": get_llm_truncation_count(),
             "last_run_attempt_at": context.run_iso,
+            **session_usage,
         }
 
         if not run_was_stopped:
             run_stats["last_run_error"] = NO_FRESH_CARDS_ERROR
-        run_stats["source_breakdown"] = _build_source_breakdown(context.enabled_sources, [])
+        run_stats["source_breakdown"] = _build_source_breakdown(
+            context.enabled_sources, [], source_health
+        )
         run_stats["source_discovery_cache"] = context.source_cache_stats or {}
+        run_stats["source_health"] = {
+            source: {
+                "health": str(state.get("health") or "unknown"),
+                "collection_complete": bool(state.get("collection_complete")),
+                "error": str(state.get("error") or ""),
+            }
+            for source, state in source_health.items()
+        }
+        source_warnings = [
+            f"{get_source_display_label(source)}: {str(state.get('error') or state.get('health') or 'unknown')}"
+            for source, state in source_health.items()
+            if str(state.get("health") or "healthy") != "healthy"
+        ]
+        if source_warnings:
+            run_stats["warnings"] = source_warnings
 
         if run_shutdown_requested():
             raise RunInterruptedError("Server shutdown interrupted scrape finalization.")
@@ -671,14 +716,42 @@ def finalize_scrape_run(
     run_stats["llm_total_cost_usd"] = round(get_session_cost_usd(), 6)
     run_stats["llm_truncation_count"] = get_llm_truncation_count()
     run_stats.update(_derive_run_summary_metrics(audit_rows))
+    session_usage = get_session_usage_summary()
+    run_stats["llm_calls"] = max(int(run_stats.get("llm_calls", 0) or 0), session_usage["llm_calls"])
+    run_stats["llm_errors"] = max(int(run_stats.get("llm_errors", 0) or 0), session_usage["llm_errors"])
+    run_stats["llm_total_input_tokens"] = max(
+        int(run_stats.get("llm_total_input_tokens", 0) or 0),
+        session_usage["llm_input_tokens"],
+    )
+    run_stats["llm_total_output_tokens"] = max(
+        int(run_stats.get("llm_total_output_tokens", 0) or 0),
+        session_usage["llm_output_tokens"],
+    )
 
     run_stats["pool_was_empty_before_run"] = pool_was_empty
 
     if no_fresh_cards:
         run_stats["last_run_error"] = NO_FRESH_CARDS_ERROR
 
-    run_stats["source_breakdown"] = _build_source_breakdown(context.enabled_sources, audit_rows)
+    run_stats["source_breakdown"] = _build_source_breakdown(
+        context.enabled_sources, audit_rows, source_health
+    )
     run_stats["source_discovery_cache"] = context.source_cache_stats or {}
+    run_stats["source_health"] = {
+        source: {
+            "health": str(state.get("health") or "unknown"),
+            "collection_complete": bool(state.get("collection_complete")),
+            "error": str(state.get("error") or ""),
+        }
+        for source, state in source_health.items()
+    }
+    unhealthy_messages = [
+        f"{get_source_display_label(source)}: {str(state.get('error') or state.get('health') or 'unknown')}"
+        for source, state in source_health.items()
+        if str(state.get("health") or "healthy") != "healthy"
+    ]
+    if unhealthy_messages:
+        run_stats["warnings"] = unhealthy_messages
 
     workspace_records = workspace_service.build_workspace_record_sets(
         merged_pool,

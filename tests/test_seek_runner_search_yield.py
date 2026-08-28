@@ -211,6 +211,71 @@ def test_seek_scrape_records_query_yield_metric_per_search_target(monkeypatch):
     assert all(metric.success for metric in recorded_metrics)
 
 
+def test_seek_scrape_attaches_partial_results_to_late_bot_challenge(monkeypatch):
+    """A challenge after one target must carry completed review output upward."""
+    list_page = _FakeListPage(
+        {
+            "target-a": [_FakeCard("seek:partial")],
+            "target-b": [_FakeCard("seek:blocked")],
+        }
+    )
+    _patch_common_seek_internals(monkeypatch, list_page)
+
+    def _wait_for_challenge(page, *args, **kwargs):
+        if "target-b" in page.url:
+            raise seek_runner.BotChallengeDetected(
+                "SEEK challenge after cards",
+                failure_class=seek_runner.SEEK_BOT_CHALLENGE,
+            )
+        return True
+
+    monkeypatch.setattr(
+        seek_runner, "_wait_for_seek_bot_challenge_or_manual_verification", _wait_for_challenge
+    )
+    monkeypatch.setattr(
+        seek_runner,
+        "_log_seek_list_page_diagnostics",
+        lambda *args, **kwargs: "challenge_page",
+    )
+    monkeypatch.setattr(
+        seek_runner,
+        "_seek_list_page_diagnostics",
+        lambda page: {
+            "title": "Just a moment",
+            "url": page.url,
+            "body_text": "confirm you are human",
+            "selector_count": 0,
+            "page_status": "challenge_page",
+            "failure_class": seek_runner.SEEK_BOT_CHALLENGE,
+        },
+    )
+    monkeypatch.setattr(
+        seek_runner,
+        "_review_pre_detail_batch",
+        lambda card_records, review_context, n_workers: (
+            [
+                (i, ({"decision": "KEEP"}, record, [], 0.0))
+                for i, record in enumerate(card_records)
+            ],
+            [],
+        ),
+    )
+
+    try:
+        seek_runner.seek_scrape_to_records(
+            **_base_scrape_kwargs(
+                profile={"target_roles": ["Business Analyst"], "search_settings": {}},
+                search_targets=_search_targets(),
+                discovery_capture=[],
+            )
+        )
+    except seek_runner.BotChallengeDetected as exc:
+        assert [record[rs.RECORD_JOB_KEY] for record in exc.kept_records] == ["seek:partial"]
+        assert exc.audit_rows == []
+    else:  # pragma: no cover - defensive guard
+        raise AssertionError("expected BotChallengeDetected")
+
+
 def test_seek_scrape_uses_remembered_all_probe_plan_for_deep_pagination(monkeypatch):
     """A remembered complete-probe plan, not query order, owns page-2 expansion."""
     list_page = _FakeListPage(

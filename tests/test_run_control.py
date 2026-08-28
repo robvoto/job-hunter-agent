@@ -76,6 +76,32 @@ def test_get_run_progress_detail_returns_defensive_copy():
     assert detail2["source"] == "linkedin"
 
 
+def test_progress_can_be_read_without_cross_source_contamination():
+    run_control.clear_run_progress()
+    run_control.set_run_progress_state(
+        "SEEK page 2/5",
+        stage="source_collection",
+        source="seek",
+        current=2,
+        total=5,
+    )
+    run_control.set_run_progress_state(
+        "APSJobs search 1/2",
+        stage="source_collection",
+        source="apsjobs",
+        current=1,
+        total=2,
+    )
+
+    assert run_control.get_run_progress_for_source("seek") == "SEEK page 2/5"
+    assert run_control.get_run_progress_for_source("apsjobs") == "APSJobs search 1/2"
+    snapshot = run_control.get_run_progress_by_source()
+    assert snapshot["seek"]["progress_detail"]["current"] == 2
+    assert snapshot["apsjobs"]["progress_detail"]["current"] == 1
+
+    run_control.clear_run_progress()
+
+
 def test_set_run_progress_state_rejects_invalid_source():
     run_control.clear_run_progress()
     with pytest.raises(ValueError, match="Invalid progress source"):

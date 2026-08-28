@@ -1920,6 +1920,40 @@ def test_llm_judge_title_parses_match_verdict():
     assert result == {"verdict": "match", "reason": "Direct match."}
 
 
+def test_llm_judge_title_retries_retryable_structured_output_failure(caplog):
+    calls = []
+
+    class _FakeParsed:
+        def model_dump(self):
+            return {"verdict": "match", "reason": "Recovered response."}
+
+    class _FakeResponse:
+        usage = None
+        output_parsed = _FakeParsed()
+
+    class _FakeResponses:
+        def parse(self, **kwargs):
+            calls.append(kwargs)
+            if len(calls) == 1:
+                raise ValueError("EOF while parsing structured JSON")
+            return _FakeResponse()
+
+    class _FakeClient:
+        responses = _FakeResponses()
+
+    with caplog.at_level("WARNING"):
+        result = llm_gate.llm_judge_title(
+            "Business Analyst",
+            ["business analyst"],
+            [],
+            llm_client=_FakeClient(),
+        )
+
+    assert result == {"verdict": "match", "reason": "Recovered response."}
+    assert len(calls) == 2
+    assert "[LLM][RETRY] purpose=title_judgment" in caplog.text
+
+
 
 
 def test_llm_judge_title_prompt_treats_role_lists_as_direction_not_whitelist():

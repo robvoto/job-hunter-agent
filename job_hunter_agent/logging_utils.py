@@ -92,13 +92,16 @@ def render_board_final_block(
     pages: int,
     kept: int,
     rejected: int,
+    health: str | None = None,
 ) -> str:
     source_label = str(source_name or "UNKNOWN").strip().upper() or "UNKNOWN"
+    health_line = f"Health: {health}\n" if health else ""
     return (
         f"\n{LOG_BLOCK_SEPARATOR}\n"
         f"BOARD FINAL {source_label}\n"
         f"Seen: {int(seen)} | Read: {int(read)} | Pages: {int(pages)} | "
         f"Kept: {int(kept)} | Rejected: {int(rejected)}\n"
+        f"{health_line}"
         f"{LOG_BLOCK_SEPARATOR}"
     )
 
