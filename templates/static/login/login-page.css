@@ -176,32 +176,6 @@
   line-height: 1.4;
 }
 
-.login-invite {
-  margin-top: 20px;
-  padding: 16px 18px;
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border-subtle) 70%);
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--accent) 6%, transparent);
-  font-size: var(--font-size-sm);
-  line-height: 1.5;
-}
-
-.login-invite strong {
-  display: block;
-  margin-bottom: 6px;
-  color: var(--text-primary);
-}
-
-.login-invite p {
-  color: var(--text-muted);
-  margin: 0;
-}
-
-.login-invite a {
-  color: var(--accent);
-  text-decoration: underline;
-}
-
 .login-card {
   width: min(100%, 410px);
   display: grid;

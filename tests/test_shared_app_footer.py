@@ -54,6 +54,18 @@ def test_login_has_no_legacy_login_only_copyright():
     assert "All rights reserved." not in login_html
 
 
+def test_login_has_no_promotional_invite_panel():
+    login_html = (REPO_ROOT / "templates" / "login.html").read_text(encoding="utf-8")
+    login_css = (REPO_ROOT / "templates" / "static" / "login" / "login-page.css").read_text(
+        encoding="utf-8"
+    )
+
+    assert "login-invite" not in login_html
+    assert "login-invite" not in login_css
+    assert "Want to try it out?" not in login_html
+    assert "review on LinkedIn" not in login_html
+
+
 def test_login_footer_is_page_level_sibling_of_auth_content():
     login_html = (REPO_ROOT / "templates" / "login.html").read_text(encoding="utf-8")
 
