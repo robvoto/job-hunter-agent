@@ -858,6 +858,8 @@ def test_run_enabled_sources_keeps_partial_audit_rows_from_errored_source(monkey
     assert [record["job_key"] for record in kept] == ["seek:1", "linkedin:1"]
     assert [row["job_key"] for row in audit] == ["seek:1", "linkedin:1"]
     assert skills == []
+    assert context.source_cache_stats[SOURCE_SEEK]["error"] == "seek ended late"
+    assert context.source_cache_stats[SOURCE_LINKEDIN]["error"] == ""
 
 
 def test_run_linkedin_source_preserves_partial_results_on_late_failure(monkeypatch):

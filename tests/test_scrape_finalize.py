@@ -910,3 +910,12 @@ def test_build_source_breakdown_keeps_enabled_sources_with_zero_counts():
         {"source": "SEEK", "seen": 0, "read": 0, "pages": 0, "kept": 0, "rejected": 0},
         {"source": "LINKEDIN", "seen": 0, "read": 0, "pages": 0, "kept": 0, "rejected": 0},
     ]
+
+
+def test_source_errors_from_cache_stats_keeps_failed_source_visible_in_summary():
+    assert scrape_finalize._source_errors_from_cache_stats(
+        {
+            "seek": {"error": "BotChallengeDetected"},
+            "linkedin": {"error": ""},
+        }
+    ) == ["SEEK: BotChallengeDetected"]
