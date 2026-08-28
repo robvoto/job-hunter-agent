@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import contextvars
 import logging
-import threading
 import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
@@ -22,10 +21,8 @@ from job_hunter_agent.run_control import (
     get_run_progress_for_source,
     run_stop_requested,
     run_shutdown_requested,
-    reset_source_timeout_event,
     set_run_progress,
     set_run_progress_state,
-    set_source_timeout_event,
     step_through_enabled,
 )
 from job_hunter_agent.source_errors import PartialSourceResultsError
@@ -78,15 +75,9 @@ SOURCE_HEARTBEAT_SECONDS = 15
 SOURCE_TIMEOUT_GRACE_MIN_SECONDS = 0.25
 SOURCE_TIMEOUT_GRACE_MAX_SECONDS = 10.0
 SOURCE_TIMEOUT_GRACE_FRACTION = 0.1
-SEEK_SOURCE_TIMEOUT_MESSAGE = (
-    "SEEK exceeded its source time budget; stopping and preserving completed results."
-)
-LINKEDIN_SOURCE_TIMEOUT_MESSAGE = (
-    "LinkedIn exceeded its source time budget; stopping and preserving completed results."
-)
-APSJOBS_SOURCE_TIMEOUT_MESSAGE = (
-    "APSJobs exceeded its source time budget; stopping and preserving completed results."
-)
+SEEK_SOURCE_TIMEOUT_MESSAGE = "SEEK is taking longer than expected; waiting for it to finish."
+LINKEDIN_SOURCE_TIMEOUT_MESSAGE = "LinkedIn is taking longer than expected; waiting for it to finish."
+APSJOBS_SOURCE_TIMEOUT_MESSAGE = "APSJobs is taking longer than expected; waiting for it to finish."
 
 
 def _exception_message(exc: Exception) -> str:
@@ -1041,14 +1032,11 @@ def _run_source_with_scope(
     source: str,
     runner: Callable[[ScrapeRunContext], SourceRunResult],
     context: ScrapeRunContext,
-    timeout_event: threading.Event | None = None,
 ) -> SourceRunResult:
     log_token = set_log_source_scope(source)
-    timeout_token = set_source_timeout_event(timeout_event)
     try:
         return runner(context)
     finally:
-        reset_source_timeout_event(timeout_token)
         reset_log_source_scope(log_token)
 
 
@@ -1061,22 +1049,18 @@ def _run_sources_in_parallel(
     executor = ThreadPoolExecutor(max_workers=len(source_order))
     started_at: dict[str, float] = {source: time.monotonic() for source in source_order}
     futures = {}
-    timeout_events: dict[Any, threading.Event] = {}
     for source in source_order:
         _log_source_start(source, execution_mode="parallel")
         runner = _get_source_runner(source)
         worker_context = contextvars.copy_context()
-        timeout_event = threading.Event()
         future = executor.submit(
             worker_context.run,
             _run_source_with_scope,
             source,
             runner,
             context,
-            timeout_event,
         )
         futures[future] = source
-        timeout_events[future] = timeout_event
 
     warn_deadlines = {
         future: started_at[source] + _source_timeout_seconds(source)
@@ -1115,11 +1099,6 @@ def _run_sources_in_parallel(
                     source,
                     timeout_messages[future],
                     elapsed_s=elapsed_s,
-                )
-                timeout_events[future].set()
-                stop_deadlines.setdefault(
-                    future,
-                    now + _source_stop_cleanup_seconds(source),
                 )
                 timeout_warned.add(future)
 
@@ -1165,7 +1144,6 @@ def _run_sources_in_parallel(
                         "elapsed_s": int(now - started_at[source]),
                         "cleanup_seconds": cleanup_seconds,
                         "stop_requested": run_stop_requested(),
-                        "source_timeout": timeout_events[future].is_set(),
                     },
                     fingerprint_parts=("source_stop_bounded", source, message),
                 )
@@ -1259,7 +1237,8 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
 
     When more than one source is enabled they run concurrently, unless step-through is
     active, in which case the run stays serial so manual pausing can actually halt progress.
-    Each source has a hard timeout so a stuck job board cannot block the whole run.
+    Each source has a configurable warning threshold; only an explicit user stop
+    bounds cleanup for a source that does not return.
 
     Mutable shared state (job_history, llm_cache) is isolated per source during
     execution and merged back into context after all sources complete.

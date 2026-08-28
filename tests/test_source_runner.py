@@ -748,22 +748,18 @@ def test_parallel_runner_does_not_kill_active_source_after_timeout_warning(monke
     assert "[SOURCE_TIMEOUT]" in caplog.text
 
 
-def test_parallel_runner_requests_cooperative_source_stop_after_timeout(monkeypatch, caplog):
+def test_parallel_runner_keeps_collecting_after_timeout_warning(monkeypatch, caplog):
     context = _make_context([SOURCE_SEEK])
     observed_stop = threading.Event()
 
     def cooperative_seek(ctx):
-        deadline = time.monotonic() + 1
-        while time.monotonic() < deadline:
-            if source_runner.run_stop_requested():
-                observed_stop.set()
-                return _seek_result(
-                    kept_records=[{"job_key": "seek:before-timeout"}],
-                    audit_rows=[{"job_key": "seek:before-timeout"}],
-                    source_collection_complete=False,
-                )
-            time.sleep(0.001)
-        raise AssertionError("source timeout was not propagated to the worker")
+        time.sleep(0.03)
+        if source_runner.run_stop_requested():
+            observed_stop.set()
+        return _seek_result(
+            kept_records=[{"job_key": "seek:after-warning"}],
+            audit_rows=[{"job_key": "seek:after-warning"}],
+        )
 
     monkeypatch.setattr(source_runner, "_run_seek_source", cooperative_seek)
     monkeypatch.setattr(source_runner, "SEEK_SOURCE_TIMEOUT_SECONDS", 0.01)
@@ -771,11 +767,11 @@ def test_parallel_runner_requests_cooperative_source_stop_after_timeout(monkeypa
 
     kept, audit, skills = run_enabled_sources(context)
 
-    assert observed_stop.is_set()
-    assert [record["job_key"] for record in kept] == ["seek:before-timeout"]
-    assert [row["job_key"] for row in audit] == ["seek:before-timeout"]
+    assert not observed_stop.is_set()
+    assert [record["job_key"] for record in kept] == ["seek:after-warning"]
+    assert [row["job_key"] for row in audit] == ["seek:after-warning"]
     assert skills == []
-    assert "exceeded its source time budget" in caplog.text
+    assert "[SOURCE_TIMEOUT]" in caplog.text
 
 
 def test_parallel_runner_detaches_unresponsive_source_after_stop_cleanup(monkeypatch):
