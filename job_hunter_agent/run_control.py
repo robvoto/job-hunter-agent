@@ -32,9 +32,6 @@ _RUN_PROGRESS_SCOPE: contextvars.ContextVar[object | None] = contextvars.Context
 _RUN_STOP_EVENT_SCOPE: contextvars.ContextVar[threading.Event | None] = contextvars.ContextVar(
     "job_hunter_run_stop_event", default=None
 )
-_RUN_SOURCE_TIMEOUT_EVENT_SCOPE: contextvars.ContextVar[threading.Event | None] = contextvars.ContextVar(
-    "job_hunter_source_timeout_event", default=None
-)
 _RUN_ACTIVE_PROGRESS_SCOPE: object | None = None
 _RUN_ACTIVE_STOP_EVENT: threading.Event | None = None
 _RUN_PROGRESS_BY_SOURCE: dict[str, tuple[str, ProgressDetail | None]] = {}
@@ -146,9 +143,6 @@ def clear_run_stop_request() -> None:
 
 
 def run_stop_requested() -> bool:
-    source_timeout_event = _RUN_SOURCE_TIMEOUT_EVENT_SCOPE.get()
-    if source_timeout_event is not None and source_timeout_event.is_set():
-        return True
     scoped_event = _RUN_STOP_EVENT_SCOPE.get()
     if scoped_event is not None:
         return scoped_event.is_set()
@@ -437,13 +431,3 @@ def get_run_progress_by_source() -> dict[str, dict[str, Any]]:
                 "progress_detail": asdict(detail) if detail is not None else None,
             }
         return result
-
-
-def set_source_timeout_event(event: threading.Event | None) -> object:
-    """Bind a cooperative source-timeout event to the current worker context."""
-    return _RUN_SOURCE_TIMEOUT_EVENT_SCOPE.set(event)
-
-
-def reset_source_timeout_event(token: object) -> None:
-    """Remove a worker's cooperative source-timeout binding."""
-    _RUN_SOURCE_TIMEOUT_EVENT_SCOPE.reset(token)
