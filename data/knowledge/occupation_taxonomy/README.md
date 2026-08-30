@@ -1,42 +1,67 @@
 # O*NET occupation taxonomy
 
-Versioned local reference data generated from an O*NET source zip.
+Local, generated reference data used by Job Hunter's deterministic title gate.
 
-Generated files:
+Runtime job searches do **not** call O*NET over the network. The application reads the committed local index so title classification stays fast and available offline.
 
-- `onet_occupations.json` — O*NET-SOC 2019 occupation codes, titles, and descriptions.
-- `onet_alternate_titles.json` — alternate titles mapped to O*NET-SOC 2019 occupations.
-- `onet_index.json` — lookup index keyed by normalized title.
+## Current source
 
-## Regenerating
+The preferred source is the official full **O*NET Database JSON** release advertised at:
 
-Run with either supported O*NET source zip:
+https://www.onetcenter.org/database.html
 
-```powershell
-python -m job_hunter_agent.onet_taxonomy_import "C:\path\to\<source>.zip"
+The generated `onet_index.json` records separately:
+
+- `taxonomy_version` — the O*NET-SOC occupation taxonomy version.
+- `database_release` — the O*NET database release, for example `30.3`.
+- `dataset_fingerprint` — SHA-256 of the deterministic generated title index.
+- `source_url` — the exact official database distribution used.
+
+These values are part of cache safety. A newer/different O*NET dataset must not reuse title classifications produced from older data.
+
+## Generated files
+
+- `onet_index.json` — normalized occupation and job-title lookup index used at runtime.
+- `onet_occupations.json` — occupation codes, titles and descriptions for inspection/reference.
+
+The old `onet_alternate_titles.json` file was removed because it duplicated title data already represented in the runtime index and became unnecessarily large with the full Job Titles dataset.
+
+## Refreshing
+
+Check whether the local taxonomy is current:
+
+```bash
+uv run python -m job_hunter_agent.onet_taxonomy_refresh --check
 ```
 
-The format is auto-detected. Output files are identical regardless of source.
+Refresh explicitly from the official advertised O*NET JSON database:
 
-## Source options
+```bash
+uv run python -m job_hunter_agent.onet_taxonomy_refresh --update
+```
 
-### Option A — Full O*NET database (recommended)
+Refresh is fail-safe: the new archive is downloaded to a temporary location, parsed and validated, and generated files are only replaced after a complete valid build.
 
-~19,000 alternate titles. Much better title classification coverage.
+`.github/workflows/onet-taxonomy-refresh.yml` checks weekly. When O*NET publishes a new database release, it regenerates and validates the reference data and opens/updates a pull request. It does not silently auto-merge taxonomy changes.
 
-1. Go to https://www.onetcenter.org/database.html
-2. Download **Database** → select version → **Text** format → `db_XX_X_text.zip`
-3. Run the importer with that zip.
+The importer also accepts current nested O*NET text database ZIPs and legacy `OccupationalListings.zip` for manual/backwards-compatible imports. New automated refreshes use the official advertised JSON distribution.
 
-### Option B — OccupationalListings.zip (limited)
+## Target occupation safety
 
-~1,680 alternate titles. Many common job titles (e.g. "Tax Accountant", "Property Manager")
-will not be recognised as far from target roles, causing unnecessary LLM calls.
+The full O*NET Job Titles dataset intentionally maps many real-world titles to multiple occupations. Job Hunter therefore does not use every alias as permission to widen a candidate's target occupation family.
 
-Use only if the full database is unavailable.
+For `target_occupation_queries`, resolution is conservative:
 
-## Notes
+1. exact O*NET occupation titles;
+2. exact Job Titles that O*NET marks as preferred in **Sample of Reported Titles / My Next Move**;
+3. otherwise, an exact job title only when it resolves to one occupation;
+4. ambiguous unpreferred aliases contribute no target code.
 
-- Do not import the taxonomy into SQLite. SQLite holds only runtime cache decisions in `occupation_title_cache`.
-- After regenerating, restart the server — the index is loaded once at startup via `lru_cache`.
-- The current files were generated from the OccupationalListings format (limited). Regenerate with the full database to fix coverage gaps.
+The broader full Job Titles index is still used to classify scraped job titles. This distinction improves coverage without turning ambiguous aliases such as `Systems Analyst` or `Data Analyst` into false target occupations.
+
+## Attribution
+
+O*NET data is published by the **National Center for O*NET Development** for the U.S. Department of Labor, Employment and Training Administration.
+
+O*NET Database licensing: Creative Commons Attribution 4.0 International (CC BY 4.0):
+https://creativecommons.org/licenses/by/4.0/

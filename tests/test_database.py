@@ -37,6 +37,10 @@ def test_init_creates_all_tables(tmp_db):
 
 def test_occupation_title_cache_schema(tmp_db):
     with db_conn(tmp_db) as conn:
+        columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(occupation_title_cache)").fetchall()
+        }
+        assert {"database_release", "dataset_fingerprint"}.issubset(columns)
         conn.execute(
             """
             INSERT INTO occupation_title_cache (

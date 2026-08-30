@@ -88,8 +88,52 @@ If new taxonomy behaviour requires rule data, put that data in approved knowledg
 - `.skills/no-hardcoding/SKILL.md`: business judgement, mappings, thresholds, source rules, and reusable knowledge must not be hidden in Python feature code.
 - `docs/CONFIG_AND_RULES_GOVERNANCE.md`: Python is the engine; knowledge files hold rule libraries; Admin/global settings hold operational knobs; tests enforce architecture.
 
-## Cache versioning guardrail
+## Full Job Titles data and target-query safety
 
-The classification cache is keyed by the profile's target occupation queries plus `LOOKUP_MATCHER_VERSION`.
+Runtime classification uses the current full O*NET **Job Titles** dataset rather than the limited legacy OccupationalListings title list. This gives the deterministic gate broad coverage for modern titles such as `Cloud Engineer` without maintaining a product-specific title dictionary.
 
-When material O*NET classification logic changes, the matcher/cache version must be bumped so stale cached near/far/uncertain results are not silently reused across runs.
+The full dataset is intentionally many-to-many: one real-world title can map to several occupations. That is useful for classifying scraped jobs but unsafe if every mapping is automatically treated as a candidate target occupation.
+
+`target_occupation_queries` therefore resolve conservatively:
+
+1. exact O*NET occupation titles are trusted;
+2. exact Job Titles marked by O*NET as preferred in Sample of Reported Titles / My Next Move are trusted;
+3. otherwise an exact Job Title is trusted only when it resolves to one occupation code;
+4. ambiguous unpreferred Job Titles do not widen the candidate's target occupation family.
+
+This keeps the authoritative data source broad while preserving the product rule that uncertainty must not become a hidden false-negative gate.
+
+## Exact and embedded multi-code titles
+
+The same candidate-code rule applies whether an O*NET phrase matches the whole job title or appears inside a longer title:
+
+- all candidate codes outside the target set -> `far`;
+- all candidate codes inside the target set -> `near`;
+- mixed inside/outside codes -> `uncertain`;
+- no target occupation context -> `uncertain`.
+
+For example, current O*NET maps `Cloud Engineer` to multiple technical occupations. For a BA / Systems Analyst profile, if all of those codes are outside the target set, both `Cloud Engineer` and `Senior Cloud Engineer` can be rejected cheaply without a title-LLM call.
+
+The existing protection against broad one-word embedded aliases remains: a generic alternate/job title such as `Engineer` is not enough by itself to classify a longer title.
+
+## Data freshness and cache versioning
+
+O*NET-SOC taxonomy version and O*NET database release are different identities. The generated index records:
+
+- `taxonomy_version` (for example O*NET-SOC 2019);
+- `database_release` (for example 30.3);
+- `dataset_fingerprint` (SHA-256 of the generated title index);
+- the official source URL.
+
+The runtime classification cache requires the current taxonomy version, database release and dataset fingerprint, in addition to the candidate-profile hash. A refresh therefore cannot silently reuse a decision made from older title data.
+
+`LOOKUP_MATCHER_VERSION` remains a separate code-algorithm guardrail and is included in the profile hash. Material classification-logic changes must bump it.
+
+The canonical maintenance commands are:
+
+```bash
+uv run python -m job_hunter_agent.onet_taxonomy_refresh --check
+uv run python -m job_hunter_agent.onet_taxonomy_refresh --update
+```
+
+The weekly GitHub Actions refresh checks the official O*NET database metadata, rebuilds and validates only when necessary, and opens/updates a pull request for review. Runtime searches never perform network O*NET lookups.

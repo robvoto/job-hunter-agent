@@ -52,6 +52,8 @@ This guide describes which integrations exist, which ones are packaged product b
   - `JOB_HUNTER_DB_PATH`
 - Seed/deploy rule: `python -m job_hunter_agent.db_seed` syncs only the approved repo-managed JSON seed manifest. It does not recursively copy arbitrary JSON files from `data/knowledge`.
 - Required runtime knowledge includes the managed knowledge JSON plus the O*NET occupation taxonomy JSON files needed at runtime.
+- O*NET runtime lookup is local. Network access to `onetcenter.org` is an explicit maintenance/CI refresh action only; job searches do not depend on a live O*NET service.
+- The weekly O*NET refresh reads the official database-page metadata, downloads the advertised JSON database, validates/regenerates local reference data, and opens a pull request only when the generated fingerprint changes.
 - Boundary: production-only environment files, secrets, service definitions, and mounted data paths must stay out of git and out of packaged defaults.
 
 ## LLM and provider boundary

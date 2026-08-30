@@ -40,7 +40,6 @@ APPROVED_DB_KNOWLEDGE_JSON_REL_PATHS: tuple[str, ...] = (
 
 APPROVED_RUNTIME_KNOWLEDGE_JSON_REL_PATHS: tuple[str, ...] = (
     *APPROVED_DB_KNOWLEDGE_JSON_REL_PATHS,
-    "occupation_taxonomy/onet_alternate_titles.json",
     "occupation_taxonomy/onet_index.json",
     "occupation_taxonomy/onet_occupations.json",
 )

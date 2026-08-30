@@ -191,6 +191,8 @@ CREATE TABLE IF NOT EXISTS occupation_title_cache (
     normalized_title          TEXT NOT NULL,
     candidate_profile_hash    TEXT NOT NULL,
     taxonomy_version          TEXT NOT NULL,
+    database_release          TEXT NOT NULL DEFAULT '',
+    dataset_fingerprint       TEXT NOT NULL DEFAULT '',
     result                    TEXT NOT NULL CHECK (result IN ('near', 'far', 'uncertain')),
     matched_occupation_code   TEXT,
     confidence                REAL NOT NULL CHECK (confidence >= 0.0 AND confidence <= 1.0),
@@ -324,7 +326,9 @@ def _apply_requirement_importance_migration(conn: sqlite3.Connection) -> None:
     for table in _JSON_DATA_TABLES:
         if table not in tables:
             continue
-        for row in conn.execute(f"SELECT rowid, data FROM {table} WHERE data IS NOT NULL").fetchall():
+        for row in conn.execute(
+            f"SELECT rowid, data FROM {table} WHERE data IS NOT NULL"
+        ).fetchall():
             payload = json.loads(row[1])
             migrated_payload, changed = _rename_requirement_importances(payload)
             if changed:
@@ -418,6 +422,14 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE occupation_title_cache ADD COLUMN matched_phrase TEXT")
         if "match_type" not in columns:
             conn.execute("ALTER TABLE occupation_title_cache ADD COLUMN match_type TEXT")
+        if "database_release" not in columns:
+            conn.execute(
+                "ALTER TABLE occupation_title_cache ADD COLUMN database_release TEXT NOT NULL DEFAULT ''"
+            )
+        if "dataset_fingerprint" not in columns:
+            conn.execute(
+                "ALTER TABLE occupation_title_cache ADD COLUMN dataset_fingerprint TEXT NOT NULL DEFAULT ''"
+            )
     if "users" in tables:
         columns = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
         if "access_status" not in columns:
