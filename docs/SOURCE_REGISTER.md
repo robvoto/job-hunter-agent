@@ -188,10 +188,9 @@ Limit:
 ## Current ONET design note 2026-06-02
 
 Decision:
-- Use onboarding-generated target_occupation_queries as machine-facing occupation context.
-- These queries are generated once from the candidate CV/profile and stored in the user profile.
-- They are not display titles and not manually hardcoded per domain.
-- ONET uses them to derive candidate target occupation codes.
+- Use the current user-selected `target_roles` and `also_consider_roles` as machine-facing occupation context.
+- CV extraction may suggest role directions for the onboarding review screen, but suggestions are transient until the user selects and confirms them.
+- O*NET uses the selected role titles to derive candidate target occupation codes.
 - ONET remains a conservative pre-detail helper: exact/strong occupation-code match = near; clear different occupation code = far; no reliable match = uncertain.
 - uncertain must not reject by itself; it continues to detail/LLM review.
 - Do not add deterministic title-normalisation heuristics or domain-specific Python title mappings.

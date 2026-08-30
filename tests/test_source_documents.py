@@ -67,7 +67,6 @@ def test_run_onboarding_uses_llm_titles_without_parser(monkeypatch):
             "role_titles": ["Scrum Master", "Agile Project Coordinator"],
             "preferred_role_titles": ["Scrum Master"],
             "alternative_role_titles": ["Agile Project Coordinator"],
-            "target_occupation_queries": ["Scrum Master", "Agile Project Coordinator"],
             "match_preferences": {},
         }
 
@@ -79,12 +78,12 @@ def test_run_onboarding_uses_llm_titles_without_parser(monkeypatch):
 
     assert result["ok"] is True
     assert "Scrum Master\nCompany Name | 2022 - Present" in str(captured["text"])
-    assert result["profile"]["target_roles"] == ["scrum master"]
-    assert result["profile"]["also_consider_roles"] == ["agile project coordinator"]
-    assert result["profile"]["target_occupation_queries"] == [
-        "Scrum Master",
-        "Agile Project Coordinator",
-    ]
+    assert result["profile"]["target_roles"] == []
+    assert result["profile"]["also_consider_roles"] == []
+    assert result["role_suggestions"] == {
+        "target_roles": ["scrum master"],
+        "also_consider_roles": ["agile project coordinator"],
+    }
     assert result["profile"]["role_experience"] == [
         {
             "normalized_title": "agile project coordinator",
@@ -115,6 +114,44 @@ def test_run_onboarding_uses_llm_titles_without_parser(monkeypatch):
     assert result["profile"]["candidate_capabilities"][0]["name"] == "agile delivery"
 
 
+def test_cv_role_suggestions_do_not_become_targets_before_user_selection(monkeypatch):
+    monkeypatch.setattr(
+        source_documents,
+        "load_profile",
+        lambda: {"search_settings": {}, "match_preferences": {}, "onboarding_settings": {}},
+    )
+    monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
+    monkeypatch.setattr(source_documents, "clear_onboarding_runtime_outputs", lambda: None)
+    monkeypatch.setattr(
+        profile_learning,
+        "_llm_extract_from_cv",
+        lambda text, lookback_years, alias_limit: {
+            "capabilities": [
+                {
+                    "name": "data analysis",
+                    "level": "working",
+                    "aliases": [],
+                    "icon_key": "data_reporting",
+                    "atomic_concept": True,
+                    "needs_review": False,
+                }
+            ],
+            "role_titles": ["Data Analyst"],
+            "preferred_role_titles": ["Data Analyst"],
+            "alternative_role_titles": [],
+            "match_preferences": {},
+        },
+    )
+
+    result = source_documents.run_onboarding(
+        {"profile_sources": [{"label": "Primary CV", "filename": "cv.txt", "content": "Data Analyst"}]}
+    )
+
+    assert result["role_suggestions"]["target_roles"] == ["data analyst"]
+    assert result["profile"]["target_roles"] == []
+    assert result["profile"]["also_consider_roles"] == []
+
+
 @pytest.mark.parametrize(
     "fixture, expected",
     [
@@ -133,7 +170,6 @@ def test_run_onboarding_uses_llm_titles_without_parser(monkeypatch):
                 "role_titles": [],
                 "preferred_role_titles": [],
                 "alternative_role_titles": [],
-                "target_occupation_queries": ["Scrum Master"],
                 "match_preferences": {},
             },
             "role titles, preferred role titles",
@@ -144,7 +180,6 @@ def test_run_onboarding_uses_llm_titles_without_parser(monkeypatch):
                 "role_titles": ["Scrum Master"],
                 "preferred_role_titles": ["Scrum Master"],
                 "alternative_role_titles": [],
-                "target_occupation_queries": ["Scrum Master"],
                 "match_preferences": {},
             },
             "capability groups",

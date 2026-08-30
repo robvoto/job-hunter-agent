@@ -69,7 +69,6 @@ _LLM_FIXTURE = {
     "role_titles": ["delivery lead", "project coordinator"],
     "preferred_role_titles": ["delivery lead"],
     "alternative_role_titles": ["project coordinator"],
-    "target_occupation_queries": ["Delivery Lead", "Project Coordinator"],
     "match_preferences": {
         "prefer_permanent": None,
         "work_mode_preference": None,
@@ -86,7 +85,7 @@ _LLM_FIXTURE = {
 }
 
 
-def test_build_learning_patch_returns_titles_capabilities_and_queries_without_parser():
+def test_build_learning_patch_returns_transient_role_suggestions_without_parser():
     with (
         patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=_LLM_FIXTURE),
         patch(
@@ -103,9 +102,11 @@ def test_build_learning_patch_returns_titles_capabilities_and_queries_without_pa
     assert "stakeholder engagement" in names
     assert "process mapping" in names
     assert all(rule["icon_key"] in VALID_CAPABILITY_ICON_KEYS for rule in rules)
-    assert patch_result["target_roles"] == ["delivery lead"]
-    assert patch_result["also_consider_roles"] == ["project coordinator"]
-    assert patch_result["target_occupation_queries"] == ["Delivery Lead", "Project Coordinator"]
+    assert "target_roles" not in patch_result
+    assert patch_result["role_suggestions"] == {
+        "target_roles": ["delivery lead"],
+        "also_consider_roles": ["project coordinator"],
+    }
     assert patch_result["candidate_eligibility"][0]["name"] == "PV clearance"
     assert patch_result["candidate_eligibility"][0]["value"] is True
     assert patch_result["role_experience"] == [
@@ -156,7 +157,6 @@ def test_build_learning_patch_groups_role_experience_by_normalized_title():
         "role_titles": ["Business Analyst"],
         "preferred_role_titles": ["Business Analyst"],
         "alternative_role_titles": [],
-        "target_occupation_queries": ["Business Analyst"],
         "match_preferences": {},
     }
 
@@ -220,7 +220,6 @@ def test_build_learning_patch_groups_role_experience_by_canonical_title_and_pres
         "role_titles": ["BA", "Business Analyst", "Senior BA"],
         "preferred_role_titles": ["Business Analyst"],
         "alternative_role_titles": [],
-        "target_occupation_queries": ["Business Analyst"],
         "match_preferences": {},
     }
 
@@ -277,7 +276,6 @@ def test_build_learning_patch_groups_role_experience_by_canonical_title_and_pres
                 "role_titles": [],
                 "preferred_role_titles": [],
                 "alternative_role_titles": [],
-                "target_occupation_queries": ["Delivery Lead"],
                 "match_preferences": {},
             },
             "role titles, preferred role titles",
@@ -288,30 +286,9 @@ def test_build_learning_patch_groups_role_experience_by_canonical_title_and_pres
                 "role_titles": ["Delivery Lead"],
                 "preferred_role_titles": ["Delivery Lead"],
                 "alternative_role_titles": [],
-                "target_occupation_queries": ["Delivery Lead"],
                 "match_preferences": {},
             },
             "capability groups",
-        ),
-        (
-            {
-                "capabilities": [
-                    {
-                        "name": "stakeholder engagement",
-                        "level": "strong",
-                        "aliases": [],
-                        "icon_key": "communication_stakeholders",
-                        "atomic_concept": True,
-                        "needs_review": False,
-                    },
-                ],
-                "role_titles": ["Delivery Lead"],
-                "preferred_role_titles": ["Delivery Lead"],
-                "alternative_role_titles": [],
-                "target_occupation_queries": [],
-                "match_preferences": {},
-            },
-            "target occupation queries",
         ),
     ],
 )
@@ -342,7 +319,6 @@ def test_build_learning_patch_raises_when_llm_omits_required_fields(fixture, exp
             "role_titles": ["Delivery Lead"],
             "preferred_role_titles": ["Delivery Lead"],
             "alternative_role_titles": [],
-            "target_occupation_queries": ["Delivery Lead"],
             "match_preferences": {},
         },
         {
@@ -359,7 +335,6 @@ def test_build_learning_patch_raises_when_llm_omits_required_fields(fixture, exp
             "role_titles": ["Delivery Lead"],
             "preferred_role_titles": ["Delivery Lead"],
             "alternative_role_titles": [],
-            "target_occupation_queries": ["Delivery Lead"],
             "match_preferences": {},
         },
     ],
@@ -399,7 +374,6 @@ def test_build_learning_patch_does_not_register_title_normalization_candidate_si
                 "role_titles": ["Business Analyst"],
                 "preferred_role_titles": ["Business Analyst"],
                 "alternative_role_titles": [],
-                "target_occupation_queries": ["Business Analyst"],
                 "match_preferences": {},
             },
         ),
@@ -449,7 +423,6 @@ def test_build_learning_patch_routes_uncertain_capabilities_to_signal_registry()
         "role_titles": ["Business Analyst"],
         "preferred_role_titles": ["Business Analyst"],
         "alternative_role_titles": [],
-        "target_occupation_queries": ["Business Analyst"],
         "match_preferences": {},
     }
     captured = []
@@ -507,7 +480,6 @@ def test_build_learning_patch_does_not_emit_hard_blocker_pattern():
         "role_titles": ["Business Analyst"],
         "preferred_role_titles": ["Business Analyst"],
         "alternative_role_titles": [],
-        "target_occupation_queries": ["Business Analyst"],
         "match_preferences": {},
     }
     captured = []

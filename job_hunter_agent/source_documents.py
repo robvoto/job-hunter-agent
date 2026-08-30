@@ -41,12 +41,12 @@ from job_hunter_agent.profile_store import (
     KEY_PRIMARY_PATTERNS,
     KEY_ROLE_EXPERIENCE,
     KEY_SECONDARY_PATTERNS,
-    KEY_TARGET_OCCUPATION_QUERIES,
     build_candidate_profile_tiers_from_sections,
     load_profile,
     normalize_engagement_type_preferences,
     patch_profile,
 )
+from job_hunter_agent.profile_learning import ROLE_SUGGESTIONS_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,6 @@ ONBOARDING_RESET_FIELDS = (
     KEY_CANDIDATE_ELIGIBILITY,
     KEY_CANDIDATE_QUALIFICATIONS,
     KEY_ROLE_EXPERIENCE,
-    KEY_TARGET_OCCUPATION_QUERIES,
 )
 
 DEFAULT_SOURCE_MATERIALS = {
@@ -447,6 +446,7 @@ def run_onboarding(
     learning_patch = build_learning_patch(
         combined_text, active_onboarding_settings, source_sections
     )
+    role_suggestions = learning_patch.pop(ROLE_SUGGESTIONS_KEY)
     patch.update(learning_patch)
     _print_role_history_summary(list(patch.get(KEY_ROLE_EXPERIENCE) or []))
 
@@ -485,18 +485,17 @@ def run_onboarding(
 
     logger.info(
         "LLM extracted %d target and %d secondary title(s)",
-        len(patch.get(KEY_PRIMARY_PATTERNS) or []),
-        len(patch.get(KEY_SECONDARY_PATTERNS) or []),
+        len(role_suggestions.get(KEY_PRIMARY_PATTERNS) or []),
+        len(role_suggestions.get(KEY_SECONDARY_PATTERNS) or []),
     )
 
     profile = patch_profile(patch)
 
     extraction_counts = {
-        "target_titles": len(patch.get(KEY_PRIMARY_PATTERNS) or []),
-        "secondary_titles": len(patch.get(KEY_SECONDARY_PATTERNS) or []),
+        "target_titles": len(role_suggestions.get(KEY_PRIMARY_PATTERNS) or []),
+        "secondary_titles": len(role_suggestions.get(KEY_SECONDARY_PATTERNS) or []),
         "capabilities": len(patch.get(KEY_CANDIDATE_CAPABILITIES) or []),
         "qualifications": len(patch.get(KEY_CANDIDATE_QUALIFICATIONS) or []),
-        "occupation_queries": len(patch.get(KEY_TARGET_OCCUPATION_QUERIES) or []),
     }
 
     return {
@@ -509,6 +508,7 @@ def run_onboarding(
             f"{_format_count(extraction_counts['capabilities'], 'capability row', 'capability rows')} from this run only."
         ),
         "profile": profile,
+        "role_suggestions": role_suggestions,
         "imported_sources": imported_sources,
         "missing_sources": missing_sources,
         "fresh_onboarding_run_started": True,

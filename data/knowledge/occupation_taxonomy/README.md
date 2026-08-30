@@ -50,7 +50,7 @@ The importer also accepts current nested O*NET text database ZIPs and legacy `Oc
 
 The full O*NET Job Titles dataset intentionally maps many real-world titles to multiple occupations. Job Hunter therefore does not use every alias as permission to widen a candidate's target occupation family.
 
-For `target_occupation_queries`, resolution is conservative:
+For user-selected `target_roles` and `also_consider_roles`, resolution is conservative:
 
 1. exact O*NET occupation titles;
 2. exact Job Titles that O*NET marks as preferred in **Sample of Reported Titles / My Next Move**;

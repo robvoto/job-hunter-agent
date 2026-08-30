@@ -37,7 +37,7 @@ def test_committed_taxonomy_rejects_senior_cloud_engineer_for_business_analyst_t
 
     result = classify_title(
         "Senior Cloud Engineer",
-        {"target_occupation_queries": ["Business Analyst"]},
+        {"target_roles": ["Business Analyst"]},
         _index=payload["by_normalized_title"],
     )
 

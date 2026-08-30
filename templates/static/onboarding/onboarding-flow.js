@@ -580,10 +580,11 @@ function renderReviewStep() {
 }
 
 function getSearchBasicsHydrationProfile() {
+  const importedSuggestions = onboardingPage.lastImportPayload?.role_suggestions || {};
   const reviewTitles = onboardingPage.reviewTargetTitles.length
     ? onboardingPage.reviewTargetTitles
-    : (Array.isArray((onboardingPage.lastImportPayload || {}).profile?.target_roles)
-      ? (onboardingPage.lastImportPayload || {}).profile.target_roles
+    : (Array.isArray(importedSuggestions.target_roles)
+      ? importedSuggestions.target_roles
       : []);
   return {
     ...(onboardingPage.lastLoadedProfile || {}),
@@ -592,10 +593,14 @@ function getSearchBasicsHydrationProfile() {
   };
 }
 
-function hydrateDraftStep(profile) {
+function hydrateDraftStep(profile, roleSuggestions = {}) {
+  const reviewSource = {
+    ...(profile || {}),
+    ...(roleSuggestions || {}),
+  };
   const normalizedTitles = normalizeReviewTitleLists(
-    profile?.target_roles || [],
-    profile?.also_consider_roles || [],
+    reviewSource.target_roles || [],
+    reviewSource.also_consider_roles || [],
   );
   onboardingPage.setReviewTargetTitles(normalizedTitles.primary);
   onboardingPage.setReviewSecondaryTitles(normalizedTitles.secondary);
@@ -696,7 +701,7 @@ async function createProfile() {
   onboardingPage.setLastImportPayload(payload);
   onboardingPage.setMaxUnlockedStep(Math.max(onboardingPage.maxUnlockedStep, REVIEW_STEP));
   onboardingPage.setDraftBuiltExplicitly(true);
-  hydrateDraftStep(payload.profile || {});
+  hydrateDraftStep(payload.profile || {}, payload.role_suggestions || {});
   setStep(REVIEW_STEP);
   const pageLimitNotice = String(payload?.page_limit_notice || '').trim();
   const extractionMessage = formatImportSuccessSummary(payload);

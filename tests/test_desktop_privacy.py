@@ -67,7 +67,6 @@ def test_desktop_mode_blocks_cv_learning_signal_registration(monkeypatch):
         "role_titles": ["Delivery Lead"],
         "preferred_role_titles": ["Delivery Lead"],
         "alternative_role_titles": [],
-        "target_occupation_queries": ["Delivery Lead"],
         "match_preferences": {},
     }
 
@@ -90,7 +89,8 @@ def test_desktop_mode_blocks_cv_learning_signal_registration(monkeypatch):
 
     result = profile_learning.build_learning_patch("CV text")
 
-    assert result["target_occupation_queries"] == ["Delivery Lead"]
+    assert result["role_suggestions"]["target_roles"] == ["delivery lead"]
+    assert "target_roles" not in result
     assert called == []
 
 

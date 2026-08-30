@@ -1,6 +1,22 @@
 """Tests for shared search-term planning helpers."""
 
-from job_hunter_agent.search_terms import direct_profile_title_match_job_keys
+from job_hunter_agent.search_terms import (
+    direct_profile_title_match_job_keys,
+    ordered_profile_search_terms,
+)
+
+
+def test_ordered_profile_search_terms_uses_selected_roles_only():
+    profile = {
+        "target_roles": ["Business Analyst"],
+        "also_consider_roles": ["Systems Analyst"],
+        "target_occupation_queries": ["Data Analyst"],
+    }
+
+    assert ordered_profile_search_terms({"keywords": "legacy keyword"}, profile) == [
+        "Business Analyst",
+        "Systems Analyst",
+    ]
 
 
 def test_direct_profile_title_match_job_keys_uses_existing_title_tiers():

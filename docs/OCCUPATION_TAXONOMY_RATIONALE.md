@@ -94,7 +94,7 @@ Runtime classification uses the current full O*NET **Job Titles** dataset rather
 
 The full dataset is intentionally many-to-many: one real-world title can map to several occupations. That is useful for classifying scraped jobs but unsafe if every mapping is automatically treated as a candidate target occupation.
 
-`target_occupation_queries` therefore resolve conservatively:
+User-selected `target_roles` and `also_consider_roles` therefore resolve conservatively:
 
 1. exact O*NET occupation titles are trusted;
 2. exact Job Titles marked by O*NET as preferred in Sample of Reported Titles / My Next Move are trusted;

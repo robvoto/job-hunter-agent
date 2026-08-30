@@ -2,11 +2,11 @@
 
 This module provides utilities for processing and learning from candidate CV text.
 It focuses on extracting structured information, such as capabilities, role titles,
-and occupation queries, for use in the job matching and profile building processes.
+and role directions, for use in the job matching and profile building processes.
 
 Key functionalities include:
 - Repairing common text encoding and formatting issues in imported CV text.
-- Extracting capabilities, role titles, and occupation queries from CV text using LLMs.
+- Extracting capabilities and role titles from CV text using LLMs.
 - Building learning signals for new capabilities and title normalization candidates.
 
 The module integrates with LLMs for advanced extraction tasks and includes
@@ -45,7 +45,6 @@ from job_hunter_agent.profile_store import (
     KEY_PRIMARY_PATTERNS,
     KEY_ROLE_EXPERIENCE,
     KEY_SECONDARY_PATTERNS,
-    KEY_TARGET_OCCUPATION_QUERIES,
     VALID_CAPABILITY_ICON_KEYS,
     CapabilityLevel,
 )
@@ -53,6 +52,8 @@ from job_hunter_agent.runtime_helpers import is_desktop_runtime
 from job_hunter_agent.text_processing import compact_whitespace
 
 KEY_NEEDS_REVIEW = "needs_review"
+# Transient onboarding output. It is shown for user review and is never persisted.
+ROLE_SUGGESTIONS_KEY = "role_suggestions"
 
 
 def _simple_title(value: str) -> str:
@@ -94,7 +95,7 @@ def _cap_log(msg: str) -> None:
 
 _BULLET_PREFIX_RE = re.compile(r"^[\-*•–—]+\s*")
 
-_CV_EXTRACTION_CACHE_CONTRACT_VERSION = 2
+_CV_EXTRACTION_CACHE_CONTRACT_VERSION = 3
 _cv_extraction_cache: dict[str, dict[str, Any]] = {}
 _cv_extraction_cache_loaded = False
 
@@ -161,7 +162,6 @@ class _CvExtractionResponse(BaseModel):
     role_titles: list[str] = Field(default_factory=list)
     preferred_role_titles: list[str] = Field(default_factory=list)
     alternative_role_titles: list[str] = Field(default_factory=list)
-    target_occupation_queries: list[str] = Field(default_factory=list)
 
 
 # ── Text repair ────────────────────────────────────────────────────────────────
@@ -315,8 +315,7 @@ def _llm_extract_from_cv(
             f"role_experience={len(cached.get(KEY_ROLE_EXPERIENCE, []) or [])} "
             f"role_titles={len(cached.get('role_titles', []) or [])} "
             f"preferred_role_titles={len(cached.get('preferred_role_titles', []) or [])} "
-            f"alternative_role_titles={len(cached.get('alternative_role_titles', []) or [])} "
-            f"target_queries={len(cached.get(KEY_TARGET_OCCUPATION_QUERIES, []) or [])}"
+            f"alternative_role_titles={len(cached.get('alternative_role_titles', []) or [])}"
         )
         return cached
 
@@ -375,8 +374,6 @@ def _llm_extract_from_cv(
         "  Use standalone role titles only, no duplicates.\n"
         "- alternative_role_titles: list credible adjacent or secondary role directions from the CV that are less central than preferred_role_titles.\n"
         "  Do not repeat any preferred_role_titles entry here. Use standalone role titles only, no duplicates.\n"
-        "- target_occupation_queries: generate 3 to 8 machine-facing occupation query strings that match the candidate's occupation family.\n"
-        "  Use standard job titles a job-search system could match against.\n"
         "- eligibility: extract only current, independently verifiable facts the candidate actually holds or is legally allowed to claim now. "
         "Examples include an existing clearance, citizenship, work rights, licence, or registration. "
         "Do not treat future possibility, willingness, suitability, or being eligible/able to obtain something as a current eligibility fact. "
@@ -420,8 +417,7 @@ def _llm_extract_from_cv(
         f"role_experience={len(result.get(KEY_ROLE_EXPERIENCE, []) or [])} "
         f"role_titles={len(result.get('role_titles', []) or [])} "
         f"preferred_role_titles={len(result.get('preferred_role_titles', []) or [])} "
-        f"alternative_role_titles={len(result.get('alternative_role_titles', []) or [])} "
-        f"target_queries={len(result.get(KEY_TARGET_OCCUPATION_QUERIES, []) or [])}"
+        f"alternative_role_titles={len(result.get('alternative_role_titles', []) or [])}"
     )
 
     if benchmark_model is None:
@@ -767,12 +763,6 @@ def build_learning_patch(
     alternative_titles = [
         value for value in alternative_titles_raw if value not in set(preferred_titles)
     ]
-    raw_queries = extracted.get(KEY_TARGET_OCCUPATION_QUERIES) or []
-    occupation_queries = list(
-        dict.fromkeys(
-            compact_whitespace(value) for value in raw_queries if str(value or "").strip()
-        )
-    )
     _cap_log(
         f"[BUILD_LEARNING_PATCH] LLM extraction returned {len(extracted_titles)} role title(s)"
     )
@@ -782,9 +772,6 @@ def build_learning_patch(
     _cap_log(
         f"[BUILD_LEARNING_PATCH] LLM extraction returned {len(alternative_titles)} alternative role title(s)"
     )
-    _cap_log(
-        f"[BUILD_LEARNING_PATCH] LLM extraction returned {len(occupation_queries)} target occupation query(ies)"
-    )
 
     missing: list[str] = []
     if not approved_capabilities:
@@ -793,8 +780,6 @@ def build_learning_patch(
         missing.append("role titles")
     if not preferred_titles:
         missing.append("preferred role titles")
-    if not occupation_queries:
-        missing.append("target occupation queries")
     if missing:
         raise ValueError("LLM did not return required onboarding data: " + ", ".join(missing) + ".")
 
@@ -802,7 +787,7 @@ def build_learning_patch(
         "[ONBOARDING][LLM_CALL_DONE] purpose=cv_extraction "
         f"capability_count={len(approved_capabilities)} role_title_count={len(extracted_titles)} "
         f"preferred_role_count={len(preferred_titles)} alternative_role_count={len(alternative_titles)} "
-        f"occupation_query_count={len(occupation_queries)}"
+        "role_suggestions_are_transient=true"
     )
 
     patch[KEY_CANDIDATE_CAPABILITIES] = approved_capabilities
@@ -814,9 +799,10 @@ def build_learning_patch(
 
     max_target = _resolve_onboarding_int(onboarding_settings, KEY_MAX_TARGET)
     max_secondary = _resolve_onboarding_int(onboarding_settings, KEY_MAX_SECONDARY)
-    patch[KEY_PRIMARY_PATTERNS] = preferred_titles[:max_target]
-    patch[KEY_SECONDARY_PATTERNS] = alternative_titles[:max_secondary]
-    patch[KEY_TARGET_OCCUPATION_QUERIES] = occupation_queries
+    patch[ROLE_SUGGESTIONS_KEY] = {
+        KEY_PRIMARY_PATTERNS: preferred_titles[:max_target],
+        KEY_SECONDARY_PATTERNS: alternative_titles[:max_secondary],
+    }
 
     raw_prefs = extracted.get(KEY_MATCH_PREFS) or {}
     match_prefs = {k: v for k, v in raw_prefs.items() if v is not None and v != ""}

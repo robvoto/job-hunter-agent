@@ -5,7 +5,6 @@ from __future__ import annotations
 from job_hunter_agent.profile_store import (
     KEY_PRIMARY_PATTERNS,
     KEY_SECONDARY_PATTERNS,
-    KEY_TARGET_OCCUPATION_QUERIES,
 )
 
 
@@ -16,7 +15,6 @@ def ordered_profile_search_terms(search_settings: dict, profile: dict | None = N
         for key in (
             KEY_PRIMARY_PATTERNS,
             KEY_SECONDARY_PATTERNS,
-            KEY_TARGET_OCCUPATION_QUERIES,
         ):
             values = profile.get(key) or []
             if not isinstance(values, list):

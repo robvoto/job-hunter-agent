@@ -694,7 +694,6 @@ def test_run_onboarding_logs_read_summary(monkeypatch, capsys, caplog, tmp_path)
             },
             {"title": "Senior BA", "canonical_title": "Business Analyst", "duration_months": 24, "end_year": 2024},
         ],
-        "target_occupation_queries": ["Business Analyst"],
         "match_preferences": {},
     }
 
@@ -745,7 +744,7 @@ def test_run_onboarding_logs_read_summary(monkeypatch, capsys, caplog, tmp_path)
     assert "Captured role history:" in combined
     assert "business analyst: 5 years total" in combined
     assert "variants: ba (1 year), business analyst (2 years), senior ba (2 years)" in combined
-    assert "occupation_query_count=1" in combined
+    assert "role_suggestions_are_transient=true" in combined
 
 
 def test_api_onboarding_confirm_ignores_min_contract_months_when_contract_not_selected(monkeypatch):
@@ -1101,7 +1100,6 @@ def test_run_onboarding_uses_saved_onboarding_settings_when_argument_missing(mon
             "role_titles": ["Delivery Lead"],
             "preferred_role_titles": ["Delivery Lead"],
             "alternative_role_titles": [],
-            "target_occupation_queries": ["Delivery Lead"],
             "match_preferences": {},
         }
 
@@ -1148,7 +1146,7 @@ def test_normalize_full_profile_removes_exact_duplicate_title_from_secondary():
     assert normalized["also_consider_roles"] == ["scrum master"]
 
 
-def test_normalize_full_profile_preserves_clean_target_occupation_queries():
+def test_normalize_full_profile_drops_legacy_target_occupation_queries():
     normalized = profile_store.normalize_full_profile(
         {
             "target_occupation_queries": [
@@ -1159,11 +1157,7 @@ def test_normalize_full_profile_preserves_clean_target_occupation_queries():
         }
     )
 
-    assert normalized["target_occupation_queries"] == [
-        "Software Engineer",
-        "DevOps Engineer",
-        "Cloud Engineer",
-    ]
+    assert "target_occupation_queries" not in normalized
 
 
 def test_normalize_full_profile_mirrors_primary_search_location_into_match_preferences():

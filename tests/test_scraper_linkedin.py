@@ -212,7 +212,6 @@ def test_linkedin_search_targets_include_distinct_profile_roles():
         profile={
             "target_roles": ["Scrum Master"],
             "also_consider_roles": ["Agile Project Coordinator"],
-            "target_occupation_queries": ["Delivery Manager", "Scrum Master"],
         },
         llm_cache={},
         job_history={},
@@ -226,7 +225,6 @@ def test_linkedin_search_targets_include_distinct_profile_roles():
     assert [target["search_term"] for target in targets] == [
         "Scrum Master",
         "Agile Project Coordinator",
-        "Delivery Manager",
     ]
 
 

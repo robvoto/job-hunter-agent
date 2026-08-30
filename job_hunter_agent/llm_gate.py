@@ -2963,7 +2963,7 @@ def llm_judge_title(
     llm_client: Any = None,
     benchmark_model: str | None = None,
 ) -> dict[str, Any] | None:
-    """Decide whether a near/uncertain title should reach full description review.
+    """Decide whether an O*NET near/uncertain or exploratory far title should reach detail review.
 
     Strict mode judges only against preferred/alternative role lists. Exploration mode may also
     use candidate capability names to avoid rejecting plausible adjacent titles merely because

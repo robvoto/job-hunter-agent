@@ -8,7 +8,7 @@ Classification logic:
 - Exact or embedded O*NET title maps only outside targets    → far
 - Exact or embedded O*NET title maps only inside targets     → near
 - Candidate codes are mixed inside/outside target set        → uncertain (reason: ambiguous)
-- Profile target occupation queries yield no known codes     → uncertain (reason: no_profile_context)
+- Selected target/also-consider roles yield no known codes   → uncertain (reason: no_profile_context)
 
 O*NET is reference data, not truth. This module never hard-rejects a job on its own.
 The caller decides whether to use the classification result for rejection.
@@ -27,6 +27,7 @@ from typing import Any
 from job_hunter_agent.database import db_conn
 from job_hunter_agent.onet_taxonomy_import import TAXONOMY_VERSION, normalize_title
 from job_hunter_agent.paths import ONET_TAXONOMY_DIR
+from job_hunter_agent.profile_store import KEY_PRIMARY_PATTERNS, KEY_SECONDARY_PATTERNS
 from job_hunter_agent.text_processing import compact_whitespace
 
 logger = logging.getLogger(__name__)
@@ -40,7 +41,7 @@ LOOKUP_SOURCE_CACHE = "cache"
 LOOKUP_SOURCE_FRESH = "fresh"
 # Cache-version guardrail: bump this when material classification logic changes so
 # stale near/far/uncertain cache rows cannot be silently reused.
-LOOKUP_MATCHER_VERSION = "job-titles-v3"
+LOOKUP_MATCHER_VERSION = "job-titles-v4"
 
 _RESULT_RESPONSE_LABELS = {
     RESULT_NEAR: "in your target roles",
@@ -52,7 +53,7 @@ _REASON_RESPONSE_LABELS = {
     RESULT_FAR: "matched an occupation outside your target set",
     "no_match": "no exact title match",
     "ambiguous": "multiple occupation codes matched",
-    "no_profile_context": "profile has no target occupation queries",
+    "no_profile_context": "profile has no selected role context",
     "cached": "cached",
 }
 
@@ -116,33 +117,59 @@ def _load_taxonomy_identity() -> TaxonomyIdentity:
 
 def _compute_profile_hash(profile: dict[str, Any]) -> str:
     relevant = {
-        "target_occupation_queries": sorted(_profile_target_occupation_queries(profile)),
+        "role_selection": _profile_role_selection(profile),
         "lookup_matcher_version": LOOKUP_MATCHER_VERSION,
     }
     canonical = json.dumps(relevant, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(canonical.encode()).hexdigest()[:16]
 
 
-def _profile_target_occupation_queries(profile: dict[str, Any]) -> list[str]:
-    queries: list[str] = []
+def _normalized_profile_roles(profile: dict[str, Any], key: str) -> list[str]:
+    roles: list[str] = []
     seen: set[str] = set()
-    for value in profile.get("target_occupation_queries") or []:
-        cleaned = compact_whitespace(value)
+    values = profile.get(key) or []
+    if not isinstance(values, list):
+        return roles
+    for value in values:
+        cleaned = compact_whitespace(str(value or ""))
         if not cleaned:
             continue
-        key = cleaned.lower()
-        if key in seen:
+        normalized = cleaned.casefold()
+        if normalized in seen:
             continue
-        seen.add(key)
-        queries.append(cleaned)
-    return queries
+        seen.add(normalized)
+        roles.append(cleaned)
+    return roles
+
+
+def _profile_role_selection(profile: dict[str, Any]) -> dict[str, list[str]]:
+    return {
+        KEY_PRIMARY_PATTERNS: _normalized_profile_roles(profile, KEY_PRIMARY_PATTERNS),
+        KEY_SECONDARY_PATTERNS: _normalized_profile_roles(profile, KEY_SECONDARY_PATTERNS),
+    }
+
+
+def _profile_occupation_titles(profile: dict[str, Any]) -> list[str]:
+    selection = _profile_role_selection(profile)
+    titles: list[str] = []
+    seen: set[str] = set()
+    for role in (
+        *selection[KEY_PRIMARY_PATTERNS],
+        *selection[KEY_SECONDARY_PATTERNS],
+    ):
+        normalized = role.casefold()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        titles.append(role)
+    return titles
 
 
 def _derive_target_occupation_codes(
-    target_occupation_queries: list[str],
+    role_titles: list[str],
     index: dict[str, list[dict[str, Any]]],
 ) -> set[str]:
-    """Resolve target queries conservatively using O*NET-backed preferred mappings.
+    """Resolve selected role titles conservatively using O*NET-backed mappings.
 
     Occupation titles are authoritative. Job-title aliases that O*NET exposes as
     preferred My Next Move titles are trusted next. Other exact aliases contribute
@@ -150,8 +177,8 @@ def _derive_target_occupation_codes(
     titles therefore cannot silently widen the candidate's target family.
     """
     occupation_codes: set[str] = set()
-    for query in target_occupation_queries:
-        matches = index.get(normalize_title(query)) or []
+    for role_title in role_titles:
+        matches = index.get(normalize_title(role_title)) or []
         preferred_codes = {
             str(match.get("occupation_code") or "").strip()
             for match in matches
@@ -412,7 +439,7 @@ def _cache_save(
 def _log_classification(
     title: str,
     normalized: str,
-    profile_target_occupation_queries: list[str],
+    profile_occupation_titles: list[str],
     derived_target_occupation_codes: list[str],
     result: OccupationClassification,
 ) -> None:
@@ -425,7 +452,7 @@ def _log_classification(
                 "lookup_source": result.lookup_source,
                 "title": title,
                 "normalized_title": normalized,
-                "profile_target_occupation_queries": profile_target_occupation_queries,
+                "profile_occupation_titles": profile_occupation_titles,
                 "derived_target_occupation_codes": derived_target_occupation_codes,
                 "result": result.result,
                 "response": format_onet_response(result),
@@ -468,9 +495,9 @@ def classify_title(
         if _index is not None
         else _load_taxonomy_identity()
     )
-    profile_target_occupation_queries = _profile_target_occupation_queries(profile)
+    profile_occupation_titles = _profile_occupation_titles(profile)
     target_occupation_codes = _derive_target_occupation_codes(
-        profile_target_occupation_queries, index
+        profile_occupation_titles, index
     )
     profile_hash = _compute_profile_hash(profile)
 
@@ -479,7 +506,7 @@ def classify_title(
         _log_classification(
             title,
             normalized,
-            profile_target_occupation_queries,
+            profile_occupation_titles,
             sorted(target_occupation_codes),
             cached,
         )
@@ -544,7 +571,7 @@ def classify_title(
     _log_classification(
         title,
         normalized,
-        profile_target_occupation_queries,
+        profile_occupation_titles,
         sorted(target_occupation_codes),
         result,
     )

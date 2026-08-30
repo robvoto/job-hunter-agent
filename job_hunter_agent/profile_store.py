@@ -176,7 +176,6 @@ KEY_ONBOARDING_COMPLETE = "onboarding_complete"
 KEY_MATCH_PREFS = "match_preferences"
 KEY_PRIMARY_PATTERNS = "target_roles"
 KEY_SECONDARY_PATTERNS = "also_consider_roles"
-KEY_TARGET_OCCUPATION_QUERIES = "target_occupation_queries"
 KEY_CAPABILITY_LEVEL_WEIGHTS = "capability_level_weights"
 KEY_REQUIREMENT_IMPORTANCE_WEIGHTS = "requirement_importance_weights"
 KEY_REQUIREMENT_STATUS_WEIGHTS = "requirement_status_weights"
@@ -255,6 +254,7 @@ _OBSOLETE_PROFILE_KEYS = (
     "".join(["llm_profile", "_brief_mode"]),
     "".join(["llm_profile", "_brief"]),
     "star_" + "evidence_text",
+    "target_occupation_queries",
 )
 
 
@@ -344,7 +344,6 @@ DEFAULT_PROFILE = {
     "target_roles": [],
     "also_consider_roles": [],
     KEY_EXPLORE_ADJACENT_ROLES: False,
-    KEY_TARGET_OCCUPATION_QUERIES: [],
     "must_not_require_skills": [],
     "onboarding_settings": {
         **DEFAULT_ONBOARDING_SETTINGS,
@@ -922,9 +921,6 @@ def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
     )
     merged[KEY_PRIMARY_PATTERNS] = primary_titles
     merged[KEY_SECONDARY_PATTERNS] = secondary_titles
-    merged[KEY_TARGET_OCCUPATION_QUERIES] = normalize_multiline_string_list(
-        merged.get(KEY_TARGET_OCCUPATION_QUERIES, [])
-    )
     merged["must_not_require_skills"] = normalize_multiline_string_list(
         merged.get("must_not_require_skills", [])
     )

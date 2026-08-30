@@ -403,11 +403,6 @@ def test_build_apsjobs_search_targets_uses_all_distinct_profile_role_terms():
         {
             "target_roles": ["Senior Systems Analyst", "Business Analyst"],
             "also_consider_roles": ["AI Business Analyst"],
-            "target_occupation_queries": [
-                "Senior Business Analyst",
-                "business analyst",
-                "Systems Analyst",
-            ],
         },
     )
 
@@ -416,8 +411,6 @@ def test_build_apsjobs_search_targets_uses_all_distinct_profile_role_terms():
         "Senior Systems Analyst",
         "Business Analyst",
         "AI Business Analyst",
-        "Senior Business Analyst",
-        "Systems Analyst",
     ]
 
 

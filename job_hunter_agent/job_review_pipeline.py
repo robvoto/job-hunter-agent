@@ -269,10 +269,10 @@ def _log_title_classification_uncertainty(
     onet: OccupationClassification,
 ) -> None:
     title = str(record.get(RECORD_TITLE_KEY) or "").strip()
-    target_queries = occupation_taxonomy._profile_target_occupation_queries(profile)
+    selected_role_titles = occupation_taxonomy._profile_occupation_titles(profile)
     target_codes = sorted(
         occupation_taxonomy._derive_target_occupation_codes(
-            target_queries,
+            selected_role_titles,
             occupation_taxonomy._load_index(),
         )
     )
@@ -287,7 +287,7 @@ def _log_title_classification_uncertainty(
         job_key=str(record.get(RECORD_JOB_KEY) or ""),
     )
     entry["title"] = title
-    entry["target_occupation_queries"] = target_queries
+    entry["selected_role_titles"] = selected_role_titles
     entry["target_occupation_codes"] = target_codes
     entry["onet_result"] = onet.result
     entry["onet_reason"] = onet.reason
@@ -1223,7 +1223,12 @@ def review_pre_detail_normalized_job(
                 "confidence": onet.confidence,
                 "reason": onet.reason,
             }
-            _onet_outcome = "REJECT" if onet.result == RESULT_FAR else "FETCH_DETAILS"
+            explore_adjacent_roles = bool(profile.get(KEY_EXPLORE_ADJACENT_ROLES, False))
+            _onet_outcome = (
+                "REJECT"
+                if onet.result == RESULT_FAR and not explore_adjacent_roles
+                else "FETCH_DETAILS"
+            )
             logger.debug(
                 format_log_block(
                     "PIPELINE][ONET_DECISION",
@@ -1244,7 +1249,7 @@ def review_pre_detail_normalized_job(
             )
             if onet.result == RESULT_UNCERTAIN:
                 _log_title_classification_uncertainty(record, profile, onet)
-            if onet.result == RESULT_FAR:
+            if onet.result == RESULT_FAR and not explore_adjacent_roles:
                 reject_reason = "ONET_FAR_OCCUPATION"
                 _pipeline_log(
                     "TITLE_GATE",
@@ -1264,7 +1269,9 @@ def review_pre_detail_normalized_job(
                 )
                 return _build_outcome(record), record, skill_observations, False
 
-            # Near/uncertain titles get one cheap semantic check before detail fetch.
+            # Near/uncertain titles, plus exploration-mode far titles, get one cheap
+            # semantic check before detail fetch. Exploration can widen review only;
+            # it never changes the persisted role selections.
             # Strict mode keeps the original role-list contract; exploration mode may
             # use candidate capability names only to decide whether an unfamiliar title
             # is plausible enough to inspect, never to score or accept the job here.
@@ -1276,7 +1283,6 @@ def review_pre_detail_normalized_job(
             ]
             target_roles = profile.get("target_roles")
             secondary_roles = profile.get("also_consider_roles")
-            explore_adjacent_roles = bool(profile.get(KEY_EXPLORE_ADJACENT_ROLES, False))
             title_cache_key = build_title_judgment_cache_key(
                 title,
                 target_roles,

@@ -186,33 +186,32 @@ _TEST_INDEX = {
 }
 
 _ANALYST_PROFILE = {
-    "target_occupation_queries": ["business analyst"],
-    "target_roles": ["chef"],
+    "target_roles": ["business analyst"],
     "also_consider_roles": ["project manager"],
 }
 
 _ACCOUNTING_PROFILE = {
-    "target_occupation_queries": ["accountant", "bookkeeper", "payroll clerk"],
+    "target_roles": ["accountant", "bookkeeper", "payroll clerk"],
 }
 
 _SOFTWARE_PROFILE = {
-    "target_occupation_queries": ["software developers"],
+    "target_roles": ["software developers"],
 }
 
 _ADMIN_PROFILE = {
-    "target_occupation_queries": ["administrative assistant", "office administrator"],
+    "target_roles": ["administrative assistant", "office administrator"],
 }
 
 _PROJECT_PROFILE = {
-    "target_occupation_queries": ["project management specialist"],
+    "target_roles": ["project management specialist"],
 }
 
 _HEALTHCARE_PROFILE = {
-    "target_occupation_queries": ["registered nurse"],
+    "target_roles": ["registered nurse"],
 }
 
 _ICT_PROFILE = {
-    "target_occupation_queries": ["help desk technician"],
+    "target_roles": ["help desk technician"],
 }
 
 
@@ -343,7 +342,7 @@ def test_multicode_exact_match_all_outside_target_returns_far(tmp_db):
 
 
 def test_multicode_exact_match_mixed_target_returns_uncertain(tmp_db):
-    profile = {"target_occupation_queries": ["business analyst", "office administrator"]}
+    profile = {"target_roles": ["business analyst", "office administrator"]}
     result = classify_title("coordinator", profile, db_path=tmp_db, _index=_TEST_INDEX)
     assert result.result == RESULT_UNCERTAIN
     assert result.reason == "ambiguous"
@@ -388,11 +387,11 @@ def test_cache_hit_returns_cached_result(tmp_db):
 
 
 def test_cache_is_keyed_by_profile_hash(tmp_db):
-    # Different non-query profile fields must not change cache results.
+    # Different non-matching profile fields must not change cache results.
     other_profile = {
-        "target_occupation_queries": ["business analyst"],
-        "target_roles": ["chef"],
-        "also_consider_roles": ["surgeon"],
+        "target_roles": ["business analyst"],
+        "also_consider_roles": ["project manager"],
+        "candidate_capabilities": ["unrelated capability"],
     }
     classify_title("business analyst", _ANALYST_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
     result = classify_title("business analyst", other_profile, db_path=tmp_db, _index={})
@@ -401,7 +400,7 @@ def test_cache_is_keyed_by_profile_hash(tmp_db):
 
 
 def test_profile_hash_changes_when_matcher_version_changes(monkeypatch):
-    profile = {"target_occupation_queries": ["business analyst"]}
+    profile = {"target_roles": ["business analyst"]}
 
     original_hash = occupation_taxonomy._compute_profile_hash(profile)
     monkeypatch.setattr(occupation_taxonomy, "LOOKUP_MATCHER_VERSION", "job-titles-v99")
@@ -410,7 +409,51 @@ def test_profile_hash_changes_when_matcher_version_changes(monkeypatch):
     assert updated_hash != original_hash
 
 
-def test_target_query_prefers_onet_curated_mapping_over_ambiguous_job_title():
+def test_changing_selected_target_roles_recalculates_occupation_context(tmp_db):
+    first_profile = {"target_roles": ["business analyst"]}
+    changed_profile = {"target_roles": ["chef"]}
+
+    first = classify_title(
+        "business analyst", first_profile, db_path=tmp_db, _index=_TEST_INDEX
+    )
+    changed = classify_title(
+        "business analyst", changed_profile, db_path=tmp_db, _index=_TEST_INDEX
+    )
+
+    assert first.result == RESULT_NEAR
+    assert changed.result == RESULT_FAR
+    assert changed.reason == RESULT_FAR
+
+
+def test_removing_selected_role_removes_its_occupation_context(tmp_db):
+    profile_with_role = {
+        "target_roles": ["business analyst", "office administrator"],
+    }
+    profile_after_removal = {"target_roles": ["business analyst"]}
+
+    before = classify_title(
+        "office administrator", profile_with_role, db_path=tmp_db, _index=_TEST_INDEX
+    )
+    after = classify_title(
+        "office administrator", profile_after_removal, db_path=tmp_db, _index=_TEST_INDEX
+    )
+
+    assert before.result == RESULT_NEAR
+    assert after.result == RESULT_FAR
+
+
+def test_also_consider_roles_contribute_to_occupation_context(tmp_db):
+    profile = {
+        "target_roles": ["unfamiliar selected role"],
+        "also_consider_roles": ["business analyst"],
+    }
+
+    result = classify_title("business analyst", profile, db_path=tmp_db, _index=_TEST_INDEX)
+
+    assert result.result == RESULT_NEAR
+
+
+def test_selected_role_prefers_onet_curated_mapping_over_ambiguous_job_title():
     index = {
         "business analyst": [
             {
@@ -432,7 +475,7 @@ def test_target_query_prefers_onet_curated_mapping_over_ambiguous_job_title():
     assert codes == {"13-1111.00"}
 
 
-def test_ambiguous_unpreferred_target_query_does_not_widen_target_family():
+def test_ambiguous_unpreferred_selected_role_does_not_widen_target_family():
     index = {
         "data analyst": [
             {
@@ -481,8 +524,8 @@ def test_cache_does_not_reuse_result_after_dataset_identity_changes(tmp_db):
 
 def test_no_profile_context_returns_uncertain(tmp_db):
     empty_profile: dict = {
-        "target_roles": ["business analyst"],
-        "also_consider_roles": ["project manager"],
+        "target_roles": [],
+        "also_consider_roles": [],
     }
     result = classify_title("business analyst", empty_profile, db_path=tmp_db, _index=_TEST_INDEX)
     assert result.result == RESULT_UNCERTAIN
@@ -492,10 +535,9 @@ def test_no_profile_context_returns_uncertain(tmp_db):
 
 
 def test_profile_with_queries_that_do_not_match_returns_uncertain(tmp_db):
-    # Unknown queries should not fall back to title strings.
+    # Unknown selected roles should not fall back to title strings.
     unknown_profile = {
-        "target_occupation_queries": ["ict portfolio transformation lead"],
-        "target_roles": ["business analyst"],
+        "target_roles": ["ict portfolio transformation lead"],
         "also_consider_roles": [],
     }
     result = classify_title("business analyst", unknown_profile, db_path=tmp_db, _index=_TEST_INDEX)
@@ -503,11 +545,8 @@ def test_profile_with_queries_that_do_not_match_returns_uncertain(tmp_db):
     assert result.reason == "no_profile_context"
 
 
-# ── target_occupation_queries ─────────────────────────────────────────────────
-
-
-def test_target_occupation_queries_used_for_classification(tmp_db):
-    """target_occupation_queries codes must be included when deriving target occupations."""
+def test_selected_target_roles_are_used_for_classification(tmp_db):
+    """Selected target roles are included when deriving target occupations."""
     result = classify_title(
         "accounts payable officer", _ACCOUNTING_PROFILE, db_path=tmp_db, _index=_TEST_INDEX
     )
@@ -515,8 +554,8 @@ def test_target_occupation_queries_used_for_classification(tmp_db):
     assert result.matched_occupation_code == "43-3031.00"
 
 
-def test_admin_profile_uses_occupation_queries(tmp_db):
-    """Multiple target occupation queries should expand the target code set."""
+def test_admin_profile_uses_selected_roles(tmp_db):
+    """Multiple selected roles should expand the target code set."""
     result = classify_title(
         "office administrator", _ADMIN_PROFILE, db_path=tmp_db, _index=_TEST_INDEX
     )
@@ -524,25 +563,24 @@ def test_admin_profile_uses_occupation_queries(tmp_db):
     assert result.matched_occupation_code == "43-6014.00"
 
 
-def test_missing_target_occupation_queries_does_not_fall_back_to_target_roles(tmp_db):
-    """Display titles must not be reused as machine-facing occupation context."""
-    profile_without_queries = {
+def test_selected_target_roles_are_the_occupation_context(tmp_db):
+    """Selected role titles are the machine-facing occupation context."""
+    selected_profile = {
         "target_roles": ["business analyst"],
         "also_consider_roles": ["project manager"],
     }
     result = classify_title(
-        "business analyst", profile_without_queries, db_path=tmp_db, _index=_TEST_INDEX
+        "business analyst", selected_profile, db_path=tmp_db, _index=_TEST_INDEX
     )
-    assert result.result == RESULT_UNCERTAIN
-    assert result.reason == "no_profile_context"
+    assert result.result == RESULT_NEAR
+    assert result.reason == RESULT_NEAR
 
 
-def test_empty_target_occupation_queries_does_not_fall_back_to_target_roles(tmp_db):
-    """An empty occupation-query list must still leave O*NET uncertain."""
+def test_empty_selected_roles_leave_onet_uncertain(tmp_db):
+    """No selected roles must leave O*NET uncertain."""
     profile = {
-        "target_roles": ["business analyst"],
+        "target_roles": [],
         "also_consider_roles": [],
-        "target_occupation_queries": [],
     }
     result = classify_title("business analyst", profile, db_path=tmp_db, _index=_TEST_INDEX)
     assert result.result == RESULT_UNCERTAIN
@@ -568,13 +606,13 @@ def test_admin_profile_keeps_unrelated_titles_far(tmp_db):
     assert result.matched_occupation_code == "47-2111.00"
 
 
-def test_healthcare_profile_uses_occupation_queries(tmp_db):
+def test_healthcare_profile_uses_selected_roles(tmp_db):
     result = classify_title("Nurse", _HEALTHCARE_PROFILE, db_path=tmp_db, _index=_TEST_INDEX)
     assert result.result == RESULT_NEAR
     assert result.matched_occupation_code == "29-1141.00"
 
 
-def test_ict_profile_uses_occupation_queries(tmp_db):
+def test_ict_profile_uses_selected_roles(tmp_db):
     result = classify_title(
         "Help Desk Technician", _ICT_PROFILE, db_path=tmp_db, _index=_TEST_INDEX
     )
@@ -604,7 +642,7 @@ def test_onet_classify_log_emitted(tmp_db, caplog):
             _index=_TEST_INDEX,
         )
     assert any("ONET_TITLE_CLASSIFY" in r.message for r in caplog.records)
-    assert any("profile_target_occupation_queries" in r.message for r in caplog.records)
+    assert any("profile_occupation_titles" in r.message for r in caplog.records)
     assert any("derived_target_occupation_codes" in r.message for r in caplog.records)
     assert any("matched_occupation_code" in r.message for r in caplog.records)
     assert any("matched_phrase" in r.message for r in caplog.records)
@@ -634,7 +672,7 @@ def test_multicode_embedded_phrase_mixed_target_returns_uncertain(tmp_db):
     index["audit analyst"] = [
         {"occupation_code": "13-2011.00", "occupation_title": "Accountants and Auditors", "source": "alternate_title"}
     ]
-    mixed_profile = {"target_occupation_queries": ["business analyst", "audit analyst"]}
+    mixed_profile = {"target_roles": ["business analyst", "audit analyst"]}
     result = classify_title("Senior Tax Accountant", mixed_profile, db_path=tmp_db, _index=index)
     assert result.result == RESULT_UNCERTAIN
     assert result.reason == "ambiguous"
@@ -661,7 +699,7 @@ def test_multicode_embedded_phrase_all_inside_target_returns_near(tmp_db):
         {"occupation_code": "13-2011.00", "occupation_title": "Accountants and Auditors", "source": "occupation_title"},
         {"occupation_code": "13-2082.00", "occupation_title": "Tax Preparers", "source": "occupation_title"},
     ]
-    profile = {"target_occupation_queries": ["accountant", "tax preparers"]}
+    profile = {"target_roles": ["accountant", "tax preparers"]}
     index["tax preparers"] = [
         {"occupation_code": "13-2082.00", "occupation_title": "Tax Preparers", "source": "occupation_title"}
     ]

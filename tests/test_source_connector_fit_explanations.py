@@ -542,7 +542,6 @@ def test_seek_search_targets_use_all_distinct_profile_role_terms_not_legacy_keyw
     profile = {
         "target_roles": ["Senior Systems Analyst", "Business Analyst"],
         "also_consider_roles": ["AI Business Analyst"],
-        "target_occupation_queries": ["business analyst", "IT Business Analyst"],
         "search_settings": {
             "keywords": "legacy business analyst keyword",
             "locations": ["New South Wales"],
@@ -556,13 +555,11 @@ def test_seek_search_targets_use_all_distinct_profile_role_terms_not_legacy_keyw
         "Senior Systems Analyst",
         "Business Analyst",
         "AI Business Analyst",
-        "IT Business Analyst",
     ]
     assert [parse_qs(urlparse(target["url"]).query)["keywords"][0] for target in targets] == [
         "Senior Systems Analyst",
         "Business Analyst",
         "AI Business Analyst",
-        "IT Business Analyst",
     ]
 
 
