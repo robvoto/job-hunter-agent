@@ -38,18 +38,19 @@ Use for project filesystem/tool access and whenever MCP execution is unreliable.
 - Prefer backward-compatible changes: add optional arguments, add new actions, or change only the internal Python implementation behind an existing action contract.
 - Internal implementation may evolve freely as long as the published v1 tool contract remains compatible.
 
-## Existing logged-in browser control
-This section is runtime-specific: it applies only when the Human MCP/browser bridge capability is exposed. Local Codex/Claude/Cline sessions must not assume they can control the signed-in browser merely because these tools exist in another runtime.
+## Existing signed-in browser control
+Runtime-specific: use only when Human MCP browser tools are exposed.
 
-- Human MCP server source: `E:\Programming\MCP-server\mcp_fileserver.py`.
-- Browser bridge extension source: `E:\Programming\MCP-server\chrome-human-mcp`.
-- Browser bridge design notes: `E:\Programming\MCP-server\docs\BROWSER_CONTROL.md`.
-- The human uses the normal signed-in Chrome session for sites such as LinkedIn. Do not launch a clean automation profile, copy cookies, or ask for another login unless the human explicitly requests a separate browser profile.
-- Current control path is the local Chrome extension bridge, not Chrome remote-debugging autoConnect. The extension bridge listens on `127.0.0.1:8766`, talks only to localhost, and preserves the existing signed-in session.
-- Human MCP exposes browser tools including `browser_status`, `browser_list_pages`, `browser_select_page`, `browser_navigate`, `browser_snapshot`, `browser_click`, `browser_fill`, and `browser_wait_for` after the connector catalogue refreshes.
-- In an already-open ChatGPT session the connector schema may be stale and not surface newly added browser tools. In that case, `HUMAN_MCP_SECURE.run_command` may use a local FastMCP client against `http://127.0.0.1:8001/mcp` as a temporary catalogue bridge. A new ChatGPT session should discover the tools directly.
-- Opening a URL with `Start-Process` is not proof of DOM/browser control. Before claiming browser control, verify bridge health and successfully read `browser_list_pages` or `browser_snapshot`.
-- If Windows output fails on LinkedIn Unicode/emoji, treat it as an output-encoding issue. Use `PYTHONIOENCODING=ascii:backslashreplace` or bounded escaped output rather than assuming the browser read failed.
+- Server: `E:\Programming\MCP-server\mcp_fileserver.py`; bridge: `127.0.0.1:8766`; design notes: `E:\Programming\MCP-server\docs\BROWSER_CONTROL.md`.
+- Control the human's existing signed-in Chrome session. Do not launch a clean automation profile or copy cookies unless explicitly requested.
+- `browser_status` proves only that an extension is polling. Prove usable control with `browser_list_pages` and, when needed, `browser_snapshot`.
+- For deterministic actions: `browser_list_pages` -> `browser_select_page` -> navigate/snapshot/click. `browser_list_pages` itself does not require a selected tab.
+- Browser queue names are extension identities, not Chrome folder names. Each Chrome profile must load only its matching unpacked extension: Rob -> `chrome-human-mcp` (`PROFILE="rob"`), Maria -> `chrome-human-mcp-maria` (`PROFILE="maria"`). If two Chrome profiles poll the same queue, commands can be consumed by the wrong browser and produce impossible-looking tab/select/snapshot failures.
+- If status is healthy but tab results are inconsistent, verify the loaded extension path in each Chrome profile before blaming the MCP server or retrying commands.
+- `chrome.scripting.executeScript` requires the target host in the extension manifest. A site may navigate successfully yet snapshot fail with a host-permission error. Add the exact durable host pattern, then reload the unpacked extension; do not misdiagnose this as bot detection.
+- A stale ChatGPT connector catalogue can hide newly added browser actions. Refresh/discover the connector before inventing a fallback.
+- Opening a URL externally is not proof of DOM control. Do not claim browser control until the MCP can read the target tab.
+- If Windows output fails on Unicode/emoji, treat it as output encoding and retry with bounded escaped output.
 
 ### Gmail OAuth access
 - Human MCP now contains read-only Gmail tools: `gmail_auth_status`, `gmail_search`, `gmail_read_message`, and `gmail_read_thread`.
