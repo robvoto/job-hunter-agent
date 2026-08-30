@@ -1851,7 +1851,10 @@ def _run_scrape_job(*, force_refresh: bool = False) -> None:
         scrape_jobs_direct(force_refresh=force_refresh)
         if run_shutdown_requested():
             raise RunInterruptedError("Server shutdown interrupted the scrape run.")
-        _write_run_stats_field("last_run_error", None)
+        # Finalization owns the current run's error/warning state. Do not erase
+        # a source failure after a partial run has been persisted.
+        if not str((load_run_stats() or {}).get("last_run_error") or "").strip():
+            _write_run_stats_field("last_run_error", None)
     except RunInterruptedError:
         _write_run_stats_field("run_status", RUN_STATUS_INTERRUPTED)
         _write_run_stats_field("last_run_error", RUN_INTERRUPTED_MESSAGE)

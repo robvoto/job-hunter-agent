@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextvars
 import logging
+import threading
 import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
@@ -11,14 +12,20 @@ from datetime import datetime
 from typing import Any, Callable, Sequence, cast
 
 from job_hunter_agent.posting_utils import current_posted_age_days
-from job_hunter_agent.record_schema import RECORD_POSTED_AGE_DAYS_KEY, RECORD_RUN_STARTED_AT_KEY
+from job_hunter_agent.record_schema import (
+    RECORD_JOB_KEY,
+    RECORD_POSTED_AGE_DAYS_KEY,
+    RECORD_RUN_STARTED_AT_KEY,
+)
 from job_hunter_agent.run_context import ScrapeRunContext
 from job_hunter_agent.run_control import (
-    get_run_progress,
+    get_run_progress_for_source,
     run_stop_requested,
     run_shutdown_requested,
+    reset_source_timeout_event,
     set_run_progress,
     set_run_progress_state,
+    set_source_timeout_event,
     step_through_enabled,
 )
 from job_hunter_agent.source_errors import PartialSourceResultsError
@@ -71,14 +78,35 @@ SOURCE_HEARTBEAT_SECONDS = 15
 SOURCE_TIMEOUT_GRACE_MIN_SECONDS = 0.25
 SOURCE_TIMEOUT_GRACE_MAX_SECONDS = 10.0
 SOURCE_TIMEOUT_GRACE_FRACTION = 0.1
-SEEK_SOURCE_TIMEOUT_MESSAGE = "SEEK is taking longer than expected; waiting for it to finish."
-LINKEDIN_SOURCE_TIMEOUT_MESSAGE = "LinkedIn is taking longer than expected; waiting for it to finish."
-APSJOBS_SOURCE_TIMEOUT_MESSAGE = "APSJobs is taking longer than expected; waiting for it to finish."
+SEEK_SOURCE_TIMEOUT_MESSAGE = (
+    "SEEK exceeded its source time budget; stopping and preserving completed results."
+)
+LINKEDIN_SOURCE_TIMEOUT_MESSAGE = (
+    "LinkedIn exceeded its source time budget; stopping and preserving completed results."
+)
+APSJOBS_SOURCE_TIMEOUT_MESSAGE = (
+    "APSJobs exceeded its source time budget; stopping and preserving completed results."
+)
 
 
 def _exception_message(exc: Exception) -> str:
     message = str(exc).strip()
     return message or type(exc).__name__
+
+
+def _merge_partial_rows(*groups: list[dict]) -> list[dict]:
+    """Keep one copy of each explicitly identified row across retry attempts."""
+    merged: list[dict] = []
+    seen_keys: set[str] = set()
+    for group in groups:
+        for row in group:
+            job_key = str(row.get(RECORD_JOB_KEY) or "").strip()
+            if job_key and job_key in seen_keys:
+                continue
+            if job_key:
+                seen_keys.add(job_key)
+            merged.append(row)
+    return merged
 
 @dataclass
 class SourceRunResult:
@@ -95,6 +123,15 @@ class SourceRunResult:
     source_cache_signature: str = ""
     source_failure_backoff: bool = False
     source_collection_complete: bool = True
+
+
+def _source_health(result: SourceRunResult) -> str:
+    """Classify collection health separately from whether the worker returned."""
+    if result.error is None and result.source_collection_complete:
+        return "healthy"
+    if result.kept_records or result.audit_rows:
+        return "partial_failure"
+    return "full_failure"
 
 
 def _source_search_signature(context: ScrapeRunContext, source: str) -> str:
@@ -279,12 +316,15 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
         try:
             kept, audit, skills = seek_scrape_to_records(**_seek_kwargs, headless=headless)
         except BotChallengeDetected as exc:
+            partial_kept = list(exc.kept_records)
+            partial_audit = list(exc.audit_rows)
+            partial_skills = list(exc.skill_observations)
             failure_class = getattr(exc, "failure_class", "SEEK_UNKNOWN_FAILURE")
             if failure_class not in {
                 SEEK_HUMAN_VERIFICATION,
                 SEEK_BOT_CHALLENGE,
                 SEEK_TIMEOUT_NO_CARDS,
-            } or not headless:
+            }:
                 set_run_progress(_exception_message(exc))
                 _record_source_warning(
                     source=SOURCE_SEEK,
@@ -305,6 +345,39 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
                     ),
                 )
                 raise
+            if not headless:
+                set_run_progress(_exception_message(exc))
+                _record_source_warning(
+                    source=SOURCE_SEEK,
+                    severity="warning",
+                    category="source_failure",
+                    message=_exception_message(exc),
+                    run_id=context.run_iso,
+                    context={
+                        "failure_class": failure_class,
+                        "headless": headless,
+                        "assisted_verification_enabled": assisted_verification_enabled,
+                    },
+                    fingerprint_parts=(
+                        "source_failure",
+                        SOURCE_SEEK,
+                        failure_class,
+                        _exception_message(exc),
+                    ),
+                )
+                return SourceRunResult(
+                    source=SOURCE_SEEK,
+                    kept_records=partial_kept,
+                    audit_rows=partial_audit,
+                    skill_observations=partial_skills,
+                    error=exc,
+                    _job_history_snapshot=job_history,
+                    _llm_cache_snapshot=llm_cache,
+                    discovery_records=(cached_records if cached_records is not None else captured_records),
+                    source_cache_status=cache_status,
+                    source_cache_signature=signature,
+                    source_collection_complete=False,
+                )
             if not assisted_verification_enabled:
                 logger.warning(
                     "[SEEK] Headless SEEK run hit %s but AWS browser session mode is disabled",
@@ -331,11 +404,16 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
                 )
                 return SourceRunResult(
                     source=SOURCE_SEEK,
+                    kept_records=partial_kept,
+                    audit_rows=partial_audit,
+                    skill_observations=partial_skills,
                     error=exc,
                     _job_history_snapshot=job_history,
                     _llm_cache_snapshot=llm_cache,
+                    discovery_records=(cached_records if cached_records is not None else captured_records),
                     source_cache_status=cache_status,
                     source_cache_signature=signature,
+                    source_collection_complete=False,
                 )
             logger.warning(
                 "[SEEK] Headless SEEK run hit %s; retrying with AWS browser session",
@@ -345,6 +423,9 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
             try:
                 kept, audit, skills = seek_scrape_to_records(**_seek_kwargs, headless=False)
             except BotChallengeDetected as retry_exc:
+                retry_kept = list(retry_exc.kept_records)
+                retry_audit = list(retry_exc.audit_rows)
+                retry_skills = list(retry_exc.skill_observations)
                 retry_failure_class = getattr(retry_exc, "failure_class", "SEEK_UNKNOWN_FAILURE")
                 if retry_failure_class not in {
                     SEEK_HUMAN_VERIFICATION,
@@ -379,9 +460,16 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
                 )
                 return SourceRunResult(
                     source=SOURCE_SEEK,
+                    kept_records=_merge_partial_rows(partial_kept, retry_kept),
+                    audit_rows=_merge_partial_rows(partial_audit, retry_audit),
+                    skill_observations=[*partial_skills, *retry_skills],
                     error=retry_exc,
                     _job_history_snapshot=job_history,
                     _llm_cache_snapshot=llm_cache,
+                    discovery_records=(cached_records if cached_records is not None else captured_records),
+                    source_cache_status=cache_status,
+                    source_cache_signature=signature,
+                    source_collection_complete=False,
                 )
         return SourceRunResult(
             source=SOURCE_SEEK,
@@ -427,6 +515,7 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
             discovery_records=(cached_records if cached_records is not None else captured_records),
             source_cache_status=cache_status,
             source_cache_signature=signature,
+            source_collection_complete=False,
         )
     except Exception as exc:
         logger.exception("[SEEK] scraping failed")
@@ -452,6 +541,10 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
             error=exc,
             _job_history_snapshot=job_history,
             _llm_cache_snapshot=llm_cache,
+            discovery_records=(cached_records if cached_records is not None else captured_records),
+            source_cache_status=cache_status,
+            source_cache_signature=signature,
+            source_collection_complete=False,
         )
 
 
@@ -633,6 +726,10 @@ def _run_linkedin_source(context: ScrapeRunContext) -> SourceRunResult:
             error=exc.original_error,
             _job_history_snapshot=job_history,
             _llm_cache_snapshot=llm_cache,
+            discovery_records=(cached_records if cached_records is not None else captured_records),
+            source_cache_status=cache_status,
+            source_cache_signature=signature,
+            source_collection_complete=False,
         )
     except Exception as exc:
         logger.exception("[LinkedIn] scraping failed")
@@ -657,6 +754,10 @@ def _run_linkedin_source(context: ScrapeRunContext) -> SourceRunResult:
             error=exc,
             _job_history_snapshot=job_history,
             _llm_cache_snapshot=llm_cache,
+            discovery_records=(cached_records if cached_records is not None else captured_records),
+            source_cache_status=cache_status,
+            source_cache_signature=signature,
+            source_collection_complete=False,
         )
 
 
@@ -735,6 +836,10 @@ def _run_apsjobs_source(context: ScrapeRunContext) -> SourceRunResult:
             error=exc.original_error,
             _job_history_snapshot=job_history,
             _llm_cache_snapshot=llm_cache,
+            discovery_records=(cached_records if cached_records is not None else captured_records),
+            source_cache_status=cache_status,
+            source_cache_signature=signature,
+            source_collection_complete=False,
         )
     except Exception as exc:
         logger.exception("[APSJobs] scraping failed")
@@ -754,6 +859,10 @@ def _run_apsjobs_source(context: ScrapeRunContext) -> SourceRunResult:
             error=exc,
             _job_history_snapshot=job_history,
             _llm_cache_snapshot=llm_cache,
+            discovery_records=(cached_records if cached_records is not None else captured_records),
+            source_cache_status=cache_status,
+            source_cache_signature=signature,
+            source_collection_complete=False,
         )
 
 
@@ -767,14 +876,23 @@ SOURCE_RUNNER_NAMES: dict[str, str] = {
 def _log_source_timeout_warning(
     source: str, message: str, *, elapsed_s: float | None = None
 ) -> None:
+    source_progress = get_run_progress_for_source(source)
     logger.warning(
         "[%s][SOURCE_TIMEOUT] elapsed_s=%s progress=%r message=%s",
         source.upper(),
         int(elapsed_s) if elapsed_s is not None else -1,
-        get_run_progress() or "(none)",
+        source_progress or "(none)",
         message,
     )
-    set_run_progress(message)
+    source_label = get_source_display_label(source)
+    set_run_progress_state(
+        message,
+        stage="error",
+        source=source,
+        headline=f"{source_label} timed out",
+        detail="Stopping the source and preserving completed results.",
+        determinate=False,
+    )
     record_system_warning(
         severity="warning",
         category="source_timeout",
@@ -787,7 +905,7 @@ def _log_source_timeout_warning(
         ),
         context={
             "elapsed_s": int(elapsed_s) if elapsed_s is not None else None,
-            "progress": get_run_progress() or "",
+            "progress": source_progress,
         },
     )
 
@@ -856,10 +974,20 @@ def _log_source_start(source: str, *, execution_mode: str) -> None:
 
 
 def _log_source_complete(result: SourceRunResult, *, elapsed_s: float) -> None:
-    log = logger.warning if result.error is not None else logger.info
+    if result.error is None and result.source_collection_complete:
+        marker = "SOURCE_COMPLETE"
+        log = logger.info
+    elif result.kept_records or result.audit_rows or (
+        result.error is None and not result.source_collection_complete
+    ):
+        marker = "SOURCE_PARTIAL"
+        log = logger.warning
+    else:
+        marker = "SOURCE_FAILED"
+        log = logger.error
     log(
         format_log_block(
-            f"{result.source.upper()}][SOURCE_COMPLETE",
+            f"{result.source.upper()}][{marker}",
             {
                 "source": get_source_display_label(result.source),
                 "elapsed_seconds": int(elapsed_s),
@@ -867,6 +995,7 @@ def _log_source_complete(result: SourceRunResult, *, elapsed_s: float) -> None:
                 "audit": len(result.audit_rows),
                 "skills": len(result.skill_observations),
                 "error": type(result.error).__name__ if result.error is not None else "none",
+                "collection_complete": result.source_collection_complete,
                 "source_cache": result.source_cache_status,
                 "source_cache_signature": result.source_cache_signature[:12],
             },
@@ -912,12 +1041,15 @@ def _run_source_with_scope(
     source: str,
     runner: Callable[[ScrapeRunContext], SourceRunResult],
     context: ScrapeRunContext,
+    timeout_event: threading.Event | None = None,
 ) -> SourceRunResult:
-    token = set_log_source_scope(source)
+    log_token = set_log_source_scope(source)
+    timeout_token = set_source_timeout_event(timeout_event)
     try:
         return runner(context)
     finally:
-        reset_log_source_scope(token)
+        reset_source_timeout_event(timeout_token)
+        reset_log_source_scope(log_token)
 
 
 def _run_sources_in_parallel(
@@ -929,11 +1061,22 @@ def _run_sources_in_parallel(
     executor = ThreadPoolExecutor(max_workers=len(source_order))
     started_at: dict[str, float] = {source: time.monotonic() for source in source_order}
     futures = {}
+    timeout_events: dict[Any, threading.Event] = {}
     for source in source_order:
         _log_source_start(source, execution_mode="parallel")
         runner = _get_source_runner(source)
         worker_context = contextvars.copy_context()
-        futures[executor.submit(worker_context.run, _run_source_with_scope, source, runner, context)] = source
+        timeout_event = threading.Event()
+        future = executor.submit(
+            worker_context.run,
+            _run_source_with_scope,
+            source,
+            runner,
+            context,
+            timeout_event,
+        )
+        futures[future] = source
+        timeout_events[future] = timeout_event
 
     warn_deadlines = {
         future: started_at[source] + _source_timeout_seconds(source)
@@ -952,9 +1095,6 @@ def _run_sources_in_parallel(
         while pending:
             now = time.monotonic()
 
-            # Only an explicit user stop gets a bounded cleanup window. A source
-            # timeout is informational: active searches may legitimately exceed it,
-            # and discarding their in-flight results would corrupt the run outcome.
             if run_stop_requested():
                 for future in pending:
                     source = futures[future]
@@ -975,6 +1115,11 @@ def _run_sources_in_parallel(
                     source,
                     timeout_messages[future],
                     elapsed_s=elapsed_s,
+                )
+                timeout_events[future].set()
+                stop_deadlines.setdefault(
+                    future,
+                    now + _source_stop_cleanup_seconds(source),
                 )
                 timeout_warned.add(future)
 
@@ -1019,13 +1164,15 @@ def _run_sources_in_parallel(
                     context={
                         "elapsed_s": int(now - started_at[source]),
                         "cleanup_seconds": cleanup_seconds,
-                        "stop_requested": True,
+                        "stop_requested": run_stop_requested(),
+                        "source_timeout": timeout_events[future].is_set(),
                     },
                     fingerprint_parts=("source_stop_bounded", source, message),
                 )
                 results_by_source[source] = SourceRunResult(
                     source=source,
                     error=TimeoutError(message),
+                    source_collection_complete=False,
                 )
                 set_run_progress_state(
                     message,
@@ -1045,7 +1192,7 @@ def _run_sources_in_parallel(
                     "[%s][SOURCE_RUNNING] elapsed_s=%d progress=%r",
                     source.upper(),
                     int(elapsed_s),
-                    get_run_progress() or "(none)",
+                    get_run_progress_for_source(source) or "(none)",
                 )
                 while next_heartbeat_at[source] <= now:
                     next_heartbeat_at[source] += SOURCE_HEARTBEAT_SECONDS
@@ -1162,8 +1309,9 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
         )
         results = _run_sources_in_parallel(context, enabled_source_order)
     elif enabled_source_order:
-        source = enabled_source_order[0]
-        results = [_run_source_with_scope(source, _get_source_runner(source), context)]
+        # Use the same monitored worker path for a single source so its timeout
+        # and cooperative cancellation contract matches parallel runs.
+        results = _run_sources_in_parallel(context, enabled_source_order)
 
     # Merge mutable state back into context in deterministic order.
     for result in results:
@@ -1177,6 +1325,9 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
             "records": len(result.discovery_records),
             "external_source_calls_avoided": result.source_cache_status
             in {"HIT", "BACKOFF", "STALE_FALLBACK"},
+            "health": _source_health(result),
+            "collection_complete": bool(result.source_collection_complete),
+            "error": _exception_message(result.error) if result.error is not None else "",
         }
         for result in results
     }

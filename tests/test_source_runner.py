@@ -464,6 +464,34 @@ def test_seek_visible_bot_challenge_returns_error_result(monkeypatch):
     assert result.kept_records == []
 
 
+def test_seek_bot_challenge_preserves_partial_results_from_scraper(monkeypatch):
+    context = _make_context([SOURCE_SEEK])
+    context.headless = False
+    context.profile = {"search_settings": {"keywords": "Business Analyst", "locations": ["Sydney"]}}
+
+    def fake_seek_scrape_to_records(**kwargs):
+        exc = source_runner.BotChallengeDetected(
+            "challenge after cards",
+            failure_class=source_runner.SEEK_BOT_CHALLENGE,
+        )
+        exc.attach_partial_results(
+            kept_records=[{"job_key": "seek:partial-keep"}],
+            audit_rows=[{"job_key": "seek:partial-keep", "decision": "KEEP"}],
+            skill_observations=[{"kind": "partial"}],
+        )
+        raise exc
+
+    monkeypatch.setattr(source_runner, "seek_scrape_to_records", fake_seek_scrape_to_records)
+
+    result = source_runner._run_seek_source(context)
+
+    assert result.error is not None
+    assert result.source_collection_complete is False
+    assert result.kept_records == [{"job_key": "seek:partial-keep"}]
+    assert result.audit_rows == [{"job_key": "seek:partial-keep", "decision": "KEEP"}]
+    assert result.skill_observations == [{"kind": "partial"}]
+
+
 def test_seek_human_verification_sets_user_facing_progress(monkeypatch):
     context = _make_context([SOURCE_SEEK])
     context.headless = False
@@ -619,6 +647,22 @@ def test_parallel_runner_logs_source_start_and_complete_blocks(monkeypatch, capl
     assert "[LINKEDIN][SOURCE_COMPLETE]" in caplog.text
 
 
+def test_parallel_runner_labels_failed_source_with_truthful_health_marker(monkeypatch, caplog):
+    caplog.set_level(logging.INFO, logger="job_hunter_agent.source_runner")
+    context = _make_context([SOURCE_SEEK])
+    monkeypatch.setattr(
+        source_runner,
+        "_run_seek_source",
+        lambda ctx: _seek_result(error=RuntimeError("challenge"), source_collection_complete=False),
+    )
+
+    run_enabled_sources(context)
+
+    assert "[SEEK][SOURCE_FAILED]" in caplog.text
+    assert "[SEEK][SOURCE_COMPLETE]" not in caplog.text
+    assert context.source_cache_stats[SOURCE_SEEK]["health"] == "full_failure"
+
+
 def test_run_enabled_sources_binds_source_scope_per_runner(monkeypatch):
     context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
     captured_scopes: list[str] = []
@@ -702,6 +746,36 @@ def test_parallel_runner_does_not_kill_active_source_after_timeout_warning(monke
     assert [row["job_key"] for row in audit] == ["seek:late", "linkedin:1"]
     assert skills == []
     assert "[SOURCE_TIMEOUT]" in caplog.text
+
+
+def test_parallel_runner_requests_cooperative_source_stop_after_timeout(monkeypatch, caplog):
+    context = _make_context([SOURCE_SEEK])
+    observed_stop = threading.Event()
+
+    def cooperative_seek(ctx):
+        deadline = time.monotonic() + 1
+        while time.monotonic() < deadline:
+            if source_runner.run_stop_requested():
+                observed_stop.set()
+                return _seek_result(
+                    kept_records=[{"job_key": "seek:before-timeout"}],
+                    audit_rows=[{"job_key": "seek:before-timeout"}],
+                    source_collection_complete=False,
+                )
+            time.sleep(0.001)
+        raise AssertionError("source timeout was not propagated to the worker")
+
+    monkeypatch.setattr(source_runner, "_run_seek_source", cooperative_seek)
+    monkeypatch.setattr(source_runner, "SEEK_SOURCE_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr(source_runner, "SOURCE_HEARTBEAT_SECONDS", 60)
+
+    kept, audit, skills = run_enabled_sources(context)
+
+    assert observed_stop.is_set()
+    assert [record["job_key"] for record in kept] == ["seek:before-timeout"]
+    assert [row["job_key"] for row in audit] == ["seek:before-timeout"]
+    assert skills == []
+    assert "exceeded its source time budget" in caplog.text
 
 
 def test_parallel_runner_detaches_unresponsive_source_after_stop_cleanup(monkeypatch):

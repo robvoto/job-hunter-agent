@@ -13,6 +13,7 @@ from job_hunter_agent.paths import RESULTS_TEMPLATE_PATH, UI_LABELS_PATH, get_wo
 from job_hunter_agent.routes.responses import json_response
 from job_hunter_agent.run_control import (
     get_run_progress,
+    get_run_progress_by_source,
     get_run_progress_detail,
     request_run_stop,
 )
@@ -136,6 +137,7 @@ def api_run_status():  # type: ignore[no-untyped-def]
             "stop_requested": status == srv.RUN_STATUS_STOPPING,
             "progress": progress or None,
             "progress_detail": progress_detail,
+            "progress_by_source": get_run_progress_by_source(),
             "elapsed_seconds": elapsed_seconds,
             "elapsed_text": elapsed_text or None,
             "last_run_at": last_run,
@@ -156,6 +158,7 @@ def api_run_stop():  # type: ignore[no-untyped-def]
                 "stop_requested": False,
                 "progress": get_run_progress() or None,
                 "progress_detail": get_run_progress_detail(),
+                "progress_by_source": get_run_progress_by_source(),
                 "elapsed_seconds": srv._current_run_elapsed_seconds(),
                 "elapsed_text": srv._format_current_run_elapsed() or None,
             }
@@ -174,6 +177,7 @@ def api_run_stop():  # type: ignore[no-untyped-def]
             "stop_requested": True,
             "progress": progress or None,
             "progress_detail": get_run_progress_detail(),
+            "progress_by_source": get_run_progress_by_source(),
             "elapsed_seconds": elapsed_seconds,
             "elapsed_text": elapsed_text or None,
             "last_run_at": last_run,
