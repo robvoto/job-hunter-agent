@@ -64,6 +64,12 @@ Never leave the human guessing. End Git-related work with exactly one clear inte
 
 If the state is not `IN MAIN`, say what single action is still required. Do not use `done`, `shipped`, `merged`, or `deployed` ambiguously.
 
+## Repository-state reporting
+
+- `MAIN STATUS` reports remote integration only; `CLEANUP STATUS` reports only the merged task's temporary branch and worktree.
+- Do not call a repository `clean` unless the shared checkout and every active worktree have been checked clean, and the shared checkout is current with `origin/main`.
+- Otherwise state the verified scope precisely, for example: `task worktree clean; other worktrees not assessed`.
+
 ## Mandatory post-merge cleanup
 
 A successful integration is **not complete** until the task worktree/branch cleanup is completed or explicitly reported as blocked.
