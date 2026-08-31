@@ -3,6 +3,7 @@
 import pytest
 
 from job_hunter_agent import profile_learning, source_documents
+from job_hunter_agent.utils import deep_merge
 
 
 @pytest.fixture(autouse=True)
@@ -78,8 +79,8 @@ def test_run_onboarding_uses_llm_titles_without_parser(monkeypatch):
 
     assert result["ok"] is True
     assert "Scrum Master\nCompany Name | 2022 - Present" in str(captured["text"])
-    assert result["profile"]["target_roles"] == []
-    assert result["profile"]["also_consider_roles"] == []
+    assert result["profile"].get("target_roles", []) == []
+    assert result["profile"].get("also_consider_roles", []) == []
     assert result["role_suggestions"] == {
         "target_roles": ["scrum master"],
         "also_consider_roles": ["agile project coordinator"],
@@ -148,8 +149,94 @@ def test_cv_role_suggestions_do_not_become_targets_before_user_selection(monkeyp
     )
 
     assert result["role_suggestions"]["target_roles"] == ["data analyst"]
-    assert result["profile"]["target_roles"] == []
-    assert result["profile"]["also_consider_roles"] == []
+    assert result["profile"].get("target_roles", []) == []
+    assert result["profile"].get("also_consider_roles", []) == []
+
+
+def test_onboarding_rebuild_preserves_confirmed_roles_until_review_confirm(monkeypatch):
+    current_profile = {
+        "target_roles": ["business analyst"],
+        "also_consider_roles": ["systems analyst"],
+        "search_settings": {},
+        "match_preferences": {},
+        "onboarding_settings": {},
+    }
+
+    def fake_patch_profile(patch):
+        nonlocal current_profile
+        current_profile = deep_merge(current_profile, patch)
+        return current_profile
+
+    monkeypatch.setattr(source_documents, "load_profile", lambda: current_profile)
+    monkeypatch.setattr(source_documents, "patch_profile", fake_patch_profile)
+    monkeypatch.setattr(source_documents, "clear_onboarding_runtime_outputs", lambda: None)
+    monkeypatch.setattr(
+        profile_learning,
+        "_llm_extract_from_cv",
+        lambda text, lookback_years, alias_limit: {
+            "capabilities": [
+                {
+                    "name": "data analysis",
+                    "level": "working",
+                    "aliases": [],
+                    "icon_key": "data_reporting",
+                    "atomic_concept": True,
+                    "needs_review": False,
+                }
+            ],
+            "role_titles": ["Data Analyst"],
+            "preferred_role_titles": ["Data Analyst"],
+            "alternative_role_titles": [],
+            "match_preferences": {},
+        },
+    )
+
+    result = source_documents.run_onboarding(
+        {"profile_sources": [{"label": "Primary CV", "filename": "cv.txt", "content": "Data Analyst"}]}
+    )
+
+    assert result["role_suggestions"] == {
+        "target_roles": ["data analyst"],
+        "also_consider_roles": [],
+    }
+    assert result["profile"]["target_roles"] == ["business analyst"]
+    assert result["profile"]["also_consider_roles"] == ["systems analyst"]
+
+
+def test_onboarding_extraction_failure_does_not_erase_confirmed_roles(monkeypatch):
+    current_profile = {
+        "target_roles": ["business analyst"],
+        "also_consider_roles": ["systems analyst"],
+        "search_settings": {},
+        "match_preferences": {},
+        "onboarding_settings": {},
+    }
+    applied_patches = []
+
+    def fake_patch_profile(patch):
+        nonlocal current_profile
+        applied_patches.append(patch)
+        current_profile = deep_merge(current_profile, patch)
+        return current_profile
+
+    def fail_learning_patch(*args, **kwargs):
+        raise RuntimeError("simulated extraction failure")
+
+    monkeypatch.setattr(source_documents, "load_profile", lambda: current_profile)
+    monkeypatch.setattr(source_documents, "patch_profile", fake_patch_profile)
+    monkeypatch.setattr(source_documents, "clear_onboarding_runtime_outputs", lambda: None)
+    monkeypatch.setattr(source_documents, "build_learning_patch", fail_learning_patch)
+
+    with pytest.raises(RuntimeError, match="simulated extraction failure"):
+        source_documents.run_onboarding(
+            {"profile_sources": [{"label": "Primary CV", "filename": "cv.txt", "content": "CV"}]}
+        )
+
+    assert len(applied_patches) == 1
+    assert "target_roles" not in applied_patches[0]
+    assert "also_consider_roles" not in applied_patches[0]
+    assert current_profile["target_roles"] == ["business analyst"]
+    assert current_profile["also_consider_roles"] == ["systems analyst"]
 
 
 @pytest.mark.parametrize(

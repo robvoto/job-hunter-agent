@@ -54,9 +54,9 @@ logger = logging.getLogger(__name__)
 ROOT_DIR = REPO_ROOT
 
 # Fields reset to DEFAULT_PROFILE values at the start of every onboarding run.
+# Role selections are intentionally excluded: they are confirmed user intent and
+# remain authoritative until the review confirm endpoint explicitly replaces them.
 ONBOARDING_RESET_FIELDS = (
-    KEY_PRIMARY_PATTERNS,
-    KEY_SECONDARY_PATTERNS,
     KEY_CANDIDATE_CAPABILITIES,
     KEY_ONBOARDING_COMPLETE,
     KEY_EVIDENCE_TIERS,

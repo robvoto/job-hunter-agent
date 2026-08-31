@@ -163,11 +163,17 @@ def _reset_fresh_onboarding_user(user_id: str) -> None:
         save_source_materials,
     )
     from job_hunter_agent.user_context import set_user_id
-    from job_hunter_agent.profile_store import patch_profile
+    from job_hunter_agent.profile_store import (
+        KEY_PRIMARY_PATTERNS,
+        KEY_SECONDARY_PATTERNS,
+        patch_profile,
+    )
 
     set_user_id(user_id)
     try:
-        patch_profile(build_onboarding_reset_patch())
+        fresh_patch = build_onboarding_reset_patch()
+        fresh_patch.update({KEY_PRIMARY_PATTERNS: [], KEY_SECONDARY_PATTERNS: []})
+        patch_profile(fresh_patch)
         save_source_materials(DEFAULT_SOURCE_MATERIALS)
     finally:
         set_user_id(None)
