@@ -2,6 +2,7 @@
 
 import logging
 import hashlib as _hashlib
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -85,6 +86,34 @@ _LLM_FIXTURE = {
 }
 
 
+def test_resolve_role_family_requires_structured_confirmation_before_save():
+    calls = []
+
+    class _Responses:
+        def parse(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(
+                output_parsed=profile_learning._RoleFamilyResolution(
+                    role_family="Systems Analyst", resolved=True
+                )
+            )
+
+    class _Client:
+        responses = _Responses()
+
+    with (
+        patch("job_hunter_agent.llm_gate._llm_generation_kwargs", return_value={}),
+        patch("job_hunter_agent.llm_gate._log_llm_call"),
+    ):
+        result = profile_learning.resolve_role_family(
+            " Senior Systems Analyst ", _Client(), benchmark_model="test-model"
+        )
+
+    assert result == {"role_family": "Systems Analyst", "resolved": True}
+    assert calls[0]["input"][-1]["content"] == "Senior Systems Analyst"
+    assert calls[0]["text_format"] is profile_learning._RoleFamilyResolution
+
+
 def test_build_learning_patch_returns_transient_role_suggestions_without_parser():
     with (
         patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=_LLM_FIXTURE),
@@ -116,6 +145,7 @@ def test_build_learning_patch_returns_transient_role_suggestions_without_parser(
             "most_recent_end_year": profile_learning._CURRENT_YEAR,
             "title_variants": [
                 {
+                    "title": "Delivery Lead",
                     "normalized_title": "delivery lead",
                     "total_duration_months": 36,
                     "most_recent_end_year": profile_learning._CURRENT_YEAR,
@@ -128,6 +158,7 @@ def test_build_learning_patch_returns_transient_role_suggestions_without_parser(
             "most_recent_end_year": 2019,
             "title_variants": [
                 {
+                    "title": "Project Coordinator",
                     "normalized_title": "project coordinator",
                     "total_duration_months": 36,
                     "most_recent_end_year": 2019,
@@ -176,6 +207,7 @@ def test_build_learning_patch_groups_role_experience_by_normalized_title():
             "most_recent_end_year": 2024,
             "title_variants": [
                 {
+                    "title": "Senior Business Analyst",
                     "normalized_title": "senior business analyst",
                     "total_duration_months": 42,
                     "most_recent_end_year": 2024,
@@ -239,20 +271,73 @@ def test_build_learning_patch_groups_role_experience_by_canonical_title_and_pres
             "most_recent_end_year": 2024,
             "title_variants": [
                 {
+                    "title": "BA",
                     "normalized_title": "ba",
                     "total_duration_months": 12,
                     "most_recent_end_year": 2020,
                 },
                 {
+                    "title": "Business Analyst",
                     "normalized_title": "business analyst",
                     "total_duration_months": 24,
                     "most_recent_end_year": 2022,
                 },
                 {
+                    "title": "Senior BA",
                     "normalized_title": "senior ba",
                     "total_duration_months": 24,
                     "most_recent_end_year": 2024,
                 },
+            ],
+        }
+    ]
+
+
+def test_build_learning_patch_proposes_role_family_but_preserves_cv_title():
+    fixture = {
+        "capabilities": [
+            {
+                "name": "systems analysis",
+                "level": "strong",
+                "aliases": [],
+                "icon_key": "analysis_requirements",
+                "atomic_concept": True,
+            }
+        ],
+        "role_experience": [
+            {
+                "title": "Senior Systems Analyst",
+                "canonical_title": "Systems Analyst",
+                "duration_months": 24,
+                "end_year": 2025,
+                "is_current": True,
+            }
+        ],
+        "role_titles": ["Senior Systems Analyst"],
+        "preferred_role_titles": ["Senior Systems Analyst"],
+        "alternative_role_titles": [],
+        "match_preferences": {},
+    }
+
+    with patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=fixture):
+        patch_result = build_learning_patch(SAMPLE_CV)
+
+    assert patch_result["role_suggestions"] == {
+        "target_roles": ["systems analyst"],
+        "also_consider_roles": [],
+    }
+    assert patch_result["role_experience"] == [
+        {
+            "normalized_title": "systems analyst",
+            "total_duration_months": 24,
+            "most_recent_end_year": profile_learning._CURRENT_YEAR,
+            "title_variants": [
+                {
+                    "title": "Senior Systems Analyst",
+                    "normalized_title": "senior systems analyst",
+                    "total_duration_months": 24,
+                    "most_recent_end_year": profile_learning._CURRENT_YEAR,
+                }
             ],
         }
     ]

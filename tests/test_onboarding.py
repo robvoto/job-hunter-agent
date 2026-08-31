@@ -105,7 +105,7 @@ def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
     assert 'class="summary-field__value"' in html
 
 
-def test_onboarding_flow_keyword_helper_is_owned_by_page_module():
+def test_onboarding_flow_does_not_expose_search_keyword_concept():
     page_js_path = (
         Path(__file__).resolve().parents[1]
         / "templates"
@@ -123,9 +123,10 @@ def test_onboarding_flow_keyword_helper_is_owned_by_page_module():
     page_js_text = page_js_path.read_text(encoding="utf-8")
     search_js_text = search_js_path.read_text(encoding="utf-8")
 
-    assert "defaultSearchKeywordFromTargetRoles" in page_js_text
-    assert "export function defaultSearchKeywordFromTargetRoles" not in search_js_text
-    assert "onboardingPage.defaultSearchKeywordFromTargetRoles(profile)" in search_js_text
+    assert "defaultSearchKeywordFromTargetRoles" not in page_js_text
+    assert "defaultSearchKeywordFromTargetRoles" not in search_js_text
+    assert "search_keyword" not in page_js_text
+    assert "search_keyword" not in search_js_text
     assert "reviewTargetTitles.join(', ')" not in page_js_text
     assert "defaultSearchKeywordsFromReviewedTitles" not in page_js_text
 
@@ -753,7 +754,7 @@ def test_run_onboarding_logs_read_summary(monkeypatch, capsys, caplog, tmp_path)
     assert "[ONBOARDING][LLM_CALL_DONE] purpose=cv_extraction" in combined
     assert "Captured role history:" in combined
     assert "business analyst: 5 years total" in combined
-    assert "variants: ba (1 year), business analyst (2 years), senior ba (2 years)" in combined
+    assert "variants: BA (1 year), Business Analyst (2 years), Senior BA (2 years)" in combined
     assert "role_suggestions_are_transient=true" in combined
 
 
@@ -971,19 +972,18 @@ def test_validate_required_onboarding_inputs_rejects_bad_boundaries():
         raise AssertionError("Expected ValueError for invalid onboarding boundaries")
 
 
-def test_validate_required_onboarding_inputs_rejects_single_word_keyword():
-    with pytest.raises(ValueError, match="at least two words"):
-        server_helpers._validate_required_onboarding_inputs(
-            {
-                "keywords": "Analyst",
-                "locations": ["Sydney"],
-                "engagement_type": ["permanent", "contract"],
-            },
-            {
-                "extraction_lookback_years": 12,
-                "title_extraction_min_months": 6,
-            },
-        )
+def test_validate_required_onboarding_inputs_does_not_require_internal_keyword():
+    server_helpers._validate_required_onboarding_inputs(
+        {
+            "keywords": "Analyst",
+            "locations": ["Sydney"],
+            "engagement_type": ["permanent", "contract"],
+        },
+        {
+            "extraction_lookback_years": 12,
+            "title_extraction_min_months": 6,
+        },
+    )
 
 
 def test_save_profile_rejects_single_word_keyword():

@@ -54,7 +54,6 @@ logger = logging.getLogger(__name__)
 REQUEST_FILES_KEY = "files"
 REQUEST_SEARCH_PREFERENCES_KEY = "search_preferences"
 REQUEST_ONBOARDING_SETTINGS_KEY = "onboarding_settings"
-REQUEST_SEARCH_KEYWORD_KEY = "search_keyword"
 REQUEST_SEARCH_LOCATIONS_KEY = "search_locations"
 PROFILE_SEARCH_SETTINGS_KEY = "search_settings"
 PROFILE_SALARY_PREFS_KEY = "salary_preferences"
@@ -138,7 +137,6 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
     try:
         target = [str(p).strip() for p in body.get(KEY_PRIMARY_PATTERNS, []) if str(p).strip()]
         secondary = [str(p).strip() for p in body.get(KEY_SECONDARY_PATTERNS, []) if str(p).strip()]
-        keyword = str(body.get(REQUEST_SEARCH_KEYWORD_KEY) or "").strip()
         locations = [
             str(value).strip()
             for value in body.get(REQUEST_SEARCH_LOCATIONS_KEY, [])
@@ -161,8 +159,6 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
             raise ValueError(PROFILE_REVIEW_BLOCKING_REASON_NO_CAPABILITIES)
         if not target:
             raise ValueError("Primary job title must not be empty")
-        if keyword and (len(keyword) < 2 or len(keyword) > 120):
-            raise ValueError("Please keep the primary search title between 2 and 120 characters.")
         search_limits = load_global_settings()[KEY_LIMITS]["search"]
         max_locations = int(search_limits[KEY_LOCATIONS_MAX_SELECTED]["max"])
         if not locations:
@@ -236,9 +232,7 @@ def api_onboarding_confirm(body: dict = Body(...)):  # type: ignore[no-untyped-d
         profile_patch[KEY_CANDIDATE_CAPABILITIES] = capability_rules
         current = srv.load_profile()
         search_settings = dict(current.get(PROFILE_SEARCH_SETTINGS_KEY, {}))
-        if keyword:
-            search_settings[KEY_KEYWORDS] = keyword
-        elif not str(search_settings.get(KEY_KEYWORDS) or "").strip():
+        if not str(search_settings.get(KEY_KEYWORDS) or "").strip():
             search_settings[KEY_KEYWORDS] = target[0]
         search_settings[KEY_LOCATIONS] = locations
         profile_patch[PROFILE_SEARCH_SETTINGS_KEY] = search_settings

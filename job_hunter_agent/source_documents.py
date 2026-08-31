@@ -120,7 +120,9 @@ def _print_role_history_summary(role_experience: list[dict[str, Any]]) -> None:
             for variant in raw_variants:
                 if not isinstance(variant, dict):
                     continue
-                variant_title = str(variant.get("normalized_title") or "").strip()
+                variant_title = str(
+                    variant.get("title") or variant.get("normalized_title") or ""
+                ).strip()
                 variant_months = int(variant.get("total_duration_months") or 0)
                 if not variant_title or variant_months <= 0:
                     continue

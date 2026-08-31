@@ -536,7 +536,19 @@ def render_html(
 
     search_settings = get_search_settings(scoring_profile)
 
-    search_keywords_label = str(search_settings.get("keywords") or "").strip() or "Not set"
+    role_values = [
+        *(scoring_profile.get("target_roles") or []),
+        *(scoring_profile.get("also_consider_roles") or []),
+    ]
+    role_labels = []
+    seen_roles = set()
+    for value in role_values:
+        role = str(value or "").strip()
+        key = role.casefold()
+        if role and key not in seen_roles:
+            seen_roles.add(key)
+            role_labels.append(role)
+    search_roles_label = " | ".join(role_labels) or "Not set"
 
     search_locations = [
         str(value).strip() for value in search_settings.get("locations", []) if str(value).strip()
@@ -741,7 +753,7 @@ def render_html(
                 debug_mode=active_debug_mode,
                 header_nav_html=hidden_tabs_html,
             ),
-            "SEARCH_KEYWORDS_LABEL": safe_html(search_keywords_label),
+            "SEARCH_KEYWORDS_LABEL": safe_html(search_roles_label),
             "SEARCH_LOCATIONS_LABEL": safe_html(search_locations_label),
             "WORK_TYPE_LABEL": safe_html(work_type_label),
             "WORK_MODE_LABEL": safe_html(work_mode_label),

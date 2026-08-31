@@ -540,7 +540,7 @@ def test_seek_search_targets_use_seek_location_code():
 
 def test_seek_search_targets_use_all_distinct_profile_role_terms_not_legacy_keyword():
     profile = {
-        "target_roles": ["Senior Systems Analyst", "Business Analyst"],
+        "target_roles": ["Systems Analyst", "Business Analyst"],
         "also_consider_roles": ["AI Business Analyst"],
         "search_settings": {
             "keywords": "legacy business analyst keyword",
@@ -552,12 +552,12 @@ def test_seek_search_targets_use_all_distinct_profile_role_terms_not_legacy_keyw
     targets = build_seek_search_targets(profile, configured_date_range=7, sort_newest_first=True)
 
     assert [target["keywords"] for target in targets] == [
-        "Senior Systems Analyst",
+        "Systems Analyst",
         "Business Analyst",
         "AI Business Analyst",
     ]
     assert [parse_qs(urlparse(target["url"]).query)["keywords"][0] for target in targets] == [
-        "Senior Systems Analyst",
+        "Systems Analyst",
         "Business Analyst",
         "AI Business Analyst",
     ]

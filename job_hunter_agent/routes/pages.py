@@ -400,21 +400,6 @@ def _render_template_with_locations(
         )
 
         html = html.replace(
-            "__JOB_HUNTER_TITLE_TIER_SEARCH_KEYWORD_LABEL__",
-            title_tier_labels["search_keyword_label"],
-        )
-
-        html = html.replace(
-            "__JOB_HUNTER_TITLE_TIER_SEARCH_KEYWORD_HELP__",
-            title_tier_labels["search_keyword_help"],
-        )
-
-        html = html.replace(
-            "__JOB_HUNTER_TITLE_TIER_SEARCH_KEYWORD_EXAMPLE__",
-            title_tier_labels["search_keyword_example"],
-        )
-
-        html = html.replace(
             "__JOB_HUNTER_TITLE_TIER_TARGET_ROLES_LABEL__", title_tier_labels["target_roles_label"]
         )
 
@@ -691,15 +676,6 @@ def _render_template_with_locations(
             ],
             "__JOB_HUNTER_TITLE_TIER_MOVE_TO_ALSO_CONSIDER_LABEL__": title_tier_labels[
                 "move_to_also_consider_label"
-            ],
-            "__JOB_HUNTER_TITLE_TIER_SEARCH_KEYWORD_LABEL__": title_tier_labels[
-                "search_keyword_label"
-            ],
-            "__JOB_HUNTER_TITLE_TIER_SEARCH_KEYWORD_HELP__": title_tier_labels[
-                "search_keyword_help"
-            ],
-            "__JOB_HUNTER_TITLE_TIER_SEARCH_KEYWORD_EXAMPLE__": title_tier_labels[
-                "search_keyword_example"
             ],
             "__JOB_HUNTER_MIN_CONTRACT_MONTH_OPTIONS__": srv.render_min_contract_month_options(
                 selected_value=None

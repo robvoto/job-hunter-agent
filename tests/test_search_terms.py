@@ -19,6 +19,21 @@ def test_ordered_profile_search_terms_uses_selected_roles_only():
     ]
 
 
+def test_ordered_profile_search_terms_uses_confirmed_role_family_without_cv_history():
+    profile = {
+        "target_roles": ["Systems Analyst"],
+        "also_consider_roles": [],
+        "role_experience": [
+            {
+                "normalized_title": "systems analyst",
+                "title_variants": [{"normalized_title": "senior systems analyst"}],
+            }
+        ],
+    }
+
+    assert ordered_profile_search_terms({}, profile) == ["Systems Analyst"]
+
+
 def test_direct_profile_title_match_job_keys_uses_existing_title_tiers():
     profile = {
         "target_roles": ["Business Analyst"],

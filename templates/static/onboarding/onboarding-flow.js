@@ -7,6 +7,7 @@ import * as onboardingSettingsUtils from '../settings/shared/settings-utils.js';
 import * as onboardingCurrencyUi from '../common/currency-input.js';
 import * as onboardingLocationUi from '../common/location-options.js';
 import * as onboardingCapabilityUi from '../common/capability-ui.js';
+import { confirmRoleFamily } from '../common/role-family.js';
 
 const {
   applyProfileDefaults,
@@ -130,7 +131,6 @@ const flowRefs = Object.freeze({
   checkTargetTitles: document.getElementById('check_target_titles'),
   checkSecondaryTitles: document.getElementById('check_secondary_titles'),
   checkCapabilities: document.getElementById('check_capabilities'),
-  checkSearchTitle: document.getElementById('check_search_title'),
   checkLocations: document.getElementById('check_locations'),
   checkEngagementType: document.getElementById('check_engagement_type'),
   checkMinContractMonths: document.getElementById('check_min_contract_months'),
@@ -139,7 +139,6 @@ const flowRefs = Object.freeze({
   checkSalaryYearly: document.getElementById('check_salary_yearly'),
   checkSalaryDaily: document.getElementById('check_salary_daily'),
   locationSearch: document.getElementById('location_search'),
-  reviewSearchKeywords: document.getElementById('review_search_keywords'),
   reviewMinimumSalaryYearly: document.getElementById('review_minimum_salary_yearly'),
   reviewMinimumDailyRate: document.getElementById('review_minimum_daily_rate'),
   reviewCapabilityFilter: document.getElementById('review_capability_filter'),
@@ -285,10 +284,13 @@ function moveReviewTitle(sourceList, sourceIndex, targetList) {
   renderReviewStep();
 }
 
-function addReviewTitle(targetList, value) {
+async function addReviewTitle(targetList, value) {
   const cleaned = normalizeReviewTitle(value);
   if (!cleaned) return;
-  const key = normalizeReviewTitleKey(cleaned);
+  const roleFamily = await confirmRoleFamily(cleaned);
+  if (!roleFamily) return;
+  const confirmed = normalizeReviewTitle(roleFamily);
+  const key = normalizeReviewTitleKey(confirmed);
   const target = targetList === 'primary' ? onboardingPage.reviewTargetTitles : onboardingPage.reviewSecondaryTitles;
   const other = targetList === 'primary' ? onboardingPage.reviewSecondaryTitles : onboardingPage.reviewTargetTitles;
   const otherIndex = other.findIndex((item) => normalizeReviewTitleKey(item) === key);
@@ -296,7 +298,7 @@ function addReviewTitle(targetList, value) {
     other.splice(otherIndex, 1);
   }
   if (!target.some((item) => normalizeReviewTitleKey(item) === key)) {
-    target.push(cleaned);
+    target.push(confirmed);
   }
   const normalized = normalizeReviewTitleLists(onboardingPage.reviewTargetTitles, onboardingPage.reviewSecondaryTitles);
   onboardingPage.setReviewTargetTitles(normalized.primary);
@@ -338,7 +340,6 @@ function updateCheckStep() {
       ? onboardingFlowLabels.capability_rows_label_one
       : formatLabel(onboardingFlowLabels.capability_rows_label_many, { count: onboardingPage.reviewCapabilityRules.length }))
     : onboardingFlowLabels.capabilities_none_label;
-  flowRefs.checkSearchTitle.textContent = searchPrefs.keywords || onboardingFlowLabels.not_provided_label;
   flowRefs.checkLocations.textContent = searchPrefs.locations.length
     ? searchPrefs.locations.map(locationLabel).join(' | ')
     : onboardingFlowLabels.not_provided_label;
@@ -623,7 +624,6 @@ function buildCompletionRedirectState(payload, searchPrefs) {
     title: isRebuildMode ? 'Profile refreshed' : 'Profile built',
     message: payload?.message || (isRebuildMode ? 'Your profile was refreshed from the uploaded CV.' : 'Your profile was built from the uploaded CV.'),
     target_titles: targets,
-    search_keywords: String(searchPrefs?.keywords || '').trim(),
     search_locations: locations,
     min_contract_months: searchPrefs?.min_contract_months ?? null,
     created_at: new Date().toISOString(),
@@ -768,7 +768,6 @@ async function finishSetup() {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        search_keyword: searchPrefs.keywords,
         search_locations: searchPrefs.locations,
         min_contract_months: searchPrefs.min_contract_months,
        engagement_type: searchPrefs.engagement_type,
@@ -788,7 +787,6 @@ async function finishSetup() {
 
   const finalSearchPrefs = {
     ...(onboardingPage.lastImportPayload?.profile?.search_settings || {}),
-    keywords: searchPrefs.keywords || String(payload?.profile?.search_settings?.keywords || '').trim(),
     locations: searchPrefs.locations,
     min_contract_months: searchPrefs.min_contract_months,
     engagement_type: searchPrefs.engagement_type,
@@ -936,15 +934,15 @@ flowRefs.wizardProgressSteps?.addEventListener('click', (event) => {
   setStep(targetStep);
 });
 
-flowRefs.reviewAddTargetTitle.addEventListener('click', () => {
+flowRefs.reviewAddTargetTitle.addEventListener('click', async () => {
   const input = flowRefs.reviewTargetTitlesInput;
-  addReviewTitle('primary', input.value);
+  await addReviewTitle('primary', input.value);
   input.value = '';
 });
 
-flowRefs.reviewAddSecondaryTitle.addEventListener('click', () => {
+flowRefs.reviewAddSecondaryTitle.addEventListener('click', async () => {
   const input = flowRefs.reviewSecondaryTitlesInput;
-  addReviewTitle('secondary', input.value);
+  await addReviewTitle('secondary', input.value);
   input.value = '';
 });
 
@@ -1033,7 +1031,6 @@ flowRefs.reviewStepRoot.addEventListener('click', (event) => {
 });
 
 [
-  flowRefs.reviewSearchKeywords,
   flowRefs.reviewMinimumSalaryYearly,
   flowRefs.reviewMinimumDailyRate,
   ...document.querySelectorAll('input[name="engagement_type"]'),
@@ -1115,7 +1112,6 @@ async function initWizard() {
   if (urlParams.has('fresh')) {
     clearOnboardingBrowserState();
     history.replaceState(null, '', window.location.pathname);
-    if (flowRefs.reviewSearchKeywords) flowRefs.reviewSearchKeywords.value = '';
     if (flowRefs.reviewMinimumSalaryYearly) flowRefs.reviewMinimumSalaryYearly.value = '';
     if (flowRefs.reviewMinimumDailyRate) flowRefs.reviewMinimumDailyRate.value = '';
     await loadProfileDefaultsForInit(hasProfile);

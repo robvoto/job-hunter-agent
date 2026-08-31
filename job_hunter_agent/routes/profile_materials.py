@@ -27,6 +27,7 @@ from job_hunter_agent.source_documents import (
     refresh_role_history_from_saved_cv,
     save_source_materials,
 )
+from job_hunter_agent.profile_learning import resolve_role_family
 from job_hunter_agent.system_warnings import (
     aggregate_system_warning_diagnostics,
     classify_system_warning,
@@ -199,6 +200,22 @@ def api_profile_qualification_save(body: dict = Body(...)):  # type: ignore[no-u
     except Exception as exc:
         return json_response({"error": str(exc)}, 400)
     return json_response({"ok": True, "qualification": saved, "profile": updated})
+
+
+@router.post("/api/profile/resolve-role-family")
+def api_profile_resolve_role_family(body: dict = Body(...)):  # type: ignore[no-untyped-def]
+    """Propose a neutral role family before a user saves role preference."""
+
+    try:
+        title = str(body.get("title") or "").strip()
+        result = resolve_role_family(title)
+        if not result.get("resolved") or not str(result.get("role_family") or "").strip():
+            raise ValueError(
+                "This role could not be resolved confidently. Please enter the role family you want to search."
+            )
+    except Exception as exc:
+        return json_response({"error": str(exc)}, 400)
+    return json_response({"ok": True, **result})
 
 
 @router.post("/api/profile/refresh-role-history-from-saved-cv")

@@ -704,7 +704,9 @@ def build_profile_prompt_context() -> str:
                 for variant in variants[:3]:
                     if not isinstance(variant, dict):
                         continue
-                    variant_title = compact_whitespace(str(variant.get("normalized_title") or ""))
+                    variant_title = compact_whitespace(
+                        str(variant.get("title") or variant.get("normalized_title") or "")
+                    )
                     variant_months = int(variant.get("total_duration_months") or 0)
                     if not variant_title or variant_title == title or variant_months <= 0:
                         continue

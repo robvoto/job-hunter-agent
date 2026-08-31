@@ -170,11 +170,11 @@ Changes here affect the app globally, but users do not edit them from their own 
 - if a role lists pay, the workspace can show whether it meets your target
 - these targets also power the salary filter in the workspace
 
-`Search keyword`
+`Preferred roles` and `Alternative roles`
 
-- a single broad fallback term used only when no preferred or alternative role list is selected
-- when roles are selected, Job Hunter searches each preferred and alternative role separately and combines the results
-- the helper text under the field should stay short and explanatory
+- these are the only role preferences users manage
+- Job Hunter owns source-specific query mechanics internally and searches the selected roles separately before combining results
+- if a proposed role needs a family clarification, confirm the neutral role family before saving it
 
 `Sector preference`
 

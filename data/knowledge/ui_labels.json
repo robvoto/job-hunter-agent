@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 118,
+  "version": 119,
   "updated_at": "2026-08-31",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -38,10 +38,7 @@
     "also_consider_roles_input_placeholder": "Add an alternative role",
     "also_consider_roles_empty_text": "No alternative roles extracted yet.",
     "move_to_also_consider_label": "Move to alternative roles",
-    "search_keyword_label": "Search keyword",
     "role_search_help": "Job Hunter searches each preferred and alternative role separately on each enabled job board. Results are combined, and confirmed duplicate jobs are kept once.",
-    "search_keyword_help": "Use one broad keyword only when no role list is selected. When roles are selected, each role becomes a separate job-board search term.",
-    "search_keyword_example": "e.g. Business Analyst",
     "explore_adjacent_roles_label": "Explore adjacent roles",
     "explore_adjacent_roles_help": "Let unfamiliar but plausible titles reach description review. Turn this off to keep title matching strict."
   },
@@ -671,7 +668,7 @@
     "hidden_jobs_copy": "This area keeps roles you have intentionally pushed out of sight for now.",
     "search_settings_heading": "Search Settings",
     "search_settings_helper": "Shared search settings used across sources.",
-    "keywords_label": "Keywords",
+    "keywords_label": "Roles",
     "locations_label": "Locations",
     "work_type_sidebar_label": "Work type",
     "work_mode_sidebar_label": "Work mode",
@@ -1056,8 +1053,8 @@
     "settings_salary_daily_help_text": "Used when contract roles list a day rate.",
     "profile_review_blocking_reason_no_profile": "Create your profile before reviewing jobs.",
     "profile_review_blocking_reason_no_capabilities": "Your profile has no capability rules. Rebuild onboarding before reviewing jobs.",
-    "search_keywords_length_error": "Please keep the primary search title between 2 and 120 characters.",
-    "search_keywords_phrase_error": "Please use at least two words for the primary search title, or leave it blank."
+    "search_keywords_length_error": "Please keep the role preference between 2 and 120 characters.",
+    "search_keywords_phrase_error": "Please use at least two words for the role preference, or leave it blank."
   },
   "requirement_taxonomy_labels": {
     "type_field_label": "Requirement type",
