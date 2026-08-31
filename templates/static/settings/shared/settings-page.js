@@ -335,12 +335,31 @@ const candidateSettingsSummaryFields = [
   { key: 'llmModel', path: 'llm.model', fieldId: 'llm_model', format: formatSummaryText, scope: 'user_settings' },
 ];
 
+function isNamedObjectArray(value) {
+  return Array.isArray(value) && value.length > 0 && value.every((item) => (
+    item && typeof item === 'object' && !Array.isArray(item)
+    && typeof item.name === 'string' && item.name.trim() !== ''
+  ));
+}
+
 function collectSettingsDiffs(before, after, path = [], diffs = []) {
   if (before && typeof before === 'object' && !Array.isArray(before)
       && after && typeof after === 'object' && !Array.isArray(after)) {
     const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
     [...keys].sort().forEach((key) => {
       collectSettingsDiffs(before[key], after[key], [...path, key], diffs);
+    });
+    return diffs;
+  }
+  // Arrays of named objects (e.g. profile.candidate_capabilities) are diffed
+  // per item, keyed by name, so editing one entry reports just that entry
+  // instead of dumping the whole list on both sides of the arrow.
+  if (isNamedObjectArray(before) && isNamedObjectArray(after)) {
+    const beforeByName = new Map(before.map((item) => [item.name.trim(), item]));
+    const afterByName = new Map(after.map((item) => [item.name.trim(), item]));
+    const names = [...new Set([...beforeByName.keys(), ...afterByName.keys()])].sort();
+    names.forEach((name) => {
+      collectSettingsDiffs(beforeByName.get(name), afterByName.get(name), [...path, name], diffs);
     });
     return diffs;
   }
@@ -390,6 +409,18 @@ function buildCandidateSettingsSaveMessage(beforeProfile, beforeUserSettings, af
   genericDiffs.forEach((diff) => {
     const qualifiedPath = `${diff.scope}.${diff.path}`;
     if (coveredDiffs.has(qualifiedPath)) return;
+    const beforeIsObject = diff.before && typeof diff.before === 'object';
+    const afterIsObject = diff.after && typeof diff.after === 'object';
+    // A whole named-object entry appearing or disappearing reads better as a
+    // one-word add/remove than as "Not set -> {full json}".
+    if (diff.before === undefined && afterIsObject) {
+      lines.push(`${qualifiedPath}: ${sharedUiLabels.settings_value_added}`);
+      return;
+    }
+    if (diff.after === undefined && beforeIsObject) {
+      lines.push(`${qualifiedPath}: ${sharedUiLabels.settings_value_removed}`);
+      return;
+    }
     lines.push(`${qualifiedPath}: ${formatGenericSummaryValue(diff.before)} -> ${formatGenericSummaryValue(diff.after)}`);
   });
 

@@ -1,8 +1,8 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 117,
-  "updated_at": "2026-08-26",
+  "version": 118,
+  "updated_at": "2026-08-31",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
     "remote_label": "Remote",
@@ -242,6 +242,8 @@
     "settings_value_none": "None",
     "settings_value_on": "On",
     "settings_value_off": "Off",
+    "settings_value_added": "added",
+    "settings_value_removed": "removed",
     "schedule_section_title": "Run & Schedule",
     "schedule_section_copy": "These controls use your current search settings. Set the time here, then use the main Save Settings button. If the scheduler is already running, changes apply automatically without a restart.",
     "select_shown_label": "Select shown",
