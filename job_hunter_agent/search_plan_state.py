@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
 from typing import Iterable
 
 from job_hunter_agent.database import db_conn, ensure_user_row
@@ -45,6 +46,79 @@ def _resolve_user_id(user_id: str | None) -> str:
     return str(user_id or get_active_user_id()).strip()
 
 
+def is_search_plan_trusted(
+    state: dict,
+    probe_terms: Iterable[str],
+    *,
+    min_corroboration_samples: int,
+    max_age_minutes: int,
+    now: datetime | None = None,
+) -> bool:
+    """Return whether persisted complete-probe evidence may prune this target set.
+
+    Search terms must match exactly. This function only trusts observed job-key
+    coverage; it does not infer that two role labels are semantically related.
+    """
+    normalized_probe_terms = [str(term).strip() for term in probe_terms if str(term).strip()]
+    remembered_probe_terms = [
+        str(term).strip() for term in state.get("probe_terms", []) if str(term).strip()
+    ]
+    selected_terms = [
+        str(term).strip() for term in state.get("selected_terms", []) if str(term).strip()
+    ]
+    if not normalized_probe_terms or remembered_probe_terms != normalized_probe_terms:
+        return False
+    if not selected_terms or not set(selected_terms).issubset(normalized_probe_terms):
+        return False
+    selection_counts = state.get("selection_counts")
+    if not isinstance(selection_counts, dict):
+        return False
+    if any(
+        int(selection_counts.get(term, 0)) < int(min_corroboration_samples)
+        for term in selected_terms
+    ):
+        return False
+
+    observed_at = str(state.get("observed_at") or "").strip()
+    if not observed_at:
+        return False
+    try:
+        observed_datetime = datetime.fromisoformat(observed_at.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if observed_datetime.tzinfo is None:
+        observed_datetime = observed_datetime.replace(tzinfo=timezone.utc)
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    return current - observed_datetime <= timedelta(minutes=max(0, int(max_age_minutes)))
+
+
+def planned_search_terms(
+    state: dict,
+    probe_terms: Iterable[str],
+    *,
+    min_corroboration_samples: int,
+    max_age_minutes: int,
+    now: datetime | None = None,
+) -> tuple[list[str], str]:
+    """Choose live terms and explain whether this run is a complete probe."""
+    normalized_probe_terms = [str(term).strip() for term in probe_terms if str(term).strip()]
+    if is_search_plan_trusted(
+        state,
+        normalized_probe_terms,
+        min_corroboration_samples=min_corroboration_samples,
+        max_age_minutes=max_age_minutes,
+        now=now,
+    ):
+        return [
+            str(term).strip() for term in state["selected_terms"] if str(term).strip()
+        ], "remembered"
+    if state:
+        return normalized_probe_terms, "probe_required"
+    return normalized_probe_terms, "bootstrap"
+
+
 def load_search_plan_state(
     *,
     source: str,
@@ -77,6 +151,9 @@ def save_search_plan_observation(
     probe_terms: Iterable[str],
     selected_terms: Iterable[str],
     coverage_job_count: int,
+    term_job_counts: dict[str, int] | None = None,
+    selected_coverage_job_count: int | None = None,
+    observed_at: datetime | None = None,
     user_id: str | None = None,
 ) -> dict:
     """Persist one complete-probe observation and cumulative selection counts."""
@@ -105,6 +182,17 @@ def save_search_plan_observation(
         "selected_terms": normalized_selected_terms,
         "selection_counts": selection_counts,
         "coverage_job_count": int(coverage_job_count),
+        "term_job_counts": {
+            str(term).strip(): int(count)
+            for term, count in (term_job_counts or {}).items()
+            if str(term).strip()
+        },
+        "selected_coverage_job_count": (
+            int(selected_coverage_job_count)
+            if selected_coverage_job_count is not None
+            else int(coverage_job_count)
+        ),
+        "observed_at": (observed_at or datetime.now(timezone.utc)).isoformat(),
     }
     ensure_user_row(uid)
     with db_conn() as conn:

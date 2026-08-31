@@ -31,6 +31,8 @@ from job_hunter_agent.global_settings import (
     get_linkedin_fetch_timeout_seconds,
     get_linkedin_max_consecutive_target_failures,
     get_linkedin_parallel_search_workers,
+    get_search_plan_min_corroboration_samples,
+    get_source_discovery_cache_max_age_minutes,
 )
 from job_hunter_agent.io_utils import DEBUG_CAPTURE_SOURCE_PAYLOADS, write_source_payload_debug
 from job_hunter_agent.job_review_pipeline import (
@@ -68,6 +70,13 @@ from job_hunter_agent.scrapers.base import BaseJobScraper, normalize_jobspy_reco
 from job_hunter_agent.scrapers.location_adapters import to_linkedin_search_scope
 from job_hunter_agent.source_registry import SOURCE_LINKEDIN
 from job_hunter_agent.source_errors import PartialSourceResultsError
+from job_hunter_agent.search_metrics import QueryYieldMetric, record_query_yield_metric
+from job_hunter_agent.search_plan_state import (
+    load_search_plan_state,
+    planned_search_terms,
+    save_search_plan_observation,
+    select_query_cover,
+)
 from job_hunter_agent.posting_utils import parse_visible_posted_age_days
 from job_hunter_agent.work_mode_extraction import (
     WORK_MODE_UNKNOWN,
@@ -355,10 +364,67 @@ class LinkedInScraper(BaseJobScraper):
             search_settings.get(KEY_DATE_RANGE_DAYS, DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS])
             or DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS]
         )
-        targets = self._build_search_targets(search_settings)
-        if not targets:
+        configured_targets = self._build_search_targets(search_settings)
+        if not configured_targets:
             logger.debug("[LinkedIn] no search targets configured; skipping")
             return kept_records, audit_rows, skill_observations
+
+        # A trusted plan prunes only complete source targets. A bootstrap or
+        # stale plan deliberately runs every configured term so the source can
+        # re-measure real job-key coverage before pruning again.
+        probe_terms_by_location: dict[str, list[str]] = {}
+        plan_probe_locations: set[str] = set()
+        targets = list(configured_targets)
+        if self.search_plan_signature:
+            planned_terms_by_location: dict[str, list[str]] = {}
+            for target in configured_targets:
+                location = str(target.get("location") or "")
+                term = str(target.get("search_term") or "").strip()
+                if term:
+                    probe_terms_by_location.setdefault(location, []).append(term)
+            for location, probe_terms in probe_terms_by_location.items():
+                state = load_search_plan_state(
+                    source=self.source_name.lower(),
+                    signature=self.search_plan_signature,
+                    location=location,
+                )
+                planned_terms, plan_source = planned_search_terms(
+                    state,
+                    probe_terms,
+                    min_corroboration_samples=get_search_plan_min_corroboration_samples(),
+                    max_age_minutes=get_source_discovery_cache_max_age_minutes(),
+                )
+                planned_terms_by_location[location] = planned_terms
+                if plan_source != "remembered":
+                    plan_probe_locations.add(location)
+                skipped_terms = set(probe_terms) - set(planned_terms)
+                prior_term_job_counts = state.get("term_job_counts")
+                estimated_jobs_avoided = (
+                    sum(
+                        int(prior_term_job_counts.get(term, 0))
+                        for term in skipped_terms
+                    )
+                    if isinstance(prior_term_job_counts, dict)
+                    else 0
+                )
+                logger.info(
+                    "[LINKEDIN][SEARCH_PLAN] location=%r source=%s configured_terms=%d "
+                    "planned_terms=%d skipped_terms=%d estimated_queries_avoided=%d "
+                    "estimated_detail_review_work_avoided=%d",
+                    location or "(all)",
+                    plan_source,
+                    len(probe_terms),
+                    len(planned_terms),
+                    max(0, len(probe_terms) - len(planned_terms)),
+                    max(0, len(probe_terms) - len(planned_terms)),
+                    estimated_jobs_avoided,
+                )
+            targets = [
+                target
+                for target in configured_targets
+                if str(target.get("search_term") or "").strip()
+                in planned_terms_by_location.get(str(target.get("location") or ""), [])
+            ]
 
         review_context = ReviewPipelineContext(
             profile=self.profile,
@@ -373,6 +439,8 @@ class LinkedInScraper(BaseJobScraper):
         )
 
         total_targets = len(targets)
+        seen_discovered_job_keys: set[str] = set()
+        probe_job_keys_by_location: dict[str, dict[str, set[str]]] = {}
         if self.discovery_records is not None:
             cached_collection_complete = True
             for index, cached_record in enumerate(self.discovery_records, start=1):
@@ -451,6 +519,30 @@ class LinkedInScraper(BaseJobScraper):
                 tgt["results_wanted"],
             )
 
+        def _record_target_metric(
+            target: dict,
+            started_at: float,
+            discovered_count: int,
+            new_unique_count: int,
+            *,
+            success: bool,
+            failure_reason: str = "",
+        ) -> None:
+            record_query_yield_metric(
+                QueryYieldMetric(
+                    source=self.source_name.lower(),
+                    search_term=target["search_term"],
+                    location=target["location"],
+                    elapsed_seconds=time.monotonic() - started_at,
+                    discovered_count=discovered_count,
+                    new_unique_job_count=new_unique_count,
+                    duplicate_job_count=discovered_count - new_unique_count,
+                    pages_searched=1,
+                    success=success,
+                    failure_reason=failure_reason,
+                )
+            )
+
         try:
             with ThreadPoolExecutor(max_workers=parallel_search_workers) as fetch_executor:
 
@@ -485,6 +577,10 @@ class LinkedInScraper(BaseJobScraper):
                         break
 
                     idx0 = target_index - 1
+                    if target["location"] in plan_probe_locations:
+                        probe_job_keys_by_location.setdefault(target["location"], {}).setdefault(
+                            target["search_term"], set()
+                        )
                     if idx0 not in pending_fetches:
                         # Circuit breaker tripped before this target was ever submitted.
                         skipped_after_breaker += 1
@@ -493,6 +589,9 @@ class LinkedInScraper(BaseJobScraper):
                     target_tag = f"[LinkedIn target {target_index}/{total_targets}]"
                     _set_linkedin_run_progress(target_index, total_targets)
                     _log_target_banner(idx0, target)
+                    target_started_at = time.monotonic()
+                    target_discovered_count = 0
+                    target_new_unique_count = 0
 
                     future, fetch_started_at = pending_fetches.pop(idx0)
                     if not breaker_tripped and next_to_submit < total_targets:
@@ -511,10 +610,26 @@ class LinkedInScraper(BaseJobScraper):
                     except InterruptedError:
                         logger.debug("%s jobspy fetch cancelled due to stop request", target_tag)
                         self.discovery_status["complete"] = False
+                        _record_target_metric(
+                            target,
+                            target_started_at,
+                            target_discovered_count,
+                            target_new_unique_count,
+                            success=False,
+                            failure_reason="stopped",
+                        )
                         break
                     except Exception as exc:
                         logger.warning("%s jobspy call failed: %s: %s", target_tag, type(exc).__name__, exc)
                         self.discovery_status["complete"] = False
+                        _record_target_metric(
+                            target,
+                            target_started_at,
+                            target_discovered_count,
+                            target_new_unique_count,
+                            success=False,
+                            failure_reason=type(exc).__name__,
+                        )
                         failed_targets += 1
                         consecutive_failures += 1
                         if isinstance(exc, TimeoutError):
@@ -545,6 +660,13 @@ class LinkedInScraper(BaseJobScraper):
 
                     if rows is None or len(rows) == 0:
                         logger.debug("%s no results", target_tag)
+                        _record_target_metric(
+                            target,
+                            target_started_at,
+                            0,
+                            0,
+                            success=True,
+                        )
                         continue
 
                     if target.get("sort_newest_first"):
@@ -582,6 +704,7 @@ class LinkedInScraper(BaseJobScraper):
                         )
                         record[RECORD_DESCRIPTION_SOURCE_KEY] = "linkedin_full_description"
                         record[RECORD_DETAILS_TEXT_KEY] = str(record.get(RECORD_DETAILS_TEXT_KEY) or "")
+                        target_discovered_count += 1
                         logger.debug(
                             "[PIPELINE][CARD_NORMALIZED] source=LINKEDIN job_key=%s title=%r company=%r url=%r description_chars=%d",
                             record.get(RECORD_JOB_KEY),
@@ -590,20 +713,49 @@ class LinkedInScraper(BaseJobScraper):
                             record.get(RECORD_URL_KEY),
                             len(record[RECORD_DETAILS_TEXT_KEY]),
                         )
-                        if self.discovery_capture is not None:
+                        job_key = str(record.get(RECORD_JOB_KEY) or "").strip()
+                        if target["search_term"] in probe_terms_by_location.get(
+                            target["location"], []
+                        ):
+                            probe_job_keys_by_location.setdefault(
+                                target["location"], {}
+                            ).setdefault(target["search_term"], set()).update(
+                                {job_key} if job_key else set()
+                            )
+                        is_new_discovery = not job_key or job_key not in seen_discovered_job_keys
+                        if job_key:
+                            seen_discovered_job_keys.add(job_key)
+                        if self.discovery_capture is not None and is_new_discovery:
                             self.discovery_capture.append(copy.deepcopy(record))
-                        self._review_discovered_record(
-                            record,
-                            review_context,
-                            seen_job_keys,
-                            target_tag,
-                            kept_records,
-                            skill_observations,
-                        )
+                        if is_new_discovery:
+                            target_new_unique_count += 1
+                            self._review_discovered_record(
+                                record,
+                                review_context,
+                                seen_job_keys,
+                                target_tag,
+                                kept_records,
+                                skill_observations,
+                            )
                     if run_stop_requested():
                         logger.debug("%s stop requested after row review; ending scrape", target_tag)
                         self.discovery_status["complete"] = False
+                        _record_target_metric(
+                            target,
+                            target_started_at,
+                            target_discovered_count,
+                            target_new_unique_count,
+                            success=False,
+                            failure_reason="stopped",
+                        )
                         break
+                    _record_target_metric(
+                        target,
+                        target_started_at,
+                        target_discovered_count,
+                        target_new_unique_count,
+                        success=True,
+                    )
         except Exception as exc:
             raise PartialSourceResultsError(
                 self.source_name,
@@ -623,6 +775,40 @@ class LinkedInScraper(BaseJobScraper):
             final_status = "partial_failure"
         else:
             final_status = "healthy"
+
+        if self.search_plan_signature and final_status == "healthy":
+            for location in plan_probe_locations:
+                probe_terms = probe_terms_by_location[location]
+                observed = probe_job_keys_by_location.get(location, {})
+                if set(observed) != set(probe_terms):
+                    logger.warning(
+                        "[LINKEDIN][SEARCH_PLAN] not updating location=%r; complete "
+                        "per-term probe evidence was not collected",
+                        location or "(all)",
+                    )
+                    continue
+                selected_terms = select_query_cover(observed)
+                selected_job_keys: set[str] = set()
+                for term in selected_terms:
+                    selected_job_keys.update(observed.get(term, set()))
+                remembered = save_search_plan_observation(
+                    source=self.source_name.lower(),
+                    signature=self.search_plan_signature,
+                    location=location,
+                    probe_terms=probe_terms,
+                    selected_terms=selected_terms,
+                    coverage_job_count=len(set().union(*observed.values())) if observed else 0,
+                    term_job_counts={term: len(job_keys) for term, job_keys in observed.items()},
+                    selected_coverage_job_count=len(selected_job_keys),
+                )
+                logger.info(
+                    "[LINKEDIN][SEARCH_PLAN] location=%r selected_terms=%r "
+                    "coverage_jobs=%d samples=%d",
+                    location or "(all)",
+                    selected_terms,
+                    len(set().union(*observed.values())) if observed else 0,
+                    int(remembered.get("sample_count") or 0),
+                )
 
         self.discovery_status.update(
             {

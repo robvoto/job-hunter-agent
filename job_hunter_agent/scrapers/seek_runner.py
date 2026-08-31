@@ -30,7 +30,8 @@ import job_hunter_agent.record_schema as rs
 from job_hunter_agent.global_settings import (
     KEY_SEEK_QUICK_APPLY_ONLY,
     get_playwright_browser_mode,
-    get_seek_search_plan_min_corroboration_samples,
+    get_search_plan_min_corroboration_samples,
+    get_source_discovery_cache_max_age_minutes,
 )
 from job_hunter_agent.history import (
     apply_detail_evidence_reuse,
@@ -56,6 +57,7 @@ from job_hunter_agent.run_control import (
 from job_hunter_agent.search_metrics import QueryYieldMetric, record_query_yield_metric
 from job_hunter_agent.search_plan_state import (
     load_search_plan_state,
+    planned_search_terms,
     save_search_plan_observation,
     select_query_cover,
 )
@@ -1353,32 +1355,15 @@ def seek_scrape_to_records(
                         signature=search_plan_signature,
                         location=location_key,
                     )
-                    remembered_probe_terms = [
-                        str(term).strip() for term in remembered.get("probe_terms", []) if str(term).strip()
-                    ]
-                    remembered_selected_terms = [
-                        str(term).strip()
-                        for term in remembered.get("selected_terms", [])
-                        if str(term).strip()
-                    ]
-                    remembered_selection_counts = {
-                        str(term).strip(): int(count)
-                        for term, count in (remembered.get("selection_counts") or {}).items()
-                        if str(term).strip()
-                    }
-                    min_corroboration_samples = get_seek_search_plan_min_corroboration_samples()
-                    # sample_count alone only proves N complete probes happened; it says
-                    # nothing about whether *this* selection was picked more than once.
-                    # selection_counts tracks how many observations actually chose each
-                    # term, so corroboration must be checked per-term against the
-                    # currently remembered selection, not against the run count.
-                    is_corroborated = bool(remembered_selected_terms) and all(
-                        remembered_selection_counts.get(term, 0) >= min_corroboration_samples
-                        for term in remembered_selected_terms
+                    _planned_terms, plan_source = planned_search_terms(
+                        remembered,
+                        probe_terms,
+                        min_corroboration_samples=get_search_plan_min_corroboration_samples(),
+                        max_age_minutes=get_source_discovery_cache_max_age_minutes(),
                     )
-                    if remembered_probe_terms == probe_terms and is_corroborated:
+                    if plan_source == "remembered":
                         historical_selected_terms_by_location[location_key] = set(
-                            remembered_selected_terms
+                            _planned_terms
                         )
             seen_discovered_job_keys: set[str] = set()
             try:
@@ -1748,6 +1733,9 @@ def seek_scrape_to_records(
                         coverage_job_keys: set[str] = set()
                         for job_keys in observed.values():
                             coverage_job_keys.update(job_keys)
+                        selected_coverage_job_keys: set[str] = set()
+                        for term in selected_terms:
+                            selected_coverage_job_keys.update(observed.get(term, set()))
                         remembered = save_search_plan_observation(
                             source="seek",
                             signature=search_plan_signature,
@@ -1755,6 +1743,8 @@ def seek_scrape_to_records(
                             probe_terms=probe_terms,
                             selected_terms=selected_terms,
                             coverage_job_count=len(coverage_job_keys),
+                            term_job_counts={term: len(job_keys) for term, job_keys in observed.items()},
+                            selected_coverage_job_count=len(selected_coverage_job_keys),
                         )
                         logger.info(
                             "[SEEK][SEARCH_PLAN] location=%r selected_terms=%r coverage_jobs=%d samples=%d",

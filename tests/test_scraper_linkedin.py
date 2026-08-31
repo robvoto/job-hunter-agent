@@ -228,6 +228,55 @@ def test_linkedin_search_targets_include_distinct_profile_roles():
     ]
 
 
+def test_linkedin_search_plan_prunes_trusted_redundant_role_target(monkeypatch):
+    from job_hunter_agent.scrapers import linkedin as linkedin_module
+
+    scraper = LinkedInScraper(
+        profile={},
+        llm_cache={},
+        job_history={},
+        applied_job_keys=set(),
+        hidden_job_keys=set(),
+        run_iso="2026-06-22T09:00:00+10:00",
+        search_plan_signature="signature-1",
+    )
+    targets = [
+        {
+            "search_term": "Role A",
+            "location": "Sydney, Australia",
+            "results_wanted": 1,
+            "hours_old": 24,
+            "sort_newest_first": False,
+            "easy_apply": None,
+        },
+        {
+            "search_term": "Role B",
+            "location": "Sydney, Australia",
+            "results_wanted": 1,
+            "hours_old": 24,
+            "sort_newest_first": False,
+            "easy_apply": None,
+        },
+    ]
+    monkeypatch.setattr(scraper, "_build_search_targets", lambda _settings: targets)
+    monkeypatch.setattr(linkedin_module, "load_search_plan_state", lambda **_kwargs: {})
+    monkeypatch.setattr(
+        linkedin_module,
+        "planned_search_terms",
+        lambda *_args, **_kwargs: (["Role B"], "remembered"),
+    )
+    monkeypatch.setattr(linkedin_module, "get_search_plan_min_corroboration_samples", lambda: 2)
+    monkeypatch.setattr(linkedin_module, "get_source_discovery_cache_max_age_minutes", lambda: 60)
+    fetched_terms: list[str] = []
+    monkeypatch.setattr(scraper, "_fetch_jobspy", lambda target: fetched_terms.append(target["search_term"]))
+
+    scraper.scrape()
+
+    assert fetched_terms == ["Role B"]
+    assert scraper.discovery_status["total_targets"] == 1
+    assert scraper.discovery_status["attempted_targets"] == 1
+
+
 def test_linkedin_jobspy_fetch_stops_immediately_when_run_stop_requested(monkeypatch):
     from job_hunter_agent.scrapers import linkedin as linkedin_module
 

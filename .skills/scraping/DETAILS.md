@@ -32,12 +32,13 @@ Do not add filtering or scoring logic to Phases 1–3. Phase 4 is the only place
 
 ## Source discovery reliability
 
-### SEEK search-plan safety
-- Every configured term gets comparable page-1 probe evidence before a remembered plan is updated.
-- Bootstrap runs expand conservatively; query execution order must not decide which term gets deeper pagination.
-- Incomplete, stopped, or failed probe evidence must not update the remembered plan.
-- A remembered selected term is trusted for pruning only when its persisted `selection_counts[term]` meets the configured `seek_search_plan_min_corroboration_samples`; total `sample_count` alone is not corroboration.
-- Search-plan evidence remains isolated by material discovery signature and location.
+### Cross-source search-plan safety
+- JH-081 role terms are the exact probe vocabulary; search-plan state never invents role synonyms or semantic overlap.
+- Every configured term gets comparable bounded probe evidence before a remembered plan is updated.
+- Bootstrap, stale, incomplete, stopped, challenged, or failed runs remain conservative and must not update the remembered plan.
+- A remembered selected term is trusted only when its persisted per-term selection count meets the configured `search_plan_min_corroboration_samples` and its observation remains within the managed source-discovery freshness window.
+- Fresh trusted plans may prune redundant LinkedIn and APSJobs targets. SEEK still performs comparable page-1 probes and uses the plan only for deeper pagination, preserving its source-specific bounded-page contract.
+- Search-plan evidence remains isolated by user, source, material discovery signature, and location; cross-source job identity is handled separately by the central identity contract.
 
 ### LinkedIn two-stage discovery
 1. JobSpy performs card discovery with `linkedin_fetch_description=False`.
@@ -168,4 +169,3 @@ Do **not** use `output/console.log` for diagnosing current behaviour — it is w
 - Are search keywords avoided as job-level work mode proof?
 - Are search parameters validated before the scraper fires (non-empty keywords, location, completed onboarding)?
 - Did you run the smallest relevant scraper/data-shape check?
-

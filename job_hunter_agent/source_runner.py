@@ -574,6 +574,7 @@ def _run_linkedin_source(context: ScrapeRunContext) -> SourceRunResult:
             discovery_records=cached_records,
             discovery_capture=captured_records,
             discovery_status=failure_state,
+            search_plan_signature=signature,
         )
         kept, audit, skills = li.scrape()
 
@@ -780,6 +781,7 @@ def _run_apsjobs_source(context: ScrapeRunContext) -> SourceRunResult:
             discovery_records=cached_records,
             discovery_capture=captured_records,
             discovery_status=failure_state,
+            search_plan_signature=signature,
         )
         kept, audit, skills = scraper.scrape()
         return SourceRunResult(
