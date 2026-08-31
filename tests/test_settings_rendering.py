@@ -180,6 +180,24 @@ def test_settings_page_generic_summary_recurses_into_array_items():
     assert "return value.length ? value.join(', ')" not in js_text
 
 
+def test_settings_page_diffs_named_object_arrays_per_item():
+    # collectSettingsDiffs must not stop at the array boundary for arrays of
+    # named objects (candidate_capabilities/eligibility/qualifications). Editing
+    # one entry should report just that entry's changed sub-path -- not dump the
+    # whole before/after list -- and a whole entry appearing/disappearing should
+    # read as a one-word add/remove.
+    repo_root = Path(__file__).resolve().parents[1]
+    js_text = (
+        repo_root / "templates" / "static" / "settings" / "shared" / "settings-page.js"
+    ).read_text(encoding="utf-8")
+
+    assert "function isNamedObjectArray(value)" in js_text
+    assert "if (isNamedObjectArray(before) && isNamedObjectArray(after)) {" in js_text
+    assert "collectSettingsDiffs(beforeByName.get(name), afterByName.get(name), [...path, name], diffs);" in js_text
+    assert "lines.push(`${qualifiedPath}: ${sharedUiLabels.settings_value_added}`);" in js_text
+    assert "lines.push(`${qualifiedPath}: ${sharedUiLabels.settings_value_removed}`);" in js_text
+
+
 def test_settings_utils_review_normaliser_preserves_icon_key():
     repo_root = Path(__file__).resolve().parents[1]
     js_text = (

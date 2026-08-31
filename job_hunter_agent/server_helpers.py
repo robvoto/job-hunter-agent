@@ -278,6 +278,8 @@ _SHARED_UI_LABEL_KEYS = (
     "settings_value_none",
     "settings_value_on",
     "settings_value_off",
+    "settings_value_added",
+    "settings_value_removed",
     "select_shown_label",
     "clear_selection_label",
     "remove_selected_label",
