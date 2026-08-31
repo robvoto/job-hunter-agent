@@ -100,6 +100,7 @@ The scraper layer does not make business-fit decisions.
 * `source_metadata.hiring_company` is populated only from an explicit hirer/employer fact; it must not default to the publisher/company profile.
 * Publisher industry, company-profile links, ATS/application URLs, and hirer references are factual context, not automatic proof of a direct-employer relationship.
 * Posting-channel classification (`direct_employer`, `agency_or_recruiter`, `unknown`) is versioned derived data. Explicit recruiter metadata can decide deterministically; otherwise the LLM interprets the ad and source facts.
+* The combined fit review is the first posting-channel pass. An explicit `unknown` triggers one small posting-only LLM judgement using the same managed guidance and source/ad facts, with a profile-independent cache; genuinely ambiguous results may remain `unknown`.
 * Stale posting-channel classifications are not reused or displayed as current. Cached detail text may still be reused while obsolete source metadata is discarded.
 
 ---

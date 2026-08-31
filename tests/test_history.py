@@ -138,6 +138,7 @@ def test_history_reuse_rechecks_jobs_with_unclassified_posting_channel():
 
 
 def test_history_reuse_rechecks_old_confident_posting_channel_contract():
+    assert POSTING_CHANNEL_CLASSIFIER_VERSION == 4
     entry = {
         "times_kept": 1,
         RECORD_LAST_KEPT_SNAPSHOT_KEY: {
@@ -147,7 +148,7 @@ def test_history_reuse_rechecks_old_confident_posting_channel_contract():
                 {"requirement": "Business analysis", "importance": "required", "status": "supported"}
             ],
             RECORD_POSTING_CHANNEL_EVIDENCE_KEY: {
-                POSTING_CHANNEL_VERSION_KEY: POSTING_CHANNEL_CLASSIFIER_VERSION - 1,
+                POSTING_CHANNEL_VERSION_KEY: 3,
                 "kind": "direct_employer",
                 "source": "metadata_first",
                 "trusted_metadata": ["job_url_direct"],

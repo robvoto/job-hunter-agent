@@ -5,6 +5,9 @@ from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
     RECORD_FULL_DESCRIPTION_KEY,
     RECORD_JOB_KEY,
+    RECORD_LLM_COST_USD_KEY,
+    RECORD_LLM_INPUT_TOKENS_KEY,
+    RECORD_LLM_OUTPUT_TOKENS_KEY,
     RECORD_SOURCE_METADATA_KEY,
     RECORD_TITLE_KEY,
     SOURCE_POSTER_COMPANY_INDUSTRY_KEY,
@@ -365,6 +368,249 @@ def test_resolve_llm_review_payload_counts_truncations(monkeypatch):
     source_learning.resolve_llm_review_payload(record, llm_cache)
 
     assert source_learning.get_llm_truncation_count() == 1
+
+
+def test_resolve_llm_review_payload_resolved_posting_channel_skips_dedicated_llm(monkeypatch):
+    record = _build_record()
+    llm_cache = {}
+
+    monkeypatch.setattr(source_learning, "llm_is_enabled", lambda: True)
+    monkeypatch.setattr(
+        source_learning,
+        "llm_should_consider_with_learning",
+        lambda *_args, **_kwargs: {
+            "fit_review": {"decision": "KEEP", "grade": "SOLID"},
+            "learning_candidates": [],
+            "posting_channel": {
+                "kind": "direct_employer",
+                "confident": True,
+                "evidence": "The organisation describes its own team.",
+            },
+        },
+    )
+    monkeypatch.setattr(
+        source_learning,
+        "llm_classify_posting_channel",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("dedicated posting LLM should not be called")
+        ),
+    )
+
+    payload = source_learning.resolve_llm_review_payload(record, llm_cache)
+
+    assert payload["posting_channel"]["kind"] == "direct_employer"
+
+
+def test_resolve_llm_review_payload_unknown_uses_dedicated_posting_llm(monkeypatch):
+    record = _build_record()
+    llm_cache = {}
+    posting_input = "Title\nSource-listed company/advertiser: Company\nDescription"
+    calls = {"count": 0, "input": ""}
+
+    monkeypatch.setattr(source_learning, "llm_is_enabled", lambda: True)
+    monkeypatch.setattr(
+        source_learning,
+        "llm_should_consider_with_learning",
+        lambda *_args, **_kwargs: {
+            "fit_review": {"decision": "KEEP", "grade": "SOLID"},
+            "learning_candidates": [],
+            "posting_channel": {"kind": "unknown", "confident": True, "evidence": ""},
+            RECORD_LLM_INPUT_TOKENS_KEY: 100,
+            RECORD_LLM_OUTPUT_TOKENS_KEY: 20,
+            RECORD_LLM_COST_USD_KEY: 0.001,
+        },
+    )
+
+    def fake_posting_llm(review_input, *_args, **_kwargs):
+        calls["count"] += 1
+        calls["input"] = review_input
+        return {
+            "kind": "direct_employer",
+            "confident": True,
+            "evidence": "The organisation describes its own workplace.",
+            RECORD_LLM_INPUT_TOKENS_KEY: 30,
+            RECORD_LLM_OUTPUT_TOKENS_KEY: 5,
+            RECORD_LLM_COST_USD_KEY: 0.0002,
+        }
+
+    monkeypatch.setattr(source_learning, "llm_classify_posting_channel", fake_posting_llm)
+
+    payload = source_learning.resolve_llm_review_payload(record, llm_cache)
+
+    fit_fp = source_learning.build_llm_cache_key(posting_input)
+    posting_fp = source_learning.build_posting_channel_cache_key(posting_input)
+    assert calls == {"count": 1, "input": posting_input}
+    assert payload["posting_channel"]["kind"] == "direct_employer"
+    assert payload[RECORD_LLM_INPUT_TOKENS_KEY] == 130
+    assert payload[RECORD_LLM_OUTPUT_TOKENS_KEY] == 25
+    assert payload[RECORD_LLM_COST_USD_KEY] == 0.0012
+    assert llm_cache[fit_fp]["posting_channel"]["kind"] == "direct_employer"
+    assert llm_cache[fit_fp][RECORD_LLM_INPUT_TOKENS_KEY] == 130
+    assert llm_cache[fit_fp][RECORD_LLM_OUTPUT_TOKENS_KEY] == 25
+    assert llm_cache[fit_fp][RECORD_LLM_COST_USD_KEY] == 0.0012
+    assert llm_cache[posting_fp]["kind"] == "direct_employer"
+    assert RECORD_LLM_COST_USD_KEY not in llm_cache[posting_fp]
+
+
+def test_resolve_llm_review_payload_cached_unknown_still_uses_dedicated_posting_llm(monkeypatch):
+    record = _build_record()
+    posting_input = "Title\nSource-listed company/advertiser: Company\nDescription"
+    fit_fp = source_learning.build_llm_cache_key(posting_input)
+    llm_cache = {
+        fit_fp: {
+            "fit_review": {"decision": "MAYBE", "grade": "WEAK"},
+            "learning_candidates": [],
+            "posting_channel": {"kind": "unknown", "confident": True, "evidence": ""},
+            RECORD_LLM_INPUT_TOKENS_KEY: 999,
+            RECORD_LLM_OUTPUT_TOKENS_KEY: 999,
+            RECORD_LLM_COST_USD_KEY: 9.99,
+        }
+    }
+    calls = {"count": 0}
+
+    monkeypatch.setattr(source_learning, "llm_is_enabled", lambda: True)
+    monkeypatch.setattr(
+        source_learning,
+        "llm_should_consider_with_learning",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("combined fit LLM should not be called")
+        ),
+    )
+
+    def fake_posting_llm(*_args, **_kwargs):
+        calls["count"] += 1
+        return {
+            "kind": "agency_or_recruiter",
+            "confident": True,
+            "evidence": "The poster represents a separate client.",
+            RECORD_LLM_INPUT_TOKENS_KEY: 40,
+            RECORD_LLM_OUTPUT_TOKENS_KEY: 6,
+            RECORD_LLM_COST_USD_KEY: 0.0003,
+        }
+
+    monkeypatch.setattr(source_learning, "llm_classify_posting_channel", fake_posting_llm)
+
+    payload = source_learning.resolve_llm_review_payload(record, llm_cache)
+
+    assert calls["count"] == 1
+    assert payload["payload_source"] == "cache"
+    assert payload["posting_channel"]["kind"] == "agency_or_recruiter"
+    assert payload[RECORD_LLM_INPUT_TOKENS_KEY] == 40
+    assert payload[RECORD_LLM_OUTPUT_TOKENS_KEY] == 6
+    assert payload[RECORD_LLM_COST_USD_KEY] == 0.0003
+    assert llm_cache[fit_fp]["posting_channel"]["kind"] == "agency_or_recruiter"
+    # The raw fit cache keeps historical provider metrics, but cache-hit normalization
+    # never returns them as new spend. The fallback call is charged only in this payload.
+    assert llm_cache[fit_fp][RECORD_LLM_INPUT_TOKENS_KEY] == 999
+    assert llm_cache[fit_fp][RECORD_LLM_OUTPUT_TOKENS_KEY] == 999
+    assert llm_cache[fit_fp][RECORD_LLM_COST_USD_KEY] == 9.99
+
+    second = source_learning.resolve_llm_review_payload(record, llm_cache)
+    assert second["posting_channel"]["kind"] == "agency_or_recruiter"
+    assert RECORD_LLM_INPUT_TOKENS_KEY not in second
+    assert RECORD_LLM_OUTPUT_TOKENS_KEY not in second
+    assert RECORD_LLM_COST_USD_KEY not in second
+
+
+def test_resolve_llm_review_payload_dedicated_unknown_remains_unknown(monkeypatch):
+    record = _build_record(company="Private Advertiser", description="Six month contract. Apply now.")
+    llm_cache = {}
+
+    monkeypatch.setattr(source_learning, "llm_is_enabled", lambda: True)
+    monkeypatch.setattr(
+        source_learning,
+        "llm_should_consider_with_learning",
+        lambda *_args, **_kwargs: {
+            "fit_review": {"decision": "MAYBE", "grade": "WEAK"},
+            "learning_candidates": [],
+            "posting_channel": {"kind": "unknown", "confident": True, "evidence": ""},
+        },
+    )
+    monkeypatch.setattr(
+        source_learning,
+        "llm_classify_posting_channel",
+        lambda *_args, **_kwargs: {"kind": "unknown", "confident": True, "evidence": ""},
+    )
+
+    payload = source_learning.resolve_llm_review_payload(record, llm_cache)
+
+    assert payload["posting_channel"] == {"kind": "unknown", "confident": True, "evidence": ""}
+
+
+def test_unresolved_posting_channel_reuses_dedicated_cache(monkeypatch):
+    record = _build_record()
+    payload = {
+        "posting_channel": {"kind": "unknown", "confident": True, "evidence": ""},
+    }
+    llm_cache = {}
+    calls = {"count": 0}
+
+    def fake_posting_llm(*_args, **_kwargs):
+        calls["count"] += 1
+        return {
+            "kind": "direct_employer",
+            "confident": True,
+            "evidence": "The organisation describes its own workplace.",
+        }
+
+    monkeypatch.setattr(source_learning, "llm_classify_posting_channel", fake_posting_llm)
+    first = source_learning._resolve_unresolved_posting_channel(record, payload, llm_cache)
+
+    monkeypatch.setattr(
+        source_learning,
+        "llm_classify_posting_channel",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("dedicated posting cache should avoid a second provider call")
+        ),
+    )
+    second = source_learning._resolve_unresolved_posting_channel(record, payload, llm_cache)
+
+    assert calls["count"] == 1
+    assert first["posting_channel"]["kind"] == "direct_employer"
+    assert second["posting_channel"]["kind"] == "direct_employer"
+
+
+def test_unresolved_posting_channel_llm_failure_leaves_unknown(monkeypatch):
+    record = _build_record()
+    payload = {
+        "posting_channel": {"kind": "unknown", "confident": False, "evidence": ""},
+    }
+    llm_cache = {}
+    monkeypatch.setattr(source_learning, "llm_classify_posting_channel", lambda *_args, **_kwargs: None)
+
+    resolved = source_learning._resolve_unresolved_posting_channel(record, payload, llm_cache)
+
+    assert resolved == payload
+    assert len(llm_cache) == 0
+
+
+def test_resolve_llm_review_payload_explicit_recruiter_metadata_skips_dedicated_llm(monkeypatch):
+    record = _build_record()
+    record[RECORD_SOURCE_METADATA_KEY] = {
+        "raw_source_fields": {"recruiter_badge": "Recruiter"},
+    }
+
+    monkeypatch.setattr(source_learning, "llm_is_enabled", lambda: True)
+    monkeypatch.setattr(
+        source_learning,
+        "llm_should_consider_with_learning",
+        lambda *_args, **_kwargs: {
+            "fit_review": {"decision": "KEEP", "grade": "SOLID"},
+            "learning_candidates": [],
+            "posting_channel": {"kind": "unknown", "confident": True, "evidence": ""},
+        },
+    )
+    monkeypatch.setattr(
+        source_learning,
+        "llm_classify_posting_channel",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("explicit recruiter metadata should resolve without another LLM call")
+        ),
+    )
+
+    payload = source_learning.resolve_llm_review_payload(record, {})
+
+    assert payload["posting_channel"]["kind"] == "unknown"
 
 
 def test_deterministic_review_does_not_reject_potential_title_before_llm():

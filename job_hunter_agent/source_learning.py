@@ -15,9 +15,12 @@ from job_hunter_agent.hard_blocker_rules import (
 )
 from job_hunter_agent.llm_gate import (
     build_llm_cache_key,
+    build_posting_channel_cache_key,
+    llm_classify_posting_channel,
     llm_is_enabled,
     llm_should_consider_learning_candidates,
     llm_should_consider_with_learning,
+    normalize_llm_posting_channel,
     normalize_llm_review_payload,
 )
 from job_hunter_agent.logging_utils import format_log_block
@@ -27,6 +30,9 @@ from job_hunter_agent.record_schema import (
     RECORD_FIT_SOURCE_TEXT_KEY,
     RECORD_FULL_DESCRIPTION_KEY,
     RECORD_JOB_KEY,
+    RECORD_LLM_COST_USD_KEY,
+    RECORD_LLM_INPUT_TOKENS_KEY,
+    RECORD_LLM_OUTPUT_TOKENS_KEY,
     RECORD_SOURCE_METADATA_KEY,
     RECORD_TITLE_KEY,
     RECORD_TITLE_REASON_KEY,
@@ -49,6 +55,7 @@ from job_hunter_agent.signal_schema import (
 )
 from job_hunter_agent.text_processing import compact_whitespace
 from job_hunter_agent.runtime_helpers import is_desktop_runtime
+from job_hunter_agent.role_analysis import infer_posting_channel
 
 
 _llm_truncation_count = 0
@@ -318,6 +325,84 @@ def _fit_review_source_context(record: dict) -> list[str]:
     return lines
 
 
+def _posting_channel_review_input(record: dict) -> str:
+    """Build bounded source-only input without candidate-profile content."""
+    title_text = str(record.get(RECORD_TITLE_KEY) or "").strip()
+    body_text = str(
+        record.get(RECORD_FIT_SOURCE_TEXT_KEY) or record.get(RECORD_FULL_DESCRIPTION_KEY) or ""
+    ).strip()
+    source_text = "\n".join(
+        part for part in [title_text, *_fit_review_source_context(record), body_text] if part
+    )
+    return source_text[: get_llm_max_chars()]
+
+
+def _merge_fresh_llm_usage(payload: dict[str, Any], usage: dict[str, Any]) -> dict[str, Any]:
+    """Add only usage from a provider call made during this resolution."""
+    merged = dict(payload)
+    if usage.get(RECORD_LLM_INPUT_TOKENS_KEY) not in (None, ""):
+        merged[RECORD_LLM_INPUT_TOKENS_KEY] = int(merged.get(RECORD_LLM_INPUT_TOKENS_KEY) or 0) + int(
+            usage[RECORD_LLM_INPUT_TOKENS_KEY]
+        )
+    if usage.get(RECORD_LLM_OUTPUT_TOKENS_KEY) not in (None, ""):
+        merged[RECORD_LLM_OUTPUT_TOKENS_KEY] = int(merged.get(RECORD_LLM_OUTPUT_TOKENS_KEY) or 0) + int(
+            usage[RECORD_LLM_OUTPUT_TOKENS_KEY]
+        )
+    if usage.get(RECORD_LLM_COST_USD_KEY) not in (None, ""):
+        merged[RECORD_LLM_COST_USD_KEY] = round(
+            float(merged.get(RECORD_LLM_COST_USD_KEY) or 0) + float(usage[RECORD_LLM_COST_USD_KEY]),
+            6,
+        )
+    return merged
+
+
+def _resolve_unresolved_posting_channel(
+    record: dict,
+    payload: dict[str, Any],
+    llm_cache: dict,
+) -> dict[str, Any]:
+    """Run the posting-only LLM only when current evidence is still unresolved."""
+    combined_signal = payload.get("posting_channel")
+    if not isinstance(combined_signal, dict):
+        return payload
+    if str(combined_signal.get("kind") or "").strip().lower() != "unknown":
+        return payload
+    if infer_posting_channel(record, combined_signal).get("kind") != "unknown":
+        return payload
+
+    posting_input = _posting_channel_review_input(record)
+    if not posting_input:
+        return payload
+
+    posting_fp = build_posting_channel_cache_key(posting_input)
+    cached_posting = llm_cache.get(posting_fp)
+    if isinstance(cached_posting, dict):
+        dedicated_signal = normalize_llm_posting_channel(cached_posting)
+        logger.debug(
+            "[POSTING_CHANNEL][FALLBACK] job_key=%s cache=HIT kind=%s",
+            str(record.get(RECORD_JOB_KEY) or "unknown"),
+            dedicated_signal.get("kind"),
+        )
+    else:
+        logger.debug(
+            "[POSTING_CHANNEL][FALLBACK] job_key=%s cache=MISS",
+            str(record.get(RECORD_JOB_KEY) or "unknown"),
+        )
+        dedicated_result = llm_classify_posting_channel(posting_input)
+        if dedicated_result is None:
+            logger.warning(
+                "[POSTING_CHANNEL][FALLBACK] job_key=%s dedicated classification failed; "
+                "leaving source unresolved",
+                str(record.get(RECORD_JOB_KEY) or "unknown"),
+            )
+            return payload
+        dedicated_signal = normalize_llm_posting_channel(dedicated_result)
+        llm_cache[posting_fp] = dedicated_signal
+        payload = _merge_fresh_llm_usage(payload, dedicated_result)
+
+    return {**payload, "posting_channel": dedicated_signal}
+
+
 def resolve_llm_review_payload(
     record: dict,
     llm_cache: dict,
@@ -404,8 +489,18 @@ def resolve_llm_review_payload(
                 company,
                 call_type,
             )
-
-            return {**cached, "payload_source": "cache"}
+            raw_cached = llm_cache.get(llm_fp)
+            resolved_cached = (
+                _resolve_unresolved_posting_channel(record, cached, llm_cache)
+                if isinstance(raw_cached, dict) and "posting_channel" in raw_cached
+                else cached
+            )
+            if resolved_cached.get("posting_channel") != cached.get("posting_channel"):
+                llm_cache[llm_fp] = {
+                    **llm_cache[llm_fp],
+                    "posting_channel": resolved_cached.get("posting_channel"),
+                }
+            return {**resolved_cached, "payload_source": "cache"}
 
     if not llm_is_enabled():
         raise RuntimeError("LLM review requested but no provider key is configured")
@@ -440,6 +535,7 @@ def resolve_llm_review_payload(
 
     else:
         payload = llm_should_consider_with_learning(truncated_input)
+        payload = _resolve_unresolved_posting_channel(record, payload, llm_cache)
 
     # Persist the freshly computed payload so later equivalent jobs (same
     # profile fingerprint + description) hit the cache instead of paying for

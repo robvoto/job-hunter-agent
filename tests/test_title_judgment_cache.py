@@ -163,6 +163,28 @@ def test_posting_channel_contract_version_invalidates_fit_cache_key(monkeypatch)
     assert ":posting:v999:" in after
 
 
+def test_dedicated_posting_channel_cache_key_is_profile_independent(monkeypatch):
+    before = llm_gate.build_posting_channel_cache_key("source facts and ad text")
+
+    monkeypatch.setattr(llm_gate, "_profile_fingerprint", lambda: "different-profile")
+    after = llm_gate.build_posting_channel_cache_key("source facts and ad text")
+
+    assert before == after
+    assert f":posting:v{llm_gate.POSTING_CHANNEL_CLASSIFIER_VERSION}:" in after
+    assert f":llm:v{llm_gate.POSTING_CHANNEL_LLM_CACHE_CONTRACT_VERSION}:" in after
+
+
+def test_dedicated_posting_channel_cache_survives_profile_pruning(monkeypatch):
+    monkeypatch.setattr(llm_gate, "_profile_fingerprint", lambda: "active-fp")
+    key = llm_gate.build_posting_channel_cache_key("source facts and ad text")
+    value = {"kind": "direct_employer", "confident": True, "evidence": "Own workplace."}
+
+    pruned, removed = io_utils.prune_llm_cache_for_current_profile({key: value})
+
+    assert removed == 0
+    assert pruned == {key: value}
+
+
 def test_title_judgment_cache_entry_survives_current_profile_pruning(monkeypatch):
     monkeypatch.setattr(llm_gate, "_profile_fingerprint", lambda: "active-fp")
     key = llm_gate.build_title_judgment_cache_key(

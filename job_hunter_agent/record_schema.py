@@ -70,9 +70,10 @@ RECORD_MISSING_CLEARANCE_SUPPORT_KEY = "missing_clearance_support"
 RECORD_REVIEWED_SIGNAL_MATCHES_KEY = "reviewed_signal_matches"
 RECORD_POSTING_CHANNEL_EVIDENCE_KEY = "posting_channel_evidence"
 POSTING_CHANNEL_VERSION_KEY = "classifier_version"
-# Bump whenever posting-channel metadata precedence or its managed LLM contract changes.
-# History reuse and fit-review cache keys depend on this value.
-POSTING_CHANNEL_CLASSIFIER_VERSION = 3
+# Bump whenever posting-channel metadata precedence, managed LLM contract, or
+# unresolved-classification fallback behaviour changes. History reuse and the
+# relevant LLM cache namespaces depend on this value.
+POSTING_CHANNEL_CLASSIFIER_VERSION = 4
 RECORD_JOB_QUALITY_SIGNALS_KEY = "job_quality_signals"
 RECORD_REQUIREMENT_COVERAGE_KEY = "requirement_coverage"
 RECORD_REQUIREMENT_COVERAGE_VERSION_KEY = "requirement_coverage_contract_version"

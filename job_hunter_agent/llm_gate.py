@@ -861,6 +861,7 @@ def build_profile_storage_resolution_guidance() -> str:
 LLM_CACHE_SCHEMA_VERSION = 3
 FIT_REVIEW_CACHE_CONTRACT_VERSION = 3
 TITLE_JUDGMENT_CACHE_CONTRACT_VERSION = 1
+POSTING_CHANNEL_LLM_CACHE_CONTRACT_VERSION = 1
 
 
 def build_llm_cache_key(job_description_text: str) -> str:
@@ -874,12 +875,27 @@ def build_llm_cache_key(job_description_text: str) -> str:
     )
 
 
-def active_llm_cache_prefixes() -> tuple[str, str]:
-    """Return the only cache namespaces valid for the active profile/contracts."""
+def build_posting_channel_cache_key(posting_source_text: str) -> str:
+    """Build the profile-independent cache key for the posting-only LLM judgement."""
+    source_hash = hashlib.sha256(
+        str(posting_source_text or "").encode("utf-8", errors="ignore")
+    ).hexdigest()
+    return (
+        f"v{LLM_CACHE_SCHEMA_VERSION}:posting:v{POSTING_CHANNEL_CLASSIFIER_VERSION}:"
+        f"llm:v{POSTING_CHANNEL_LLM_CACHE_CONTRACT_VERSION}:{source_hash}"
+    )
+
+
+def active_llm_cache_prefixes() -> tuple[str, ...]:
+    """Return cache namespaces valid for active profile and profile-independent contracts."""
     base = f"v{LLM_CACHE_SCHEMA_VERSION}:{_profile_fingerprint()}:"
     return (
         f"{base}fit:v{FIT_REVIEW_CACHE_CONTRACT_VERSION}:posting:v{POSTING_CHANNEL_CLASSIFIER_VERSION}:",
         f"{base}title:v{TITLE_JUDGMENT_CACHE_CONTRACT_VERSION}:",
+        (
+            f"v{LLM_CACHE_SCHEMA_VERSION}:posting:v{POSTING_CHANNEL_CLASSIFIER_VERSION}:"
+            f"llm:v{POSTING_CHANNEL_LLM_CACHE_CONTRACT_VERSION}:"
+        ),
     )
 
 
@@ -2138,7 +2154,7 @@ def _normalize_llm_occupation_alignment(value: Any) -> str:
     return LLM_INVALID_OCCUPATION_ALIGNMENT
 
 
-def _normalize_llm_posting_channel(value: Any) -> dict[str, Any]:
+def normalize_llm_posting_channel(value: Any) -> dict[str, Any]:
     """Normalize the LLM's posting_channel classification to a validated dict.
 
     An invalid or missing kind degrades to LLM_INVALID_POSTING_CHANNEL_KIND rather than
@@ -2280,7 +2296,7 @@ def normalize_llm_review_payload(
                 "occupation_alignment_reason": _normalize_llm_review_text(
                     value.get("occupation_alignment_reason"), max_chars=300
                 ),
-                "posting_channel": _normalize_llm_posting_channel(value.get("posting_channel")),
+                "posting_channel": normalize_llm_posting_channel(value.get("posting_channel")),
                 "debug_reason": _normalize_llm_review_text(
                     value.get("debug_reason"), max_chars=300
                 ),
@@ -2880,6 +2896,72 @@ def llm_should_consider_learning_candidates(
             job_description_text, fit_review=False, benchmark_model=benchmark_model
         )
     ).get("learning_candidates", [])
+
+
+def llm_classify_posting_channel(
+    posting_source_text: str,
+    *,
+    llm_client: Any = None,
+    benchmark_model: str | None = None,
+) -> dict[str, Any] | None:
+    """Run the small posting-only judgement used when the combined fit review is unresolved."""
+    active_client = llm_client or client
+    posting_source_text = str(posting_source_text or "").strip()
+    if active_client is None or not posting_source_text:
+        return None
+
+    model = benchmark_model or _log_llm_model_once()
+    # Posting source is another short structured classification, so reuse the
+    # managed short-classification output budget rather than adding a hidden cap.
+    max_output_tokens = get_llm_title_judgment_max_output_tokens()
+    max_attempts = 2
+    for attempt in range(1, max_attempts + 1):
+        try:
+            record_llm_request()
+            logger.debug(
+                "[LLM][REQUEST] purpose=posting_channel model=%s input_chars=%d "
+                "max_output_tokens=%d attempt=%d/%d",
+                model,
+                len(posting_source_text),
+                max_output_tokens,
+                attempt,
+                max_attempts,
+            )
+            resp = active_client.responses.parse(
+                model=model,
+                input=[
+                    {"role": "system", "content": build_posting_channel_guidance()},
+                    {"role": "user", "content": posting_source_text},
+                ],
+                max_output_tokens=max_output_tokens,
+                text_format=_LLMPostingChannel,
+                **_llm_generation_kwargs(model),
+            )
+            _log_llm_call(resp, "posting_channel", model)
+            parsed = getattr(resp, "output_parsed", None)
+            if parsed is None:
+                raise ValueError("LLM posting-channel judgement returned no parsed output")
+            payload = normalize_llm_posting_channel(parsed.model_dump())
+            logger.debug(
+                "[LLM][RESULT] purpose=posting_channel kind=%s confident=%s evidence=%r",
+                payload["kind"],
+                payload["confident"],
+                payload["evidence"],
+            )
+            return {**payload, **_llm_usage_summary(resp, model)}
+        except Exception as exc:
+            record_llm_error()
+            if attempt < max_attempts and _is_retryable_llm_payload_error(exc):
+                logger.warning(
+                    "[LLM][RETRY] purpose=posting_channel model=%s attempt=%d/%d reason=%s",
+                    model,
+                    attempt + 1,
+                    max_attempts,
+                    f"{type(exc).__name__}: {exc}",
+                )
+                continue
+            logger.error("[LLM][FAIL] purpose=posting_channel error=%s", exc)
+            return None
 
 
 def llm_classify_section_label(
