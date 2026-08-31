@@ -48,6 +48,39 @@ Responsibilities:
 
 ---
 
+### Agent Ad-Hoc Search (JH-292)
+
+Lets an external agent (Claude, etc. via CLI/MCP shell access) trigger a
+one-off search with custom keywords, salary floor, locations, and enabled
+sources -- for example an urgent broad "any role" search that deliberately
+differs from the signed-in user's saved profile settings.
+
+```powershell
+python -m job_hunter_agent.agent_search --base-user-id <real-user-id> --keywords "business analyst" "business support officer" --min-salary 0 --print-results
+```
+
+Safety model: the command reuses `scrape_jobs_direct()` completely
+unchanged. It never writes to `--base-user-id`'s own persisted profile row --
+it reads that profile once (read-only) for candidate background/capability
+context, then scopes the actual run to a separate, deterministic
+`<base-user-id>::agent-adhoc` user_id via `user_context.set_user_id()`.
+Results land in that ephemeral user_id's own `workspace_pool` row, never
+merged into the real user's normal saved results. Re-running for the same
+`--base-user-id` reuses the same ephemeral profile/workspace row rather than
+accumulating a new one per call.
+
+Read results from a prior ad-hoc run without triggering a new scrape:
+
+```python
+from job_hunter_agent.agent_search import get_ad_hoc_results
+get_ad_hoc_results("<real-user-id>")
+```
+
+Local/CLI use only. A proper authenticated HTTP endpoint exposing the same
+capability is tracked separately as JH-293.
+
+---
+
 ### Agent Runner
 
 Persistent automation wrapper.
