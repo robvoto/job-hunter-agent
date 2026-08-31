@@ -932,6 +932,10 @@ def render_custom_blocker_preview(resolution: dict, debug_mode: bool = False) ->
         ]
         parts.append('<dl class="custom-blocker-preview-debug">')
         for row_label, row_value in debug_rows:
+            # A rejected term leaves most resolution fields blank; rendering empty
+            # <dd>s is just noise, so keep only the rows that carry a value.
+            if not str(row_value).strip():
+                continue
             parts.append(f"<dt>{safe_html(row_label)}</dt><dd>{safe_html(row_value)}</dd>")
         parts.append("</dl>")
 
