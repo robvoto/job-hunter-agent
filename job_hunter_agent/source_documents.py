@@ -295,6 +295,11 @@ def _collect_import_sources(materials: dict[str, Any]) -> list[dict[str, str]]:
 def build_onboarding_reset_patch(
     onboarding_settings: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Build the extraction reset without touching user-confirmed role intent.
+
+    Role suggestions are returned separately by ``run_onboarding`` and become
+    persisted selections only through the explicit review-confirm endpoint.
+    """
     patch: dict[str, Any] = {
         field: copy.deepcopy(DEFAULT_PROFILE[field])
         for field in ONBOARDING_RESET_FIELDS
@@ -325,11 +330,12 @@ def run_onboarding(
     search_preferences: dict | None = None,
     onboarding_settings: dict | None = None,
 ) -> dict[str, Any]:
-    """Collect source documents, reset onboarding fields, re-extract everything, save.
+    """Collect source documents, refresh onboarding-owned data, and save.
 
     This is the single shared path for both initial onboarding and the Danger Rebuild.
     Non-onboarding fields (search settings, salary, preferences, review controls, etc.)
-    are preserved unchanged.
+    are preserved unchanged. Existing confirmed role selections remain persisted while
+    CV-derived role suggestions are reviewed and are replaced only on explicit confirm.
     """
     resolved = normalize_source_materials(
         source_materials or load_source_materials(create_if_missing=True)

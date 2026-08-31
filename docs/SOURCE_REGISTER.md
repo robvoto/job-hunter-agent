@@ -190,6 +190,7 @@ Limit:
 Decision:
 - Use the current user-selected `target_roles` and `also_consider_roles` as machine-facing occupation context.
 - CV extraction may suggest role directions for the onboarding review screen, but suggestions are transient until the user selects and confirms them.
+- Rebuilding from a CV preserves confirmed role selections until the final review confirmation replaces them; an interrupted or failed rebuild cannot clear them.
 - O*NET uses the selected role titles to derive candidate target occupation codes.
 - ONET remains a conservative pre-detail helper: exact/strong occupation-code match = near; clear different occupation code = far; no reliable match = uncertain.
 - uncertain must not reject by itself; it continues to detail/LLM review.
