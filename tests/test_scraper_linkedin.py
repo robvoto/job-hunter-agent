@@ -1145,6 +1145,23 @@ def test_extract_linkedin_description_reads_show_more_less_markup():
     )
 
 
+def test_extract_linkedin_description_stops_after_markup_with_void_tags_before_it():
+    from job_hunter_agent.scrapers.linkedin import _extract_linkedin_description
+
+    html = (
+        "<html><head><meta charset='utf-8'><link rel='stylesheet'></head>"
+        "<body><input type='hidden'>"
+        '<div class="description__text"><section class="show-more-less-html">'
+        '<div class="show-more-less-html__markup">'
+        "<p>The actual job description.</p>"
+        "</div></section></div>"
+        "<footer>Similar jobs and LinkedIn sign-in content.</footer>"
+        "</body></html>"
+    )
+
+    assert _extract_linkedin_description(html) == "The actual job description."
+
+
 def test_extract_linkedin_job_url_direct_reads_apply_code_element():
     from job_hunter_agent.scrapers.linkedin import _extract_linkedin_job_url_direct
 
