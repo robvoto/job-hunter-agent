@@ -355,7 +355,10 @@ function formatGenericSummaryValue(value) {
     return sharedUiLabels.settings_value_not_set;
   }
   if (typeof value === 'boolean') return formatSummaryBoolean(value);
-  if (Array.isArray(value)) return value.length ? value.join(', ') : sharedUiLabels.settings_value_none;
+  if (Array.isArray(value)) {
+    if (!value.length) return sharedUiLabels.settings_value_none;
+    return value.map((item) => formatGenericSummaryValue(item)).join(', ');
+  }
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
 }

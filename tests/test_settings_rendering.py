@@ -164,6 +164,22 @@ def test_settings_page_renders_role_history_readonly_panel_script():
     assert "refresh_role_history_from_saved_cv" in js_text
 
 
+def test_settings_page_generic_summary_recurses_into_array_items():
+    # profile.candidate_capabilities is an array of objects with no dedicated
+    # summary field, so it falls through to formatGenericSummaryValue. Array.join
+    # calls each element's toString(), which for a plain object is "[object
+    # Object]" -- assert the array branch instead maps each item back through
+    # formatGenericSummaryValue so an object item is rendered as JSON, not
+    # stringified via Array.prototype.join.
+    repo_root = Path(__file__).resolve().parents[1]
+    js_text = (
+        repo_root / "templates" / "static" / "settings" / "shared" / "settings-page.js"
+    ).read_text(encoding="utf-8")
+
+    assert "return value.map((item) => formatGenericSummaryValue(item)).join(', ');" in js_text
+    assert "return value.length ? value.join(', ')" not in js_text
+
+
 def test_settings_utils_review_normaliser_preserves_icon_key():
     repo_root = Path(__file__).resolve().parents[1]
     js_text = (
