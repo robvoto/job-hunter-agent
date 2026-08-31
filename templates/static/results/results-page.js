@@ -408,6 +408,37 @@
       }
     }
 
+    function reviewActionsHtmlFor(action) {
+      const labels = (window.__JOB_HUNTER_WORKSPACE__ && window.__JOB_HUNTER_WORKSPACE__.labels) || {};
+      if (action === 'applied') {
+        return '<div class="job-actions">'
+          + '<button class="review-button review-undo jh-button jh-button--primary jh-button--compact review-button--selected" type="button" data-review-action="unapply">'
+          + `${_rejEscapeHtml(labels.actionUndoAppliedLabel)}</button>`
+          + '<span class="review-status" aria-live="polite"></span>'
+          + '</div>';
+      }
+      if (action === 'hidden') {
+        return '<div class="job-actions">'
+          + '<button class="review-button review-undo jh-button jh-button--secondary jh-button--compact" type="button" data-review-action="unhide">'
+          + `${_rejEscapeHtml(labels.actionUnhideLabel)}</button>`
+          + '<span class="review-status" aria-live="polite"></span>'
+          + '</div>';
+      }
+      // unapply / unhide land back in "potential", which needs the full
+      // applied / not-for-me / hide action set restored.
+      return '<div class="job-actions">'
+        + '<button class="review-button review-applied jh-button jh-button--primary jh-button--compact" type="button" data-review-action="applied">'
+        + `${_rejEscapeHtml(labels.appliedBadgeLabel)}</button>`
+        + '<button class="review-button review-not-for-me jh-button jh-button--danger jh-button--compact" type="button" data-review-action="not_for_me" '
+        + `title="${_rejEscapeHtml(labels.actionNotForMeTooltip)}">`
+        + `${_rejEscapeHtml(labels.actionNotForMeLabel)}</button>`
+        + '<button class="review-button review-hide jh-button jh-button--secondary jh-button--compact" type="button" data-review-action="hidden" '
+        + `title="${_rejEscapeHtml(labels.actionHideTooltip)}">`
+        + `${_rejEscapeHtml(labels.actionHideLabel)}</button>`
+        + '<span class="review-status" aria-live="polite"></span>'
+        + '</div>';
+    }
+
     function moveCardAfterReview(card, action) {
       const destination = {
         applied: 'applied',
@@ -436,15 +467,23 @@
         return;
       }
 
+      // Built directly from the action taken, rather than cloned from another
+      // card already sitting in the destination tab -- cloning left the card
+      // with its old (now-wrong) action buttons whenever the destination tab
+      // was empty before this move (e.g. applying the first job while the
+      // Applied tab had zero jobs in it).
       const sourceActions = card.querySelector('.job-actions');
-      const targetActions = targetPanel.querySelector('.job-actions');
-      if (sourceActions && targetActions) {
-        const replacementActions = targetActions.cloneNode(true);
-        const sourceButton = sourceActions.querySelector('.review-button');
-        replacementActions.querySelectorAll('.review-button').forEach(button => {
-          copyReviewButtonData(sourceButton, button);
-        });
-        sourceActions.replaceWith(replacementActions);
+      if (sourceActions) {
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = reviewActionsHtmlFor(action);
+        const replacementActions = wrapper.firstElementChild;
+        if (replacementActions) {
+          const sourceButton = sourceActions.querySelector('.review-button');
+          replacementActions.querySelectorAll('.review-button').forEach(button => {
+            copyReviewButtonData(sourceButton, button);
+          });
+          sourceActions.replaceWith(replacementActions);
+        }
       }
 
       targetGrid.appendChild(card);

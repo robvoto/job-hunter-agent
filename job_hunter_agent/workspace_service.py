@@ -583,6 +583,20 @@ def render_html(
     if not remove_item_label:
         raise ValueError("ui_labels.json is missing shared_ui_labels.remove_item_label")
 
+    # Read the review-action button labels through the low-level UI-label loader
+    # so results-page.js can rebuild a job card's action buttons after an
+    # applied/hidden toggle without depending on another card already present
+    # in the destination tab to clone markup from.
+    workspace_card_labels = load_ui_labels().get("workspace_card_labels", {})
+    if not isinstance(workspace_card_labels, dict):
+        raise ValueError("ui_labels.json is missing workspace_card_labels")
+
+    def _card_label(key: str) -> str:
+        value = str(workspace_card_labels.get(key) or "").strip()
+        if not value:
+            raise ValueError(f"ui_labels.json is missing workspace_card_labels.{key}")
+        return value
+
     last_run_cards_html = _render_summary_cards_html(
         [
             (
@@ -654,6 +668,13 @@ def render_html(
             "LABEL_WS_PROFILE_GAP_NOT_HAVE_SAVED_TEMPLATE"
         ],
         "profileGapErrorLabel": ws_page_labels["LABEL_WS_PROFILE_GAP_ERROR_LABEL"],
+        "actionUndoAppliedLabel": _card_label("action_undo_applied_label"),
+        "actionUnhideLabel": _card_label("action_unhide_label"),
+        "appliedBadgeLabel": _card_label("applied_badge"),
+        "actionNotForMeLabel": _card_label("action_not_for_me_label"),
+        "actionNotForMeTooltip": _card_label("action_not_for_me_tooltip"),
+        "actionHideLabel": _card_label("action_hide_label"),
+        "actionHideTooltip": _card_label("action_hide_tooltip"),
     }
 
     top_reject_reasons_html = "".join(

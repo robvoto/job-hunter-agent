@@ -54,12 +54,21 @@ def test_workspace_save_action_round_trips(workspace_job_page):
         f"applied action failed: {response_info.value.status} {response_info.value.text()}"
     )
 
-    _wait_for_action_button(page, "unapply")
     # The scope-tab bar is re-rendered once per section, so all three sections'
     # copies share the same data-workspace-target -- any of them toggles the
     # same active-section state, so .first is fine.
     page.locator('[data-workspace-target="applied"]').first.click()
-    expect(page.locator('[data-review-action="unapply"]')).to_be_visible()
+
+    # The seeded workspace has exactly one job, so the Applied tab is empty
+    # before this click. moveCardAfterReview() used to clone its replacement
+    # action buttons from a card already sitting in the destination tab; with
+    # no such card to clone from, the moved card kept its stale
+    # applied/not_for_me/hidden buttons instead of swapping to "unapply" until
+    # a full page reload later picked up the server-rendered card. Assert the
+    # swap immediately, with no reload, so this can't hide behind
+    # _wait_for_action_button's reload-based polling for eventual consistency.
+    expect(page.locator('[data-review-action="unapply"]')).to_be_visible(timeout=2000)
+    expect(page.locator('[data-review-action="applied"]')).to_have_count(0)
 
     with page.expect_response("**/api/review") as response_info:
         page.locator('[data-review-action="unapply"]').click()
@@ -82,9 +91,13 @@ def test_workspace_dismiss_action_round_trips(workspace_job_page):
         f"hidden action failed: {response_info.value.status} {response_info.value.text()}"
     )
 
-    _wait_for_action_button(page, "unhide")
     page.locator('[data-workspace-target="hidden"]').first.click()
-    expect(page.locator('[data-review-action="unhide"]')).to_be_visible()
+
+    # Same empty-destination-tab case as the applied round trip above: the
+    # Hidden tab starts empty for this seeded job. Assert immediately, with
+    # no reload, so the check can't hide behind eventual consistency.
+    expect(page.locator('[data-review-action="unhide"]')).to_be_visible(timeout=2000)
+    expect(page.locator('[data-review-action="hidden"]')).to_have_count(0)
 
     with page.expect_response("**/api/review") as response_info:
         page.locator('[data-review-action="unhide"]').click()
