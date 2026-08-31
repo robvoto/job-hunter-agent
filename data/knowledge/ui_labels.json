@@ -615,7 +615,7 @@
     "custom_blocker_requirement_type_qualification": "qualification",
     "custom_blocker_preview_heading_template": "${importance} ${requirement_type}",
     "custom_blocker_preview_save_as_label": "Will save as required-requirement blocker",
-    "custom_blocker_reason_no_match": "This doesn't match a requirement listed for this job.",
+    "custom_blocker_reason_no_match": "That's not one of this job's required terms. Only terms this job actually lists can be saved here — tick one of the suggested required terms above instead.",
     "custom_blocker_reason_ambiguous": "This matches more than one requirement for this job, so it can't be saved automatically.",
     "custom_blocker_reason_not_required_template": "This matches a requirement, but it's only ${importance}, not required.",
     "custom_blocker_reason_invalid_input": "Enter at least 2 characters.",
