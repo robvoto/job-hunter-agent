@@ -79,6 +79,8 @@ def test_settings_page_renders_keyword_label_and_location_field(monkeypatch):
 
     assert "Job board search" in html
 
+    assert "Job Hunter searches each preferred and alternative role separately" in html
+
     assert ">Add<" not in html
 
     assert '<label for="locations">Location</label>' in html

@@ -172,8 +172,8 @@ Changes here affect the app globally, but users do not edit them from their own 
 
 `Search keyword`
 
-- a single role term used by onboarding and search
-- keep it broad enough to capture relevant roles without combining multiple titles into one field
+- a single broad fallback term used only when no preferred or alternative role list is selected
+- when roles are selected, Job Hunter searches each preferred and alternative role separately and combines the results
 - the helper text under the field should stay short and explanatory
 
 `Sector preference`

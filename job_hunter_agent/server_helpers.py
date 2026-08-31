@@ -178,6 +178,7 @@ _ONBOARDING_TITLE_TIER_LABEL_KEYS = (
     "also_consider_roles_input_placeholder",
     "also_consider_roles_empty_text",
     "move_to_also_consider_label",
+    "role_search_help",
     "search_keyword_label",
     "search_keyword_help",
     "search_keyword_example",

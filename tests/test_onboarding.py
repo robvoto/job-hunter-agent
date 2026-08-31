@@ -61,6 +61,7 @@ def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
 
     assert "Preferred roles" in html
     assert "Alternative roles" in html
+    assert "Job Hunter searches each preferred and alternative role separately" in html
     assert 'id="review_search_keywords"' not in html
     assert "Add a preferred role" in html
     assert "Add an alternative role" in html
@@ -232,6 +233,15 @@ def test_shared_location_help_explains_source_specific_scope():
     assert "50-mile radius on LinkedIn" in help_text
     assert "NSW means a state search on SEEK and LinkedIn" in help_text
     assert "APS Jobs maps both Sydney and NSW to NSW" in help_text
+
+
+def test_title_tier_labels_explain_role_search_expansion():
+    labels = server_helpers.load_onboarding_title_tier_labels()
+
+    assert labels["role_search_help"] == (
+        "Job Hunter searches each preferred and alternative role separately on each enabled job board. "
+        "Results are combined, and confirmed duplicate jobs are kept once."
+    )
 
 
 def test_onboarding_import_summary_labels_include_cost_copy():
