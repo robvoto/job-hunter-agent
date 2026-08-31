@@ -32,7 +32,7 @@ from job_hunter_agent.global_settings import (
     get_linkedin_max_consecutive_target_failures,
     get_linkedin_parallel_search_workers,
     get_search_plan_min_corroboration_samples,
-    get_source_discovery_cache_max_age_minutes,
+    get_search_plan_max_age_minutes,
 )
 from job_hunter_agent.io_utils import DEBUG_CAPTURE_SOURCE_PAYLOADS, write_source_payload_debug
 from job_hunter_agent.job_review_pipeline import (
@@ -392,7 +392,7 @@ class LinkedInScraper(BaseJobScraper):
                     state,
                     probe_terms,
                     min_corroboration_samples=get_search_plan_min_corroboration_samples(),
-                    max_age_minutes=get_source_discovery_cache_max_age_minutes(),
+                    max_age_minutes=get_search_plan_max_age_minutes(),
                 )
                 planned_terms_by_location[location] = planned_terms
                 if plan_source != "remembered":

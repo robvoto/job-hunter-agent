@@ -637,6 +637,7 @@ The current managed defaults for history and cache retention live in `data/confi
 - `cache_settings.occupation_title_cache_max_age_days`: `365`
 - `cache_settings.source_discovery_cache_max_entries`: `10000`
 - `cache_settings.source_discovery_cache_max_age_minutes`: `60`
+- `cache_settings.search_plan_max_age_minutes`: `10080`
 - `cache_settings.linkedin_failure_backoff_minutes`: `15`
 - `cache_settings.linkedin_max_consecutive_target_failures`: `6`
 
@@ -646,6 +647,10 @@ Behavior:
 - The occupation-title cache is pruned by both age and count.
 - Source discovery snapshots are retained per account and reused only for a
   matching source signature within the configured freshness window.
+- Learned search plans use their own freshness window. When that window expires,
+  each configured role term is run in a bounded complete probe; only a healthy
+  complete probe can replace the remembered plan. Source-result cache reuse does
+  not refresh the plan.
 - A fully failed LinkedIn search records a temporary bounded backoff state; it does not suppress future retries permanently.
 - LinkedIn stops submitting new search targets after the configured number of consecutive target failures. Already-running bounded workers are drained, successful partial results are preserved, and an incomplete/failed collection is not written as a successful discovery snapshot.
 - A LinkedIn search that completes successfully with zero rows is `healthy`; zero rows alone are not a source failure.

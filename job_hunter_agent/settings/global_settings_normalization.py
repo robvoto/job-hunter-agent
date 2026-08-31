@@ -98,6 +98,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_OCCUPATION_TITLE_CACHE_MAX_ENTRIES,
     KEY_SOURCE_DISCOVERY_CACHE_MAX_ENTRIES,
     KEY_SOURCE_DISCOVERY_CACHE_MAX_AGE_MINUTES,
+    KEY_SEARCH_PLAN_MAX_AGE_MINUTES,
     KEY_LINKEDIN_FAILURE_BACKOFF_MINUTES,
     KEY_SEARCH_PLAN_MIN_CORROBORATION_SAMPLES,
     KEY_LINKEDIN_STALE_FALLBACK_MAX_AGE_MINUTES,
@@ -1019,6 +1020,13 @@ def normalize_global_settings(
             DEFAULT_CACHE_SETTINGS[KEY_SOURCE_DISCOVERY_CACHE_MAX_AGE_MINUTES],
             normalized_cache_limits[KEY_SOURCE_DISCOVERY_CACHE_MAX_AGE_MINUTES]["min"],
             normalized_cache_limits[KEY_SOURCE_DISCOVERY_CACHE_MAX_AGE_MINUTES]["max"],
+        ),
+        KEY_SEARCH_PLAN_MAX_AGE_MINUTES: _require_int(
+            cache_source,
+            KEY_SEARCH_PLAN_MAX_AGE_MINUTES,
+            DEFAULT_CACHE_SETTINGS[KEY_SEARCH_PLAN_MAX_AGE_MINUTES],
+            normalized_cache_limits[KEY_SEARCH_PLAN_MAX_AGE_MINUTES]["min"],
+            normalized_cache_limits[KEY_SEARCH_PLAN_MAX_AGE_MINUTES]["max"],
         ),
         KEY_LINKEDIN_FAILURE_BACKOFF_MINUTES: _require_int(
             cache_source,

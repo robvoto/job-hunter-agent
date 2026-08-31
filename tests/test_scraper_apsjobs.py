@@ -193,7 +193,7 @@ def test_apsjobs_search_plan_prunes_trusted_redundant_role_target(monkeypatch, t
         lambda *_args, **_kwargs: (["Role B"], "remembered"),
     )
     monkeypatch.setattr(apsjobs_module, "get_search_plan_min_corroboration_samples", lambda: 2)
-    monkeypatch.setattr(apsjobs_module, "get_source_discovery_cache_max_age_minutes", lambda: 60)
+    monkeypatch.setattr(apsjobs_module, "get_search_plan_max_age_minutes", lambda: 10080)
     monkeypatch.setattr(apsjobs_module, "PLAYWRIGHT_USER_DATA_DIR", tmp_path)
     fetched_terms: list[str] = []
     monkeypatch.setattr(

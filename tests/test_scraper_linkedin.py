@@ -266,7 +266,7 @@ def test_linkedin_search_plan_prunes_trusted_redundant_role_target(monkeypatch):
         lambda *_args, **_kwargs: (["Role B"], "remembered"),
     )
     monkeypatch.setattr(linkedin_module, "get_search_plan_min_corroboration_samples", lambda: 2)
-    monkeypatch.setattr(linkedin_module, "get_source_discovery_cache_max_age_minutes", lambda: 60)
+    monkeypatch.setattr(linkedin_module, "get_search_plan_max_age_minutes", lambda: 10080)
     fetched_terms: list[str] = []
     monkeypatch.setattr(scraper, "_fetch_jobspy", lambda target: fetched_terms.append(target["search_term"]))
 

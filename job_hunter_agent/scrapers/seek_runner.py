@@ -31,7 +31,7 @@ from job_hunter_agent.global_settings import (
     KEY_SEEK_QUICK_APPLY_ONLY,
     get_playwright_browser_mode,
     get_search_plan_min_corroboration_samples,
-    get_source_discovery_cache_max_age_minutes,
+    get_search_plan_max_age_minutes,
 )
 from job_hunter_agent.history import (
     apply_detail_evidence_reuse,
@@ -1359,7 +1359,7 @@ def seek_scrape_to_records(
                         remembered,
                         probe_terms,
                         min_corroboration_samples=get_search_plan_min_corroboration_samples(),
-                        max_age_minutes=get_source_discovery_cache_max_age_minutes(),
+                        max_age_minutes=get_search_plan_max_age_minutes(),
                     )
                     if plan_source == "remembered":
                         historical_selected_terms_by_location[location_key] = set(

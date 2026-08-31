@@ -264,6 +264,7 @@
     "occupation_title_cache_max_age_days": 365,
     "source_discovery_cache_max_entries": 10000,
     "source_discovery_cache_max_age_minutes": 60,
+    "search_plan_max_age_minutes": 10080,
     "linkedin_failure_backoff_minutes": 15,
     "search_plan_min_corroboration_samples": 2,
     "linkedin_stale_fallback_max_age_minutes": 1440,

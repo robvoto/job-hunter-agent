@@ -36,7 +36,7 @@ Do not add filtering or scoring logic to Phases 1–3. Phase 4 is the only place
 - JH-081 role terms are the exact probe vocabulary; search-plan state never invents role synonyms or semantic overlap.
 - Every configured term gets comparable bounded probe evidence before a remembered plan is updated.
 - Bootstrap, stale, incomplete, stopped, challenged, or failed runs remain conservative and must not update the remembered plan.
-- A remembered selected term is trusted only when its persisted per-term selection count meets the configured `search_plan_min_corroboration_samples` and its observation remains within the managed source-discovery freshness window.
+- A remembered selected term is trusted only when its persisted per-term selection count meets the configured `search_plan_min_corroboration_samples` and its observation remains within the independent managed `search_plan_max_age_minutes` window. Source-result cache freshness does not refresh or expire the learned plan.
 - Fresh trusted plans may prune redundant LinkedIn and APSJobs targets. SEEK still performs comparable page-1 probes and uses the plan only for deeper pagination, preserving its source-specific bounded-page contract.
 - Search-plan evidence remains isolated by user, source, material discovery signature, and location; cross-source job identity is handled separately by the central identity contract.
 
