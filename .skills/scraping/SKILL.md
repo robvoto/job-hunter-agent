@@ -36,6 +36,10 @@ See `.skills/scraping/DETAILS.md` for detailed work-mode extraction, source-spec
 - APSJobs uses direct filtered search URLs where supported, source-native APS IDs for early deduplication, and treats a legitimate zero-result query as healthy success rather than source failure.
 - `SOURCE_COMPLETE` means the source worker finished. Use explicit health markers such as `SOURCE_FAILED` / `SOURCE_PARTIAL` and the structured source status to describe whether collection actually succeeded.
 - Do not treat search keywords as job-level work-mode proof.
+- **Search-semantics boundary:** user-facing role/preference labels, canonical occupation/taxonomy identity, machine-facing source queries, seniority or other ranking/eligibility preferences, and source-cache signatures are separate contracts. Do not make one automatically own or overwrite another merely to simplify search planning.
+- Any change to how profile/user values become SEEK, LinkedIn, or APSJobs query terms is a business-semantics change. Before implementation, follow `.skills/code-change/SKILL.md`'s approval gate and show the exact before/after query set for representative current values, including whether the number of source targets increases or decreases and whether discovery becomes broader or narrower.
+- Search-term derivation must not be implemented as hardcoded role lists or one-off title exceptions. If the desired mapping between a user role and a machine query is not already an approved product contract, stop and ask rather than inventing it.
+- Changing search-term inputs or cache/signature composition must include an explicit cache-impact statement: which discovery snapshots/search plans/reviews become invalid, which remain reusable, and why. A cache-version bump must not invalidate a more expensive independent cache unless that cache's own behavioural contract actually changed.
 
 ## Ownership
 - `scrapers/seek_runner.py`: SEEK scrape loop, card review dispatch, parallel detail fetch, result collection.
