@@ -31,6 +31,7 @@ from job_hunter_agent.profile_store import (
     KEY_CANDIDATE_QUALIFICATIONS,
 )
 from job_hunter_agent.eligibility_profile import prepare_eligibility_fact
+from job_hunter_agent.experience_requirements import extract_required_experience_months
 from job_hunter_agent.record_schema import (
     RECORD_LAST_KEPT_SNAPSHOT_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
@@ -421,6 +422,20 @@ def _resolve_and_confirm_requirement(canonical_item: dict, profile: dict) -> dic
     confirmed_fact = normalize_profile_item_name(canonical_item.get("canonical_requirement"))
     if not confirmed_fact:
         raise ValueError("This requirement does not have one resolved profile fact to confirm.")
+    # candidate_capabilities never stores a duration: the years/months a job asks
+    # for are compared against captured role_experience (refreshed from the CV /
+    # onboarding), not frozen into the profile as a derived capability. Reject a
+    # canonical fact that carries a duration token and send it back for review
+    # rather than persisting "5 Years Business Analysis".
+    if (
+        requirement_type == "capability"
+        and extract_required_experience_months(confirmed_fact) is not None
+    ):
+        raise ValueError(
+            "This looks like a years-of-experience requirement. Confirm the "
+            "underlying skill or domain instead — the duration is checked "
+            "against your role history and is not saved to your profile."
+        )
     try:
         resolved = llm_gate.llm_resolve_profile_storage(canonical_item, profile)
     except llm_gate.LLMCallError as exc:

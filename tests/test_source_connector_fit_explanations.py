@@ -2163,9 +2163,11 @@ def test_render_job_card_requirement_coverage_shows_role_duration_note_in_normal
                     "matched_job_text": "Minimum 5 years experience as Business Analyst",
                     "profile_support": [],
                     "required_experience_months": 60,
-                    "matched_role_experience_title": "business analyst",
-                    "matched_role_experience_months": 36,
-                    "matched_role_experience_end_year": 2024,
+                    "matched_role_family": "business analyst",
+                    "matched_role_family_months": 36,
+                    "matched_role_family_end_year": 2024,
+                    "experience_requirement_met": False,
+                    "experience_duration_gap": True,
                 }
             ],
             "source": "seek",
@@ -2174,7 +2176,7 @@ def test_render_job_card_requirement_coverage_shows_role_duration_note_in_normal
         debug_mode=False,
     )
 
-    assert "Role history proves 36 months in business analyst against 60 required months" in html
+    assert "Role history shows 36 months in business analyst, short of the 60 required months" in html
     assert "most recent end year 2024" in html
     assert "req-coverage-detail" not in html
     assert "Partial matches" in html

@@ -96,10 +96,11 @@ def test_requirement_fit_audit_exposes_exact_evidence_mapping_and_credit():
             "credit_fraction": 0.5,
             "weighted_credit": 1.5,
             "required_experience_months": 0,
-            "matched_role_experience_title": "",
-            "matched_role_experience_months": 0,
-            "matched_role_experience_end_year": 0,
+            "matched_role_family": "",
+            "matched_role_family_months": 0,
+            "matched_role_family_end_year": 0,
             "experience_requirement_met": False,
+            "experience_duration_gap": False,
             "experience_requirement_review_needed": False,
         }
     ]
@@ -346,13 +347,17 @@ def test_exact_capability_with_matching_role_duration_can_be_supported_without_d
             "profile_support": ["Configured CRM workflows for internal teams."],
             "experience_components": [
                 {"kind": "duration", "text": "5+ years"},
-                {"kind": "role_or_activity", "text": "Salesforce configuration"},
+                {
+                    "kind": "role_or_activity",
+                    "text": "Salesforce configuration",
+                    "matched_role_family": "Salesforce Configuration",
+                },
             ],
         },
         profile,
         role_experience=[
             {
-                "normalized_title": "salesforce configuration",
+                "normalized_title": "Salesforce Configuration",
                 "total_duration_months": 72,
                 "most_recent_end_year": 2025,
             }
@@ -361,8 +366,8 @@ def test_exact_capability_with_matching_role_duration_can_be_supported_without_d
 
     assert normalized["status"] == "supported"
     assert normalized["required_experience_months"] == 60
-    assert normalized["matched_role_experience_title"] == "salesforce configuration"
-    assert normalized["matched_role_experience_months"] == 72
+    assert normalized["matched_role_family"] == "Salesforce Configuration"
+    assert normalized["matched_role_family_months"] == 72
     assert normalized["experience_requirement_met"] is True
     assert fit_scoring.fit_score(_record([normalized]), profile) == 100
 

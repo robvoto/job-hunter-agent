@@ -18,7 +18,10 @@ from typing import Any, Dict
 from openai import APIStatusError, APITimeoutError, OpenAI
 from pydantic import AliasChoices, BaseModel, Field, ValidationError
 
-from job_hunter_agent.experience_requirements import resolve_role_experience_requirement
+from job_hunter_agent.experience_requirements import (
+    extract_required_experience_months,
+    resolve_role_experience_requirement,
+)
 from job_hunter_agent.global_settings import (
     KEY_LLM_PRICING_PER_1M,
     KEY_LLM_PROMPT_EVIDENCE_TIERS,
@@ -401,6 +404,14 @@ class _LLMExperienceComponent(BaseModel):
     # token overlap between job wording and candidate evidence.
     profile_supported: bool = False
     profile_evidence: list[str] = Field(default_factory=list)
+    # Set by the LLM on the role_or_activity (or duration) component of an
+    # explicit years/months requirement: the exact Role experience matrix family
+    # name whose accumulated history covers the stated role/activity, treating
+    # obvious role-family equivalents (e.g. Business Analyst / Senior Business
+    # Analyst) as one family. Empty when no saved family safely applies — the
+    # deterministic layer then leaves the requirement unresolved for review
+    # rather than guessing the role relationship.
+    matched_role_family: str = ""
 
 
 class _LLMRequirementCoverageItem(BaseModel):
@@ -1380,14 +1391,16 @@ def _normalize_experience_components(value: Any) -> list[dict[str, Any]]:
             if isinstance(raw_profile_evidence, list)
             else []
         )
-        components.append(
-            {
-                "kind": kind,
-                "text": text,
-                "profile_supported": item.get("profile_supported") is True,
-                "profile_evidence": profile_evidence,
-            }
-        )
+        component: dict[str, Any] = {
+            "kind": kind,
+            "text": text,
+            "profile_supported": item.get("profile_supported") is True,
+            "profile_evidence": profile_evidence,
+        }
+        matched_role_family = compact_whitespace(item.get("matched_role_family"))
+        if matched_role_family:
+            component["matched_role_family"] = matched_role_family
+        components.append(component)
     return components
 
 
@@ -1858,9 +1871,14 @@ def normalize_llm_requirement_coverage(
             matched_candidate_fact = ""
             capability_name = ""
             eligibility_name = ""
+        required_experience_months = extract_required_experience_months(
+            requirement, matched_job_text
+        )
+        # The role<->family equivalence is the LLM's call (matched_role_family on
+        # the experience component); this only does the month arithmetic.
         preliminary_experience_requirement = resolve_role_experience_requirement(
-            requirement,
-            matched_job_text,
+            experience_components,
+            required_experience_months,
             role_experience,
         )
         has_experience_qualifier = any(
@@ -1880,7 +1898,7 @@ def normalize_llm_requirement_coverage(
         )
         role_history_covers_unqualified_experience = bool(
             preliminary_experience_requirement
-            and preliminary_experience_requirement.get("matched_role_experience_title")
+            and preliminary_experience_requirement.get("role_family_resolved")
             and experience_components_complete
             and not has_experience_qualifier
         )
@@ -2013,18 +2031,39 @@ def normalize_llm_requirement_coverage(
             normalized_item["matched_profile_term"] = matched_profile_term
         experience_requirement = preliminary_experience_requirement
         if experience_requirement:
-            normalized_item.update(experience_requirement)
-            if not normalized_item.get("matched_role_experience_title"):
+            normalized_item["required_experience_months"] = experience_requirement[
+                "required_experience_months"
+            ]
+            if experience_requirement.get("role_family_resolved"):
+                normalized_item["matched_role_family"] = experience_requirement[
+                    "matched_role_family"
+                ]
+                normalized_item["matched_role_family_months"] = experience_requirement[
+                    "matched_role_family_months"
+                ]
+                if experience_requirement.get("matched_role_family_end_year"):
+                    normalized_item["matched_role_family_end_year"] = experience_requirement[
+                        "matched_role_family_end_year"
+                    ]
+                requirement_met = bool(experience_requirement["experience_requirement_met"])
+                normalized_item["experience_requirement_met"] = requirement_met
+                if not requirement_met:
+                    # Role family proven but accumulated duration is short: keep
+                    # the row visible as a partial and show the gap.
+                    normalized_item["experience_duration_gap"] = True
+                    if normalized_item["status"] == "supported":
+                        normalized_item["status"] = "partially_supported"
+            else:
+                # The LLM could not safely tie this duration requirement to a
+                # saved role family (named none, or named one absent from the
+                # profile). Leave it unresolved for human review rather than
+                # asserting a pass or a fail.
                 normalized_item["experience_requirement_review_needed"] = True
-            if (
-                normalized_item["status"] == "supported"
-                and (
-                    not normalized_item.get("matched_role_experience_title")
-                    or int(normalized_item.get("matched_role_experience_months") or 0)
-                    < int(normalized_item["required_experience_months"])
-                )
-            ):
-                normalized_item["status"] = "partially_supported"
+                unresolved_family = experience_requirement.get("matched_role_family")
+                if unresolved_family:
+                    normalized_item["experience_requirement_review_family"] = unresolved_family
+                if normalized_item["status"] == "supported":
+                    normalized_item["status"] = "partially_supported"
         if requirement_type != "eligibility":
             if non_eligibility_count >= max_items:
                 continue

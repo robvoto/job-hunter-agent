@@ -297,7 +297,11 @@ def test_normalize_llm_review_payload_downgrades_supported_when_role_duration_is
                     "profile_support": ["Ran BA activities across delivery teams."],
                     "experience_components": [
                         {"kind": "duration", "text": "5+ years"},
-                        {"kind": "role_or_activity", "text": "Business Analyst"},
+                        {
+                            "kind": "role_or_activity",
+                            "text": "Business Analyst",
+                            "matched_role_family": "Business Analyst",
+                        },
                     ],
                 }
             ],
@@ -305,7 +309,7 @@ def test_normalize_llm_review_payload_downgrades_supported_when_role_duration_is
         valid_capability_names={"business analysis": "Business Analysis"},
         role_experience=[
             {
-                "normalized_title": "business analyst",
+                "normalized_title": "Business Analyst",
                 "total_duration_months": 24,
                 "most_recent_end_year": 2024,
             }
@@ -315,9 +319,10 @@ def test_normalize_llm_review_payload_downgrades_supported_when_role_duration_is
     row = payload["requirement_coverage"][0]
     assert row["status"] == "partially_supported"
     assert row["required_experience_months"] == 60
-    assert row["matched_role_experience_title"] == "business analyst"
-    assert row["matched_role_experience_months"] == 24
+    assert row["matched_role_family"] == "Business Analyst"
+    assert row["matched_role_family_months"] == 24
     assert row["experience_requirement_met"] is False
+    assert row["experience_duration_gap"] is True
     assert payload["fit_review"]["grade"] == "SOLID"
 
 
@@ -354,7 +359,8 @@ def test_normalize_llm_review_payload_downgrades_supported_when_years_requiremen
     assert row["status"] == "partially_supported"
     assert row["required_experience_months"] == 60
     assert row["experience_requirement_review_needed"] is True
-    assert "matched_role_experience_title" not in row
+    assert "matched_role_family" not in row
+    assert "experience_requirement_met" not in row
 
 
 def test_normalize_llm_review_payload_matches_years_requirement_against_role_variants():
@@ -371,7 +377,11 @@ def test_normalize_llm_review_payload_matches_years_requirement_against_role_var
                     "profile_support": ["Ran BA activities across delivery teams."],
                     "experience_components": [
                         {"kind": "duration", "text": "5+ years"},
-                        {"kind": "role_or_activity", "text": "Business Analyst"},
+                        {
+                            "kind": "role_or_activity",
+                            "text": "Business Analyst",
+                            "matched_role_family": "senior ba",
+                        },
                     ],
                 }
             ],
@@ -406,9 +416,140 @@ def test_normalize_llm_review_payload_matches_years_requirement_against_role_var
     row = payload["requirement_coverage"][0]
     assert row["status"] == "supported"
     assert row["required_experience_months"] == 60
-    assert row["matched_role_experience_title"] == "business analyst"
-    assert row["matched_role_experience_months"] == 60
+    # The LLM named the "senior ba" sub-title, but the row reports and credits
+    # the canonical family it belongs to, never the sub-title itself.
+    assert row["matched_role_family"] == "business analyst"
+    assert row["matched_role_family_months"] == 60
     assert row["experience_requirement_met"] is True
+
+
+def _years_experience_coverage_row(matched_role_family: str) -> dict:
+    """The reported wording, decomposed the way the fit-review LLM returns it."""
+    return {
+        "requirement": "5+ years business analysis experience",
+        "importance": "required",
+        "requirement_type": "capability",
+        "status": "supported",
+        "matched_candidate_fact": "Business Analysis",
+        "capability_name": "Business Analysis",
+        "matched_job_text": "5+ years business analysis experience",
+        "profile_support": ["Ran BA activities across delivery teams."],
+        "experience_components": [
+            {"kind": "duration", "text": "5+ years"},
+            {
+                "kind": "role_or_activity",
+                "text": "business analysis",
+                "matched_role_family": matched_role_family,
+            },
+        ],
+    }
+
+
+def _ba_family_role_experience(total_duration_months: int) -> list[dict]:
+    """One BA family whose accumulated history spans BA + Senior BA titles."""
+    return [
+        {
+            "normalized_title": "Business Analyst",
+            "total_duration_months": total_duration_months,
+            "most_recent_end_year": 2025,
+            "title_variants": [
+                {"normalized_title": "Business Analyst"},
+                {"normalized_title": "Senior Business Analyst"},
+            ],
+        }
+    ]
+
+
+def test_years_business_analysis_requirement_met_from_combined_ba_family_history():
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [_years_experience_coverage_row("Senior Business Analyst")],
+        valid_capability_names={"business analysis": "Business Analysis"},
+        role_experience=_ba_family_role_experience(66),
+    )
+
+    row = result[0]
+    assert row["status"] == "supported"
+    assert row["required_experience_months"] == 60
+    # The LLM tied the requirement to the "Senior Business Analyst" sub-title,
+    # but the combined family total is credited and reported under the canonical
+    # "Business Analyst" family so senior time is never overstated.
+    assert row["matched_role_family"] == "Business Analyst"
+    assert row["matched_role_family_months"] == 66
+    assert row["experience_requirement_met"] is True
+    assert "experience_duration_gap" not in row
+    assert "experience_requirement_review_needed" not in row
+
+
+def test_years_business_analysis_requirement_shows_gap_when_history_is_short():
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [_years_experience_coverage_row("Business Analyst")],
+        valid_capability_names={"business analysis": "Business Analysis"},
+        role_experience=_ba_family_role_experience(36),
+    )
+
+    row = result[0]
+    assert row["required_experience_months"] == 60
+    assert row["matched_role_family"] == "Business Analyst"
+    assert row["matched_role_family_months"] == 36
+    assert row["experience_requirement_met"] is False
+    assert row["experience_duration_gap"] is True
+    assert row["status"] == "partially_supported"
+
+
+def test_years_requirement_left_for_review_when_llm_ties_no_role_family():
+    # The LLM could not safely tie the duration to any saved family (empty
+    # matched_role_family). The row stays visible but unresolved for review;
+    # deterministic code never guesses the role relationship.
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [_years_experience_coverage_row("")],
+        valid_capability_names={"business analysis": "Business Analysis"},
+        role_experience=_ba_family_role_experience(66),
+    )
+
+    row = result[0]
+    assert row["required_experience_months"] == 60
+    assert row["experience_requirement_review_needed"] is True
+    assert row["status"] == "partially_supported"
+    assert "matched_role_family" not in row
+    assert "experience_requirement_met" not in row
+
+
+def test_years_requirement_for_unrelated_role_is_not_matched_from_ba_history():
+    # "3+ years registered nursing experience" against a BA-only history: the
+    # LLM names a nursing family that the profile does not hold, and no profile
+    # evidence supports nursing at all, so the row is not credited. The review
+    # flag is still recorded so the unresolved duration is visible.
+    row_in = {
+        "requirement": "3+ years registered nursing experience",
+        "importance": "required",
+        "requirement_type": "capability",
+        "status": "supported",
+        "matched_candidate_fact": "Business Analysis",
+        "capability_name": "Business Analysis",
+        "matched_job_text": "3+ years registered nursing experience",
+        "profile_support": ["Ran BA activities across delivery teams."],
+        "experience_components": [
+            {"kind": "duration", "text": "3+ years"},
+            {
+                "kind": "role_or_activity",
+                "text": "registered nursing",
+                "matched_role_family": "Registered Nurse",
+            },
+        ],
+    }
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [row_in],
+        valid_capability_names={"business analysis": "Business Analysis"},
+        role_experience=_ba_family_role_experience(120),
+    )
+
+    row = result[0]
+    assert row["required_experience_months"] == 36
+    assert row["experience_requirement_review_needed"] is True
+    assert row["experience_requirement_review_family"] == "Registered Nurse"
+    assert row["status"] == "not_shown"
+    assert row["matched_candidate_fact"] == ""
+    assert "experience_requirement_met" not in row
 
 
 def test_normalize_llm_review_payload_falls_back_to_model_grade_without_coverage():
@@ -2112,7 +2253,11 @@ def test_experience_duration_does_not_prove_missing_qualifier(
                 "profile_support": profile_support,
                 "experience_components": [
                     {"kind": "duration", "text": "5+ years"},
-                    {"kind": "role_or_activity", "text": "Business Analyst"},
+                    {
+                        "kind": "role_or_activity",
+                        "text": "Business Analyst",
+                        "matched_role_family": "Senior Business Analyst",
+                    },
                     {
                         "kind": "qualifier",
                         "text": qualifier,
@@ -2151,7 +2296,11 @@ def test_unqualified_business_analyst_duration_remains_supported_from_role_histo
                 "profile_support": [],
                 "experience_components": [
                     {"kind": "duration", "text": "5+ years"},
-                    {"kind": "role_or_activity", "text": "Business Analyst"},
+                    {
+                        "kind": "role_or_activity",
+                        "text": "Business Analyst",
+                        "matched_role_family": "Business Analyst",
+                    },
                 ],
             }
         ],
@@ -2182,7 +2331,11 @@ def test_experience_qualifier_evidence_preserves_a_legitimate_partial_match():
                 "profile_support": ["Delivered business analysis for telecommunications programs."],
                 "experience_components": [
                     {"kind": "duration", "text": "5+ years"},
-                    {"kind": "role_or_activity", "text": "Business Analyst"},
+                    {
+                        "kind": "role_or_activity",
+                        "text": "Business Analyst",
+                        "matched_role_family": "Business Analyst",
+                    },
                     {
                         "kind": "qualifier",
                         "text": "telecommunications",
@@ -2226,7 +2379,11 @@ def test_experience_qualifier_explicit_profile_support_preserves_a_full_match():
                 "profile_support": [evidence],
                 "experience_components": [
                     {"kind": "duration", "text": "5+ years"},
-                    {"kind": "role_or_activity", "text": "Senior Business Analyst"},
+                    {
+                        "kind": "role_or_activity",
+                        "text": "Senior Business Analyst",
+                        "matched_role_family": "Senior Business Analyst",
+                    },
                     {
                         "kind": "qualifier",
                         "text": "Australian Life Insurance industry",

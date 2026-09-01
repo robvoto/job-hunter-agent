@@ -1788,9 +1788,11 @@ def test_fit_review_logs_role_duration_requirement_diagnostics(monkeypatch, capl
                 "matched_job_text": "Minimum 5 years experience as Business Analyst",
                 "profile_support": ["Ran BA activities across delivery teams."],
                 "required_experience_months": 60,
-                "matched_role_experience_title": "business analyst",
-                "matched_role_experience_months": 36,
-                "matched_role_experience_end_year": 2024,
+                "matched_role_family": "business analyst",
+                "matched_role_family_months": 36,
+                "matched_role_family_end_year": 2024,
+                "experience_requirement_met": False,
+                "experience_duration_gap": True,
             }
         ],
         "llm_cost_usd": 0.0123,
@@ -1803,7 +1805,10 @@ def test_fit_review_logs_role_duration_requirement_diagnostics(monkeypatch, capl
 
     messages = [entry.message for entry in caplog.records]
     block = next(message for message in messages if "Requirement scoring" in message)
-    assert "Role history: business analyst 36 months matched against required 60 months" in block
+    assert (
+        "Role history shows 36 months in business analyst, short of the 60 required months"
+        in block
+    )
     assert "most recent end year 2024" in block
 
 
