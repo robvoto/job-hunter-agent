@@ -17,6 +17,7 @@ Use for project filesystem/tool access and whenever MCP execution is unreliable.
 ## Failure handling
 - One failed MCP call does **not** prove the connector or resource is unavailable.
 - Inspect the actual error and retry with a smaller, safer command.
+- Before invoking an optional operating-system CLI, check that it exists with `command -v`; never retry a known-missing binary unchanged. For SQLite inspection, use `uv run python` with the standard-library `sqlite3` module or the project's DB helpers instead of requiring a system package.
 - If `run_command` fails with Windows `cp1252`/`UnicodeDecodeError`, treat it as an output-decoding failure, not a repo-access failure.
 - For commands likely to emit non-ASCII text, prefer bounded ASCII-safe output, e.g. `PYTHONIOENCODING=ascii:backslashreplace` for Python diagnostics, or explicitly sanitize/escape output before returning it.
 - Avoid broad `grep` over binary caches or huge generated files. Exclude `__pycache__`, binary files, generated workspace HTML, and other noisy paths unless they are the target.
