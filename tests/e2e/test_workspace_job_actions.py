@@ -15,20 +15,11 @@ from playwright.sync_api import expect
 from tests.e2e.conftest import WORKSPACE_CANDIDATE_EMAIL, _seed_kept_job
 
 
-def _wait_for_action_button(page, action: str, *, attempts: int = 15):
-    """Review actions rebuild the cached workspace HTML on a background thread
-    (see workspace_refresh_service.rebuild_workspace_after_rule_change), so the
-    client's post-save reload can race that rebuild and briefly still show the
-    pre-action state. Poll by reloading until the expected button appears.
-    """
+def _wait_for_action_button(page, action: str):
+    """Wait for the post-review reload to expose the persisted action."""
     selector = f'[data-review-action="{action}"]'
     locator = page.locator(selector)
-    for _ in range(attempts):
-        if locator.count() > 0:
-            return locator
-        page.wait_for_timeout(200)
-        page.reload()
-    locator.wait_for(state="attached", timeout=2000)
+    locator.first.wait_for(state="attached", timeout=5000)
     return locator
 
 

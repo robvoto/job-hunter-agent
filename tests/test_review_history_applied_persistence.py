@@ -46,6 +46,28 @@ def test_append_review_key_applied_persists_profile_and_history(monkeypatch: pyt
     assert entry["company"] == "Acme Corp"
 
 
+def test_review_action_waits_for_workspace_snapshot(monkeypatch: pytest.MonkeyPatch):
+    refresh_calls = []
+
+    monkeypatch.setattr(
+        review_history_service,
+        "rebuild_workspace_after_rule_change",
+        lambda reason="", **kwargs: refresh_calls.append((reason, kwargs)) or "refresh-id",
+    )
+
+    result = review_history_service.append_review_key(
+        "hidden",
+        "seek:test-hidden-job-1",
+        title="Business Analyst",
+        company="Acme Corp",
+    )
+
+    assert result["workspace_refresh_async"] is False
+    assert refresh_calls == [
+        ("review action saved: hidden", {"wait_for_completion": True}),
+    ]
+
+
 def test_append_review_key_applied_is_idempotent_and_keeps_first_applied_at(
     monkeypatch: pytest.MonkeyPatch,
 ):
