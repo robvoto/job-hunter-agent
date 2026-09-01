@@ -1931,10 +1931,11 @@ def render_job_card(
                 '<button type="button" class="jh-button jh-button--primary jh-button--micro job-requirement-action gap-btn" '
                 f'data-action="confirm_have" data-capability-name="{safe_html(canonical_requirement)}" '
                 f'title="{safe_html(_workspace_label("workspace_card_labels", action_title_key))}">'
+                '<span aria-hidden="true">+</span>'
                 f'<span>{safe_html(_workspace_label("workspace_card_labels", action_label_key))}</span></button>'
             )
             not_have_label = safe_html(
-                _workspace_label("shared_ui_labels", "profile_confirm_not_have_label")
+                _workspace_label("workspace_card_labels", "gap_confirm_not_have_label")
             )
             confirm_not_have_html = (
                 f'<button type="button" class="jh-button jh-button--danger jh-button--micro job-requirement-action gap-btn" '
@@ -1943,6 +1944,10 @@ def render_job_card(
             )
             profile_review_html = (
                 '<span class="req-coverage-detail req-coverage-detail--profile-review">'
+                '<span class="req-coverage-detail-text">'
+                f'<strong>{safe_html(_workspace_label("workspace_card_labels", "profile_evidence_label"))}</strong> '
+                f'{safe_html(_workspace_label("workspace_card_labels", "profile_evidence_unconfirmed_label"))}'
+                '</span>'
                 f'{confirm_have_html}{confirm_not_have_html}'
                 '</span>'
             )
@@ -2139,7 +2144,10 @@ def render_job_card(
         )
         occ_label = _workspace_label(
             "workspace_card_labels", "occupation_alignment_row_label")
-        occ_text = f"{occ_label}: {occupation_alignment['alignment_label']}"
+        occ_text = (
+            f"{occ_label}: {occupation_alignment['alignment_label']} — "
+            f"{occupation_alignment['reason']}"
+        )
         occupation_row_html = (
             f'<li class="job-requirement-item job-requirement-item--{occ_modifier}">'
             f'<span class="job-requirement-text">{safe_html(occ_text)}</span></li>'
