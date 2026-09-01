@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 119,
+  "version": 120,
   "updated_at": "2026-09-01",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -258,7 +258,8 @@
     "clear_selection_label": "Clear selection",
     "remove_selected_label": "Remove selected",
     "remove_item_label": "Remove {name}",
-    "remove_item_fallback_label": "Remove item"
+    "remove_item_fallback_label": "Remove item",
+    "profile_confirm_not_have_label": "I don't have this"
   },
   "access_status_labels_description": "Managed copy for the Google account verification, access request, approval waitlist, and blocked-account pages.",
   "access_status_labels": {
@@ -593,14 +594,11 @@
     "posting_channel_direct_employer_badge": "Direct employer",
     "posting_channel_direct_employer_tooltip": "Posted directly by the employer.",
     "archive_badge_tooltip": "This role was saved from an earlier search and kept on your workspace.",
-    "gap_confirm_not_have_label": "No, I don't have this",
-    "profile_evidence_label": "Profile evidence:",
-    "profile_evidence_unconfirmed_label": "Not confirmed",
-    "add_to_profile_action_label": "Add evidence",
+    "add_to_profile_action_label": "I have this",
     "add_to_profile_action_title": "Confirm this capability and add it to your profile",
-    "add_to_eligibility_action_label": "Add eligibility",
+    "add_to_eligibility_action_label": "I have this",
     "add_to_eligibility_action_title": "Add this eligibility fact to your profile",
-    "add_to_qualification_action_label": "Add qualification",
+    "add_to_qualification_action_label": "I have this",
     "add_to_qualification_action_title": "Add this qualification to your profile",
     "posted_age_badge_template": "${days}+ Days Old",
     "posted_age_badge_tooltip_template": "This ad appears to be at least ${days} days old.",

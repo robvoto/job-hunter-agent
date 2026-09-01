@@ -24,11 +24,15 @@ let runStatusWasRunning = false;
 
 const capabilityLabels = capabilityUi.labels || {};
 const titleTierLabels = window.__JOB_HUNTER_TITLE_TIER_LABELS__ || {};
+const sharedUiLabels = window.__JOB_HUNTER_SHARED_UI_LABELS__ || {};
 if (!capabilityLabels.onboarding_title || !capabilityLabels.help_text) {
   throw new Error('Missing capability UI labels.');
 }
 if (!titleTierLabels.target_roles_label || !titleTierLabels.target_roles_help || !titleTierLabels.target_roles_empty_text) {
   throw new Error('Missing onboarding title tier labels.');
+}
+if (!sharedUiLabels.profile_confirm_not_have_label) {
+  throw new Error('Missing shared profile confirmation labels.');
 }
 const capabilityTitle = capabilityLabels.onboarding_title;
 const preferredRolesLabel = titleTierLabels.target_roles_label;
@@ -56,7 +60,7 @@ const NO_CAPABILITY_OBSERVATIONS_COPY = 'No capability suggestions yet. We found
 const RULE_REASON_TITLE_NOT_TARGET = 'TITLE_NOT_TARGET';
 const RULE_REASON_TITLE_BAD_KEYWORD = 'TITLE_BAD_KEYWORD';
 const RULE_REASON_ONET_UNCERTAIN_TITLE = 'ONET_UNCERTAIN_TITLE';
-const DECLINE_CAPABILITY_LABEL = "No, I don't have this";
+const DECLINE_CAPABILITY_LABEL = sharedUiLabels.profile_confirm_not_have_label;
 
 function getReviewChoiceMeta(choice) {
   if (!choice) return { label: 'Choose a strength' };

@@ -4494,11 +4494,42 @@ def test_add_to_profile_button_carries_capability_data_attributes():
 
     assert 'data-action="confirm_have" data-capability-name="Stakeholder management"' in html
     assert 'data-action="confirm_do_not_have" data-capability-name="Stakeholder management"' in html
-    assert "Profile evidence:" in html
-    assert "Not confirmed" in html
-    assert "Add evidence" in html
+    assert "Profile evidence:" not in html
+    assert "Not confirmed" not in html
+    assert "I have this" in html
+    assert "I don&#x27;t have this" in html
+    assert "Add evidence" not in html
     assert html.count("jh-button--micro job-requirement-action gap-btn") == 2
     assert "Needs confirmation" not in html
+
+
+def test_adjacent_title_row_omits_long_alignment_reason_from_normal_ui():
+    reason = "The job is a Consultant role in Operations & Transformation with a long explanation that belongs in diagnostics."
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-short-title-alignment",
+            "title": "Consultant - Operations & Transformation",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Canberra ACT",
+            "work_type": "Full Time",
+            "work_mode": "On-site",
+            "salary": "N/A",
+            "full_description": "Transformation consulting role.",
+            "fit_highlights": [],
+            "source": "seek",
+            "occupation_alignment": "adjacent",
+            "occupation_alignment_reason": reason,
+            "requirement_coverage": [],
+        },
+        _capability_profile(),
+    )
+
+    assert "Job title match: Adjacent" in html
+    assert reason not in html
 
 
 def test_canonical_fact_resolved_true_flows_through_to_add_to_profile_button():
