@@ -1506,51 +1506,142 @@
       const allBtns = btn.parentElement
         ? Array.from(btn.parentElement.querySelectorAll('.gap-btn'))
         : [btn];
-      allBtns.forEach(function(b) { b.disabled = true; });
+      let levelPicker = null;
 
-      jobHunterFetch(`${API_BASE_URL}/api/profile-gap`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_key: jobKey, capability_name: capabilityName, action: action }),
-      }).then(function(resp) {
-        return resp.json().catch(function() { return {}; }).then(function(data) {
-          if (!resp.ok || data.error) {
-            allBtns.forEach(function(b) { b.disabled = false; });
-            showRowStatus(data.error || WORKSPACE_CONTEXT.labels.profileGapErrorLabel);
-            return;
-          }
-          const fact = String(data.confirmed_fact || capabilityName).trim();
-          const target = String(data.profile_target || fact).trim();
-          const formatLabel = function(template, values) {
-            return Object.entries(values).reduce(
-              (text, entry) => text.split(`{${entry[0]}}`).join(entry[1]),
-              String(template || ''),
-            );
-          };
-          let savedLabel = '';
-          if (action === 'confirm_do_not_have') {
-            savedLabel = formatLabel(WORKSPACE_CONTEXT.labels.profileGapNotHaveSavedTemplate, { fact });
-          } else if (data.change_kind === 'related_skill_added') {
-            savedLabel = formatLabel(
-              WORKSPACE_CONTEXT.labels.profileGapAddedExistingTemplate,
-              { fact, target },
-            );
-          } else if (data.change_kind === 'new_item_added') {
-            savedLabel = formatLabel(
-              WORKSPACE_CONTEXT.labels.profileGapAddedNewTemplate,
-              { fact, target },
-            );
-          } else {
-            savedLabel = formatLabel(
-              WORKSPACE_CONTEXT.labels.profileGapAlreadyPresentTemplate,
-              { fact },
-            );
-          }
-          replaceRowActionsWithBadge(savedLabel, allBtns);
+      function removeLevelPicker() {
+        if (levelPicker) {
+          levelPicker.remove();
+          levelPicker = null;
+        }
+      }
+
+      function showCapabilityLevelPicker(allowedLevels) {
+        removeLevelPicker();
+        allBtns.forEach(function(b) {
+          b.disabled = false;
+          b.hidden = true;
         });
-      }).catch(function() {
-        allBtns.forEach(function(b) { b.disabled = false; });
-        showRowStatus(WORKSPACE_CONTEXT.labels.profileGapErrorLabel);
-      });
+        const allowed = new Set(
+          Array.isArray(allowedLevels) && allowedLevels.length
+            ? allowedLevels.map(function(level) { return String(level || '').trim().toLowerCase(); })
+            : ['strong', 'working', 'basic']
+        );
+        const orderedLevels = ['strong', 'working', 'basic'].filter(function(level) {
+          return allowed.has(level);
+        });
+        levelPicker = document.createElement('span');
+        levelPicker.className = 'profile-gap-strength-picker';
+
+        const prompt = document.createElement('span');
+        prompt.className = 'profile-gap-strength-prompt';
+        prompt.textContent = String(
+          WORKSPACE_CONTEXT.labels.profileGapStrengthPromptLabel
+          || 'How strong is this capability for you?'
+        );
+        levelPicker.appendChild(prompt);
+
+        orderedLevels.forEach(function(level) {
+          const choice = document.createElement('button');
+          choice.type = 'button';
+          choice.className = 'jh-button jh-button--secondary jh-button--micro profile-gap-strength-choice';
+          choice.dataset.capabilityLevel = level;
+          choice.textContent = level.charAt(0).toUpperCase() + level.slice(1);
+          choice.addEventListener('click', function() {
+            levelPicker.querySelectorAll('button').forEach(function(button) {
+              button.disabled = true;
+            });
+            submitProfileGap(level);
+          });
+          levelPicker.appendChild(choice);
+        });
+
+        const cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'jh-button jh-button--neutral jh-button--micro profile-gap-strength-cancel';
+        cancel.textContent = 'Cancel';
+        cancel.addEventListener('click', function() {
+          removeLevelPicker();
+          allBtns.forEach(function(b) {
+            b.hidden = false;
+            b.disabled = false;
+          });
+        });
+        levelPicker.appendChild(cancel);
+        btn.parentElement.appendChild(levelPicker);
+      }
+
+      function submitProfileGap(capabilityLevel) {
+        allBtns.forEach(function(b) { b.disabled = true; });
+        const payload = {
+          job_key: jobKey,
+          capability_name: capabilityName,
+          action: action,
+        };
+        if (capabilityLevel) payload.capability_level = capabilityLevel;
+
+        jobHunterFetch(`${API_BASE_URL}/api/profile-gap`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }).then(function(resp) {
+          return resp.json().catch(function() { return {}; }).then(function(data) {
+            if (!resp.ok || data.error) {
+              if (levelPicker) {
+                levelPicker.querySelectorAll('button').forEach(function(button) {
+                  button.disabled = false;
+                });
+              } else {
+                allBtns.forEach(function(b) { b.disabled = false; });
+              }
+              showRowStatus(data.error || WORKSPACE_CONTEXT.labels.profileGapErrorLabel);
+              return;
+            }
+            if (data.requires_capability_level) {
+              showCapabilityLevelPicker(data.allowed_capability_levels);
+              return;
+            }
+            const fact = String(data.confirmed_fact || capabilityName).trim();
+            const target = String(data.profile_target || fact).trim();
+            const formatLabel = function(template, values) {
+              return Object.entries(values).reduce(
+                (text, entry) => text.split(`{${entry[0]}}`).join(entry[1]),
+                String(template || ''),
+              );
+            };
+            let savedLabel = '';
+            if (action === 'confirm_do_not_have') {
+              savedLabel = formatLabel(WORKSPACE_CONTEXT.labels.profileGapNotHaveSavedTemplate, { fact });
+            } else if (data.change_kind === 'related_skill_added') {
+              savedLabel = formatLabel(
+                WORKSPACE_CONTEXT.labels.profileGapAddedExistingTemplate,
+                { fact, target },
+              );
+            } else if (data.change_kind === 'new_item_added') {
+              savedLabel = formatLabel(
+                WORKSPACE_CONTEXT.labels.profileGapAddedNewTemplate,
+                { fact, target },
+              );
+            } else {
+              savedLabel = formatLabel(
+                WORKSPACE_CONTEXT.labels.profileGapAlreadyPresentTemplate,
+                { fact },
+              );
+            }
+            removeLevelPicker();
+            replaceRowActionsWithBadge(savedLabel, allBtns);
+          });
+        }).catch(function() {
+          if (levelPicker) {
+            levelPicker.querySelectorAll('button').forEach(function(button) {
+              button.disabled = false;
+            });
+          } else {
+            allBtns.forEach(function(b) { b.disabled = false; });
+          }
+          showRowStatus(WORKSPACE_CONTEXT.labels.profileGapErrorLabel);
+        });
+      }
+
+      submitProfileGap('');
     });
 })();

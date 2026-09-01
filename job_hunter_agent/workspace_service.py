@@ -576,9 +576,20 @@ def render_html(
     # Read the one shared action label this renderer needs through the low-level
     # UI-label loader. Importing server_helpers here creates a service-layer
     # cycle through source_connector/workspace rebuild paths.
-    shared_ui_labels = load_ui_labels().get("shared_ui_labels", {})
+    ui_labels = load_ui_labels()
+    shared_ui_labels = ui_labels.get("shared_ui_labels", {})
     if not isinstance(shared_ui_labels, dict):
         raise ValueError("ui_labels.json is missing shared_ui_labels")
+    capability_ui_labels = ui_labels.get("capability_ui_labels", {})
+    if not isinstance(capability_ui_labels, dict):
+        raise ValueError("ui_labels.json is missing capability_ui_labels")
+    profile_gap_strength_prompt = str(
+        capability_ui_labels.get("review_strength_prompt_label") or ""
+    ).strip()
+    if not profile_gap_strength_prompt:
+        raise ValueError(
+            "ui_labels.json is missing capability_ui_labels.review_strength_prompt_label"
+        )
     remove_item_label = str(shared_ui_labels.get("remove_item_label") or "").strip()
     if not remove_item_label:
         raise ValueError("ui_labels.json is missing shared_ui_labels.remove_item_label")
@@ -654,6 +665,7 @@ def render_html(
             "LABEL_WS_PROFILE_GAP_NOT_HAVE_SAVED_TEMPLATE"
         ],
         "profileGapErrorLabel": ws_page_labels["LABEL_WS_PROFILE_GAP_ERROR_LABEL"],
+        "profileGapStrengthPromptLabel": profile_gap_strength_prompt,
     }
 
     top_reject_reasons_html = "".join(

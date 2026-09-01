@@ -827,6 +827,18 @@
   min-width: 0;
 }
 
+.profile-gap-strength-picker {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.profile-gap-strength-prompt {
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
 .job-requirement-note {
   display: block;
   margin-top: 4px;

@@ -23,7 +23,7 @@ from job_hunter_agent.profile_gaps import (
     resolve_custom_blocker,
 )
 from job_hunter_agent.profile_item_names import normalize_profile_item_name
-from job_hunter_agent.profile_store import CAPABILITY_ICON_GENERIC
+from job_hunter_agent.profile_store import CAPABILITY_ICON_GENERIC, VALID_CAPABILITY_RULE_LEVELS
 from job_hunter_agent.profile_store import (
     KEY_CANDIDATE_CAPABILITIES,
     KEY_CANDIDATE_ELIGIBILITY,
@@ -416,7 +416,9 @@ def _matches_managed_clearance(name: str) -> bool:
     )
 
 
-def _resolve_and_confirm_requirement(canonical_item: dict, profile: dict) -> dict:
+def _resolve_and_confirm_requirement(
+    canonical_item: dict, profile: dict, *, capability_level: str = ""
+) -> dict:
     """Persist exactly one user-confirmed canonical fact in the resolved destination."""
     requirement_type = str(canonical_item.get("requirement_type") or "capability").strip().lower()
     confirmed_fact = normalize_profile_item_name(canonical_item.get("canonical_requirement"))
@@ -529,11 +531,24 @@ def _resolve_and_confirm_requirement(canonical_item: dict, profile: dict) -> dic
                 )
             profile[eligibility_key] = eligibility
         else:
+            selected_level = str(capability_level or "").strip().lower()
+            if not selected_level:
+                return {
+                    "ok": True,
+                    "resolution": resolution,
+                    "profile_target": profile_target,
+                    "confirmed_fact": confirmed_fact,
+                    "change_kind": "capability_level_required",
+                    "requires_capability_level": True,
+                    "allowed_capability_levels": sorted(VALID_CAPABILITY_RULE_LEVELS),
+                }
+            if selected_level not in VALID_CAPABILITY_RULE_LEVELS:
+                raise ValueError("capability_level must be strong, working, or basic")
             capabilities = list(profile.get(KEY_CANDIDATE_CAPABILITIES) or [])
             capabilities.append(
                 {
                     "name": profile_target,
-                    "level": "working",
+                    "level": selected_level,
                     "fit": "supporting",
                     "aliases": [],
                     "icon_key": CAPABILITY_ICON_GENERIC,
@@ -563,6 +578,7 @@ def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
         action = str(body.get("action", "")).strip()
         capability_name = str(body.get("capability_name", "")).strip()
         job_key = str(body.get("job_key", "")).strip()
+        capability_level = str(body.get("capability_level", "")).strip().lower()
         if action not in _PROFILE_GAP_VALID_ACTIONS:
             raise ValueError(f"invalid action: {action!r}")
 
@@ -601,7 +617,9 @@ def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
                 )
             if requirement_type == "capability" and current_status == STATUS_CONFIRMED_DO_NOT_HAVE:
                 raise ValueError("capability_name is already saved as must_not_require_skills")
-            result = _resolve_and_confirm_requirement(canonical_item, profile)
+            result = _resolve_and_confirm_requirement(
+                canonical_item, profile, capability_level=capability_level
+            )
             return json_response(result)
 
         elif action == "confirm_do_not_have":

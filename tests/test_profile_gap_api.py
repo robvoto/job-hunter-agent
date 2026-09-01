@@ -96,12 +96,27 @@ def test_profile_gap_confirm_have_adds_canonical_capability(client, monkeypatch)
     )
     _mock_profile_storage_resolution(monkeypatch, "new", "Cloud computing (AWS)")
 
+    first = client.post(
+        "/api/profile-gap",
+        json={
+            "job_key": job_key,
+            "capability_name": "cloud computing (aws)",
+            "action": "confirm_have",
+        },
+    )
+    assert first.status_code == 200
+    assert first.json()["ok"] is True
+    assert first.json()["requires_capability_level"] is True
+    assert first.json()["change_kind"] == "capability_level_required"
+    assert saved_profiles == [], "new capabilities must not save before strength is selected"
+
     resp = client.post(
         "/api/profile-gap",
         json={
             "job_key": job_key,
             "capability_name": "cloud computing (aws)",
             "action": "confirm_have",
+            "capability_level": "strong",
         },
     )
     assert resp.status_code == 200
@@ -112,7 +127,7 @@ def test_profile_gap_confirm_have_adds_canonical_capability(client, monkeypatch)
     rules = saved_profiles[0]["candidate_capabilities"]
     added = next(r for r in rules if r["name"] == "Cloud computing (AWS)")
     assert added["fit"] == "supporting"
-    assert added["level"] == "working"
+    assert added["level"] == "strong"
     assert added["icon_key"] == "generic_capability"
 
 
@@ -811,6 +826,7 @@ def test_profile_gap_confirm_have_row_button_resolves_via_canonical_requirement_
             "job_key": job_key,
             "capability_name": "Cloud computing (AWS)",
             "action": "confirm_have",
+            "capability_level": "working",
         },
     )
     assert resp.status_code == 200
@@ -863,6 +879,7 @@ def test_profile_gap_confirm_have_new_resolution_is_idempotent_on_repeat_confirm
         "job_key": job_key,
         "capability_name": "cloud computing (aws)",
         "action": "confirm_have",
+        "capability_level": "basic",
     }
     first = client.post("/api/profile-gap", json=payload)
     second = client.post("/api/profile-gap", json=payload)
