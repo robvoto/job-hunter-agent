@@ -1944,10 +1944,6 @@ def render_job_card(
             )
             profile_review_html = (
                 '<span class="req-coverage-detail req-coverage-detail--profile-review">'
-                '<span class="req-coverage-detail-text">'
-                f'<strong>{safe_html(_workspace_label("workspace_card_labels", "profile_evidence_label"))}</strong> '
-                f'{safe_html(_workspace_label("workspace_card_labels", "profile_evidence_unconfirmed_label"))}'
-                '</span>'
                 f'{confirm_have_html}{confirm_not_have_html}'
                 '</span>'
             )

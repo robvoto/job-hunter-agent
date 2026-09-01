@@ -4494,8 +4494,8 @@ def test_add_to_profile_button_carries_capability_data_attributes():
 
     assert 'data-action="confirm_have" data-capability-name="Stakeholder management"' in html
     assert 'data-action="confirm_do_not_have" data-capability-name="Stakeholder management"' in html
-    assert "Profile evidence:" in html
-    assert "Not confirmed" in html
+    assert "Profile evidence:" not in html
+    assert "Not confirmed" not in html
     assert "Add evidence" in html
     assert html.count("jh-button--micro job-requirement-action gap-btn") == 2
     assert "Needs confirmation" not in html
