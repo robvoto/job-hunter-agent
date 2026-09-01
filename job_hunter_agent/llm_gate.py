@@ -22,6 +22,7 @@ from job_hunter_agent.experience_requirements import (
     extract_required_experience_months,
     resolve_role_experience_requirement,
 )
+from job_hunter_agent.role_experience_duration import apply_effective_durations
 from job_hunter_agent.global_settings import (
     KEY_LLM_PRICING_PER_1M,
     KEY_LLM_PROMPT_EVIDENCE_TIERS,
@@ -624,7 +625,9 @@ def build_profile_prompt_context() -> str:
         *(profile.get(KEY_CANDIDATE_ELIGIBILITY_FACTS, []) or []),
     ]
     qualification_rules = profile.get(KEY_CANDIDATE_QUALIFICATIONS, [])
-    role_experience = profile.get(KEY_ROLE_EXPERIENCE, [])
+    # Accrue whole elapsed months onto still-current role segments so the role
+    # experience matrix the LLM sees reflects today, not the last CV extraction.
+    role_experience = apply_effective_durations(profile.get(KEY_ROLE_EXPERIENCE, []))
     salary_preferences = profile.get("salary_preferences", {})
     match_preferences = (
         profile.get("match_preferences", {})

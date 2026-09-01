@@ -19,7 +19,7 @@ import logging
 import os
 import re
 import traceback
-from datetime import datetime
+from datetime import date, datetime
 from functools import lru_cache
 from typing import Any, Literal
 
@@ -95,7 +95,11 @@ def _cap_log(msg: str) -> None:
 
 _BULLET_PREFIX_RE = re.compile(r"^[\-*•–—]+\s*")
 
-_CV_EXTRACTION_CACHE_CONTRACT_VERSION = 3
+# Bump whenever the extracted CV shape changes so every cached extraction misses
+# and is genuinely re-run. v4 adds role_experience[].duration_as_of (the real
+# extraction date) for current roles; stamping today's date onto a stale cached
+# duration_months would be a lie, so the bump is what makes the backfill honest.
+_CV_EXTRACTION_CACHE_CONTRACT_VERSION = 4
 _cv_extraction_cache: dict[str, dict[str, Any]] = {}
 _cv_extraction_cache_loaded = False
 
@@ -278,6 +282,19 @@ def _strip_bullet_prefix(text: str) -> str:
 # ── LLM extraction ─────────────────────────────────────────────────────────────
 
 
+def _stamp_current_role_extraction_dates(result: dict[str, Any]) -> None:
+    """Record today's date as ``duration_as_of`` on each current role in place.
+
+    Called only from the uncached LLM path so the date always pairs with a
+    freshly extracted ``duration_months``. Downstream aggregation carries it into
+    the role family's ``segments`` so job-match time can accrue elapsed months.
+    """
+    today = date.today().isoformat()
+    for item in result.get(KEY_ROLE_EXPERIENCE) or []:
+        if isinstance(item, dict) and bool(item.get("is_current")):
+            item["duration_as_of"] = today
+
+
 def _ensure_cv_extraction_cache_loaded() -> None:
     global _cv_extraction_cache_loaded
     if _cv_extraction_cache_loaded:
@@ -407,6 +424,11 @@ def _llm_extract_from_cv(
         )
         traceback.print_exc()
         raise
+
+    # Stamp the real extraction date onto every current role. This only happens
+    # on a genuine (uncached) LLM call, so duration_as_of always pairs with a
+    # freshly extracted duration_months; the cache then replays the true date.
+    _stamp_current_role_extraction_dates(result)
 
     _cap_log(
         "[ONBOARDING][LLM_CALL_DONE] purpose=cv_extraction "
@@ -562,7 +584,8 @@ def _aggregate_role_experience(raw: list[Any]) -> list[dict[str, Any]]:
 
         duration_months = max(int(item.get("duration_months") or 0), 0)
         end_year = max(int(item.get("end_year") or 0), 0)
-        if bool(item.get("is_current")):
+        is_current = bool(item.get("is_current"))
+        if is_current:
             end_year = max(end_year, _CURRENT_YEAR)
 
         existing = aggregated.setdefault(
@@ -572,10 +595,24 @@ def _aggregate_role_experience(raw: list[Any]) -> list[dict[str, Any]]:
                 "total_duration_months": 0,
                 "most_recent_end_year": 0,
                 "title_variants": {},
+                "segments": [],
             },
         )
         existing["total_duration_months"] = int(existing["total_duration_months"]) + duration_months
         existing["most_recent_end_year"] = max(int(existing["most_recent_end_year"]), end_year)
+
+        # Keep each raw segment's is_current so job-match time can accrue elapsed
+        # months onto a still-current role. duration_as_of is stamped upstream
+        # (_stamp_current_role_extraction_dates) only for genuine extractions.
+        segment: dict[str, Any] = {
+            "duration_months": duration_months,
+            "is_current": is_current,
+        }
+        if is_current:
+            duration_as_of = str(item.get("duration_as_of") or "").strip()
+            if duration_as_of:
+                segment["duration_as_of"] = duration_as_of
+        existing["segments"].append(segment)
 
         variant_title = raw_title or normalized_title
         variants = existing["title_variants"]

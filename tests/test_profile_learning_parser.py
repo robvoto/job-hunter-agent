@@ -114,6 +114,7 @@ def test_build_learning_patch_returns_transient_role_suggestions_without_parser(
             "normalized_title": "delivery lead",
             "total_duration_months": 36,
             "most_recent_end_year": profile_learning._CURRENT_YEAR,
+            "segments": [{"duration_months": 36, "is_current": True}],
             "title_variants": [
                 {
                     "normalized_title": "delivery lead",
@@ -126,6 +127,7 @@ def test_build_learning_patch_returns_transient_role_suggestions_without_parser(
             "normalized_title": "project coordinator",
             "total_duration_months": 36,
             "most_recent_end_year": 2019,
+            "segments": [{"duration_months": 36, "is_current": False}],
             "title_variants": [
                 {
                     "normalized_title": "project coordinator",
@@ -174,6 +176,10 @@ def test_build_learning_patch_groups_role_experience_by_normalized_title():
             "normalized_title": "senior business analyst",
             "total_duration_months": 42,
             "most_recent_end_year": 2024,
+            "segments": [
+                {"duration_months": 24, "is_current": False},
+                {"duration_months": 18, "is_current": False},
+            ],
             "title_variants": [
                 {
                     "normalized_title": "senior business analyst",
@@ -237,6 +243,11 @@ def test_build_learning_patch_groups_role_experience_by_canonical_title_and_pres
             "normalized_title": "business analyst",
             "total_duration_months": 60,
             "most_recent_end_year": 2024,
+            "segments": [
+                {"duration_months": 12, "is_current": False},
+                {"duration_months": 24, "is_current": False},
+                {"duration_months": 24, "is_current": False},
+            ],
             "title_variants": [
                 {
                     "normalized_title": "ba",
@@ -668,3 +679,91 @@ def test_llm_extract_from_cv_loads_disk_cache_before_calling_llm():
 
     assert result == prior_result
     assert saved == [], "save must not be called when the disk cache already had the entry"
+
+
+_MINIMAL_CAPABILITY = {
+    "name": "stakeholder engagement",
+    "level": "strong",
+    "aliases": [],
+    "icon_key": "communication_stakeholders",
+    "atomic_concept": True,
+    "needs_review": False,
+}
+
+
+def test_aggregate_role_experience_preserves_segment_is_current_and_duration_as_of():
+    fixture = {
+        "capabilities": [_MINIMAL_CAPABILITY],
+        "role_experience": [
+            {"title": "Business Analyst", "duration_months": 40, "end_year": 2024},
+            {
+                "title": "Business Analyst",
+                "duration_months": 20,
+                "end_year": 2026,
+                "is_current": True,
+                "duration_as_of": "2026-03-01",
+            },
+        ],
+        "role_titles": ["Business Analyst"],
+        "preferred_role_titles": ["Business Analyst"],
+        "alternative_role_titles": [],
+        "match_preferences": {},
+    }
+
+    with (
+        patch("job_hunter_agent.profile_learning._llm_extract_from_cv", return_value=fixture),
+        patch(
+            "job_hunter_agent.profile_learning.signal_in_approved_knowledge",
+            return_value=(False, ""),
+        ),
+    ):
+        patch_result = build_learning_patch(SAMPLE_CV)
+
+    rows = patch_result["role_experience"]
+    assert len(rows) == 1
+    assert rows[0]["segments"] == [
+        {"duration_months": 40, "is_current": False},
+        {"duration_months": 20, "is_current": True, "duration_as_of": "2026-03-01"},
+    ]
+
+
+def test_cache_hit_returns_stale_duration_as_of_without_restamping():
+    """A cache hit must replay the real extraction date, never stamp today's."""
+    cv_text = "CV for duration_as_of cache-hit test"
+    lookback, alias_limit = 5, 3
+    cache_key = _hashlib.sha256(
+        f"role-tier-v{profile_learning._CV_EXTRACTION_CACHE_CONTRACT_VERSION}:{lookback}:{alias_limit}:{cv_text}".encode()
+    ).hexdigest()[:16]
+    stale_result = {
+        "role_experience": [
+            {
+                "title": "Business Analyst",
+                "duration_months": 30,
+                "is_current": True,
+                "duration_as_of": "2024-01-01",
+            }
+        ]
+    }
+
+    _reset_cv_extraction_cache()
+    profile_learning._cv_extraction_cache[cache_key] = stale_result
+
+    with (
+        patch("job_hunter_agent.profile_learning._ensure_cv_extraction_cache_loaded"),
+        patch("job_hunter_agent.io_utils.save_cv_extraction_cache"),
+    ):
+        result = profile_learning._llm_extract_from_cv(cv_text, lookback, alias_limit)
+
+    assert result["role_experience"][0]["duration_as_of"] == "2024-01-01"
+
+
+def test_cv_extraction_cache_key_changes_when_the_contract_version_bumps():
+    cv_text, lookback, alias_limit = "identical cv text", 5, 3
+    current = profile_learning._CV_EXTRACTION_CACHE_CONTRACT_VERSION
+
+    def _key(version: int) -> str:
+        return _hashlib.sha256(
+            f"role-tier-v{version}:{lookback}:{alias_limit}:{cv_text}".encode()
+        ).hexdigest()[:16]
+
+    assert _key(current) != _key(current - 1)

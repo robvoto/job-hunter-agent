@@ -107,3 +107,64 @@ def test_no_duration_means_no_resolution():
         resolve_role_experience_requirement(_duration_components("Business Analyst"), None, _ba_family(66))
         is None
     )
+
+
+def _ba_family_with_current_segment(stored_months: int, duration_as_of: str) -> list[dict]:
+    """A BA family whose only segment is still current, extracted at duration_as_of."""
+    return [
+        {
+            "normalized_title": "Business Analyst",
+            "total_duration_months": stored_months,
+            "most_recent_end_year": 2026,
+            "title_variants": [{"normalized_title": "Business Analyst"}],
+            "segments": [
+                {
+                    "duration_months": stored_months,
+                    "is_current": True,
+                    "duration_as_of": duration_as_of,
+                }
+            ],
+        }
+    ]
+
+
+def _accrued(stored_months: int, duration_as_of: str) -> int:
+    from datetime import date
+
+    from job_hunter_agent.role_experience_duration import whole_months_between
+
+    return stored_months + whole_months_between(
+        date.fromisoformat(duration_as_of), date.today()
+    )
+
+
+def test_current_role_accrual_clears_a_threshold_stored_months_alone_would_miss():
+    # 56 months captured well over a year ago; the still-current role has since
+    # accrued past the 60-month bar even though the stored snapshot is short.
+    duration_as_of = "2024-01-01"
+    stored_months = 56
+    resolved = resolve_role_experience_requirement(
+        _duration_components("Business Analyst"),
+        60,
+        _ba_family_with_current_segment(stored_months, duration_as_of),
+    )
+
+    expected = _accrued(stored_months, duration_as_of)
+    assert expected >= 60
+    assert resolved["matched_role_family_months"] == expected
+    assert resolved["experience_requirement_met"] is True
+
+
+def test_current_role_accrual_still_short_leaves_the_requirement_unmet():
+    duration_as_of = "2024-01-01"
+    stored_months = 12
+    resolved = resolve_role_experience_requirement(
+        _duration_components("Business Analyst"),
+        120,
+        _ba_family_with_current_segment(stored_months, duration_as_of),
+    )
+
+    expected = _accrued(stored_months, duration_as_of)
+    assert expected < 120
+    assert resolved["matched_role_family_months"] == expected
+    assert resolved["experience_requirement_met"] is False
