@@ -22,6 +22,7 @@ from job_hunter_agent.description_trust import (
     get_trusted_full_description,
     get_trusted_sources,
 )
+from job_hunter_agent.experience_requirement_display import experience_requirement_note
 from job_hunter_agent.filters import suggest_title_block_phrase
 from job_hunter_agent.fit_scoring import (
     build_fit_highlights,
@@ -1828,15 +1829,16 @@ def render_job_card(
             _normalize_capability_token(matched_candidate_fact), ""
         )
         required_experience_months = _workspace_int(row.get("required_experience_months") or 0)
-        matched_role_experience_title = compact_whitespace(
-            str(row.get("matched_role_experience_title") or "")
+        matched_role_family = compact_whitespace(
+            str(row.get("matched_role_family") or "")
         )
-        matched_role_experience_months = _workspace_int(
-            row.get("matched_role_experience_months") or 0
+        matched_role_family_months = _workspace_int(
+            row.get("matched_role_family_months") or 0
         )
-        matched_role_experience_end_year = _workspace_int(
-            row.get("matched_role_experience_end_year") or 0
+        matched_role_family_end_year = _workspace_int(
+            row.get("matched_role_family_end_year") or 0
         )
+        experience_requirement_met = bool(row.get("experience_requirement_met"))
         experience_requirement_review_needed = bool(
             row.get("experience_requirement_review_needed")
         )
@@ -1876,24 +1878,18 @@ def render_job_card(
         )
         experience_note_html = ""
         if required_experience_months > 0:
-            required_years = required_experience_months / 12.0
-            if matched_role_experience_title:
-                experience_note = (
-                    f"Role history proves {matched_role_experience_months} months in "
-                    f"{matched_role_experience_title} against {required_experience_months} required months"
-                )
-                if matched_role_experience_end_year > 0:
-                    experience_note += f" (most recent end year {matched_role_experience_end_year})"
-            elif experience_requirement_review_needed:
-                experience_note = (
-                    f"Role history could not prove a matching role family for this "
-                    f"{required_years:g}-year requirement."
-                )
-            else:
-                experience_note = f"This requirement asks for {required_years:g} years of role history."
-            experience_note_html = (
-                f'<span class="job-requirement-note">{safe_html(experience_note)}</span>'
+            experience_note = experience_requirement_note(
+                required_experience_months=required_experience_months,
+                matched_role_family=matched_role_family,
+                matched_role_family_months=matched_role_family_months,
+                matched_role_family_end_year=matched_role_family_end_year,
+                experience_requirement_met=experience_requirement_met,
+                experience_requirement_review_needed=experience_requirement_review_needed,
             )
+            if experience_note:
+                experience_note_html = (
+                    f'<span class="job-requirement-note">{safe_html(experience_note)}</span>'
+                )
         importance_html = (
             f'<span class="job-req-importance jh-badge job-req-importance--{safe_html(importance.replace("_", "-"))}">{safe_html(importance_label)}</span>'
             if importance_label
@@ -2121,15 +2117,19 @@ def render_job_card(
             row["required_experience_months"] = _workspace_int(
                 item.get("required_experience_months") or 0
             )
-            row["matched_role_experience_title"] = compact_whitespace(
-                str(item.get("matched_role_experience_title") or "")
+            row["matched_role_family"] = compact_whitespace(
+                str(item.get("matched_role_family") or "")
             )
-            row["matched_role_experience_months"] = _workspace_int(
-                item.get("matched_role_experience_months") or 0
+            row["matched_role_family_months"] = _workspace_int(
+                item.get("matched_role_family_months") or 0
             )
-            row["matched_role_experience_end_year"] = _workspace_int(
-                item.get("matched_role_experience_end_year") or 0
+            row["matched_role_family_end_year"] = _workspace_int(
+                item.get("matched_role_family_end_year") or 0
             )
+            row["experience_requirement_met"] = bool(
+                item.get("experience_requirement_met")
+            )
+            row["experience_duration_gap"] = bool(item.get("experience_duration_gap"))
             row["experience_requirement_review_needed"] = bool(
                 item.get("experience_requirement_review_needed")
             )

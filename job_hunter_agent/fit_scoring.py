@@ -12,6 +12,9 @@ from job_hunter_agent.capability_matching import (
 )
 
 logger = logging.getLogger(__name__)
+from job_hunter_agent.experience_requirement_display import (
+    experience_requirement_note as _experience_requirement_note,
+)
 from job_hunter_agent.global_settings import KEY_FIT_HIGHLIGHTS, load_global_settings
 from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent.paths import UNCERTAINTY_LOG_PATH
@@ -417,16 +420,17 @@ def requirement_fit_audit_rows(record: dict, profile: Optional[dict] = None) -> 
                 "credit_fraction": credit_fraction,
                 "weighted_credit": scoring_weight * credit_fraction,
                 "required_experience_months": int(item.get("required_experience_months") or 0),
-                "matched_role_experience_title": compact_whitespace(
-                    str(item.get("matched_role_experience_title") or "")
+                "matched_role_family": compact_whitespace(
+                    str(item.get("matched_role_family") or "")
                 ),
-                "matched_role_experience_months": int(
-                    item.get("matched_role_experience_months") or 0
+                "matched_role_family_months": int(
+                    item.get("matched_role_family_months") or 0
                 ),
-                "matched_role_experience_end_year": int(
-                    item.get("matched_role_experience_end_year") or 0
+                "matched_role_family_end_year": int(
+                    item.get("matched_role_family_end_year") or 0
                 ),
                 "experience_requirement_met": bool(item.get("experience_requirement_met")),
+                "experience_duration_gap": bool(item.get("experience_duration_gap")),
                 "experience_requirement_review_needed": bool(
                     item.get("experience_requirement_review_needed")
                 ),
@@ -503,35 +507,22 @@ def requirement_fit_diagnostics(record: dict, profile: Optional[dict] = None) ->
         match_source = compact_whitespace(str(row.get("match_source") or "")).lower()
         matched_profile_term = compact_whitespace(str(row.get("matched_profile_term") or ""))
         required_experience_months = int(row.get("required_experience_months") or 0)
-        matched_role_experience_title = compact_whitespace(
-            str(row.get("matched_role_experience_title") or "")
-        )
-        matched_role_experience_months = int(row.get("matched_role_experience_months") or 0)
-        matched_role_experience_end_year = int(row.get("matched_role_experience_end_year") or 0)
+        matched_role_family = compact_whitespace(str(row.get("matched_role_family") or ""))
+        matched_role_family_months = int(row.get("matched_role_family_months") or 0)
+        matched_role_family_end_year = int(row.get("matched_role_family_end_year") or 0)
+        experience_requirement_met = bool(row.get("experience_requirement_met"))
         experience_requirement_review_needed = bool(
             row.get("experience_requirement_review_needed")
         )
         if required_experience_months > 0:
-            required_years = required_experience_months / 12.0
-            if matched_role_experience_title:
-                experience_evidence_label = (
-                    f"Role history: {matched_role_experience_title} "
-                    f"{matched_role_experience_months} months matched against "
-                    f"required {required_experience_months} months"
-                )
-                if matched_role_experience_end_year > 0:
-                    experience_evidence_label += (
-                        f" (most recent end year {matched_role_experience_end_year})"
-                    )
-            elif experience_requirement_review_needed:
-                experience_evidence_label = (
-                    f"Role history: requirement asks for {required_years:g} years, "
-                    "but the saved role titles did not prove a matching role family."
-                )
-            else:
-                experience_evidence_label = (
-                    f"Role history: requirement asks for {required_years:g} years."
-                )
+            experience_evidence_label = _experience_requirement_note(
+                required_experience_months=required_experience_months,
+                matched_role_family=matched_role_family,
+                matched_role_family_months=matched_role_family_months,
+                matched_role_family_end_year=matched_role_family_end_year,
+                experience_requirement_met=experience_requirement_met,
+                experience_requirement_review_needed=experience_requirement_review_needed,
+            )
         else:
             experience_evidence_label = ""
         importance_key = str(row["importance"]).strip().lower()

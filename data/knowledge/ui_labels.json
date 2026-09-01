@@ -1,8 +1,8 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 118,
-  "updated_at": "2026-08-31",
+  "version": 119,
+  "updated_at": "2026-09-01",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
     "remote_label": "Remote",
@@ -184,6 +184,14 @@
     "refresh_button_label": "Refresh from saved CV",
     "refresh_button_busy_label": "Refreshing...",
     "empty_text": "No role history captured yet. Upload your CV, then use Refresh from saved CV."
+  },
+  "experience_requirement_labels_description": "Note shown on a job requirement that asks for explicit years/months in a role. The fit-review LLM names the matching saved role family; the numbers are looked up from captured role history.",
+  "experience_requirement_labels": {
+    "duration_proven": "Role history proves {months} months in {family} against {required} required months.",
+    "duration_gap": "Role history shows {months} months in {family}, short of the {required} required months.",
+    "end_year_suffix": " (most recent end year {end_year})",
+    "role_unresolved": "Role history could not confirm a matching role family for this {years}-year requirement — needs review.",
+    "duration_only": "This requirement asks for {years} years in a role."
   },
   "shared_ui_labels_description": "Shared labels for reusable app chrome and common action buttons.",
   "shared_ui_labels": {

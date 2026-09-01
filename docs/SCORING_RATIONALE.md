@@ -205,7 +205,7 @@ Requirement Fit % is calculated directly from requirement coverage.
 | Mapped candidate capability | Resolves which candidate capability covers the requirement. |
 | Candidate capability level | Determines coverage credit: strong, working, basic, low, or zero. |
 | `not_shown` / `mismatch` | Adds zero coverage and is counted separately. |
-| Explicit years/months requirement | When requirement text names a duration threshold, `llm_gate.py` compares it against stored onboarding `role_experience` title-duration rows before finalizing coverage. |
+| Explicit years/months requirement | When requirement text names a duration threshold, the fit-review LLM names the matching stored `role_experience` family (`matched_role_family`) and `experience_requirements.py` compares that family's accumulated months against the threshold: enough → coverage stands; short → `experience_duration_gap` and a downgrade to `partially_supported`; no family safely resolved → `experience_requirement_review_needed`, left for human review. No duration is stored on the profile. |
 | Unknown mapped capability | Adds zero coverage and writes `requirement_capability_mapping_uncertain` to `output/uncertainty.jsonl` plus a system warning. |
 
 The raw score breakdown behind this table is not shown on job cards outside debug mode. In debug mode it appears in the card's "Debug: LLM fit review" panel — see [Job Card Layout](USER_GUIDE.md#job-card-layout) in the user guide.
@@ -231,7 +231,7 @@ The main score includes requirement coverage and the occupation alignment adjust
 | Requirement coverage | Directly calculates Requirement Fit %. |
 | Candidate capability level | Strong / working / basic / low determines coverage credit. |
 | Candidate eligibility fact | True eligibility support counts as covered; false or missing facts do not. |
-| Stored role duration evidence | Explicit "X years/months" requirements can be downgraded to `partially_supported` when saved `role_experience` cannot prove the threshold for the matching role title. |
+| Stored role duration evidence | Explicit "X years/months" requirements are downgraded to `partially_supported` (with the gap shown) when the LLM-named `role_experience` family cannot prove the threshold, and left for review when no family safely resolves. Duration is never stored on the profile. |
 | Required gaps | Shown as warnings with zero additional score effect. |
 | Required weak coverage | Shown as warnings with zero additional score effect. |
 | Unknown mapped capability or eligibility fact | Logged to `output/uncertainty.jsonl` and the admin warning store. |
@@ -318,7 +318,7 @@ Current derivation rules:
 
 - `supported` contributes full weight.
 - `partially_supported` contributes configured partial weight (`requirement_status_weights.partially_supported`, currently `0.5`).
-- For explicit duration requirements, stored onboarding `role_experience` can force a downgrade from `supported` to `partially_supported` when the saved role-title history does not prove the stated years/months threshold.
+- For explicit duration requirements, the fit-review LLM names the matching `role_experience` family and deterministic code compares its accumulated months (against the canonical family, lower-bounding stated ranges) to the threshold: a short family forces a downgrade from `supported` to `partially_supported` (gap shown), and an unresolved family sets `experience_requirement_review_needed`. The years asked for are compared against captured `role_experience` — a snapshot from the last CV/profile refresh — and never stored on the profile.
 - `not_shown` contributes zero but still counts against the maximum possible score.
 - `mismatch` contributes zero and caps the grade at WEAK if there is any coverage.
 - `requirement_coverage` is the only source of requirement rows used for grading; missing structured coverage is treated as incomplete review data rather than reconstructed from a second flat list.

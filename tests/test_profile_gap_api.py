@@ -288,6 +288,51 @@ def test_profile_gap_confirm_have_rejects_non_capability_string(client, monkeypa
     assert saved_profiles == []
 
 
+def test_profile_gap_confirm_have_rejects_capability_carrying_a_years_token(client, monkeypatch):
+    # candidate_capabilities must never store a duration: the years a job asks
+    # for are compared live against captured role history, not frozen into the
+    # profile. A canonical_requirement that still carries a years token is sent
+    # back for review instead of being persisted as "5 Years Business Analysis".
+    job_key = "job-1"
+    monkeypatch.setattr(
+        "job_hunter_agent.routes.review.load_job_history",
+        lambda: _job_history_with_requirement_coverage(
+            job_key,
+            [
+                {
+                    "requirement": "5+ years business analysis experience",
+                    "requirement_type": "capability",
+                    "status": "not_shown",
+                    "capability_name": "5 Years Business Analysis",
+                    "canonical_requirement": "5 Years Business Analysis",
+                    "matched_job_text": "5+ years business analysis experience",
+                    "profile_action_allowed": True,
+                }
+            ],
+        ),
+    )
+    existing_profile = {"candidate_capabilities": [], "must_not_require_skills": []}
+    saved_profiles = []
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+    )
+
+    resp = client.post(
+        "/api/profile-gap",
+        json={
+            "job_key": job_key,
+            "capability_name": "5 Years Business Analysis",
+            "action": "confirm_have",
+        },
+    )
+    assert resp.status_code == 400
+    assert "years-of-experience requirement" in resp.json()["error"]
+    assert saved_profiles == []
+
+
 def test_profile_gap_confirm_do_not_have_adds_to_must_not_require(client, monkeypatch):
     job_key = "job-1"
     monkeypatch.setattr(

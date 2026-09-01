@@ -1,8 +1,8 @@
 {
   "kind": "system_config",
   "name": "llm_requirement_coverage_defaults",
-  "version": 18,
-  "updated_at": "2026-08-20",
+  "version": 19,
+  "updated_at": "2026-09-01",
   "description": "Managed default guidance for LLM requirement coverage decomposition behaviour.",
   "lines": [
     "For requirement_coverage: semantically decompose capability and qualification requirements into atomic items. Return legal or formal entry gates separately in eligibility_requirements.",
@@ -30,6 +30,8 @@
     "A requirement that states a duration or years of experience in a field, tool, or role is capability even if the field itself sounds formal (e.g. years of experience in a regulated industry is still capability, not eligibility).",
     "For every explicit duration or years-of-experience requirement, return experience_components that decompose the wording into short fragments with kind duration, role_or_activity, or qualifier. A qualifier is any substantive domain, industry, technology, methodology, product, environment, or other constraint beyond the duration and role/activity. For every component also return profile_supported and profile_evidence. profile_evidence must be concise evidence from the candidate profile that supports that component; leave it empty when profile_supported=false.",
     "Role history can validate the duration and role/activity portion only. It must never be used as evidence for a qualifier. For each qualifier, profile_supported=true only when the candidate profile directly substantiates the full substantive qualifier. Shared geography, a broader parent industry, an adjacent domain, or generic occupation experience is not enough to prove a narrower qualifier. If support is uncertain, set profile_supported=false and profile_evidence=[] instead of inferring support. A requirement with qualifier components is supported only when candidate profile evidence supports every qualifier; if no qualifier is supported, use not_shown even when role history meets the duration. Use partially_supported only when candidate evidence proves at least one substantive qualifier or when the complete substantive content is supported but the duration is insufficient.",
+    "On the duration component (or the role_or_activity component) of an explicit years/months requirement, set matched_role_family to the exact family name from the supplied role experience matrix whose accumulated history covers the stated role or activity. Treat role-family equivalents as one family (e.g. Business Analyst and Senior Business Analyst) and return the matrix family name that carries the combined history. Leave matched_role_family empty when no matrix family can be safely tied to the requirement; deterministic code then does the month arithmetic and comparison, and an empty value leaves the row for human review rather than asserting a pass or fail. Never write the number of years back into canonical_requirement or any profile concept — the duration is compared against captured role history (refreshed from the CV/onboarding), not stored as a profile fact.",
+    "For a requirement whose core is a duration or years of experience, canonical_requirement must name only the underlying role, skill, or domain concept and must never contain a number of years or months (write \"Business Analysis\", never \"5 Years Business Analysis\").",
     "Link capability requirements to the exact profile capability name, eligibility requirements to the exact profile eligibility fact, and qualification requirements to the exact profile qualification name.",
     "Use matched_candidate_fact for the matched profile fact and keep capability_name / eligibility_name aligned with the requirement_type.",
     "Leave matched_candidate_fact empty only for not_shown or mismatch items.",

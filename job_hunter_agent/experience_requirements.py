@@ -1,7 +1,15 @@
 """Deterministic helpers for explicit experience-duration requirements.
 
-Purpose: parse requirements like "5+ years experience as Business Analyst" and
-compare them against stored role_experience rows without changing wider scoring policy.
+Purpose: pull the numeric threshold out of wording like "5+ years experience as
+a Business Analyst" and compare it against the saved role_experience family the
+fit-review LLM has already identified.
+
+Ownership boundary: this module does arithmetic only. Deciding which job wording
+counts as the same role family (e.g. Business Analyst vs Senior Business Analyst)
+is a semantic judgement that stays with the fit-review LLM, which receives the
+role experience matrix and returns ``matched_role_family`` on the experience
+component. There is deliberately no regex subject extraction, stemming, or
+synonym table here.
 """
 
 from __future__ import annotations
@@ -9,222 +17,166 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from job_hunter_agent.onet_taxonomy_import import normalize_title as normalize_occupation_title
+from job_hunter_agent.llm_protocol import (
+    LLM_EXPERIENCE_COMPONENT_DURATION,
+    LLM_EXPERIENCE_COMPONENT_ROLE_ACTIVITY,
+)
 from job_hunter_agent.text_processing import compact_whitespace
-from job_hunter_agent.title_normalization_rules import normalize_title_text
 
-_EXPERIENCE_YEARS_PATTERNS = (
-    re.compile(
-        r"(?i)\b(?:minimum of\s+|minimum\s+|at least\s+)?(\d+(?:\.\d+)?)\s*(?:\+)?\s*(?:years|yrs)\b"
-    ),
-    re.compile(
-        r"(?i)\b(\d+(?:\.\d+)?)\s*(?:-|to|–|—)\s*(\d+(?:\.\d+)?)\s*(?:years|yrs)\b"
-    ),
+# Range patterns are searched before the single-value patterns on purpose: the
+# single-value pattern happily matches the upper bound inside a range ("5 years"
+# within "3-5 years"), which would overstate the requirement. A stated range is
+# lower-bounded ("3-5 years" -> 36 months, "18-24 months" -> 18).
+_EXPERIENCE_MONTHS_RANGE = re.compile(
+    r"(?i)\b(\d+)\s*(?:-|to|–|—)\s*(\d+)\s*months?\b"
 )
-_EXPERIENCE_MONTHS_PATTERNS = (
-    re.compile(
-        r"(?i)\b(?:minimum of\s+|minimum\s+|at least\s+)?(\d+)\s*(?:\+)?\s*months?\b"
-    ),
-    re.compile(r"(?i)\b(\d+)\s*(?:-|to|–|—)\s*(\d+)\s*months?\b"),
+_EXPERIENCE_MONTHS_SINGLE = re.compile(
+    r"(?i)\b(?:minimum of\s+|minimum\s+|at least\s+)?(\d+)\s*(?:\+)?\s*months?\b"
 )
-_SUBJECT_PATTERNS = (
-    re.compile(
-        r"(?i)\b(?:years|yrs|months?)\s+(?:of\s+)?experience\s+as\s+(?:an?\s+)?(?P<subject>[^,.;:()]+)"
-    ),
-    re.compile(
-        r"(?i)\b(?:years|yrs|months?)\s+(?:of\s+)?experience\s+in\s+(?P<subject>[^,.;:()]+)"
-    ),
-    re.compile(
-        r"(?i)\bexperience\s+as\s+(?:an?\s+)?(?P<subject>[^,.;:()]+)"
-    ),
-    re.compile(r"(?i)\bexperience\s+in\s+(?P<subject>[^,.;:()]+)"),
+_EXPERIENCE_YEARS_RANGE = re.compile(
+    r"(?i)\b(\d+(?:\.\d+)?)\s*(?:-|to|–|—)\s*(\d+(?:\.\d+)?)\s*(?:years|yrs)\b"
 )
-_SUBJECT_SPLIT_PATTERN = re.compile(
-    r"(?i)\b(?:in|with|across|within|for|on|using|including|required|preferred|essential)\b"
+_EXPERIENCE_YEARS_SINGLE = re.compile(
+    r"(?i)\b(?:minimum of\s+|minimum\s+|at least\s+)?(\d+(?:\.\d+)?)\s*(?:\+)?\s*(?:years|yrs)\b"
 )
-_ROOT_SUFFIXES = ("ation", "ition", "ment", "ance", "ence", "ing", "tion", "sion", "tor", "or", "er", "al")
 
 
 def extract_required_experience_months(*texts: Any) -> int | None:
+    """Return the stated experience threshold in whole months, or None.
+
+    Pure numeric parsing: it recognises "N years"/"N months" and lower-bounds a
+    stated range ("3-5 years" -> 36). It never inspects the role or activity
+    named alongside the duration.
+    """
     for raw_text in texts:
         text = compact_whitespace(str(raw_text or ""))
         if not text:
             continue
 
-        for pattern in _EXPERIENCE_MONTHS_PATTERNS:
-            match = pattern.search(text)
-            if not match:
-                continue
-            return int(match.group(1))
+        months_range = _EXPERIENCE_MONTHS_RANGE.search(text)
+        if months_range:
+            return min(int(months_range.group(1)), int(months_range.group(2)))
 
-        for pattern in _EXPERIENCE_YEARS_PATTERNS:
-            match = pattern.search(text)
-            if not match:
-                continue
-            return int(float(match.group(1)) * 12)
+        months_single = _EXPERIENCE_MONTHS_SINGLE.search(text)
+        if months_single:
+            return int(months_single.group(1))
+
+        years_range = _EXPERIENCE_YEARS_RANGE.search(text)
+        if years_range:
+            lower_years = min(float(years_range.group(1)), float(years_range.group(2)))
+            return int(lower_years * 12)
+
+        years_single = _EXPERIENCE_YEARS_SINGLE.search(text)
+        if years_single:
+            return int(float(years_single.group(1)) * 12)
 
     return None
+
+
+def _llm_matched_role_family(experience_components: list[dict[str, Any]] | None) -> str:
+    """Return the role family the fit-review LLM tied this requirement to.
+
+    The LLM sets ``matched_role_family`` on the role_or_activity (or duration)
+    component to the exact role experience matrix family whose accumulated
+    history it judges to cover the stated role/activity. Empty means the LLM
+    could not safely tie the requirement to any saved family.
+    """
+    if not isinstance(experience_components, list):
+        return ""
+    for kind in (LLM_EXPERIENCE_COMPONENT_ROLE_ACTIVITY, LLM_EXPERIENCE_COMPONENT_DURATION):
+        for component in experience_components:
+            if not isinstance(component, dict) or component.get("kind") != kind:
+                continue
+            family = compact_whitespace(component.get("matched_role_family"))
+            if family:
+                return family
+    return ""
+
+
+def _role_experience_family_lookup(
+    role_experience: list[dict[str, Any]] | None,
+) -> dict[str, dict[str, Any]]:
+    """Index saved role families by every name they are known under (casefolded).
+
+    Both the family's own ``normalized_title`` and each ``title_variants`` entry
+    resolve to the same family row, so an LLM that names a sub-title (e.g.
+    "Senior Business Analyst") still lands on the accumulated family total — and
+    ``family`` carries the canonical ``normalized_title`` so the caller reports
+    and credits the whole family, never the sub-title it was asked about.
+    """
+    lookup: dict[str, dict[str, Any]] = {}
+    for row in role_experience or []:
+        if not isinstance(row, dict):
+            continue
+        title = compact_whitespace(row.get("normalized_title"))
+        if not title:
+            continue
+        entry = {
+            "family": title,
+            "total_duration_months": max(int(row.get("total_duration_months") or 0), 0),
+            "most_recent_end_year": max(int(row.get("most_recent_end_year") or 0), 0),
+        }
+        names = {title.casefold()}
+        variants = row.get("title_variants")
+        if isinstance(variants, list):
+            for variant in variants:
+                if not isinstance(variant, dict):
+                    continue
+                variant_title = compact_whitespace(variant.get("normalized_title"))
+                if variant_title:
+                    names.add(variant_title.casefold())
+        for name in names:
+            lookup.setdefault(name, entry)
+    return lookup
 
 
 def resolve_role_experience_requirement(
-    requirement: Any,
-    matched_job_text: Any,
+    experience_components: list[dict[str, Any]] | None,
+    required_months: int | None,
     role_experience: list[dict[str, Any]] | None,
 ) -> dict[str, Any] | None:
-    required_months = extract_required_experience_months(requirement, matched_job_text)
+    """Compare a stated experience threshold against the LLM-identified family.
+
+    Returns None when the requirement states no duration. Otherwise:
+    - ``matched_role_family`` present + found in role history -> reports the
+      canonical family name, its accumulated months, and whether they meet
+      ``required_months``.
+    - ``matched_role_family`` present but absent from role history, or empty ->
+      ``role_family_resolved`` is False so the caller keeps the row unresolved
+      for human review rather than asserting a pass or a fail.
+
+    The months come from ``role_experience`` captured at the last CV/profile
+    refresh; they are a snapshot, not a figure that ticks up on its own.
+    """
     if required_months is None:
         return None
 
-    match = _match_role_experience(requirement, matched_job_text, role_experience or [])
-    result = {"required_experience_months": required_months}
-    if not match:
+    result: dict[str, Any] = {"required_experience_months": int(required_months)}
+    family = _llm_matched_role_family(experience_components)
+    if not family:
+        result["role_family_resolved"] = False
         return result
 
+    saved = _role_experience_family_lookup(role_experience).get(family.casefold())
+    if saved is None:
+        # The LLM named a family the profile does not actually hold; do not
+        # invent a pass or a fail from that. Keep the LLM's label so the review
+        # note can say which family was looked for.
+        result["matched_role_family"] = family
+        result["role_family_resolved"] = False
+        return result
+
+    # Report and credit the canonical family, never the sub-title the LLM was
+    # asked about: labelling the whole Business Analyst family total as "Senior
+    # Business Analyst" would overstate seniority.
+    total_months = int(saved["total_duration_months"])
     result.update(
         {
-            "matched_role_experience_title": str(match["normalized_title"]),
-            "matched_role_experience_months": int(match["total_duration_months"]),
-            "matched_role_experience_end_year": int(match["most_recent_end_year"]),
-            "experience_requirement_met": int(match["total_duration_months"]) >= required_months,
+            "matched_role_family": saved["family"],
+            "role_family_resolved": True,
+            "matched_role_family_months": total_months,
+            "matched_role_family_end_year": int(saved["most_recent_end_year"]),
+            "experience_requirement_met": total_months >= int(required_months),
         }
     )
     return result
-
-
-def _match_role_experience(
-    requirement: Any,
-    matched_job_text: Any,
-    role_experience: list[dict[str, Any]],
-) -> dict[str, Any] | None:
-    normalized_rows = []
-    for item in role_experience:
-        if not isinstance(item, dict):
-            continue
-        normalized_title = normalize_title_text(item.get("normalized_title"))
-        if not normalized_title:
-            continue
-        raw_variants = item.get("title_variants") or []
-        if not isinstance(raw_variants, list):
-            raw_variants = []
-        variant_titles = [
-            normalize_title_text(variant.get("normalized_title"))
-            for variant in raw_variants
-            if isinstance(variant, dict) and normalize_title_text(variant.get("normalized_title"))
-        ]
-        normalized_rows.append(
-            {
-                "normalized_title": normalized_title,
-                "occupation_title": normalize_occupation_title(normalized_title),
-                "total_duration_months": int(item.get("total_duration_months") or 0),
-                "most_recent_end_year": int(item.get("most_recent_end_year") or 0),
-                "variant_titles": variant_titles,
-            }
-        )
-    if not normalized_rows:
-        return None
-
-    for subject in _candidate_subjects(requirement, matched_job_text):
-        normalized_subject = normalize_title_text(subject)
-        occupation_subject = normalize_occupation_title(subject)
-        if not normalized_subject:
-            continue
-
-        exact = next(
-            (row for row in normalized_rows if row["normalized_title"] == normalized_subject),
-            None,
-        )
-        if exact:
-            return exact
-
-        variant_exact = next(
-            (row for row in normalized_rows if normalized_subject in row["variant_titles"]),
-            None,
-        )
-        if variant_exact:
-            return variant_exact
-
-        exact_occupation = next(
-            (row for row in normalized_rows if row["occupation_title"] == occupation_subject),
-            None,
-        )
-        if exact_occupation:
-            return exact_occupation
-
-        subject_roots = _root_tokens(subject)
-        if len(subject_roots) < 2:
-            continue
-        for row in normalized_rows:
-            title_roots = _root_tokens(row["normalized_title"])
-            if len(title_roots) < 2:
-                continue
-            if subject_roots.issubset(title_roots) or title_roots.issubset(subject_roots):
-                return row
-
-    return None
-
-
-def _candidate_subjects(requirement: Any, matched_job_text: Any) -> list[str]:
-    subjects: list[str] = []
-    seen: set[str] = set()
-
-    for raw_text in (requirement, matched_job_text):
-        text = compact_whitespace(str(raw_text or ""))
-        if not text:
-            continue
-        for pattern in _SUBJECT_PATTERNS:
-            for match in pattern.finditer(text):
-                _append_subject(subjects, seen, match.group("subject"))
-        stripped = _strip_duration_prefix(text)
-        if stripped:
-            _append_subject(subjects, seen, stripped)
-
-    return subjects
-
-
-def _append_subject(subjects: list[str], seen: set[str], raw_subject: Any) -> None:
-    subject = _clean_subject(raw_subject)
-    if not subject:
-        return
-    key = subject.lower()
-    if key in seen:
-        return
-    seen.add(key)
-    subjects.append(subject)
-
-
-def _clean_subject(value: Any) -> str:
-    text = compact_whitespace(str(value or ""))
-    if not text:
-        return ""
-    text = re.sub(r"(?i)\b(?:required|preferred|essential|mandatory)\b.*$", "", text).strip(" ,.;:-")
-    parts = _SUBJECT_SPLIT_PATTERN.split(text, maxsplit=1)
-    text = compact_whitespace(parts[0] if parts else text)
-    text = re.sub(r"(?i)^(?:as\s+)?(?:an?\s+)?", "", text)
-    text = re.sub(r"(?i)\bexperience\b$", "", text).strip(" ,.;:-")
-    return compact_whitespace(text)
-
-
-def _strip_duration_prefix(value: str) -> str:
-    text = compact_whitespace(value)
-    if not text:
-        return ""
-    text = re.sub(
-        r"(?i)^\b(?:minimum of\s+|minimum\s+|at least\s+)?\d+(?:\.\d+)?(?:\s*(?:-|to|–|—)\s*\d+(?:\.\d+)?)?\s*(?:\+)?\s*(?:years|yrs|months?)\b",
-        "",
-        text,
-    )
-    text = re.sub(r"(?i)^\b(?:of\s+)?experience\b", "", text)
-    return _clean_subject(text)
-
-
-def _root_tokens(value: Any) -> set[str]:
-    tokens = normalize_occupation_title(value).split()
-    roots: set[str] = set()
-    for token in tokens:
-        root = token
-        for suffix in _ROOT_SUFFIXES:
-            if root.endswith(suffix) and len(root) > len(suffix) + 2:
-                root = root[: -len(suffix)]
-                break
-        roots.add(root)
-    return roots
