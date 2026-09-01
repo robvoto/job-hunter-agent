@@ -10,6 +10,7 @@ import copy
 import json
 import logging
 import re
+from datetime import date
 from typing import Any
 
 from job_hunter_agent.capability_matrix import (
@@ -769,6 +770,30 @@ def normalize_eligibility_rules(rules: list[dict[str, Any]] | list[str] | None) 
     return apply_clearance_hierarchy(cleaned)
 
 
+def _normalize_role_segment(raw: Any) -> dict[str, Any] | None:
+    """Shape one role segment. ``duration_as_of`` is kept only when it is a valid
+    ISO date on a current segment; a completed segment never carries one.
+    """
+    if not isinstance(raw, dict):
+        return None
+    is_current = bool(raw.get("is_current"))
+    segment: dict[str, Any] = {
+        "duration_months": coerce_int(
+            raw.get("duration_months"), default=0, minimum=0, maximum=12_000
+        ),
+        "is_current": is_current,
+    }
+    if is_current:
+        as_of = str(raw.get("duration_as_of") or "").strip()
+        try:
+            date.fromisoformat(as_of)
+        except ValueError:
+            as_of = ""
+        if as_of:
+            segment["duration_as_of"] = as_of
+    return segment
+
+
 def normalize_role_experience(items: Any) -> list[dict[str, Any]]:
     aggregated: dict[str, dict[str, Any]] = {}
 
@@ -800,6 +825,8 @@ def normalize_role_experience(items: Any) -> list[dict[str, Any]]:
                 "total_duration_months": 0,
                 "most_recent_end_year": 0,
                 "title_variants": {},
+                "segments": [],
+                "_saw_segments": False,
             },
         )
         existing["total_duration_months"] = int(existing["total_duration_months"]) + int(
@@ -809,6 +836,17 @@ def normalize_role_experience(items: Any) -> list[dict[str, Any]]:
             int(existing["most_recent_end_year"]),
             int(most_recent_end_year),
         )
+
+        # Preserve per-segment is_current / duration_as_of so job-match time can
+        # accrue elapsed months. A legacy row carries no "segments" and stays
+        # aggregate-only; the key is only emitted when an input row supplied it.
+        raw_segments = item.get("segments")
+        if isinstance(raw_segments, list):
+            existing["_saw_segments"] = True
+            for raw_segment in raw_segments:
+                normalized_segment = _normalize_role_segment(raw_segment)
+                if normalized_segment is not None:
+                    existing["segments"].append(normalized_segment)
 
         raw_variants = item.get("title_variants") or []
         if not isinstance(raw_variants, list):
@@ -860,6 +898,8 @@ def normalize_role_experience(items: Any) -> list[dict[str, Any]]:
         row = aggregated[key]
         variants = row.pop("title_variants", {})
         row["title_variants"] = [variants[name] for name in sorted(variants)]
+        if not row.pop("_saw_segments", False):
+            row.pop("segments", None)
         result.append(row)
     return result
 

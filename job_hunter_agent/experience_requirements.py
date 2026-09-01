@@ -21,6 +21,7 @@ from job_hunter_agent.llm_protocol import (
     LLM_EXPERIENCE_COMPONENT_DURATION,
     LLM_EXPERIENCE_COMPONENT_ROLE_ACTIVITY,
 )
+from job_hunter_agent.role_experience_duration import effective_family_months
 from job_hunter_agent.text_processing import compact_whitespace
 
 # Range patterns are searched before the single-value patterns on purpose: the
@@ -111,9 +112,12 @@ def _role_experience_family_lookup(
         title = compact_whitespace(row.get("normalized_title"))
         if not title:
             continue
+        # effective_family_months accrues whole elapsed months onto a still-current
+        # role segment (see role_experience_duration); a legacy row with no
+        # segments falls back to its stored total_duration_months unchanged.
         entry = {
             "family": title,
-            "total_duration_months": max(int(row.get("total_duration_months") or 0), 0),
+            "total_duration_months": effective_family_months(row),
             "most_recent_end_year": max(int(row.get("most_recent_end_year") or 0), 0),
         }
         names = {title.casefold()}

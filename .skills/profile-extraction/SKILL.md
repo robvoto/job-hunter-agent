@@ -27,6 +27,27 @@ Use before editing CV/onboarding/profile extraction, capability clustering, elig
 - `capability_matrix.py`: capability clustering/matrix.
 - `signal_registry.py`: pending learned signals.
 
+## Role duration freshness (`role_experience[].segments`)
+
+Each `role_experience` family row carries `segments: list[dict]` — one entry per
+extracted role segment: `{duration_months, is_current}`, plus `duration_as_of`
+(the real extraction date, ISO) only on a still-current segment. This is a
+**runtime-only backend field**: not user-editable, not in `collectProfile()`, no
+Settings control. Legacy rows with no `segments` key must round-trip unchanged;
+they pick up segments the next time role history is refreshed from the saved CV.
+
+- `profile_learning._stamp_current_role_extraction_dates` stamps `duration_as_of`
+  only on the genuine (uncached) LLM path, so the date always pairs with a
+  freshly extracted `duration_months`.
+- Both `_aggregate_role_experience` and `profile_store.normalize_role_experience`
+  must preserve segments through their aggregation.
+- Effective (accrued) family months live in `role_experience_duration.py`; only
+  `experience_requirements.py` and `llm_gate.build_profile_prompt_context` consume
+  it. Nothing writes accrued months back onto the profile or into capabilities.
+- **Bump `_CV_EXTRACTION_CACHE_CONTRACT_VERSION` whenever the extracted CV shape
+  changes** so every cached extraction misses and is genuinely re-run — otherwise
+  a stale cached `duration_months` gets paired with a fresh date.
+
 ## Known danger zone: normalize_full_profile
 `normalize_full_profile` (in `profile_store.py`) is called on every `load_profile()` and `save_profile()`.
 It runs `normalize_capability_rules` on `candidate_capabilities`. Any mutation here silently
