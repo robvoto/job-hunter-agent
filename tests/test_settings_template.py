@@ -484,8 +484,10 @@ def test_capability_help_text_explains_matching_weight():
 def test_settings_review_panel_empty_state_copy_is_defined():
 
     js_path = ROOT_DIR / "templates" / "static" / "settings" / "shared" / "settings-review-panel.js"
+    labels_path = ROOT_DIR / "data" / "knowledge" / "ui_labels.json"
 
     js = js_path.read_text(encoding="utf-8")
+    ui_labels = json.loads(labels_path.read_text(encoding="utf-8"))
 
     assert (
         "No capability suggestions yet. We found no saved review data from the latest search. Run a search again so kept jobs can be analysed for new capability signals."
@@ -505,7 +507,9 @@ def test_settings_review_panel_empty_state_copy_is_defined():
 
     assert "Filters already working correctly" in js
 
-    assert "No, I don't have this" in js
+    assert "const sharedUiLabels = window.__JOB_HUNTER_SHARED_UI_LABELS__ || {};" in js
+    assert "const DECLINE_CAPABILITY_LABEL = sharedUiLabels.profile_confirm_not_have_label;" in js
+    assert ui_labels["shared_ui_labels"]["profile_confirm_not_have_label"]
 
     assert "decline-skill-btn" in js
 
@@ -669,4 +673,3 @@ def test_admin_hydrates_parallel_worker_limit_inputs_before_save():
     assert "setFieldValue('search_limit_linkedin_parallel_search_workers_max', searchLimits.linkedin_parallel_search_workers?.max);" in js
     assert "min: readNumber('search_limit_linkedin_parallel_search_workers_min'" in js
     assert "max: readNumber('search_limit_linkedin_parallel_search_workers_max'" in js
-
