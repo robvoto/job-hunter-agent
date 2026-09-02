@@ -2,9 +2,10 @@
 
 from copy import deepcopy
 import re
+import threading
 from functools import lru_cache
-from typing import Any, Iterable, List, Optional
-from urllib.parse import ParseResult, urlsplit, urlunsplit
+from typing import Any, Callable, Iterable, List, Optional
+from urllib.parse import ParseResult, parse_qsl, urlencode, urlsplit, urlunsplit
 
 """Manages job identity, duplicate detection, and linking across sources.
 
@@ -42,6 +43,8 @@ from job_hunter_agent.record_schema import (
     RECORD_SOURCE_PROVENANCE_KEY,
     RECORD_TITLE_KEY,
     RECORD_URL_KEY,
+    RECORD_DETAILS_STATUS_KEY,
+    RECORD_DETAILS_TEXT_KEY,
 )
 from job_hunter_agent.runtime_helpers import append_uncertainty_log, build_uncertainty_entry
 from job_hunter_agent.system_warnings import (
@@ -50,6 +53,8 @@ from job_hunter_agent.system_warnings import (
 )
 from job_hunter_agent.source_registry import get_domain_to_source_map
 from job_hunter_agent.title_normalization_rules import normalize_title_text
+
+RUN_IDENTITY_CLAIM_KEY = "_run_identity_claim"
 
 
 @lru_cache(maxsize=1)
@@ -149,6 +154,39 @@ def _source_metadata(record: dict) -> dict:
     return metadata if isinstance(metadata, dict) else {}
 
 
+def _normalized_identity_url(value: object) -> str:
+    """Normalize a URL while retaining unknown query parameters as identity facts.
+
+    Only the managed duplicate-rules allowlist is removed. An unknown parameter
+    remains part of the identity because external apply systems commonly encode
+    the vacancy ID in the query string.
+    """
+
+    raw_url = str(value or "").strip()
+
+    if not raw_url:
+        return ""
+
+    try:
+        parsed: ParseResult = urlsplit(raw_url)
+        ignored_parameters = set(
+            _get_identity_config().get("non_identity_query_parameters", [])
+        )
+        retained_query = [
+            (key, value)
+            for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+            if key.strip().lower() not in ignored_parameters
+        ]
+    except ValueError:
+        return raw_url.split("#", 1)[0].strip().lower()
+
+    normalized_path = parsed.path.rstrip("/")
+    normalized_query = urlencode(retained_query, doseq=True)
+    return urlunsplit(
+        (parsed.scheme.lower(), parsed.netloc.lower(), normalized_path, normalized_query, "")
+    )
+
+
 def _normalized_url(record: dict) -> str:
 
     raw_url = str(record.get(RECORD_URL_KEY) or "").strip()
@@ -157,22 +195,10 @@ def _normalized_url(record: dict) -> str:
         return ""
 
     try:  # Catches ValueError for malformed URLs
-        parsed: ParseResult = urlsplit(raw_url)
-
-        parsed = urlsplit(raw_url)
+        return _normalized_identity_url(raw_url)
 
     except ValueError:
         return raw_url.split("#", 1)[0].split("?", 1)[0].strip().lower()
-
-    normalized_path = parsed.path.rstrip("/")
-
-    return urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), normalized_path, "", ""))
-
-
-def _normalized_identity_url(value: object) -> str:
-    """Normalize an identity URL without treating query parameters as identity."""
-
-    return _normalized_url({RECORD_URL_KEY: value})
 
 
 def _normalized_job_key(record: dict) -> str:
@@ -246,6 +272,107 @@ def _confirmed_duplicate_signature_values(record: dict) -> set[tuple[str, str]]:
             if isinstance(entry, dict):
                 values.update(_record_identity_signatures(entry).items())
     return values
+
+
+class RunIdentityRegistry:
+    """Coordinate exact identity claims across concurrent source workers.
+
+    This registry owns only deterministic identity facts already accepted by the
+    job-identity contract. It prevents a second source from entering detail or
+    fit review while the first source is processing the same vacancy, and
+    releases an unreviewable claim so another source can continue safely.
+    """
+
+    def __init__(self) -> None:
+        self._condition = threading.Condition()
+        self._claims: dict[tuple[str, str], dict[str, Any]] = {}
+        self._claims_by_token: dict[object, dict[str, Any]] = {}
+
+    def claim_or_wait(
+        self,
+        record: dict,
+        *,
+        should_abort: Callable[[], bool] | None = None,
+    ) -> tuple[str, dict | None, object | None]:
+        """Return ``owner``, ``duplicate``, ``unresolved``, or ``aborted``.
+
+        Waiting is bounded by the owning source's normal completion/stop path,
+        not by a second identity timeout. A failed or incomplete owner releases
+        its claim and lets the waiting source try the work.
+        """
+
+        signatures = _confirmed_duplicate_signature_values(record)
+        if not signatures:
+            return "unresolved", None, None
+
+        with self._condition:
+            while True:
+                claim = next(
+                    (
+                        candidate
+                        for signature, candidate in self._claims.items()
+                        if signature in signatures
+                    ),
+                    None,
+                )
+                if claim is None:
+                    token = object()
+                    claim = {
+                        "token": token,
+                        "record": record,
+                        "signatures": signatures,
+                        "state": "pending",
+                    }
+                    self._claims_by_token[token] = claim
+                    for signature in signatures:
+                        self._claims[signature] = claim
+                    return "owner", None, token
+
+                if claim["record"] is record:
+                    return "owner", None, claim["token"]
+
+                if claim["state"] == "complete":
+                    return "duplicate", claim["record"], None
+
+                if should_abort is not None and should_abort():
+                    return "aborted", None, None
+
+                self._condition.wait(timeout=0.05)
+
+    def finish(self, token: object, record: dict) -> None:
+        """Complete an exact claim only when usable detail evidence exists."""
+
+        with self._condition:
+            claim = self._claims_by_token.pop(token, None)
+            if claim is None:
+                return
+
+            if str(record.get(RECORD_DETAILS_STATUS_KEY) or "") == "ok" and str(
+                record.get(RECORD_DETAILS_TEXT_KEY) or ""
+            ).strip():
+                claim["state"] = "complete"
+                claim["record"] = record
+                final_signatures = _confirmed_duplicate_signature_values(record)
+                claim["signatures"].update(final_signatures)
+                for signature in claim["signatures"]:
+                    self._claims[signature] = claim
+            else:
+                for signature, current in list(self._claims.items()):
+                    if current is claim:
+                        del self._claims[signature]
+            self._condition.notify_all()
+
+    def release(self, token: object) -> None:
+        """Release a claim when finalisation itself cannot complete."""
+
+        with self._condition:
+            claim = self._claims_by_token.pop(token, None)
+            if claim is None:
+                return
+            for signature, current in list(self._claims.items()):
+                if current is claim:
+                    del self._claims[signature]
+            self._condition.notify_all()
 
 
 def _confirmed_duplicate_match(a: dict, b: dict) -> Optional[tuple[str, str]]:
@@ -457,6 +584,20 @@ def _append_duplicate_link(
     links.append(_duplicate_link(linked_record, matched_on, matched_value))
 
     _set_duplicate_links(record, _merge_duplicate_links(links))
+
+
+def merge_confirmed_duplicate_evidence(canonical: dict, duplicate: dict) -> bool:
+    """Attach a same-run duplicate's source facts to the canonical record."""
+
+    match = _confirmed_duplicate_match(canonical, duplicate)
+    if match is None:
+        return False
+
+    matched_on, matched_value = match
+    _append_duplicate_link(canonical, duplicate, matched_on, matched_value)
+    _merge_preserved_state(canonical, duplicate)
+    _set_source_provenance(canonical, _merge_source_provenance(canonical, duplicate))
+    return True
 
 
 def _potential_duplicate_signature(record: dict) -> dict[str, str]:

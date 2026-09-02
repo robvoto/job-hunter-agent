@@ -358,6 +358,7 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
             discovery_capture=captured_records,
             discovery_status=failure_state,
             search_plan_signature=signature,
+            identity_registry=context.identity_registry,
         )
         try:
             kept, audit, skills = seek_scrape_to_records(**_seek_kwargs, headless=headless)
@@ -630,6 +631,7 @@ def _run_linkedin_source(context: ScrapeRunContext) -> SourceRunResult:
             discovery_capture=captured_records,
             discovery_status=failure_state,
             search_plan_signature=signature,
+            identity_registry=context.identity_registry,
         )
         kept, audit, skills = li.scrape()
 
@@ -696,6 +698,7 @@ def _run_linkedin_source(context: ScrapeRunContext) -> SourceRunResult:
                     discovery_records=stale_records,
                     discovery_capture=None,
                     discovery_status={},
+                    identity_registry=context.identity_registry,
                 )
                 kept, audit, skills = fallback_scraper.scrape()
                 cached_records = stale_records
@@ -837,6 +840,7 @@ def _run_apsjobs_source(context: ScrapeRunContext) -> SourceRunResult:
             discovery_capture=captured_records,
             discovery_status=failure_state,
             search_plan_signature=signature,
+            identity_registry=context.identity_registry,
         )
         kept, audit, skills = scraper.scrape()
         return SourceRunResult(

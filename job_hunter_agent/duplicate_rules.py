@@ -48,6 +48,18 @@ def _normalize_config(payload: dict[str, Any]) -> dict[str, Any]:
 
     normalized["source_priority"] = cleaned_priority
 
+    query_parameters = normalized.get("non_identity_query_parameters", [])
+    if not isinstance(query_parameters, list):
+        raise ValueError(
+            "duplicate_rules.json must define non_identity_query_parameters as an array"
+        )
+    cleaned_query_parameters = {
+        str(parameter).strip().lower()
+        for parameter in query_parameters
+        if str(parameter).strip()
+    }
+    normalized["non_identity_query_parameters"] = sorted(cleaned_query_parameters)
+
     return normalized
 
 

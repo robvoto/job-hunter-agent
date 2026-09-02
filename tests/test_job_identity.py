@@ -85,7 +85,7 @@ def test_exact_external_apply_url_confirms_cross_source_repost_and_preserves_pro
             "title": "Business Analyst",
             "company": "Acme",
             "source_metadata": {
-                "apply_url": "https://careers.acme.example/jobs/req-7?source=seek",
+                "apply_url": "https://careers.acme.example/jobs/req-7?utm_source=seek",
                 "canonical_url": "https://seek.com.au/job/101",
                 "platform_job_id": "101",
                 "raw_source_fields": {"listing_reference": "seek"},
@@ -100,7 +100,7 @@ def test_exact_external_apply_url_confirms_cross_source_repost_and_preserves_pro
             "title": "Business Analyst (Reposted)",
             "company": "Acme",
             "source_metadata": {
-                "apply_url": "https://careers.acme.example/jobs/req-7?source=linkedin",
+                "apply_url": "https://careers.acme.example/jobs/req-7?utm_source=linkedin",
                 "canonical_url": "https://linkedin.com/jobs/view/202",
                 "platform_job_id": "202",
                 "raw_source_fields": {"listing_reference": "linkedin"},
@@ -125,6 +125,25 @@ def test_exact_external_apply_url_confirms_cross_source_repost_and_preserves_pro
     linked = survivor[RECORD_DUPLICATE_LINKS_KEY][0]
     assert linked["source"] == "linkedin"
     assert linked["source_metadata"]["raw_source_fields"]["listing_reference"] == "linkedin"
+
+
+def test_external_apply_query_parameter_carrying_vacancy_identity_stays_distinct():
+    first = {
+        "job_key": "seek:101",
+        "source": "seek",
+        "source_metadata": {
+            "apply_url": "https://careers.acme.example/apply?job=123",
+        },
+    }
+    second = {
+        "job_key": "linkedin:202",
+        "source": "linkedin",
+        "source_metadata": {
+            "apply_url": "https://careers.acme.example/apply?job=456",
+        },
+    }
+
+    assert not are_jobs_confirmed_duplicates(first, second)
 
 
 def test_same_ats_requisition_and_ats_authority_confirms_cross_platform_duplicate():
@@ -183,7 +202,7 @@ def test_confirmed_identity_history_lookup_reuses_linked_source_entry():
             "job_key": "seek:101",
             "source": "seek",
             "source_metadata": {
-                "apply_url": "https://careers.acme.example/jobs/req-7?source=seek",
+                "apply_url": "https://careers.acme.example/jobs/req-7?utm_source=seek",
             },
         },
         {"linkedin:202": entry},

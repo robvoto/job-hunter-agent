@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import importlib
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from job_hunter_agent.database import db_conn
+from job_hunter_agent.job_review_pipeline import ReviewPipelineContext
 from job_hunter_agent.run_context import ScrapeRunContext
 from job_hunter_agent.source_discovery_cache import (
     build_source_search_signature,
@@ -353,6 +355,58 @@ def test_seek_cache_hit_lazily_creates_detail_session_when_detail_fetch_needed(m
 
     assert [item["job_key"] for item in kept] == ["seek:1"]
     assert len(created) == 1
+
+
+def test_seek_async_detail_worker_uses_actual_cached_record_for_history_lookup(monkeypatch):
+    from job_hunter_agent.scrapers import seek_runner
+
+    actual_record = {
+        "job_key": "seek:actual",
+        "source": "seek",
+        "title": "Policy Officer",
+        "url": "https://www.seek.com.au/job/actual",
+    }
+    history = {
+        "seek:actual": {
+            "detail_evidence": {
+                "details_text": "A complete cached description.",
+                "details_status": "ok",
+                "fetched_at": "2026-08-15T08:00:00+00:00",
+            }
+        }
+    }
+    context = ReviewPipelineContext(
+        profile={"search_settings": {}},
+        job_history=history,
+        audit_rows=[],
+        llm_cache={},
+        applied_job_keys=set(),
+        hidden_job_keys=set(),
+        run_iso="2026-08-15T09:00:00+00:00",
+        date_range_days=3,
+        source_name="SEEK",
+    )
+
+    class _NoDetailPage:
+        async def new_page(self):
+            raise AssertionError("cached detail evidence should avoid a new page")
+
+    def fake_post(record, _context, hooks=None):
+        assert record is actual_record
+        assert record["details_text"] == "A complete cached description."
+        return {"decision": "KEEP"}, record, []
+
+    monkeypatch.setattr(seek_runner, "run_stop_requested", lambda: False)
+    monkeypatch.setattr(seek_runner, "review_post_detail_normalized_job", fake_post)
+
+    results = asyncio.run(
+        seek_runner._seek_detail_batch_on_context(
+            [(4, actual_record)], _NoDetailPage(), context, n_workers=1
+        )
+    )
+
+    assert results[4][0]["decision"] == "KEEP"
+    assert results[4][1] is actual_record
 
 
 def test_first_seek_search_misses_and_second_identical_search_is_cache_hit(monkeypatch):

@@ -436,6 +436,7 @@ class LinkedInScraper(BaseJobScraper):
             run_iso=self.run_iso,
             date_range_days=date_range_days,
             source_name="LinkedIn",
+            identity_registry=self.identity_registry,
         )
 
         total_targets = len(targets)

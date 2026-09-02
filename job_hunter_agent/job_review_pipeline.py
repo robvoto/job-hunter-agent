@@ -119,6 +119,9 @@ from job_hunter_agent.history import apply_kept_job_reuse, can_reuse_kept_job, f
 from job_hunter_agent.job_identity import (
     find_confirmed_duplicate,
     find_confirmed_identity_history_entry,
+    merge_confirmed_duplicate_evidence,
+    RUN_IDENTITY_CLAIM_KEY,
+    RunIdentityRegistry,
 )
 from job_hunter_agent.job_types import infer_work_type_from_description
 from job_hunter_agent.job_quality import (
@@ -226,7 +229,7 @@ from job_hunter_agent.record_schema import (
 )
 from job_hunter_agent.llm_protocol import LLM_UNCERTAIN_COVERAGE_REQUIREMENT_TYPE
 from job_hunter_agent.role_analysis import infer_posting_channel
-from job_hunter_agent.run_control import pause_for_step_through
+from job_hunter_agent.run_control import pause_for_step_through, run_stop_requested
 from job_hunter_agent.salary_utils import preferred_salary_display
 from job_hunter_agent.score_labels import score_to_tone_class
 from job_hunter_agent.signal_detection import (
@@ -616,6 +619,7 @@ class ReviewPipelineContext:
     run_iso: str = ""
     date_range_days: int = 0
     source_name: str = ""
+    identity_registry: RunIdentityRegistry | None = None
 
 
 def _find_applied_identity_match(record: dict, context: ReviewPipelineContext) -> dict | None:
@@ -1434,6 +1438,25 @@ def review_pre_detail_normalized_job(
         record["_obs_card_rejected"] = True
         _finalize_job_result(record, context, reason=card_reason)
         return _build_outcome(record), record, skill_observations, False
+
+    if context.identity_registry is not None:
+        claim_status, canonical_record, claim_token = context.identity_registry.claim_or_wait(
+            record,
+            should_abort=run_stop_requested,
+        )
+        if claim_status == "aborted":
+            record[RECORD_DECISION_KEY] = "REJECT"
+            record[RECORD_REJECT_REASON_KEY] = "STOP_REQUESTED"
+            _finalize_job_result(record, context, reason="STOP_REQUESTED")
+            return _build_outcome(record), record, skill_observations, False
+        if claim_status == "duplicate" and canonical_record is not None:
+            merge_confirmed_duplicate_evidence(canonical_record, record)
+            record[RECORD_DECISION_KEY] = "SKIP"
+            record[RECORD_REJECT_REASON_KEY] = "DUPLICATE_CONFIRMED_SAME_RUN"
+            _finalize(record, context)
+            return _build_outcome(record), record, skill_observations, False
+        if claim_status == "owner" and claim_token is not None:
+            record[RUN_IDENTITY_CLAIM_KEY] = (context.identity_registry, claim_token)
 
     history_entry = context.job_history.get(job_key) or find_confirmed_identity_history_entry(
         record, context.job_history

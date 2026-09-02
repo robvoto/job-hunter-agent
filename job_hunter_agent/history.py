@@ -12,6 +12,7 @@ from job_hunter_agent.global_settings import (
     get_repeated_listing_min_times_seen,
 )
 from job_hunter_agent.llm_review_state import has_complete_llm_keep_data
+from job_hunter_agent.job_identity import RUN_IDENTITY_CLAIM_KEY
 from job_hunter_agent.posting_utils import days_since, parse_timestamp
 from job_hunter_agent.record_schema import (
     RECORD_APPLY_METHOD_KEY,
@@ -583,7 +584,15 @@ def update_job_history(history: Dict[str, dict], record: dict, run_iso: str) -> 
 def finalize_record(
     history: Dict[str, dict], audit_rows: List[dict], record: dict, run_iso: str
 ) -> None:
-
-    update_job_history(history, record, run_iso)
-
-    audit_rows.append(record)
+    claim = record.pop(RUN_IDENTITY_CLAIM_KEY, None)
+    try:
+        update_job_history(history, record, run_iso)
+        audit_rows.append(record)
+    except Exception:
+        if isinstance(claim, tuple) and len(claim) == 2:
+            registry, token = claim
+            registry.release(token)
+        raise
+    if isinstance(claim, tuple) and len(claim) == 2:
+        registry, token = claim
+        registry.finish(token, record)

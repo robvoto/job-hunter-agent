@@ -202,7 +202,7 @@ def test_pre_detail_skips_cross_source_identity_already_applied(monkeypatch):
     record = _base_record("seek", "card", "card")
     record[RECORD_JOB_KEY] = "seek:101"
     record["source_metadata"]["apply_url"] = (
-        "https://careers.acme.example/jobs/req-7?source=seek"
+        "https://careers.acme.example/jobs/req-7?utm_source=seek"
     )
 
     monkeypatch.setattr(

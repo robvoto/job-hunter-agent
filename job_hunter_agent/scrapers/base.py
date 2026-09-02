@@ -351,6 +351,7 @@ class BaseJobScraper(ABC):
         discovery_capture: list[dict] | None = None,
         discovery_status: dict[str, bool] | None = None,
         search_plan_signature: str = "",
+        identity_registry=None,
     ):
         self.profile = profile
         self.llm_cache = llm_cache
@@ -362,6 +363,7 @@ class BaseJobScraper(ABC):
         self.discovery_capture = discovery_capture
         self.discovery_status = discovery_status if discovery_status is not None else {}
         self.search_plan_signature = search_plan_signature
+        self.identity_registry = identity_registry
 
     @abstractmethod
     def scrape(self) -> tuple:

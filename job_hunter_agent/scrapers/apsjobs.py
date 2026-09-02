@@ -651,6 +651,7 @@ class APSJobsScraper(BaseJobScraper):
                 or DEFAULT_SEARCH_SETTINGS[KEY_DATE_RANGE_DAYS]
             ),
             source_name="APSJobs",
+            identity_registry=self.identity_registry,
         )
 
         if self.discovery_records is not None:

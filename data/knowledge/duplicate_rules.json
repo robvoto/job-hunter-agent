@@ -1,9 +1,23 @@
 {
   "kind": "system_config",
   "name": "duplicate_rules",
-  "version": 1,
+  "version": 2,
   "source_priority": {
     "seek": 0,
     "linkedin": 1
-  }
+  },
+  "non_identity_query_parameters": [
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "utm_term",
+    "utm_content",
+    "gclid",
+    "dclid",
+    "fbclid",
+    "msclkid",
+    "mc_cid",
+    "mc_eid",
+    "trk"
+  ]
 }

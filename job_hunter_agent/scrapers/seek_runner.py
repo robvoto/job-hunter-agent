@@ -1040,7 +1040,7 @@ async def _seek_detail_batch_on_context(
                 return
             job_key = str(rec.get(rs.RECORD_JOB_KEY) or "")
             history_entry = (
-                find_confirmed_identity_history_entry(record, review_context.job_history)
+                find_confirmed_identity_history_entry(rec, review_context.job_history)
                 if job_key
                 else None
             )
@@ -1227,6 +1227,7 @@ def seek_scrape_to_records(
     discovery_capture: list[dict] | None = None,
     discovery_status: dict[str, bool] | None = None,
     search_plan_signature: str = "",
+    identity_registry=None,
 ) -> tuple:
     """Collect, review and return SEEK records while publishing bounded stage progress.
 
@@ -1249,6 +1250,7 @@ def seek_scrape_to_records(
         run_iso=run_iso,
         date_range_days=configured_date_range,
         source_name="SEEK",
+        identity_registry=identity_registry,
     )
 
     if discovery_records is not None:

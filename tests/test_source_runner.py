@@ -10,7 +10,9 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 from job_hunter_agent import source_runner
+from job_hunter_agent import job_review_pipeline
 from job_hunter_agent.logging_utils import get_log_source_scope
+from job_hunter_agent.job_review_pipeline import ReviewPipelineContext, review_pre_detail_normalized_job
 from job_hunter_agent.run_context import ScrapeRunContext
 from job_hunter_agent.source_errors import PartialSourceResultsError
 from job_hunter_agent.source_registry import SOURCE_APSJOBS, SOURCE_LINKEDIN, SOURCE_SEEK
@@ -194,6 +196,82 @@ def test_all_enabled_sources_run_concurrently_when_multiple_enabled(monkeypatch)
     run_enabled_sources(context)
 
     assert overlap_confirmed.is_set(), "enabled sources did not run concurrently"
+
+
+def test_parallel_sources_skip_exact_cross_source_duplicate_before_detail_and_llm(monkeypatch):
+    """The shared exact-identity registry owns same-run work suppression."""
+    context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
+    detail_calls = 0
+    llm_calls = 0
+    counter_lock = threading.Lock()
+
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "analyze_title_filters",
+        lambda title, profile: {"ok": True, "reason": "OK"},
+    )
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "passes_quick_card_filters",
+        lambda **kwargs: (True, "OK"),
+    )
+
+    def _process(source: str) -> SourceRunResult:
+        nonlocal detail_calls, llm_calls
+        record = {
+            "job_key": f"{source}:same-run",
+            "source": source,
+            "source_name": source,
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": f"https://{source}.example/jobs/same-run",
+            "source_metadata": {
+                "apply_url": "https://careers.acme.example/apply?job=123",
+            },
+        }
+        review_context = ReviewPipelineContext(
+            profile={"search_settings": {}},
+            job_history={},
+            audit_rows=[],
+            llm_cache={},
+            applied_job_keys=set(),
+            hidden_job_keys=set(),
+            run_iso=context.run_iso,
+            date_range_days=3,
+            source_name=source,
+            identity_registry=context.identity_registry,
+        )
+        outcome, record, _, should_fetch = review_pre_detail_normalized_job(
+            record, review_context
+        )
+        if outcome["decision"] == "KEEP" and should_fetch:
+            with counter_lock:
+                detail_calls += 1
+            record["details_text"] = "A complete source description."
+            record["details_status"] = "ok"
+            with counter_lock:
+                llm_calls += 1
+            record["decision"] = "KEEP"
+            job_review_pipeline._finalize(record, review_context)
+            return SourceRunResult(source=source, kept_records=[record], audit_rows=review_context.audit_rows)
+        return SourceRunResult(source=source, audit_rows=review_context.audit_rows)
+
+    monkeypatch.setattr(source_runner, "_run_seek_source", lambda ctx: _process(SOURCE_SEEK))
+    monkeypatch.setattr(
+        source_runner, "_run_linkedin_source", lambda ctx: _process(SOURCE_LINKEDIN)
+    )
+
+    kept, audit, _ = run_enabled_sources(context)
+
+    assert detail_calls == 1
+    assert llm_calls == 1
+    assert len(kept) == 1
+    assert len(audit) == 2
+    assert len(kept[0]["duplicate_links"]) == 1
+    assert {entry["source"] for entry in kept[0]["source_provenance"]} == {
+        SOURCE_SEEK,
+        SOURCE_LINKEDIN,
+    }
 
 
 def test_step_through_runs_sources_serially(monkeypatch):

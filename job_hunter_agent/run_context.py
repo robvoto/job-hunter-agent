@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
@@ -20,6 +20,7 @@ from job_hunter_agent.global_settings import (
     KEY_SORT_NEWEST_FIRST,
 )
 from job_hunter_agent.history import TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING
+from job_hunter_agent.job_identity import RunIdentityRegistry
 from job_hunter_agent.io_utils import (
     load_audit_rows,
     load_job_history,
@@ -89,6 +90,10 @@ class ScrapeRunContext:
     force_source_refresh: bool = False
 
     source_cache_stats: dict[str, dict[str, Any]] | None = None
+
+    # Shared by all source workers; exact identity coordination must happen
+    # before source-specific detail and fit review is paid for.
+    identity_registry: RunIdentityRegistry = field(default_factory=RunIdentityRegistry)
 
 
 def build_scrape_run_context(argv: list[str] | None = None) -> ScrapeRunContext:
