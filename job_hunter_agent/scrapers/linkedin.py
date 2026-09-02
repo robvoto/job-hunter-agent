@@ -217,6 +217,24 @@ class _LinkedInDescriptionParser(HTMLParser):
     """
 
     _MARKUP_CLASS = "show-more-less-html__markup"
+    _VOID_TAGS = frozenset(
+        {
+            "area",
+            "base",
+            "br",
+            "col",
+            "embed",
+            "hr",
+            "img",
+            "input",
+            "link",
+            "meta",
+            "param",
+            "source",
+            "track",
+            "wbr",
+        }
+    )
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -225,6 +243,8 @@ class _LinkedInDescriptionParser(HTMLParser):
         self._chunks: list[str] = []
 
     def handle_starttag(self, tag: str, attrs) -> None:
+        if tag.lower() in self._VOID_TAGS:
+            return
         self._depth += 1
         if self._capture_from_depth is None:
             class_attr = str(dict(attrs).get("class") or "")
@@ -232,6 +252,8 @@ class _LinkedInDescriptionParser(HTMLParser):
                 self._capture_from_depth = self._depth
 
     def handle_startendtag(self, tag, attrs) -> None:
+        if tag.lower() in self._VOID_TAGS:
+            return
         self.handle_starttag(tag, attrs)
         self.handle_endtag(tag)
 
