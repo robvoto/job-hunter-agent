@@ -83,6 +83,8 @@ After the task commit is verified as an ancestor of `origin/main`:
 5. If the same remote task branch exists, is fully merged into `origin/main`, and is not still needed by an active worktree/session, delete it with `git push origin --delete <branch>`.
 6. Run `git worktree prune`.
 7. Verify the task worktree no longer appears in `git worktree list` and the merged task branch no longer appears locally.
+8. Run `./scripts/check-git-closure.sh --task-sha <task-sha> --branch <branch> --worktree <path>`. This executable gate must pass before reporting `MAIN STATUS: IN MAIN`.
+9. When the human says `merge all`, asks for repository cleanup, or Git state was already unclear/dirty, also run the same command with `--strict-repo`; do not report repository cleanup complete while it reports dirty worktrees or merged local branches left behind.
 
 Never leave a clean, fully merged task worktree or branch behind "for later". Parallel worktrees are temporary execution spaces, not permanent project folders.
 
