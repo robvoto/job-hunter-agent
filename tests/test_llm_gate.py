@@ -1644,6 +1644,41 @@ def test_normalize_coverage_allows_short_atomic_requirement_echoing_its_own_text
     assert result[0]["profile_action_allowed"] is True
 
 
+def test_normalize_coverage_blocks_profile_action_for_compound_row_with_existing_partial_evidence():
+    """A collapsed AND row must not offer a duplicate/incorrect profile action."""
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "Experience with Jira, Confluence and Microsoft Office 365",
+                "importance": "preferred",
+                "requirement_type": "capability",
+                "canonical_requirement": "jira & confluence",
+                "canonical_fact_resolved": True,
+                "status": "not_shown",
+                "matched_job_text": (
+                    "Strong knowledge of Jira, Confluence and Microsoft Office 365, "
+                    "with exposure to tools such as Figma and Miro highly regarded."
+                ),
+                "profile_support": [],
+                "experience_components": [
+                    {
+                        "kind": "qualifier",
+                        "text": "Jira, Confluence, Microsoft Office 365",
+                        "profile_supported": True,
+                        "profile_evidence": ["jira & confluence"],
+                    }
+                ],
+            }
+        ],
+        valid_capability_names={"jira & confluence": "jira & confluence"},
+    )
+
+    assert len(result) == 1
+    assert result[0]["status"] == "not_shown"
+    assert result[0]["canonical_requirement"] == "jira & confluence"
+    assert result[0]["profile_action_allowed"] is False
+
+
 def test_normalize_coverage_blocks_profile_action_when_canonical_fact_resolved_is_missing():
     # A canonical label alone is not a profile-learning decision. Missing the
     # LLM-owned canonical_fact_resolved judgement fails closed.
