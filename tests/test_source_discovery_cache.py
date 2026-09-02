@@ -154,6 +154,33 @@ def test_first_search_misses_and_second_identical_search_avoids_source(monkeypat
     assert calls[1]["discovery_records"] == [{"job_key": "apsjobs:1", "title": "Policy"}]
 
 
+def test_expired_search_plan_bypasses_fresh_source_snapshot(monkeypatch):
+    from job_hunter_agent import source_runner
+
+    _clear_cache()
+    context = _make_context()
+    context.enabled_sources = [SOURCE_APSJOBS]
+    signature = source_runner._source_search_signature(context, SOURCE_APSJOBS)
+    save_source_discovery_snapshot(SOURCE_APSJOBS, signature, [{"job_key": "apsjobs:1"}])
+
+    monkeypatch.setattr(
+        source_runner,
+        "load_search_plan_state",
+        lambda **kwargs: {"probe_terms": ["policy"], "selected_terms": ["policy"]},
+    )
+    monkeypatch.setattr(
+        source_runner,
+        "planned_search_terms",
+        lambda *args, **kwargs: (["policy"], "probe_required"),
+    )
+
+    signature, status, records = source_runner._source_cache_lookup(context, SOURCE_APSJOBS)
+
+    assert signature
+    assert status == "MISS"
+    assert records is None
+
+
 def test_all_linkedin_timeouts_enter_bounded_backoff(monkeypatch):
     from job_hunter_agent.scrapers import linkedin
     from job_hunter_agent import source_runner

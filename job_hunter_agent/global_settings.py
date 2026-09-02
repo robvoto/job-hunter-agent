@@ -328,6 +328,10 @@ def get_source_discovery_cache_max_age_minutes() -> int:
     return int(load_global_settings()[KEY_CACHE_SETTINGS][KEY_SOURCE_DISCOVERY_CACHE_MAX_AGE_MINUTES])
 
 
+def get_search_plan_max_age_minutes() -> int:
+    return int(load_global_settings()[KEY_CACHE_SETTINGS][KEY_SEARCH_PLAN_MAX_AGE_MINUTES])
+
+
 def get_source_discovery_cache_max_entries() -> int:
     return int(load_global_settings()[KEY_CACHE_SETTINGS][KEY_SOURCE_DISCOVERY_CACHE_MAX_ENTRIES])
 
@@ -336,10 +340,10 @@ def get_linkedin_failure_backoff_minutes() -> int:
     return int(load_global_settings()[KEY_CACHE_SETTINGS][KEY_LINKEDIN_FAILURE_BACKOFF_MINUTES])
 
 
-def get_seek_search_plan_min_corroboration_samples() -> int:
+def get_search_plan_min_corroboration_samples() -> int:
     return int(
         load_global_settings()[KEY_CACHE_SETTINGS][
-            KEY_SEEK_SEARCH_PLAN_MIN_CORROBORATION_SAMPLES
+            KEY_SEARCH_PLAN_MIN_CORROBORATION_SAMPLES
         ]
     )
 

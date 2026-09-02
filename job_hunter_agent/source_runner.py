@@ -35,6 +35,8 @@ from job_hunter_agent.global_settings import (
     KEY_SEEK_MAX_PAGES,
     KEY_SORT_NEWEST_FIRST,
     get_linkedin_stale_fallback_max_age_minutes,
+    get_search_plan_max_age_minutes,
+    get_search_plan_min_corroboration_samples,
     get_seek_assisted_verification_enabled,
 )
 from job_hunter_agent.scrapers.apsjobs import APSJobsScraper
@@ -64,6 +66,7 @@ from job_hunter_agent.source_discovery_cache import (
     save_source_discovery_snapshot,
     save_source_failure_state,
 )
+from job_hunter_agent.search_plan_state import load_search_plan_state, planned_search_terms
 
 logger = logging.getLogger(__name__)
 
@@ -219,10 +222,62 @@ def _reevaluate_stale_posting_ages(
     return adjusted
 
 
+def _search_plan_requires_probe(
+    context: ScrapeRunContext, source: str, signature: str
+) -> bool:
+    """Return whether an existing learned plan has expired before cache reuse."""
+    if source == SOURCE_SEEK:
+        targets = build_seek_search_targets(
+            context.profile, context.configured_date_range, context.sort_newest_first
+        )
+        term_key = "keywords"
+    elif source == SOURCE_LINKEDIN:
+        from job_hunter_agent.scrapers.linkedin import build_linkedin_search_targets
+
+        targets = build_linkedin_search_targets(context.search_settings, context.profile)
+        term_key = "search_term"
+    elif source == SOURCE_APSJOBS:
+        from job_hunter_agent.scrapers.apsjobs import build_apsjobs_search_targets
+
+        targets = build_apsjobs_search_targets(context.search_settings, context.profile)[1]
+        term_key = "search_term"
+    else:
+        return False
+
+    terms_by_location: dict[str, list[str]] = {}
+    for target in targets:
+        location = str(target.get("location") or "")
+        term = str(target.get(term_key) or "").strip()
+        if term:
+            terms_by_location.setdefault(location, []).append(term)
+
+    for location, probe_terms in terms_by_location.items():
+        state = load_search_plan_state(source=source.lower(), signature=signature, location=location)
+        if not state:
+            continue
+        _, plan_source = planned_search_terms(
+            state,
+            probe_terms,
+            min_corroboration_samples=get_search_plan_min_corroboration_samples(),
+            max_age_minutes=get_search_plan_max_age_minutes(),
+        )
+        if plan_source != "remembered":
+            logger.info(
+                "[%s][SEARCH_PLAN] bypassing source-result cache; existing plan requires a bounded probe location=%r",
+                source.upper(),
+                location or "(all)",
+            )
+            return True
+    return False
+
+
 def _source_cache_lookup(context: ScrapeRunContext, source: str) -> tuple[str, str, list[dict] | None]:
     signature = _source_search_signature(context, source)
     if context.force_source_refresh:
         logger.info("[%s][SOURCE_CACHE] MISS reason=force_refresh", source.upper())
+        return signature, "MISS", None
+    if _search_plan_requires_probe(context, source, signature):
+        logger.info("[%s][SOURCE_CACHE] MISS reason=search_plan_probe_required", source.upper())
         return signature, "MISS", None
     snapshot = load_source_discovery_snapshot(source, signature)
     if snapshot is not None:
@@ -574,6 +629,7 @@ def _run_linkedin_source(context: ScrapeRunContext) -> SourceRunResult:
             discovery_records=cached_records,
             discovery_capture=captured_records,
             discovery_status=failure_state,
+            search_plan_signature=signature,
         )
         kept, audit, skills = li.scrape()
 
@@ -780,6 +836,7 @@ def _run_apsjobs_source(context: ScrapeRunContext) -> SourceRunResult:
             discovery_records=cached_records,
             discovery_capture=captured_records,
             discovery_status=failure_state,
+            search_plan_signature=signature,
         )
         kept, audit, skills = scraper.scrape()
         return SourceRunResult(

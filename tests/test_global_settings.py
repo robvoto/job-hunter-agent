@@ -86,6 +86,8 @@ def test_save_global_settings_normalizes_values(isolated_db):
                 "candidate_application_history_cache_max_age_days": "90",
                 "occupation_title_cache_max_entries": "9000",
                 "occupation_title_cache_max_age_days": "400",
+                "source_discovery_cache_max_age_minutes": "75",
+                "search_plan_max_age_minutes": "10080",
             },
             "llm_settings": {
                 "model_options": [
@@ -159,6 +161,10 @@ def test_save_global_settings_normalizes_values(isolated_db):
     assert saved["cache_settings"]["occupation_title_cache_max_entries"] == 9000
 
     assert saved["cache_settings"]["occupation_title_cache_max_age_days"] == 400
+
+    assert saved["cache_settings"]["source_discovery_cache_max_age_minutes"] == 75
+
+    assert saved["cache_settings"]["search_plan_max_age_minutes"] == 10080
 
     assert "capability_strength_presets" in saved["onboarding_settings"]
 

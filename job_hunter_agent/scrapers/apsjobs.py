@@ -18,6 +18,8 @@ from job_hunter_agent.global_settings import (
     DEFAULT_SEARCH_SETTINGS,
     KEY_APSJOBS_RESULTS_PER_SEARCH,
     KEY_DATE_RANGE_DAYS,
+    get_search_plan_min_corroboration_samples,
+    get_search_plan_max_age_minutes,
 )
 from job_hunter_agent.io_utils import (
     DEBUG_CAPTURE_SOURCE_PAYLOADS,
@@ -35,6 +37,12 @@ from job_hunter_agent.paths import PLAYWRIGHT_USER_DATA_DIR
 from job_hunter_agent.posting_utils import parse_visible_posted_age_days
 from job_hunter_agent.profile_store import get_search_settings
 from job_hunter_agent.search_metrics import QueryYieldMetric, record_query_yield_metric
+from job_hunter_agent.search_plan_state import (
+    load_search_plan_state,
+    planned_search_terms,
+    save_search_plan_observation,
+    select_query_cover,
+)
 from job_hunter_agent.search_terms import ordered_profile_search_terms
 from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
@@ -561,7 +569,7 @@ class APSJobsScraper(BaseJobScraper):
         scanned_titles: list[str] = []
 
         search_settings = get_search_settings(self.profile)
-        keywords, targets = build_apsjobs_search_targets(search_settings, self.profile)
+        keywords, configured_targets = build_apsjobs_search_targets(search_settings, self.profile)
         selector_timeout = int(
             search_settings.get(
                 KEY_PLAYWRIGHT_SELECTOR_TIMEOUT,
@@ -572,6 +580,63 @@ class APSJobsScraper(BaseJobScraper):
         if not keywords:
             logger.debug("[APSJobs] no search keywords configured; skipping")
             return kept_records, audit_rows, skill_observations
+
+        # A trusted plan prunes only complete source targets. A bootstrap or
+        # stale plan deliberately runs every configured term so the source can
+        # re-measure real job-key coverage before pruning again.
+        probe_terms_by_location: dict[str, list[str]] = {}
+        plan_probe_locations: set[str] = set()
+        targets = list(configured_targets)
+        if self.search_plan_signature:
+            planned_terms_by_location: dict[str, list[str]] = {}
+            for target in configured_targets:
+                location = str(target.get("location") or "")
+                term = str(target.get("search_term") or "").strip()
+                if term:
+                    probe_terms_by_location.setdefault(location, []).append(term)
+            for location, probe_terms in probe_terms_by_location.items():
+                state = load_search_plan_state(
+                    source=self.source_name.lower(),
+                    signature=self.search_plan_signature,
+                    location=location,
+                )
+                planned_terms, plan_source = planned_search_terms(
+                    state,
+                    probe_terms,
+                    min_corroboration_samples=get_search_plan_min_corroboration_samples(),
+                    max_age_minutes=get_search_plan_max_age_minutes(),
+                )
+                planned_terms_by_location[location] = planned_terms
+                if plan_source != "remembered":
+                    plan_probe_locations.add(location)
+                skipped_terms = set(probe_terms) - set(planned_terms)
+                prior_term_job_counts = state.get("term_job_counts")
+                estimated_jobs_avoided = (
+                    sum(
+                        int(prior_term_job_counts.get(term, 0))
+                        for term in skipped_terms
+                    )
+                    if isinstance(prior_term_job_counts, dict)
+                    else 0
+                )
+                logger.info(
+                    "[APSJOBS][SEARCH_PLAN] location=%r source=%s configured_terms=%d "
+                    "planned_terms=%d skipped_terms=%d estimated_queries_avoided=%d "
+                    "estimated_detail_review_work_avoided=%d",
+                    location or "(all)",
+                    plan_source,
+                    len(probe_terms),
+                    len(planned_terms),
+                    max(0, len(probe_terms) - len(planned_terms)),
+                    max(0, len(probe_terms) - len(planned_terms)),
+                    estimated_jobs_avoided,
+                )
+            targets = [
+                target
+                for target in configured_targets
+                if str(target.get("search_term") or "").strip()
+                in planned_terms_by_location.get(str(target.get("location") or ""), [])
+            ]
 
         review_context = ReviewPipelineContext(
             profile=self.profile,
@@ -600,6 +665,10 @@ class APSJobsScraper(BaseJobScraper):
         PLAYWRIGHT_USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
         collection_complete = True
         seen_discovered_job_keys: set[str] = set()
+        probe_job_keys_by_location: dict[str, dict[str, set[str]]] = {}
+        for location in plan_probe_locations:
+            for term in probe_terms_by_location[location]:
+                probe_job_keys_by_location.setdefault(location, {})[term] = set()
         total_targets = len(targets)
         logger.debug(
             format_debug_marker(
@@ -675,6 +744,18 @@ class APSJobsScraper(BaseJobScraper):
                             discovered_links = _collect_candidate_links(
                                 page, page.url or APSJOBS_JOB_SEARCH_URL, int(target["results_wanted"])
                             )
+                            if target["location"] in plan_probe_locations:
+                                observed_keys = probe_job_keys_by_location.setdefault(
+                                    target["location"], {}
+                                ).setdefault(target["search_term"], set())
+                                observed_keys.update(
+                                    key
+                                    for key in (
+                                        normalize_job_key(link.get("url", ""), source=SOURCE_APSJOBS)
+                                        for link in discovered_links
+                                    )
+                                    if key
+                                )
                             candidate_links = _new_candidate_links(
                                 discovered_links, seen_discovered_job_keys
                             )
@@ -795,6 +876,43 @@ class APSJobsScraper(BaseJobScraper):
                 skill_observations=skill_observations,
                 original_error=exc,
             ) from exc
+
+        if self.search_plan_signature and collection_complete:
+            for location in plan_probe_locations:
+                probe_terms = probe_terms_by_location[location]
+                observed = probe_job_keys_by_location.get(location, {})
+                if set(observed) != set(probe_terms):
+                    logger.warning(
+                        "[APSJOBS][SEARCH_PLAN] not updating location=%r; complete "
+                        "per-term probe evidence was not collected",
+                        location or "(all)",
+                    )
+                    continue
+                selected_terms = select_query_cover(observed)
+                selected_job_keys: set[str] = set()
+                for term in selected_terms:
+                    selected_job_keys.update(observed.get(term, set()))
+                coverage_job_keys: set[str] = set()
+                for job_keys in observed.values():
+                    coverage_job_keys.update(job_keys)
+                remembered = save_search_plan_observation(
+                    source=self.source_name.lower(),
+                    signature=self.search_plan_signature,
+                    location=location,
+                    probe_terms=probe_terms,
+                    selected_terms=selected_terms,
+                    coverage_job_count=len(coverage_job_keys),
+                    term_job_counts={term: len(job_keys) for term, job_keys in observed.items()},
+                    selected_coverage_job_count=len(selected_job_keys),
+                )
+                logger.info(
+                    "[APSJOBS][SEARCH_PLAN] location=%r selected_terms=%r "
+                    "coverage_jobs=%d samples=%d",
+                    location or "(all)",
+                    selected_terms,
+                    len(coverage_job_keys),
+                    int(remembered.get("sample_count") or 0),
+                )
 
         logger.debug(
             format_debug_marker(

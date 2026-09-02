@@ -98,8 +98,9 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_OCCUPATION_TITLE_CACHE_MAX_ENTRIES,
     KEY_SOURCE_DISCOVERY_CACHE_MAX_ENTRIES,
     KEY_SOURCE_DISCOVERY_CACHE_MAX_AGE_MINUTES,
+    KEY_SEARCH_PLAN_MAX_AGE_MINUTES,
     KEY_LINKEDIN_FAILURE_BACKOFF_MINUTES,
-    KEY_SEEK_SEARCH_PLAN_MIN_CORROBORATION_SAMPLES,
+    KEY_SEARCH_PLAN_MIN_CORROBORATION_SAMPLES,
     KEY_LINKEDIN_STALE_FALLBACK_MAX_AGE_MINUTES,
     KEY_LINKEDIN_MAX_CONSECUTIVE_TARGET_FAILURES,
     KEY_PLAYWRIGHT_BROWSER_MODE,
@@ -1020,6 +1021,13 @@ def normalize_global_settings(
             normalized_cache_limits[KEY_SOURCE_DISCOVERY_CACHE_MAX_AGE_MINUTES]["min"],
             normalized_cache_limits[KEY_SOURCE_DISCOVERY_CACHE_MAX_AGE_MINUTES]["max"],
         ),
+        KEY_SEARCH_PLAN_MAX_AGE_MINUTES: _require_int(
+            cache_source,
+            KEY_SEARCH_PLAN_MAX_AGE_MINUTES,
+            DEFAULT_CACHE_SETTINGS[KEY_SEARCH_PLAN_MAX_AGE_MINUTES],
+            normalized_cache_limits[KEY_SEARCH_PLAN_MAX_AGE_MINUTES]["min"],
+            normalized_cache_limits[KEY_SEARCH_PLAN_MAX_AGE_MINUTES]["max"],
+        ),
         KEY_LINKEDIN_FAILURE_BACKOFF_MINUTES: _require_int(
             cache_source,
             KEY_LINKEDIN_FAILURE_BACKOFF_MINUTES,
@@ -1027,12 +1035,12 @@ def normalize_global_settings(
             normalized_cache_limits[KEY_LINKEDIN_FAILURE_BACKOFF_MINUTES]["min"],
             normalized_cache_limits[KEY_LINKEDIN_FAILURE_BACKOFF_MINUTES]["max"],
         ),
-        KEY_SEEK_SEARCH_PLAN_MIN_CORROBORATION_SAMPLES: _require_int(
+        KEY_SEARCH_PLAN_MIN_CORROBORATION_SAMPLES: _require_int(
             cache_source,
-            KEY_SEEK_SEARCH_PLAN_MIN_CORROBORATION_SAMPLES,
-            DEFAULT_CACHE_SETTINGS[KEY_SEEK_SEARCH_PLAN_MIN_CORROBORATION_SAMPLES],
-            normalized_cache_limits[KEY_SEEK_SEARCH_PLAN_MIN_CORROBORATION_SAMPLES]["min"],
-            normalized_cache_limits[KEY_SEEK_SEARCH_PLAN_MIN_CORROBORATION_SAMPLES]["max"],
+            KEY_SEARCH_PLAN_MIN_CORROBORATION_SAMPLES,
+            DEFAULT_CACHE_SETTINGS[KEY_SEARCH_PLAN_MIN_CORROBORATION_SAMPLES],
+            normalized_cache_limits[KEY_SEARCH_PLAN_MIN_CORROBORATION_SAMPLES]["min"],
+            normalized_cache_limits[KEY_SEARCH_PLAN_MIN_CORROBORATION_SAMPLES]["max"],
         ),
         KEY_LINKEDIN_STALE_FALLBACK_MAX_AGE_MINUTES: _require_int(
             cache_source,

@@ -85,8 +85,9 @@ export const JobHunterAdminSettings = (function () {
     cache_occupation_title_cache_max_age_days: ['cache_settings', 'occupation_title_cache_max_age_days'],
     cache_source_discovery_cache_max_entries: ['cache_settings', 'source_discovery_cache_max_entries'],
     cache_source_discovery_cache_max_age_minutes: ['cache_settings', 'source_discovery_cache_max_age_minutes'],
+    cache_search_plan_max_age_minutes: ['cache_settings', 'search_plan_max_age_minutes'],
     cache_linkedin_failure_backoff_minutes: ['cache_settings', 'linkedin_failure_backoff_minutes'],
-    cache_seek_search_plan_min_corroboration_samples: ['cache_settings', 'seek_search_plan_min_corroboration_samples'],
+    cache_search_plan_min_corroboration_samples: ['cache_settings', 'search_plan_min_corroboration_samples'],
     cache_linkedin_stale_fallback_max_age_minutes: ['cache_settings', 'linkedin_stale_fallback_max_age_minutes'],
     cache_linkedin_max_consecutive_target_failures: ['cache_settings', 'linkedin_max_consecutive_target_failures'],
     description_trust_min_trusted_description_length: ['description_trust_settings', 'min_trusted_description_length'],
@@ -305,8 +306,9 @@ export const JobHunterAdminSettings = (function () {
     setFieldValue('cache_occupation_title_cache_max_age_days', cacheSettings.occupation_title_cache_max_age_days);
     setFieldValue('cache_source_discovery_cache_max_entries', cacheSettings.source_discovery_cache_max_entries);
     setFieldValue('cache_source_discovery_cache_max_age_minutes', cacheSettings.source_discovery_cache_max_age_minutes);
+    setFieldValue('cache_search_plan_max_age_minutes', cacheSettings.search_plan_max_age_minutes);
     setFieldValue('cache_linkedin_failure_backoff_minutes', cacheSettings.linkedin_failure_backoff_minutes);
-    setFieldValue('cache_seek_search_plan_min_corroboration_samples', cacheSettings.seek_search_plan_min_corroboration_samples);
+    setFieldValue('cache_search_plan_min_corroboration_samples', cacheSettings.search_plan_min_corroboration_samples);
     setFieldValue('cache_linkedin_stale_fallback_max_age_minutes', cacheSettings.linkedin_stale_fallback_max_age_minutes);
     setFieldValue('cache_linkedin_max_consecutive_target_failures', cacheSettings.linkedin_max_consecutive_target_failures);
     setFieldValue('onboarding_extraction_lookback_years', onboarding.extraction_lookback_years);
@@ -547,13 +549,17 @@ export const JobHunterAdminSettings = (function () {
           'cache_source_discovery_cache_max_age_minutes',
           currentCacheSettings.source_discovery_cache_max_age_minutes,
         ),
+        search_plan_max_age_minutes: readNumber(
+          'cache_search_plan_max_age_minutes',
+          currentCacheSettings.search_plan_max_age_minutes,
+        ),
         linkedin_failure_backoff_minutes: readNumber(
           'cache_linkedin_failure_backoff_minutes',
           currentCacheSettings.linkedin_failure_backoff_minutes,
         ),
-        seek_search_plan_min_corroboration_samples: readNumber(
-          'cache_seek_search_plan_min_corroboration_samples',
-          currentCacheSettings.seek_search_plan_min_corroboration_samples,
+        search_plan_min_corroboration_samples: readNumber(
+          'cache_search_plan_min_corroboration_samples',
+          currentCacheSettings.search_plan_min_corroboration_samples,
         ),
         linkedin_stale_fallback_max_age_minutes: readNumber(
           'cache_linkedin_stale_fallback_max_age_minutes',

@@ -134,6 +134,82 @@ def test_first_visible_locator_falls_through_to_next_selector():
     assert result.is_visible() is True
 
 
+def test_apsjobs_search_plan_prunes_trusted_redundant_role_target(monkeypatch, tmp_path):
+    class _Page:
+        url = "https://www.apsjobs.gov.au/s/job-search"
+
+        def goto(self, *_args, **_kwargs):
+            return None
+
+        def wait_for_selector(self, *_args, **_kwargs):
+            return None
+
+        def close(self):
+            return None
+
+    class _BrowserContext:
+        def new_page(self):
+            return _Page()
+
+        def close(self):
+            return None
+
+    class _Chromium:
+        def launch_persistent_context(self, **_kwargs):
+            return _BrowserContext()
+
+    class _Playwright:
+        chromium = _Chromium()
+
+    class _PlaywrightContext:
+        def __enter__(self):
+            return _Playwright()
+
+        def __exit__(self, *_args):
+            return None
+
+    scraper = apsjobs_module.APSJobsScraper(
+        profile={},
+        llm_cache={},
+        job_history={},
+        applied_job_keys=set(),
+        hidden_job_keys=set(),
+        run_iso="2026-06-22T09:00:00+10:00",
+        search_plan_signature="signature-1",
+    )
+    targets = [
+        {"search_term": "Role A", "location": "NSW", "results_wanted": 1},
+        {"search_term": "Role B", "location": "NSW", "results_wanted": 1},
+    ]
+    monkeypatch.setattr(
+        apsjobs_module,
+        "build_apsjobs_search_targets",
+        lambda _settings, _profile: ("Role A", targets),
+    )
+    monkeypatch.setattr(apsjobs_module, "load_search_plan_state", lambda **_kwargs: {})
+    monkeypatch.setattr(
+        apsjobs_module,
+        "planned_search_terms",
+        lambda *_args, **_kwargs: (["Role B"], "remembered"),
+    )
+    monkeypatch.setattr(apsjobs_module, "get_search_plan_min_corroboration_samples", lambda: 2)
+    monkeypatch.setattr(apsjobs_module, "get_search_plan_max_age_minutes", lambda: 10080)
+    monkeypatch.setattr(apsjobs_module, "PLAYWRIGHT_USER_DATA_DIR", tmp_path)
+    fetched_terms: list[str] = []
+    monkeypatch.setattr(
+        apsjobs_module,
+        "_build_apsjobs_search_url",
+        lambda term, _location: fetched_terms.append(term) or "https://example.test/search",
+    )
+    monkeypatch.setattr(apsjobs_module, "_collect_candidate_links", lambda *_args: [])
+    monkeypatch.setattr(apsjobs_module, "sync_playwright", lambda: _PlaywrightContext())
+
+    scraper.scrape()
+
+    assert fetched_terms == ["Role B"]
+    assert scraper.discovery_status["complete"] is True
+
+
 def test_first_visible_locator_returns_none_when_nothing_visible():
     page = _FakeVisibilityPage(
         {

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import job_hunter_agent.record_schema as rs
 from job_hunter_agent.scrapers import seek_runner
 
@@ -293,6 +295,7 @@ def test_seek_scrape_uses_remembered_all_probe_plan_for_deep_pagination(monkeypa
             "selected_terms": ["Senior Business Analyst"],
             "sample_count": 2,
             "selection_counts": {"Senior Business Analyst": 2},
+            "observed_at": datetime.now(timezone.utc).isoformat(),
         },
     )
     saved_observations: list[dict] = []

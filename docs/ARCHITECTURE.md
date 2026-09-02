@@ -83,6 +83,7 @@ Primary modules:
 * `scrapers/apsjobs.py` — APSJobs Playwright scraper for government-seeking profiles
 * `source_runner.py` — routes enabled sources; checks the persisted per-source discovery snapshot before running a board search; enabled sources run concurrently via `ThreadPoolExecutor` with isolated mutable state per source when more than one source is active; distinguishes worker completion from source health (`healthy`, `partial_failure`, `full_failure`, `stopped`); commits discovery snapshots only for complete successful collections; step-through keeps the run serial for manual inspection; SEEK can pause a visible persistent browser for manual verification when the assisted flag is enabled
 * `source_discovery_cache.py` — persists normalized pre-decision source evidence and bounded LinkedIn failure state; it never stores final fit decisions. Failed, partial, stopped, or interrupted collections cannot overwrite a known-good success snapshot.
+* `search_plan_state.py` — persists complete per-user/source/signature/location role-query coverage and corroborated deterministic query covers; fresh trusted covers prune redundant LinkedIn and APSJobs targets, while SEEK retains its bounded first-page probes and prunes deeper pagination.
 * `source_connector.py` — orchestration entry point
 
 Responsibilities:

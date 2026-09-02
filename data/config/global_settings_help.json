@@ -93,8 +93,9 @@
         "occupation_title_cache_max_age_days": "Allowed min/max age for occupation-title classification cache rows before pruning.",
         "source_discovery_cache_max_entries": "Allowed min/max number of source discovery snapshots retained per user.",
         "source_discovery_cache_max_age_minutes": "Allowed min/max freshness window for successful source discovery snapshots.",
+        "search_plan_max_age_minutes": "Allowed min/max freshness window for a learned source search plan before a bounded complete probe is required again.",
         "linkedin_failure_backoff_minutes": "Allowed min/max temporary backoff window after a fully timed-out identical LinkedIn search.",
-        "seek_search_plan_min_corroboration_samples": "Allowed min/max number of matching observations a remembered SEEK search plan must accumulate before it is trusted to skip deeper pagination for any term.",
+        "search_plan_min_corroboration_samples": "Allowed min/max number of matching complete observations a remembered source search plan must accumulate before it is trusted to prune redundant role queries.",
         "linkedin_stale_fallback_max_age_minutes": "Allowed min/max age of a known-good LinkedIn snapshot that may still be reused when a live search is unavailable.",
         "linkedin_max_consecutive_target_failures": "Allowed min/max consecutive LinkedIn target failures before the run stops submitting further searches."
       }
@@ -144,9 +145,10 @@
         "occupation_title_cache_max_entries": "Maximum number of saved occupation-title classification cache rows kept in SQLite.",
         "occupation_title_cache_max_age_days": "Maximum age for saved occupation-title classification cache rows before pruning.",
         "source_discovery_cache_max_entries": "Maximum number of saved source discovery snapshots kept per user.",
-        "source_discovery_cache_max_age_minutes": "How many minutes a successful source discovery snapshot can be reused.",
+        "source_discovery_cache_max_age_minutes": "How many minutes a successful source discovery snapshot can be reused. This does not control learned search-plan freshness.",
+        "search_plan_max_age_minutes": "How many minutes a trusted learned search plan may prune redundant role queries before every configured role term is probed again. This is independent of source-result cache freshness.",
         "linkedin_failure_backoff_minutes": "How many minutes a fully timed-out identical LinkedIn search is suppressed before retrying.",
-        "seek_search_plan_min_corroboration_samples": "How many matching observations a remembered SEEK search plan must accumulate before its previously selected terms are trusted to skip deeper pagination for other terms. Below this, every configured term is expanded conservatively.",
+        "search_plan_min_corroboration_samples": "How many matching complete observations a remembered source search plan must accumulate before its selected role terms are trusted to prune redundant queries. Below this, every configured term is probed conservatively.",
         "linkedin_stale_fallback_max_age_minutes": "How old a known-good LinkedIn discovery snapshot may be and still be served when an identical live search is in backoff or just failed entirely. Posting ages are conservatively aged forward before date-range filtering.",
         "linkedin_max_consecutive_target_failures": "How many consecutive LinkedIn target failures (timeouts or errors) are allowed in one run before the circuit breaker stops submitting further searches."
       }

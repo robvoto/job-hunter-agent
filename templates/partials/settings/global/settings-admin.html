@@ -433,13 +433,17 @@
             <input id="cache_source_discovery_cache_max_age_minutes" type="number" min="1" max="10080" step="1">
             <div class="field-help">How long a successful identical source search can reuse its discovery snapshot.</div>
 
+            <label for="cache_search_plan_max_age_minutes">Learned search plan freshness (minutes)</label>
+            <input id="cache_search_plan_max_age_minutes" type="number" min="1" max="10080" step="1">
+            <div class="field-help">How long a trusted learned plan may skip redundant role queries before a bounded complete probe refreshes it. This is separate from source-result cache freshness.</div>
+
             <label for="cache_linkedin_failure_backoff_minutes">LinkedIn failure backoff (minutes)</label>
             <input id="cache_linkedin_failure_backoff_minutes" type="number" min="1" max="1440" step="1">
             <div class="field-help">Temporary retry delay after every target in an identical LinkedIn search times out.</div>
 
-            <label for="cache_seek_search_plan_min_corroboration_samples">SEEK search plan min corroboration samples</label>
-            <input id="cache_seek_search_plan_min_corroboration_samples" type="number" min="1" max="10" step="1">
-            <div class="field-help">How many matching observations a remembered SEEK search plan must accumulate before its previously selected terms are trusted to skip deeper pagination for other terms. Below this, every configured term is expanded conservatively.</div>
+            <label for="cache_search_plan_min_corroboration_samples">Search plan min corroboration samples</label>
+            <input id="cache_search_plan_min_corroboration_samples" type="number" min="1" max="10" step="1">
+            <div class="field-help">How many matching complete observations a remembered source search plan must accumulate before its selected terms are trusted to skip redundant queries. Below this, every configured term is probed conservatively.</div>
 
             <label for="cache_linkedin_stale_fallback_max_age_minutes">LinkedIn stale fallback max age (minutes)</label>
             <input id="cache_linkedin_stale_fallback_max_age_minutes" type="number" min="1" max="10080" step="1">
