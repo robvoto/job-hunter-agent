@@ -119,7 +119,6 @@ RECORD_LAST_BLOCK_TITLE_AT_KEY = "last_block_title_at"
 RECORD_TIMES_BLOCK_TITLE_KEY = "times_block_title"
 RECORD_REJECT_TITLE_RULES_KEY = "reject_title_rules"
 RECORD_REJECT_DESCRIPTION_PHRASE_RULES_KEY = "reject_description_phrase_rules"
-RECORD_APPLICATION_HISTORY_KEY = "application_history"
 
 RECORD_REQUIRED_PROFILE_GAPS_KEY = "required_profile_gaps"
 
