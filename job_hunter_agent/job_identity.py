@@ -757,6 +757,25 @@ def find_confirmed_duplicate(record: dict, pool: Iterable[dict]) -> Optional[dic
     return None
 
 
+def find_confirmed_identity_history_entry(
+    record: dict, history: dict[str, dict]
+) -> Optional[dict]:
+    """Return history for an exact identity, including a previously linked source."""
+
+    job_key = _normalized_job_key(record)
+    if job_key and isinstance(history.get(job_key), dict):
+        return history[job_key]
+
+    for entry in history.values():
+        if not isinstance(entry, dict):
+            continue
+        for candidate_key in ("last_kept_snapshot", "detail_evidence"):
+            candidate = entry.get(candidate_key)
+            if isinstance(candidate, dict) and are_jobs_confirmed_duplicates(record, candidate):
+                return entry
+    return None
+
+
 def deduplicate_across_sources(records: List[dict]) -> List[dict]:
     """Collapse only confirmed duplicates and keep explicit duplicate links."""
 

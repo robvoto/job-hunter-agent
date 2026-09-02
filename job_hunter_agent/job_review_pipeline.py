@@ -116,7 +116,10 @@ from job_hunter_agent.fit_scoring import (
 )
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
 from job_hunter_agent.history import apply_kept_job_reuse, can_reuse_kept_job, finalize_record
-from job_hunter_agent.job_identity import find_confirmed_duplicate
+from job_hunter_agent.job_identity import (
+    find_confirmed_duplicate,
+    find_confirmed_identity_history_entry,
+)
 from job_hunter_agent.job_types import infer_work_type_from_description
 from job_hunter_agent.job_quality import (
     detect_external_date_signals,
@@ -1432,7 +1435,9 @@ def review_pre_detail_normalized_job(
         _finalize_job_result(record, context, reason=card_reason)
         return _build_outcome(record), record, skill_observations, False
 
-    history_entry = context.job_history.get(job_key, {})
+    history_entry = context.job_history.get(job_key) or find_confirmed_identity_history_entry(
+        record, context.job_history
+    ) or {}
     if not _defer_keep_reuse_until_post_detail(record) and can_reuse_kept_job(
         history_entry, record, profile
     ):

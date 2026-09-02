@@ -13,6 +13,7 @@ from job_hunter_agent.job_identity import (
     are_jobs_confirmed_duplicates,
     deduplicate_across_sources,
     find_confirmed_duplicate,
+    find_confirmed_identity_history_entry,
     normalize_job_key,
 )
 from job_hunter_agent.record_schema import (
@@ -166,6 +167,27 @@ def test_same_ats_id_from_different_ats_authorities_is_not_a_duplicate():
             },
         },
     )
+
+
+def test_confirmed_identity_history_lookup_reuses_linked_source_entry():
+    entry = {
+        "detail_evidence": {
+            "source_metadata": {
+                "apply_url": "https://careers.acme.example/jobs/req-7",
+            }
+        }
+    }
+
+    assert find_confirmed_identity_history_entry(
+        {
+            "job_key": "seek:101",
+            "source": "seek",
+            "source_metadata": {
+                "apply_url": "https://careers.acme.example/jobs/req-7?source=seek",
+            },
+        },
+        {"linkedin:202": entry},
+    ) is entry
 
 
 def test_find_confirmed_duplicate_returns_first_matching_applied_record():

@@ -39,6 +39,7 @@ from job_hunter_agent.history import (
     can_reuse_detail_evidence,
     finalize_record,
 )
+from job_hunter_agent.job_identity import find_confirmed_identity_history_entry
 from job_hunter_agent.io_utils import DEBUG_CAPTURE_SOURCE_PAYLOADS, write_source_payload_debug
 from job_hunter_agent.job_quality import detect_broad_engagement_signal
 from job_hunter_agent.job_review_pipeline import (
@@ -1038,7 +1039,11 @@ async def _seek_detail_batch_on_context(
                 )
                 return
             job_key = str(rec.get(rs.RECORD_JOB_KEY) or "")
-            history_entry = review_context.job_history.get(job_key) if job_key else None
+            history_entry = (
+                find_confirmed_identity_history_entry(record, review_context.job_history)
+                if job_key
+                else None
+            )
             cache_hit = history_entry is not None and can_reuse_detail_evidence(
                 history_entry, review_context.date_range_days, review_context.run_iso
             )
