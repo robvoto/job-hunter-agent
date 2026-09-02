@@ -75,6 +75,10 @@ def _walk_label_strings(obj, path=""):
 _LABEL_DUPLICATION_BASELINE = {
     ("onboarding_flow_labels.clean_search_error", "templates/static/common/account-bar.js"),
     (
+        "workspace_card_labels.gap_confirm_not_have_label",
+        "templates/static/settings/shared/settings-review-panel.js",
+    ),
+    (
         "workspace_page_labels.rejection_panel_copy",
         "templates/static/results/results-page.js",
     ),

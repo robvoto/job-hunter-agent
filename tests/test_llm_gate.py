@@ -190,6 +190,50 @@ def test_fit_review_prompt_includes_role_experience_matrix(monkeypatch):
     assert "explicit years or months of experience" in prompt
 
 
+def test_role_experience_matrix_shows_accrued_months_for_a_current_segment(monkeypatch):
+    from datetime import date
+
+    from job_hunter_agent.role_experience_duration import whole_months_between
+
+    duration_as_of = "2024-01-01"
+    stored_months = 42
+    monkeypatch.setattr(
+        llm_gate,
+        "load_profile",
+        lambda: {
+            "candidate_capabilities": [{"name": "business analysis", "level": "strong"}],
+            "candidate_eligibility": [],
+            "role_experience": [
+                {
+                    "normalized_title": "business analyst",
+                    "total_duration_months": stored_months,
+                    "most_recent_end_year": 2026,
+                    "segments": [
+                        {
+                            "duration_months": stored_months,
+                            "is_current": True,
+                            "duration_as_of": duration_as_of,
+                        }
+                    ],
+                    "title_variants": [],
+                }
+            ],
+            "match_preferences": {},
+            "salary_preferences": {},
+            "candidate_profile_tiers": {},
+            "onboarding_settings": {},
+        },
+    )
+
+    prompt = llm_gate._build_learning_prompt("Job description", fit_review=True)
+
+    accrued = stored_months + whole_months_between(
+        date.fromisoformat(duration_as_of), date.today()
+    )
+    assert accrued > stored_months
+    assert f"business analyst: {accrued} months" in prompt
+
+
 def test_learning_only_prompt_retains_learning_guidance():
     prompt = llm_gate._build_learning_prompt("Job description", fit_review=False)
 

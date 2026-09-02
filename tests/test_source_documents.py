@@ -90,6 +90,7 @@ def test_run_onboarding_uses_llm_titles_without_parser(monkeypatch):
                         "normalized_title": "agile project coordinator",
             "total_duration_months": 24,
             "most_recent_end_year": 2022,
+            "segments": [{"duration_months": 24, "is_current": False}],
             "title_variants": [
                 {
                     "title": "Agile Project Coordinator",
@@ -103,6 +104,7 @@ def test_run_onboarding_uses_llm_titles_without_parser(monkeypatch):
                         "normalized_title": "scrum master",
             "total_duration_months": 24,
             "most_recent_end_year": 2026,
+            "segments": [{"duration_months": 24, "is_current": True}],
             "title_variants": [
                 {
                     "title": "Scrum Master",
@@ -297,3 +299,89 @@ def test_run_onboarding_fails_when_llm_omits_required_fields(monkeypatch, fixtur
                 ]
             }
         )
+
+
+def test_refresh_role_history_from_saved_cv_only_touches_role_experience(monkeypatch):
+    """The targeted refresh re-extracts role_experience with segments and leaves
+    every other profile section exactly as it was."""
+    starting_profile = {
+        "candidate_capabilities": [
+            {"name": "stakeholder engagement", "level": "strong", "aliases": []}
+        ],
+        "candidate_eligibility": [{"name": "PV clearance", "value": True}],
+        "candidate_qualifications": [{"name": "CBAP", "held": True}],
+        "match_preferences": {"work_mode_preference": "hybrid"},
+        "onboarding_settings": {},
+        # legacy aggregate-only row, no segments
+        "role_experience": [
+            {"normalized_title": "business analyst", "total_duration_months": 24}
+        ],
+    }
+    applied_patches: list[dict] = []
+
+    def fake_patch_profile(patch):
+        applied_patches.append(patch)
+        return deep_merge(starting_profile, patch)
+
+    monkeypatch.setattr(
+        source_documents,
+        "load_source_materials",
+        lambda create_if_missing=False: {
+            "profile_sources": [
+                {"label": "Primary CV", "filename": "cv.txt", "content": _CV_CONTENT}
+            ]
+        },
+    )
+    monkeypatch.setattr(source_documents, "normalize_source_materials", lambda payload: payload)
+    monkeypatch.setattr(source_documents, "load_profile", lambda: starting_profile)
+    monkeypatch.setattr(source_documents, "patch_profile", fake_patch_profile)
+    monkeypatch.setattr(
+        profile_learning,
+        "_llm_extract_from_cv",
+        lambda text, lookback_years, alias_limit: {
+            "capabilities": [
+                {
+                    "name": "agile delivery",
+                    "level": "strong",
+                    "aliases": [],
+                    "icon_key": "delivery_project",
+                    "atomic_concept": True,
+                    "needs_review": False,
+                }
+            ],
+            "role_experience": [
+                {"title": "Business Analyst", "duration_months": 30, "end_year": 2022},
+                {
+                    "title": "Business Analyst",
+                    "duration_months": 18,
+                    "end_year": 2026,
+                    "is_current": True,
+                },
+            ],
+            "role_titles": ["Business Analyst"],
+            "preferred_role_titles": ["Business Analyst"],
+            "alternative_role_titles": [],
+            "match_preferences": {},
+        },
+    )
+
+    result = source_documents.refresh_role_history_from_saved_cv()
+
+    assert result["ok"] is True
+    # Only role_experience is patched.
+    assert [set(patch) for patch in applied_patches] == [{"role_experience"}]
+
+    rows = result["role_experience"]
+    assert len(rows) == 1
+    assert rows[0]["normalized_title"] == "business analyst"
+    assert rows[0]["segments"] == [
+        {"duration_months": 30, "is_current": False},
+        {"duration_months": 18, "is_current": True},
+    ]
+
+    # Every other section is untouched.
+    updated = result["profile"]
+    assert updated["candidate_capabilities"] == starting_profile["candidate_capabilities"]
+    assert updated["candidate_eligibility"] == starting_profile["candidate_eligibility"]
+    assert updated["candidate_qualifications"] == starting_profile["candidate_qualifications"]
+    assert updated["match_preferences"] == starting_profile["match_preferences"]
