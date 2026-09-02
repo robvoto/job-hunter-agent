@@ -567,6 +567,7 @@ def test_settings_sidebar_has_client_side_section_search():
     assert "group.classList.remove('is-active');" in js
     assert "saveActivePage()" in js
     assert "buildCandidateSettingsSaveMessage" in js
+    assert "showStatus(sharedUiLabels.settings_saved_success, 'success');" in js
     assert "settings_saved_no_effective_changes" in js
     assert "el.id === 'settings_section_search'" in js
     assert ".settings-sidebar-search" in css
