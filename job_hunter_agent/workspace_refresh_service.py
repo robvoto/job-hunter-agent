@@ -17,6 +17,7 @@ from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
 
 _refresh_state_lock = threading.Lock()
 _refresh_states: dict[str, str] = {}
+_workspace_rebuild_lock = threading.Lock()
 
 
 def workspace_refresh_status(refresh_id: str) -> str:
@@ -51,8 +52,12 @@ def rebuild_workspace_after_rule_change(
         _refresh_states[refresh_id] = "pending"
 
     def _rebuild() -> None:
-        try:
+        with _workspace_rebuild_lock:
             rebuild_workspace_results(reason=f"{reason}; applying saved filters to current results")
+
+    def _run_rebuild() -> None:
+        try:
+            _rebuild()
         except Exception:
             with _refresh_state_lock:
                 _refresh_states[refresh_id] = "error"
@@ -61,15 +66,17 @@ def rebuild_workspace_after_rule_change(
             with _refresh_state_lock:
                 _refresh_states[refresh_id] = "ready"
 
+    if wait_for_completion:
+        _run_rebuild()
+        return refresh_id
+
     ctx = contextvars.copy_context()
     rebuild_thread = threading.Thread(
         target=ctx.run,
-        args=(_rebuild,),
+        args=(_run_rebuild,),
         daemon=True,
         name="job-hunter-workspace-rebuild",
     )
     rebuild_thread.start()
-    if wait_for_completion:
-        rebuild_thread.join()
 
     return refresh_id

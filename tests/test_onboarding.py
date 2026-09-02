@@ -1386,7 +1386,7 @@ def test_remove_review_key_supports_unapply(monkeypatch):
     assert saved_profile["review_controls"]["hidden_job_keys"] == ["job-3"]
     assert events[0][0][0] == "unapply"
     assert str(events[1][0][0]).startswith("rebuild:review action saved: unapply")
-    assert events[1][1] == {}
+    assert events[1][1] == {"wait_for_completion": True}
 
 
 def test_matching_rules_changed_detects_capability_matrix_change():
@@ -1447,7 +1447,9 @@ def test_rebuild_workspace_after_rule_change_runs_in_background(monkeypatch, tmp
 
 
 def test_rebuild_workspace_after_rule_change_can_wait_for_snapshot(monkeypatch, tmp_path):
+    started = []
     joined = []
+    rebuilds = []
 
     class FakeThread:
         def __init__(self, target=None, args=None, daemon=None, name=None):
@@ -1455,6 +1457,7 @@ def test_rebuild_workspace_after_rule_change_can_wait_for_snapshot(monkeypatch, 
             self.args = args or ()
 
         def start(self):
+            started.append(True)
             self.target(*self.args)
 
         def join(self):
@@ -1464,13 +1467,20 @@ def test_rebuild_workspace_after_rule_change_can_wait_for_snapshot(monkeypatch, 
     workspace_path.write_text("ok", encoding="utf-8")
     monkeypatch.setattr(workspace_refresh_service, "get_workspace_results_path", lambda: workspace_path)
     monkeypatch.setattr(workspace_refresh_service.threading, "Thread", FakeThread)
-    monkeypatch.setattr(workspace_refresh_service, "rebuild_workspace_results", lambda reason="": None)
+    monkeypatch.setattr(
+        workspace_refresh_service,
+        "rebuild_workspace_results",
+        lambda reason="": rebuilds.append(reason),
+    )
 
-    workspace_refresh_service.rebuild_workspace_after_rule_change(
+    refresh_id = workspace_refresh_service.rebuild_workspace_after_rule_change(
         "review action saved: applied", wait_for_completion=True
     )
 
-    assert joined == [True]
+    assert started == []
+    assert joined == []
+    assert refresh_id
+    assert rebuilds == ["review action saved: applied; applying saved filters to current results"]
 
 
 def test_rebuild_workspace_on_startup_runs_when_data_exists(monkeypatch, tmp_path):
