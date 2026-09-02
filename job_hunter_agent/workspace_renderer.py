@@ -2134,7 +2134,7 @@ def render_job_card(
     occupation_alignment = occupation_alignment_diagnostics(
         display_record, get_scoring_rules(active_profile)
     )
-    if occupation_alignment["is_classified"] and occupation_alignment["alignment"] != "same":
+    if False:  # Occupation alignment belongs in debug/audit output, not the job card.
         occ_modifier = (
             "mismatch" if occupation_alignment["alignment"] == "different" else "partially-supported"
         )
