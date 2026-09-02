@@ -3927,6 +3927,39 @@ def test_workspace_renders_requirement_coverage_with_status_classes():
     assert "Bonus" in html  # bonus label
 
 
+def test_workspace_hides_occupation_alignment_reason_outside_debug_mode():
+    reason = (
+        "The job is a Business Improvement Analyst role focused on waste management, "
+        "which is adjacent to the candidate's target roles."
+    )
+    record = {
+        "job_key": "seek:occupation-alignment-ui",
+        "title": "Business Improvement Analyst",
+        "company": "Acme",
+        "url": "https://example.com/job",
+        "title_reason": "OK",
+        "content_reason": "OK",
+        "decision": "KEEP",
+        "llm_decision": "KEEP",
+        "llm_fit_grade": "SOLID",
+        "occupation_alignment": "adjacent",
+        "occupation_alignment_reason": reason,
+        "requirement_coverage": [],
+        "location": "Sydney NSW",
+        "work_type": "Full Time",
+        "work_mode": "Hybrid",
+        "salary": "N/A",
+        "full_description": "Business improvement role. " * 40,
+        "fit_highlights": [],
+        "source": "seek",
+    }
+
+    html = workspace_renderer.render_job_card(record, _test_profile())
+
+    assert reason not in html
+    assert "Job title match" not in html
+
+
 def test_workspace_requirement_list_groups_attention_items_before_matched_items():
     html = workspace_renderer.render_job_card(
         {
