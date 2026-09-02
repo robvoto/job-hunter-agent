@@ -1191,15 +1191,7 @@ async function saveActivePage() {
       alertsSettings.fillUserSettings(userPayload);
       initSliders();
       showInlineStatus(globalStatus, 'Settings saved.', 'success');
-      showStatus(
-        buildCandidateSettingsSaveMessage(
-          previousProfile,
-          previousUserSettings,
-          profilePayload,
-          userPayload,
-        ),
-        'success',
-      );
+      showStatus(sharedUiLabels.settings_saved_success, 'success');
     }
     clearDirty();
   } catch (err) {
