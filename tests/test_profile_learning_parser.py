@@ -342,6 +342,7 @@ def test_build_learning_patch_proposes_role_family_but_preserves_cv_title():
             "normalized_title": "systems analyst",
             "total_duration_months": 24,
             "most_recent_end_year": profile_learning._CURRENT_YEAR,
+            "segments": [{"duration_months": 24, "is_current": True}],
             "title_variants": [
                 {
                     "title": "Senior Systems Analyst",
