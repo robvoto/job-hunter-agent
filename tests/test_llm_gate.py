@@ -2318,6 +2318,127 @@ def test_unqualified_business_analyst_duration_remains_supported_from_role_histo
     assert result[0]["experience_requirement_met"] is True
 
 
+def test_incomplete_decomposition_without_qualifier_keeps_role_history_proof():
+    """LLM omitted the role_or_activity fragment but tied the duration component
+    to a real saved family and named no qualifier: the row must stay visible on
+    the role-history proof, not be forced to a self-contradictory not_shown."""
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "Functional Business Analysis experience",
+                "importance": "required",
+                "requirement_type": "capability",
+                "status": "supported",
+                "matched_candidate_fact": "Business Analysis",
+                "matched_job_text": "Minimum 5 years Functional Business Analysis experience",
+                "profile_support": ["Ran BA activities across delivery teams."],
+                "experience_components": [
+                    {
+                        "kind": "duration",
+                        "text": "5 years",
+                        "matched_role_family": "Business Analyst",
+                    }
+                ],
+            }
+        ],
+        valid_capability_names={"business analysis": "Business Analysis"},
+        role_experience=[
+            {
+                "normalized_title": "Business Analyst",
+                "total_duration_months": 120,
+                "most_recent_end_year": 2025,
+            }
+        ],
+    )
+
+    row = result[0]
+    assert row["status"] == "supported"
+    assert row["matched_role_family"] == "Business Analyst"
+    assert row["matched_role_family_months"] == 120
+    assert row["required_experience_months"] == 60
+    assert row["experience_requirement_met"] is True
+
+
+def test_incomplete_decomposition_with_qualifier_still_forces_not_shown():
+    """The completeness guard stays active when a qualifier is in play: an
+    incomplete decomposition around a qualifier cannot be trusted, so role
+    history alone must not carry the row."""
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "5 years Business Analysis in health insurance",
+                "importance": "required",
+                "requirement_type": "capability",
+                "status": "supported",
+                "matched_candidate_fact": "Business Analysis",
+                "matched_job_text": "5 years Business Analysis in health insurance",
+                "profile_support": ["Ran BA activities across delivery teams."],
+                "experience_components": [
+                    {
+                        "kind": "duration",
+                        "text": "5 years",
+                        "matched_role_family": "Business Analyst",
+                    },
+                    {
+                        "kind": "qualifier",
+                        "text": "health insurance",
+                        "profile_supported": False,
+                        "profile_evidence": [],
+                    },
+                ],
+            }
+        ],
+        valid_capability_names={"business analysis": "Business Analysis"},
+        role_experience=[
+            {
+                "normalized_title": "Business Analyst",
+                "total_duration_months": 120,
+                "most_recent_end_year": 2025,
+            }
+        ],
+    )
+
+    assert result[0]["status"] == "not_shown"
+    assert result[0]["matched_candidate_fact"] == ""
+
+
+def test_incomplete_decomposition_with_unresolved_family_still_forces_not_shown():
+    """No qualifier, but the LLM tied the duration to a family the profile does
+    not hold: the arithmetic never resolved, so the row cannot be carried on
+    role history and stays held as before."""
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": "5+ years Python backend development",
+                "importance": "required",
+                "requirement_type": "capability",
+                "status": "supported",
+                "matched_candidate_fact": "Python",
+                "matched_job_text": "Minimum 5+ years Python backend development",
+                "profile_support": ["Built Python services."],
+                "experience_components": [
+                    {
+                        "kind": "duration",
+                        "text": "5+ years",
+                        "matched_role_family": "Python Developer",
+                    }
+                ],
+            }
+        ],
+        valid_capability_names={"python": "Python"},
+        role_experience=[
+            {
+                "normalized_title": "business analyst",
+                "total_duration_months": 120,
+                "most_recent_end_year": 2025,
+            }
+        ],
+    )
+
+    assert result[0]["status"] == "not_shown"
+    assert result[0]["matched_candidate_fact"] == ""
+
+
 def test_experience_qualifier_evidence_preserves_a_legitimate_partial_match():
     result = llm_gate.normalize_llm_requirement_coverage(
         [

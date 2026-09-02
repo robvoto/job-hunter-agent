@@ -1898,11 +1898,29 @@ def normalize_llm_requirement_coverage(
         experience_components_complete = (
             has_experience_duration and has_experience_role_or_activity
         )
-        role_history_covers_unqualified_experience = bool(
+        role_family_resolved = bool(
             preliminary_experience_requirement
             and preliminary_experience_requirement.get("role_family_resolved")
-            and experience_components_complete
-            and not has_experience_qualifier
+        )
+        # A resolved role family already carries the fit-review LLM's
+        # requirement<->role tie: matched_role_family is only set when the model
+        # linked the wording to a real saved role_experience family. When that
+        # resolved and the decomposition names no qualifier, an omitted
+        # duration / role_or_activity fragment is a decomposition-shape gap, not
+        # a substantive one, and the deterministic month arithmetic already has
+        # what it needs. Requirements that do carry a qualifier still need the
+        # full decomposition so the qualifier can be checked against profile
+        # evidence.
+        role_history_conclusive_without_qualifier = (
+            role_family_resolved and not has_experience_qualifier
+        )
+        experience_decomposition_sufficient = (
+            experience_components_complete
+            or role_history_conclusive_without_qualifier
+        )
+        role_history_covers_unqualified_experience = bool(
+            preliminary_experience_requirement
+            and role_history_conclusive_without_qualifier
         )
         if (
             requirement_type == "capability"
@@ -1939,7 +1957,21 @@ def normalize_llm_requirement_coverage(
             and preliminary_experience_requirement
             and status in {"supported", "partially_supported"}
         ):
-            if not experience_components_complete:
+            if not experience_decomposition_sufficient:
+                logger.warning(
+                    "[LLM][WARN] purpose=fit_review experience_requirement_forced_not_shown "
+                    "requirement=%r reason=missing_experience_components "
+                    "role_family_resolved=%s has_qualifier=%s has_duration=%s "
+                    "has_role_or_activity=%s required_months=%s",
+                    requirement,
+                    role_family_resolved,
+                    has_experience_qualifier,
+                    has_experience_duration,
+                    has_experience_role_or_activity,
+                    preliminary_experience_requirement.get(
+                        "required_experience_months"
+                    ),
+                )
                 _record_requirement_coverage_warning(
                     requirement=requirement,
                     importance=importance,
@@ -1959,6 +1991,29 @@ def normalize_llm_requirement_coverage(
                 profile_support = []
                 covered_requirement_elements = []
             else:
+                if (
+                    not experience_components_complete
+                    and role_history_conclusive_without_qualifier
+                ):
+                    # The decomposition is shape-incomplete but the role family
+                    # resolved and no qualifier is in play: keep the row visible
+                    # on the role-history proof instead of forcing not_shown.
+                    logger.info(
+                        "[LLM][COVERAGE] experience_requirement_kept_on_role_history "
+                        "requirement=%r family=%r role_months=%s required_months=%s "
+                        "met=%s (incomplete decomposition bypassed: no qualifier)",
+                        requirement,
+                        preliminary_experience_requirement.get("matched_role_family"),
+                        preliminary_experience_requirement.get(
+                            "matched_role_family_months"
+                        ),
+                        preliminary_experience_requirement.get(
+                            "required_experience_months"
+                        ),
+                        preliminary_experience_requirement.get(
+                            "experience_requirement_met"
+                        ),
+                    )
                 qualifier_supported, qualifier_count = _experience_qualifier_support_count(
                     experience_components,
                 )
