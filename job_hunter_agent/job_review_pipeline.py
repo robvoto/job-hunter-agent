@@ -116,6 +116,7 @@ from job_hunter_agent.fit_scoring import (
 )
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
 from job_hunter_agent.history import apply_kept_job_reuse, can_reuse_kept_job, finalize_record
+from job_hunter_agent.job_identity import find_confirmed_duplicate
 from job_hunter_agent.job_types import infer_work_type_from_description
 from job_hunter_agent.job_quality import (
     detect_external_date_signals,
@@ -612,6 +613,22 @@ class ReviewPipelineContext:
     run_iso: str = ""
     date_range_days: int = 0
     source_name: str = ""
+
+
+def _find_applied_identity_match(record: dict, context: ReviewPipelineContext) -> dict | None:
+    """Match a new source record to applied history using only central identity facts."""
+
+    candidates: list[dict] = []
+    for job_key in context.applied_job_keys:
+        entry = context.job_history.get(job_key)
+        if not isinstance(entry, dict):
+            continue
+        snapshot = entry.get("last_kept_snapshot")
+        if isinstance(snapshot, dict):
+            candidates.append(snapshot)
+        else:
+            candidates.append(entry)
+    return find_confirmed_duplicate(record, candidates)
 
 
 _DETAILS_STATUS_REJECT_REASON = {
@@ -1194,6 +1211,12 @@ def review_pre_detail_normalized_job(
             reason=reject_reason,
             explanation="The listing appears to be closed and no longer accepting applications.",
         )
+        return _build_outcome(record), record, skill_observations, False
+
+    if _find_applied_identity_match(record, context) is not None:
+        record[RECORD_DECISION_KEY] = "SKIP"
+        record[RECORD_REJECT_REASON_KEY] = "ALREADY_APPLIED"
+        _finalize(record, context)
         return _build_outcome(record), record, skill_observations, False
 
     title_analysis = analyze_title_filters(title, profile)

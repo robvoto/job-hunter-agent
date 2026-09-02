@@ -1,5 +1,6 @@
 """Helpers for job identity."""
 
+from copy import deepcopy
 import re
 from functools import lru_cache
 from typing import Any, Iterable, List, Optional
@@ -31,10 +32,14 @@ from job_hunter_agent.record_schema import (
     RECORD_RUN_STARTED_AT_KEY,
     RECORD_POTENTIAL_DUPLICATE_LINKS_KEY,
     RECORD_SOURCE_ATS_REQUISITION_ID_KEY,
+    RECORD_SOURCE_ATS_SOURCE_KEY,
+    RECORD_SOURCE_APPLY_URL_KEY,
+    RECORD_SOURCE_CANONICAL_URL_KEY,
     RECORD_SOURCE_KEY,
     RECORD_SOURCE_METADATA_KEY,
     RECORD_SOURCE_NAME_KEY,
     RECORD_SOURCE_PLATFORM_JOB_ID_KEY,
+    RECORD_SOURCE_PROVENANCE_KEY,
     RECORD_TITLE_KEY,
     RECORD_URL_KEY,
 )
@@ -164,6 +169,12 @@ def _normalized_url(record: dict) -> str:
     return urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), normalized_path, "", ""))
 
 
+def _normalized_identity_url(value: object) -> str:
+    """Normalize an identity URL without treating query parameters as identity."""
+
+    return _normalized_url({RECORD_URL_KEY: value})
+
+
 def _normalized_job_key(record: dict) -> str:
 
     val = record.get(RECORD_JOB_KEY) or ""
@@ -173,7 +184,7 @@ def _normalized_job_key(record: dict) -> str:
     return normalize_job_key(str(val), source=source)
 
 
-def _confirmed_duplicate_signatures(record: dict) -> dict[str, str]:
+def _record_identity_signatures(record: dict) -> dict[str, str]:
 
     signatures: dict[str, str] = {}
 
@@ -189,13 +200,18 @@ def _confirmed_duplicate_signatures(record: dict) -> dict[str, str]:
 
     metadata = _source_metadata(record)
 
+    for metadata_key in (RECORD_SOURCE_CANONICAL_URL_KEY, RECORD_SOURCE_APPLY_URL_KEY):
+        metadata_url = _normalized_identity_url(metadata.get(metadata_key))
+        if metadata_url:
+            signatures[f"metadata_{metadata_key}"] = metadata_url
+
     ats_requisition_id = _normalize_identity_text(
         str(metadata.get(RECORD_SOURCE_ATS_REQUISITION_ID_KEY) or "")
     )
 
     if ats_requisition_id:
         ats_source = _normalize_identity_text(
-            str(metadata.get("ats_source") or _source_label(record))
+            str(metadata.get(RECORD_SOURCE_ATS_SOURCE_KEY) or _source_label(record))
         )
 
         if ats_source:
@@ -214,17 +230,40 @@ def _confirmed_duplicate_signatures(record: dict) -> dict[str, str]:
     return signatures
 
 
+def _confirmed_duplicate_signatures(record: dict) -> dict[str, str]:
+    """Return deterministic identity facts from the record itself."""
+
+    return _record_identity_signatures(record)
+
+
+def _confirmed_duplicate_signature_values(record: dict) -> set[tuple[str, str]]:
+    """Return deterministic identities for the record and linked source records."""
+
+    values = set(_record_identity_signatures(record).items())
+    provenance = record.get(RECORD_SOURCE_PROVENANCE_KEY)
+    if isinstance(provenance, list):
+        for entry in provenance:
+            if isinstance(entry, dict):
+                values.update(_record_identity_signatures(entry).items())
+    return values
+
+
 def _confirmed_duplicate_match(a: dict, b: dict) -> Optional[tuple[str, str]]:
 
-    signatures_a = _confirmed_duplicate_signatures(a)
+    signatures_a = _confirmed_duplicate_signature_values(a)
+    signatures_b = _confirmed_duplicate_signature_values(b)
 
-    signatures_b = _confirmed_duplicate_signatures(b)
-
-    for key in ("job_key", "url", "ats_requisition_id", "platform_job_id"):
-        value_a = signatures_a.get(key)
-
-        if value_a and value_a == signatures_b.get(key):
-            return key, value_a
+    for key in (
+        "job_key",
+        "url",
+        f"metadata_{RECORD_SOURCE_CANONICAL_URL_KEY}",
+        f"metadata_{RECORD_SOURCE_APPLY_URL_KEY}",
+        "ats_requisition_id",
+        "platform_job_id",
+    ):
+        for signature_key, signature_value in signatures_a:
+            if signature_key == key and (signature_key, signature_value) in signatures_b:
+                return key, signature_value
 
     return None
 
@@ -243,16 +282,126 @@ def _duplicate_link(record: dict, matched_on: str, matched_value: str) -> dict[s
         "job_key": _normalized_job_key(record),
         "url": _normalized_url(record),
         "identity_signatures": _confirmed_duplicate_signatures(record),
-        "source_metadata": {
-            "ats_source": str(metadata.get("ats_source") or "").strip(),
-            RECORD_SOURCE_ATS_REQUISITION_ID_KEY: str(
-                metadata.get(RECORD_SOURCE_ATS_REQUISITION_ID_KEY) or ""
-            ).strip(),
-            RECORD_SOURCE_PLATFORM_JOB_ID_KEY: str(
-                metadata.get(RECORD_SOURCE_PLATFORM_JOB_ID_KEY) or ""
-            ).strip(),
-        },
+        "source_metadata": deepcopy(metadata),
+        "source_provenance": _source_provenance_entry(record),
     }
+
+
+def _source_provenance_entry(record: dict) -> dict[str, Any]:
+    """Capture source facts without making them part of the user preference model."""
+
+    entry: dict[str, Any] = {}
+    for key in (
+        RECORD_SOURCE_KEY,
+        RECORD_SOURCE_NAME_KEY,
+        RECORD_JOB_KEY,
+        RECORD_URL_KEY,
+        RECORD_TITLE_KEY,
+        RECORD_COMPANY_KEY,
+        RECORD_LOCATION_KEY,
+        RECORD_SOURCE_METADATA_KEY,
+    ):
+        value = record.get(key)
+        if value not in (None, "", [], {}):
+            entry[key] = deepcopy(value)
+    return entry
+
+
+def _source_provenance(record: dict) -> list[dict]:
+    entries = record.get(RECORD_SOURCE_PROVENANCE_KEY)
+    if not isinstance(entries, list):
+        return []
+    return [entry for entry in entries if isinstance(entry, dict)]
+
+
+def _provenance_key(entry: dict) -> tuple[str, ...]:
+    metadata = entry.get(RECORD_SOURCE_METADATA_KEY)
+    metadata = metadata if isinstance(metadata, dict) else {}
+    return (
+        str(
+            entry.get(RECORD_SOURCE_KEY) or entry.get(RECORD_SOURCE_NAME_KEY) or ""
+        )
+        .strip()
+        .lower(),
+        str(entry.get(RECORD_JOB_KEY) or "").strip().lower(),
+        _normalized_identity_url(entry.get(RECORD_URL_KEY)),
+        _normalized_identity_url(metadata.get(RECORD_SOURCE_CANONICAL_URL_KEY)),
+        _normalized_identity_url(metadata.get(RECORD_SOURCE_APPLY_URL_KEY)),
+        _normalize_identity_text(metadata.get(RECORD_SOURCE_ATS_SOURCE_KEY)),
+        _normalize_identity_text(metadata.get(RECORD_SOURCE_ATS_REQUISITION_ID_KEY)),
+    )
+
+
+def _merge_source_provenance(*records: dict) -> list[dict]:
+    merged: list[dict] = []
+    seen: set[tuple[str, ...]] = set()
+    for record in records:
+        for entry in [*_source_provenance(record), _source_provenance_entry(record)]:
+            if not entry:
+                continue
+            key = _provenance_key(entry)
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(deepcopy(entry))
+    return merged
+
+
+def _set_source_provenance(record: dict, entries: list[dict]) -> None:
+    if entries:
+        record[RECORD_SOURCE_PROVENANCE_KEY] = entries
+    else:
+        record.pop(RECORD_SOURCE_PROVENANCE_KEY, None)
+
+
+_PRESERVED_STATE_KEYS = (
+    "application_history",
+    "candidate_application_history",
+    "seen_before",
+    "times_seen",
+    "times_kept",
+    "times_viewed",
+    "first_seen_at",
+    "last_seen_at",
+    "first_viewed_at",
+    "last_viewed_at",
+    "first_kept_at",
+    "last_kept_at",
+    "first_applied_at",
+    "last_applied_at",
+    "last_unapplied_at",
+    "last_not_for_me_at",
+    "times_not_for_me",
+    "last_block_title_at",
+    "times_block_title",
+    "is_hidden",
+    "first_hidden_at",
+    "last_hidden_at",
+    "last_unhidden_at",
+)
+
+
+def _merge_preserved_state(kept: dict, merged_away: dict) -> None:
+    """Retain non-empty application/history state while merging proven duplicates."""
+
+    for key in _PRESERVED_STATE_KEYS:
+        incoming = merged_away.get(key)
+        current = kept.get(key)
+        if incoming in (None, "", [], {}):
+            continue
+        if current in (None, "", [], {}):
+            kept[key] = deepcopy(incoming)
+        elif key in {"seen_before", "is_hidden"} and bool(incoming):
+            kept[key] = True
+        elif key.startswith("times_"):
+            try:
+                kept[key] = max(int(current or 0), int(incoming or 0))
+            except (TypeError, ValueError):
+                pass
+        elif key.startswith("first_") and isinstance(current, str) and isinstance(incoming, str):
+            kept[key] = min(current, incoming)
+        elif key.startswith("last_") and isinstance(current, str) and isinstance(incoming, str):
+            kept[key] = max(current, incoming)
 
 
 def _duplicate_links(record: dict) -> list[dict]:
@@ -640,6 +789,11 @@ def deduplicate_across_sources(records: List[dict]) -> List[dict]:
                     record,
                     _merge_duplicate_links(_duplicate_links(record), _duplicate_links(kept_record)),
                 )
+                _merge_preserved_state(record, kept_record)
+                _set_source_provenance(
+                    record,
+                    _merge_source_provenance(record, kept_record),
+                )
 
                 _log_confirmed_duplicate_merge(record, kept_record, matched_on, matched_value)
 
@@ -647,6 +801,11 @@ def deduplicate_across_sources(records: List[dict]) -> List[dict]:
 
             else:
                 _append_duplicate_link(kept_record, record, matched_on, matched_value)
+                _merge_preserved_state(kept_record, record)
+                _set_source_provenance(
+                    kept_record,
+                    _merge_source_provenance(kept_record, record),
+                )
 
                 _log_confirmed_duplicate_merge(kept_record, record, matched_on, matched_value)
 

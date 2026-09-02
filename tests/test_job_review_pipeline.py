@@ -184,6 +184,42 @@ def _render_ready_record(source: str = "seek") -> dict:
     return record
 
 
+def test_pre_detail_skips_cross_source_identity_already_applied(monkeypatch):
+    context = _review_context("SEEK")
+    context.applied_job_keys = {"linkedin:202"}
+    context.job_history = {
+        "linkedin:202": {
+            "last_kept_snapshot": {
+                RECORD_JOB_KEY: "linkedin:202",
+                RECORD_URL_KEY: "https://linkedin.com/jobs/view/202",
+                "source": "linkedin",
+                "source_metadata": {
+                    "apply_url": "https://careers.acme.example/jobs/req-7",
+                },
+            }
+        }
+    }
+    record = _base_record("seek", "card", "card")
+    record[RECORD_JOB_KEY] = "seek:101"
+    record["source_metadata"]["apply_url"] = (
+        "https://careers.acme.example/jobs/req-7?source=seek"
+    )
+
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "analyze_title_filters",
+        lambda *_args: (_ for _ in ()).throw(
+            AssertionError("applied identity should skip before title review")
+        ),
+    )
+
+    outcome, updated, _, should_fetch = review_pre_detail_normalized_job(record, context)
+
+    assert outcome[RECORD_DECISION_KEY] == "SKIP"
+    assert updated[RECORD_REJECT_REASON_KEY] == "ALREADY_APPLIED"
+    assert should_fetch is False
+
+
 def _patch_llm_review_path(monkeypatch, payload):
     monkeypatch.setattr(
         job_review_pipeline,

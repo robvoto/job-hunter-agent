@@ -193,6 +193,7 @@ def _build_export_job(record: dict, workspace_state: str, profile: dict[str, Any
         "llm_fit_grade": _first_non_empty(record.get("llm_fit_grade")),
         "details_status": _first_non_empty(record.get("details_status")),
         "posting_channel_evidence": record.get("posting_channel_evidence") or {},
+        "source_provenance": record.get("source_provenance") or [],
         "candidate_application_history": record.get("candidate_application_history") or {},
         "last_seen_at": record.get("last_seen_at"),
         "last_viewed_at": record.get("last_viewed_at"),

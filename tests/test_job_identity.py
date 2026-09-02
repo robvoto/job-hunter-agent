@@ -18,6 +18,7 @@ from job_hunter_agent.job_identity import (
 from job_hunter_agent.record_schema import (
     RECORD_DUPLICATE_LINKS_KEY,
     RECORD_POTENTIAL_DUPLICATE_LINKS_KEY,
+    RECORD_SOURCE_PROVENANCE_KEY,
 )
 
 
@@ -70,6 +71,100 @@ def test_are_jobs_confirmed_duplicates_requires_same_job_key_or_url():
     assert not are_jobs_confirmed_duplicates(
         {"job_key": "seek:1", "company": "Acme", "title": "Senior Business Analyst"},
         {"job_key": "seek:2", "company": "Acme", "title": "Senior Business Analyst"},
+    )
+
+
+def test_exact_external_apply_url_confirms_cross_source_repost_and_preserves_provenance():
+    records = [
+        {
+            "job_key": "seek:101",
+            "source": "seek",
+            "source_name": "SEEK",
+            "url": "https://seek.com.au/job/101?tracking=old",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "source_metadata": {
+                "apply_url": "https://careers.acme.example/jobs/req-7?source=seek",
+                "canonical_url": "https://seek.com.au/job/101",
+                "platform_job_id": "101",
+                "raw_source_fields": {"listing_reference": "seek"},
+            },
+            "last_applied_at": "2026-08-20T09:00:00+10:00",
+        },
+        {
+            "job_key": "linkedin:202",
+            "source": "linkedin",
+            "source_name": "LinkedIn",
+            "url": "https://linkedin.com/jobs/view/202",
+            "title": "Business Analyst (Reposted)",
+            "company": "Acme",
+            "source_metadata": {
+                "apply_url": "https://careers.acme.example/jobs/req-7?source=linkedin",
+                "canonical_url": "https://linkedin.com/jobs/view/202",
+                "platform_job_id": "202",
+                "raw_source_fields": {"listing_reference": "linkedin"},
+            },
+        },
+    ]
+
+    deduped = deduplicate_across_sources(records)
+
+    assert len(deduped) == 1
+    survivor = deduped[0]
+    assert survivor["job_key"] == "seek:101"
+    assert survivor["last_applied_at"] == "2026-08-20T09:00:00+10:00"
+    assert {entry["source"] for entry in survivor[RECORD_SOURCE_PROVENANCE_KEY]} == {
+        "seek",
+        "linkedin",
+    }
+    assert {entry["url"] for entry in survivor[RECORD_SOURCE_PROVENANCE_KEY]} == {
+        "https://seek.com.au/job/101?tracking=old",
+        "https://linkedin.com/jobs/view/202",
+    }
+    linked = survivor[RECORD_DUPLICATE_LINKS_KEY][0]
+    assert linked["source"] == "linkedin"
+    assert linked["source_metadata"]["raw_source_fields"]["listing_reference"] == "linkedin"
+
+
+def test_same_ats_requisition_and_ats_authority_confirms_cross_platform_duplicate():
+    assert are_jobs_confirmed_duplicates(
+        {
+            "job_key": "seek:101",
+            "source": "seek",
+            "source_metadata": {
+                "ats_source": "jobs.acme.example",
+                "ats_requisition_id": "REQ-7",
+            },
+        },
+        {
+            "job_key": "linkedin:202",
+            "source": "linkedin",
+            "source_metadata": {
+                "ats_source": "jobs.acme.example",
+                "ats_requisition_id": "req-7",
+            },
+        },
+    )
+
+
+def test_same_ats_id_from_different_ats_authorities_is_not_a_duplicate():
+    assert not are_jobs_confirmed_duplicates(
+        {
+            "job_key": "seek:101",
+            "source": "seek",
+            "source_metadata": {
+                "ats_source": "jobs.acme.example",
+                "ats_requisition_id": "REQ-7",
+            },
+        },
+        {
+            "job_key": "linkedin:202",
+            "source": "linkedin",
+            "source_metadata": {
+                "ats_source": "jobs.other.example",
+                "ats_requisition_id": "REQ-7",
+            },
+        },
     )
 
 
