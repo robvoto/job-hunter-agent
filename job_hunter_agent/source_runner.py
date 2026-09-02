@@ -1363,6 +1363,7 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
             "status": result.source_cache_status,
             "signature": result.source_cache_signature,
             "records": len(result.discovery_records),
+            "error": _exception_message(result.error) if result.error is not None else "",
             "external_source_calls_avoided": result.source_cache_status
             in {"HIT", "BACKOFF", "STALE_FALLBACK"},
             "health": _source_health(result),

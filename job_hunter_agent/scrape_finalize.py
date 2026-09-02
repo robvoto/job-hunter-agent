@@ -341,6 +341,18 @@ def _build_source_breakdown(
     return breakdown
 
 
+
+def _source_errors_from_cache_stats(source_cache_stats: dict | None) -> list[str]:
+    """Expose source-worker failures in the final run report even when no records survived."""
+    errors: list[str] = []
+    for source, details in (source_cache_stats or {}).items():
+        if not isinstance(details, dict):
+            continue
+        error = str(details.get("error") or "").strip()
+        if error:
+            errors.append(f"{get_source_display_label(str(source)).upper()}: {error}")
+    return errors
+
 def _log_source_final_stats(run_stats: dict) -> None:
     source_breakdown = run_stats.get("source_breakdown") or []
     for item in source_breakdown:
@@ -620,6 +632,7 @@ def finalize_scrape_run(
         ]
         if source_warnings:
             run_stats["warnings"] = source_warnings
+        run_stats["errors"] = _source_errors_from_cache_stats(context.source_cache_stats)
 
         if run_shutdown_requested():
             raise RunInterruptedError("Server shutdown interrupted scrape finalization.")
@@ -752,6 +765,7 @@ def finalize_scrape_run(
     ]
     if unhealthy_messages:
         run_stats["warnings"] = unhealthy_messages
+    run_stats["errors"] = _source_errors_from_cache_stats(context.source_cache_stats)
 
     workspace_records = workspace_service.build_workspace_record_sets(
         merged_pool,
