@@ -170,6 +170,42 @@ CREATE TABLE IF NOT EXISTS candidate_application_history (
 );
 CREATE INDEX IF NOT EXISTS idx_app_history_user ON candidate_application_history(user_id);
 
+-- Application outcome events (facts, append-only). One row per observed outcome
+-- for a job the candidate actually applied to. `evidence_ref` points back at the
+-- source record (email message id / sheet row / board activity row) so any
+-- derived rollup can be audited or rebuilt. Owner: employer_outcome_store.py.
+CREATE TABLE IF NOT EXISTS candidate_application_events (
+    user_id      TEXT NOT NULL REFERENCES users(user_id),
+    event_id     TEXT NOT NULL,
+    employer_key TEXT NOT NULL,
+    employer_raw TEXT NOT NULL,
+    role_title   TEXT NOT NULL DEFAULT '',
+    event_type   TEXT NOT NULL,
+    event_date   TEXT NOT NULL,
+    source       TEXT NOT NULL,
+    evidence_ref TEXT NOT NULL,
+    confidence   TEXT NOT NULL,
+    data         TEXT,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, event_id)
+);
+CREATE INDEX IF NOT EXISTS idx_app_events_user_employer
+    ON candidate_application_events(user_id, employer_key);
+CREATE INDEX IF NOT EXISTS idx_app_events_user_date
+    ON candidate_application_events(user_id, event_date DESC);
+
+-- Derived per-employer rollup of candidate_application_events. This is a cache:
+-- it is safe to drop and rebuild from the events table at any time, and it is
+-- never hand-edited. It stores counts and dates only, no thresholds or labels,
+-- so display rules can change without a rebuild. Owner: employer_outcome_store.py.
+CREATE TABLE IF NOT EXISTS candidate_employer_outcomes (
+    user_id      TEXT NOT NULL REFERENCES users(user_id),
+    employer_key TEXT NOT NULL,
+    data         TEXT NOT NULL,
+    updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, employer_key)
+);
+
 -- Per-user agent/scrape-loop runtime state
 CREATE TABLE IF NOT EXISTS agent_state (
     user_id    TEXT PRIMARY KEY REFERENCES users(user_id),
@@ -471,6 +507,8 @@ EXPECTED_TABLES = {
     "workspace_pool",
     "profile_documents",
     "candidate_application_history",
+    "candidate_application_events",
+    "candidate_employer_outcomes",
     "agent_state",
     "system_warnings",
     "occupation_title_cache",

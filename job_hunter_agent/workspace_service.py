@@ -51,7 +51,6 @@ from job_hunter_agent.profile_store import (
     normalize_work_mode_preferences,
 )
 from job_hunter_agent.score_labels import viewed_badge_html
-from job_hunter_agent.system_warnings import make_system_warning_fingerprint, record_system_warning
 from job_hunter_agent.user_settings import get_workspace_minimum_score
 from job_hunter_agent.utils import safe_html
 from job_hunter_agent.workspace_renderer import (
@@ -196,38 +195,28 @@ def _enrich_records_with_candidate_application_history(records: list[dict]) -> l
 
     enriched_count = 0
 
-    try:
-        from job_hunter_agent.candidate_application_history import (
-            enrich_records_with_application_history,
-            load_candidate_job_rejection_history,
+    # No catch-all here on purpose. When the feature is disabled the loader
+    # returns an empty history rather than raising, so the only failures that
+    # could reach this point are real defects. Swallowing them produced a card
+    # that looked identical to "no history with this employer", which is the
+    # opposite of what this panel is for: the candidate would read a silent
+    # failure as evidence of a clean record. Let it raise.
+    from job_hunter_agent.candidate_application_history import (
+        enrich_records_with_application_history,
+        load_candidate_job_rejection_history,
+    )
+
+    candidate_history = load_candidate_job_rejection_history()
+
+    if candidate_history:
+        enriched_records = enrich_records_with_application_history(records, candidate_history)
+
+        enriched_count = sum(
+            1
+            for before, after in zip(records, enriched_records)
+            if "candidate_application_history" not in before
+            and "candidate_application_history" in after
         )
-
-        candidate_history = load_candidate_job_rejection_history()
-
-        if candidate_history:
-            enriched_records = enrich_records_with_application_history(records, candidate_history)
-
-            enriched_count = sum(
-                1
-                for before, after in zip(records, enriched_records)
-                if "candidate_application_history" not in before
-                and "candidate_application_history" in after
-            )
-
-    except Exception as exc:
-        logger.warning("[candidate_application_history] unavailable: %s", exc)
-        record_system_warning(
-            severity="warning",
-            category="candidate_application_history_enrichment",
-            source="_enrich_records_with_candidate_application_history",
-            message=f"Candidate application history enrichment unavailable: {exc}",
-            fingerprint=make_system_warning_fingerprint(
-                "candidate_application_history_enrichment", str(exc)
-            ),
-            context={"error": str(exc)},
-        )
-
-        enriched_records = records
 
     logger.info("[candidate_application_history] records enriched: %s", enriched_count)
 

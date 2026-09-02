@@ -1,0 +1,7 @@
+{
+  "kind": "system_config",
+  "name": "employer_aliases",
+  "version": 1,
+  "description": "Managed employer alias map. Overrides employer identity ONLY where two genuinely different strings mean one employer and normalisation cannot derive it. Ships empty: entries are added per deployment through review. Names absent from this map remain distinct employers.",
+  "employer_aliases": []
+}

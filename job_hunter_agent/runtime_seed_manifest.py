@@ -16,6 +16,7 @@ APPROVED_DB_KNOWLEDGE_JSON_REL_PATHS: tuple[str, ...] = (
     "description_compaction_rules.json",
     "dodgy_job_rules.json",
     "duplicate_rules.json",
+    "employer_aliases.json",
     "hard_blocker_rules.json",
     "job_type.json",
     "llm_capability_naming_defaults.json",
