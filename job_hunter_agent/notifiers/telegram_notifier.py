@@ -152,15 +152,22 @@ def _build_search_settings_text() -> str:
     search_settings = profile.get("search_settings", {}) if isinstance(profile, dict) else {}
     sources = profile.get("enabled_sources", []) if isinstance(profile, dict) else []
     target_roles = profile.get("target_roles", []) if isinstance(profile, dict) else []
+    alternative_roles = profile.get("also_consider_roles", []) if isinstance(profile, dict) else []
     salary_preferences = profile.get("salary_preferences", {}) if isinstance(profile, dict) else {}
     match_preferences = profile.get("match_preferences", {}) if isinstance(profile, dict) else {}
     settings = load_user_settings(None, create_if_missing=False)
     workspace_settings = settings.get("workspace", {}) if isinstance(settings, dict) else {}
 
-    keyword = str(search_settings.get("keywords") or "").strip() or "not set"
     locations = [str(value).strip() for value in search_settings.get("locations", []) if str(value).strip()]
     source_labels = [str(value).strip().upper() for value in sources if str(value).strip()]
-    roles = [str(value).strip() for value in target_roles if str(value).strip()]
+    roles = []
+    seen_roles = set()
+    for value in [*target_roles, *alternative_roles]:
+        role = str(value).strip()
+        role_key = role.casefold()
+        if role and role_key not in seen_roles:
+            seen_roles.add(role_key)
+            roles.append(role)
     home_location = str(match_preferences.get("home_location") or "").strip() or "not set"
     work_modes = [str(value).strip() for value in match_preferences.get("work_mode_preference", []) if str(value).strip()]
     engagement_types = [str(value).strip() for value in match_preferences.get("engagement_type", []) if str(value).strip()]
@@ -171,7 +178,7 @@ def _build_search_settings_text() -> str:
         "Active search settings",
         "",
         "Search",
-        f"Keyword: {keyword}",
+        f"Roles: {', '.join(roles) if roles else 'not set'}",
         f"Locations: {', '.join(locations) if locations else 'not set'}",
         f"Sources: {', '.join(source_labels) if source_labels else 'not set'}",
         f"Date range: last {int(search_settings.get('date_range_days', 0) or 0)} day(s)",

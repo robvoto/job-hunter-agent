@@ -173,10 +173,10 @@ Do not rename major files casually unless there is time to clean the whole proje
   5. Review Draft, Search Basics, and Check Setup are completed inside the onboarding flow
   6. Settings is then used to refine the runtime profile
 
-- Onboarding and Settings copy for preferred roles, alternative roles, the search keyword, and `Explore adjacent roles` comes from `data/knowledge/ui_labels.json` via `window.__JOB_HUNTER_TITLE_TIER_LABELS__`.
+- Onboarding and Settings copy for preferred roles, alternative roles, and `Explore adjacent roles` comes from `data/knowledge/ui_labels.json` via `window.__JOB_HUNTER_TITLE_TIER_LABELS__`.
 - `profile_store.KEY_EXPLORE_ADJACENT_ROLES` owns the candidate-specific exploration switch and defaults to `False` (strict title behaviour).
 - `job_review_pipeline.review_pre_detail_normalized_job()` passes the candidate capability names into `llm_gate.llm_judge_title()` so exploration mode can keep plausible adjacent titles for description review; strict mode ignores those capability signals and preserves the original title contract.
-- The onboarding search keyword is a single term. Do not comma-join multiple title candidates in auto-fill logic.
+- Confirmed preferred and alternative role lists drive separate source-native search targets; do not expose or invent a separate search-string setting.
 
 ### Onboarding File Map
 

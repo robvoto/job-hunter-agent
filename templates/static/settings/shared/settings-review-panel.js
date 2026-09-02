@@ -51,7 +51,7 @@ const TUNING_TEXT = {
   workingFiltersHeading: 'Filters already working correctly',
   workingFiltersCopy: 'These title keyword filters are already blocking off-target roles before deeper review.',
   otherRulesHeading: 'Repeated exclusion patterns',
-  otherRulesCopy: 'Patterns from rejects that are worth keeping, strengthening, or watching before you touch search keywords.',
+  otherRulesCopy: 'Patterns from rejects that are worth keeping, strengthening, or watching before you change role targeting.',
 };
 
 const NO_CAPABILITY_SUGGESTIONS_COPY = 'No capability suggestions yet. We found no saved review data from the latest search. Run a search again so kept jobs can be analysed for new capability signals.';

@@ -5,7 +5,6 @@ const WIZARD_STATE_KEY = onboardingPage.WIZARD_STATE_KEY;
 
 function getSearchBasicsState() {
   return {
-    keywords: onboardingPage.refs.reviewSearchKeywords?.value || '',
     minContractMonths: onboardingPage.getResolvedMinContractMonthValue?.() || '',
     minimumSalaryYearly: onboardingPage.refs.reviewMinimumSalaryYearly?.value || '',
     minimumDailyRate: onboardingPage.refs.reviewMinimumDailyRate?.value || '',
@@ -22,7 +21,6 @@ export function buildSearchBasicsProfilePatch() {
 
   return {
     search_settings: {
-      keywords: String(searchBasics.keywords || '').trim(),
       locations,
     },
     match_preferences: {
@@ -65,7 +63,6 @@ export function saveWizardState() {
     reviewCapabilityVisibleCount: onboardingPage.reviewCapabilityVisibleCount,
     selectedLocations: onboardingPage.selectedLocations,
     workModePreference: onboardingSettingsUtils.getWorkModePreferenceValues(),
-    searchKeywords: onboardingPage.refs.reviewSearchKeywords?.value || '',
     minContractMonths: onboardingPage.getResolvedMinContractMonthValue?.() || '',
     minimumSalaryYearly: onboardingPage.refs.reviewMinimumSalaryYearly?.value || '',
     minimumDailyRate: onboardingPage.refs.reviewMinimumDailyRate?.value || '',
@@ -121,7 +118,6 @@ export function restoreWizardState() {
       console.warn('Could not restore onboarding location state.', error);
     }
     try {
-      if (onboardingPage.refs.reviewSearchKeywords) onboardingPage.refs.reviewSearchKeywords.value = state.searchKeywords || '';
       onboardingPage.setMinContractMonthValue(state.minContractMonths || '');
       if (onboardingPage.refs.reviewMinimumSalaryYearly) onboardingSettingsUtils.setCurrencyFieldValue(onboardingPage.refs.reviewMinimumSalaryYearly, state.minimumSalaryYearly || 0);
       if (onboardingPage.refs.reviewMinimumDailyRate) onboardingSettingsUtils.setCurrencyFieldValue(onboardingPage.refs.reviewMinimumDailyRate, state.minimumDailyRate || 0);

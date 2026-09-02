@@ -178,9 +178,7 @@ _ONBOARDING_TITLE_TIER_LABEL_KEYS = (
     "also_consider_roles_input_placeholder",
     "also_consider_roles_empty_text",
     "move_to_also_consider_label",
-    "search_keyword_label",
-    "search_keyword_help",
-    "search_keyword_example",
+    "role_search_help",
     "explore_adjacent_roles_label",
     "explore_adjacent_roles_help",
 )
@@ -1609,13 +1607,11 @@ def _validate_required_onboarding_inputs(
     search_preferences: dict[str, Any],
     onboarding_settings_payload: dict | None,
 ) -> None:
-    keywords = str(search_preferences.get(KEY_KEYWORDS) or "").strip()
     locations = _parse_locations_override(search_preferences.get(KEY_LOCATIONS))
     engagement_type = normalize_engagement_type_preferences(
         search_preferences.get(KEY_ENGAGEMENT_TYPE), default_to_all=False
     )
 
-    validate_search_keywords(keywords, require_phrase=True)
     search_limits = load_global_settings()[KEY_LIMITS]["search"]
     max_locations = int(search_limits[KEY_LOCATIONS_MAX_SELECTED]["max"])
     if not locations:

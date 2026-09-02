@@ -453,13 +453,15 @@ def test_settings_search_section_uses_shared_choice_strip_widget(monkeypatch):
 
     assert ">+<" in html
 
-    assert 'id="keywords"' in html
-
     assert 'data-chip-editor="keywords"' not in html
 
-    assert "Search keyword" in html
+    assert 'id="keywords"' not in html
 
-    assert 'placeholder="e.g. Business Analyst"' in html
+    assert "Search keyword" not in html
+
+    assert "Preferred roles" in html
+
+    assert "Alternative roles" in html
 
     assert 'id="seek_max_pages_choices"' in html
 

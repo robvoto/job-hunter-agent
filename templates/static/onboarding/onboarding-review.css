@@ -25,13 +25,11 @@
   margin-top: 0;
 }
 
-#review_search_keywords,
 #location_search,
 #sector_preference {
   width: 100%;
 }
 
-#review_search_keywords + .help,
 #location_search + .help,
 #sector_preference + .help {
   max-width: none;
@@ -90,5 +88,4 @@
   padding-top: var(--onboarding-actions-padding-top);
   border-top: var(--onboarding-actions-border);
 }
-
 

@@ -204,7 +204,7 @@
     }
 
     function buildOnboardingFooterSummary(state) {
-      const titles = splitOnboardingSummary(state?.search_keywords).slice(0, 3);
+      const titles = splitOnboardingSummary(state?.target_titles).slice(0, 3);
       const locations = Array.isArray(state?.search_locations)
         ? state.search_locations.map((value) => String(value || '').trim()).filter(Boolean)
         : [];

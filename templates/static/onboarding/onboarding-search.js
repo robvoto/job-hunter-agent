@@ -2,7 +2,6 @@ import * as onboardingPage from './onboarding-page.js';
 import * as onboardingSettingsUtils from '../settings/shared/settings-utils.js';
 import * as onboardingLocationUi from '../common/location-options.js';
 const {
-  reviewSearchKeywords: reviewSearchKeywordsEl,
   reviewMinimumSalaryYearly: reviewMinimumSalaryYearlyEl,
   reviewMinimumDailyRate: reviewMinimumDailyRateEl,
 } = onboardingPage.refs;
@@ -47,11 +46,6 @@ export function hydrateSearchBasics(profile) {
   const searchSettings = profile?.search_settings || {};
   const matchPreferences = profile?.match_preferences || {};
   const salaryPreferences = profile?.salary_preferences || {};
-  const currentKeywords = String(reviewSearchKeywordsEl?.value || '').trim();
-  const savedKeywords = String(searchSettings.keywords || '').trim();
-  const profileTargetRoles = Array.isArray(profile?.target_roles) ? profile.target_roles : [];
-  const fallbackKeyword = profileTargetRoles.length ? onboardingPage.defaultSearchKeywordFromTargetRoles(profile) : '';
-  reviewSearchKeywordsEl.value = currentKeywords || savedKeywords || fallbackKeyword;
   onboardingPage.setMinContractMonthValue(matchPreferences.min_contract_months ?? '');
   const currentSalaryYearly = String(reviewMinimumSalaryYearlyEl.value || '').trim();
   const currentSalaryDaily = String(reviewMinimumDailyRateEl.value || '').trim();

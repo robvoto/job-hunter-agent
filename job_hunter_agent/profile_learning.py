@@ -63,6 +63,7 @@ def _simple_title(value: str) -> str:
 
 from job_hunter_agent.global_settings import (
     KEY_CAPABILITY_ALIAS_LIMIT,
+    get_llm_capability_naming_max_output_tokens,
     get_llm_profile_extraction_max_output_tokens,
 )
 from job_hunter_agent.signal_registry import register_signals, signal_in_approved_knowledge
@@ -91,6 +92,59 @@ _CURRENT_YEAR = datetime.now().year
 
 def _cap_log(msg: str) -> None:
     logger.info("%s", msg)
+
+
+def resolve_role_family(
+    title: str,
+    llm_client: Any = None,
+    *,
+    benchmark_model: str | None = None,
+) -> dict[str, Any]:
+    """Resolve a proposed role label before it becomes saved search intent."""
+    cleaned_title = compact_whitespace(title)
+    if not cleaned_title:
+        raise ValueError("Role title is required")
+
+    from job_hunter_agent.llm_gate import (
+        _llm_generation_kwargs,
+        _log_llm_call,
+        client,
+        get_llm_model,
+    )
+
+    active_client = llm_client or client
+    if active_client is None:
+        raise RuntimeError("Role-family resolution requires an available LLM client")
+    prompt = (
+        "Resolve the supplied job title into one neutral occupation-family label. "
+        "Return the exact title unchanged only when it already names the neutral family. "
+        "Do not include seniority, level, rank, employment status, or other qualifiers "
+        "that narrow discovery. If the family cannot be resolved confidently, return "
+        "an empty role_family and resolved=false. Do not invent a different occupation."
+    )
+    model = benchmark_model or get_llm_model()
+    try:
+        response = active_client.responses.parse(
+            model=model,
+            input=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": cleaned_title},
+            ],
+            text_format=_RoleFamilyResolution,
+            max_output_tokens=get_llm_capability_naming_max_output_tokens(),
+            **_llm_generation_kwargs(model),
+        )
+        _log_llm_call(response, "role_family_resolution", model)
+    except Exception as exc:
+        logger.exception("[ONBOARDING][ROLE_FAMILY_RESOLUTION_ERROR] title=%r", cleaned_title)
+        raise RuntimeError(f"Could not resolve role family: {type(exc).__name__}") from exc
+
+    parsed = response.output_parsed
+    if parsed is None:
+        raise RuntimeError("Role-family resolution returned no structured result")
+    role_family = compact_whitespace(parsed.role_family)
+    resolved = bool(parsed.resolved and role_family)
+    return {"role_family": role_family if resolved else "", "resolved": resolved}
 
 
 _BULLET_PREFIX_RE = re.compile(r"^[\-*•–—]+\s*")
@@ -147,6 +201,13 @@ class _RoleExperienceExtraction(BaseModel):
     duration_months: int = 0
     end_year: int = 0
     is_current: bool = False
+
+
+class _RoleFamilyResolution(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role_family: str = ""
+    resolved: bool = False
 
 
 class _CvExtractionResponse(BaseModel):
@@ -371,8 +432,11 @@ def _llm_extract_from_cv(
         "  If one displayed role clearly combines two standalone roles (for example with ' - ' or '/'), split it into separate role title entries instead of returning one composite title.\n"
         "- preferred_role_titles: list the candidate's main role directions from the CV.\n"
         "  These should be the strongest current or core occupation-family titles the candidate would most likely target first.\n"
+        "  Return neutral occupation-family labels, not seniority or level variants; for example, use Systems Analyst for Senior Systems Analyst.\n"
+        "  Keep the exact CV/employment wording in role_experience.title; role_experience.canonical_title is only the family grouping.\n"
         "  Use standalone role titles only, no duplicates.\n"
         "- alternative_role_titles: list credible adjacent or secondary role directions from the CV that are less central than preferred_role_titles.\n"
+        "  Use the same neutral occupation-family convention; do not narrow a source search by seniority.\n"
         "  Do not repeat any preferred_role_titles entry here. Use standalone role titles only, no duplicates.\n"
         "- eligibility: extract only current, independently verifiable facts the candidate actually holds or is legally allowed to claim now. "
         "Examples include an existing clearance, citizenship, work rights, licence, or registration. "
@@ -554,7 +618,8 @@ def _aggregate_role_experience(raw: list[Any]) -> list[dict[str, Any]]:
         if not isinstance(item, dict):
             continue
 
-        raw_title = _simple_title(item.get("title") or "")
+        display_title = compact_whitespace(str(item.get("title") or ""))
+        raw_title = _simple_title(display_title)
         canonical_title = _simple_title(item.get("canonical_title") or "")
         normalized_title = canonical_title or raw_title
         if not normalized_title:
@@ -582,6 +647,7 @@ def _aggregate_role_experience(raw: list[Any]) -> list[dict[str, Any]]:
         variant = variants.setdefault(
             variant_title,
             {
+                "title": display_title or variant_title,
                 "normalized_title": variant_title,
                 "total_duration_months": 0,
                 "most_recent_end_year": 0,
@@ -609,6 +675,31 @@ def _dedupe_role_titles(values: Any) -> list[str]:
         seen.add(cleaned)
         result.append(cleaned)
     return result
+
+
+def _resolve_extracted_role_families(
+    titles: list[str], role_experience: list[dict[str, Any]]
+) -> list[str]:
+    """Use the same extraction response to propose confirmed role families."""
+    family_by_variant: dict[str, set[str]] = {}
+    for row in role_experience:
+        if not isinstance(row, dict):
+            continue
+        family = _simple_title(row.get("normalized_title") or "")
+        if not family:
+            continue
+        for variant in row.get("title_variants") or []:
+            if not isinstance(variant, dict):
+                continue
+            title = _simple_title(variant.get("normalized_title") or "")
+            if title:
+                family_by_variant.setdefault(title, set()).add(family)
+
+    resolved: list[str] = []
+    for title in titles:
+        candidates = family_by_variant.get(_simple_title(title), set())
+        resolved.append(next(iter(candidates)) if len(candidates) == 1 else title)
+    return _dedupe_role_titles(resolved)
 
 
 def _capability_context_sections(
@@ -756,9 +847,11 @@ def build_learning_patch(
 
     raw_titles = extracted.get("role_titles") or []
     extracted_titles = _dedupe_role_titles(raw_titles)
-    preferred_titles = _dedupe_role_titles(extracted.get("preferred_role_titles") or [])
-    alternative_titles_raw = _dedupe_role_titles(
-        extracted.get("alternative_role_titles") or []
+    preferred_titles = _resolve_extracted_role_families(
+        _dedupe_role_titles(extracted.get("preferred_role_titles") or []), role_experience
+    )
+    alternative_titles_raw = _resolve_extracted_role_families(
+        _dedupe_role_titles(extracted.get("alternative_role_titles") or []), role_experience
     )
     alternative_titles = [
         value for value in alternative_titles_raw if value not in set(preferred_titles)

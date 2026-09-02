@@ -48,7 +48,7 @@ def test_ui_labels_json_contains_all_settings_clearances_keys():
     assert not missing, f"ui_labels.json is missing settings_clearances_labels keys: {missing}"
 
 
-def test_settings_page_renders_keyword_label_and_location_field(monkeypatch):
+def test_settings_page_renders_role_preferences_and_location_field(monkeypatch):
 
     monkeypatch.setattr(
         _fa,
@@ -69,7 +69,13 @@ def test_settings_page_renders_keyword_label_and_location_field(monkeypatch):
 
     assert "__JOB_HUNTER_TITLE_TIER_SEARCH_KEYWORD_LABEL__" not in html
 
-    assert "Search keyword" in html
+    assert "Search keyword" not in html
+
+    assert 'id="keywords"' not in html
+
+    assert "Preferred roles" in html
+
+    assert "Alternative roles" in html
 
     assert "Include SEEK in search" in html
 
@@ -78,6 +84,8 @@ def test_settings_page_renders_keyword_label_and_location_field(monkeypatch):
     assert "Shared search inputs that apply across all enabled sources." in html
 
     assert "Job board search" in html
+
+    assert "Job Hunter searches each preferred and alternative role separately" in html
 
     assert ">Add<" not in html
 

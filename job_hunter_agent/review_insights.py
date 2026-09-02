@@ -521,8 +521,8 @@ def _build_rule_tuning_suggestions_from_reviews(review_items: list[dict[str, Any
                     "count": count,
                     "headline": "Broad capture is producing a lot of non-primary job titles",
                     "detail": f"{count} role(s) were filtered by title before deeper review.",
-                    "target": "Search keywords and title matching",
-                    "recommendation": "Keep search broad unless deeper review volume rises. Tighten title rules before tightening search keywords.",
+                    "target": "Role targeting and title matching",
+                    "recommendation": "Keep role targeting broad unless deeper review volume rises. Tighten title rules only after confirming the broader role family is not useful.",
                     "samples": samples,
                 }
             )

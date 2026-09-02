@@ -65,30 +65,6 @@ const fillUserSettings = (s) => alertsSettings.fillUserSettings(s);
 const collectUserSettings = () => alertsSettings.collectUserSettings(loadedUserSettings);
 
 const sectorPreferenceDefault = String(SECTOR_PREFERENCE_DEFAULT || 'any').trim().toLowerCase();
-function readOnboardingWelcomeSearchKeywords() {
-  try {
-    const raw = window.localStorage.getItem('jobHunter.onboardingWelcome');
-    if (!raw) return '';
-    const parsed = JSON.parse(raw);
-    return String(parsed?.search_keywords || '').trim();
-  } catch {
-    return '';
-  }
-}
-
-function validateSearchKeywords(keyword) {
-  const text = String(keyword || '').trim();
-  if (!text) {
-    return;
-  }
-  if (text.length < 2 || text.length > 120) {
-    throw new Error('Please keep the search keyword between 2 and 120 characters.');
-  }
-  if (text.split(/\s+/).filter(Boolean).length < 2) {
-    throw new Error('Please use at least two words for the search title, or leave it blank.');
-  }
-}
-
 let loadedUserSettings = null;
 const SEEK_QUICK_APPLY_ONLY = 'seek_quick_apply_only';
 
@@ -276,7 +252,6 @@ function captureCandidateSettingsSnapshot(profile, userSettings) {
     ? normalizedProfile.enabled_sources.map((value) => String(value || '').trim().toLowerCase())
     : [];
   return {
-    searchKeyword: normalizedProfile.search_settings?.keywords || '',
     locations: normalizedProfile.search_settings?.locations || [],
     searchDateWindow: normalizedProfile.search_settings?.date_range_days ?? '',
     seekMaxPages: normalizedProfile.search_settings?.seek_max_pages ?? '',
@@ -307,7 +282,6 @@ function captureCandidateSettingsSnapshot(profile, userSettings) {
 }
 
 const candidateSettingsSummaryFields = [
-  { key: 'searchKeyword', path: 'search_settings.keywords', fieldId: 'keywords', format: formatSummaryText },
   { key: 'locations', path: 'search_settings.locations', fieldId: 'locations', format: formatSummaryList },
   { key: 'searchDateWindow', path: 'search_settings.date_range_days', fieldId: 'search_date_window', format: (value) => formatSummarySelect('search_date_window', value) },
   { key: 'seekMaxPages', path: 'search_settings.seek_max_pages', fieldId: 'seek_max_pages', format: formatSummaryText },
@@ -628,8 +602,8 @@ function initFieldInfoDrawers() {
 upgradeSettingsHelpBlocks();
 initFieldInfoDrawers();
 
-function collectProfile() {
-  chipEditor.flushChipEditorInputs();
+async function collectProfile() {
+  await chipEditor.flushChipEditorInputs();
   const searchDateWindow = Number(document.getElementById('search_date_window')?.value || '3');
   const hoursMap = { 0: 720, 1: 24, 3: 72, 7: 168, 15: 360, 30: 720 };
   const seekQuickApplyRaw = document.getElementById(SEEK_QUICK_APPLY_ONLY)?.value;
@@ -639,13 +613,11 @@ function collectProfile() {
   if (!Number.isFinite(seekMaxPages)) {
     throw new Error('Please choose a valid SEEK page limit.');
   }
-  validateSearchKeywords(settingsField('keywords').value);
   const engagementTypeValues = getEngagementTypeValues();
   const contractEnabled = engagementTypeValues.includes('contract') || engagementTypeValues.includes('full_time_contract');
   const minContractEl = document.getElementById('min_contract_months');
   return {
     search_settings: {
-      keywords: String(settingsField('keywords').value || '').trim(),
       locations: getSelectedLocationValues(),
       classification_ids: toLines(document.getElementById('classification_ids').value),
       date_range_days: searchDateWindow === 0 ? 30 : searchDateWindow,
@@ -694,9 +666,6 @@ function collectProfile() {
 }
 
 function fillForm(profile) {
-  const savedKeywords = String(profile.search_settings?.keywords || '').trim();
-  const onboardingKeywords = savedKeywords ? '' : readOnboardingWelcomeSearchKeywords();
-  settingsField('keywords').value = savedKeywords || onboardingKeywords || '';
   renderLocationOptions();
   document.getElementById('classification_ids').value = (profile.search_settings?.classification_ids || []).join('\n');
   setChoiceGroupValue('seek_max_pages', profile.search_settings?.seek_max_pages);
@@ -1200,7 +1169,7 @@ async function saveActivePage() {
     } else {
       const previousProfile = loadedProfile;
       const previousUserSettings = loadedUserSettings;
-      const profile = collectProfile();
+      const profile = await collectProfile();
       const userSettingsPayload = alertsSettings.collectUserSettings(loadedUserSettings);
       const profileResponse = await jobHunterFetch('/api/profile', {
         method: 'PATCH',

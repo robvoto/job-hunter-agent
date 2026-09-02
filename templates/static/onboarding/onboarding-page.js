@@ -30,7 +30,6 @@ export const refs = Object.freeze({
   continueToReview: document.getElementById('continue_to_review'),
   stepNavButtons: Array.from(document.querySelectorAll('[data-step-nav]')),
   capabilityStrengthPreset: document.getElementById('os_capability_strength_preset'),
-  reviewSearchKeywords: document.getElementById('review_search_keywords'),
   minContractMonths: document.getElementById('min_contract_months'),
   reviewMinimumSalaryYearly: document.getElementById('review_minimum_salary_yearly'),
   reviewMinimumDailyRate: document.getElementById('review_minimum_daily_rate'),
@@ -61,7 +60,6 @@ const {
   continueToReview: continueToReviewEl,
   stepNavButtons,
   capabilityStrengthPreset: capabilityStrengthPresetEl,
-  reviewSearchKeywords: reviewSearchKeywordsEl,
   reviewMinimumSalaryYearly: reviewMinimumSalaryYearlyEl,
   reviewMinimumDailyRate: reviewMinimumDailyRateEl,
   reviewCapabilityFilter: reviewCapabilityFilterEl,
@@ -128,16 +126,6 @@ function dedupeSearchTitles(values) {
   return output;
 }
 
-export function defaultSearchKeywordFromTargetRoles(profile) {
-  if (!profile || !Array.isArray(profile.target_roles)) {
-    throw new Error('Missing target roles.');
-  }
-  const allTitles = dedupeSearchTitles(reviewTargetTitles.concat(profile.target_roles));
-  if (!allTitles.length) {
-    throw new Error('Missing target role keywords.');
-  }
-  return allTitles[0];
-}
 const {
   WORK_MODE_PREFERENCE_VALUES: ONBOARDING_WORK_MODE_PREFERENCE_VALUES,
   ENGAGEMENT_TYPE_VALUES,
@@ -325,10 +313,7 @@ export function hasDraftProfileState() {
 export function hasSearchBasicsState() {
   return Boolean(
     hasDraftProfileState()
-    && (
-      selectedLocations.length
-      || String(reviewSearchKeywordsEl?.value || '').trim()
-    )
+    && selectedLocations.length
   );
 }
 
@@ -486,7 +471,6 @@ export function saveWizardState() {
     reviewCapabilityVisibleCount,
     selectedLocations,
     workModePreference: getOnboardingWorkModePreferenceValues(),
-    searchKeywords: reviewSearchKeywordsEl?.value || '',
     minContractMonths: getResolvedMinContractMonthValue(),
     minimumSalaryYearly: reviewMinimumSalaryYearlyEl?.value || '',
     minimumDailyRate: reviewMinimumDailyRateEl?.value || '',
@@ -701,7 +685,6 @@ export function locationSelectionErrorMessage() {
 export function searchPreferencesPayload() {
   const engagementType = getOnboardingEngagementTypeValues();
   return {
-    keywords: reviewSearchKeywordsEl?.value.trim() || '',
     locations: selectedLocations.slice(),
     engagement_type: engagementType,
     min_contract_months: (engagementType.includes('contract') || engagementType.includes('full_time_contract')) ? (getResolvedMinContractMonthValue() || null) : null,
@@ -713,12 +696,6 @@ export function searchPreferencesPayload() {
 }
 
 export function validateSearchPreferences(searchPrefs) {
-  if (searchPrefs.keywords && (searchPrefs.keywords.length < 2 || searchPrefs.keywords.length > 120)) {
-    throw new Error(`Please keep the ${onboardingPageTitleTierLabels.search_keyword_label.toLowerCase()} between 2 and 120 characters.`);
-  }
-  if (searchPrefs.keywords && searchPrefs.keywords.trim().split(/\s+/).filter(Boolean).length < 2) {
-    throw new Error('Please use at least two words for the search title, or leave it blank.');
-  }
   if (searchPrefs.locations.length < 1 || searchPrefs.locations.length > MAX_ONBOARDING_LOCATIONS) {
     throw new Error(locationSelectionErrorMessage());
   }
@@ -741,9 +718,6 @@ export function validateSearchPreferences(searchPrefs) {
   }
   if ((Array.isArray(searchPrefs.work_mode_preference) ? searchPrefs.work_mode_preference : []).some((mode) => !ONBOARDING_WORK_MODE_PREFERENCE_VALUES.has(mode))) {
     throw new Error('Please choose only remote, hybrid, or on-site.');
-  }
-  if (!searchPrefs.keywords) {
-    throw new Error(`Please confirm one ${onboardingPageTitleTierLabels.search_keyword_label.toLowerCase()}.`);
   }
   if (searchPrefs.minimum_salary_yearly !== '' && searchPrefs.minimum_salary_yearly !== null && searchPrefs.minimum_salary_yearly !== undefined) {
     const yearly = onboardingParseCurrencyValue(searchPrefs.minimum_salary_yearly);
@@ -774,7 +748,6 @@ export function applyProfileDefaults(profile) {
   if (!preset) {
     throw new Error('Missing capability strength preset.');
   }
-  const searchSettings = profile.search_settings;
   const matchPreferences = profile.match_preferences;
   const salaryPreferences = profile.salary_preferences;
 
@@ -789,14 +762,6 @@ export function applyProfileDefaults(profile) {
     );
     reviewTargetTitles = normalizedTitles.primary;
     reviewSecondaryTitles = normalizedTitles.secondary;
-  }
-  if (reviewSearchKeywordsEl && !String(reviewSearchKeywordsEl.value || '').trim()) {
-    const savedKeywords = String(searchSettings.keywords || '').trim();
-    if (savedKeywords) {
-      reviewSearchKeywordsEl.value = savedKeywords;
-    } else if (Array.isArray(profile.target_roles) && profile.target_roles.length) {
-      reviewSearchKeywordsEl.value = defaultSearchKeywordFromTargetRoles(profile);
-    }
   }
   if (refs.minContractMonths && !String(refs.minContractMonths.value || '').trim()) {
     if (matchPreferences.min_contract_months === undefined) {
@@ -834,8 +799,8 @@ export function applyProfileDefaults(profile) {
     setSectorPreferenceValues(matchPreferences.prefer_sector);
     updateSearchPreferenceSummaries();
   }
-  if (!selectedLocations.length && Array.isArray(searchSettings.locations) && searchSettings.locations.length) {
-    setSelectedLocations(searchSettings.locations);
+  if (!selectedLocations.length && Array.isArray(profile.search_settings.locations) && profile.search_settings.locations.length) {
+    setSelectedLocations(profile.search_settings.locations);
     renderLocationSelect();
   }
   refreshStepNavigation();

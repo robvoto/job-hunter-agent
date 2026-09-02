@@ -401,14 +401,14 @@ def test_build_apsjobs_search_targets_uses_all_distinct_profile_role_terms():
     keywords, targets = apsjobs_module.build_apsjobs_search_targets(
         {"keywords": "legacy keyword", "locations": ["NSW"]},
         {
-            "target_roles": ["Senior Systems Analyst", "Business Analyst"],
+            "target_roles": ["Systems Analyst", "Business Analyst"],
             "also_consider_roles": ["AI Business Analyst"],
         },
     )
 
-    assert keywords == "Senior Systems Analyst"
+    assert keywords == "Systems Analyst"
     assert [target["search_term"] for target in targets] == [
-        "Senior Systems Analyst",
+        "Systems Analyst",
         "Business Analyst",
         "AI Business Analyst",
     ]
