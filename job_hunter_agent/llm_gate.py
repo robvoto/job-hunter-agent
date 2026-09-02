@@ -1754,6 +1754,20 @@ def normalize_llm_requirement_coverage(
         experience_components = _normalize_experience_components(
             item.get("experience_components")
         )
+        # A row that already contains explicit candidate-supported component
+        # evidence is not a clean "missing fact" suitable for creating a new
+        # profile item. This fail-closed structural guard protects against an
+        # LLM collapsing an AND/compound requirement into one not_shown row
+        # while simultaneously acknowledging that part of the row is already
+        # supported by the candidate profile. The semantic fix remains at the
+        # LLM decomposition boundary; deterministic code only blocks the unsafe
+        # profile-learning action here rather than guessing how to split prose.
+        if profile_action_allowed and any(
+            component.get("profile_supported") is True
+            and bool(component.get("profile_evidence"))
+            for component in experience_components
+        ):
+            profile_action_allowed = False
         role_defining = bool(item.get("role_defining"))
         role_defining_group = compact_whitespace(item.get("role_defining_group"))
         if not requirement:
