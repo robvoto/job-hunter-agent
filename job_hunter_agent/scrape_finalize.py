@@ -99,12 +99,6 @@ def _save_workspace_pool(records: list[dict]) -> None:
 
 
 def _merge_into_pool(pool: list[dict], new_records: list[dict]) -> list[dict]:
-    frozen_score_keys = {
-        "fit_score",
-        "fit_score_breakdown",
-        "fit_label",
-        "fit_tone_class",
-    }
     merged_by_key: dict[str, dict] = {}
     ordered_keys: list[str] = []
 
@@ -125,10 +119,10 @@ def _merge_into_pool(pool: list[dict], new_records: list[dict]) -> list[dict]:
             ordered_keys.append(job_key)
             continue
         updated = dict(existing)
+        # A fresh review is authoritative for its score and evidence. Keeping an
+        # older frozen score while replacing requirement_coverage creates a
+        # contradictory workspace record (new evidence beside an old score).
         updated.update(record)
-        for key in frozen_score_keys:
-            if key in existing:
-                updated[key] = existing[key]
         merged_by_key[job_key] = updated
 
     return [merged_by_key[job_key] for job_key in ordered_keys]

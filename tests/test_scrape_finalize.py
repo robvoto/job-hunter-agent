@@ -64,7 +64,7 @@ def test_interrupted_finalize_does_not_generate_success_summary(monkeypatch):
     assert summaries == []
 
 
-def test_merge_into_pool_updates_non_score_fields_and_preserves_frozen_score():
+def test_merge_into_pool_updates_fresh_review_score_and_non_score_fields():
     pool = [
         {
             "job_key": "job:1",
@@ -85,6 +85,10 @@ def test_merge_into_pool_updates_non_score_fields_and_preserves_frozen_score():
             "company": "Acme",
             "url": "https://new.example/job",
             "salary": "$120k",
+            RECORD_FIT_SCORE_KEY: 48,
+            RECORD_FIT_SCORE_BREAKDOWN_KEY: [{"label": "Fresh review", "value": 48}],
+            RECORD_FIT_LABEL_KEY: "Stretch",
+            RECORD_FIT_TONE_CLASS_KEY: "tone-low",
         }
     ]
 
@@ -93,10 +97,10 @@ def test_merge_into_pool_updates_non_score_fields_and_preserves_frozen_score():
     assert merged[0]["title"] == "New title"
     assert merged[0]["url"] == "https://new.example/job"
     assert merged[0]["salary"] == "$120k"
-    assert merged[0][RECORD_FIT_SCORE_KEY] == 72
-    assert merged[0][RECORD_FIT_SCORE_BREAKDOWN_KEY] == [{"label": "Base", "value": 72}]
-    assert merged[0][RECORD_FIT_LABEL_KEY] == "Strong fit"
-    assert merged[0][RECORD_FIT_TONE_CLASS_KEY] == "tone-good"
+    assert merged[0][RECORD_FIT_SCORE_KEY] == 48
+    assert merged[0][RECORD_FIT_SCORE_BREAKDOWN_KEY] == [{"label": "Fresh review", "value": 48}]
+    assert merged[0][RECORD_FIT_LABEL_KEY] == "Stretch"
+    assert merged[0][RECORD_FIT_TONE_CLASS_KEY] == "tone-low"
 
 
 def test_finalize_scrape_run_writes_outputs(monkeypatch, tmp_path, capsys, caplog):
