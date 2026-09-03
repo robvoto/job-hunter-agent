@@ -2,7 +2,7 @@
 
 This module is the single owner of run-wide progress state.  It stores both:
 
-* ``text``  — a human-readable progress string for logging and legacy consumers;
+* ``text``  — a human-readable progress string for logging and display;
 * ``detail`` — a typed, validated :class:`ProgressDetail` that the UI renders
   with a source badge, progress bar, and stage information instead of parsing
   arbitrary strings in the browser.
@@ -21,7 +21,6 @@ from typing import Any
 
 from job_hunter_agent.logging_utils import format_debug_marker
 
-_RUN_STOP_REQUESTED = threading.Event()
 _RUN_SHUTDOWN_REQUESTED = threading.Event()
 _RUN_PROGRESS_LOCK = threading.Lock()
 _RUN_PROGRESS_TEXT = ""
@@ -124,18 +123,15 @@ def pause_for_step_through(label: str) -> None:
 
 
 def request_run_stop() -> None:
-    """Signal the active run, or the legacy global event when no run is scoped."""
+    """Signal the active scoped run; no global fallback stop state exists."""
     with _RUN_PROGRESS_LOCK:
         active_event = _RUN_ACTIVE_STOP_EVENT
     if active_event is not None:
         active_event.set()
-    else:
-        _RUN_STOP_REQUESTED.set()
 
 
 def clear_run_stop_request() -> None:
-    """Clear only currently active/legacy stop events, never detached worker events."""
-    _RUN_STOP_REQUESTED.clear()
+    """Clear only the currently active scoped stop event."""
     with _RUN_PROGRESS_LOCK:
         active_event = _RUN_ACTIVE_STOP_EVENT
     if active_event is not None:
@@ -148,9 +144,7 @@ def run_stop_requested() -> bool:
         return scoped_event.is_set()
     with _RUN_PROGRESS_LOCK:
         active_event = _RUN_ACTIVE_STOP_EVENT
-    if active_event is not None:
-        return active_event.is_set()
-    return _RUN_STOP_REQUESTED.is_set()
+    return active_event.is_set() if active_event is not None else False
 
 
 def run_control_scope_active() -> bool:
@@ -158,12 +152,13 @@ def run_control_scope_active() -> bool:
     return _RUN_PROGRESS_SCOPE.get() is not None
 
 
-def begin_run_progress_scope() -> object:
+def begin_run_progress_scope(*, bind_current_context: bool = True) -> object:
     """Start isolated stop/progress state for one background run.
 
-    Source workers inherit both values through ``contextvars.copy_context()``.
-    A detached late worker therefore keeps its own stop event and cannot resume
-    merely because a later run clears or replaces the active event.
+    ``bind_current_context=False`` reserves the active scope before a worker is
+    launched; the worker must then call :func:`bind_run_progress_scope`. This
+    closes the stop-request race without leaking run ContextVars into the HTTP
+    request context.
     """
     global _RUN_ACTIVE_PROGRESS_SCOPE, _RUN_ACTIVE_STOP_EVENT
     global _RUN_PROGRESS_TEXT, _RUN_PROGRESS_DETAIL, _RUN_PROGRESS_BY_SOURCE
@@ -178,9 +173,20 @@ def begin_run_progress_scope() -> object:
         _RUN_PROGRESS_TEXT = ""
         _RUN_PROGRESS_DETAIL = None
         _RUN_PROGRESS_BY_SOURCE = {}
+    if bind_current_context:
+        _RUN_PROGRESS_SCOPE.set(scope)
+        _RUN_STOP_EVENT_SCOPE.set(stop_event)
+    return scope
+
+
+def bind_run_progress_scope(scope: object) -> None:
+    """Bind the already-active *scope* and its stop event to this execution context."""
+    with _RUN_PROGRESS_LOCK:
+        if _RUN_ACTIVE_PROGRESS_SCOPE is not scope or _RUN_ACTIVE_STOP_EVENT is None:
+            raise RuntimeError("Cannot bind an inactive run-control scope.")
+        stop_event = _RUN_ACTIVE_STOP_EVENT
     _RUN_PROGRESS_SCOPE.set(scope)
     _RUN_STOP_EVENT_SCOPE.set(stop_event)
-    return scope
 
 
 def end_run_progress_scope(scope: object) -> None:
@@ -334,6 +340,10 @@ def set_run_progress_state(
         or item_total is not None
         or determinate is not None
     )
+    if normalized_text and not has_detail:
+        raise ValueError(
+            "non-empty run progress requires structured detail; use stage/source/headline/detail fields"
+        )
 
     if has_detail:
         detail_obj = _validate_progress_detail(
@@ -380,15 +390,6 @@ def set_run_progress_state(
             log_parts["pct"] = round(detail_obj.current / detail_obj.total * 100, 1)
     logger.debug(format_debug_marker("RUN_PROGRESS", log_parts))
 
-
-def set_run_progress(text: str) -> None:
-    """Set a text-only operational message and clear stale structured detail.
-
-    Use this for exceptional or legacy messages that do not have a trustworthy
-    stage model. Normal source and finalisation progress should use
-    :func:`set_run_progress_state`.
-    """
-    set_run_progress_state(text)
 
 
 def clear_run_progress() -> None:

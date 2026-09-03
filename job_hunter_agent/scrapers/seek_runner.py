@@ -51,7 +51,6 @@ from job_hunter_agent.job_review_pipeline import (
 from job_hunter_agent.paths import PLAYWRIGHT_USER_DATA_DIR
 from job_hunter_agent.run_control import (
     run_stop_requested,
-    set_run_progress,
     set_run_progress_state,
     step_through_enabled,
 )
@@ -96,6 +95,19 @@ def seek_quick_apply_filter_matches(setting: object, apply_method: str) -> bool:
         return True
     is_quick_apply = str(apply_method or "").strip() == rs.APPLY_METHOD_QUICK_APPLY
     return bool(setting) == is_quick_apply
+
+
+
+
+def _set_seek_status_progress(text: str, *, stage: str) -> None:
+    message = str(text or "").strip()
+    set_run_progress_state(
+        message,
+        stage=stage,
+        source="seek",
+        headline=message,
+        determinate=False,
+    )
 
 
 class BotChallengeDetected(Exception):
@@ -275,7 +287,7 @@ def _wait_for_seek_user_verification(list_page, page_tag: str, timeout_ms: int) 
         page_tag,
         timeout_ms,
     )
-    set_run_progress(_SEEK_FAILURE_MESSAGES[SEEK_HUMAN_VERIFICATION])
+    _set_seek_status_progress(_SEEK_FAILURE_MESSAGES[SEEK_HUMAN_VERIFICATION], stage="verification")
     try:
         list_page.wait_for_selector(SELECTOR_CARDS, timeout=timeout_ms)
     except Exception:
@@ -364,8 +376,9 @@ def _wait_for_seek_bot_challenge_or_manual_verification(
         use_persistent_browser,
     )
     if use_persistent_browser and not headless:
-        set_run_progress(
-            "SEEK needs verification. Open the AWS browser session and complete the check."
+        _set_seek_status_progress(
+            "SEEK needs verification. Open the AWS browser session and complete the check.",
+            stage="verification",
         )
         try:
             list_page.wait_for_selector(SELECTOR_CARDS, timeout=playwright_selector_timeout)
@@ -419,9 +432,9 @@ def _handle_seek_list_page_failure(
                     "[SEEK][HUMAN_VERIFICATION_RESOLVED] %s continuing scrape after manual verification",
                     page_tag,
                 )
-                set_run_progress("SEEK human verification resolved; continuing scrape.")
+                _set_seek_status_progress("SEEK human verification resolved; continuing scrape.", stage="source_collection")
                 return True
-            set_run_progress(_SEEK_FAILURE_MESSAGES[SEEK_HUMAN_VERIFICATION])
+            _set_seek_status_progress(_SEEK_FAILURE_MESSAGES[SEEK_HUMAN_VERIFICATION], stage="verification")
             raise BotChallengeDetected(
                 _SEEK_FAILURE_MESSAGES[SEEK_HUMAN_VERIFICATION],
                 failure_class=SEEK_HUMAN_VERIFICATION,
@@ -431,7 +444,7 @@ def _handle_seek_list_page_failure(
             "on AWS this needs VNC/noVNC or secure admin port forwarding",
             page_tag,
         )
-        set_run_progress(_SEEK_FAILURE_MESSAGES[SEEK_HUMAN_VERIFICATION])
+        _set_seek_status_progress(_SEEK_FAILURE_MESSAGES[SEEK_HUMAN_VERIFICATION], stage="verification")
         raise BotChallengeDetected(
             _SEEK_FAILURE_MESSAGES[SEEK_HUMAN_VERIFICATION],
             failure_class=SEEK_HUMAN_VERIFICATION,
@@ -446,7 +459,7 @@ def _handle_seek_list_page_failure(
             use_persistent_browser,
         )
         if use_persistent_browser and not headless:
-            set_run_progress("SEEK needs verification. Open the AWS browser session and complete the check.")
+            _set_seek_status_progress("SEEK needs verification. Open the AWS browser session and complete the check.", stage="verification")
             try:
                 list_page.wait_for_selector(SELECTOR_CARDS, timeout=playwright_selector_timeout)
             except Exception as wait_exc:
@@ -460,7 +473,7 @@ def _handle_seek_list_page_failure(
                 ) from wait_exc
             logger.info("[SEEK][BOT_CHALLENGE_RESOLVED] %s continuing scrape after verification", page_tag)
             return True
-        set_run_progress(_SEEK_FAILURE_MESSAGES[SEEK_BOT_CHALLENGE])
+        _set_seek_status_progress(_SEEK_FAILURE_MESSAGES[SEEK_BOT_CHALLENGE], stage="error")
         raise BotChallengeDetected(
             _SEEK_FAILURE_MESSAGES[SEEK_BOT_CHALLENGE],
             failure_class=SEEK_BOT_CHALLENGE,
@@ -473,7 +486,7 @@ def _handle_seek_list_page_failure(
             page_status,
             snapshot["selector_count"],
         )
-        set_run_progress(_SEEK_FAILURE_MESSAGES[SEEK_TIMEOUT_NO_CARDS])
+        _set_seek_status_progress(_SEEK_FAILURE_MESSAGES[SEEK_TIMEOUT_NO_CARDS], stage="error")
         return False
     logger.warning(
         "[SEEK][UNKNOWN_FAILURE] %s title=%r status=%s headless=%s persistent=%s",
@@ -483,7 +496,7 @@ def _handle_seek_list_page_failure(
         headless,
         use_persistent_browser,
     )
-    set_run_progress(_SEEK_FAILURE_MESSAGES[SEEK_UNKNOWN_FAILURE])
+    _set_seek_status_progress(_SEEK_FAILURE_MESSAGES[SEEK_UNKNOWN_FAILURE], stage="error")
     return False
 
 

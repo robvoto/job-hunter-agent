@@ -14,6 +14,7 @@ from job_hunter_agent import (
     profile_learning,
     profile_store,
     review_history_service,
+    run_control,
     server_helpers,
     server_review,
     source_documents,
@@ -890,6 +891,44 @@ def test_api_run_rejects_missing_llm_provider_before_thread_start(monkeypatch):
         == "Search requires LLM review, but no provider key is configured for this runtime."
     )
     assert thread_started == []
+
+
+def test_api_run_creates_control_scope_before_thread_start(monkeypatch):
+    monkeypatch.setattr(scrape_debug.srv, "_onboarding_complete", lambda: True)
+    monkeypatch.setattr(scrape_debug.srv, "require_profile_ready_for_review", lambda: None)
+    monkeypatch.setattr(scrape_debug, "ensure_llm_runtime_ready", lambda *, no_llm_mode: None)
+    monkeypatch.setattr(scrape_debug.srv, "_try_mark_run_started", lambda: True)
+    monkeypatch.setattr(scrape_debug.srv, "_normalize_search_settings_payload", lambda body: {})
+    monkeypatch.setattr(scrape_debug.srv, "_read_last_run_timestamp", lambda: None)
+
+    observed = {}
+
+    class _Thread:
+        def __init__(self, *, target, args, daemon):
+            observed["scope_active_at_thread_creation"] = run_control.run_control_scope_active()
+            run_control.request_run_stop()
+            observed["stop_visible_before_worker_start"] = run_control.run_stop_requested()
+            observed["target"] = target
+            observed["args"] = args
+            observed["daemon"] = daemon
+
+        def start(self):
+            worker = observed["args"][0]
+            scope = worker.keywords["progress_scope"]
+            observed["scope"] = scope
+            # Do not execute the real scrape in this unit test; release the scope
+            # that the real worker owns in its finally block.
+            scrape_debug.end_run_progress_scope(scope)
+
+    monkeypatch.setattr(scrape_debug.threading, "Thread", _Thread)
+
+    response = scrape_debug.api_run({})
+
+    assert response.status_code == 200, response.body
+    assert observed["scope_active_at_thread_creation"] is False
+    assert observed["stop_visible_before_worker_start"] is True
+    assert observed["scope"] is not None
+    assert observed["daemon"] is True
 
 
 def test_validate_required_onboarding_inputs_requires_locations_and_engagement():

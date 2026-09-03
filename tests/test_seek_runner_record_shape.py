@@ -367,7 +367,7 @@ def test_seek_user_verification_wait_succeeds_when_cards_appear(monkeypatch):
             calls.append((selector, timeout))
 
     monkeypatch.setattr(
-        "job_hunter_agent.scrapers.seek_runner.set_run_progress", lambda message: None
+        "job_hunter_agent.scrapers.seek_runner._set_seek_status_progress", lambda message, **kwargs: None
     )
 
     assert _wait_for_seek_user_verification(_WaitPage(), "[SEEK p1/3]", 5000) is True
@@ -392,7 +392,7 @@ def test_seek_bot_challenge_wait_succeeds_when_cards_appear(monkeypatch):
             calls.append((selector, timeout))
 
     monkeypatch.setattr(
-        "job_hunter_agent.scrapers.seek_runner.set_run_progress", lambda message: None
+        "job_hunter_agent.scrapers.seek_runner._set_seek_status_progress", lambda message, **kwargs: None
     )
 
     assert (
@@ -427,7 +427,7 @@ def test_seek_bot_challenge_wait_succeeds_in_visible_browser_without_assisted_fl
             calls.append((selector, timeout))
 
     monkeypatch.setattr(
-        "job_hunter_agent.scrapers.seek_runner.set_run_progress", lambda message: None
+        "job_hunter_agent.scrapers.seek_runner._set_seek_status_progress", lambda message, **kwargs: None
     )
 
     assert (
@@ -460,7 +460,7 @@ def test_seek_bot_challenge_timeout_raises_classified_bot_challenge(monkeypatch)
             raise TimeoutError("still blocked")
 
     monkeypatch.setattr(
-        "job_hunter_agent.scrapers.seek_runner.set_run_progress", lambda message: None
+        "job_hunter_agent.scrapers.seek_runner._set_seek_status_progress", lambda message, **kwargs: None
     )
 
     try:
@@ -484,7 +484,7 @@ def test_seek_human_verification_recovery_continues_without_bot_challenge(monkey
             return None
 
     monkeypatch.setattr(
-        "job_hunter_agent.scrapers.seek_runner.set_run_progress", lambda message: None
+        "job_hunter_agent.scrapers.seek_runner._set_seek_status_progress", lambda message, **kwargs: None
     )
 
     assert (
@@ -510,7 +510,7 @@ def test_seek_human_verification_timeout_raises_classified_bot_challenge(monkeyp
             raise TimeoutError("still blocked")
 
     monkeypatch.setattr(
-        "job_hunter_agent.scrapers.seek_runner.set_run_progress", lambda message: None
+        "job_hunter_agent.scrapers.seek_runner._set_seek_status_progress", lambda message, **kwargs: None
     )
 
     try:

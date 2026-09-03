@@ -576,7 +576,7 @@ def test_seek_human_verification_sets_user_facing_progress(monkeypatch):
     context.profile = {"search_settings": {"keywords": "Business Analyst", "locations": ["Sydney"]}}
     messages: list[str] = []
 
-    def fake_progress(message: str) -> None:
+    def fake_progress(message: str, **kwargs) -> None:
         messages.append(message)
 
     def fake_seek_scrape_to_records(*, headless, **kwargs):
@@ -585,7 +585,7 @@ def test_seek_human_verification_sets_user_facing_progress(monkeypatch):
             failure_class=source_runner.SEEK_HUMAN_VERIFICATION,
         )
 
-    monkeypatch.setattr(source_runner, "set_run_progress", fake_progress)
+    monkeypatch.setattr(source_runner, "_set_seek_source_progress", fake_progress)
     monkeypatch.setattr(source_runner, "seek_scrape_to_records", fake_seek_scrape_to_records)
 
     result = source_runner._run_seek_source(context)
@@ -601,14 +601,14 @@ def test_seek_assisted_verification_sets_browser_session_enabled_message(monkeyp
     context.profile = {"search_settings": {"keywords": "Business Analyst", "locations": ["Sydney"]}}
     messages: list[str] = []
 
-    def fake_progress(message: str) -> None:
+    def fake_progress(message: str, **kwargs) -> None:
         messages.append(message)
 
     def fake_seek_scrape_to_records(**kwargs):
         return ([{"job_key": "seek:1"}], [], [])
 
     monkeypatch.setattr(source_runner, "get_seek_assisted_verification_enabled", lambda: True)
-    monkeypatch.setattr(source_runner, "set_run_progress", fake_progress)
+    monkeypatch.setattr(source_runner, "_set_seek_source_progress", fake_progress)
     monkeypatch.setattr(source_runner, "seek_scrape_to_records", fake_seek_scrape_to_records)
 
     result = source_runner._run_seek_source(context)

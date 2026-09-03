@@ -26,7 +26,6 @@ from job_hunter_agent.run_control import (
     RunInterruptedError,
     begin_run_progress_scope,
     clear_run_progress,
-    clear_run_stop_request,
     enable_step_through,
     end_run_progress_scope,
     run_control_scope_active,
@@ -147,7 +146,6 @@ def _scrape_jobs_direct_scoped(*, trigger_label: str, force_refresh: bool = Fals
     get_user_id_for_runtime()
     if run_shutdown_requested():
         raise RunInterruptedError("Server shutdown interrupted before source collection started.")
-    clear_run_stop_request()
     clear_run_progress()
     context = build_scrape_run_context(sys.argv)
     context.force_source_refresh = bool(force_refresh or has_cli_flag(sys.argv, CLI_FLAG_FORCE_REFRESH))
