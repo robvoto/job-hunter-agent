@@ -131,3 +131,7 @@ CONFIDENCE_LOW = "LOW"
 REASON_OK = "OK"
 ORIGINAL_POSTED_DATE_STATUS_VERIFIED = "verified"
 ORIGINAL_POSTED_DATE_STATUS_UNVERIFIED = "unverified"
+
+# Resolved employer outcome history attached per record. Always one of the
+# states owned by employer_outcome_display, never absent-by-accident.
+RECORD_EMPLOYER_OUTCOME_KEY = "employer_outcome"

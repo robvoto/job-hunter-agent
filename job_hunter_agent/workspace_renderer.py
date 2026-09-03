@@ -69,6 +69,7 @@ from job_hunter_agent.profile_store import (
 )
 from job_hunter_agent.role_analysis import posting_channel_evidence_is_current
 from job_hunter_agent.requirement_classification import load_default_eligibility_subtype
+from job_hunter_agent.employer_outcome_display import build_employer_outcome_check_item
 from job_hunter_agent.record_schema import (
     APPLY_METHOD_EASY_APPLY,
     APPLY_METHOD_QUICK_APPLY,
@@ -76,6 +77,7 @@ from job_hunter_agent.record_schema import (
     RECORD_APPLY_METHOD_KEY,
     RECORD_DECISION_KEY,
     RECORD_DUPLICATE_LINKS_KEY,
+    RECORD_EMPLOYER_OUTCOME_KEY,
     RECORD_LLM_COST_USD_KEY,
     RECORD_LLM_DECISION_KEY,
     RECORD_LLM_ELAPSED_MS_KEY,
@@ -764,6 +766,7 @@ def _build_checks_before_applying_items(
     salary_fit_state: str,
     soft_risk_reasons: Optional[list[str]] = None,
     job_quality_signals: Optional[list[dict]] = None,
+    employer_outcome: Optional[dict] = None,
 ) -> list[str]:
     items: list[str] = []
     seen: set[str] = set()
@@ -822,6 +825,14 @@ def _build_checks_before_applying_items(
                 history_label
                 + (f": {' — '.join(history_bits)}" if history_bits else "")
             )
+
+    if employer_outcome:
+        add(
+            build_employer_outcome_check_item(
+                employer_outcome,
+                lambda key: _workspace_label("check_item_labels", key),
+            )
+        )
 
     if salary_fit_state == "below":
         add(_workspace_label("check_item_labels", "salary_below_target"))
@@ -1731,6 +1742,7 @@ def render_job_card(
         salary_fit_state,
         soft_risk_reasons,
         job_quality_signals,
+        record.get(RECORD_EMPLOYER_OUTCOME_KEY),
     )
     job_requirements_html = ""
     merged_requirement_rows: dict[str, dict[str, Any]] = {}
