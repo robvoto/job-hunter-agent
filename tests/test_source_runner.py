@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 from job_hunter_agent import source_runner
 from job_hunter_agent import job_review_pipeline
+from job_hunter_agent import run_control
 from job_hunter_agent.logging_utils import get_log_source_scope
 from job_hunter_agent.job_review_pipeline import ReviewPipelineContext, review_pre_detail_normalized_job
 from job_hunter_agent.run_context import ScrapeRunContext
@@ -725,6 +726,41 @@ def test_parallel_runner_logs_source_start_and_complete_blocks(monkeypatch, capl
     assert "[LINKEDIN][SOURCE_COMPLETE]" in caplog.text
 
 
+def test_parallel_source_failure_stops_remaining_sources_and_preserves_failure(monkeypatch):
+    context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
+    seek_observed_stop = threading.Event()
+
+    def cooperative_seek(ctx):
+        deadline = time.time() + 1
+        while time.time() < deadline and not run_control.run_stop_requested():
+            time.sleep(0.005)
+        if run_control.run_stop_requested():
+            seek_observed_stop.set()
+        return _seek_result(source_collection_complete=False)
+
+    def failed_linkedin(ctx):
+        return _li_result(
+            error=RuntimeError("9 LinkedIn targets timed out"),
+            source_collection_complete=False,
+        )
+
+    monkeypatch.setattr(source_runner, "_run_seek_source", cooperative_seek)
+    monkeypatch.setattr(source_runner, "_run_linkedin_source", failed_linkedin)
+
+    scope = run_control.begin_run_progress_scope()
+    try:
+        run_enabled_sources(context)
+        assert seek_observed_stop.is_set()
+        assert context.source_failure_message == "LinkedIn failed: 9 LinkedIn targets timed out"
+        progress = run_control.get_run_progress_detail()
+        assert progress is not None
+        assert progress["stage"] == "error"
+        assert progress["source"] == SOURCE_LINKEDIN
+        assert progress["headline"] == "LinkedIn failed"
+    finally:
+        run_control.end_run_progress_scope(scope)
+
+
 def test_parallel_runner_labels_failed_source_with_truthful_health_marker(monkeypatch, caplog):
     caplog.set_level(logging.INFO, logger="job_hunter_agent.source_runner")
     context = _make_context([SOURCE_SEEK])
@@ -734,7 +770,11 @@ def test_parallel_runner_labels_failed_source_with_truthful_health_marker(monkey
         lambda ctx: _seek_result(error=RuntimeError("challenge"), source_collection_complete=False),
     )
 
-    run_enabled_sources(context)
+    scope = run_control.begin_run_progress_scope()
+    try:
+        run_enabled_sources(context)
+    finally:
+        run_control.end_run_progress_scope(scope)
 
     assert "[SEEK][SOURCE_FAILED]" in caplog.text
     assert "[SEEK][SOURCE_COMPLETE]" not in caplog.text
