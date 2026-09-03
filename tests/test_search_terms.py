@@ -10,10 +10,9 @@ def test_ordered_profile_search_terms_uses_selected_roles_only():
     profile = {
         "target_roles": ["Business Analyst"],
         "also_consider_roles": ["Systems Analyst"],
-        "target_occupation_queries": ["Data Analyst"],
     }
 
-    assert ordered_profile_search_terms({"keywords": "legacy keyword"}, profile) == [
+    assert ordered_profile_search_terms({"keywords": "unused keyword"}, profile) == [
         "Business Analyst",
         "Systems Analyst",
     ]

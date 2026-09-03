@@ -8,18 +8,14 @@ from job_hunter_agent import profile_store, review_insights
 from job_hunter_agent.io_utils import load_ui_labels
 
 
-def test_save_profile_strips_legacy_guidance_key(isolated_db):
-    legacy_key = "".join(["llm", "_capability_naming_guidance"])
-
-    saved = profile_store.save_profile(
-        {
-            **profile_store.DEFAULT_PROFILE,
-            legacy_key: "  Prefer stable business-analysis style labels.  ",
-        }
-    )
-
-    assert legacy_key not in saved
-    assert legacy_key not in profile_store.load_profile()
+def test_save_profile_rejects_unknown_top_level_field(isolated_db):
+    with pytest.raises(ValueError, match="unsupported top-level fields: llm_capability_naming_guidance"):
+        profile_store.save_profile(
+            {
+                **profile_store.DEFAULT_PROFILE,
+                "llm_capability_naming_guidance": "obsolete guidance",
+            }
+        )
 
 
 def test_save_profile_does_not_persist_scoring_rules(isolated_db):
@@ -36,26 +32,7 @@ def test_save_profile_does_not_persist_scoring_rules(isolated_db):
     assert "scoring_rules" not in persisted
 
 
-def test_load_profile_drops_legacy_guidance_key(isolated_db):
-    from job_hunter_agent.database import db_conn, ensure_user_row
-    from job_hunter_agent.user_context import get_user_id_for_runtime
-
-    legacy_key = "".join(["llm", "_capability_naming_guidance"])
-    user_id = get_user_id_for_runtime()
-    ensure_user_row(user_id)
-    with db_conn() as conn:
-        conn.execute(
-            """INSERT INTO user_profile (user_id, data) VALUES (?, ?)
-            ON CONFLICT(user_id) DO UPDATE SET data = excluded.data""",
-            (user_id, json.dumps({legacy_key: "Prefer labels close to business analysis."})),
-        )
-
-    loaded = profile_store.load_profile()
-
-    assert legacy_key not in loaded
-
-
-def test_load_profile_drops_obsolete_fit_context_fields(isolated_db):
+def test_load_profile_rejects_unknown_top_level_field(isolated_db):
     from job_hunter_agent.database import db_conn, ensure_user_row
     from job_hunter_agent.user_context import get_user_id_for_runtime
 
@@ -65,26 +42,28 @@ def test_load_profile_drops_obsolete_fit_context_fields(isolated_db):
         conn.execute(
             """INSERT INTO user_profile (user_id, data) VALUES (?, ?)
             ON CONFLICT(user_id) DO UPDATE SET data = excluded.data""",
-            (
-                user_id,
-                json.dumps(
-                    {
-                        "".join(["llm_profile", "_brief_mode"]): "manual",
-                        "".join(["llm_profile", "_brief"]): "obsolete prompt text",
-                        "star_" + "evidence_text": "obsolete evidence text",
-                    }
-                ),
-            ),
+            (user_id, json.dumps({"llm_profile_brief": "obsolete"})),
         )
 
-    loaded = profile_store.load_profile()
-
-    assert "".join(["llm_profile", "_brief_mode"]) not in loaded
-    assert "".join(["llm_profile", "_brief"]) not in loaded
-    assert "star_" + "evidence_text" not in loaded
+    with pytest.raises(ValueError, match="unsupported top-level fields: llm_profile_brief"):
+        profile_store.load_profile()
 
 
-def test_load_profile_drops_legacy_target_occupation_queries(isolated_db):
+def test_normalize_full_profile_rejects_multiple_unknown_fields():
+    with pytest.raises(
+        ValueError,
+        match="unsupported top-level fields: llm_profile_brief, llm_profile_brief_mode, star_evidence_text",
+    ):
+        profile_store.normalize_full_profile(
+            {
+                "llm_profile_brief_mode": "manual",
+                "llm_profile_brief": "obsolete prompt text",
+                "star_evidence_text": "obsolete evidence text",
+            }
+        )
+
+
+def test_load_profile_rejects_removed_target_occupation_queries(isolated_db):
     from job_hunter_agent.database import db_conn, ensure_user_row
     from job_hunter_agent.user_context import get_user_id_for_runtime
 
@@ -94,21 +73,11 @@ def test_load_profile_drops_legacy_target_occupation_queries(isolated_db):
         conn.execute(
             """INSERT INTO user_profile (user_id, data) VALUES (?, ?)
             ON CONFLICT(user_id) DO UPDATE SET data = excluded.data""",
-            (
-                user_id,
-                json.dumps(
-                    {
-                        "target_roles": ["Business Analyst"],
-                        "target_occupation_queries": ["Data Analyst"],
-                    }
-                ),
-            ),
+            (user_id, json.dumps({"target_occupation_queries": ["Data Analyst"]})),
         )
 
-    loaded = profile_store.load_profile()
-
-    assert loaded["target_roles"] == ["Business Analyst"]
-    assert "target_occupation_queries" not in loaded
+    with pytest.raises(ValueError, match="unsupported top-level fields: target_occupation_queries"):
+        profile_store.load_profile()
 
 
 def test_load_profile_raises_for_non_object_data(isolated_db):
@@ -128,10 +97,9 @@ def test_load_profile_raises_for_non_object_data(isolated_db):
         profile_store.load_profile()
 
 
-def test_default_profile_does_not_include_legacy_guidance_key():
-    legacy_key = "".join(["llm", "_capability_naming_guidance"])
-    assert legacy_key not in profile_store.DEFAULT_PROFILE
-    assert "cv_text" not in profile_store.DEFAULT_PROFILE
+def test_default_profile_declares_current_rejection_rule_fields():
+    assert profile_store.DEFAULT_PROFILE["reject_title_rules"] == []
+    assert profile_store.DEFAULT_PROFILE["reject_description_phrase_rules"] == []
     assert "candidate_eligibility" in profile_store.DEFAULT_PROFILE
 
 
