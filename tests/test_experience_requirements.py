@@ -53,6 +53,7 @@ def _ba_family(total_duration_months: int) -> list[dict]:
             "normalized_title": "Business Analyst",
             "total_duration_months": total_duration_months,
             "most_recent_end_year": 2025,
+            "segments": [{"duration_months": total_duration_months, "is_current": False}],
             "title_variants": [
                 {"normalized_title": "Business Analyst"},
                 {"normalized_title": "Senior Business Analyst"},

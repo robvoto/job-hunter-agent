@@ -33,8 +33,9 @@ Each `role_experience` family row carries `segments: list[dict]` — one entry p
 extracted role segment: `{duration_months, is_current}`, plus `duration_as_of`
 (the real extraction date, ISO) only on a still-current segment. This is a
 **runtime-only backend field**: not user-editable, not in `collectProfile()`, no
-Settings control. Legacy rows with no `segments` key must round-trip unchanged;
-they pick up segments the next time role history is refreshed from the saved CV.
+Settings control. `segments` is mandatory on every persisted `role_experience` row.
+Pre-live stale rows without it are invalid and disposable; do not preserve or migrate
+them. Rebuild the profile from the saved CV if current role history is needed.
 
 - `profile_learning._stamp_current_role_extraction_dates` stamps `duration_as_of`
   only on the genuine (uncached) LLM path, so the date always pairs with a
@@ -53,11 +54,10 @@ they pick up segments the next time role history is refreshed from the saved CV.
 It runs `normalize_capability_rules` on `candidate_capabilities`. Any mutation here silently
 affects every profile read and write.
 
-**Migration pattern rule:** the migration block at the end of `normalize_full_profile` is for
-renaming the legacy key `capability_profile_rules` → `candidate_capabilities`. The `if` condition
-must check the OLD key, not the new one. Checking the new key deletes capabilities on every call.
-Test any change here with `test_normalize_full_profile_preserves_candidate_capabilities` and
-`test_normalize_full_profile_migrates_legacy_capability_profile_rules_key`.
+**Pre-live schema rule:** do not keep key-renaming migrations, aliases, or old/new profile
+shapes in this normalizer. Persist and consume only the current canonical profile keys. If stale
+dev/test profile data uses a removed key, discard/rebuild that data instead of teaching runtime
+code to understand it.
 
 **No broad exception swallowing in the capability path.** Do not add `except Exception: pass` or
 similar fallbacks around capability normalisation. If the optional enhancement import is changed,

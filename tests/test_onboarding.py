@@ -1228,11 +1228,13 @@ def test_normalize_full_profile_groups_role_experience_and_skips_blank_titles():
                     "normalized_title": "Senior Business Analyst",
                     "total_duration_months": 24,
                     "most_recent_end_year": 2024,
+                    "segments": [{"duration_months": 24, "is_current": False}],
                 },
                 {
                     "normalized_title": " senior   business analyst ",
                     "total_duration_months": 18,
                     "most_recent_end_year": 2022,
+                    "segments": [{"duration_months": 18, "is_current": False}],
                 },
                 {
                     "normalized_title": "",
@@ -1248,6 +1250,10 @@ def test_normalize_full_profile_groups_role_experience_and_skips_blank_titles():
             "normalized_title": "senior business analyst",
             "total_duration_months": 42,
             "most_recent_end_year": 2024,
+            "segments": [
+                {"duration_months": 24, "is_current": False},
+                {"duration_months": 18, "is_current": False},
+            ],
             "title_variants": [
                 {
                     "normalized_title": "senior business analyst",

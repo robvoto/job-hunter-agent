@@ -10,6 +10,7 @@ Use before adding/changing thresholds, mappings, defaults, labels, scoring value
 ## Core rule
 Business judgement must not hide in feature code.
 Silent fallbacks are not acceptable. If required data is missing, surface an explicit error or fix the owner.
+**Pre-live canonical-contract rule:** until Rob explicitly declares Job Hunter live for the first time, all existing dev/test data, caches, persisted rows, obsolete fields, old payload shapes, and superseded contracts are disposable. Maintain exactly one current schema/code path. Never preserve or migrate pre-live legacy data, accept aliases for removed fields, support old/new shapes in parallel, or add compatibility shims. Update producers/consumers/tests to the canonical contract and delete stale data/caches instead. Only Rob can explicitly approve an exception.
 Do not mask failures with fallback encoders, fallback parsers, fallback labels, default models, guessed config, alternate fields, broad exception swallowing, or compatibility shims. Stop and expose the failure unless the human explicitly approves the fallback with a stated reason.
 Any new heuristic or hardcoded business/display rule is a red flag and requires explicit human approval before implementation.
 Concrete examples in skills, tests, bug reports, or conversation are diagnostic examples only. Never promote a current user's title, company, location, profile fact, observed job phrase, or one reported record into generic product logic unless the human explicitly approves it as managed knowledge/config.

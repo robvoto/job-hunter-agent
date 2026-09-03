@@ -11,8 +11,8 @@ segments contribute their stored months; a current segment contributes its store
 months plus the whole calendar months elapsed since ``duration_as_of``.
 
 Ownership boundary: pure date arithmetic. No role-family semantics, no threshold
-policy, no user-facing text. Legacy rows without ``segments`` pass through with
-their stored ``total_duration_months`` untouched.
+policy, no user-facing text. ``segments`` is the only supported role-duration
+contract; incomplete rows fail explicitly instead of using an older aggregate shape.
 """
 
 from __future__ import annotations
@@ -46,28 +46,28 @@ def _parse_iso_date(value: Any) -> date | None:
 def effective_family_months(row: dict[str, Any], *, as_of: date | None = None) -> int:
     """Return the family's accrued duration in whole months as of ``as_of``.
 
-    ``as_of`` defaults to today. A row with no ``segments`` list is a legacy row
-    and returns its stored ``total_duration_months`` unchanged. A current segment
-    with a missing or unparseable ``duration_as_of`` contributes its stored
-    months only — an honest floor, never a fabricated accrual.
+    ``as_of`` defaults to today. Every row must contain a non-empty ``segments``
+    list. Every current segment must contain a valid ISO ``duration_as_of`` date.
+    Invalid canonical data fails explicitly at runtime; there is no legacy fallback.
     """
     if not isinstance(row, dict):
-        return 0
+        raise TypeError("role_experience row must be a dict")
 
     segments = row.get(_SEGMENTS_KEY)
     if not isinstance(segments, list) or not segments:
-        return max(int(row.get(_TOTAL_MONTHS_KEY) or 0), 0)
+        raise ValueError("role_experience row requires a non-empty segments list")
 
     reference = as_of or date.today()
     total = 0
     for segment in segments:
         if not isinstance(segment, dict):
-            continue
+            raise ValueError("role_experience segments must contain dict rows")
         months = max(int(segment.get("duration_months") or 0), 0)
         if segment.get("is_current"):
             extracted_on = _parse_iso_date(segment.get("duration_as_of"))
-            if extracted_on is not None:
-                months += whole_months_between(extracted_on, reference)
+            if extracted_on is None:
+                raise ValueError("current role_experience segment requires valid duration_as_of")
+            months += whole_months_between(extracted_on, reference)
         total += months
     return total
 
