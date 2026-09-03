@@ -90,5 +90,12 @@ Never leave a clean, fully merged task worktree or branch behind "for later". Pa
 
 For any integration reported as `IN MAIN`, also report exactly one cleanup state:
 
-- `CLEANUP STATUS: COMPLETE — merged task worktree/branch removed`; or
+- `CLEANUP STATUS: COMPLETE — merged task worktree removed`; or
 - `CLEANUP STATUS: BLOCKED — <exact dirty/unmerged reason and worktree path>`.
+
+Always add one explicit branch state after cleanup:
+
+- `BRANCH STATUS: DELETED — local and remote task branches removed`; or
+- `BRANCH STATUS: RETAINED — <exact branch name and why it cannot be deleted>`.
+
+`CLEANUP STATUS: COMPLETE` is forbidden while any task-related local or remote branch still exists. `rescue/*` branches are not exempt from strict repository closure; if one must be retained to preserve unmerged work, strict closure must fail and the final response must say `BRANCH STATUS: RETAINED` with the branch name and reason.
