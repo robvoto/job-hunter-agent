@@ -5,6 +5,8 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from job_hunter_agent import workspace_rebuild_service, workspace_renderer, workspace_service
 
 
@@ -284,20 +286,15 @@ def test_job_link_click_marks_viewed_without_immediate_resort():
     assert "sendViewedBeacon(link);" in results_js
 
 
-def test_candidate_application_history_loader_failure_returns_original_records(caplog):
+def test_candidate_application_history_loader_failure_is_not_silently_masked():
     records = [{"job_key": "seek:1"}, {"job_key": "seek:2"}]
 
     with patch(
         "job_hunter_agent.candidate_application_history.load_candidate_job_rejection_history",
         side_effect=RuntimeError("boom"),
     ):
-        with caplog.at_level("WARNING", logger="job_hunter_agent.workspace_service"):
-            result = workspace_service._enrich_records_with_candidate_application_history(records)
-
-    assert result is records
-    assert result == [{"job_key": "seek:1"}, {"job_key": "seek:2"}]
-
-    assert "[candidate_application_history] unavailable: boom" in caplog.text
+        with pytest.raises(RuntimeError, match="boom"):
+            workspace_service._enrich_records_with_candidate_application_history(records)
 
 
 def test_candidate_application_history_enrichment_never_syncs_from_sheet():
