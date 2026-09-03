@@ -1160,30 +1160,80 @@
       return [...new Set([...selected, ...custom, ...(pendingInput ? [pendingInput] : [])])];
     }
 
+    // Show a filter box + scroll once the job lists more required terms than
+    // comfortably fit without one.
+    const _REJ_FILTER_THRESHOLD = 8;
+
+    function _rejRequiredTerms(groups) {
+      const raw = Array.isArray(groups?.required_terms) ? groups.required_terms : [];
+      const items = [];
+      const seen = new Set();
+      for (const entry of raw) {
+        const value = String(entry?.term || '').trim();
+        const key = value.toLowerCase();
+        if (!value || seen.has(key)) continue;
+        seen.add(key);
+        items.push(value);
+      }
+      return items;
+    }
+
+    function _rejCheckboxChip(value, category) {
+      const escapedValue = _rejEscapeHtml(value);
+      const escapedCat = _rejEscapeHtml(category);
+      return `<div class="rejection-chip">` +
+        `<label><input class="jh-checkbox" type="checkbox" data-value="${escapedValue}" data-cat="${escapedCat}" /> ${escapedValue}</label>` +
+        `</div>`;
+    }
+
     function _rejRenderSuggestions(groups) {
       const body = document.getElementById('rejection-panel-body');
       body.className = 'rejection-panel-body';
       const items = _rejSuggestionItems(groups);
-      updateRejectionFirstUseNote(items[0]?.value || '');
-      if (items.length === 0) {
+      const requiredTerms = _rejRequiredTerms(groups);
+      updateRejectionFirstUseNote(requiredTerms[0] || items[0]?.value || '');
+      if (items.length === 0 && requiredTerms.length === 0) {
         body.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">No strong required terms found. Add one below if this role clearly depends on something you want to avoid.</p>';
         return;
       }
-      const chips = items.map(item => {
-        const escapedValue = _rejEscapeHtml(item.value);
-        const escapedCat = _rejEscapeHtml(item.category);
-        return `<div class="rejection-chip">` +
-          `<label><input class="jh-checkbox" type="checkbox" data-value="${escapedValue}" data-cat="${escapedCat}" /> ${escapedValue}</label>` +
-          `</div>`;
-      }).join('');
-      body.innerHTML =
-        `<div class="rejection-group">` +
-        `<div class="rejection-group-label">Suggested required terms</div>` +
-        `<div class="rejection-chips">${chips}</div>` +
-        `</div>`;
+
+      const sections = [];
+      if (requiredTerms.length) {
+        const useFilter = requiredTerms.length > _REJ_FILTER_THRESHOLD;
+        const rows = requiredTerms.map(term => _rejCheckboxChip(term, 'required')).join('');
+        sections.push(
+          `<div class="rejection-group">` +
+          `<div class="rejection-group-label">Required by this job</div>` +
+          (useFilter
+            ? `<input type="text" class="rejection-filter" data-rej-filter="1" placeholder="Filter terms…" aria-label="Filter required terms" />`
+            : '') +
+          `<div class="rejection-chips${useFilter ? ' rejection-chips--scroll' : ''}" data-rej-filter-list="1">${rows}</div>` +
+          `</div>`
+        );
+      }
+      if (items.length) {
+        const chips = items.map(item => _rejCheckboxChip(item.value, item.category)).join('');
+        sections.push(
+          `<div class="rejection-group">` +
+          `<div class="rejection-group-label">Suggested required terms</div>` +
+          `<div class="rejection-chips">${chips}</div>` +
+          `</div>`
+        );
+      }
+      body.innerHTML = sections.join('');
       body.querySelectorAll('input[type=checkbox]').forEach(cb => {
         cb.addEventListener('change', _rejUpdateSaveBtn);
       });
+      const filterEl = body.querySelector('[data-rej-filter]');
+      const filterList = body.querySelector('[data-rej-filter-list]');
+      if (filterEl && filterList) {
+        filterEl.addEventListener('input', () => {
+          const query = filterEl.value.trim().toLowerCase();
+          filterList.querySelectorAll('.rejection-chip').forEach(chip => {
+            chip.hidden = query !== '' && !chip.textContent.toLowerCase().includes(query);
+          });
+        });
+      }
     }
 
     function _rejRenderBlockFollowup(payload) {

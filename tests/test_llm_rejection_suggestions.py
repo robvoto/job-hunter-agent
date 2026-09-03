@@ -335,6 +335,9 @@ def test_rejection_suggestions_route_uses_llm_gate(monkeypatch):
         "_issue_rejection_suggestion_approval_tokens",
         lambda job_id, suggestions: {"Salesforce": "approval-token"},
     )
+    monkeypatch.setattr(
+        review_routes, "_profile_gap_requirement_coverage", lambda job_id: []
+    )
 
     response = review_routes.api_rejection_suggestions("job-1")
 
@@ -342,6 +345,57 @@ def test_rejection_suggestions_route_uses_llm_gate(monkeypatch):
     assert json.loads(response.body) == {
         "other": ["Salesforce"],
         "approval_tokens": {"Salesforce": "approval-token"},
+        "required_terms": [],
+    }
+
+
+def test_rejection_suggestions_route_surfaces_parsed_required_terms(monkeypatch):
+    monkeypatch.setattr(review_routes, "get_job_description", lambda job_id: "Job description")
+    monkeypatch.setattr(
+        review_routes.llm_gate, "llm_suggest_rejection_blockers", lambda description: []
+    )
+    monkeypatch.setattr(review_routes.srv, "_rejection_suggestions_cache", {})
+    monkeypatch.setattr(
+        review_routes.srv.SettingsHandler,
+        "_issue_rejection_suggestion_approval_tokens",
+        lambda job_id, suggestions: {},
+    )
+    monkeypatch.setattr(
+        review_routes,
+        "_profile_gap_requirement_coverage",
+        lambda job_id: [
+            {
+                "requirement": "Business Intelligence reporting",
+                "requirement_type": "capability",
+                "canonical_requirement": "Business Intelligence",
+                "importance": "mandatory",
+                "matched_job_text": "Business Intelligence reporting",
+                "profile_action_allowed": True,
+            },
+            {
+                "requirement": "Nice to have Tableau",
+                "requirement_type": "capability",
+                "canonical_requirement": "Tableau",
+                "importance": "preferred",
+                "matched_job_text": "Tableau",
+                "profile_action_allowed": True,
+            },
+        ],
+    )
+
+    response = review_routes.api_rejection_suggestions("job-1")
+
+    assert response.status_code == 200
+    assert json.loads(response.body) == {
+        "other": [],
+        "approval_tokens": {},
+        "required_terms": [
+            {
+                "term": "Business Intelligence",
+                "requirement_type": "capability",
+                "matched_job_text": "Business Intelligence reporting",
+            }
+        ],
     }
 
 
