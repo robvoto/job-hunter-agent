@@ -509,9 +509,8 @@ def test_settings_review_panel_empty_state_copy_is_defined():
 
     assert "Filters already working correctly" in js
 
-    assert "const sharedUiLabels = window.__JOB_HUNTER_SHARED_UI_LABELS__ || {};" in js
-    assert "const DECLINE_CAPABILITY_LABEL = sharedUiLabels.profile_confirm_not_have_label;" in js
-    assert ui_labels["shared_ui_labels"]["profile_confirm_not_have_label"]
+    assert "const DECLINE_CAPABILITY_LABEL = capabilityLabels.decline_capability_label;" in js
+    assert ui_labels["workspace_card_labels"]["gap_confirm_not_have_label"]
 
     assert "decline-skill-btn" in js
 

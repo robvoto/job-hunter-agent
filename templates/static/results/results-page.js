@@ -1575,7 +1575,6 @@
         prompt.className = 'profile-gap-strength-prompt';
         prompt.textContent = String(
           WORKSPACE_CONTEXT.labels.profileGapStrengthPromptLabel
-          || 'How strong is this capability for you?'
         );
         levelPicker.appendChild(prompt);
 

@@ -56,7 +56,7 @@ const NO_CAPABILITY_OBSERVATIONS_COPY = 'No capability suggestions yet. We found
 const RULE_REASON_TITLE_NOT_TARGET = 'TITLE_NOT_TARGET';
 const RULE_REASON_TITLE_BAD_KEYWORD = 'TITLE_BAD_KEYWORD';
 const RULE_REASON_ONET_UNCERTAIN_TITLE = 'ONET_UNCERTAIN_TITLE';
-const DECLINE_CAPABILITY_LABEL = "No, I don't have this";
+const DECLINE_CAPABILITY_LABEL = capabilityLabels.decline_capability_label;
 
 function getReviewChoiceMeta(choice) {
   if (!choice) return { label: 'Choose a strength' };

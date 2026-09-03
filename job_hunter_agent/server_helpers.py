@@ -217,6 +217,7 @@ _CAPABILITY_UI_LABEL_KEYS = (
     "onboarding_empty_text",
     "onboarding_no_match_text",
     "review_strength_prompt_label",
+    "decline_capability_label",
 )
 _SHARED_UI_LABEL_KEYS = (
     "select_theme_aria_label",
@@ -892,13 +893,17 @@ def load_capability_ui_labels() -> dict[str, str]:
     shared_labels = payload.get("shared_ui_labels", {})
     if not isinstance(shared_labels, dict):
         raise ValueError("ui_labels.json is missing shared_ui_labels")
-    # shared_ui_labels is the canonical source for these bulk-selection action
-    # labels so the settings and onboarding capability editors show the same text.
+    workspace_card_labels = payload.get("workspace_card_labels", {})
+    if not isinstance(workspace_card_labels, dict):
+        raise ValueError("ui_labels.json is missing workspace_card_labels")
+    # Shared/workspace labels remain canonical owners; this bundle exposes the
+    # subset needed by capability editors without duplicating display copy.
     labels = {
         **raw_labels,
         "settings_select_shown_label": shared_labels.get("select_shown_label", ""),
         "settings_clear_selection_label": shared_labels.get("clear_selection_label", ""),
         "settings_remove_selected_label": shared_labels.get("remove_selected_label", ""),
+        "decline_capability_label": workspace_card_labels.get("gap_confirm_not_have_label", ""),
     }
     missing = [key for key in _CAPABILITY_UI_LABEL_KEYS if not str(labels.get(key, "")).strip()]
     if missing:
