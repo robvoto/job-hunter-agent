@@ -14,6 +14,7 @@ from job_hunter_agent.scrapers.base import _build_salary_string
 from job_hunter_agent.scrapers.linkedin import (
     LinkedInScraper,
     _fetch_jobspy_with_timeout,
+    _extract_linkedin_job_header_evidence,
     classify_linkedin_apply_method,
 )
 from job_hunter_agent.scrapers.location_adapters import (
@@ -80,6 +81,40 @@ def test_classify_linkedin_apply_method_unknown_when_apply_url_matches_canonical
     assert classify_linkedin_apply_method(url, url) == APPLY_METHOD_UNKNOWN
 
 
+def test_linkedin_detail_fetch_uses_canonical_vacancy_url(monkeypatch):
+    from job_hunter_agent.scrapers import linkedin as linkedin_module
+
+    requested_urls = []
+
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b"canonical vacancy page"
+
+    monkeypatch.setattr(
+        linkedin_module,
+        "urlopen",
+        lambda request, timeout: requested_urls.append((request.full_url, timeout)) or _Response(),
+    )
+
+    record = {
+        RECORD_URL_KEY: "https://www.linkedin.com/jobs/view/123",
+        "source_metadata": {
+            "raw_source_fields": {
+                "job_url_direct": "https://employer.example/apply/123",
+            }
+        },
+    }
+
+    assert linkedin_module._fetch_job_html(record) == "canonical vacancy page"
+    assert requested_urls == [(record[RECORD_URL_KEY], 20)]
+
+
 def test_linkedin_detail_fetch_detects_closed_listing_signal(monkeypatch):
     from job_hunter_agent.scrapers import linkedin as linkedin_module
 
@@ -95,7 +130,11 @@ def test_linkedin_detail_fetch_detects_closed_listing_signal(monkeypatch):
     monkeypatch.setattr(
         linkedin_module,
         "_fetch_job_html",
-        lambda _record: "<html><body>No longer accepting applications</body></html>",
+        lambda _record: (
+            '<div class="job-details-jobs-unified-top-card__container">'
+            "No longer accepting applications Reposted 2 days ago"
+            "</div>"
+        ),
     )
 
     signals = scraper._fetch_linkedin_detail_evidence({RECORD_URL_KEY: "https://example.com/job/1"})
@@ -103,23 +142,111 @@ def test_linkedin_detail_fetch_detects_closed_listing_signal(monkeypatch):
     assert any(signal.get("kind") == job_quality.SIGNAL_KIND_JOB_CLOSED for signal in signals)
 
 
-def test_linkedin_posted_age_parses_visible_relative_text_only():
-    from job_hunter_agent.scrapers.linkedin import _extract_linkedin_posted_age_days
-
+def test_linkedin_header_evidence_reads_only_current_vacancy_header():
     assert (
-        _extract_linkedin_posted_age_days(
-            "<html><body><span>3 days ago</span></body></html>",
+        _extract_linkedin_job_header_evidence(
+            '<div class="job-details-jobs-unified-top-card__container">'
+            "Posted 3 days ago"
+            "</div>",
             date(2026, 6, 22),
-        )
+        )["posted_age_days"]
         == 3.0
     )
     assert (
-        _extract_linkedin_posted_age_days(
-            "<html><body><span>Posted 3 hours ago</span></body></html>",
+        _extract_linkedin_job_header_evidence(
+            '<div class="job-details-jobs-unified-top-card__container">'
+            "Reposted 3 hours ago"
+            "</div>",
             date(2026, 6, 22),
-        )
+        )["posted_age_days"]
         == pytest.approx(3 / 24)
     )
+
+
+def test_linkedin_related_job_dates_do_not_contaminate_header_age():
+    evidence = _extract_linkedin_job_header_evidence(
+        """
+        <main>
+          <div class="job-details-jobs-unified-top-card__container">
+            <h1>Business Analyst</h1>
+            <span>Posted 3 days ago</span>
+          </div>
+          <aside class="jobs-search-results-list">
+            <article>Recommended role — Posted 60 days ago</article>
+          </aside>
+        </main>
+        """,
+        date(2026, 6, 22),
+    )
+
+    assert evidence["posted_age_days"] == 3.0
+    assert evidence["is_reposted"] is False
+
+
+def test_linkedin_explicit_repost_is_recorded_without_external_apply_page(monkeypatch):
+    from job_hunter_agent.scrapers import linkedin as linkedin_module
+
+    scraper = LinkedInScraper(
+        profile={},
+        llm_cache={},
+        job_history={},
+        applied_job_keys=set(),
+        hidden_job_keys=set(),
+        run_iso="2026-06-20T00:00:00+10:00",
+    )
+    monkeypatch.setattr(
+        linkedin_module,
+        "_fetch_job_html",
+        lambda _record: (
+            '<div class="job-details-jobs-unified-top-card__container">'
+            "Reposted 2 days ago"
+            "</div>"
+        ),
+    )
+    record = {
+        RECORD_URL_KEY: "https://www.linkedin.com/jobs/view/1",
+        "source_metadata": {
+            "apply_url": "",
+            "raw_source_fields": {
+                "job_url_direct": "https://external.example/apply/1",
+            },
+        },
+        "posted_age_days": 99.0,
+    }
+
+    signals = scraper._fetch_linkedin_detail_evidence(record)
+
+    assert signals == []
+    assert record["is_reposted"] is True
+    assert record["posted_age_days"] == 2.0
+
+
+def test_linkedin_closed_reposted_header_emits_hard_reject_signal(monkeypatch):
+    from job_hunter_agent.scrapers import linkedin as linkedin_module
+
+    scraper = LinkedInScraper(
+        profile={},
+        llm_cache={},
+        job_history={},
+        applied_job_keys=set(),
+        hidden_job_keys=set(),
+        run_iso="2026-06-20T00:00:00+10:00",
+    )
+    monkeypatch.setattr(
+        linkedin_module,
+        "_fetch_job_html",
+        lambda _record: (
+            '<div class="job-details-jobs-unified-top-card__container">'
+            "No longer accepting applications · Reposted 2 days ago"
+            "</div>"
+        ),
+    )
+    record = {RECORD_URL_KEY: "https://www.linkedin.com/jobs/view/1"}
+
+    signals = scraper._fetch_linkedin_detail_evidence(record)
+
+    assert signals and signals[0]["kind"] == job_quality.SIGNAL_KIND_JOB_CLOSED
+    assert record["is_reposted"] is True
 
 
 def test_linkedin_backfills_missing_posted_age_from_visible_listing_text(monkeypatch, caplog):
@@ -180,7 +307,11 @@ def test_linkedin_backfills_missing_posted_age_from_visible_listing_text(monkeyp
     monkeypatch.setattr(
         linkedin_module,
         "_fetch_job_html",
-        lambda _record: "<html><body><span>Posted 3 hours ago</span></body></html>",
+        lambda _record: (
+            '<div class="job-details-jobs-unified-top-card__container">'
+            "Posted 3 hours ago"
+            "</div>"
+        ),
     )
     monkeypatch.setattr(
         linkedin_module,
@@ -1043,7 +1174,7 @@ def test_linkedin_partial_success_preserves_kept_jobs_after_later_failure(monkey
     assert status["complete"] is False
 
 
-def test_linkedin_rejected_precheck_card_causes_zero_detail_fetches(monkeypatch):
+def test_linkedin_header_is_captured_before_pre_detail_rejection(monkeypatch):
     from job_hunter_agent.scrapers import linkedin as linkedin_module
 
     class _Rows:
@@ -1085,10 +1216,12 @@ def test_linkedin_rejected_precheck_card_causes_zero_detail_fetches(monkeypatch)
         ),
     )
 
-    def _fail_if_called(_record):
-        raise AssertionError("detail fetch must not run for a card rejected pre-detail")
-
-    monkeypatch.setattr(scraper, "_fetch_linkedin_detail_evidence", _fail_if_called)
+    detail_fetches = []
+    monkeypatch.setattr(
+        scraper,
+        "_fetch_linkedin_detail_evidence",
+        lambda record: detail_fetches.append(record) or [],
+    )
     monkeypatch.setattr(
         linkedin_module,
         "review_pre_detail_normalized_job",
@@ -1108,6 +1241,7 @@ def test_linkedin_rejected_precheck_card_causes_zero_detail_fetches(monkeypatch)
     kept_records, _, _ = scraper.scrape()
 
     assert kept_records == []
+    assert len(detail_fetches) == 1
 
 
 def test_linkedin_duplicate_native_id_causes_single_detail_fetch(monkeypatch):

@@ -43,11 +43,11 @@ Do not add filtering or scoring logic to Phases 1–3. Phase 4 is the only place
 ### LinkedIn two-stage discovery
 1. JobSpy performs card discovery with `linkedin_fetch_description=False`.
 2. Native LinkedIn job IDs are deduplicated before expensive work.
-3. `review_pre_detail_normalized_job()` runs with no LinkedIn detail-page network call.
-4. Only records returning `should_fetch_details=True` perform one bounded LinkedIn job-page fetch.
-5. That one page is reused for description, apply URL/domain, posted-age backfill, and closed-job evidence before post-detail review.
+3. One bounded fetch of the canonical LinkedIn vacancy page captures the specific job header before `review_pre_detail_normalized_job()`.
+4. Explicit header closure is rejected before title/fit LLM review; open records continue through the pre-detail gate.
+5. The same page is reused for description, apply URL/domain, posted-age extraction, and repost/closed evidence before post-detail review.
 
-Do not regress to full-description JobSpy discovery or pre-gate per-job page fetching; that caused broad LinkedIn targets to hit the outer per-target timeout.
+Do not regress to full-description JobSpy discovery or broad-page status/date scans. Header status/date evidence must come from the canonical vacancy page, while external ATS HTML remains optional original-date corroboration only.
 
 ### LinkedIn cache and failure semantics
 - Complete successful discovery may write the known-good success snapshot. Partial/stopped/full-failure/fallback data may not replace it.
@@ -66,7 +66,7 @@ Both Seek and LinkedIn normalize the raw work_type string through `map_job_type(
 ## Owners
 - `scrapers/seek_runner.py`: SEEK scrape loop, card review dispatch, parallel detail fetch, result collection.
 - `scrapers/seek.py`: SEEK low-level page helpers, selectors, URL building, detail payload fetch.
-- `scrapers/linkedin.py`: LinkedIn via python-jobspy card discovery plus the post-gate single-detail-fetch path.
+- `scrapers/linkedin.py`: LinkedIn via python-jobspy card discovery plus canonical-vacancy header preflight and single-detail-fetch evidence reuse.
 - `scrapers/apsjobs.py`: APSJobs direct filtered search and native-ID collection.
 - `source_runner.py`: routes enabled SEEK, LinkedIn, and APSJobs sources and owns discovery cache/backoff/fallback orchestration.
 - `source_connector.py`: orchestration entry point.

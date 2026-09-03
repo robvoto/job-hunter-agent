@@ -395,6 +395,8 @@ def detect_external_date_signals(
     linkedin_age_days: float | None,
     rules: dict,
     run_date: date,
+    *,
+    detect_closed: bool = True,
 ) -> list:
     if not html:
         return []
@@ -402,17 +404,18 @@ def detect_external_date_signals(
     signals = []
     flag_days = int(rules["external_date_mismatch_flag_days"])
 
-    for pat in rules.get("job_closed_indicators", []):
-        if re.search(pat, html, re.IGNORECASE):
-            signals.append(
-                {
-                    "kind": SIGNAL_KIND_JOB_CLOSED,
-                    "label": "Job Closed",
-                    "evidence": "External page indicates this role is no longer available.",
-                    "needs_review": True,
-                }
-            )
-            return signals
+    if detect_closed:
+        for pat in rules.get("job_closed_indicators", []):
+            if re.search(pat, html, re.IGNORECASE):
+                signals.append(
+                    {
+                        "kind": SIGNAL_KIND_JOB_CLOSED,
+                        "label": "Job Closed",
+                        "evidence": "External page indicates this role is no longer available.",
+                        "needs_review": True,
+                    }
+                )
+                return signals
 
     verification = extract_external_original_posting_date(html, run_date)
     external_age = int(verification["age_days"]) if verification is not None else None

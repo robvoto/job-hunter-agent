@@ -579,6 +579,54 @@ def test_review_pre_detail_rejects_closed_jobs_before_title_review(monkeypatch):
     assert updated_record[RECORD_REJECT_REASON_KEY] == "JOB_CLOSED"
 
 
+def test_acu_closed_reposted_job_is_rejected_before_any_fit_review(monkeypatch):
+    record = _base_record("linkedin", "linkedin_full_description", "description")
+    record[RECORD_COMPANY_KEY] = "Australian Catholic University"
+    record[RECORD_TITLE_KEY] = "Business Analyst"
+    record[RECORD_IS_REPOSTED_KEY] = True
+    record["job_quality_signals"] = [
+        {
+            "kind": "job_closed",
+            "label": "Job Closed",
+            "evidence": "LinkedIn's current vacancy header says no longer accepting applications.",
+            "needs_review": False,
+        }
+    ]
+
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "analyze_title_filters",
+        lambda *_args: (_ for _ in ()).throw(
+            AssertionError("closed repost must not reach title or fit review")
+        ),
+    )
+
+    outcome, updated_record, _, should_fetch = review_pre_detail_normalized_job(
+        record, _review_context("LinkedIn")
+    )
+
+    assert outcome[RECORD_DECISION_KEY] == "REJECT"
+    assert outcome[RECORD_REJECT_REASON_KEY] == "JOB_CLOSED"
+    assert updated_record[RECORD_IS_REPOSTED_KEY] is True
+    assert should_fetch is False
+
+
+def test_acu_open_reposted_job_continues_with_repost_evidence(monkeypatch):
+    record = _base_record("linkedin", "linkedin_full_description", "description")
+    record[RECORD_COMPANY_KEY] = "Australian Catholic University"
+    record[RECORD_TITLE_KEY] = "Business Analyst"
+    record[RECORD_IS_REPOSTED_KEY] = True
+    record[RECORD_TITLE_REASON_KEY] = "OK"
+    context = _review_context("LinkedIn")
+
+    _patch_llm_review_path(monkeypatch, _keep_review_payload())
+
+    outcome, updated_record, _ = review_post_detail_normalized_job(record, context)
+
+    assert outcome[RECORD_DECISION_KEY] == "KEEP"
+    assert updated_record[RECORD_IS_REPOSTED_KEY] is True
+
+
 def test_hard_block_rejection_registers_learning_signal(monkeypatch):
     registrations = []
     profile = _review_profile()
@@ -1333,6 +1381,30 @@ def test_external_apply_unverified_original_date_does_not_reject(monkeypatch):
     assert updated_record[RECORD_ORIGINAL_POSTED_DATE_KEY] == ""
     assert updated_record[RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY] is None
     assert updated_record[RECORD_IS_REPOSTED_KEY] is None
+
+
+def test_explicit_linkedin_repost_survives_unverified_external_date(monkeypatch):
+    record = _base_record("linkedin", "jobAdDetails", "card")
+    record[RECORD_TITLE_REASON_KEY] = "OK"
+    record[RECORD_APPLY_METHOD_KEY] = APPLY_METHOD_EXTERNAL_APPLY
+    record[RECORD_IS_REPOSTED_KEY] = True
+    record["source_metadata"] = {
+        "apply_url": "https://jobs.example.com/apply/123",
+        "raw_source_fields": {},
+    }
+    context = _review_context("LINKEDIN")
+
+    _patch_llm_review_path(monkeypatch, _keep_review_payload())
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "fetch_external_html",
+        lambda _url: "<html><body>Apply now with your resume.</body></html>",
+    )
+
+    outcome, updated_record, _ = review_post_detail_normalized_job(record, context)
+
+    assert outcome[RECORD_DECISION_KEY] == "KEEP"
+    assert updated_record[RECORD_IS_REPOSTED_KEY] is True
 
 
 def test_external_apply_verified_same_listing_date_is_not_reposted(monkeypatch):
