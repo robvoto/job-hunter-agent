@@ -88,6 +88,11 @@ After the task commit is verified as an ancestor of `origin/main`:
 
 Never leave a clean, fully merged task worktree or branch behind "for later". Parallel worktrees are temporary execution spaces, not permanent project folders.
 
+This is enforced, not trusted: `tests/test_git_hygiene.py` fails the whole suite
+while any local branch fully merged into main still exists. The rule and
+`scripts/check-git-closure.sh` both predate seventeen stale worktrees, because
+both depended on an agent choosing to run them. The test does not.
+
 For any integration reported as `IN MAIN`, also report exactly one cleanup state:
 
 - `CLEANUP STATUS: COMPLETE — merged task worktree/branch removed`; or
