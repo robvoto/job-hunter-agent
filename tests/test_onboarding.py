@@ -1195,18 +1195,11 @@ def test_normalize_full_profile_removes_exact_duplicate_title_from_secondary():
     assert normalized["also_consider_roles"] == ["scrum master"]
 
 
-def test_normalize_full_profile_drops_legacy_target_occupation_queries():
-    normalized = profile_store.normalize_full_profile(
-        {
-            "target_occupation_queries": [
-                "  Software Engineer  ",
-                "software engineer",
-                "DevOps Engineer\nCloud Engineer",
-            ]
-        }
-    )
-
-    assert "target_occupation_queries" not in normalized
+def test_normalize_full_profile_rejects_removed_target_occupation_queries():
+    with pytest.raises(ValueError, match="unsupported top-level fields: target_occupation_queries"):
+        profile_store.normalize_full_profile(
+            {"target_occupation_queries": ["Software Engineer"]}
+        )
 
 
 def test_normalize_full_profile_mirrors_primary_search_location_into_match_preferences():

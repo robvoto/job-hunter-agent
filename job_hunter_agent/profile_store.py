@@ -251,12 +251,6 @@ DEFAULT_CANDIDATE_PROFILE_TIERS = {
 }
 
 DEFAULT_MATCH_LEVELS = normalize_match_levels(list(MATCH_LEVELS))
-_OBSOLETE_PROFILE_KEYS = (
-    "".join(["llm_profile", "_brief_mode"]),
-    "".join(["llm_profile", "_brief"]),
-    "star_" + "evidence_text",
-    "target_occupation_queries",
-)
 
 
 class ProfileLoadError(RuntimeError):
@@ -347,6 +341,8 @@ DEFAULT_PROFILE = {
     "also_consider_roles": [],
     KEY_EXPLORE_ADJACENT_ROLES: False,
     "must_not_require_skills": [],
+    "reject_title_rules": [],
+    "reject_description_phrase_rules": [],
     "onboarding_settings": {
         **DEFAULT_ONBOARDING_SETTINGS,
     },
@@ -901,10 +897,12 @@ def normalize_role_experience(items: Any) -> list[dict[str, Any]]:
 def normalize_full_profile(profile: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(profile, dict):
         raise TypeError("profile must be a dict")
+    unsupported_keys = sorted(set(profile) - set(DEFAULT_PROFILE))
+    if unsupported_keys:
+        raise ValueError(
+            "profile contains unsupported top-level fields: " + ", ".join(unsupported_keys)
+        )
     merged = deep_merge(copy.deepcopy(DEFAULT_PROFILE), profile)
-    merged.pop("".join(["llm", "_capability_naming_guidance"]), None)
-    for key in _OBSOLETE_PROFILE_KEYS:
-        merged.pop(key, None)
     merged["search_settings"] = normalize_search_settings(merged.get("search_settings", {}))
     merged["salary_preferences"] = normalize_salary_preferences(
         merged.get("salary_preferences", {})
