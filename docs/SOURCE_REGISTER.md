@@ -59,7 +59,7 @@ Limit:
 - LLM must not generate free-form target occupation queries from the CV.
 - LLM output must be inspectable by the user.
 
-## Required requirement gaps
+## Mandatory requirement gaps
 
 Sources:
 - Named entity recognition overview: https://en.wikipedia.org/wiki/Named-entity_recognition

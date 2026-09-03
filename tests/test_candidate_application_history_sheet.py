@@ -142,6 +142,25 @@ def test_fetch_candidate_returns_rows_when_enabled():
     assert result[0]["Run Date"] == "2025-01-15"
 
 
+def test_fetch_candidate_excludes_not_job_related_audit_rows():
+    csv_text = (
+        "Run Date,Company,Role,From,Subject,Content,Thread ID,Message ID,Status\r\n"
+        "2026-09-01,Acme,Business Analyst,a@example.com,A,B,T1,M1,Rejected\r\n"
+        "2026-09-01,Other,Newsletter,b@example.com,C,D,T2,M2,Not job-related\r\n"
+    )
+    with (
+        patch(
+            "job_hunter_agent.candidate_application_history.is_candidate_application_history_enabled",
+            return_value=True,
+        ),
+        patch("job_hunter_agent.candidate_application_history.requests.get") as mock_get,
+    ):
+        mock_get.return_value = _mock_response(csv_text)
+        result = fetch_candidate_job_rejection_rows()
+
+    assert [row["Company"] for row in result] == ["Acme"]
+
+
 def test_fetch_candidate_reads_config_from_settings():
     """URL must use spreadsheet_id and tab_name from global settings, not hardcoded values."""
     with (

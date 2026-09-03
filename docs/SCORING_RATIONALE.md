@@ -399,7 +399,7 @@ This prevents the system from treating a job sentence as proof of capability mer
 
 ## What is deliberately not counted as capability proof
 
-These signals can help ranking but should not prove required requirement fit:
+These signals can help ranking but should not prove mandatory requirement fit:
 
 - location
 - salary/rate

@@ -142,7 +142,13 @@ def fetch_candidate_job_rejection_rows() -> list[dict]:
     """
     if not is_candidate_application_history_enabled():
         return []
-    return fetch_job_rejection_sheet_rows()
+    # The sheet can retain non-job mail as an audit record. It must never
+    # enter the rejection-history runtime store or be treated as a rejection.
+    return [
+        row
+        for row in fetch_job_rejection_sheet_rows()
+        if _clean(row.get("Status")).casefold() != "not job-related"
+    ]
 
 
 _LLM_EXTRACTION_DEGRADED: dict = {
@@ -269,6 +275,7 @@ def normalize_job_rejection_row(row: dict) -> dict:
     cooked = {
         "run_date": _clean(row.get("Run Date")),
         "raw_company": _clean(row.get("Company")),
+        "raw_role": _clean(row.get("Role")),
         "from": _clean(row.get("From")),
         "subject": _clean(row.get("Subject")),
         "content": _clean(row.get("Content")),
@@ -333,9 +340,9 @@ def match_job_application_history(job_record: dict, rejection_rows: list[dict]) 
     best_match_confidence = ""
 
     for row in rejection_rows:
-        # Use LLM-extracted fields when available; fall back to raw_company.
+        # Use LLM-extracted fields when available; fall back to sheet values.
         candidate_company = row.get("llm_company") or row.get("raw_company") or ""
-        candidate_role = row.get("llm_role") or ""
+        candidate_role = row.get("llm_role") or row.get("raw_role") or ""
 
         company_match = company_name_match_details(job_company, candidate_company)
         company_score = float(company_match.get("score", 0.0) or 0.0)
@@ -466,6 +473,7 @@ def _make_failed_normalized_row(raw_row: dict, reason: str) -> dict:
     return {
         "run_date": _clean(raw_row.get("Run Date")),
         "raw_company": _clean(raw_row.get("Company")),
+        "raw_role": _clean(raw_row.get("Role")),
         "from": _clean(raw_row.get("From")),
         "subject": _clean(raw_row.get("Subject")),
         "content": _clean(raw_row.get("Content")),
@@ -610,7 +618,7 @@ def _candidate_history_sheet_row_to_store_entry(normalized_row: dict, *, source:
     confidence = _clean(normalized_row.get("llm_confidence")).lower()
     evidence = _clean(normalized_row.get("llm_evidence"))
     company = _clean(normalized_row.get("llm_company") or normalized_row.get("raw_company"))
-    role = _clean(normalized_row.get("llm_role"))
+    role = _clean(normalized_row.get("llm_role") or normalized_row.get("raw_role"))
     created_at = _candidate_history_now()
     message_id = _clean(normalized_row.get("message_id"))
     if message_id:
@@ -687,7 +695,12 @@ def _candidate_history_import_rows(raw_rows: list[dict], *, source: str) -> tupl
     for raw_row in raw_rows:
         cache_key = _make_cache_key(raw_row)
         if cache_key in cache:
-            normalized_row = cache[cache_key]
+            normalized_row = dict(cache[cache_key])
+            raw_role = _clean(raw_row.get("Role"))
+            if normalized_row.get("raw_role") != raw_role:
+                normalized_row["raw_role"] = raw_role
+                cache[cache_key] = normalized_row
+                updated = True
             cache_hits += 1
         else:
             try:
