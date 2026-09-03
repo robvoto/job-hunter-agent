@@ -16,7 +16,7 @@ import threading
 from typing import Any, Dict
 
 from openai import APIStatusError, APITimeoutError, OpenAI
-from pydantic import AliasChoices, BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from job_hunter_agent.experience_requirements import (
     extract_required_experience_months,
@@ -448,14 +448,10 @@ class _LLMRequirementCoverageItem(BaseModel):
     )
     # Separate semantic judgement for requirement-type learning. True means the
     # entire requirement can safely be assigned one reusable type without
-    # discarding another independently required dimension. Legacy cache rows
-    # default false so old output is suppressed rather than re-called or guessed.
+    # discarding another independently required dimension.
     classification_reviewable: bool = False
     status: str
-    matched_candidate_fact: str = Field(
-        default="",
-        validation_alias=AliasChoices("matched_candidate_fact", "profile_name"),
-    )
+    matched_candidate_fact: str = ""
     matched_job_text: str = ""
     profile_support: list[str] = Field(default_factory=list)
     covered_requirement_elements: list[str] = Field(default_factory=list)
@@ -818,7 +814,6 @@ def build_requirement_coverage_guidance() -> str:
 def build_requirement_coverage_debug_guidance() -> str:
     parts = [
         'For debug match diagnostics: return match_source exactly as "capability_name", "related_skill", "eligibility", or "qualification".',
-        'Existing debug consumers recognize the legacy source set: "match_source":"capability_name|related_skill|eligibility".',
         "For debug match diagnostics: return matched_profile_term as the exact capability name, related skill, eligibility fact, or qualification used.",
         "For debug match diagnostics: matched_candidate_fact must stay the canonical profile concept.",
         "For debug match diagnostics: profile_support must contain only actual candidate evidence text, never just the capability name or related skill label.",
@@ -1475,7 +1470,7 @@ def _atomicize_known_eligibility_rows(
                 lookup,
             )
         if len(mentions) > 1 and not (row.get("named_alternatives") or []):
-            original_fact = compact_whitespace(row.get("eligibility_name") or row.get("matched_candidate_fact")).casefold()
+            original_fact = compact_whitespace(row.get("matched_candidate_fact")).casefold()
             original_canonical = lookup.get(original_fact, "").casefold() if original_fact else ""
             for canonical in mentions:
                 fact_value = (eligibility_fact_values or {}).get(canonical.casefold())
@@ -1530,9 +1525,7 @@ def _merge_requirement_coverage(
         requirement_type = str(row.get("requirement_type") or "").strip().lower()
         canonical = compact_whitespace(row.get("canonical_requirement")).casefold()
         requirement = compact_whitespace(row.get("requirement")).casefold()
-        matched_fact = compact_whitespace(
-            row.get("matched_candidate_fact") or row.get("eligibility_name")
-        ).casefold()
+        matched_fact = compact_whitespace(row.get("matched_candidate_fact")).casefold()
         identity = (
             matched_fact
             if requirement_type == "eligibility" and matched_fact
@@ -1679,10 +1672,7 @@ def normalize_llm_requirement_coverage(
         profile_action_allowed = (
             bool(canonical_requirement) and not named_alternatives and canonical_fact_resolved
         )
-        matched_candidate_fact_raw = item.get("matched_candidate_fact") or item.get("profile_name")
-        if not matched_candidate_fact_raw:
-            matched_candidate_fact_raw = item.get("capability_name") or item.get("eligibility_name")
-        matched_candidate_fact = compact_whitespace(matched_candidate_fact_raw)
+        matched_candidate_fact = compact_whitespace(item.get("matched_candidate_fact"))
         capability_name = ""
         eligibility_name = ""
         qualification_name = ""

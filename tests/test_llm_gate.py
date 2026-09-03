@@ -101,6 +101,41 @@ def test_fit_review_prompt_excludes_learning_guidance(monkeypatch):
     assert "matched_profile_term" not in prompt
 
 
+
+
+def test_requirement_coverage_rejects_removed_profile_name_alias():
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [{
+            "requirement": "Stakeholder engagement",
+            "importance": "preferred",
+            "requirement_type": "capability",
+            "status": "supported",
+            "profile_name": "Stakeholder Engagement",
+            "profile_support": ["Worked with senior stakeholders."],
+        }],
+        valid_capability_names={"stakeholder engagement": "Stakeholder Engagement"},
+    )
+    assert result[0]["matched_candidate_fact"] == ""
+    assert result[0]["capability_name"] == ""
+    assert result[0]["status"] == "not_shown"
+
+
+def test_requirement_coverage_rejects_type_specific_input_alias():
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [{
+            "requirement": "Stakeholder engagement",
+            "importance": "preferred",
+            "requirement_type": "capability",
+            "status": "supported",
+            "capability_name": "Stakeholder Engagement",
+            "profile_support": ["Worked with senior stakeholders."],
+        }],
+        valid_capability_names={"stakeholder engagement": "Stakeholder Engagement"},
+    )
+    assert result[0]["matched_candidate_fact"] == ""
+    assert result[0]["capability_name"] == ""
+    assert result[0]["status"] == "not_shown"
+
 def test_fit_review_prompt_debug_match_diagnostics_adds_debug_schema(monkeypatch):
     monkeypatch.setattr(
         llm_gate,
@@ -124,7 +159,7 @@ def test_fit_review_prompt_debug_match_diagnostics_adds_debug_schema(monkeypatch
 
     assert "match_source" in prompt
     assert "matched_profile_term" in prompt
-    assert '"match_source":"capability_name|related_skill|eligibility"' in prompt
+    assert 'return match_source exactly as "capability_name", "related_skill", "eligibility", or "qualification"' in prompt
     assert "profile_support must contain only actual candidate evidence text" in prompt
 
 
@@ -260,6 +295,7 @@ def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
                     "capability_name": "stakeholder engagement",
                     "matched_job_text": "work with stakeholders",
                     "profile_support": ["stakeholder management"],
+                    "matched_candidate_fact": "stakeholder engagement",
                 },
                 {
                     "requirement": "Process mapping",
@@ -267,6 +303,7 @@ def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
                     "capability_name": "process mapping",
                     "matched_job_text": "map the current process",
                     "profile_support": ["process mapping"],
+                    "matched_candidate_fact": "process mapping",
                 },
             ],
         },
@@ -348,6 +385,7 @@ def test_normalize_llm_review_payload_downgrades_supported_when_role_duration_is
                             "matched_role_family": "Business Analyst",
                         },
                     ],
+                    "matched_candidate_fact": "business analysis",
                 }
             ],
         },
@@ -388,6 +426,7 @@ def test_normalize_llm_review_payload_downgrades_supported_when_years_requiremen
                         {"kind": "duration", "text": "5+ years"},
                         {"kind": "role_or_activity", "text": "Python backend development"},
                     ],
+                    "matched_candidate_fact": "python",
                 }
             ],
         },
@@ -430,6 +469,7 @@ def test_normalize_llm_review_payload_matches_years_requirement_against_role_var
                             "matched_role_family": "senior ba",
                         },
                     ],
+                    "matched_candidate_fact": "business analysis",
                 }
             ],
         },
@@ -631,6 +671,7 @@ def test_normalize_llm_review_payload_debug_reason_is_capped():
                     "capability_name": "stakeholder engagement",
                     "matched_job_text": "work with stakeholders",
                     "profile_support": ["stakeholder management"],
+                    "matched_candidate_fact": "stakeholder engagement",
                 },
             ],
         },
@@ -650,6 +691,7 @@ def _keep_payload_with_alignment(**overrides):
                 "capability_name": "stakeholder engagement",
                 "matched_job_text": "work with stakeholders",
                 "profile_support": ["stakeholder management"],
+                "matched_candidate_fact": "stakeholder engagement",
             },
         ],
     }
@@ -720,6 +762,7 @@ def test_request_learning_payload_uses_single_llm_call(monkeypatch):
                         "capability_name": "Stakeholder Engagement",
                         "matched_job_text": "work with stakeholders",
                         "profile_support": ["stakeholder management"],
+                        "matched_candidate_fact": "Stakeholder Engagement",
                     },
                 ],
             }
@@ -768,6 +811,7 @@ def test_request_learning_payload_uses_debug_fit_review_schema_when_enabled(monk
                         "matched_profile_term": "Stakeholder Engagement",
                         "matched_job_text": "work with stakeholders",
                         "profile_support": ["Led stakeholder engagement."],
+                        "matched_candidate_fact": "Stakeholder Engagement",
                     },
                 ],
             }
@@ -827,6 +871,7 @@ def test_normalize_llm_review_payload_distinguishes_capability_name_and_related_
                     "matched_profile_term": "stakeholder engagement",
                     "matched_job_text": "work with stakeholders",
                     "profile_support": ["Led stakeholder engagement across delivery teams."],
+                    "matched_candidate_fact": "stakeholder engagement",
                 },
                 {
                     "requirement": "Requirements traceability",
@@ -838,6 +883,7 @@ def test_normalize_llm_review_payload_distinguishes_capability_name_and_related_
                     "profile_support": [
                         "Produced traceable requirements, user stories and acceptance criteria."
                     ],
+                    "matched_candidate_fact": "business analysis",
                 },
             ],
         },
@@ -869,6 +915,7 @@ def test_request_learning_payload_retries_once_on_invalid_json(monkeypatch, capl
                         "capability_name": "Stakeholder Engagement",
                         "matched_job_text": "work with stakeholders",
                         "profile_support": ["stakeholder management"],
+                        "matched_candidate_fact": "Stakeholder Engagement",
                     },
                 ],
             }
@@ -932,6 +979,7 @@ def test_request_learning_payload_returns_usage_summary(monkeypatch):
                         "capability_name": "Stakeholder Engagement",
                         "matched_job_text": "work with stakeholders",
                         "profile_support": ["stakeholder management"],
+                        "matched_candidate_fact": "Stakeholder Engagement",
                     },
                 ],
             }
@@ -981,6 +1029,7 @@ def test_strong_grade_requires_requirement_capability_evidence():
                     "capability_name": "",
                     "matched_job_text": "work with stakeholders",
                     "profile_support": [],
+                    "matched_candidate_fact": "",
                 },
                 {
                     "requirement": "Process mapping",
@@ -988,6 +1037,7 @@ def test_strong_grade_requires_requirement_capability_evidence():
                     "capability_name": "",
                     "matched_job_text": "map the current process",
                     "profile_support": [],
+                    "matched_candidate_fact": "",
                 },
             ],
         },
@@ -1009,6 +1059,7 @@ def test_prospend_style_partial_coverage_does_not_become_strong():
                     "capability_name": "Stakeholder Engagement",
                     "matched_job_text": "stakeholder workshops",
                     "profile_support": ["stakeholder engagement"],
+                    "matched_candidate_fact": "Stakeholder Engagement",
                 },
                 {
                     "requirement": "Process mapping",
@@ -1016,6 +1067,7 @@ def test_prospend_style_partial_coverage_does_not_become_strong():
                     "capability_name": "Process Mapping",
                     "matched_job_text": "process mapping",
                     "profile_support": ["process mapping"],
+                    "matched_candidate_fact": "Process Mapping",
                 },
                 {
                     "requirement": "UAT support",
@@ -1023,6 +1075,7 @@ def test_prospend_style_partial_coverage_does_not_become_strong():
                     "capability_name": "Acceptance Testing",
                     "matched_job_text": "uat support",
                     "profile_support": ["user acceptance testing"],
+                    "matched_candidate_fact": "Acceptance Testing",
                 },
             ],
         },
@@ -1046,6 +1099,7 @@ def _cov(req: str, status: str, cap: str = "") -> dict:
         "capability_name": cap,
         "matched_job_text": "",
         "profile_support": [],
+               "matched_candidate_fact": cap,
     }
 
 
@@ -1161,6 +1215,7 @@ def _cov_imp(req: str, status: str, importance: str, cap: str = "") -> dict:
         "capability_name": cap,
         "matched_job_text": "",
         "profile_support": [],
+               "matched_candidate_fact": cap,
     }
 
 
@@ -1376,6 +1431,7 @@ def test_normalize_llm_review_payload_rejects_keep_when_all_capability_coverage_
                     "importance": "mandatory",
                     "requirement_type": "capability",
                     "capability_name": "some tool",
+                    "matched_candidate_fact": "some tool",
                 },
             ],
         },
@@ -1403,6 +1459,7 @@ def test_normalize_coverage_includes_importance_field():
             "capability_name": "agile methodologies",
             "matched_job_text": "agile ceremonies",
             "profile_support": [],
+            "matched_candidate_fact": "agile methodologies",
         },
         {
             "requirement": "Nice portfolio",
@@ -1411,6 +1468,7 @@ def test_normalize_coverage_includes_importance_field():
             "capability_name": "",
             "matched_job_text": "portfolio optional",
             "profile_support": [],
+            "matched_candidate_fact": "",
         },
     ]
     result = llm_gate.normalize_llm_requirement_coverage(
@@ -1497,6 +1555,7 @@ def test_normalize_coverage_defaults_invalid_importance_to_preferred():
             "capability_name": "python",
             "matched_job_text": "Python required",
             "profile_support": [],
+            "matched_candidate_fact": "python",
         },
     ]
     result = llm_gate.normalize_llm_requirement_coverage(

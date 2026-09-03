@@ -27,24 +27,28 @@ _REQUIREMENT_COVERAGE = [
         "capability_name": "Cloud computing (AWS)",
         "matched_job_text": "AWS platform experience",
         "profile_action_allowed": True,
+        "matched_candidate_fact": "Cloud computing (AWS)",
     },
     {
         "requirement": "Permanent full-time role",
         "status": "not_shown",
         "capability_name": "",
         "matched_job_text": "Permanent full-time role",
+        "matched_candidate_fact": "",
     },
     {
         "requirement": "Sydney",
         "status": "not_shown",
         "capability_name": "",
         "matched_job_text": "Sydney",
+        "matched_candidate_fact": "",
     },
     {
         "requirement": "Salary package",
         "status": "not_shown",
         "capability_name": "",
         "matched_job_text": "Salary package",
+        "matched_candidate_fact": "",
     },
 ]
 
@@ -172,6 +176,7 @@ def test_compute_gaps_excludes_item_without_profile_action_allowed():
         "capability_name": "CBAP",
         "matched_job_text": "CBAP or equivalent certification",
         "profile_action_allowed": False,
+                          "matched_candidate_fact": "CBAP",
     }
     assert compute_profile_gaps([unresolved_item], [], []) == []
 

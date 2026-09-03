@@ -288,8 +288,6 @@ def eligibility_gate_diagnostics(record: dict, profile: Optional[dict] = None) -
         matched_candidate_fact = compact_whitespace(
             str(
                 item.get("matched_candidate_fact")
-                or item.get("profile_name")
-                or item.get("eligibility_name")
                 or item.get("canonical_requirement")
                 or ""
             )
@@ -360,9 +358,7 @@ def requirement_fit_audit_rows(record: dict, profile: Optional[dict] = None) -> 
             raise ValueError(f"Unknown requirement importance in coverage: {importance!r}")
         requirement_type = str(item.get("requirement_type") or "").strip().lower()
         status = str(item.get("status") or "").strip().lower()
-        matched_candidate_fact = str(
-            item.get("matched_candidate_fact") or item.get("profile_name") or ""
-        ).strip()
+        matched_candidate_fact = str(item.get("matched_candidate_fact") or "").strip()
         weight = importance_weights[importance]
         is_eligibility_gate = requirement_type in {"eligibility", "qualification"}
         scoring_weight = 0.0 if is_eligibility_gate else weight
@@ -729,9 +725,6 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
         total_weight += scoring_weight
         matched_candidate_fact = str(
             item.get("matched_candidate_fact")
-            or item.get("profile_name")
-            or item.get("capability_name")
-            or item.get("eligibility_name")
             or ""
         ).strip()
 

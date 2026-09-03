@@ -49,7 +49,7 @@ def _normalize_capability_row(raw_row, profile, role_experience=None):
 
 def test_requirement_fit_all_supported_strong_is_100():
     record = _record([
-        {"requirement": "Stakeholder engagement", "importance": "mandatory", "status": "supported", "capability_name": "stakeholder engagement"}
+        {"requirement": "Stakeholder engagement", "importance": "mandatory", "status": "supported", "capability_name": "stakeholder engagement", "matched_candidate_fact": "stakeholder engagement"}
     ], title_match_metadata={"match_family": "primary"}, salary="$300k", posted_age_days=0)
 
     assert fit_scoring.fit_score(record, _profile()) == 100
@@ -226,6 +226,7 @@ def test_requirement_fit_partially_supported_uses_partial_status_credit():
             "importance": "mandatory",
             "status": "partially_supported",
             "capability_name": "stakeholder engagement",
+            "matched_candidate_fact": "stakeholder engagement",
         }
     ])
 
@@ -236,7 +237,7 @@ def test_requirement_fit_partially_supported_uses_partial_status_credit():
 
 def test_requirement_fit_uses_capability_level_not_llm_grade_or_title():
     record = _record([
-        {"requirement": "Salesforce configuration", "importance": "mandatory", "status": "supported", "capability_name": "salesforce"}
+        {"requirement": "Salesforce configuration", "importance": "mandatory", "status": "supported", "capability_name": "salesforce", "matched_candidate_fact": "salesforce"}
     ], llm_fit_grade="EXCELLENT", title_match_metadata={"match_family": "primary"})
 
     assert fit_scoring.fit_score(record, _profile()) == 35
@@ -465,9 +466,9 @@ def test_required_capability_gap_lowers_fit_without_becoming_eligibility_gate():
 
 def test_requirement_fit_not_shown_and_mismatch_are_zero_and_counted():
     record = _record([
-        {"requirement": "Stakeholder engagement", "importance": "mandatory", "status": "supported", "capability_name": "stakeholder engagement"},
-        {"requirement": "Python engineering", "importance": "mandatory", "status": "not_shown", "capability_name": ""},
-        {"requirement": "NV1 clearance", "importance": "preferred", "status": "mismatch", "capability_name": ""},
+        {"requirement": "Stakeholder engagement", "importance": "mandatory", "status": "supported", "capability_name": "stakeholder engagement", "matched_candidate_fact": "stakeholder engagement"},
+        {"requirement": "Python engineering", "importance": "mandatory", "status": "not_shown", "capability_name": "", "matched_candidate_fact": ""},
+        {"requirement": "NV1 clearance", "importance": "preferred", "status": "mismatch", "capability_name": "", "matched_candidate_fact": ""},
     ])
 
     assert fit_scoring.fit_score(record, _profile()) == 43
@@ -486,6 +487,7 @@ def test_requirement_fit_unknown_mapped_capability_logs_uncertainty(tmp_path, mo
             "status": "supported",
             "capability_name": "unknown data platform capability",
             "matched_job_text": "data platform uplift",
+            "matched_candidate_fact": "unknown data platform capability",
         }
     ])
 
@@ -655,6 +657,7 @@ def test_requirement_fit_invalid_status_does_not_score_even_with_valid_capabilit
             "requirement_type": "capability",
             "capability_name": "sql",
             "matched_job_text": "SQL required",
+            "matched_candidate_fact": "sql",
         }
     ])
 
@@ -710,6 +713,7 @@ def _fully_supported_record(**extra):
                 "importance": "mandatory",
                 "status": "supported",
                 "capability_name": "stakeholder engagement",
+                "matched_candidate_fact": "stakeholder engagement",
             }
         ],
         **extra,
@@ -760,6 +764,7 @@ def test_occupation_alignment_different_clamps_to_zero_not_negative():
                 "importance": "mandatory",
                 "status": "mismatch",
                 "capability_name": "",
+                "matched_candidate_fact": "",
             }
         ],
         occupation_alignment="different",

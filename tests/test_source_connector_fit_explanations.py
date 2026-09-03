@@ -398,6 +398,7 @@ def test_render_job_card_gap_button_carries_the_capability_name_not_requirement_
                     "matched_job_text": "AWS platform experience",
                     "canonical_requirement": "Cloud computing (AWS)",
                     "profile_action_allowed": True,
+                    "matched_candidate_fact": "Cloud computing (AWS)",
                 }
             ],
         },
@@ -451,6 +452,7 @@ def test_render_job_card_omits_gap_actions_for_vague_or_alternative_requirement(
                     "matched_job_text": requirement,
                     "canonical_requirement": "",
                     "profile_action_allowed": False,
+                    "matched_candidate_fact": "CBAP",
                 }
             ],
         },
@@ -1050,6 +1052,7 @@ def test_fit_score_requirement_coverage_directly_drives_requirement_fit_score():
                     "capability_name": "agile methodologies",
                     "matched_job_text": "agile delivery ceremonies",
                     "profile_support": ["Agile methodologies"],
+                    "matched_candidate_fact": "agile methodologies",
                 },
                 {
                     "requirement": "Acceptance testing",
@@ -1058,6 +1061,7 @@ def test_fit_score_requirement_coverage_directly_drives_requirement_fit_score():
                     "capability_name": "acceptance testing",
                     "matched_job_text": "acceptance criteria",
                     "profile_support": ["Acceptance Testing"],
+                    "matched_candidate_fact": "acceptance testing",
                 },
             ],
         },
@@ -1095,6 +1099,7 @@ def test_strong_high_confidence_fit_keeps_requirement_coverage_transparency_only
                 "capability_name": "agile methodologies",
                 "matched_job_text": "agile delivery",
                 "profile_support": [],
+                "matched_candidate_fact": "agile methodologies",
             },
             {
                 "requirement": "Acceptance testing",
@@ -1102,6 +1107,7 @@ def test_strong_high_confidence_fit_keeps_requirement_coverage_transparency_only
                 "capability_name": "acceptance testing",
                 "matched_job_text": "acceptance criteria",
                 "profile_support": [],
+                "matched_candidate_fact": "acceptance testing",
             },
             {
                 "requirement": "Stakeholder engagement",
@@ -1109,6 +1115,7 @@ def test_strong_high_confidence_fit_keeps_requirement_coverage_transparency_only
                 "capability_name": "primary stakeholder engagement",
                 "matched_job_text": "stakeholder workshops",
                 "profile_support": [],
+                "matched_candidate_fact": "primary stakeholder engagement",
             },
         ],
     }
@@ -1184,6 +1191,7 @@ def test_eligibility_coverage_renders_in_clearance_panel_when_supported():
                     "eligibility_name": "Baseline clearance",
                     "matched_job_text": "Security Clearance: NV1 / Baseline / As per role",
                     "profile_support": [],
+                    "matched_candidate_fact": "Baseline clearance",
                 }
             ],
             "source": "seek",
@@ -1212,6 +1220,7 @@ def test_eligibility_mismatch_renders_in_clearance_panel_not_checks_before_apply
             "eligibility_name": "NV1",
             "matched_job_text": "Security Clearance: NV1 only, no alternatives accepted",
             "profile_support": [],
+            "matched_candidate_fact": "NV1",
         }
     ]
 
@@ -1256,7 +1265,7 @@ def test_fit_score_breakdown_ignores_profile_title_scoring_rule_overrides():
             "llm_fit_grade": "SOLID",
             "title_match_metadata": {"match_family": "primary"},
             "requirement_coverage": [
-                {"requirement": "Agile delivery", "importance": "mandatory", "status": "supported", "capability_name": "agile methodologies"}
+                {"requirement": "Agile delivery", "importance": "mandatory", "status": "supported", "capability_name": "agile methodologies", "matched_candidate_fact": "agile methodologies"}
             ],
         },
         profile,
@@ -1299,7 +1308,7 @@ def test_fit_score_breakdown_keeps_secondary_role_family_out_of_score():
             "llm_fit_grade": "SOLID",
             "title_match_metadata": {"match_family": "secondary"},
             "requirement_coverage": [
-                {"requirement": "Agile delivery", "importance": "mandatory", "status": "supported", "capability_name": "agile methodologies"}
+                {"requirement": "Agile delivery", "importance": "mandatory", "status": "supported", "capability_name": "agile methodologies", "matched_candidate_fact": "agile methodologies"}
             ],
         },
         _capability_profile(),
@@ -2017,6 +2026,7 @@ def test_render_job_card_requirement_coverage_omits_duplicate_matched_text():
                     "capability_name": "acceptance testing",
                     "matched_job_text": requirement,
                     "profile_support": [],
+                    "matched_candidate_fact": "acceptance testing",
                 }
             ],
             "source": "seek",
@@ -2046,6 +2056,7 @@ def test_render_job_card_requirement_coverage_shows_evidence_subtitles_in_normal
                     "capability_name": "acceptance testing",
                     "matched_job_text": requirement,
                     "profile_support": [],
+                    "matched_candidate_fact": "acceptance testing",
                 }
             ],
             "source": "seek",
@@ -2073,6 +2084,7 @@ def test_render_job_card_requirement_coverage_hides_capability_badge_in_normal_m
                     "capability_name": "agile delivery",
                     "matched_job_text": "Lead end-to-end delivery within Agile squads, working across multiple initiatives across data, technology, and change",
                     "profile_support": [],
+                    "matched_candidate_fact": "agile delivery",
                 }
             ],
             "source": "seek",
@@ -2128,6 +2140,7 @@ def test_render_job_card_requirement_coverage_shows_ad_wording_in_debug_mode():
                     "capability_name": "agile delivery",
                     "matched_job_text": "Lead end-to-end delivery within Agile squads, working across multiple initiatives across data, technology, and change",
                     "profile_support": [],
+                    "matched_candidate_fact": "agile delivery",
                 }
             ],
             "source": "seek",
@@ -2168,6 +2181,7 @@ def test_render_job_card_requirement_coverage_shows_role_duration_note_in_normal
                     "matched_role_family_end_year": 2024,
                     "experience_requirement_met": False,
                     "experience_duration_gap": True,
+                    "matched_candidate_fact": "acceptance testing",
                 }
             ],
             "source": "seek",
@@ -3635,6 +3649,7 @@ def test_render_job_card_fit_breakdown_starts_with_plain_english_summary_from_re
                     "capability_name": "Agile methodologies",
                     "matched_job_text": "agile delivery",
                     "profile_support": ["agile"],
+                    "matched_candidate_fact": "Agile methodologies",
                 },
                 {
                     "requirement": "Stakeholder engagement",
@@ -3643,6 +3658,7 @@ def test_render_job_card_fit_breakdown_starts_with_plain_english_summary_from_re
                     "capability_name": "Primary stakeholder engagement",
                     "matched_job_text": "stakeholder engagement",
                     "profile_support": ["stakeholder engagement"],
+                    "matched_candidate_fact": "Primary stakeholder engagement",
                 },
                 {
                     "requirement": "User acceptance testing",
@@ -3651,6 +3667,7 @@ def test_render_job_card_fit_breakdown_starts_with_plain_english_summary_from_re
                     "capability_name": "Acceptance testing",
                     "matched_job_text": "user acceptance testing",
                     "profile_support": ["uat"],
+                    "matched_candidate_fact": "Acceptance testing",
                 },
                 {
                     "requirement": "SAP certification",
@@ -3659,6 +3676,7 @@ def test_render_job_card_fit_breakdown_starts_with_plain_english_summary_from_re
                     "capability_name": "",
                     "matched_job_text": "SAP certification",
                     "profile_support": [],
+                    "matched_candidate_fact": "",
                 },
             ],
             "location": "Sydney NSW",
@@ -3848,6 +3866,7 @@ def test_workspace_renders_requirement_coverage_with_status_classes():
                     "capability_name": "stakeholder engagement",
                     "matched_job_text": "work with stakeholders",
                     "profile_support": ["stakeholder management"],
+                    "matched_candidate_fact": "stakeholder engagement",
                 },
                 {
                     "requirement": "Agile delivery",
@@ -3856,6 +3875,7 @@ def test_workspace_renders_requirement_coverage_with_status_classes():
                     "capability_name": "agile methodologies",
                     "matched_job_text": "agile ceremonies",
                     "profile_support": [],
+                    "matched_candidate_fact": "agile methodologies",
                 },
                 {
                     "requirement": "Reporting",
@@ -3864,6 +3884,7 @@ def test_workspace_renders_requirement_coverage_with_status_classes():
                     "capability_name": "reporting",
                     "matched_job_text": "regular reporting",
                     "profile_support": [],
+                    "matched_candidate_fact": "reporting",
                 },
                 {
                     "requirement": "SAP certification",
@@ -3872,6 +3893,7 @@ def test_workspace_renders_requirement_coverage_with_status_classes():
                     "capability_name": "",
                     "matched_job_text": "SAP required",
                     "profile_support": [],
+                    "matched_candidate_fact": "",
                 },
                 {
                     "requirement": "Financial reporting",
@@ -3880,6 +3902,7 @@ def test_workspace_renders_requirement_coverage_with_status_classes():
                     "capability_name": "",
                     "matched_job_text": "",
                     "profile_support": [],
+                    "matched_candidate_fact": "",
                 },
                 {
                     "requirement": "PV clearance",
@@ -3889,6 +3912,7 @@ def test_workspace_renders_requirement_coverage_with_status_classes():
                     "capability_name": "",
                     "matched_job_text": "Must hold PV clearance",
                     "profile_support": [],
+                    "matched_candidate_fact": "",
                 },
             ],
             "location": "Sydney NSW",
@@ -4112,7 +4136,7 @@ def test_hard_blocked_job_still_shows_requirement_fit_evidence():
         "competitive_signals": [],
         "hard_block_reasons": ["requires SAP experience"],
         "requirement_coverage": [
-            {"requirement": "Agile delivery", "importance": "mandatory", "status": "supported", "capability_name": "agile methodologies"}
+            {"requirement": "Agile delivery", "importance": "mandatory", "status": "supported", "capability_name": "agile methodologies", "matched_candidate_fact": "agile methodologies"}
         ],
     }
 
@@ -4982,6 +5006,7 @@ def test_partial_requirement_coverage_shows_badge_in_job_requirements_only():
                     "capability_name": "data integration",
                     "matched_job_text": "data integration and data services layers",
                     "profile_support": [],
+                    "matched_candidate_fact": "data integration",
                 }
             ],
             "source": "seek",

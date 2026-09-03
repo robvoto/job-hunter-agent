@@ -67,6 +67,7 @@ class _FakeParsingResponses:
                             "capability_name": "stakeholder management",
                             "matched_job_text": "work with stakeholders",
                             "profile_support": ["stakeholder management"],
+                            "matched_candidate_fact": "stakeholder management",
                         },
                         {
                             "requirement": "Process mapping",
@@ -74,6 +75,7 @@ class _FakeParsingResponses:
                             "capability_name": "process mapping",
                             "matched_job_text": "map the current process",
                             "profile_support": ["process mapping"],
+                            "matched_candidate_fact": "process mapping",
                         },
                     ],
                     "contextual_capability_matches": [],
@@ -355,6 +357,7 @@ def test_normalize_llm_review_payload_fit_review_shape():
                     "capability_name": "stakeholder engagement",
                     "matched_job_text": "stakeholder engagement",
                     "profile_support": ["stakeholder management"],
+                    "matched_candidate_fact": "stakeholder engagement",
                 },
             ],
         },

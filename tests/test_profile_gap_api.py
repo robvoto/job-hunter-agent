@@ -77,6 +77,7 @@ def test_profile_gap_confirm_have_adds_canonical_capability(client, monkeypatch)
                     "canonical_requirement": "Cloud computing (AWS)",
                     "matched_job_text": "AWS platform experience",
                     "profile_action_allowed": True,
+                    "matched_candidate_fact": "Cloud computing (AWS)",
                 }
             ],
         ),
@@ -145,6 +146,7 @@ def test_profile_gap_confirm_have_is_idempotent(client, monkeypatch):
                     "canonical_requirement": "Cloud computing (AWS)",
                     "matched_job_text": "AWS platform experience",
                     "profile_action_allowed": True,
+                    "matched_candidate_fact": "Cloud computing (AWS)",
                 }
             ],
         ),
@@ -274,6 +276,7 @@ def test_profile_gap_confirm_have_rejects_non_capability_string(client, monkeypa
                     "status": "not_shown",
                     "capability_name": "",
                     "matched_job_text": "Permanent full-time role",
+                    "matched_candidate_fact": "",
                 }
             ],
         ),
@@ -322,6 +325,7 @@ def test_profile_gap_confirm_have_rejects_capability_carrying_a_years_token(clie
                     "canonical_requirement": "5 Years Business Analysis",
                     "matched_job_text": "5+ years business analysis experience",
                     "profile_action_allowed": True,
+                    "matched_candidate_fact": "5 Years Business Analysis",
                 }
             ],
         ),
@@ -362,6 +366,7 @@ def test_profile_gap_confirm_do_not_have_adds_to_must_not_require(client, monkey
                     "canonical_requirement": "AHPRA registration",
                     "matched_job_text": "AHPRA registration",
                     "profile_action_allowed": True,
+                    "matched_candidate_fact": "AHPRA registration",
                 }
             ],
         ),
@@ -407,6 +412,7 @@ def test_profile_gap_confirm_do_not_have_is_idempotent(client, monkeypatch):
                     "canonical_requirement": "AHPRA registration",
                     "matched_job_text": "AHPRA registration",
                     "profile_action_allowed": True,
+                    "matched_candidate_fact": "AHPRA registration",
                 }
             ],
         ),
@@ -566,6 +572,7 @@ def test_profile_gap_rejects_item_without_profile_action_allowed(client, monkeyp
                     "capability_name": "CBAP",
                     "matched_job_text": "CBAP, Agile BA, or equivalent certifications",
                     "profile_action_allowed": False,
+                    "matched_candidate_fact": "CBAP",
                 }
             ],
         ),
@@ -647,6 +654,7 @@ def test_profile_gap_rejects_item_missing_profile_action_allowed_flag(client, mo
                     "status": "not_shown",
                     "capability_name": "CBAP",
                     "matched_job_text": "CBAP, Agile BA, or equivalent certifications",
+                    "matched_candidate_fact": "CBAP",
                 }
             ],
         ),
@@ -685,6 +693,7 @@ def test_profile_gap_confirm_have_existing_resolution_adds_exact_canonical_fact_
                     "canonical_requirement": "User stories",
                     "matched_job_text": "Write user stories and acceptance criteria",
                     "profile_action_allowed": True,
+                    "matched_candidate_fact": "Write user stories and acceptance criteria",
                 }
             ],
         ),
@@ -740,6 +749,7 @@ def test_profile_gap_confirm_have_existing_resolution_is_idempotent_on_repeat_co
                     "canonical_requirement": "User stories",
                     "matched_job_text": "Write user stories and acceptance criteria",
                     "profile_action_allowed": True,
+                    "matched_candidate_fact": "Write user stories and acceptance criteria",
                 }
             ],
         ),
@@ -851,6 +861,7 @@ def test_profile_gap_confirm_have_new_resolution_is_idempotent_on_repeat_confirm
                     "canonical_requirement": "Cloud computing (AWS)",
                     "matched_job_text": "AWS platform experience",
                     "profile_action_allowed": True,
+                    "matched_candidate_fact": "Cloud computing (AWS)",
                 }
             ],
         ),
@@ -911,6 +922,7 @@ def test_profile_gap_confirm_have_unresolved_resolution_fails_closed_without_sav
                     "canonical_requirement": "Cloud computing (AWS)",
                     "matched_job_text": "AWS platform experience",
                     "profile_action_allowed": True,
+                    "matched_candidate_fact": "Cloud computing (AWS)",
                 }
             ],
         ),
@@ -957,6 +969,7 @@ def test_profile_gap_confirm_have_invalid_existing_target_fails_closed_without_s
                     "canonical_requirement": "Java",
                     "matched_job_text": "Java development experience is required.",
                     "profile_action_allowed": True,
+                    "matched_candidate_fact": "Java development experience is required.",
                 }
             ],
         ),

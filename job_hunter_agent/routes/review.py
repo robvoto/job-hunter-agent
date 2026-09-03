@@ -352,9 +352,6 @@ def _profile_gap_coverage_name(item: dict) -> str:
     return str(
         item.get("canonical_requirement")
         or item.get("matched_candidate_fact")
-        or item.get("profile_name")
-        or item.get("capability_name")
-        or item.get("eligibility_name")
         or ""
     ).strip()
 

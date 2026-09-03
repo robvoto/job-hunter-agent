@@ -41,8 +41,8 @@ def _score(record, profile=None):
 
 def test_all_supported_strong_requirements_score_100():
     record = _record([
-        {"requirement": "Stakeholder engagement", "importance": "mandatory", "status": "supported", "capability_name": "stakeholder engagement"},
-        {"requirement": "Stakeholder workshops", "importance": "preferred", "status": "supported", "capability_name": "stakeholder engagement"},
+        {"requirement": "Stakeholder engagement", "importance": "mandatory", "status": "supported", "capability_name": "stakeholder engagement", "matched_candidate_fact": "stakeholder engagement"},
+        {"requirement": "Stakeholder workshops", "importance": "preferred", "status": "supported", "capability_name": "stakeholder engagement", "matched_candidate_fact": "stakeholder engagement"},
     ])
     assert _score(record) == 100
 
@@ -60,27 +60,27 @@ def test_all_supported_strong_requirements_score_100():
 ])
 def test_non_requirement_noise_signals_do_not_change_fit_score(overrides):
     base_record = _record([
-        {"requirement": "Stakeholder engagement", "importance": "mandatory", "status": "supported", "capability_name": "stakeholder engagement"},
-        {"requirement": "SQL analysis", "importance": "preferred", "status": "supported", "capability_name": "sql"},
+        {"requirement": "Stakeholder engagement", "importance": "mandatory", "status": "supported", "capability_name": "stakeholder engagement", "matched_candidate_fact": "stakeholder engagement"},
+        {"requirement": "SQL analysis", "importance": "preferred", "status": "supported", "capability_name": "sql", "matched_candidate_fact": "sql"},
     ])
     assert _score({**base_record, **overrides}) == _score(base_record)
 
 
 def test_capability_level_controls_requirement_fit_percentage():
     record = _record([
-        {"requirement": "Stakeholder engagement", "importance": "mandatory", "status": "supported", "capability_name": "stakeholder engagement"},
-        {"requirement": "SQL analysis", "importance": "mandatory", "status": "supported", "capability_name": "sql"},
-        {"requirement": "Salesforce configuration", "importance": "mandatory", "status": "supported", "capability_name": "salesforce"},
-        {"requirement": "Legacy coding", "importance": "mandatory", "status": "supported", "capability_name": "legacy coding"},
+        {"requirement": "Stakeholder engagement", "importance": "mandatory", "status": "supported", "capability_name": "stakeholder engagement", "matched_candidate_fact": "stakeholder engagement"},
+        {"requirement": "SQL analysis", "importance": "mandatory", "status": "supported", "capability_name": "sql", "matched_candidate_fact": "sql"},
+        {"requirement": "Salesforce configuration", "importance": "mandatory", "status": "supported", "capability_name": "salesforce", "matched_candidate_fact": "salesforce"},
+        {"requirement": "Legacy coding", "importance": "mandatory", "status": "supported", "capability_name": "legacy coding", "matched_candidate_fact": "legacy coding"},
     ])
     assert _score(record) == 55
 
 
 def test_not_shown_and_mismatch_contribute_zero():
     record = _record([
-        {"requirement": "Stakeholder engagement", "importance": "mandatory", "status": "supported", "capability_name": "stakeholder engagement"},
-        {"requirement": "Python engineering", "importance": "mandatory", "status": "not_shown", "capability_name": ""},
-        {"requirement": "NV1 clearance", "importance": "preferred", "status": "mismatch", "capability_name": ""},
+        {"requirement": "Stakeholder engagement", "importance": "mandatory", "status": "supported", "capability_name": "stakeholder engagement", "matched_candidate_fact": "stakeholder engagement"},
+        {"requirement": "Python engineering", "importance": "mandatory", "status": "not_shown", "capability_name": "", "matched_candidate_fact": ""},
+        {"requirement": "NV1 clearance", "importance": "preferred", "status": "mismatch", "capability_name": "", "matched_candidate_fact": ""},
     ])
     assert _score(record) == 43
     label = fit_scoring.fit_score_breakdown(record, _profile())[0]["label"]
@@ -90,7 +90,7 @@ def test_not_shown_and_mismatch_contribute_zero():
 
 def test_required_basic_or_low_coverage_is_flagged_not_hidden():
     record = _record([
-        {"requirement": "Salesforce configuration", "importance": "mandatory", "status": "supported", "capability_name": "salesforce"}
+        {"requirement": "Salesforce configuration", "importance": "mandatory", "status": "supported", "capability_name": "salesforce", "matched_candidate_fact": "salesforce"}
     ])
     breakdown = fit_scoring.fit_score_breakdown(record, _profile())
     assert _score(record) == 35
@@ -99,7 +99,7 @@ def test_required_basic_or_low_coverage_is_flagged_not_hidden():
 
 def test_hard_blocker_overrides_requirement_fit_to_zero():
     record = _record(
-        [{"requirement": "Stakeholder engagement", "importance": "mandatory", "status": "supported", "capability_name": "stakeholder engagement"}],
+        [{"requirement": "Stakeholder engagement", "importance": "mandatory", "status": "supported", "capability_name": "stakeholder engagement", "matched_candidate_fact": "stakeholder engagement"}],
         hard_block_reasons=["requires NV1 security clearance"],
         must_not_require_skills=["NV1 security clearance"],
         full_description="requires NV1 security clearance",
@@ -111,7 +111,7 @@ def test_hard_blocker_overrides_requirement_fit_to_zero():
 
 def test_breakdown_does_not_include_grade_band_entries():
     record = _record([
-        {"requirement": "Stakeholder engagement", "importance": "mandatory", "status": "supported", "capability_name": "stakeholder engagement"}
+        {"requirement": "Stakeholder engagement", "importance": "mandatory", "status": "supported", "capability_name": "stakeholder engagement", "matched_candidate_fact": "stakeholder engagement"}
     ], llm_fit_grade="MISMATCH")
     labels = [entry["label"] for entry in fit_scoring.fit_score_breakdown(record, _profile())]
     assert not any("Grade band" in label for label in labels)

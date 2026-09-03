@@ -42,6 +42,7 @@ def test_resolve_llm_review_payload_fit_review_cache_hit_skips_llm(monkeypatch):
                     "capability_name": "stakeholder engagement",
                     "matched_job_text": "stakeholder workshops",
                     "profile_support": ["stakeholder management"],
+                    "matched_candidate_fact": "stakeholder engagement",
                 },
                 {
                     "requirement": "Process mapping",
@@ -49,6 +50,7 @@ def test_resolve_llm_review_payload_fit_review_cache_hit_skips_llm(monkeypatch):
                     "capability_name": "process mapping",
                     "matched_job_text": "process mapping",
                     "profile_support": ["process mapping"],
+                    "matched_candidate_fact": "process mapping",
                 },
             ],
         }
@@ -127,6 +129,7 @@ def test_resolve_llm_review_payload_cache_hit_uses_role_experience_for_years_req
                             {"kind": "duration", "text": "5+ years"},
                             {"kind": "role_or_activity", "text": "Business Analyst"},
                         ],
+                    "matched_candidate_fact": "business analysis",
                 }
             ],
         }
@@ -184,6 +187,7 @@ def test_resolve_llm_review_payload_cache_miss_calls_llm(monkeypatch):
                     "capability_name": "stakeholder engagement",
                     "matched_job_text": "stakeholder workshops",
                     "profile_support": ["stakeholder management"],
+                    "matched_candidate_fact": "stakeholder engagement",
                 },
                 {
                     "requirement": "Process mapping",
@@ -191,6 +195,7 @@ def test_resolve_llm_review_payload_cache_miss_calls_llm(monkeypatch):
                     "capability_name": "process mapping",
                     "matched_job_text": "process mapping",
                     "profile_support": ["process mapping"],
+                    "matched_candidate_fact": "process mapping",
                 },
             ],
         }
@@ -270,6 +275,7 @@ def test_resolve_llm_review_payload_second_equivalent_call_hits_cache(monkeypatc
                     "capability_name": "stakeholder engagement",
                     "matched_job_text": "stakeholder workshops",
                     "profile_support": ["stakeholder management"],
+                    "matched_candidate_fact": "stakeholder engagement",
                 },
             ],
         }
@@ -319,6 +325,7 @@ def test_resolve_llm_review_payload_partial_cache_calls_llm(monkeypatch):
                     "capability_name": "stakeholder engagement",
                     "matched_job_text": "stakeholder workshops",
                     "profile_support": ["stakeholder management"],
+                    "matched_candidate_fact": "stakeholder engagement",
                 },
                 {
                     "requirement": "Process mapping",
@@ -326,6 +333,7 @@ def test_resolve_llm_review_payload_partial_cache_calls_llm(monkeypatch):
                     "capability_name": "process mapping",
                     "matched_job_text": "process mapping",
                     "profile_support": ["process mapping"],
+                    "matched_candidate_fact": "process mapping",
                 },
                 {
                     "requirement": "UAT support",
@@ -333,6 +341,7 @@ def test_resolve_llm_review_payload_partial_cache_calls_llm(monkeypatch):
                     "capability_name": "acceptance testing",
                     "matched_job_text": "uat support",
                     "profile_support": ["user acceptance testing"],
+                    "matched_candidate_fact": "acceptance testing",
                 },
             ],
         }
