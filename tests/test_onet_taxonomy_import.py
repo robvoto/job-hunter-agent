@@ -3,6 +3,8 @@
 import json
 import zipfile
 
+import pytest
+
 from job_hunter_agent.onet_taxonomy_import import build_taxonomy
 
 
@@ -112,3 +114,13 @@ def test_current_text_zip_accepts_nested_members_and_job_titles_rename(tmp_path)
     assert taxonomy["metadata"]["format"] == "fulldb_text"
     assert taxonomy["metadata"]["database_release"] == "30.3"
     assert taxonomy["by_normalized_title"]["cloud engineer"][0]["source"] == "job_title"
+
+
+def test_legacy_occupational_listings_zip_is_rejected(tmp_path):
+    archive_path = tmp_path / "OccupationalListings.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("2019_Occupations.xlsx", b"obsolete")
+        archive.writestr("2019_Alt_Titles.xlsx", b"obsolete")
+
+    with pytest.raises(ValueError, match=r"current full O\*NET database"):
+        build_taxonomy(archive_path)

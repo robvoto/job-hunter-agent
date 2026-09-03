@@ -29,5 +29,7 @@ def test_wait_state_uses_quiet_disclosure_and_shared_structured_progress():
     assert 'role="progressbar"' in wait_state_js
     assert "aria-valuenow" in wait_state_js
     assert "progressDetail" in wait_state_js
+    assert "legacyProgressCopy" not in wait_state_js
+    assert "legacy =" not in wait_state_js
     assert "Current step:" not in wait_state_js
     assert "wait-state__activity" not in wait_state_js

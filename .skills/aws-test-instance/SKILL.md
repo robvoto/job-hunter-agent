@@ -35,7 +35,7 @@ Use this skill when the user mentions any of:
 
 ## Ownership
 - AWS host facts and standard diagnosis workflow: this skill + `DETAILS.md`
-- EC2 service wrapper: `scripts/ec2/start-aws-browser-session.sh` and `scripts/ec2/run-jobhunter-browser-session.sh`
+- EC2 service wrapper: `scripts/ec2/start-aws-browser-session.sh`
 - App-level scraping logic: `.skills/scraping/SKILL.md`
 - Workspace/UI behaviour: `.skills/dashboard-ui/SKILL.md`
 - Release/deploy flow: `.skills/release-management/SKILL.md`

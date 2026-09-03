@@ -36,6 +36,9 @@ SETTINGS_ADMIN_JS_PATH = (
     ROOT_DIR / "templates" / "static" / "settings" / "global" / "settings-admin.js"
 )
 AWS_BROWSER_SESSION_START_SCRIPT = ROOT_DIR / "scripts" / "ec2" / "start-aws-browser-session.sh"
+LEGACY_AWS_BROWSER_SESSION_WRAPPER = ROOT_DIR / "scripts" / "ec2" / "run-jobhunter-browser-session.sh"
+JOB_HUNTER_SERVICE_SCRIPT = ROOT_DIR / "scripts" / "ec2" / "job-hunter.service"
+JOB_HUNTER_SERVICE_INSTALL_SCRIPT = ROOT_DIR / "scripts" / "ec2" / "install-jobhunter-service.sh"
 AWS_BROWSER_SESSION_INSTALL_SCRIPT = ROOT_DIR / "scripts" / "ec2" / "install-aws-browser-session.sh"
 AWS_BROWSER_SESSION_SMOKE_SCRIPT = ROOT_DIR / "scripts" / "ec2" / "smoke-seek-aws-browser-session.sh"
 AWS_DEPLOY_SCRIPT = ROOT_DIR / "scripts" / "ec2" / "deploy-jobhunter-release.sh"
@@ -153,6 +156,10 @@ def test_aws_browser_session_scripts_are_committed():
     assert "cards=" in smoke_script
     assert "Startup rebuild refreshes saved workspace output" in deploy_script
     assert "curl -fsSI" in deploy_script
+    assert not LEGACY_AWS_BROWSER_SESSION_WRAPPER.exists()
+    assert "start-aws-browser-session.sh" in JOB_HUNTER_SERVICE_SCRIPT.read_text(encoding="utf-8")
+    assert "run-jobhunter-browser-session.sh" not in JOB_HUNTER_SERVICE_SCRIPT.read_text(encoding="utf-8")
+    assert "start-aws-browser-session.sh" in JOB_HUNTER_SERVICE_INSTALL_SCRIPT.read_text(encoding="utf-8")
 
 
 def test_aws_browser_session_page_redirects_non_admin(monkeypatch):

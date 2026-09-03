@@ -23,8 +23,7 @@ Use this file only when the task needs exact AWS host facts or repeatable CLI co
 - App dir: `/home/ubuntu/job-hunter-agent`
 - Service unit: `/etc/systemd/system/job-hunter.service`
 - Service name: `job-hunter.service`
-- Service launcher: `/home/ubuntu/job-hunter-agent/scripts/ec2/run-jobhunter-browser-session.sh`
-- Browser-session wrapper: `/home/ubuntu/job-hunter-agent/scripts/ec2/start-aws-browser-session.sh`
+- Service/browser-session launcher: `/home/ubuntu/job-hunter-agent/scripts/ec2/start-aws-browser-session.sh`
 - Data dir: `/var/lib/job-hunter/data`
 - Output dir: `/var/lib/job-hunter/output`
 - DB path: `/var/lib/job-hunter/data/job_hunter.db`
