@@ -332,24 +332,30 @@ def reset_session_cost() -> None:
         _session_output_tokens = 0
 
 
+def invalidate_profile_fingerprint_cache() -> None:
+    """Discard the process-local profile fingerprint after a profile save.
+
+    The fingerprint is derived from the actual fit-review prompt context rather
+    than the profile row timestamp. Review-only state such as Apply/Hide can
+    therefore save the profile without invalidating every fit/title cache entry.
+    """
+    global _profile_fingerprint_cache
+    _profile_fingerprint_cache = None
+
+
 def _profile_fingerprint() -> str:
-    """Cheap fingerprint of the profile row - updated_at from DB.
-    Cached for the lifetime of the process so repeated cache-key lookups in a
-    single scraping run are O(1) after the first call.
+    """Fingerprint only candidate context that can affect LLM review output.
+
+    ``user_profile.updated_at`` is intentionally not used: Apply/Hide actions
+    persist review controls through ``save_profile`` and must not make unchanged
+    job reviews stale. The rendered profile prompt context is the canonical
+    bounded input used by fit review and already excludes review-only state.
     """
     global _profile_fingerprint_cache
     if _profile_fingerprint_cache is not None:
         return _profile_fingerprint_cache
     try:
-        from job_hunter_agent.database import db_conn
-        from job_hunter_agent.paths import get_active_user_id
-
-        user_id = get_active_user_id()
-        with db_conn() as conn:
-            row = conn.execute(
-                "SELECT updated_at FROM user_profile WHERE user_id = ?", (user_id,)
-            ).fetchone()
-        raw = row["updated_at"] if row else "no-profile"
+        raw = build_profile_prompt_context() or "no-profile"
     except Exception:
         raw = "no-profile"
     _profile_fingerprint_cache = hashlib.sha256(raw.encode()).hexdigest()[:16]

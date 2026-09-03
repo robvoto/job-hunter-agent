@@ -1053,6 +1053,12 @@ def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
             ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at""",
             (user_id, json.dumps(persisted, ensure_ascii=False)),
         )
+    # save_profile also persists review-only state such as Apply/Hide. Recompute
+    # the semantic fingerprint after every save; unchanged fit context produces
+    # the same fingerprint and therefore keeps existing LLM cache entries valid.
+    from job_hunter_agent.llm_gate import invalidate_profile_fingerprint_cache
+
+    invalidate_profile_fingerprint_cache()
     log_settings_change(
         logger,
         scope="PROFILE_SETTINGS",
