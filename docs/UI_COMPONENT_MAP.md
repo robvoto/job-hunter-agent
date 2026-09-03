@@ -128,6 +128,8 @@ Example:
 
 Do not use `jh-button` for Run Search, onboarding footer navigation, tabs, pagination, account-menu actions, or icon-only controls. Those are separate components. Page styles may position or group a `jh-button`, but must not redefine its colour, border, radius, typography, hover, focus, active, or disabled states.
 
+The shared `jh-button.is-working` modifier adds the component-owned spinner for an async action while it is pending; callers also set `aria-busy="true"` and remove both state markers when the action settles.
+
 The existing `.btn*`, `.primary`, `.secondary`, `.mini-button`, and semantic `gap-btn--*` visual systems are legacy. Do not use them for new ordinary application actions. `btn-add` remains the shared add-control component and `jh-icon-button` remains the shared icon-only component.
 
 ## Shared selectable choice

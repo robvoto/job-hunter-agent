@@ -1589,6 +1589,16 @@
         btn.replaceWith(badge);
       }
 
+      function setProfileGapWorking(activeButton) {
+        activeButton.classList.add('is-working');
+        activeButton.setAttribute('aria-busy', 'true');
+      }
+
+      function clearProfileGapWorking(activeButton) {
+        activeButton.classList.remove('is-working');
+        activeButton.removeAttribute('aria-busy');
+      }
+
       if (!jobKey) return;
       if (blockStaticExportWrite()) return;
 
@@ -1638,7 +1648,7 @@
             levelPicker.querySelectorAll('button').forEach(function(button) {
               button.disabled = true;
             });
-            submitProfileGap(level);
+            submitProfileGap(level, choice);
           });
           levelPicker.appendChild(choice);
         });
@@ -1658,8 +1668,9 @@
         btn.parentElement.appendChild(levelPicker);
       }
 
-      function submitProfileGap(capabilityLevel) {
+      function submitProfileGap(capabilityLevel, activeButton) {
         allBtns.forEach(function(b) { b.disabled = true; });
+        setProfileGapWorking(activeButton || btn);
         const payload = {
           job_key: jobKey,
           capability_name: capabilityName,
@@ -1674,6 +1685,7 @@
         }).then(function(resp) {
           return resp.json().catch(function() { return {}; }).then(function(data) {
             if (!resp.ok || data.error) {
+              clearProfileGapWorking(activeButton || btn);
               if (levelPicker) {
                 levelPicker.querySelectorAll('button').forEach(function(button) {
                   button.disabled = false;
@@ -1685,6 +1697,7 @@
               return;
             }
             if (data.requires_capability_level) {
+              clearProfileGapWorking(activeButton || btn);
               showCapabilityLevelPicker(data.allowed_capability_levels);
               return;
             }
@@ -1715,10 +1728,12 @@
                 { fact },
               );
             }
+            clearProfileGapWorking(activeButton || btn);
             removeLevelPicker();
             replaceRowActionsWithBadge(savedLabel, allBtns);
           });
         }).catch(function() {
+          clearProfileGapWorking(activeButton || btn);
           if (levelPicker) {
             levelPicker.querySelectorAll('button').forEach(function(button) {
               button.disabled = false;
