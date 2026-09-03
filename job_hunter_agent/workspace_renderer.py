@@ -1830,9 +1830,6 @@ def render_job_card(
         matched_candidate_fact = compact_whitespace(
             str(
                 row.get("matched_candidate_fact")
-                or row.get("profile_name")
-                or row.get("capability_name")
-                or row.get("eligibility_name")
                 or ""
             )
         )
@@ -2116,7 +2113,7 @@ def render_job_card(
             row["is_qualification"] = is_qualification
             row["classification_review"] = classification_review
             row["matched_candidate_fact"] = compact_whitespace(
-                str(item.get("matched_candidate_fact") or item.get("profile_name") or "")
+                str(item.get("matched_candidate_fact") or "")
             )
             row["capability_name"] = compact_whitespace(str(item.get("capability_name") or ""))
             row["eligibility_name"] = compact_whitespace(str(item.get("eligibility_name") or ""))
