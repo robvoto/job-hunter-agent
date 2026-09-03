@@ -2463,6 +2463,46 @@ def test_unqualified_business_analyst_duration_remains_supported_from_role_histo
     assert result[0]["experience_requirement_met"] is True
 
 
+def test_met_experience_requirement_reconciles_not_shown_to_supported():
+    requirement = "3+ years experience as Business Analyst"
+    result = llm_gate.normalize_llm_requirement_coverage(
+        [
+            {
+                "requirement": requirement,
+                "importance": "mandatory",
+                "requirement_type": "capability",
+                "status": "not_shown",
+                "matched_candidate_fact": "",
+                "matched_job_text": requirement,
+                "profile_support": [],
+                "experience_components": [
+                    {"kind": "duration", "text": "3+ years"},
+                    {
+                        "kind": "role_or_activity",
+                        "text": "Business Analyst",
+                        "matched_role_family": "Business Analyst",
+                    },
+                ],
+            }
+        ],
+        role_experience=[
+            {
+                "normalized_title": "Business Analyst",
+                "total_duration_months": 120,
+                "most_recent_end_year": 2025,
+                "segments": [{"duration_months": 120, "is_current": False}],
+            }
+        ],
+    )
+
+    row = result[0]
+    assert row["status"] == "supported"
+    assert row["required_experience_months"] == 36
+    assert row["matched_role_family"] == "Business Analyst"
+    assert row["matched_role_family_months"] == 120
+    assert row["experience_requirement_met"] is True
+
+
 def test_incomplete_decomposition_without_qualifier_keeps_role_history_proof():
     """LLM omitted the role_or_activity fragment but tied the duration component
     to a real saved family and named no qualifier: the row must stay visible on

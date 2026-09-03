@@ -2110,7 +2110,22 @@ def normalize_llm_requirement_coverage(
                     ]
                 requirement_met = bool(experience_requirement["experience_requirement_met"])
                 normalized_item["experience_requirement_met"] = requirement_met
-                if not requirement_met:
+                qualifier_supported, qualifier_count = _experience_qualifier_support_count(
+                    experience_components,
+                )
+                if (
+                    requirement_met
+                    and experience_decomposition_sufficient
+                    and normalized_item["status"]
+                    in {"supported", "partially_supported", "not_shown"}
+                    and qualifier_supported == qualifier_count
+                ):
+                    # A resolved family with enough history is authoritative
+                    # evidence for the unqualified duration requirement. This
+                    # also repairs an LLM not_shown result without allowing an
+                    # unresolved or unsupported qualifier to become supported.
+                    normalized_item["status"] = "supported"
+                elif not requirement_met:
                     # Role family proven but accumulated duration is short: keep
                     # the row visible as a partial and show the gap.
                     normalized_item["experience_duration_gap"] = True
