@@ -20,6 +20,7 @@ from job_hunter_agent import (
     workspace_renderer,
     workspace_service,
 )
+from job_hunter_agent.filters import build_title_block_rule
 from job_hunter_agent.paths import SCORING_RULES_PATH
 from job_hunter_agent.profile_store import (
     KEY_EVIDENCE_TIERS,
@@ -3311,6 +3312,33 @@ def test_is_workspace_eligible_preserves_kept_jobs_when_title_filters_change(mon
     }
 
     assert is_workspace_eligible(kept_record) is True
+
+
+def test_is_workspace_eligible_excludes_stored_jobs_matching_explicit_title_block(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        workspace_service,
+        "fit_score_displayed",
+        lambda record, profile=None: int(record["score"]),
+    )
+    monkeypatch.setattr(workspace_service, "get_workspace_minimum_score", lambda: 30)
+
+    from job_hunter_agent.workspace_service import is_workspace_eligible
+
+    base_record = {
+        "title": "ServiceNow Business Analyst",
+        "score": 94,
+        "llm_decision": "KEEP",
+        "llm_fit_grade": "STRONG",
+        "requirement_coverage": [
+            {"requirement": "Business analysis", "importance": "mandatory", "status": "supported"}
+        ],
+    }
+    profile = {"reject_title_rules": [build_title_block_rule("servicenow")]}
+
+    assert is_workspace_eligible(base_record, profile) is False
+    assert is_workspace_eligible({**base_record, "title": "Business Analyst"}, profile) is True
 
 
 def test_score_filter_thresholds_hide_lowest_band_when_no_borderline_roles():
