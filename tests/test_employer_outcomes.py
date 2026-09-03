@@ -237,3 +237,77 @@ def test_card_says_so_explicitly_when_the_lookup_failed():
 
 def test_card_adds_no_line_when_there_is_genuinely_no_history():
     assert _checks(display.resolve_employer_outcome_state(None)) == []
+
+
+# --- backfill ---------------------------------------------------------------
+
+from job_hunter_agent import employer_outcome_backfill as backfill  # noqa: E402
+
+
+@pytest.fixture
+def ledger_db(tmp_path, monkeypatch, aliases):
+    from job_hunter_agent import database as db
+
+    path = tmp_path / "ledger.db"
+    monkeypatch.setenv("JOB_HUNTER_DB_PATH", str(path))
+    db.init_db(path)
+    with db.db_conn(path) as conn:
+        conn.execute("INSERT INTO users (user_id) VALUES (?)", ("u1",))
+    aliases([{"canonical": "Northwind Systems", "aliases": ["NWS"]}])
+    return path
+
+
+def _history_row(idx, company, role, date):
+    return {
+        "id": f"row-{idx}",
+        "message_id": f"msg-{idx}",
+        "company": company,
+        "role": role,
+        "date": date,
+        "status": "rejection",
+        "confidence": "high",
+        "evidence": "",
+        "job_key": None,
+    }
+
+
+def test_backfill_imports_rejections_and_collapses_aliases(ledger_db, monkeypatch):
+    rows = [
+        _history_row(1, "Northwind Systems", "Analyst", "2026-02-02"),
+        _history_row(2, "NWS", "Senior Analyst", "2026-06-18"),
+    ]
+    summary = backfill.backfill_from_rejection_history(
+        "u1", db_path=ledger_db, load_history=lambda: rows
+    )
+    assert summary["events_imported"] == 2
+    # Both spellings are one employer, so one rollup, not two.
+    assert summary["employers_in_rollup"] == 1
+
+    rollup = store.get_employer_outcome("u1", "NWS", db_path=ledger_db)
+    assert rollup["counts"][store.EVENT_REJECTED] == 2
+    assert rollup["last_event_date"] == "2026-06-18"
+
+
+def test_backfill_is_idempotent(ledger_db):
+    rows = [_history_row(1, "Northwind Systems", "Analyst", "2026-02-02")]
+    loader = lambda: rows
+    backfill.backfill_from_rejection_history("u1", db_path=ledger_db, load_history=loader)
+    backfill.backfill_from_rejection_history("u1", db_path=ledger_db, load_history=loader)
+
+    rollup = store.get_employer_outcome("u1", "Northwind Systems", db_path=ledger_db)
+    assert rollup["counts"][store.EVENT_REJECTED] == 1
+
+
+def test_backfill_reports_unattributable_rows_instead_of_dropping_them(ledger_db):
+    rows = [
+        _history_row(1, "Northwind Systems", "Analyst", "2026-02-02"),
+        _history_row(2, "", "Analyst", "2026-03-02"),
+        _history_row(3, "Northwind Systems", "Analyst", ""),
+    ]
+    summary = backfill.backfill_from_rejection_history(
+        "u1", db_path=ledger_db, load_history=lambda: rows
+    )
+    assert summary["rows_read"] == 3
+    assert summary["events_imported"] == 1
+    assert summary["skipped_no_employer"] == 1
+    assert summary["skipped_no_date"] == 1

@@ -76,3 +76,27 @@ def build_employer_outcome_check_item(
         no_response=counts.get(store.EVENT_NO_RESPONSE, 0),
         last_date=rollup.get("last_event_date") or "",
     )
+
+
+def attach_employer_outcomes_to_records(
+    records: list[dict], user_id: str, *, db_path=None
+) -> list[dict]:
+    """Attach the resolved employer-outcome state to every record.
+
+    Every record gets a state, including records whose employer has no history,
+    so a missing key downstream means a wiring fault rather than "no history".
+    A lookup failure marks the affected records UNAVAILABLE instead of leaving
+    them looking clean.
+    """
+    from job_hunter_agent.record_schema import RECORD_EMPLOYER_OUTCOME_KEY
+
+    enriched: list[dict] = []
+    for record in records:
+        employer = str(record.get("company") or "").strip()
+        if not employer:
+            resolved = resolve_employer_outcome_state(None, lookup_failed=True)
+        else:
+            rollup = store.get_employer_outcome(user_id, employer, db_path=db_path)
+            resolved = resolve_employer_outcome_state(rollup)
+        enriched.append({**record, RECORD_EMPLOYER_OUTCOME_KEY: resolved})
+    return enriched
