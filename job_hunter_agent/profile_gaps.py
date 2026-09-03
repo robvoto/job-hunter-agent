@@ -275,3 +275,42 @@ def resolve_custom_blocker(raw_text: str, requirement_coverage: list[dict]) -> d
         return result
     result["reason_code"] = CUSTOM_BLOCKER_REASON_NO_MATCH
     return result
+
+
+def list_custom_blocker_candidates(requirement_coverage: list[dict]) -> list[dict]:
+    """List the requirements a custom "Not For Me" blocker is allowed to resolve to.
+
+    This is exactly the set resolve_custom_blocker() accepts as a RESOLVED match
+    (profile_action_allowed, a real canonical_requirement, importance == mandatory).
+    The rejection panel shows these so the user ticks a real requirement instead of
+    typing a term blind. Deduped by normalized canonical_requirement, input order
+    preserved. Widening this set widens what can be persisted to
+    must_not_require_skills, so it must stay in lockstep with resolve_custom_blocker.
+    """
+    seen: set[str] = set()
+    candidates: list[dict] = []
+    for item in requirement_coverage:
+        if not isinstance(item, dict):
+            continue
+        requirement_type = str(item.get("requirement_type") or "").strip().lower()
+        if requirement_type not in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES:
+            continue
+        if item.get("profile_action_allowed") is not True:
+            continue
+        canonical_requirement = str(item.get("canonical_requirement") or "").strip()
+        if not canonical_requirement:
+            continue
+        if str(item.get("importance") or "").strip().lower() != LLM_COVERAGE_IMPORTANCE_MANDATORY:
+            continue
+        canonical_key = _normalize_for_match(canonical_requirement)
+        if not canonical_key or canonical_key in seen:
+            continue
+        seen.add(canonical_key)
+        candidates.append(
+            {
+                "term": canonical_requirement,
+                "requirement_type": requirement_type,
+                "matched_job_text": str(item.get("matched_job_text") or "").strip(),
+            }
+        )
+    return candidates

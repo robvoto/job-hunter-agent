@@ -12,6 +12,7 @@ from job_hunter_agent.profile_gaps import (
     CUSTOM_BLOCKER_REASON_NOT_REQUIRED,
     CUSTOM_BLOCKER_REASON_NO_MATCH,
     CUSTOM_BLOCKER_REASON_RESOLVED,
+    list_custom_blocker_candidates,
     resolve_custom_blocker,
 )
 
@@ -185,3 +186,44 @@ def test_ignores_items_with_disallowed_requirement_type():
 
     assert result["ok"] is False
     assert result["reason_code"] == CUSTOM_BLOCKER_REASON_NO_MATCH
+
+
+def test_list_candidates_returns_only_mandatory_actionable_requirements():
+    coverage = [
+        _coverage_item(canonical_requirement="Salesforce"),
+        _coverage_item(canonical_requirement="HubSpot", importance="preferred"),
+        _coverage_item(canonical_requirement="Marketo", profile_action_allowed=False),
+        _coverage_item(canonical_requirement="Pardot", requirement_type="uncertain"),
+        _coverage_item(canonical_requirement=""),
+    ]
+
+    candidates = list_custom_blocker_candidates(coverage)
+
+    assert [c["term"] for c in candidates] == ["Salesforce"]
+    assert candidates[0]["requirement_type"] == "capability"
+    assert candidates[0]["matched_job_text"] == "Salesforce experience"
+
+
+def test_list_candidates_dedupes_by_normalized_canonical():
+    coverage = [
+        _coverage_item(canonical_requirement="Salesforce"),
+        _coverage_item(canonical_requirement="  salesforce  "),
+    ]
+
+    assert [c["term"] for c in list_custom_blocker_candidates(coverage)] == ["Salesforce"]
+
+
+def test_list_candidates_stay_in_lockstep_with_resolver():
+    coverage = [
+        _coverage_item(canonical_requirement="Salesforce"),
+        _coverage_item(
+            canonical_requirement="Workday",
+            requirement="Workday HCM administration",
+            matched_job_text="Workday HCM",
+        ),
+    ]
+
+    for candidate in list_custom_blocker_candidates(coverage):
+        resolved = resolve_custom_blocker(candidate["term"], coverage)
+        assert resolved["ok"] is True
+        assert resolved["canonical_requirement"] == candidate["term"]

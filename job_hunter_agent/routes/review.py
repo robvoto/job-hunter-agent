@@ -20,6 +20,7 @@ from job_hunter_agent.profile_gaps import (
     STATUS_CONFIRMED_DO_NOT_HAVE,
     STATUS_CONFIRMED_HAVE,
     classify_requirement_status,
+    list_custom_blocker_candidates,
     resolve_custom_blocker,
 )
 from job_hunter_agent.profile_item_names import normalize_profile_item_name
@@ -84,8 +85,31 @@ def api_rejection_suggestions(job_id: str = Query("")):  # type: ignore[no-untyp
     approval_tokens = {}
     if isinstance(srv._rejection_suggestions_cache.get(job_id), dict):
         approval_tokens = srv._rejection_suggestions_cache[job_id].get("approval_tokens") or {}
-    if suggestions:
-        return json_response({"other": suggestions, "approval_tokens": approval_tokens})
+
+    # The job's own mandatory, profile-actionable requirements. These are the
+    # exact terms resolve_custom_blocker() accepts, so the panel can show them as
+    # tick boxes instead of asking for a blind free-text term. Anything already
+    # covered by an LLM suggestion is dropped so it is only offered once.
+    suggestion_phrases_norm = {
+        srv._normalize_suggestion_phrase(str(item or "")) for item in suggestions
+    }
+    suggestion_phrases_norm.discard("")
+    required_terms = [
+        candidate
+        for candidate in list_custom_blocker_candidates(
+            _profile_gap_requirement_coverage(job_id)
+        )
+        if srv._normalize_suggestion_phrase(candidate["term"]) not in suggestion_phrases_norm
+    ]
+
+    if suggestions or required_terms:
+        return json_response(
+            {
+                "other": list(suggestions),
+                "approval_tokens": approval_tokens,
+                "required_terms": required_terms,
+            }
+        )
     return json_response({})
 
 
