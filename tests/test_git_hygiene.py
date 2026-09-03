@@ -33,15 +33,6 @@ def _git(*args: str) -> str:
     return result.stdout
 
 
-def _branches_checked_out_in_a_worktree() -> set[str]:
-    """A branch checked out somewhere is in active use, merged or not."""
-    checked_out: set[str] = set()
-    for line in _git("worktree", "list", "--porcelain").splitlines():
-        if line.startswith("branch "):
-            checked_out.add(line.split("/", 2)[-1].strip())
-    return checked_out
-
-
 def test_no_local_branch_fully_merged_into_main_is_left_behind():
     # git marks the current branch with "*" and a branch checked out in another
     # worktree with "+"; strip either before comparing names.
@@ -50,10 +41,14 @@ def test_no_local_branch_fully_merged_into_main_is_left_behind():
         for line in _git("branch", "--merged", "main").splitlines()
         if line.strip()
     }
-    stale = merged - PROTECTED - _branches_checked_out_in_a_worktree()
+    stale = merged - PROTECTED
 
+    # A worktree still holding a merged branch is not an excuse: post-merge
+    # cleanup is `git worktree remove` followed by `git branch -d`. Excusing it
+    # here is how the worktrees accumulated in the first place, and it would
+    # disagree with scripts/check-git-closure.sh, which already flags it.
     assert not stale, (
         "These branches are fully merged into main and must be deleted "
-        "(git branch -d <name>), per .skills/git-lifecycle post-merge cleanup: "
-        f"{sorted(stale)}"
+        "(remove any worktree holding them, then git branch -d <name>), "
+        f"per .skills/git-lifecycle post-merge cleanup: {sorted(stale)}"
     )
