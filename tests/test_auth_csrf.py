@@ -95,7 +95,9 @@ def test_issue_csrf_token_derives_from_session_cookie():
     assert not verify_csrf_token(request, f"{token}x")
 
 
-def test_session_cookie_secure_flag_tracks_request_scheme():
+def test_session_cookie_secure_flag_tracks_request_scheme(monkeypatch):
+
+    monkeypatch.setenv("JOB_HUNTER_SESSION_COOKIE_SECURE", "auto")
 
     app = FastAPI()
 
