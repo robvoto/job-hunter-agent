@@ -245,7 +245,7 @@ Rules:
 * avoid sealed hardcoded dictionaries
 * preserve explainability
 * avoid hidden filtering shortcuts
-* avoid legacy compatibility layers unless explicitly required
+* while pre-live, maintain one current internal contract and remove superseded paths completely; compatibility layers require Rob's explicit exception
 
 ---
 

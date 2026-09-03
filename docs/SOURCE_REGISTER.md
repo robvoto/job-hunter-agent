@@ -128,21 +128,11 @@ Limit:
 - Do not trust unconstrained free-form LLM labels.
 - Capability aliases must not create duplicate scoring semantics.
 
-## Incremental architecture replacement
+## Pre-live architecture replacement
 
-Sources:
-- Martin Fowler — Strangler Fig Pattern: https://martinfowler.com/bliki/StranglerFigApplication.html
+Until Job Hunter is declared live for the first time, internal contract changes are atomic: update the current producer, consumers, tests, and persisted/dev data together, then delete the superseded path. Do not run old and new scoring/filtering contracts in parallel and do not introduce migration or compatibility layers for disposable pre-live data.
 
-Used for:
-- Safely replacing legacy scoring and filtering paths.
-
-Design decision:
-- Replace duplicate/legacy scoring paths incrementally.
-- Remove dead code once replacement behaviour is verified.
-
-Limit:
-- Do not preserve duplicate logic paths indefinitely.
-- Avoid parallel systems with conflicting semantics.
+External versioned interfaces are handled separately under their own explicit contract policy.
 
 ## Browser/API integration
 
