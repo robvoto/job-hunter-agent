@@ -463,6 +463,15 @@ def render_html(
 
     kept_records = _enrich_records_with_candidate_application_history(kept_records)
 
+    # Employer outcome history. Attached for every record, including employers
+    # with no history, so a missing state downstream is a wiring fault rather
+    # than being read as a clean record. No catch-all here for the same reason
+    # as the enrichment above.
+    from job_hunter_agent.employer_outcome_display import attach_employer_outcomes_to_records
+    from job_hunter_agent.paths import get_active_user_id
+
+    kept_records = attach_employer_outcomes_to_records(kept_records, get_active_user_id())
+
     if workspace_records is None:
         workspace_records = build_workspace_record_sets(
             kept_records,

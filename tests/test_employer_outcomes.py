@@ -153,3 +153,161 @@ def test_rollup_from_zero_events_raises_instead_of_returning_an_empty_shell():
 def test_rollup_rejects_an_unrecognised_stored_event_type():
     with pytest.raises(ValueError):
         store.build_employer_rollup([_event("ghosted", "2026-03-01")])
+
+
+# --- card display -----------------------------------------------------------
+
+from job_hunter_agent import employer_outcome_display as display  # noqa: E402
+from job_hunter_agent.workspace_renderer import (  # noqa: E402
+    _build_checks_before_applying_items,
+    _workspace_label,
+)
+
+
+def _label(key):
+    return _workspace_label("check_item_labels", key)
+
+
+def _rollup(applied=0, rejected=0, interview=0, no_response=0, last="2026-08-24"):
+    return {
+        "employer_display": "Northwind Systems",
+        "counts": {
+            store.EVENT_APPLIED: applied,
+            store.EVENT_REJECTED: rejected,
+            store.EVENT_INTERVIEW: interview,
+            store.EVENT_NO_RESPONSE: no_response,
+        },
+        "last_event_date": last,
+    }
+
+
+def test_a_failed_lookup_and_a_clean_record_never_render_the_same():
+    """The July 2026 defect: a broken lookup looked exactly like no history."""
+    nothing_found = display.build_employer_outcome_check_item(
+        display.resolve_employer_outcome_state(None), _label
+    )
+    could_not_look = display.build_employer_outcome_check_item(
+        display.resolve_employer_outcome_state(None, lookup_failed=True), _label
+    )
+    assert nothing_found != could_not_look
+    assert could_not_look.strip()
+
+
+def test_history_line_reports_every_count_and_the_latest_date():
+    line = display.build_employer_outcome_check_item(
+        display.resolve_employer_outcome_state(
+            _rollup(applied=6, rejected=5, interview=0, no_response=1)
+        ),
+        _label,
+    )
+    assert "Northwind Systems" in line
+    assert "6" in line and "5" in line
+    assert "2026-08-24" in line
+
+
+def test_history_line_shows_an_interview_without_hiding_rejections():
+    line = display.build_employer_outcome_check_item(
+        display.resolve_employer_outcome_state(_rollup(applied=2, rejected=1, interview=1)),
+        _label,
+    )
+    assert "rejected 1" in line
+    assert "interviewed 1" in line
+
+
+def test_unknown_state_raises_rather_than_rendering_something_plausible():
+    with pytest.raises(ValueError):
+        display.build_employer_outcome_check_item({"state": "maybe"}, _label)
+
+
+def _checks(employer_outcome):
+    return _build_checks_before_applying_items(
+        [], False, False, None, None, [], "ok", None, None, employer_outcome
+    )
+
+
+def test_card_shows_the_history_line_when_history_exists():
+    items = _checks(display.resolve_employer_outcome_state(_rollup(applied=3, rejected=2)))
+    assert any("Northwind Systems" in item for item in items)
+
+
+def test_card_says_so_explicitly_when_the_lookup_failed():
+    items = _checks(display.resolve_employer_outcome_state(None, lookup_failed=True))
+    assert any("Could not check" in item for item in items)
+
+
+def test_card_adds_no_line_when_there_is_genuinely_no_history():
+    assert _checks(display.resolve_employer_outcome_state(None)) == []
+
+
+# --- backfill ---------------------------------------------------------------
+
+from job_hunter_agent import employer_outcome_backfill as backfill  # noqa: E402
+
+
+@pytest.fixture
+def ledger_db(tmp_path, monkeypatch, aliases):
+    from job_hunter_agent import database as db
+
+    path = tmp_path / "ledger.db"
+    monkeypatch.setenv("JOB_HUNTER_DB_PATH", str(path))
+    db.init_db(path)
+    with db.db_conn(path) as conn:
+        conn.execute("INSERT INTO users (user_id) VALUES (?)", ("u1",))
+    aliases([{"canonical": "Northwind Systems", "aliases": ["NWS"]}])
+    return path
+
+
+def _history_row(idx, company, role, date):
+    return {
+        "id": f"row-{idx}",
+        "message_id": f"msg-{idx}",
+        "company": company,
+        "role": role,
+        "date": date,
+        "status": "rejection",
+        "confidence": "high",
+        "evidence": "",
+        "job_key": None,
+    }
+
+
+def test_backfill_imports_rejections_and_collapses_aliases(ledger_db, monkeypatch):
+    rows = [
+        _history_row(1, "Northwind Systems", "Analyst", "2026-02-02"),
+        _history_row(2, "NWS", "Senior Analyst", "2026-06-18"),
+    ]
+    summary = backfill.backfill_from_rejection_history(
+        "u1", db_path=ledger_db, load_history=lambda: rows
+    )
+    assert summary["events_imported"] == 2
+    # Both spellings are one employer, so one rollup, not two.
+    assert summary["employers_in_rollup"] == 1
+
+    rollup = store.get_employer_outcome("u1", "NWS", db_path=ledger_db)
+    assert rollup["counts"][store.EVENT_REJECTED] == 2
+    assert rollup["last_event_date"] == "2026-06-18"
+
+
+def test_backfill_is_idempotent(ledger_db):
+    rows = [_history_row(1, "Northwind Systems", "Analyst", "2026-02-02")]
+    loader = lambda: rows
+    backfill.backfill_from_rejection_history("u1", db_path=ledger_db, load_history=loader)
+    backfill.backfill_from_rejection_history("u1", db_path=ledger_db, load_history=loader)
+
+    rollup = store.get_employer_outcome("u1", "Northwind Systems", db_path=ledger_db)
+    assert rollup["counts"][store.EVENT_REJECTED] == 1
+
+
+def test_backfill_reports_unattributable_rows_instead_of_dropping_them(ledger_db):
+    rows = [
+        _history_row(1, "Northwind Systems", "Analyst", "2026-02-02"),
+        _history_row(2, "", "Analyst", "2026-03-02"),
+        _history_row(3, "Northwind Systems", "Analyst", ""),
+    ]
+    summary = backfill.backfill_from_rejection_history(
+        "u1", db_path=ledger_db, load_history=lambda: rows
+    )
+    assert summary["rows_read"] == 3
+    assert summary["events_imported"] == 1
+    assert summary["skipped_no_employer"] == 1
+    assert summary["skipped_no_date"] == 1
