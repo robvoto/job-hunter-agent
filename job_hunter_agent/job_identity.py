@@ -907,7 +907,10 @@ def find_confirmed_identity_history_entry(
     if job_key and isinstance(history.get(job_key), dict):
         return history[job_key]
 
-    for entry in history.values():
+    # SEEK reviews title gates across a thread pool while other threads finalize
+    # records into the same shared job_history dict, so iterate a snapshot rather
+    # than the live view to avoid "dictionary changed size during iteration".
+    for entry in list(history.values()):
         if not isinstance(entry, dict):
             continue
         for candidate_key in ("last_kept_snapshot", "detail_evidence"):

@@ -46,7 +46,10 @@ def test_append_review_key_applied_persists_profile_and_history(monkeypatch: pyt
     assert entry["company"] == "Acme Corp"
 
 
-def test_review_action_waits_for_workspace_snapshot(monkeypatch: pytest.MonkeyPatch):
+def test_review_action_refreshes_workspace_in_background(monkeypatch: pytest.MonkeyPatch):
+    # The client moves the card in place, so the review action must not block on
+    # the rebuild or ask the browser to full-page reload (that froze Applied/Hide
+    # for seconds and lost scroll position).
     refresh_calls = []
 
     monkeypatch.setattr(
@@ -62,9 +65,9 @@ def test_review_action_waits_for_workspace_snapshot(monkeypatch: pytest.MonkeyPa
         company="Acme Corp",
     )
 
-    assert result["workspace_refresh_async"] is False
+    assert result["workspace_refresh_async"] is True
     assert refresh_calls == [
-        ("review action saved: hidden", {"wait_for_completion": True}),
+        ("review action saved: hidden", {}),
     ]
 
 

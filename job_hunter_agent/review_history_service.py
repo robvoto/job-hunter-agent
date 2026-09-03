@@ -220,16 +220,19 @@ def append_review_key(
     review_controls[list_name] = existing
     save_profile(profile)
     persist_review_event(action, normalized, url=url, title=title, company=company, teaser=teaser)
-    refresh_id = rebuild_workspace_after_rule_change(
-        f"review action saved: {action}", wait_for_completion=True
-    )
+    # Rebuild the cached snapshot in the background only. The client moves the
+    # card between workspace tabs itself and must NOT full-page reload here:
+    # a blocking rebuild + reload was tried and made Applied/Hide freeze for
+    # several seconds and lose the user's scroll position. workspace_refresh_async
+    # stays True so the front-end takes the in-place path, not window.reload().
+    refresh_id = rebuild_workspace_after_rule_change(f"review action saved: {action}")
     return {
         "ok": True,
         "action": action,
         "job_key": normalized,
         "saved_count": len(existing),
         "reload_workspace": True,
-        "workspace_refresh_async": False,
+        "workspace_refresh_async": True,
         "workspace_refresh_id": refresh_id,
     }
 
@@ -267,16 +270,17 @@ def remove_review_key(
     review_controls[list_name] = updated
     save_profile(profile)
     persist_review_event(action, normalized, url=url, title=title, company=company, teaser=teaser)
-    refresh_id = rebuild_workspace_after_rule_change(
-        f"review action saved: {action}", wait_for_completion=True
-    )
+    # Background rebuild only + in-place card move on the client. See the matching
+    # comment in append_review_key: do not reintroduce a blocking rebuild or a
+    # full-page reload for review actions.
+    refresh_id = rebuild_workspace_after_rule_change(f"review action saved: {action}")
     return {
         "ok": True,
         "action": action,
         "job_key": normalized,
         "saved_count": len(updated),
         "reload_workspace": True,
-        "workspace_refresh_async": False,
+        "workspace_refresh_async": True,
         "workspace_refresh_id": refresh_id,
     }
 

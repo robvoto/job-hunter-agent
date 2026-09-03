@@ -25,22 +25,20 @@ def workspace_refresh_status(refresh_id: str) -> str:
         return _refresh_states.get(str(refresh_id or ""), "unknown")
 
 
-def rebuild_workspace_after_rule_change(
-    reason: str = "matching rule change", *, wait_for_completion: bool = False
-) -> Optional[str]:
-    """Re-render workspace results, optionally waiting for the snapshot.
+def rebuild_workspace_after_rule_change(reason: str = "matching rule change") -> Optional[str]:
+    """Re-render workspace results on a background thread.
 
     This function checks for existing workspace data and starts a daemon
     thread to execute the rebuild. It preserves the current ContextVar
     state (such as the active user ID) to ensure the thread operates in
     the correct user-scoped directory.
 
-    Review actions can request completion because their response is followed
-    immediately by a browser reload that must see the updated state.
-    Args:
-        reason: The trigger reason, logged in the rebuild summary.
-        wait_for_completion: Join the rebuild thread before returning when the
-            generated snapshot must be immediately readable.
+    The rebuild is always non-blocking. A blocking mode was tried once so a
+    review action's response could be followed by a full browser reload that
+    saw fresh state; it made Applied/Hide freeze for several seconds and threw
+    the user back to the top of the page. The client now updates the card in
+    place instead of reloading, so this only needs to refresh the cached
+    snapshot for the next full page load. Do not add a wait/blocking mode back.
     """
     from job_hunter_agent.io_utils import load_run_stats
 
@@ -65,10 +63,6 @@ def rebuild_workspace_after_rule_change(
         else:
             with _refresh_state_lock:
                 _refresh_states[refresh_id] = "ready"
-
-    if wait_for_completion:
-        _run_rebuild()
-        return refresh_id
 
     ctx = contextvars.copy_context()
     rebuild_thread = threading.Thread(

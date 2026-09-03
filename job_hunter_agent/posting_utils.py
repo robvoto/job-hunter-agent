@@ -31,6 +31,10 @@ _TIMESTAMP_INPUT_FORMATS = (
     "%m/%d/%Y %H:%M:%S",
     "%m/%d/%Y %H:%M",
     "%m/%d/%Y",
+    # ISO-style date with a non-zero-padded time (e.g. "2026-04-13 8:40"),
+    # which datetime.fromisoformat rejects but strptime accepts.
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%d %H:%M",
 )
 
 

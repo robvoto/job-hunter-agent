@@ -209,6 +209,32 @@ def test_confirmed_identity_history_lookup_reuses_linked_source_entry():
     ) is entry
 
 
+def test_confirmed_identity_history_lookup_tolerates_concurrent_history_mutation(monkeypatch):
+    # SEEK reviews title gates across a thread pool while other threads finalize
+    # records into the same job_history dict. The lookup must iterate a snapshot
+    # so an insert mid-scan cannot raise "dictionary changed size during iteration".
+    history = {
+        "linkedin:1": {"detail_evidence": {"source_metadata": {}}},
+        "linkedin:2": {"detail_evidence": {"source_metadata": {}}},
+    }
+
+    real_match = _ji.are_jobs_confirmed_duplicates
+
+    def _mutate_history_then_match(a, b):
+        history[f"linkedin:{len(history) + 1}"] = {"detail_evidence": {"source_metadata": {}}}
+        return real_match(a, b)
+
+    monkeypatch.setattr(_ji, "are_jobs_confirmed_duplicates", _mutate_history_then_match)
+
+    assert (
+        find_confirmed_identity_history_entry(
+            {"job_key": "seek:9", "source": "seek", "source_metadata": {}},
+            history,
+        )
+        is None
+    )
+
+
 def test_find_confirmed_duplicate_returns_first_matching_applied_record():
 
     # find_confirmed_duplicate only matches confirmed duplicates.
