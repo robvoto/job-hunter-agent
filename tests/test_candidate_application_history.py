@@ -13,10 +13,41 @@ from job_hunter_agent.candidate_application_history import (
     load_candidate_job_rejection_history,
     main,
     match_job_application_history,
+    normalize_job_rejection_row,
     save_candidate_application_history,
 )
 
 _CANDIDATE_APPLICATION_HISTORY_KEY = "candidate_application_history"
+
+
+def test_normalize_preserves_sheet_role_when_llm_role_is_unavailable():
+    row = {
+        "Run Date": "2026-09-01",
+        "Company": "Acme",
+        "Role": "Business Analyst",
+        "From": "a@example.com",
+        "Subject": "Application update",
+        "Content": "Thanks for applying.",
+        "Thread ID": "T1",
+        "Message ID": "M1",
+        "Status": "Rejected",
+    }
+    with patch(
+        "job_hunter_agent.candidate_application_history.extract_job_rejection_with_llm",
+        return_value={
+            "company": "Acme",
+            "role": "",
+            "is_rejection": True,
+            "application_status": "rejection",
+            "confidence": "high",
+            "evidence": "Application update",
+            "needs_review": False,
+            "review_reason": None,
+        },
+    ):
+        normalized = normalize_job_rejection_row(row)
+
+    assert normalized["raw_role"] == "Business Analyst"
 
 
 def test_enrich_preserves_order_does_not_mutate_inputs_and_only_adds_matching_history():
