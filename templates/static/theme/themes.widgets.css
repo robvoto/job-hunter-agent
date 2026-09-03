@@ -2719,23 +2719,6 @@
   }
 }
 
-/* Compatibility enforcement while legacy behaviour-hook classes remain.
-   These selectors intentionally outrank page-local geometry. Semantic colour
-   rules may still target the legacy hook classes. */
-.choice-card--work-mode.jh-choice,
-.choice-card--strength.jh-choice,
-.workspace-controls .workspace-quick-filter {
-  flex: 0 0 auto;
-  min-width: 0;
-  min-height: 1.9rem;
-  padding: 4px 11px;
-  border-radius: var(--control-radius-md);
-  font-size: var(--text-role-caption-font-size);
-  font-weight: var(--text-role-status-font-weight);
-  line-height: 1.15;
-  box-shadow: none;
-}
-
 .badge.jh-badge,
 .job-req-importance.jh-badge,
 .req-coverage-tag.jh-badge {

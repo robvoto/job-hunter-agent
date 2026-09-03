@@ -113,8 +113,8 @@ def _role_experience_family_lookup(
         if not title:
             continue
         # effective_family_months accrues whole elapsed months onto a still-current
-        # role segment (see role_experience_duration); a legacy row with no
-        # segments falls back to its stored total_duration_months unchanged.
+        # canonical role segment (see role_experience_duration). Persisted role rows
+        # without segments are invalid and fail at that owner boundary.
         entry = {
             "family": title,
             "total_duration_months": effective_family_months(row),

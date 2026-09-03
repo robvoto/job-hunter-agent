@@ -220,7 +220,7 @@ def main() -> None:
     result = refresh_taxonomy(args.output_dir, update=args.update)
     print(
         f"O*NET taxonomy: {result.status}; "
-        f"installed={result.previous_release or 'legacy/unknown'}; "
+        f"installed={result.previous_release or 'not-installed'}; "
         f"official={result.database_release}"
     )
     if args.check and result.status == "stale":
