@@ -165,6 +165,7 @@ def test_fit_review_prompt_includes_role_experience_matrix(monkeypatch):
                     "normalized_title": "business analyst",
                     "total_duration_months": 42,
                     "most_recent_end_year": 2025,
+                    "segments": [{"duration_months": 42, "is_current": False}],
                     "title_variants": [
                         {
                             "normalized_title": "senior ba",
@@ -356,6 +357,7 @@ def test_normalize_llm_review_payload_downgrades_supported_when_role_duration_is
                 "normalized_title": "Business Analyst",
                 "total_duration_months": 24,
                 "most_recent_end_year": 2024,
+                "segments": [{"duration_months": 24, "is_current": False}],
             }
         ],
     )
@@ -395,6 +397,7 @@ def test_normalize_llm_review_payload_downgrades_supported_when_years_requiremen
                 "normalized_title": "business analyst",
                 "total_duration_months": 24,
                 "most_recent_end_year": 2024,
+                "segments": [{"duration_months": 24, "is_current": False}],
             }
         ],
     )
@@ -436,6 +439,7 @@ def test_normalize_llm_review_payload_matches_years_requirement_against_role_var
                 "normalized_title": "business analyst",
                 "total_duration_months": 60,
                 "most_recent_end_year": 2024,
+                "segments": [{"duration_months": 60, "is_current": False}],
                 "title_variants": [
                     {
                         "normalized_title": "ba",
@@ -496,6 +500,7 @@ def _ba_family_role_experience(total_duration_months: int) -> list[dict]:
             "normalized_title": "Business Analyst",
             "total_duration_months": total_duration_months,
             "most_recent_end_year": 2025,
+            "segments": [{"duration_months": total_duration_months, "is_current": False}],
             "title_variants": [
                 {"normalized_title": "Business Analyst"},
                 {"normalized_title": "Senior Business Analyst"},
@@ -2352,6 +2357,7 @@ def test_experience_duration_does_not_prove_missing_qualifier(
                 "normalized_title": "Senior Business Analyst",
                 "total_duration_months": 72,
                 "most_recent_end_year": 2025,
+                "segments": [{"duration_months": 72, "is_current": False}],
             }
         ],
     )
@@ -2389,6 +2395,7 @@ def test_unqualified_business_analyst_duration_remains_supported_from_role_histo
                 "normalized_title": "Business Analyst",
                 "total_duration_months": 60,
                 "most_recent_end_year": 2025,
+                "segments": [{"duration_months": 60, "is_current": False}],
             }
         ],
     )
@@ -2426,6 +2433,7 @@ def test_incomplete_decomposition_without_qualifier_keeps_role_history_proof():
                 "normalized_title": "Business Analyst",
                 "total_duration_months": 120,
                 "most_recent_end_year": 2025,
+                "segments": [{"duration_months": 120, "is_current": False}],
             }
         ],
     )
@@ -2473,6 +2481,7 @@ def test_incomplete_decomposition_with_qualifier_still_forces_not_shown():
                 "normalized_title": "Business Analyst",
                 "total_duration_months": 120,
                 "most_recent_end_year": 2025,
+                "segments": [{"duration_months": 120, "is_current": False}],
             }
         ],
     )
@@ -2510,6 +2519,7 @@ def test_incomplete_decomposition_with_unresolved_family_still_forces_not_shown(
                 "normalized_title": "business analyst",
                 "total_duration_months": 120,
                 "most_recent_end_year": 2025,
+                "segments": [{"duration_months": 120, "is_current": False}],
             }
         ],
     )
@@ -2553,6 +2563,7 @@ def test_experience_qualifier_evidence_preserves_a_legitimate_partial_match():
                 "normalized_title": "Business Analyst",
                 "total_duration_months": 24,
                 "most_recent_end_year": 2025,
+                "segments": [{"duration_months": 24, "is_current": False}],
             }
         ],
     )
@@ -2599,6 +2610,7 @@ def test_experience_qualifier_explicit_profile_support_preserves_a_full_match():
                 "normalized_title": "Senior Business Analyst",
                 "total_duration_months": 72,
                 "most_recent_end_year": 2025,
+                "segments": [{"duration_months": 72, "is_current": False}],
             }
         ],
     )
@@ -2638,6 +2650,7 @@ def test_experience_qualifier_support_requires_explicit_profile_evidence():
                 "normalized_title": "Business Analyst",
                 "total_duration_months": 72,
                 "most_recent_end_year": 2025,
+                "segments": [{"duration_months": 72, "is_current": False}],
             }
         ],
     )

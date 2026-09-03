@@ -770,12 +770,10 @@ def normalize_eligibility_rules(rules: list[dict[str, Any]] | list[str] | None) 
     return apply_clearance_hierarchy(cleaned)
 
 
-def _normalize_role_segment(raw: Any) -> dict[str, Any] | None:
-    """Shape one role segment. ``duration_as_of`` is kept only when it is a valid
-    ISO date on a current segment; a completed segment never carries one.
-    """
+def _normalize_role_segment(raw: Any) -> dict[str, Any]:
+    """Shape one canonical role segment and reject incomplete current-role data."""
     if not isinstance(raw, dict):
-        return None
+        raise ValueError("role_experience segments must contain dict rows")
     is_current = bool(raw.get("is_current"))
     segment: dict[str, Any] = {
         "duration_months": coerce_int(
@@ -787,10 +785,11 @@ def _normalize_role_segment(raw: Any) -> dict[str, Any] | None:
         as_of = str(raw.get("duration_as_of") or "").strip()
         try:
             date.fromisoformat(as_of)
-        except ValueError:
-            as_of = ""
-        if as_of:
-            segment["duration_as_of"] = as_of
+        except ValueError as exc:
+            raise ValueError(
+                "current role_experience segment requires valid duration_as_of"
+            ) from exc
+        segment["duration_as_of"] = as_of
     return segment
 
 
@@ -826,7 +825,6 @@ def normalize_role_experience(items: Any) -> list[dict[str, Any]]:
                 "most_recent_end_year": 0,
                 "title_variants": {},
                 "segments": [],
-                "_saw_segments": False,
             },
         )
         existing["total_duration_months"] = int(existing["total_duration_months"]) + int(
@@ -837,16 +835,13 @@ def normalize_role_experience(items: Any) -> list[dict[str, Any]]:
             int(most_recent_end_year),
         )
 
-        # Preserve per-segment is_current / duration_as_of so job-match time can
-        # accrue elapsed months. A legacy row carries no "segments" and stays
-        # aggregate-only; the key is only emitted when an input row supplied it.
+        # Preserve the canonical per-segment timing contract used to accrue
+        # elapsed months at job-match time. Pre-live aggregate-only rows are invalid.
         raw_segments = item.get("segments")
-        if isinstance(raw_segments, list):
-            existing["_saw_segments"] = True
-            for raw_segment in raw_segments:
-                normalized_segment = _normalize_role_segment(raw_segment)
-                if normalized_segment is not None:
-                    existing["segments"].append(normalized_segment)
+        if not isinstance(raw_segments, list) or not raw_segments:
+            raise ValueError("role_experience row requires a non-empty segments list")
+        for raw_segment in raw_segments:
+            existing["segments"].append(_normalize_role_segment(raw_segment))
 
         raw_variants = item.get("title_variants") or []
         if not isinstance(raw_variants, list):
@@ -898,8 +893,6 @@ def normalize_role_experience(items: Any) -> list[dict[str, Any]]:
         row = aggregated[key]
         variants = row.pop("title_variants", {})
         row["title_variants"] = [variants[name] for name in sorted(variants)]
-        if not row.pop("_saw_segments", False):
-            row.pop("segments", None)
         result.append(row)
     return result
 

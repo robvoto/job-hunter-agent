@@ -360,6 +360,7 @@ def test_exact_capability_with_matching_role_duration_can_be_supported_without_d
                 "normalized_title": "Salesforce Configuration",
                 "total_duration_months": 72,
                 "most_recent_end_year": 2025,
+                "segments": [{"duration_months": 72, "is_current": False}],
             }
         ],
     )

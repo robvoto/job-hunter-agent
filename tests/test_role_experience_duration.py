@@ -7,6 +7,8 @@ No role-family semantics live here.
 
 from datetime import date
 
+import pytest
+
 from job_hunter_agent.role_experience_duration import (
     apply_effective_durations,
     effective_family_months,
@@ -24,9 +26,10 @@ def test_whole_months_between_floors_at_zero():
     assert whole_months_between(date(2026, 9, 1), date(2026, 1, 1)) == 0
 
 
-def test_legacy_row_without_segments_returns_stored_total():
+def test_row_without_segments_is_rejected():
     row = {"normalized_title": "business analyst", "total_duration_months": 48}
-    assert effective_family_months(row, as_of=date(2030, 1, 1)) == 48
+    with pytest.raises(ValueError, match="non-empty segments"):
+        effective_family_months(row, as_of=date(2030, 1, 1))
 
 
 def test_historical_only_family_does_not_accrue():
@@ -75,18 +78,20 @@ def test_mixed_completed_and_current_ba_family():
     assert effective_family_months(row, as_of=date(2026, 9, 1)) == 57
 
 
-def test_current_segment_missing_duration_as_of_falls_back_to_stored_months():
+def test_current_segment_missing_duration_as_of_is_rejected():
     row = {"segments": [{"duration_months": 30, "is_current": True}]}
-    assert effective_family_months(row, as_of=date(2030, 1, 1)) == 30
+    with pytest.raises(ValueError, match="valid duration_as_of"):
+        effective_family_months(row, as_of=date(2030, 1, 1))
 
 
-def test_current_segment_unparseable_duration_as_of_falls_back_to_stored_months():
+def test_current_segment_unparseable_duration_as_of_is_rejected():
     row = {
         "segments": [
             {"duration_months": 30, "is_current": True, "duration_as_of": "not-a-date"},
         ],
     }
-    assert effective_family_months(row, as_of=date(2030, 1, 1)) == 30
+    with pytest.raises(ValueError, match="valid duration_as_of"):
+        effective_family_months(row, as_of=date(2030, 1, 1))
 
 
 def test_apply_effective_durations_updates_total_without_mutating_input():

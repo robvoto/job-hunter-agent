@@ -312,9 +312,12 @@ def test_refresh_role_history_from_saved_cv_only_touches_role_experience(monkeyp
         "candidate_qualifications": [{"name": "CBAP", "held": True}],
         "match_preferences": {"work_mode_preference": "hybrid"},
         "onboarding_settings": {},
-        # legacy aggregate-only row, no segments
         "role_experience": [
-            {"normalized_title": "business analyst", "total_duration_months": 24}
+            {
+                "normalized_title": "business analyst",
+                "total_duration_months": 24,
+                "segments": [{"duration_months": 24, "is_current": False}],
+            }
         ],
     }
     applied_patches: list[dict] = []
