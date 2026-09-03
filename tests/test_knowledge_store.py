@@ -47,6 +47,7 @@ _UI_LABEL_SECTION_KEYS_COMPOSED_AT_RUNTIME = {
         "settings_select_shown_label",
         "settings_clear_selection_label",
         "settings_remove_selected_label",
+        "decline_capability_label",
     },
     "onboarding_page_labels": {
         "locations_label",
