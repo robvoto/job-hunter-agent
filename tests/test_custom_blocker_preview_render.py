@@ -47,7 +47,7 @@ def test_resolved_debug_keeps_all_rows():
         "raw_input": "salesforce",
         "canonical_requirement": "Salesforce",
         "requirement_type": "capability",
-        "importance": "required",
+        "importance": "mandatory",
         "matched_job_text": "Salesforce experience",
     }
     html = render_custom_blocker_preview(resolution, debug_mode=True)

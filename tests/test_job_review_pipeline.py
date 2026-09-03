@@ -129,7 +129,7 @@ def _keep_review_payload(
         "requirement_coverage": [
             {
                 "requirement": requirement,
-                "importance": "required",
+                "importance": "mandatory",
                 "status": "supported",
                 "capability_name": capability_name,
                 "matched_job_text": matched_job_text,
@@ -1370,7 +1370,7 @@ def _seed_reusable_kept_history(context, source: str) -> None:
     kept_record["llm_decision"] = "KEEP"
     kept_record["llm_fit_grade"] = "STRONG"
     kept_record[RECORD_REQUIREMENT_COVERAGE_KEY] = [
-        {"requirement": "Stakeholder engagement", "importance": "required", "status": "supported"}
+        {"requirement": "Stakeholder engagement", "importance": "mandatory", "status": "supported"}
     ]
     kept_record[RECORD_REQUIREMENT_COVERAGE_VERSION_KEY] = REQUIREMENT_COVERAGE_CONTRACT_VERSION
     kept_record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY] = {
@@ -1432,7 +1432,7 @@ def test_required_eligibility_rejects_llm_keep_when_profile_fact_is_false(monkey
         {
             "requirement": "NV2 Security Clearance Required",
             "canonical_requirement": "NV2",
-            "importance": "required",
+            "importance": "mandatory",
             "requirement_type": "eligibility",
             "status": "not_shown",
             "matched_candidate_fact": "",
@@ -1463,7 +1463,7 @@ def test_llm_supported_specific_capability_without_valid_candidate_fact_gets_no_
         "requirement_coverage": [
             {
                 "requirement": "5+ years of Salesforce configuration experience required",
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "capability",
                 "status": "supported",
                 "matched_candidate_fact": "Salesforce",
@@ -1626,7 +1626,7 @@ def test_llm_review_fields_persist_on_record(monkeypatch):
         "requirement_coverage": [
             {
                 "requirement": "Stakeholder engagement",
-                "importance": "required",
+                "importance": "mandatory",
                 "status": "supported",
                 "capability_name": "Stakeholder Engagement",
                 "matched_job_text": "work with stakeholders",
@@ -1738,7 +1738,7 @@ def test_frozen_requirement_fit_score_breakdown_is_stored_once(caplog, monkeypat
         "requirement_coverage": [
             {
                 "requirement": "Stakeholder engagement",
-                "importance": "required",
+                "importance": "mandatory",
                 "status": "supported",
                 "capability_name": "Stakeholder Engagement",
                 "matched_job_text": "work with stakeholders",
@@ -1769,7 +1769,7 @@ def test_fit_review_logs_shared_requirement_score_diagnostics(monkeypatch, caplo
         "requirement_coverage": [
             {
                 "requirement": "Stakeholder engagement",
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "capability",
                 "status": "supported",
                 "matched_candidate_fact": "Stakeholder Engagement",
@@ -1798,10 +1798,10 @@ def test_fit_review_logs_shared_requirement_score_diagnostics(monkeypatch, caplo
     messages = [entry.message for entry in caplog.records]
     block = next(message for message in messages if "Requirement scoring" in message)
     assert "Outcome: KEEP | Grade: STRONG" in block
-    assert "Eligibility gate: Not applicable | No required eligibility requirements were returned." in block
+    assert "Eligibility gate: Not applicable | No mandatory eligibility requirements were returned." in block
     assert "Why: Requirement coverage returned for scoring diagnostics." in block
     assert (
-        "Stakeholder engagement | Required | Capability | In profile | Stakeholder Engagement"
+        "Stakeholder engagement | Mandatory | Capability | In profile | Stakeholder Engagement"
         in block
     )
     assert "Evidence: Led stakeholder workshops." in block
@@ -1816,7 +1816,7 @@ def test_fit_review_logs_role_duration_requirement_diagnostics(monkeypatch, capl
         "requirement_coverage": [
             {
                 "requirement": "Minimum 5 years experience as Business Analyst",
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "capability",
                 "status": "partially_supported",
                 "matched_candidate_fact": "Business Analysis",
@@ -2108,7 +2108,7 @@ def test_build_requirement_classification_review_signals_surfaces_uncertain_item
         RECORD_REQUIREMENT_COVERAGE_KEY: [
             {
                 "requirement": "5+ years working in a security clearance environment",
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "uncertain",
                 "classification_reviewable": True,
                 "status": "invalid",

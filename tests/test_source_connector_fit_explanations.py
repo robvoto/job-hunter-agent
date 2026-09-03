@@ -345,7 +345,7 @@ def test_render_job_card_keeps_unknown_required_requirement_visible_once():
             "requirement_coverage": [
                 {
                     "requirement": requirement,
-                    "importance": "required",
+                    "importance": "mandatory",
                     "requirement_type": "invalid",
                     "status": "invalid",
                 }
@@ -368,7 +368,7 @@ def test_render_job_card_shows_single_badge_for_uncertain_classification_and_no_
             "requirement_coverage": [
                 {
                     "requirement": requirement,
-                    "importance": "required",
+                    "importance": "mandatory",
                     "requirement_type": "uncertain",
                     "status": "invalid",
                     "llm_proposed_requirement_type": "capability",
@@ -416,7 +416,7 @@ def test_capability_coverage_uses_capabilities_panel_heading():
             "requirement_coverage": [
                 {
                     "requirement": "Stakeholder engagement",
-                    "importance": "required",
+                    "importance": "mandatory",
                     "requirement_type": "capability",
                     "status": "supported",
                     "matched_candidate_fact": "stakeholder engagement",
@@ -1045,7 +1045,7 @@ def test_fit_score_requirement_coverage_directly_drives_requirement_fit_score():
             "requirement_coverage": [
                 {
                     "requirement": "Agile delivery",
-                    "importance": "required",
+                    "importance": "mandatory",
                     "status": "supported",
                     "capability_name": "agile methodologies",
                     "matched_job_text": "agile delivery ceremonies",
@@ -1164,7 +1164,7 @@ def test_missing_required_requirement_uses_deterministic_scan_without_llm_covera
     # which cannot see that NV1 is one option in an alternation. Clearance misses are
     # reported in their own list, never merged into the generic "missing" list.
     assert missing == []
-    assert missing_clearance == ["Missing required requirement: Nv1"]
+    assert missing_clearance == ["Missing mandatory requirement: Nv1"]
 
 
 def test_eligibility_coverage_renders_in_clearance_panel_when_supported():
@@ -1177,7 +1177,7 @@ def test_eligibility_coverage_renders_in_clearance_panel_when_supported():
             "requirement_coverage": [
                 {
                     "requirement": "Security Clearance: NV1 / Baseline / As per role",
-                    "importance": "required",
+                    "importance": "mandatory",
                     "requirement_type": "eligibility",
                     "requirement_subtype": "clearance",
                     "status": "supported",
@@ -1196,7 +1196,7 @@ def test_eligibility_coverage_renders_in_clearance_panel_when_supported():
     assert "Clearance" in html
     assert "job-requirement-item--supported" in html
     assert "Security Clearance: NV1 / Baseline / As per role" in html
-    assert "Missing required requirement" not in html
+    assert "Missing mandatory requirement" not in html
 
 
 def test_eligibility_mismatch_renders_in_clearance_panel_not_checks_before_applying():
@@ -1205,7 +1205,7 @@ def test_eligibility_mismatch_renders_in_clearance_panel_not_checks_before_apply
     requirement_coverage = [
         {
             "requirement": "Security Clearance: NV1 only, no alternatives accepted",
-            "importance": "required",
+            "importance": "mandatory",
             "requirement_type": "eligibility",
             "requirement_subtype": "clearance",
             "status": "mismatch",
@@ -1256,7 +1256,7 @@ def test_fit_score_breakdown_ignores_profile_title_scoring_rule_overrides():
             "llm_fit_grade": "SOLID",
             "title_match_metadata": {"match_family": "primary"},
             "requirement_coverage": [
-                {"requirement": "Agile delivery", "importance": "required", "status": "supported", "capability_name": "agile methodologies"}
+                {"requirement": "Agile delivery", "importance": "mandatory", "status": "supported", "capability_name": "agile methodologies"}
             ],
         },
         profile,
@@ -1299,7 +1299,7 @@ def test_fit_score_breakdown_keeps_secondary_role_family_out_of_score():
             "llm_fit_grade": "SOLID",
             "title_match_metadata": {"match_family": "secondary"},
             "requirement_coverage": [
-                {"requirement": "Agile delivery", "importance": "required", "status": "supported", "capability_name": "agile methodologies"}
+                {"requirement": "Agile delivery", "importance": "mandatory", "status": "supported", "capability_name": "agile methodologies"}
             ],
         },
         _capability_profile(),
@@ -1783,14 +1783,14 @@ def test_posting_channel_badge_uses_llm_classifier_review_class():
             "requirement_coverage": [
                 {
                     "requirement": "Strong stakeholder engagement and communication skills",
-                    "importance": "required",
+                    "importance": "mandatory",
                     "requirement_type": "capability",
                     "status": "supported",
                     "matched_candidate_fact": "stakeholder engagement",
                 },
                 {
                     "requirement": "Experience across end-to-end BA activities",
-                    "importance": "required",
+                    "importance": "mandatory",
                     "requirement_type": "capability",
                     "status": "mismatch",
                 },
@@ -2012,7 +2012,7 @@ def test_render_job_card_requirement_coverage_omits_duplicate_matched_text():
             "requirement_coverage": [
                 {
                     "requirement": requirement,
-                    "importance": "required",
+                    "importance": "mandatory",
                     "status": "supported",
                     "capability_name": "acceptance testing",
                     "matched_job_text": requirement,
@@ -2041,7 +2041,7 @@ def test_render_job_card_requirement_coverage_shows_evidence_subtitles_in_normal
             "requirement_coverage": [
                 {
                     "requirement": requirement,
-                    "importance": "required",
+                    "importance": "mandatory",
                     "status": "supported",
                     "capability_name": "acceptance testing",
                     "matched_job_text": requirement,
@@ -2068,7 +2068,7 @@ def test_render_job_card_requirement_coverage_hides_capability_badge_in_normal_m
             "requirement_coverage": [
                 {
                     "requirement": "Lead delivery across multiple initiatives",
-                    "importance": "required",
+                    "importance": "mandatory",
                     "status": "supported",
                     "capability_name": "agile delivery",
                     "matched_job_text": "Lead end-to-end delivery within Agile squads, working across multiple initiatives across data, technology, and change",
@@ -2123,7 +2123,7 @@ def test_render_job_card_requirement_coverage_shows_ad_wording_in_debug_mode():
             "requirement_coverage": [
                 {
                     "requirement": "Lead delivery across multiple initiatives",
-                    "importance": "required",
+                    "importance": "mandatory",
                     "status": "supported",
                     "capability_name": "agile delivery",
                     "matched_job_text": "Lead end-to-end delivery within Agile squads, working across multiple initiatives across data, technology, and change",
@@ -2157,7 +2157,7 @@ def test_render_job_card_requirement_coverage_shows_role_duration_note_in_normal
             "requirement_coverage": [
                 {
                     "requirement": "Minimum 5 years experience as Business Analyst",
-                    "importance": "required",
+                    "importance": "mandatory",
                     "status": "partially_supported",
                     "capability_name": "acceptance testing",
                     "matched_job_text": "Minimum 5 years experience as Business Analyst",
@@ -2190,7 +2190,7 @@ def test_render_job_card_requirement_coverage_shows_eligibility_details_in_debug
             "requirement_coverage": [
                 {
                     "requirement": "Hold PV security clearance",
-                    "importance": "required",
+                    "importance": "mandatory",
                     "requirement_type": "eligibility",
                     "requirement_subtype": "clearance",
                     "status": "supported",
@@ -2502,7 +2502,7 @@ def test_checks_before_applying_returns_all_items_without_truncation():
             "llm_role": "Business Analyst",
         },
         hard_block_reasons_list=[
-            "Missing required requirement: SAP certification",
+            "Missing mandatory requirement: SAP certification",
         ],
         salary_fit_state="below",
         soft_risk_reasons=[
@@ -2523,7 +2523,7 @@ def test_checks_before_applying_returns_all_items_without_truncation():
         "Possible repost of applied job: Business Analyst — Acme — SEEK",
         "Rejected before: Acme — Business Analyst",
         "Salary below target.",
-        "Missing required requirement: SAP Certification",
+        "Missing mandatory requirement: SAP Certification",
         "Freshness may be unreliable — LinkedIn can show a reposted date for external-apply listings, and the original posting date could not be verified.",
         'Ad lists both permanent and contract work types ("full time contract") — may be a wide talent-pool search rather than a specific vacancy.',
     ]
@@ -3260,7 +3260,7 @@ def test_is_workspace_eligible_uses_saved_workspace_minimum_score(monkeypatch):
         "llm_decision": "KEEP",
         "llm_fit_grade": "STRONG",
         "requirement_coverage": [
-            {"requirement": "Business analysis", "importance": "required", "status": "supported"}
+            {"requirement": "Business analysis", "importance": "mandatory", "status": "supported"}
         ],
     }
 
@@ -3283,7 +3283,7 @@ def test_is_workspace_eligible_preserves_kept_jobs_when_title_filters_change(mon
         "llm_decision": "KEEP",
         "llm_fit_grade": "STRONG",
         "requirement_coverage": [
-            {"requirement": "Business analysis", "importance": "required", "status": "supported"}
+            {"requirement": "Business analysis", "importance": "mandatory", "status": "supported"}
         ],
     }
 
@@ -3475,7 +3475,7 @@ def test_render_job_card_debug_audit_shows_evidence_credit_and_decision_conversi
             "requirement_coverage": [
                 {
                     "requirement": "5–7 years in digital health",
-                    "importance": "required",
+                    "importance": "mandatory",
                     "requirement_type": "capability",
                     "status": "supported",
                     "matched_candidate_fact": "stakeholder engagement",
@@ -3495,7 +3495,7 @@ def test_render_job_card_debug_audit_shows_evidence_credit_and_decision_conversi
                 },
                 {
                     "requirement": "Domain architecture",
-                    "importance": "required",
+                    "importance": "mandatory",
                     "requirement_type": "capability",
                     "status": "supported",
                     "matched_candidate_fact": "",
@@ -3630,7 +3630,7 @@ def test_render_job_card_fit_breakdown_starts_with_plain_english_summary_from_re
             "requirement_coverage": [
                 {
                     "requirement": "Agile delivery",
-                    "importance": "required",
+                    "importance": "mandatory",
                     "status": "supported",
                     "capability_name": "Agile methodologies",
                     "matched_job_text": "agile delivery",
@@ -3638,7 +3638,7 @@ def test_render_job_card_fit_breakdown_starts_with_plain_english_summary_from_re
                 },
                 {
                     "requirement": "Stakeholder engagement",
-                    "importance": "expected",
+                    "importance": "strongly_preferred",
                     "status": "partially_supported",
                     "capability_name": "Primary stakeholder engagement",
                     "matched_job_text": "stakeholder engagement",
@@ -3654,7 +3654,7 @@ def test_render_job_card_fit_breakdown_starts_with_plain_english_summary_from_re
                 },
                 {
                     "requirement": "SAP certification",
-                    "importance": "required",
+                    "importance": "mandatory",
                     "status": "mismatch",
                     "capability_name": "",
                     "matched_job_text": "SAP certification",
@@ -3754,7 +3754,7 @@ def test_workspace_record_sets_exclude_kept_jobs_without_complete_llm_data(monke
             "requirement_coverage": [
                 {
                     "requirement": "Stakeholder engagement",
-                    "importance": "required",
+                    "importance": "mandatory",
                     "status": "supported",
                 }
             ],
@@ -3843,7 +3843,7 @@ def test_workspace_renders_requirement_coverage_with_status_classes():
             "requirement_coverage": [
                 {
                     "requirement": "Stakeholder engagement",
-                    "importance": "required",
+                    "importance": "mandatory",
                     "status": "supported",
                     "capability_name": "stakeholder engagement",
                     "matched_job_text": "work with stakeholders",
@@ -3851,7 +3851,7 @@ def test_workspace_renders_requirement_coverage_with_status_classes():
                 },
                 {
                     "requirement": "Agile delivery",
-                    "importance": "expected",
+                    "importance": "strongly_preferred",
                     "status": "partially_supported",
                     "capability_name": "agile methodologies",
                     "matched_job_text": "agile ceremonies",
@@ -3867,7 +3867,7 @@ def test_workspace_renders_requirement_coverage_with_status_classes():
                 },
                 {
                     "requirement": "SAP certification",
-                    "importance": "required",
+                    "importance": "mandatory",
                     "status": "mismatch",
                     "capability_name": "",
                     "matched_job_text": "SAP required",
@@ -3883,7 +3883,7 @@ def test_workspace_renders_requirement_coverage_with_status_classes():
                 },
                 {
                     "requirement": "PV clearance",
-                    "importance": "required",
+                    "importance": "mandatory",
                     "status": "invalid",
                     "requirement_type": "credential",
                     "capability_name": "",
@@ -3917,12 +3917,12 @@ def test_workspace_renders_requirement_coverage_with_status_classes():
     assert "Job Requirements" in html
     assert "job-req-importance" in html
     assert "job-requirement-badges" not in html
-    assert "job-req-importance--required" in html
-    assert "job-req-importance--expected" in html
+    assert "job-req-importance--mandatory" in html
+    assert "job-req-importance--strongly-preferred" in html
     assert "job-req-importance--preferred" in html
     assert "job-req-importance--bonus" in html
-    assert "Required" in html  # required label
-    assert "Expected" in html  # expected label
+    assert "Mandatory" in html  # mandatory label
+    assert "Strongly Preferred" in html  # strongly preferred label
     assert "Preferred" in html  # preferred label
     assert "Bonus" in html  # bonus label
 
@@ -3979,7 +3979,7 @@ def test_workspace_requirement_list_groups_attention_items_before_matched_items(
             "requirement_coverage": [
                 {
                     "requirement": "Stakeholder engagement",
-                    "importance": "required",
+                    "importance": "mandatory",
                     "status": "supported",
                 },
                 {
@@ -3989,7 +3989,7 @@ def test_workspace_requirement_list_groups_attention_items_before_matched_items(
                 },
                 {
                     "requirement": "Agile delivery",
-                    "importance": "expected",
+                    "importance": "strongly_preferred",
                     "status": "supported",
                 },
                 {
@@ -3999,12 +3999,12 @@ def test_workspace_requirement_list_groups_attention_items_before_matched_items(
                 },
                 {
                     "requirement": "SAP certification",
-                    "importance": "required",
+                    "importance": "mandatory",
                     "status": "mismatch",
                 },
                 {
                     "requirement": "PV clearance",
-                    "importance": "required",
+                    "importance": "mandatory",
                     "status": "invalid",
                 },
             ],
@@ -4112,7 +4112,7 @@ def test_hard_blocked_job_still_shows_requirement_fit_evidence():
         "competitive_signals": [],
         "hard_block_reasons": ["requires SAP experience"],
         "requirement_coverage": [
-            {"requirement": "Agile delivery", "importance": "required", "status": "supported", "capability_name": "agile methodologies"}
+            {"requirement": "Agile delivery", "importance": "mandatory", "status": "supported", "capability_name": "agile methodologies"}
         ],
     }
 
@@ -4480,7 +4480,7 @@ def test_contract_duration_requirement_is_suppressed_when_already_shown_in_meta(
             "requirement_coverage": [
                 {
                     "requirement": "Contract (6 Months)",
-                    "importance": "required",
+                    "importance": "mandatory",
                     "status": "not_shown",
                     "matched_job_text": "Contract (6 Months)",
                 }
@@ -4516,7 +4516,7 @@ def test_add_to_profile_button_carries_capability_data_attributes():
                     "requirement": "Strong stakeholder management is required",
                     "canonical_requirement": "Stakeholder management",
                     "profile_action_allowed": True,
-                    "importance": "required",
+                    "importance": "mandatory",
                     "status": "not_shown",
                     "matched_job_text": "Strong stakeholder management is required",
                 }
@@ -4539,7 +4539,7 @@ def test_canonical_fact_resolved_true_flows_through_to_add_to_profile_button():
         [
             {
                 "requirement": "Working knowledge of responsible AI principles",
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "capability",
                 "canonical_requirement": "Responsible AI",
                 "canonical_fact_resolved": True,
@@ -4580,7 +4580,7 @@ def test_canonical_fact_resolved_false_suppresses_add_to_profile_button():
         [
             {
                 "requirement": "Write testable user stories and acceptance criteria",
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "capability",
                 "canonical_requirement": "User stories and acceptance criteria",
                 "canonical_fact_resolved": False,
@@ -4690,7 +4690,7 @@ def test_no_add_to_profile_link_for_unresolved_required_alternatives_list():
                     "requirement_type": "qualification",
                     "canonical_requirement": "",
                     "profile_action_allowed": False,
-                    "importance": "required",
+                    "importance": "mandatory",
                     "status": "not_shown",
                     "matched_job_text": "One of CBAP, CCBA, or an equivalent BA certification is required.",
                 }
@@ -4731,7 +4731,7 @@ def test_add_to_profile_link_shown_for_clear_single_qualification():
                     "requirement_type": "qualification",
                     "canonical_requirement": "CBAP",
                     "profile_action_allowed": True,
-                    "importance": "required",
+                    "importance": "mandatory",
                     "status": "not_shown",
                     "matched_job_text": "CBAP certification is required.",
                 }
@@ -4769,7 +4769,7 @@ def test_independent_and_joined_requirements_each_get_own_add_to_profile_link():
                     "requirement_type": "eligibility",
                     "canonical_requirement": "Australian Citizenship",
                     "profile_action_allowed": True,
-                    "importance": "required",
+                    "importance": "mandatory",
                     "status": "not_shown",
                     "matched_job_text": "Australian Citizenship is required",
                 },
@@ -4778,7 +4778,7 @@ def test_independent_and_joined_requirements_each_get_own_add_to_profile_link():
                     "requirement_type": "eligibility",
                     "canonical_requirement": "NV2",
                     "profile_action_allowed": True,
-                    "importance": "required",
+                    "importance": "mandatory",
                     "status": "not_shown",
                     "matched_job_text": "NV2 Security Clearance is required",
                 },
@@ -4857,7 +4857,7 @@ def test_no_add_to_profile_link_for_matched_requirement():
                     "requirement_type": "qualification",
                     "canonical_requirement": "CBAP",
                     "profile_action_allowed": True,
-                    "importance": "required",
+                    "importance": "mandatory",
                     "status": "supported",
                     "matched_candidate_fact": "CBAP",
                     "matched_job_text": "CBAP certification is required.",
@@ -4900,7 +4900,7 @@ def test_nv1_check_item_renders_as_human_readable():
     """NV1 clearance check item must not expose the raw 'nv1 appears required' text."""
     reasons = workspace_renderer._humanize_check_item("nv1 appears required")
     assert "nv1 appears required" not in reasons.lower()
-    assert "Missing required requirement: NV1" in reasons
+    assert "Missing mandatory requirement: NV1" in reasons
 
 
 def test_check_item_unescapes_html_entities_before_rendering():
@@ -4915,7 +4915,7 @@ def test_check_item_unescapes_html_entities_before_rendering():
 def test_must_not_require_skills_keyword_scan_no_longer_drives_checks_before_applying():
     """The pre-review must_not_require_skills keyword scan is used only to decide
     whether the LLM review can be skipped (see build_pre_review_risk_signals) — it
-    must never leak a "Missing required requirement" sentence into the rendered
+    must never leak a "Missing mandatory requirement" sentence into the rendered
     card, since that panel is now LLM-sourced only (competitive_signals /
     requirement_coverage), not a keyword scan of the description.
     """
@@ -4949,7 +4949,7 @@ def test_must_not_require_skills_keyword_scan_no_longer_drives_checks_before_app
         },
     )
 
-    assert "Missing required requirement" not in html
+    assert "Missing mandatory requirement" not in html
 
 
 def test_partial_requirement_coverage_shows_badge_in_job_requirements_only():
@@ -4977,7 +4977,7 @@ def test_partial_requirement_coverage_shows_badge_in_job_requirements_only():
             "requirement_coverage": [
                 {
                     "requirement": "Data integration",
-                    "importance": "expected",
+                    "importance": "strongly_preferred",
                     "status": "partially_supported",
                     "capability_name": "data integration",
                     "matched_job_text": "data integration and data services layers",
@@ -5165,8 +5165,8 @@ def test_fit_section_heading_uses_human_friendly_language():
             "description_source": "jobAdDetails",
             RECORD_DETAILS_STATUS_KEY: DETAILS_STATUS_OK,
             RECORD_REQUIREMENT_COVERAGE_KEY: [
-                {"requirement": "Agile delivery", "importance": "required", "status": "supported"},
-                {"requirement": "SAP experience", "importance": "required", "status": "mismatch"},
+                {"requirement": "Agile delivery", "importance": "mandatory", "status": "supported"},
+                {"requirement": "SAP experience", "importance": "mandatory", "status": "mismatch"},
             ],
             "competitive_signals": [
                 {
@@ -5235,10 +5235,10 @@ def test_render_job_card_fit_breakdown_starts_with_plain_english_summary_from_re
                 {"label": "Base fit", "value": 72, "section": "llm_fit"},
             ],
             RECORD_REQUIREMENT_COVERAGE_KEY: [
-                {"requirement": "Agile delivery", "importance": "required", "status": "supported"},
-                {"requirement": "Stakeholder engagement", "importance": "expected", "status": "partially_supported"},
+                {"requirement": "Agile delivery", "importance": "mandatory", "status": "supported"},
+                {"requirement": "Stakeholder engagement", "importance": "strongly_preferred", "status": "partially_supported"},
                 {"requirement": "User acceptance testing", "importance": "preferred", "status": "supported"},
-                {"requirement": "SAP certification", "importance": "required", "status": "mismatch"},
+                {"requirement": "SAP certification", "importance": "mandatory", "status": "mismatch"},
             ],
             "location": "Sydney NSW",
             "work_type": "Full Time",

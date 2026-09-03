@@ -65,9 +65,9 @@ from job_hunter_agent.llm_protocol import (
     LLM_ALLOWED_POSTING_CHANNEL_KINDS,
     LLM_ALLOWED_TITLE_JUDGMENT_VERDICTS,
     LLM_COVERAGE_IMPORTANCE_BONUS,
-    LLM_COVERAGE_IMPORTANCE_EXPECTED,
+    LLM_COVERAGE_IMPORTANCE_STRONGLY_PREFERRED,
     LLM_COVERAGE_IMPORTANCE_PREFERRED,
-    LLM_COVERAGE_IMPORTANCE_REQUIRED,
+    LLM_COVERAGE_IMPORTANCE_MANDATORY,
     LLM_EXPERIENCE_COMPONENT_DURATION,
     LLM_EXPERIENCE_COMPONENT_QUALIFIER,
     LLM_EXPERIENCE_COMPONENT_ROLE_ACTIVITY,
@@ -806,7 +806,7 @@ def build_requirement_coverage_guidance() -> str:
         f"Use at most {get_llm_requirement_coverage_max_items()} capability/qualification requirement_coverage items. eligibility_requirements are separate and do not consume this limit.",
         "Classify each requirement as capability, eligibility, or qualification. Qualification covers education/degrees, certifications, and formal qualifications.",
         f"For eligibility rows, set requirement_subtype to exactly one of: {', '.join(eligibility_subtypes)}. Leave requirement_subtype empty for capability and qualification rows.",
-        "For qualification rows, importance must be required or preferred.",
+        "For qualification rows, use the same mandatory/strongly_preferred/preferred/bonus importance vocabulary as every other requirement type.",
         "Use matched_candidate_fact for the exact canonical capability or eligibility name shown in the profile matrix, or the exact qualification name shown in the qualifications matrix; never put an evidence sentence there.",
         "Canonical qualification names must be concise reusable concepts such as CBAP, PRINCE2, Bachelor of Information Technology, or Diploma of Project Management — never the raw requirement sentence or an alternatives list.",
         "When the ad states explicit years or months of experience, compare that threshold against the role experience matrix before choosing supported versus partially_supported.",
@@ -875,7 +875,7 @@ def build_profile_storage_resolution_guidance() -> str:
 # Shared cache namespace/profile lifecycle. Fit review and title judgement each
 # have their own contract version so changing one does not invalidate the other.
 LLM_CACHE_SCHEMA_VERSION = 3
-FIT_REVIEW_CACHE_CONTRACT_VERSION = 3
+FIT_REVIEW_CACHE_CONTRACT_VERSION = 4
 TITLE_JUDGMENT_CACHE_CONTRACT_VERSION = 1
 POSTING_CHANNEL_LLM_CACHE_CONTRACT_VERSION = 1
 
@@ -1122,10 +1122,10 @@ _ALLOWED_REQUIREMENT_COVERAGE_STATUSES = frozenset(
 )
 
 # Importance weights used by derive_fit_review_grade.
-# required requirements dominate the grade; bonus items barely affect it.
+# mandatory requirements dominate the grade; bonus items barely affect it.
 _IMPORTANCE_WEIGHTS: dict[str, float] = {
-    LLM_COVERAGE_IMPORTANCE_REQUIRED: 3.0,
-    LLM_COVERAGE_IMPORTANCE_EXPECTED: 2.0,
+    LLM_COVERAGE_IMPORTANCE_MANDATORY: 3.0,
+    LLM_COVERAGE_IMPORTANCE_STRONGLY_PREFERRED: 2.0,
     LLM_COVERAGE_IMPORTANCE_PREFERRED: 1.0,
     LLM_COVERAGE_IMPORTANCE_BONUS: 0.25,
 }
@@ -1694,8 +1694,6 @@ def normalize_llm_requirement_coverage(
             )
             matched_candidate_fact = eligibility_name or matched_candidate_fact
         elif requirement_type_is_valid and requirement_type == "qualification":
-            if importance not in {LLM_COVERAGE_IMPORTANCE_REQUIRED, LLM_COVERAGE_IMPORTANCE_PREFERRED}:
-                importance = LLM_COVERAGE_IMPORTANCE_PREFERRED
             qualification_name = (
                 valid_qualification_lookup.get(matched_candidate_fact.lower(), "")
                 if valid_qualification_lookup is not None
@@ -1793,9 +1791,9 @@ def normalize_llm_requirement_coverage(
                     requirement,
                 )
         if status not in _ALLOWED_REQUIREMENT_COVERAGE_STATUSES:
-            if importance != LLM_COVERAGE_IMPORTANCE_REQUIRED:
+            if importance != LLM_COVERAGE_IMPORTANCE_MANDATORY:
                 continue
-            # Required wording is never discarded just because the model
+            # Mandatory wording is never discarded just because the model
             # returned an invalid/unknown status. It remains visible as an
             # unresolved item and cannot contribute support to scoring.
             status = LLM_INVALID_COVERAGE_STATUS
@@ -2153,11 +2151,11 @@ def normalize_llm_requirement_coverage(
 def derive_fit_review_grade(requirement_coverage: list[dict[str, Any]]) -> str:
     """Derive grade from importance-weighted requirement coverage.
 
-    Importance weights: required=3, expected=2, preferred=1, bonus=0.25.
+    Importance weights: mandatory=3, strongly_preferred=2, preferred=1, bonus=0.25.
     Any mismatch caps at WEAK. required+not_shown lowers the ratio but does not auto-reject,
-    except an unresolved required eligibility fact (e.g. clearance, work rights), which also
+    except an unresolved mandatory eligibility fact (e.g. clearance, work rights), which also
     caps at WEAK — eligibility is a boolean gate, not a gradeable capability, so an unknown
-    required eligibility fact must not be diluted away by unrelated supported requirements.
+    mandatory eligibility fact must not be diluted away by unrelated supported requirements.
     Items without an importance field default to 'preferred' (weight 1.0).
     """
     total_items = len(requirement_coverage)
@@ -2187,7 +2185,7 @@ def derive_fit_review_grade(requirement_coverage: list[dict[str, Any]]) -> str:
             mismatch_count += 1
         elif (
             status == "not_shown"
-            and importance == LLM_COVERAGE_IMPORTANCE_REQUIRED
+            and importance == LLM_COVERAGE_IMPORTANCE_MANDATORY
             and requirement_type in {"eligibility", "qualification"}
         ):
             required_eligibility_unresolved = True
@@ -2234,7 +2232,7 @@ def has_eligibility_mismatch(requirement_coverage: list[dict[str, Any]]) -> bool
             str(item.get("requirement_type") or "").strip().lower() == "eligibility"
             or (
                 str(item.get("requirement_type") or "").strip().lower() == "qualification"
-                and str(item.get("importance") or "").strip().lower() == LLM_COVERAGE_IMPORTANCE_REQUIRED
+                and str(item.get("importance") or "").strip().lower() == LLM_COVERAGE_IMPORTANCE_MANDATORY
             )
         )
         and str(item.get("status") or "").strip().lower() == "mismatch"

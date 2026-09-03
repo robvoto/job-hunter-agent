@@ -43,7 +43,7 @@ def test_history_reuse_with_url_variation():
         "llm_decision": "KEEP",
         "llm_fit_grade": "STRONG",
         RECORD_REQUIREMENT_COVERAGE_KEY: [
-            {"requirement": "Business analysis", "importance": "required", "status": "supported"}
+            {"requirement": "Business analysis", "importance": "mandatory", "status": "supported"}
         ],
         RECORD_REQUIREMENT_COVERAGE_VERSION_KEY: REQUIREMENT_COVERAGE_CONTRACT_VERSION,
         RECORD_POSTING_CHANNEL_EVIDENCE_KEY: {
@@ -117,7 +117,7 @@ def test_history_reuse_rechecks_jobs_with_unclassified_posting_channel():
             "llm_decision": "KEEP",
             "llm_fit_grade": "STRONG",
             RECORD_REQUIREMENT_COVERAGE_KEY: [
-                {"requirement": "Business analysis", "importance": "required", "status": "supported"}
+                {"requirement": "Business analysis", "importance": "mandatory", "status": "supported"}
             ],
             RECORD_POSTING_CHANNEL_EVIDENCE_KEY: {
                 POSTING_CHANNEL_VERSION_KEY: POSTING_CHANNEL_CLASSIFIER_VERSION,
@@ -145,7 +145,7 @@ def test_history_reuse_rechecks_old_confident_posting_channel_contract():
             "llm_decision": "KEEP",
             "llm_fit_grade": "STRONG",
             RECORD_REQUIREMENT_COVERAGE_KEY: [
-                {"requirement": "Business analysis", "importance": "required", "status": "supported"}
+                {"requirement": "Business analysis", "importance": "mandatory", "status": "supported"}
             ],
             RECORD_POSTING_CHANNEL_EVIDENCE_KEY: {
                 POSTING_CHANNEL_VERSION_KEY: 3,

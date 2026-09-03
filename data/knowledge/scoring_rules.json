@@ -1,12 +1,12 @@
 {
   "kind": "system_config",
   "name": "scoring_rules",
-  "version": 14,
-  "updated_at": "2026-08-04",
+  "version": 15,
+  "updated_at": "2026-09-02",
   "description": "Central scoring configuration. Controls how different factors contribute to job fit scoring. Must remain transparent and not contain hidden rejection logic.",
   "calibration_notes": {
-    "design": "Narrow requirement-fit scoring. The LLM extracts per-requirement coverage (status, importance, mapped capability/eligibility) from the job description; the score is the weighted percentage of requirement_importance_weights satisfied by candidate capability_level_weights and requirement_status_weights credit, adjusted by requirement_fit_entries. There is no LLM-grade base score or grade band clamping \u2014 the requirement fit percentage IS the score before hard-block penalties.",
-    "requirement_importance_weights": "Per-requirement weight by importance (required, expected, preferred, bonus) used to compute the weighted percentage of requirements satisfied.",
+    "design": "Narrow requirement-fit scoring. The LLM extracts per-requirement coverage (status, importance, mapped capability/eligibility) from the job description; the score is the weighted percentage of requirement_importance_weights satisfied by candidate capability_level_weights and requirement_status_weights credit, adjusted by requirement_fit_entries. There is no LLM-grade base score or grade band clamping — the requirement fit percentage IS the score before hard-block penalties.",
+    "requirement_importance_weights": "Per-requirement weight by importance (mandatory, strongly_preferred, preferred, bonus) used to compute the weighted percentage of requirements satisfied.",
     "capability_level_weights": "Credit multiplier applied to a requirement's weight based on the candidate's matched capability level (strong, working, basic, low, limited_depth) for that requirement.",
     "requirement_status_weights": "Credit multiplier applied to a requirement's weight based on whether support is direct (`supported`) or partial (`partially_supported`).",
     "hard_blockers": "Applied on top of the requirement-fit percentage. A single hard blocker subtracts 100, forcing the score to near-zero regardless of requirement fit."
@@ -17,8 +17,8 @@
   },
   "requirement_importance_weights": {
     "description": "Per-requirement weight by importance used to compute the weighted percentage of requirements satisfied.",
-    "required": 3.0,
-    "expected": 2.0,
+    "mandatory": 3.0,
+    "strongly_preferred": 2.0,
     "preferred": 1.0,
     "bonus": 0.25
   },

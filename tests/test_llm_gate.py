@@ -471,7 +471,7 @@ def _years_experience_coverage_row(matched_role_family: str) -> dict:
     """The reported wording, decomposed the way the fit-review LLM returns it."""
     return {
         "requirement": "5+ years business analysis experience",
-        "importance": "required",
+        "importance": "mandatory",
         "requirement_type": "capability",
         "status": "supported",
         "matched_candidate_fact": "Business Analysis",
@@ -565,7 +565,7 @@ def test_years_requirement_for_unrelated_role_is_not_matched_from_ba_history():
     # flag is still recorded so the unresolved duration is visible.
     row_in = {
         "requirement": "3+ years registered nursing experience",
-        "importance": "required",
+        "importance": "mandatory",
         "requirement_type": "capability",
         "status": "supported",
         "matched_candidate_fact": "Business Analysis",
@@ -1162,7 +1162,7 @@ def _cov_imp(req: str, status: str, importance: str, cap: str = "") -> dict:
 def test_bonus_not_shown_does_not_materially_penalise():
     # 3 required fully supported + 4 bonus not_shown.
     # bonus weight is 0.25, so their not_shown barely reduces the ratio.
-    coverage = [_cov_imp(f"m{i}", "supported", "required", f"cap{i}") for i in range(3)] + [
+    coverage = [_cov_imp(f"m{i}", "supported", "mandatory", f"cap{i}") for i in range(3)] + [
         _cov_imp(f"n{i}", "not_shown", "bonus") for i in range(4)
     ]
     grade = llm_gate.derive_fit_review_grade(coverage)
@@ -1176,9 +1176,9 @@ def test_bonus_not_shown_does_not_materially_penalise():
 
 def test_required_not_shown_lowers_grade():
     # 3 bonus supported but 2 required not_shown.
-    # required gaps should keep grade low despite bonus coverage.
+    # mandatory gaps should keep grade low despite bonus coverage.
     coverage = [_cov_imp(f"n{i}", "supported", "bonus", f"cap{i}") for i in range(3)] + [
-        _cov_imp(f"m{i}", "not_shown", "required") for i in range(2)
+        _cov_imp(f"m{i}", "not_shown", "mandatory") for i in range(2)
     ]
     # support_score = 3*0.25 = 0.75; max_score = 3*0.25 + 2*3 = 6.75; ratio = 0.11
     grade = llm_gate.derive_fit_review_grade(coverage)
@@ -1187,9 +1187,9 @@ def test_required_not_shown_lowers_grade():
 
 def test_required_mismatch_caps_at_weak():
     coverage = [
-        _cov_imp("r1", "supported", "required", "cap1"),
-        _cov_imp("r2", "supported", "required", "cap2"),
-        _cov_imp("r3", "mismatch", "required"),
+        _cov_imp("r1", "supported", "mandatory", "cap1"),
+        _cov_imp("r2", "supported", "mandatory", "cap2"),
+        _cov_imp("r3", "mismatch", "mandatory"),
     ]
     assert llm_gate.derive_fit_review_grade(coverage) == "WEAK"
 
@@ -1197,7 +1197,7 @@ def test_required_mismatch_caps_at_weak():
 # ── eligibility vs capability separation ──────────────────────────────────────
 
 
-def _cov_elig(req: str, status: str, importance: str = "required") -> dict:
+def _cov_elig(req: str, status: str, importance: str = "mandatory") -> dict:
     return {
         "requirement": req,
         "importance": importance,
@@ -1221,7 +1221,7 @@ def test_fit_review_preserves_and_splits_eligibility_outside_general_row_budget(
     general_rows = [
         {
             "requirement": f"Capability requirement {index}",
-            "importance": "required",
+            "importance": "mandatory",
             "requirement_type": "capability",
             "canonical_requirement": f"Capability {index}",
             "status": "not_shown",
@@ -1236,7 +1236,7 @@ def test_fit_review_preserves_and_splits_eligibility_outside_general_row_budget(
             "eligibility_requirements": [
                 {
                     "requirement": "Australian citizenship with Baseline Security Clearance",
-                    "importance": "required",
+                    "importance": "mandatory",
                     "requirement_type": "eligibility",
                     "canonical_requirement": "Baseline Security Clearance",
                     "status": "supported",
@@ -1271,7 +1271,7 @@ def test_eligibility_row_after_general_limit_is_not_dropped():
     rows = [
         {
             "requirement": f"Capability requirement {index}",
-            "importance": "required",
+            "importance": "mandatory",
             "requirement_type": "capability",
             "status": "not_shown",
         }
@@ -1280,7 +1280,7 @@ def test_eligibility_row_after_general_limit_is_not_dropped():
     rows.append(
         {
             "requirement": "Australian Citizenship is required",
-            "importance": "required",
+            "importance": "mandatory",
             "requirement_type": "eligibility",
             "canonical_requirement": "Australian Citizenship",
             "status": "supported",
@@ -1303,7 +1303,7 @@ def test_required_eligibility_not_shown_caps_at_weak_despite_high_capability_sup
     # surfaced. Support ratio alone would read 0.9 (STRONG territory), but an unresolved
     # required eligibility fact must not be diluted away by unrelated capability support.
     coverage = [
-        _cov_imp(f"cap{i}", "supported", "required", f"cap{i}") for i in range(9)
+        _cov_imp(f"cap{i}", "supported", "mandatory", f"cap{i}") for i in range(9)
     ] + [_cov_elig("security clearance", "not_shown")]
     assert llm_gate.derive_fit_review_grade(coverage) == "WEAK"
 
@@ -1312,8 +1312,8 @@ def test_required_capability_not_shown_still_only_dilutes_ratio():
     # Same shape, but the unresolved required item is a capability, not eligibility —
     # existing dilution behaviour (not an auto-cap) must be unchanged.
     coverage = [
-        _cov_imp(f"cap{i}", "supported", "required", f"cap{i}") for i in range(9)
-    ] + [_cov_imp("some other tool", "not_shown", "required")]
+        _cov_imp(f"cap{i}", "supported", "mandatory", f"cap{i}") for i in range(9)
+    ] + [_cov_imp("some other tool", "not_shown", "mandatory")]
     grade = llm_gate.derive_fit_review_grade(coverage)
     assert grade != "WEAK"
 
@@ -1325,7 +1325,7 @@ def test_has_eligibility_mismatch_true_for_eligibility_mismatch():
 
 def test_has_eligibility_mismatch_false_for_capability_mismatch():
     # A capability mismatch is not an eligibility mismatch — the two must stay separate.
-    coverage = [_cov_imp("some skill", "mismatch", "required")]
+    coverage = [_cov_imp("some skill", "mismatch", "mandatory")]
     assert llm_gate.has_eligibility_mismatch(coverage) is False
 
 
@@ -1346,7 +1346,7 @@ def test_normalize_llm_review_payload_overrides_keep_to_reject_on_eligibility_mi
                 {
                     "requirement": "Security clearance",
                     "status": "mismatch",
-                    "importance": "required",
+                    "importance": "mandatory",
                     "requirement_type": "eligibility",
                     "matched_candidate_fact": "security clearance",
                 },
@@ -1368,7 +1368,7 @@ def test_normalize_llm_review_payload_rejects_keep_when_all_capability_coverage_
                 {
                     "requirement": "Some tool",
                     "status": "mismatch",
-                    "importance": "required",
+                    "importance": "mandatory",
                     "requirement_type": "capability",
                     "capability_name": "some tool",
                 },
@@ -1393,7 +1393,7 @@ def test_normalize_coverage_includes_importance_field():
     items = [
         {
             "requirement": "Agile delivery",
-            "importance": "required",
+            "importance": "mandatory",
             "status": "supported",
             "capability_name": "agile methodologies",
             "matched_job_text": "agile ceremonies",
@@ -1412,7 +1412,7 @@ def test_normalize_coverage_includes_importance_field():
         items,
         valid_capability_names={"agile methodologies": "Agile Methodologies"},
     )
-    assert result[0]["importance"] == "required"
+    assert result[0]["importance"] == "mandatory"
     assert result[1]["importance"] == "bonus"
 
 
@@ -1420,7 +1420,7 @@ def test_normalize_coverage_supports_eligibility_items():
     items = [
         {
             "requirement": "PV clearance",
-            "importance": "required",
+            "importance": "mandatory",
             "requirement_type": "eligibility",
             "status": "supported",
             "matched_candidate_fact": "PV clearance",
@@ -1448,7 +1448,7 @@ def test_normalize_coverage_converts_invalid_eligibility_match_to_not_shown(monk
     items = [
         {
             "requirement": "Hold PV security clearance",
-            "importance": "required",
+            "importance": "mandatory",
             "requirement_type": "eligibility",
             "status": "supported",
             "matched_candidate_fact": "government environments",
@@ -1511,7 +1511,7 @@ def test_normalize_coverage_converts_invalid_capability_match_to_not_shown(monke
     items = [
         {
             "requirement": "SAP experience",
-            "importance": "required",
+            "importance": "mandatory",
             "requirement_type": "capability",
             "status": "supported",
             "matched_candidate_fact": "finance transformation",
@@ -1551,7 +1551,7 @@ def test_normalize_coverage_recovers_canonical_capability_from_profile_support()
         [
             {
                 "requirement": "Python experience",
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "capability",
                 "status": "supported",
                 "matched_candidate_fact": "",
@@ -1602,7 +1602,7 @@ def test_normalize_coverage_allows_profile_action_for_clear_single_fact():
         [
             {
                 "requirement": "CBAP certification is required.",
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "qualification",
                 "canonical_requirement": "CBAP",
                 "canonical_fact_resolved": True,
@@ -1628,7 +1628,7 @@ def test_normalize_coverage_allows_short_atomic_requirement_echoing_its_own_text
         [
             {
                 "requirement": "Java",
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "capability",
                 "canonical_requirement": "Java",
                 "canonical_fact_resolved": True,
@@ -1686,7 +1686,7 @@ def test_normalize_coverage_blocks_profile_action_when_canonical_fact_resolved_i
         [
             {
                 "requirement": "CBAP certification is required.",
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "qualification",
                 "canonical_requirement": "CBAP",
                 "status": "not_shown",
@@ -1762,7 +1762,7 @@ def test_normalize_coverage_blocks_profile_action_for_single_named_alternative()
         [
             {
                 "requirement": "CBAP or equivalent certification required.",
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "qualification",
                 "canonical_requirement": "CBAP",
                 "named_alternatives": ["CBAP"],
@@ -1787,7 +1787,7 @@ def test_normalize_coverage_keeps_and_joined_requirements_independently_actionab
         [
             {
                 "requirement": "Australian Citizenship is required",
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "eligibility",
                 "canonical_requirement": "Australian Citizenship",
                 "canonical_fact_resolved": True,
@@ -1797,7 +1797,7 @@ def test_normalize_coverage_keeps_and_joined_requirements_independently_actionab
             },
             {
                 "requirement": "NV2 Security Clearance is required",
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "eligibility",
                 "canonical_requirement": "NV2",
                 "canonical_fact_resolved": True,
@@ -1823,7 +1823,7 @@ def test_normalize_coverage_marks_invalid_requirement_type_for_review(monkeypatc
     items = [
         {
             "requirement": "PV clearance",
-            "importance": "required",
+            "importance": "mandatory",
             "requirement_type": "credential",
             "status": "supported",
             "matched_candidate_fact": "PV clearance",
@@ -1870,7 +1870,7 @@ def test_normalize_coverage_reclassifies_experience_wording_as_capability(monkey
         [
             {
                 "requirement": "5+ years supporting client outcomes",
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "eligibility",
                 "status": "supported",
                 "matched_candidate_fact": "",
@@ -1896,7 +1896,7 @@ def test_normalize_coverage_reclassifies_security_clearance_as_eligibility(monke
         [
             {
                 "requirement": "Ability to obtain Baseline security clearance",
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "capability",
                 "status": "supported",
                 "matched_candidate_fact": "",
@@ -1922,7 +1922,7 @@ def test_normalize_coverage_marks_conflicting_classification_uncertain(monkeypat
         [
             {
                 "requirement": "5+ years working in a security clearance environment",
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "capability",
                 "classification_reviewable": True,
                 "status": "supported",
@@ -1945,7 +1945,7 @@ def test_normalize_coverage_preserves_managed_eligibility_subtype_without_extra_
         [
             {
                 "requirement": "Ability to obtain Baseline security clearance",
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "eligibility",
                 "status": "not_shown",
                 "matched_candidate_fact": "",
@@ -1962,7 +1962,7 @@ def test_normalize_coverage_keeps_valid_llm_other_eligibility_subtype():
         [
             {
                 "requirement": "Must satisfy a formal entry condition",
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "eligibility",
                 "requirement_subtype": "other",
                 "status": "not_shown",
@@ -1998,7 +1998,7 @@ def test_normalize_coverage_legacy_payload_is_not_classification_reviewable():
         [
             {
                 "requirement": "Unresolved requirement from an older cached review",
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "capability",
                 "status": "not_shown",
                 "matched_candidate_fact": "",
@@ -2014,7 +2014,7 @@ def test_normalize_coverage_preserves_malformed_required_requirement():
         [
             {
                 "requirement": "Must hold an unfamiliar professional registration",
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "credential",
                 "status": "unexpected_status",
                 "matched_candidate_fact": "",
@@ -2024,7 +2024,7 @@ def test_normalize_coverage_preserves_malformed_required_requirement():
 
     assert len(result) == 1
     assert result[0]["requirement"] == "Must hold an unfamiliar professional registration"
-    assert result[0]["importance"] == "required"
+    assert result[0]["importance"] == "mandatory"
     assert result[0]["requirement_type"] == "invalid"
     assert result[0]["status"] == "invalid"
 
@@ -2050,7 +2050,7 @@ def test_build_requirement_coverage_guidance_includes_key_phrases():
     assert "atomic" in guidance
     assert "Use at most" in guidance
     assert "capability or eligibility" in guidance
-    assert "Do not mark every row required" in guidance
+    assert "Do not mark every row mandatory" in guidance
 
 
 def test_build_fit_review_grade_guidance_includes_key_phrase():
@@ -2252,7 +2252,7 @@ def test_normalize_review_rejects_model_keep_when_derived_grade_is_mismatch():
             "requirement_coverage": [
                 {
                     "requirement": "Must have Salesforce",
-                    "importance": "required",
+                    "importance": "mandatory",
                     "requirement_type": "capability",
                     "status": "mismatch",
                     "matched_candidate_fact": "",
@@ -2324,7 +2324,7 @@ def test_experience_duration_does_not_prove_missing_qualifier(
         [
             {
                 "requirement": requirement,
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "capability",
                 "status": "supported",
                 "matched_candidate_fact": "Business Analysis",
@@ -2367,7 +2367,7 @@ def test_unqualified_business_analyst_duration_remains_supported_from_role_histo
         [
             {
                 "requirement": "5+ years as a Business Analyst",
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "capability",
                 "status": "supported",
                 "matched_candidate_fact": "Business Analysis",
@@ -2405,7 +2405,7 @@ def test_incomplete_decomposition_without_qualifier_keeps_role_history_proof():
         [
             {
                 "requirement": "Functional Business Analysis experience",
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "capability",
                 "status": "supported",
                 "matched_candidate_fact": "Business Analysis",
@@ -2446,7 +2446,7 @@ def test_incomplete_decomposition_with_qualifier_still_forces_not_shown():
         [
             {
                 "requirement": "5 years Business Analysis in health insurance",
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "capability",
                 "status": "supported",
                 "matched_candidate_fact": "Business Analysis",
@@ -2489,7 +2489,7 @@ def test_incomplete_decomposition_with_unresolved_family_still_forces_not_shown(
         [
             {
                 "requirement": "5+ years Python backend development",
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "capability",
                 "status": "supported",
                 "matched_candidate_fact": "Python",
@@ -2523,7 +2523,7 @@ def test_experience_qualifier_evidence_preserves_a_legitimate_partial_match():
         [
             {
                 "requirement": "5+ years as a Business Analyst within telecommunications",
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "capability",
                 "status": "supported",
                 "matched_candidate_fact": "Business Analysis",
@@ -2571,7 +2571,7 @@ def test_experience_qualifier_explicit_profile_support_preserves_a_full_match():
         [
             {
                 "requirement": requirement,
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "capability",
                 "status": "supported",
                 "matched_candidate_fact": "Business Analysis",
@@ -2614,7 +2614,7 @@ def test_experience_qualifier_support_requires_explicit_profile_evidence():
         [
             {
                 "requirement": requirement,
-                "importance": "required",
+                "importance": "mandatory",
                 "requirement_type": "capability",
                 "status": "supported",
                 "matched_candidate_fact": "Business Analysis",

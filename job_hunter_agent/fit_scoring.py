@@ -66,8 +66,8 @@ LLM_REVIEW_INCOMPLETE_LABEL = "LLM review incomplete"
 # title-casing the raw enum values — otherwise the same status shows up as two
 # different phrases depending on which view you're looking at.
 _AUDIT_IMPORTANCE_LABEL_KEYS = {
-    "required": "importance_required",
-    "expected": "importance_expected",
+    "mandatory": "importance_mandatory",
+    "strongly_preferred": "importance_strongly_preferred",
     "preferred": "importance_preferred",
     "bonus": "importance_bonus",
 }
@@ -271,7 +271,7 @@ def eligibility_gate_diagnostics(record: dict, profile: Optional[dict] = None) -
             continue
         if str(item.get("requirement_type") or "").strip().lower() not in {"eligibility", "qualification"}:
             continue
-        if str(item.get("importance") or "").strip().lower() != "required":
+        if str(item.get("importance") or "").strip().lower() != "mandatory":
             continue
         relevant_rows.append(item)
 
@@ -279,7 +279,7 @@ def eligibility_gate_diagnostics(record: dict, profile: Optional[dict] = None) -
         return {
             "status": ELIGIBILITY_GATE_NOT_APPLICABLE,
             "label": "Not applicable",
-            "reason": "No required eligibility requirements were returned.",
+            "reason": "No mandatory eligibility requirements were returned.",
         }
 
     unresolved = 0
@@ -446,6 +446,47 @@ def requirement_fit_audit_rows(record: dict, profile: Optional[dict] = None) -> 
     return rows
 
 
+
+def _role_defining_gap_caps(coverage: list[dict], scoring_rules: dict) -> list[dict[str, Any]]:
+    """Return configured specialist-gap caps from reviewed coverage.
+
+    The LLM owns only the semantic role-defining labels. Numeric thresholds and
+    caps remain server-managed scoring policy.
+    """
+    role_gap_rules = scoring_rules.get("role_defining_gap_control", {})
+    if not isinstance(role_gap_rules, dict):
+        return []
+    min_group_requirements = int(role_gap_rules.get("min_group_requirements") or 0)
+    uncovered_ratio_threshold = float(role_gap_rules.get("uncovered_ratio_threshold") or 1.0)
+    max_score_when_uncovered = int(role_gap_rules.get("max_score_when_uncovered") or 100)
+    groups: dict[str, list[dict]] = {}
+    for item in coverage:
+        if not isinstance(item, dict) or not item.get("role_defining"):
+            continue
+        group = compact_whitespace(str(item.get("role_defining_group") or "")).lower()
+        if group:
+            groups.setdefault(group, []).append(item)
+
+    caps: list[dict[str, Any]] = []
+    for group, group_rows in groups.items():
+        if len(group_rows) < min_group_requirements:
+            continue
+        uncovered = [
+            item for item in group_rows
+            if str(item.get("status") or "").strip().lower()
+            not in {"supported", "partially_supported"}
+        ]
+        uncovered_ratio = len(uncovered) / len(group_rows)
+        if uncovered_ratio >= uncovered_ratio_threshold:
+            caps.append({
+                "group": group,
+                "requirements": len(group_rows),
+                "uncovered": len(uncovered),
+                "uncovered_ratio": uncovered_ratio,
+                "score_cap": max_score_when_uncovered,
+            })
+    return caps
+
 def requirement_fit_diagnostics(record: dict, profile: Optional[dict] = None) -> dict[str, Any]:
     """Return shared requirement-fit diagnostics for logs and debug UI.
 
@@ -464,35 +505,11 @@ def requirement_fit_diagnostics(record: dict, profile: Optional[dict] = None) ->
         else 0
     )
 
-    role_gap_rules = scoring_rules.get("role_defining_gap_control", {})
-    if not isinstance(role_gap_rules, dict):
-        role_gap_rules = {}
-    min_group_requirements = int(role_gap_rules.get("min_group_requirements") or 0)
-    uncovered_ratio_threshold = float(role_gap_rules.get("uncovered_ratio_threshold") or 1.0)
-    max_score_when_uncovered = int(role_gap_rules.get("max_score_when_uncovered") or 100)
-    role_groups: dict[str, list[dict[str, Any]]] = {}
-    for row in rows:
-        group = compact_whitespace(str(row.get("role_defining_group") or "")).lower()
-        if row.get("role_defining") and group:
-            role_groups.setdefault(group, []).append(row)
-    role_defining_caps: list[dict[str, Any]] = []
-    for group, group_rows in role_groups.items():
-        if len(group_rows) < min_group_requirements:
-            continue
-        uncovered = [
-            row for row in group_rows
-            if str(row.get("status") or "").lower() not in {"supported", "partially_supported"}
-        ]
-        uncovered_ratio = len(uncovered) / len(group_rows)
-        if uncovered_ratio >= uncovered_ratio_threshold:
-            final_requirement_fit = min(final_requirement_fit, max_score_when_uncovered)
-            role_defining_caps.append({
-                "group": group,
-                "requirements": len(group_rows),
-                "uncovered": len(uncovered),
-                "uncovered_ratio": uncovered_ratio,
-                "score_cap": max_score_when_uncovered,
-            })
+    role_defining_caps = _role_defining_gap_caps(
+        record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or [], scoring_rules
+    )
+    for cap in role_defining_caps:
+        final_requirement_fit = min(final_requirement_fit, int(cap["score_cap"]))
 
     detailed_rows: list[dict[str, Any]] = []
     for row in rows:
@@ -694,8 +711,8 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
         "mismatch": 0,
         "unknown": 0,
     }
-    required_gaps: list[str] = []
-    weak_required: list[str] = []
+    mandatory_gaps: list[str] = []
+    weak_mandatory: list[str] = []
     uncertain_count = 0
 
     for item in coverage:
@@ -720,13 +737,13 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
 
         if status in {"not_shown", "not shown"}:
             counts["not_shown"] += 1
-            if importance == "required":
-                required_gaps.append(requirement)
+            if importance == "mandatory":
+                mandatory_gaps.append(requirement)
             continue
         if status == "mismatch":
             counts["mismatch"] += 1
-            if importance == "required":
-                required_gaps.append(requirement)
+            if importance == "mandatory":
+                mandatory_gaps.append(requirement)
             continue
         if status not in {"supported", "partially_supported"}:
             counts["unknown"] += 1
@@ -736,8 +753,8 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
                 item,
                 "Requirement was not marked as supported or partially_supported, so scoring treated it as not covered and needs review.",
             )
-            if importance == "required":
-                required_gaps.append(requirement)
+            if importance == "mandatory":
+                mandatory_gaps.append(requirement)
             continue
         if requirement_type not in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES:
             counts["unknown"] += 1
@@ -747,8 +764,8 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
                 item,
                 "Requirement was marked with an invalid requirement type and needs review before scoring can treat it as covered.",
             )
-            if importance == "required":
-                required_gaps.append(requirement)
+            if importance == "mandatory":
+                mandatory_gaps.append(requirement)
             continue
 
         if requirement_type in {"eligibility", "qualification"}:
@@ -762,13 +779,13 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
                     item,
                     "Requirement was marked as covered but the mapped candidate eligibility fact is missing or cannot be resolved.",
                 )
-                if importance == "required":
-                    required_gaps.append(requirement)
+                if importance == "mandatory":
+                    mandatory_gaps.append(requirement)
                 continue
             if not known_levels.get(eligibility_key, False):
                 counts["mismatch"] += 1
-                if importance == "required":
-                    required_gaps.append(requirement)
+                if importance == "mandatory":
+                    mandatory_gaps.append(requirement)
                 continue
             counts["eligibility"] += 1
             continue
@@ -783,8 +800,8 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
                 item,
                 "Requirement was marked as covered but the mapped candidate capability is missing or cannot be resolved.",
             )
-            if importance == "required":
-                required_gaps.append(requirement)
+            if importance == "mandatory":
+                mandatory_gaps.append(requirement)
             continue
 
         credit = capability_credits[level] * float(status_weights[status])
@@ -793,10 +810,13 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
         counts[bucket] += 1
         if status == "partially_supported":
             counts["partial"] += 1
-        if importance == "required" and level in {"basic", "low", "limited_depth"}:
-            weak_required.append(requirement)
+        if importance == "mandatory" and level in {"basic", "low", "limited_depth"}:
+            weak_mandatory.append(requirement)
 
     percent = round((earned_weight / total_weight) * 100) if total_weight > 0 else 0
+    role_defining_caps = _role_defining_gap_caps(coverage, scoring_rules)
+    for cap in role_defining_caps:
+        percent = min(percent, int(cap["score_cap"]))
     label_parts = [
         f"Requirement Fit: {percent}%",
         f"strong {counts['strong']}",
@@ -812,18 +832,29 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
         label_parts.append(f"needs review {counts['unknown']}")
 
     entries = [{"label": " | ".join(label_parts), "value": int(percent), "section": "requirement_fit"}]
-    for requirement in required_gaps[:3]:
+    for cap in role_defining_caps:
         entries.append(
             {
-                "label": f"Required gap: {requirement}",
+                "label": (
+                    f"Role-defining gap cap: {cap['group']} "
+                    f"({cap['uncovered']}/{cap['requirements']} uncovered)"
+                ),
                 "value": 0,
                 "section": "requirement_fit_warning",
             }
         )
-    for requirement in weak_required[:3]:
+    for requirement in mandatory_gaps[:3]:
         entries.append(
             {
-                "label": f"Required weak coverage: {requirement}",
+                "label": f"Mandatory gap: {requirement}",
+                "value": 0,
+                "section": "requirement_fit_warning",
+            }
+        )
+    for requirement in weak_mandatory[:3]:
+        entries.append(
+            {
+                "label": f"Mandatory weak coverage: {requirement}",
                 "value": 0,
                 "section": "requirement_fit_warning",
             }

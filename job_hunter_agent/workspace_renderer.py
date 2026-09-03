@@ -698,7 +698,7 @@ def _humanize_check_item(text: str) -> str:
         or "required but not shown" in lower
         or "appears required" in lower
         or lower.startswith("critical missing requirement")
-        or lower.startswith("missing required requirement")
+        or lower.startswith("missing mandatory requirement")
     ):
         requirement_warning = _humanize_missing_requirement_warning(text)
         if requirement_warning:
@@ -720,7 +720,7 @@ def _humanize_requirement_label(text: str) -> str:
         return ""
 
     cleaned = re.sub(
-        r"^(critical missing requirement|missing required requirement)\s*:\s*",
+        r"^(critical missing requirement|missing mandatory requirement)\s*:\s*",
         "",
         cleaned,
         flags=re.IGNORECASE,
@@ -753,7 +753,7 @@ def _humanize_missing_requirement_warning(text: str) -> str:
     requirement = _humanize_requirement_label(text)
     if not requirement:
         return ""
-    return f"Missing required requirement: {requirement}"
+    return f"Missing mandatory requirement: {requirement}"
 
 
 def _build_checks_before_applying_items(
@@ -1759,16 +1759,16 @@ def render_job_card(
     # showing the same requirements twice with different text.
     has_coverage = len(coverage_rows) > 0
     importance_label_keys = {
-        "required": "importance_required",
-        "expected": "importance_expected",
+        "mandatory": "importance_mandatory",
+        "strongly_preferred": "importance_strongly_preferred",
         "preferred": "importance_preferred",
         "bonus": "importance_bonus",
     }
     # Ordering only (not display text) — keeps each importance tier visually
     # clustered within a requirement group instead of merging preferred tiers.
     importance_sort_buckets = {
-        "required": 0,
-        "expected": 1,
+        "mandatory": 0,
+        "strongly_preferred": 1,
         "preferred": 2,
         "bonus": 3,
     }
@@ -1814,7 +1814,7 @@ def render_job_card(
             return "mismatch"
         if coverage_status == "invalid":
             return "invalid"
-        if coverage_status == "not_shown" and importance == "required":
+        if coverage_status == "not_shown" and importance == "mandatory":
             return "required-not-shown"
         if coverage_status == "not_shown":
             return "not-shown"

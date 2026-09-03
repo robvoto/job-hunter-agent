@@ -21,7 +21,7 @@ def _coverage_item(**overrides):
         "requirement": "Salesforce experience",
         "requirement_type": "capability",
         "canonical_requirement": "Salesforce",
-        "importance": "required",
+        "importance": "mandatory",
         "matched_job_text": "Salesforce experience",
         "profile_action_allowed": True,
     }
@@ -38,7 +38,7 @@ def test_resolves_valid_required_capability():
     assert result["reason_code"] == CUSTOM_BLOCKER_REASON_RESOLVED
     assert result["canonical_requirement"] == "Salesforce"
     assert result["requirement_type"] == "capability"
-    assert result["importance"] == "required"
+    assert result["importance"] == "mandatory"
 
 
 def test_resolves_valid_required_eligibility():
@@ -96,13 +96,13 @@ def test_rejects_nonsense_term():
 
 
 def test_rejects_expected_importance_requirement():
-    coverage = [_coverage_item(importance="expected")]
+    coverage = [_coverage_item(importance="strongly_preferred")]
 
     result = resolve_custom_blocker("Salesforce", coverage)
 
     assert result["ok"] is False
     assert result["reason_code"] == CUSTOM_BLOCKER_REASON_NOT_REQUIRED
-    assert result["importance"] == "expected"
+    assert result["importance"] == "strongly_preferred"
 
 
 def test_rejects_preferred_importance_requirement():

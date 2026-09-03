@@ -267,7 +267,7 @@ def test_real_llm_does_not_explode_named_alternatives_list_into_separate_rows(mo
     )
     row = matching_rows[0]
     assert row["requirement_type"] == "qualification"
-    assert row["importance"] != "required"
+    assert row["importance"] != "mandatory"
     # The model may still produce a display label for the group (e.g. an
     # invented "Agile Certification" summary) — that alone is not the safety
     # invariant. What must always hold is that a vague group with more than

@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 123,
+  "version": 124,
   "updated_at": "2026-09-03",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -560,8 +560,6 @@
     "coverage_status_classification_review": "Needs classification/review",
     "coverage_status_mismatch": "Not in profile",
     "coverage_status_invalid": "Needs review",
-    "importance_required": "Required",
-    "importance_expected": "Expected",
     "importance_preferred": "Preferred",
     "importance_bonus": "Bonus",
     "title_block_button_label": "Hide similar titles",
@@ -634,7 +632,9 @@
     "custom_blocker_debug_matched_evidence_label": "Matched job evidence",
     "custom_blocker_debug_validation_result_label": "Validation result",
     "custom_blocker_debug_profile_field_label": "Profile field",
-    "custom_blocker_debug_persisted_value_label": "Exact persisted value"
+    "custom_blocker_debug_persisted_value_label": "Exact persisted value",
+    "importance_mandatory": "Mandatory",
+    "importance_strongly_preferred": "Strongly Preferred"
   },
   "workspace_page_labels_description": "Labels for the main workspace page (results.html).",
   "workspace_page_labels": {
@@ -710,7 +710,7 @@
     "run_efficiency_intro": "Search targets this run: ",
     "run_efficiency_separator": ". ",
     "how_match_levels_work_summary": "How scoring works",
-    "how_match_levels_work_copy": "Job Hunter compares each job's requirements with evidence in your profile. Required requirements and stronger evidence carry more weight. Missing, partial, or weak required requirements lower the result, which is then grouped into the match level shown on the card. Location, posted date, viewed status, and Easy or Quick Apply help you review jobs, but they do not prove fit.",
+    "how_match_levels_work_copy": "Job Hunter compares each job's requirements with evidence in your profile. Mandatory requirements and stronger evidence carry more weight. Missing, partial, or weak mandatory requirements lower the result, which is then grouped into the match level shown on the card. Location, posted date, viewed status, and Easy or Quick Apply help you review jobs, but they do not prove fit.",
     "rejection_panel_title": "Why isn't this a fit for you?",
     "rejection_panel_copy": "Choose required terms you do not want the app to accept again.",
     "rejection_how_this_works_summary": "How this works",
