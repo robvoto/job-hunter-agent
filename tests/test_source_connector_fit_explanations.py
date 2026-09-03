@@ -2727,7 +2727,7 @@ def test_candidate_application_history_renders_expanded_details_section():
                 "_company_match_reason": "Company token-overlap match",
                 "llm_evidence": "Thank you for your recent application for the Technical Analyst role within MUFG Pension & Market Services. "
                 "We appreciate your interest in the position and have completed our review. "
-                "This is a longer note so the workspace should trim it instead of showing the full text twice.",
+                "This is a longer note so the workspace should show it in full without truncating.",
                 "llm_review_reason": "Company mismatch needs a manual check.",
             },
         },
@@ -2739,10 +2739,14 @@ def test_candidate_application_history_renders_expanded_details_section():
     assert "MUFG Pension &amp; Market Services — 7 May 2026" in html
     assert "5/7/2026 18:37:57" not in html
     assert "Role: Technical Analyst" in html
-    assert "Confidence: high" in html
-    assert "Company match confidence: medium" in html
-    assert "Company match reason: Company token-overlap match" in html
+    # Classification / company-match confidence values are no longer rendered.
+    assert "Confidence: high" not in html
+    assert "Company match confidence" not in html
+    assert "Company match reason" not in html
+    # Evidence shows in full, no truncation.
     assert "Evidence: Thank you for your recent application" in html
+    assert "show it in full without truncating." in html
+    assert "..." not in html.split("Evidence:")[1].split("</li>")[0]
     assert "Review reason: Company mismatch needs a manual check." in html
 
     risk_start = html.index('<details class="job-insights job-risk-panel">')
@@ -2752,7 +2756,7 @@ def test_candidate_application_history_renders_expanded_details_section():
     assert '<details class="job-candidate-history">' not in html
 
 
-def test_candidate_application_history_diagnostics_are_debug_only():
+def test_candidate_application_history_review_reason_is_debug_only():
     record = {
         "job_key": "test-candidate-history-diagnostics",
         "title": "Technical Analyst",
@@ -2788,14 +2792,19 @@ def test_candidate_application_history_diagnostics_are_debug_only():
 
     assert "Role: Technical Analyst" in normal_html
     assert "Evidence: We regret to inform you" in normal_html
-    for diagnostic in (
+
+    # Classification / company-match confidence values are never rendered.
+    for dropped in (
         "Confidence: high",
         "Company match confidence: medium",
         "Company match reason: Company token-overlap match",
-        "Review reason: Needs manual review",
     ):
-        assert diagnostic not in normal_html
-        assert diagnostic in debug_html
+        assert dropped not in normal_html
+        assert dropped not in debug_html
+
+    # The review reason stays debug-only.
+    assert "Review reason: Needs manual review" not in normal_html
+    assert "Review reason: Needs manual review" in debug_html
 
 
 def test_candidate_application_history_renders_escaped_values_safely():

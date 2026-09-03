@@ -79,10 +79,9 @@ When a rejection history match exists, the expanded `<details>` section shows:
 1. Company — Date (most prominent)
 2. Role (only if non-empty)
 3. Evidence (full text, no truncation)
-4. Confidence
-5. Review reason (only if flagged)
+4. Review reason (only if flagged; debug mode only)
 
-The badge ("Rejected before" / "Possible previous application") is determined by status + confidence. The expanded section must not repeat the status label.
+The badge ("Rejected before" / "Possible previous application") is determined by status + confidence. The expanded section must not repeat the status label. The LLM classification confidence and the company-match confidence/reason diagnostics are intentionally not rendered anywhere — they were noise even in debug. The matcher still records them on the record (`_match_confidence`, `_company_match_reason`) for other consumers.
 
 ## Validation
 - Check the rendered page or smallest relevant browser/template path.
