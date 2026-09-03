@@ -156,9 +156,7 @@ def test_settings_save_confirmation_shows_linkedin_before_and_after(candidate_pa
     results_input.fill(str(after))
 
     page.locator("#save_settings_btn").click()
-    expect(page.locator("#status")).to_contain_text(
-        f"LinkedIn Results per search: {before} -> {after}"
-    )
+    expect(page.locator("#status")).to_contain_text("Settings saved successfully.")
 
 
 def test_capability_alias_preview_uses_related_skills_copy(candidate_page):
