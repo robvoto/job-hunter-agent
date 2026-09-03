@@ -373,8 +373,10 @@
   color: var(--text-primary);
   font-size: 1.02rem;
   line-height: 1.55;
-  /* Keep the collapsed teaser at least two lines tall so wide cards don't
-     shrink it to a single row. */
+  /* Cap the line length to a readable measure so the teaser wraps onto
+     multiple rows instead of stretching to a single line on wide cards,
+     and hold a two-line floor for very short summaries. */
+  max-width: 78ch;
   min-height: 3.1em;
 }
 
