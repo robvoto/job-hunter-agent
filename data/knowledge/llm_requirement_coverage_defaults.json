@@ -1,7 +1,7 @@
 {
   "kind": "system_config",
   "name": "llm_requirement_coverage_defaults",
-  "version": 22,
+  "version": 23,
   "updated_at": "2026-09-03",
   "description": "Managed default guidance for LLM requirement coverage decomposition behaviour.",
   "lines": [
@@ -42,6 +42,6 @@
     "A supported or partially_supported match must prove at least one substantive element stated in the requirement itself. Return those exact job-requirement fragments in covered_requirement_elements.",
     "If the profile only shows a broad parent capability but does not show the defining domain, technology, activity, qualification, methodology, or responsibility, use not_shown and leave matched_candidate_fact empty.",
     "Examples of invalid partial matches: agile delivery does not prove investment appraisal or ROI; general business analysis does not prove banking experience; policy interpretation does not prove complaints, fraud, or case-management experience.",
-    "Set role_defining=true when a requirement or related group distinguishes the actual specialist nature of the role from generic duties of the occupation. Use the same short role_defining_group label for related specialist requirements. Do not mark routine generic duties as role-defining."
+    "Set role_defining=true ONLY for specialist domain, platform, profession, or subject-matter requirements that distinguish this role from routine generic duties of its occupation. Mandatory generic duties such as stakeholder engagement, requirements elicitation, process mapping, agile delivery, generic reporting, or generic data analysis are NOT role-defining by themselves. All requirements that belong to the same specialist focus MUST use exactly the same short role_defining_group label, even when one is a domain capability and another is a specialist platform. Do not create separate role_defining_group labels for closely related facets of one specialization."
   ]
 }

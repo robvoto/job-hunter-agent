@@ -106,60 +106,6 @@ def test_init_is_idempotent(tmp_db):
     assert EXPECTED_TABLES.issubset(get_table_names(tmp_db))
 
 
-def test_init_migrates_stored_requirement_importance_values_once(tmp_path):
-    db = tmp_path / "legacy-results.db"
-    init_db(db)
-    with db_conn(db) as conn:
-        conn.execute("INSERT INTO users (user_id) VALUES (?)", ("u1",))
-        conn.execute(
-            """
-            INSERT INTO job_history (user_id, job_key, source, platform_id, data)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (
-                "u1",
-                "seek:1",
-                "seek",
-                "1",
-                json.dumps(
-                    {
-                        "last_kept_snapshot": {
-                            "requirement_coverage": [
-                                {"importance": "mandatory"},
-                                {"importance": "strongly_preferred"},
-                                {"importance": "preferred"},
-                                {"importance": "nice_to_have"},
-                            ]
-                        }
-                    }
-                ),
-            ),
-        )
-        conn.execute(
-            "DELETE FROM schema_migrations WHERE name = ?",
-            ("requirement_importance_terminology_v1",),
-        )
-
-    init_db(db)
-
-    with db_conn(db) as conn:
-        migrated = json.loads(
-            conn.execute(
-                "SELECT data FROM job_history WHERE user_id = ? AND job_key = ?",
-                ("u1", "seek:1"),
-            ).fetchone()[0]
-        )
-        importances = [
-            item["importance"]
-            for item in migrated["last_kept_snapshot"]["requirement_coverage"]
-        ]
-        assert importances == ["mandatory", "strongly_preferred", "preferred", "bonus"]
-        assert conn.execute(
-            "SELECT COUNT(*) FROM schema_migrations WHERE name = ?",
-            ("requirement_importance_terminology_v1",),
-        ).fetchone()[0] == 1
-
-
 def test_wal_mode_enabled(tmp_db):
     conn = get_connection(tmp_db)
     row = conn.execute("PRAGMA journal_mode").fetchone()

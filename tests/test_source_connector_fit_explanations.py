@@ -4700,7 +4700,7 @@ def test_no_add_to_profile_link_for_unresolved_required_alternatives_list():
     )
 
     assert "One of CBAP, CCBA, or an equivalent BA certification is required." in html
-    assert "job-requirement-item--required-not-shown" in html
+    assert "job-requirement-item--mandatory-not-shown" in html
     assert "req-add-to-profile" not in html
     assert "prefill_qualification=" not in html
 

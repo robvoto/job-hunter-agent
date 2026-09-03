@@ -765,8 +765,8 @@
   background: color-mix(in srgb, var(--state-warning-bg) 40%, transparent);
 }
 
-/* required + not_shown: same red urgency as mismatch — user needs to review this gap */
-.job-requirement-item--required-not-shown {
+/* mandatory + not_shown: same red urgency as mismatch — user needs to review this gap */
+.job-requirement-item--mandatory-not-shown {
   background: color-mix(in srgb, var(--state-error-bg) 40%, transparent);
 }
 

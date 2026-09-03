@@ -288,6 +288,7 @@ def _load_default_scoring_rules() -> dict[str, Any]:
         "deterministic_review_thresholds": dict(
             payload.get("deterministic_review_thresholds") or {}
         ),
+        "role_defining_gap_control": dict(payload.get("role_defining_gap_control") or {}),
         "work_mode": dict(payload.get("work_mode") or {}),
         "salary": dict(payload.get("salary") or {}),
         "location": dict(payload.get("location") or {}),

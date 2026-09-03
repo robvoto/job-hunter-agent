@@ -293,90 +293,7 @@ CREATE INDEX IF NOT EXISTS idx_system_warnings_category
     ON system_warnings(category);
 """
 
-_REQUIREMENT_IMPORTANCE_MIGRATION = "requirement_importance_terminology_v1"
 _USER_ACCESS_REQUEST_MIGRATION = "user_access_request_state_v1"
-_REQUIREMENT_IMPORTANCE_RENAMES = {
-    "mandatory": "required",
-    "strongly_preferred": "expected",
-    "nice_to_have": "bonus",
-}
-_JSON_DATA_TABLES = (
-    "knowledge",
-    "user_profile",
-    "user_settings",
-    "job_history",
-    "review_data",
-    "run_stats",
-    "audit_records",
-    "workspace_pool",
-    "profile_documents",
-    "candidate_application_history",
-    "agent_state",
-)
-
-
-def _rename_requirement_importances(value):
-    changed = False
-    if isinstance(value, dict):
-        renamed = {}
-        for key, item in value.items():
-            if key == "importance" and item in _REQUIREMENT_IMPORTANCE_RENAMES:
-                item = _REQUIREMENT_IMPORTANCE_RENAMES[item]
-                changed = True
-            item, item_changed = _rename_requirement_importances(item)
-            changed = changed or item_changed
-            renamed[key] = item
-        return renamed, changed
-    if isinstance(value, list):
-        renamed = []
-        for item in value:
-            item, item_changed = _rename_requirement_importances(item)
-            changed = changed or item_changed
-            renamed.append(item)
-        return renamed, changed
-    return value, False
-
-
-def _apply_requirement_importance_migration(conn: sqlite3.Connection) -> None:
-    """Rename stored requirement importance values once, before new readers run."""
-
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS schema_migrations (
-            name       TEXT PRIMARY KEY,
-            applied_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )
-        """
-    )
-    already_applied = conn.execute(
-        "SELECT 1 FROM schema_migrations WHERE name = ?",
-        (_REQUIREMENT_IMPORTANCE_MIGRATION,),
-    ).fetchone()
-    if already_applied:
-        return
-
-    tables = {
-        row[0]
-        for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
-    }
-    for table in _JSON_DATA_TABLES:
-        if table not in tables:
-            continue
-        for row in conn.execute(
-            f"SELECT rowid, data FROM {table} WHERE data IS NOT NULL"
-        ).fetchall():
-            payload = json.loads(row[1])
-            migrated_payload, changed = _rename_requirement_importances(payload)
-            if changed:
-                conn.execute(
-                    f"UPDATE {table} SET data = ? WHERE rowid = ?",
-                    (json.dumps(migrated_payload, ensure_ascii=False), row[0]),
-                )
-    conn.execute(
-        "INSERT INTO schema_migrations (name) VALUES (?)",
-        (_REQUIREMENT_IMPORTANCE_MIGRATION,),
-    )
-
 
 def _apply_user_access_request_migration(conn: sqlite3.Connection) -> None:
     """Convert legacy auto-pending users to verified exactly once.
@@ -479,7 +396,6 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
                 (USER_ACCESS_APPROVED, admin_email),
             )
     _apply_user_access_request_migration(conn)
-    _apply_requirement_importance_migration(conn)
 
 
 def init_db(db_path: Path | None = None) -> None:

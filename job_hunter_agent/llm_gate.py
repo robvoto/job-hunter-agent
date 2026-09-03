@@ -875,7 +875,7 @@ def build_profile_storage_resolution_guidance() -> str:
 # Shared cache namespace/profile lifecycle. Fit review and title judgement each
 # have their own contract version so changing one does not invalidate the other.
 LLM_CACHE_SCHEMA_VERSION = 3
-FIT_REVIEW_CACHE_CONTRACT_VERSION = 4
+FIT_REVIEW_CACHE_CONTRACT_VERSION = 5
 TITLE_JUDGMENT_CACHE_CONTRACT_VERSION = 1
 POSTING_CHANNEL_LLM_CACHE_CONTRACT_VERSION = 1
 

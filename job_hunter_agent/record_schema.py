@@ -81,7 +81,7 @@ RECORD_REQUIREMENT_COVERAGE_KEY = "requirement_coverage"
 RECORD_REQUIREMENT_COVERAGE_VERSION_KEY = "requirement_coverage_contract_version"
 # Bump when requirement-coverage semantics change in a way that makes persisted
 # coverage unsafe to reuse without a fresh LLM fit review.
-REQUIREMENT_COVERAGE_CONTRACT_VERSION = 1
+REQUIREMENT_COVERAGE_CONTRACT_VERSION = 2
 RECORD_OCCUPATION_ALIGNMENT_KEY = "occupation_alignment"
 RECORD_OCCUPATION_ALIGNMENT_REASON_KEY = "occupation_alignment_reason"
 RECORD_DESCRIPTION_COMPACTION_KEY = "description_compaction"

@@ -895,7 +895,7 @@ def render_custom_blocker_preview(resolution: dict, debug_mode: bool = False) ->
         save_as_label = _workspace_label("workspace_card_labels", "custom_blocker_preview_save_as_label")
         parts.append(f'<div class="custom-blocker-preview-name">{safe_html(canonical_requirement)}</div>')
         parts.append(
-            f'<span class="jh-badge job-req-importance job-req-importance--{safe_html(importance)}">'
+            f'<span class="jh-badge job-req-importance job-req-importance--{safe_html(importance.replace("_", "-"))}">'
             f"{safe_html(heading)}</span>"
         )
         parts.append(f'<div class="custom-blocker-preview-save-as">{safe_html(save_as_label)}</div>')
@@ -1815,7 +1815,7 @@ def render_job_card(
         if coverage_status == "invalid":
             return "invalid"
         if coverage_status == "not_shown" and importance == "mandatory":
-            return "required-not-shown"
+            return "mandatory-not-shown"
         if coverage_status == "not_shown":
             return "not-shown"
         return "unknown"
@@ -1915,7 +1915,7 @@ def render_job_card(
         if canonical_requirement and row.get("profile_action_allowed") and css_modifier in (
             "mismatch",
             "not-shown",
-            "required-not-shown",
+            "mandatory-not-shown",
             "unknown",
             "invalid",
         ) and not is_uncertain_classification:
