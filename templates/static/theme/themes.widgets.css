@@ -306,6 +306,18 @@
   color: var(--state-info-text);
 }
 
+.jh-button.is-working::before {
+  content: "";
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  animation: workingSpin 0.9s linear infinite;
+  opacity: 0.55;
+}
+
 .jh-message-banner.is-info {
   background: color-mix(in srgb, var(--state-info-bg) 12%, var(--bg-surface));
   border-color: var(--state-info-border);

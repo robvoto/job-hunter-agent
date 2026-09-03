@@ -2890,7 +2890,7 @@ class _FakeProfileStorageClient:
         return self._Responses(self._parsed)
 
 
-def test_llm_resolve_profile_storage_uses_profile_storage_purpose_model_override(monkeypatch):
+def test_llm_resolve_profile_storage_logs_request_and_timing(monkeypatch, caplog):
     calls = []
 
     class _Parsed:
@@ -2916,6 +2916,7 @@ def test_llm_resolve_profile_storage_uses_profile_storage_purpose_model_override
         "_log_llm_model_once",
         lambda: (_ for _ in ()).throw(AssertionError("account model fallback must not be used")),
     )
+    caplog.set_level("DEBUG", logger="job_hunter_agent.llm_gate")
 
     result = llm_gate.llm_resolve_profile_storage(
         {
@@ -2930,6 +2931,8 @@ def test_llm_resolve_profile_storage_uses_profile_storage_purpose_model_override
 
     assert result == {"resolution": "new", "profile_target": "Java"}
     assert calls[0]["model"] == "gpt-5.6-luna"
+    assert "[LLM][REQUEST] purpose=profile_storage_resolution" in caplog.text
+    assert "[LLM][TIMING] purpose=profile_storage_resolution" in caplog.text
 
 
 def test_llm_resolve_profile_storage_returns_validated_existing_resolution(monkeypatch):

@@ -13,6 +13,7 @@ import os
 import re
 import sys
 import threading
+import time
 from typing import Any, Dict
 
 from openai import APIStatusError, APITimeoutError, OpenAI
@@ -2712,10 +2713,21 @@ def llm_resolve_profile_storage(
         "canonical_hint": canonical_hint,
         "existing_profile_items": _profile_storage_items(profile, requirement_type),
     }
+    guidance = build_profile_storage_resolution_guidance()
     model = (
         benchmark_model
         or get_llm_model_override_for_purpose("profile_storage_resolution")
         or _log_llm_model_once()
+    )
+    request_started = time.perf_counter()
+    logger.debug(
+        "[LLM][REQUEST] purpose=profile_storage_resolution model=%s requirement_type=%s "
+        "input_chars=%d profile_items=%d max_output_tokens=%d",
+        model,
+        requirement_type,
+        len(guidance) + len(_json_mod.dumps(payload, ensure_ascii=False)),
+        len(payload["existing_profile_items"]),
+        get_llm_capability_naming_max_output_tokens(),
     )
     try:
         resp = active_client.responses.parse(
@@ -2723,7 +2735,7 @@ def llm_resolve_profile_storage(
             input=[
                 {
                     "role": "system",
-                    "content": build_profile_storage_resolution_guidance(),
+                    "content": guidance,
                 },
                 {
                     "role": "user",
@@ -2755,6 +2767,12 @@ def llm_resolve_profile_storage(
             purpose="profile_storage_resolution",
             model=model,
         ) from exc
+    finally:
+        logger.debug(
+            "[LLM][TIMING] purpose=profile_storage_resolution model=%s duration_ms=%.0f",
+            model,
+            (time.perf_counter() - request_started) * 1000,
+        )
 
     parsed = getattr(resp, "output_parsed", None)
     if parsed is None:

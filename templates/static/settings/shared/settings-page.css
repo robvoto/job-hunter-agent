@@ -596,9 +596,6 @@
       align-items: center;
       justify-content: space-between;
     }
-    @keyframes workingSpin {
-      to { transform: rotate(360deg); }
-    }
     .status-pill {
       display: inline-flex;
       align-items: center;
@@ -611,8 +608,7 @@
       color: var(--text-muted);
     }
     .status-pill.running::before,
-    .inline-status.loading::before,
-    button.is-working::before {
+    .inline-status.loading::before {
       content: "";
       width: 13px;
       height: 13px;
@@ -622,7 +618,6 @@
       animation: workingSpin 0.9s linear infinite;
       flex: 0 0 auto;
       opacity: 0.55;
-      margin-right: 8px;
     }
     .status-pill.running { background: var(--state-success-bg); border-color: var(--state-success-border); color: var(--state-success-text); }
     .status-pill.idle { background: var(--state-neutral-bg); border-color: var(--state-neutral-border); color: var(--state-neutral-text); }
