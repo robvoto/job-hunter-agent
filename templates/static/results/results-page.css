@@ -373,6 +373,9 @@
   color: var(--text-primary);
   font-size: 1.02rem;
   line-height: 1.55;
+  /* Keep the collapsed teaser at least two lines tall so wide cards don't
+     shrink it to a single row. */
+  min-height: 3.1em;
 }
 
 .job-summary-expand {
