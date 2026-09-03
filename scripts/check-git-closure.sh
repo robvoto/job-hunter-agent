@@ -55,7 +55,7 @@ if $strict_repo; then
   while IFS= read -r merged_branch; do
     [[ -z "$merged_branch" ]] && continue
     case "$merged_branch" in
-      main|rescue/*) continue ;;
+      main) continue ;;
     esac
     echo "FAIL: merged local branch still exists: $merged_branch" >&2
     fail=1
