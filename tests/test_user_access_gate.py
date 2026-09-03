@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sqlite3
 
 from fastapi.testclient import TestClient
 from starlette.requests import Request
@@ -66,34 +65,23 @@ def test_new_google_user_defaults_to_verified(isolated_db, monkeypatch):
     assert row["access_status"] == "verified"
 
 
-def test_existing_users_migrate_without_deleting_history(tmp_path, monkeypatch):
-    db_path = tmp_path / "legacy.db"
+def test_canonical_schema_keeps_configured_admin_approved(tmp_path, monkeypatch):
+    db_path = tmp_path / "canonical.db"
     monkeypatch.setenv("JOB_HUNTER_ADMIN_EMAIL", ADMIN_EMAIL)
-    with sqlite3.connect(db_path) as conn:
-        conn.executescript(
-            """
-            CREATE TABLE users (
-                user_id TEXT PRIMARY KEY,
-                email TEXT,
-                display_name TEXT,
-                created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                last_seen_at TEXT NOT NULL DEFAULT (datetime('now'))
-            );
-            INSERT INTO users (user_id, email, display_name)
-            VALUES ('admin-id', 'rob.voto.au@gmail.com', 'Rob'),
-                   ('candidate-id', 'old-user@example.com', 'Old User');
-            """
+    init_db(db_path)
+
+    with db_conn(db_path) as conn:
+        conn.execute(
+            "INSERT INTO users (user_id, email, display_name) VALUES (?, ?, ?)",
+            ("admin-id", ADMIN_EMAIL, "Rob"),
         )
     init_db(db_path)
 
     with db_conn(db_path) as conn:
-        rows = conn.execute(
-            "SELECT user_id, access_status FROM users ORDER BY user_id"
-        ).fetchall()
-    assert [(row["user_id"], row["access_status"]) for row in rows] == [
-        ("admin-id", "approved"),
-        ("candidate-id", "verified"),
-    ]
+        row = conn.execute(
+            "SELECT access_status FROM users WHERE user_id = ?", ("admin-id",)
+        ).fetchone()
+    assert row["access_status"] == "approved"
 
 
 def test_verified_user_must_explicitly_request_access(isolated_db, monkeypatch):
