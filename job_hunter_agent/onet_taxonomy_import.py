@@ -3,7 +3,6 @@
 Supported inputs:
 - Current/full O*NET database JSON zip (preferred).
 - Current/full O*NET database text zip, including nested release folders.
-- Legacy OccupationalListings.zip for backwards-compatible manual imports.
 
 Runtime classification remains fully local. Network freshness is handled separately by
 ``job_hunter_agent.onet_taxonomy_refresh``.
@@ -22,15 +21,12 @@ from pathlib import Path, PurePosixPath
 from tempfile import TemporaryDirectory
 from typing import Any
 
-from openpyxl import load_workbook
 
 from job_hunter_agent.paths import REPO_ROOT
 
 TAXONOMY_VERSION = "O*NET-SOC 2019"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "data" / "knowledge" / "occupation_taxonomy"
 
-_LISTINGS_OCCUPATIONS_MEMBER = "2019_Occupations.xlsx"
-_LISTINGS_ALT_TITLES_MEMBER = "2019_Alt_Titles.xlsx"
 _FULLDB_TEXT_OCCUPATIONS_MEMBER = "Occupation Data.txt"
 _FULLDB_TEXT_JOB_TITLES_MEMBER = "Job Titles.txt"
 _FULLDB_TEXT_ALT_TITLES_MEMBER = "Alternate Titles.txt"
@@ -76,22 +72,6 @@ def _infer_database_release(zip_path: Path) -> str | None:
     return f"{int(match.group(1))}.{int(match.group(2))}"
 
 
-def _read_xlsx_from_zip(zip_path: Path, basename: str) -> list[dict[str, Any]]:
-    with zipfile.ZipFile(zip_path) as archive, TemporaryDirectory() as tmp_dir:
-        member = _require_member(archive, basename)
-        extracted = Path(tmp_dir) / basename
-        extracted.write_bytes(archive.read(member))
-        workbook = load_workbook(extracted, read_only=True, data_only=True)
-        try:
-            sheet = workbook[workbook.sheetnames[0]]
-            rows = list(sheet.iter_rows(min_row=4, values_only=True))
-        finally:
-            workbook.close()
-    if not rows:
-        return []
-    headers = [str(cell).strip() for cell in rows[0]]
-    return [dict(zip(headers, row)) for row in rows[1:] if row and row[0]]
-
 
 def _read_txt_table(archive: zipfile.ZipFile, basename: str) -> list[dict[str, str]]:
     member = _require_member(archive, basename)
@@ -119,35 +99,11 @@ def _detect_format(zip_path: Path) -> str:
             or _member_by_basename(archive, _FULLDB_TEXT_ALT_TITLES_MEMBER)
         ):
             return "fulldb_text"
-        if _member_by_basename(archive, _LISTINGS_OCCUPATIONS_MEMBER):
-            return "listings"
     raise ValueError(
-        "Unrecognised O*NET zip format. Expected the current full database "
-        "(JSON or text) or legacy OccupationalListings.zip."
+        "Unrecognised O*NET zip format. Expected the current full O*NET database "
+        "in JSON or text format."
     )
 
-
-def _read_listings_format(zip_path: Path) -> tuple[list[dict], list[dict], list[dict]]:
-    occupation_rows = _read_xlsx_from_zip(zip_path, _LISTINGS_OCCUPATIONS_MEMBER)
-    title_rows = _read_xlsx_from_zip(zip_path, _LISTINGS_ALT_TITLES_MEMBER)
-    occupations = [
-        {
-            "code": str(row["O*NET-SOC 2019 Code"]).strip(),
-            "title": str(row["O*NET-SOC 2019 Title"]).strip(),
-            "description": str(row.get("O*NET-SOC 2019 Description") or "").strip(),
-        }
-        for row in occupation_rows
-    ]
-    job_titles = [
-        {
-            "occupation_code": str(row["O*NET-SOC 2019 Code"]).strip(),
-            "job_title": str(row["Alternate Title"]).strip(),
-            "short_title": "",
-            "sources": "",
-        }
-        for row in title_rows
-    ]
-    return occupations, job_titles, []
 
 
 def _read_fulldb_text_format(zip_path: Path) -> tuple[list[dict], list[dict], list[dict]]:
@@ -254,8 +210,7 @@ def build_taxonomy(
         raw_occupations, raw_job_titles, reported_titles = _read_fulldb_text_format(zip_path)
         source_label = "O*NET Database text"
     else:
-        raw_occupations, raw_job_titles, reported_titles = _read_listings_format(zip_path)
-        source_label = "O*NET OccupationalListings.zip"
+        raise ValueError(f"Unsupported O*NET archive format: {fmt}")
 
     release = database_release or _infer_database_release(zip_path)
     occupations = [

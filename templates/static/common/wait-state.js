@@ -217,25 +217,11 @@ export function renderProgressBar(progressDetail) {
   `;
 }
 
-function legacyProgressCopy(progress) {
-  const lines = String(progress || '')
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  return {
-    headline: lines[0] || '',
-    detail: lines.slice(1).join(' · '),
-  };
-}
-
 function renderProgressMarkup(state) {
   const progressDetail = state.progressDetail;
-  // Text-only messages are a bounded fallback for verification/error states; the
-  // browser never infers source, counts, elapsed time, or percentage from them.
-  const legacy = progressDetail ? { headline: '', detail: '' } : legacyProgressCopy(state.progress);
   const source = progressDetail?.source || 'generic';
-  const headline = progressDetail?.headline || legacy.headline;
-  const detail = progressDetail?.detail || legacy.detail;
+  const headline = progressDetail?.headline || '';
+  const detail = progressDetail?.detail || '';
   if (!headline && !detail && !state.elapsedText) {
     return '';
   }

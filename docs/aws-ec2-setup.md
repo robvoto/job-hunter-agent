@@ -81,7 +81,7 @@ Environment file: /etc/job-hunter/job-hunter.env
 Persistent data: /var/lib/job-hunter/data
 Persistent output: /var/lib/job-hunter/output
 Service: job-hunter.service
-ExecStart: /home/ubuntu/job-hunter-agent/scripts/ec2/run-jobhunter-browser-session.sh
+ExecStart: /home/ubuntu/job-hunter-agent/scripts/ec2/start-aws-browser-session.sh
 Local bind: 127.0.0.1:8765
 Docker: not used
 Xvfb wired into service: YES
@@ -511,7 +511,7 @@ Environment="TZ=Australia/Sydney"
 Environment="JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data"
 Environment="JOB_HUNTER_OUTPUT_DIR=/var/lib/job-hunter/output"
 Environment="JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/job_hunter.db"
-ExecStart=/home/ubuntu/job-hunter-agent/scripts/ec2/run-jobhunter-browser-session.sh
+ExecStart=/home/ubuntu/job-hunter-agent/scripts/ec2/start-aws-browser-session.sh
 Restart=always
 RestartSec=5
 

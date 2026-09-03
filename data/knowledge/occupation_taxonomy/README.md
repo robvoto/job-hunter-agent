@@ -44,7 +44,7 @@ Refresh is fail-safe: the new archive is downloaded to a temporary location, par
 
 `.github/workflows/onet-taxonomy-refresh.yml` checks weekly. When O*NET publishes a new database release, it regenerates and validates the reference data and opens/updates a pull request. It does not silently auto-merge taxonomy changes.
 
-The importer also accepts current nested O*NET text database ZIPs and legacy `OccupationalListings.zip` for manual/backwards-compatible imports. New automated refreshes use the official advertised JSON distribution.
+The importer accepts the current full O*NET database in JSON or nested text ZIP format. Automated refreshes use the official advertised JSON distribution.
 
 ## Target occupation safety
 
