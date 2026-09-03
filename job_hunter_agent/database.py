@@ -213,12 +213,6 @@ CREATE TABLE IF NOT EXISTS agent_state (
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- One-time data migrations. Entries are retained as audit metadata so a
--- migration never becomes a permanent compatibility path.
-CREATE TABLE IF NOT EXISTS schema_migrations (
-    name       TEXT PRIMARY KEY,
-    applied_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
 
 -- Runtime cache for occupation-title taxonomy decisions.
 -- The O*NET taxonomy itself is stored as versioned JSON under data/knowledge,
@@ -293,47 +287,6 @@ CREATE INDEX IF NOT EXISTS idx_system_warnings_category
     ON system_warnings(category);
 """
 
-_USER_ACCESS_REQUEST_MIGRATION = "user_access_request_state_v1"
-
-def _apply_user_access_request_migration(conn: sqlite3.Connection) -> None:
-    """Convert legacy auto-pending users to verified exactly once.
-
-    Before an explicit request action existed, every authenticated candidate was
-    stored as pending. That state did not prove the user had requested access.
-    """
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS schema_migrations (
-            name       TEXT PRIMARY KEY,
-            applied_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )
-        """
-    )
-    already_applied = conn.execute(
-        "SELECT 1 FROM schema_migrations WHERE name = ?",
-        (_USER_ACCESS_REQUEST_MIGRATION,),
-    ).fetchone()
-    if already_applied:
-        return
-
-    tables = {
-        row[0]
-        for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
-    }
-    if "users" in tables:
-        columns = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
-        if "access_status" in columns:
-            conn.execute(
-                "UPDATE users SET access_status = ? WHERE access_status = ?",
-                (USER_ACCESS_VERIFIED, USER_ACCESS_PENDING),
-            )
-
-    conn.execute(
-        "INSERT INTO schema_migrations (name) VALUES (?)",
-        (_USER_ACCESS_REQUEST_MIGRATION,),
-    )
-
-
 _system_warnings_schema_ensured_paths: set[str] = set()
 
 
@@ -359,43 +312,14 @@ def ensure_system_warnings_schema(
     _system_warnings_schema_ensured_paths.add(resolved_path)
 
 
-def _apply_migrations(conn: sqlite3.Connection) -> None:
-    """One-time schema migrations applied in order on every startup (idempotent)."""
-    tables = {
-        row[0]
-        for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
-    }
-    if "application_materials" in tables and "profile_documents" not in tables:
-        conn.execute("ALTER TABLE application_materials RENAME TO profile_documents")
-    if "occupation_title_cache" in tables:
-        columns = {
-            row[1] for row in conn.execute("PRAGMA table_info(occupation_title_cache)").fetchall()
-        }
-        if "matched_phrase" not in columns:
-            conn.execute("ALTER TABLE occupation_title_cache ADD COLUMN matched_phrase TEXT")
-        if "match_type" not in columns:
-            conn.execute("ALTER TABLE occupation_title_cache ADD COLUMN match_type TEXT")
-        if "database_release" not in columns:
-            conn.execute(
-                "ALTER TABLE occupation_title_cache ADD COLUMN database_release TEXT NOT NULL DEFAULT ''"
-            )
-        if "dataset_fingerprint" not in columns:
-            conn.execute(
-                "ALTER TABLE occupation_title_cache ADD COLUMN dataset_fingerprint TEXT NOT NULL DEFAULT ''"
-            )
-    if "users" in tables:
-        columns = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
-        if "access_status" not in columns:
-            conn.execute(
-                "ALTER TABLE users ADD COLUMN access_status TEXT NOT NULL DEFAULT 'verified'"
-            )
-        admin_email = os.getenv("JOB_HUNTER_ADMIN_EMAIL", "").strip().lower()
-        if admin_email:
-            conn.execute(
-                "UPDATE users SET access_status = ? WHERE lower(email) = ?",
-                (USER_ACCESS_APPROVED, admin_email),
-            )
-    _apply_user_access_request_migration(conn)
+def _apply_runtime_admin_access(conn: sqlite3.Connection) -> None:
+    """Keep the configured admin account approved in the canonical schema."""
+    admin_email = os.getenv("JOB_HUNTER_ADMIN_EMAIL", "").strip().lower()
+    if admin_email:
+        conn.execute(
+            "UPDATE users SET access_status = ? WHERE lower(email) = ?",
+            (USER_ACCESS_APPROVED, admin_email),
+        )
 
 
 def init_db(db_path: Path | None = None) -> None:
@@ -403,14 +327,13 @@ def init_db(db_path: Path | None = None) -> None:
     path = db_path or _default_db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     with db_conn(path) as conn:
-        _apply_migrations(conn)
         conn.executescript(_SCHEMA)
         ensure_system_warnings_schema(conn, db_path=db_path)
+        _apply_runtime_admin_access(conn)
 
 
 EXPECTED_TABLES = {
     "knowledge",
-    "schema_migrations",
     "signals",
     "global_settings",
     "users",
