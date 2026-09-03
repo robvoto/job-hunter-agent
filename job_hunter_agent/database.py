@@ -262,6 +262,21 @@ CREATE TABLE IF NOT EXISTS search_plan_state (
 );
 CREATE INDEX IF NOT EXISTS idx_search_plan_state_lookup
     ON search_plan_state(user_id, source, signature, location, updated_at);
+
+-- Per-user incremental source-discovery checkpoints. The exact role target is
+-- stored separately from location so no semantic role mapping is inferred.
+CREATE TABLE IF NOT EXISTS incremental_search_state (
+    user_id      TEXT NOT NULL REFERENCES users(user_id),
+    source       TEXT NOT NULL,
+    signature    TEXT NOT NULL,
+    location     TEXT NOT NULL,
+    role_target  TEXT NOT NULL,
+    data         TEXT NOT NULL,
+    updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, source, signature, location, role_target)
+);
+CREATE INDEX IF NOT EXISTS idx_incremental_search_state_lookup
+    ON incremental_search_state(user_id, source, signature, updated_at);
 """
 
 _SYSTEM_WARNINGS_SCHEMA = """
@@ -353,6 +368,7 @@ EXPECTED_TABLES = {
     "occupation_title_cache",
     "source_discovery_cache",
     "search_plan_state",
+    "incremental_search_state",
 }
 
 

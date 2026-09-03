@@ -161,7 +161,11 @@ def extract_card_metadata(card, filter_state=None) -> dict:
 
 
 def build_seek_search_targets(
-    profile: dict, configured_date_range: int, sort_newest_first: bool
+    profile: dict,
+    configured_date_range: int,
+    sort_newest_first: bool,
+    *,
+    effective_date_range: int | None = None,
 ) -> List[dict]:
     search_settings = get_search_settings(profile)
     search_terms = ordered_profile_search_terms(search_settings, profile)
@@ -181,7 +185,11 @@ def build_seek_search_targets(
             search_url = set_query_param(search_url, "keywords", keywords)
             if search_location:
                 search_url = set_query_param(search_url, "where", search_location)
-            search_url = set_query_param(search_url, "daterange", configured_date_range)
+            search_url = set_query_param(
+                search_url,
+                "daterange",
+                max(1, int(effective_date_range or configured_date_range)),
+            )
             if sort_newest_first:
                 search_url = set_query_param(search_url, "sortMode", "ListedDate")
             targets.append(

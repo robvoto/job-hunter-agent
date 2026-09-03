@@ -354,6 +354,22 @@ def get_linkedin_stale_fallback_max_age_minutes() -> int:
     )
 
 
+def get_incremental_search_overlap_days() -> int:
+    return int(load_global_settings()[KEY_CACHE_SETTINGS][KEY_INCREMENTAL_SEARCH_OVERLAP_DAYS])
+
+
+def get_incremental_search_catch_up_interval_days() -> int:
+    return int(
+        load_global_settings()[KEY_CACHE_SETTINGS][KEY_INCREMENTAL_SEARCH_CATCH_UP_INTERVAL_DAYS]
+    )
+
+
+def get_incremental_search_late_discovery_threshold_days() -> int:
+    return int(
+        load_global_settings()[KEY_CACHE_SETTINGS][KEY_INCREMENTAL_SEARCH_LATE_DISCOVERY_THRESHOLD_DAYS]
+    )
+
+
 def get_linkedin_max_consecutive_target_failures() -> int:
     return int(
         load_global_settings()[KEY_CACHE_SETTINGS][

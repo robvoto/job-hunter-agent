@@ -26,6 +26,7 @@ from job_hunter_agent.run_control import (
 )
 from job_hunter_agent.source_errors import PartialSourceResultsError
 from job_hunter_agent.global_settings import (
+    DEFAULT_SEARCH_SETTINGS,
     KEY_APSJOBS_RESULTS_PER_SEARCH,
     KEY_DATE_RANGE_DAYS,
     KEY_LINKEDIN_EASY_APPLY_ONLY,
@@ -64,6 +65,11 @@ from job_hunter_agent.source_discovery_cache import (
     load_source_discovery_stale_snapshot,
     save_source_discovery_snapshot,
     save_source_failure_state,
+)
+from job_hunter_agent.incremental_search import (
+    IncrementalSearchPlan,
+    plan_incremental_search,
+    save_incremental_checkpoints,
 )
 from job_hunter_agent.search_plan_state import load_search_plan_state, planned_search_terms
 
@@ -127,6 +133,55 @@ class SourceRunResult:
     source_cache_signature: str = ""
     source_failure_backoff: bool = False
     source_collection_complete: bool = True
+
+
+def _incremental_search_plan(
+    context: ScrapeRunContext, source: str, signature: str
+) -> IncrementalSearchPlan:
+    """Plan a bounded source window from the unchanged full-search signature."""
+    if source == SOURCE_SEEK:
+        targets = build_seek_search_targets(
+            context.profile, context.configured_date_range, context.sort_newest_first
+        )
+        configured_days = context.configured_date_range
+        configured_hours_old = None
+    elif source == SOURCE_LINKEDIN:
+        from job_hunter_agent.scrapers.linkedin import build_linkedin_search_targets
+
+        targets = build_linkedin_search_targets(context.search_settings, context.profile)
+        configured_hours_old = int(
+            context.search_settings.get(
+                KEY_LINKEDIN_HOURS_OLD,
+                DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD],
+            )
+            or DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD]
+        )
+        configured_days = max(1, (configured_hours_old + 23) // 24)
+    elif source == SOURCE_APSJOBS:
+        from job_hunter_agent.scrapers.apsjobs import build_apsjobs_search_targets
+
+        targets = build_apsjobs_search_targets(context.search_settings, context.profile)[1]
+        configured_days = context.configured_date_range
+        configured_hours_old = None
+    else:
+        raise ValueError(f"Unsupported incremental source: {source}")
+    return plan_incremental_search(
+        source=source,
+        signature=signature,
+        targets=targets,
+        configured_window_days=configured_days,
+        configured_hours_old=configured_hours_old,
+        force_refresh=context.force_source_refresh,
+    )
+
+
+def _log_incremental_plan(plan: IncrementalSearchPlan) -> None:
+    logger.info(
+        format_log_block(
+            f"{plan.source.upper()}][INCREMENTAL_SEARCH",
+            plan.as_log_fields(),
+        )
+    )
 
 
 def _source_health(result: SourceRunResult) -> str:
@@ -333,6 +388,8 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
     headless = bool(getattr(context, "headless", False))
     try:
         signature, cache_status, cached_records = _source_cache_lookup(context, SOURCE_SEEK)
+        incremental_plan = _incremental_search_plan(context, SOURCE_SEEK, signature)
+        _log_incremental_plan(incremental_plan)
         set_run_progress_state(
             "Starting SEEK",
             stage="starting",
@@ -341,7 +398,10 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
             determinate=False,
         )
         search_targets = build_seek_search_targets(
-            context.profile, context.configured_date_range, context.sort_newest_first
+            context.profile,
+            context.configured_date_range,
+            context.sort_newest_first,
+            effective_date_range=incremental_plan.effective_window_days,
         )
         assisted_verification_enabled = (
             get_seek_assisted_verification_enabled() or context.dashboard_debug_mode
@@ -369,6 +429,7 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
             discovery_status=failure_state,
             search_plan_signature=signature,
             identity_registry=context.identity_registry,
+            incremental_known_job_keys=set(incremental_plan.known_job_keys),
         )
         try:
             kept, audit, skills = seek_scrape_to_records(**_seek_kwargs, headless=headless)
@@ -621,6 +682,8 @@ def _run_linkedin_source(context: ScrapeRunContext) -> SourceRunResult:
     failure_state: dict[str, Any] = {"complete": True}
     try:
         signature, cache_status, cached_records = _source_cache_lookup(context, SOURCE_LINKEDIN)
+        incremental_plan = _incremental_search_plan(context, SOURCE_LINKEDIN, signature)
+        _log_incremental_plan(incremental_plan)
         set_run_progress_state(
             "Starting LinkedIn",
             stage="starting",
@@ -642,6 +705,8 @@ def _run_linkedin_source(context: ScrapeRunContext) -> SourceRunResult:
             discovery_status=failure_state,
             search_plan_signature=signature,
             identity_registry=context.identity_registry,
+            incremental_known_job_keys=set(incremental_plan.known_job_keys),
+            incremental_hours_old=incremental_plan.effective_hours_old,
         )
         kept, audit, skills = li.scrape()
 
@@ -832,6 +897,8 @@ def _run_apsjobs_source(context: ScrapeRunContext) -> SourceRunResult:
     failure_state: dict[str, Any] = {"complete": True}
     try:
         signature, cache_status, cached_records = _source_cache_lookup(context, SOURCE_APSJOBS)
+        incremental_plan = _incremental_search_plan(context, SOURCE_APSJOBS, signature)
+        _log_incremental_plan(incremental_plan)
         set_run_progress_state(
             "Starting APSJobs",
             stage="starting",
@@ -851,6 +918,7 @@ def _run_apsjobs_source(context: ScrapeRunContext) -> SourceRunResult:
             discovery_status=failure_state,
             search_plan_signature=signature,
             identity_registry=context.identity_registry,
+            incremental_known_job_keys=set(incremental_plan.known_job_keys),
         )
         kept, audit, skills = scraper.scrape()
         return SourceRunResult(
@@ -1395,6 +1463,35 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
     # known-good snapshot.
     if not run_shutdown_requested():
         for result in results:
+            incremental_stats: dict[str, Any] = {}
+            if result.source_cache_signature:
+                incremental_plan = _incremental_search_plan(
+                    context, result.source, result.source_cache_signature
+                )
+                if (
+                    result.error is None
+                    and result.source_collection_complete
+                    and result.source_cache_status in {"MISS", "HIT"}
+                ):
+                    incremental_stats = save_incremental_checkpoints(
+                        incremental_plan,
+                        targets=list(incremental_plan.targets),
+                        discovery_records=result.discovery_records,
+                        completed=True,
+                    )
+                    logger.info(
+                        format_log_block(
+                            f"{result.source.upper()}][INCREMENTAL_CHECKPOINT",
+                            incremental_stats,
+                        )
+                    )
+                else:
+                    incremental_stats = {
+                        "advanced": False,
+                        "reason": "source_not_healthy",
+                    }
+            if result.source in context.source_cache_stats:
+                context.source_cache_stats[result.source]["incremental_search"] = incremental_stats
             if (
                 result.source_cache_status not in {"MISS", "STALE_FALLBACK", "STALE_FALLBACK_AFTER_FAILURE"}
                 or not result.source_cache_signature
@@ -1409,6 +1506,7 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
                 result.source_cache_status == "MISS"
                 and result.error is None
                 and result.source_collection_complete
+                and incremental_plan.mode == "full"
             ):
                 # Only a fresh live MISS may write a new success snapshot. A
                 # stale-fallback replay must never refresh or overwrite the

@@ -415,15 +415,18 @@ def classify_linkedin_apply_method(apply_url: str, canonical_url: str) -> str:
 def build_linkedin_search_targets(
     search_settings: dict,
     profile: dict | None = None,
+    *,
+    effective_hours_old: int | None = None,
 ) -> List[dict]:
     search_terms = ordered_profile_search_terms(search_settings, profile)
     locations = [str(loc).strip() for loc in search_settings.get("locations", []) if str(loc).strip()]
-    hours_old = int(
+    configured_hours_old = int(
         search_settings.get(
             KEY_LINKEDIN_HOURS_OLD, DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD]
         )
         or DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD]
     )
+    hours_old = max(1, int(effective_hours_old or configured_hours_old))
     results_wanted = int(
         search_settings.get(
             KEY_LINKEDIN_RESULTS_PER_SEARCH,
@@ -583,6 +586,13 @@ class LinkedInScraper(BaseJobScraper):
                 if run_stop_requested():
                     cached_collection_complete = False
                     break
+                cached_job_key = str(cached_record.get(RECORD_JOB_KEY) or "").strip()
+                if cached_job_key and cached_job_key in self.incremental_known_job_keys:
+                    logger.debug(
+                        "[LinkedIn] already-seen cached incremental job_key=%s; skipping review",
+                        cached_job_key,
+                    )
+                    continue
                 self._review_discovered_record(
                     dict(cached_record),
                     review_context,
@@ -861,6 +871,13 @@ class LinkedInScraper(BaseJobScraper):
                         is_new_discovery = not job_key or job_key not in seen_discovered_job_keys
                         if job_key:
                             seen_discovered_job_keys.add(job_key)
+                        if job_key and job_key in self.incremental_known_job_keys:
+                            logger.debug(
+                                "%s already-seen incremental job_key=%s; skipping review",
+                                target_tag,
+                                job_key,
+                            )
+                            continue
                         if self.discovery_capture is not None and is_new_discovery:
                             self.discovery_capture.append(copy.deepcopy(record))
                         if is_new_discovery:
@@ -1038,7 +1055,11 @@ class LinkedInScraper(BaseJobScraper):
             kept_records.append(record)
 
     def _build_search_targets(self, search_settings: dict) -> List[dict]:
-        return build_linkedin_search_targets(search_settings, self.profile)
+        return build_linkedin_search_targets(
+            search_settings,
+            self.profile,
+            effective_hours_old=self.incremental_hours_old,
+        )
 
     def _build_review_hooks(self) -> ReviewPipelineHooks:
         def _after_description_loaded(current_record: dict, context: ReviewPipelineContext) -> None:

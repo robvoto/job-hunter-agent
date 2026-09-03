@@ -228,6 +228,18 @@
       "linkedin_max_consecutive_target_failures": {
         "min": 1,
         "max": 24
+      },
+      "incremental_search_overlap_days": {
+        "min": 1,
+        "max": 30
+      },
+      "incremental_search_catch_up_interval_days": {
+        "min": 1,
+        "max": 365
+      },
+      "incremental_search_late_discovery_threshold_days": {
+        "min": 1,
+        "max": 30
       }
     }
   },
@@ -268,7 +280,10 @@
     "linkedin_failure_backoff_minutes": 15,
     "search_plan_min_corroboration_samples": 2,
     "linkedin_stale_fallback_max_age_minutes": 1440,
-    "linkedin_max_consecutive_target_failures": 6
+    "linkedin_max_consecutive_target_failures": 6,
+    "incremental_search_overlap_days": 2,
+    "incremental_search_catch_up_interval_days": 7,
+    "incremental_search_late_discovery_threshold_days": 2
   },
   "description_trust_settings": {
     "min_trusted_description_length": 600

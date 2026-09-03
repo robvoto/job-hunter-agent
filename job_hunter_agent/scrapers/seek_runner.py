@@ -1241,6 +1241,7 @@ def seek_scrape_to_records(
     discovery_status: dict[str, bool] | None = None,
     search_plan_signature: str = "",
     identity_registry=None,
+    incremental_known_job_keys: set[str] | None = None,
 ) -> tuple:
     """Collect, review and return SEEK records while publishing bounded stage progress.
 
@@ -1251,6 +1252,7 @@ def seek_scrape_to_records(
     kept_records: List[dict] = []
     skill_observations: List[dict] = []
     seen_urls: set[str] = set()
+    incremental_known_job_keys = set(incremental_known_job_keys or ())
     review_context = ReviewPipelineContext(
         profile=profile,
         job_history=job_history,
@@ -1274,6 +1276,13 @@ def seek_scrape_to_records(
         n_detail_workers = max(1, seek_parallel_detail_workers)
         cached_records = [copy.deepcopy(record) for record in discovery_records]
         for record in cached_records:
+            job_key = str(record.get(rs.RECORD_JOB_KEY) or "").strip()
+            if job_key and job_key in incremental_known_job_keys:
+                logger.debug(
+                    "[SEEK] already-seen cached incremental job_key=%s; skipping review",
+                    job_key,
+                )
+                continue
             record[rs.RECORD_RUN_STARTED_AT_KEY] = run_iso
         _set_seek_run_progress(1, 1, detail="Cached discovery results")
         session_provider = _LazyDetailSession(
@@ -1516,6 +1525,12 @@ def seek_scrape_to_records(
                                     continue
                                 if job_key:
                                     seen_discovered_job_keys.add(job_key)
+                                if job_key and job_key in incremental_known_job_keys:
+                                    logger.debug(
+                                        "[SEEK] already-seen incremental job_key=%s; skipping review",
+                                        job_key,
+                                    )
+                                    continue
                                 if discovery_capture is not None:
                                     discovery_capture.append(copy.deepcopy(record))
                                 card_records.append(record)

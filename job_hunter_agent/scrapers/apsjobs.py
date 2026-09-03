@@ -303,16 +303,21 @@ def _build_apsjobs_search_url(search_term: str, location: str) -> str:
 
 
 def _new_candidate_links(
-    candidate_links: list[dict[str, str]], seen_job_keys: set[str]
+    candidate_links: list[dict[str, str]],
+    seen_job_keys: set[str],
+    known_job_keys: set[str] | None = None,
 ) -> list[dict[str, str]]:
     """Keep each APS job only once across overlapping search targets."""
     new_links: list[dict[str, str]] = []
+    known_job_keys = known_job_keys or set()
     for link in candidate_links:
         job_key = normalize_job_key(link.get("url", ""), source=SOURCE_APSJOBS)
         if job_key and job_key in seen_job_keys:
             continue
         if job_key:
             seen_job_keys.add(job_key)
+        if job_key and job_key in known_job_keys:
+            continue
         new_links.append(link)
     return new_links
 
@@ -658,6 +663,13 @@ class APSJobsScraper(BaseJobScraper):
             for cached_record in self.discovery_records:
                 if run_stop_requested():
                     break
+                cached_job_key = str(cached_record.get(RECORD_JOB_KEY) or "").strip()
+                if cached_job_key and cached_job_key in self.incremental_known_job_keys:
+                    logger.debug(
+                        "[APSJobs] already-seen cached incremental job_key=%s; skipping review",
+                        cached_job_key,
+                    )
+                    continue
                 self._review_discovered_record(
                     dict(cached_record), review_context, kept_records, skill_observations
                 )
@@ -758,7 +770,9 @@ class APSJobsScraper(BaseJobScraper):
                                     if key
                                 )
                             candidate_links = _new_candidate_links(
-                                discovered_links, seen_discovered_job_keys
+                                discovered_links,
+                                seen_discovered_job_keys,
+                                self.incremental_known_job_keys,
                             )
                             record_query_yield_metric(
                                 QueryYieldMetric(

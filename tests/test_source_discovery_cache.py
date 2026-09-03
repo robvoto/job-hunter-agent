@@ -24,6 +24,7 @@ from job_hunter_agent.source_registry import SOURCE_APSJOBS, SOURCE_LINKEDIN, SO
 def _clear_cache() -> None:
     with db_conn() as conn:
         conn.execute("DELETE FROM source_discovery_cache")
+        conn.execute("DELETE FROM incremental_search_state")
 
 
 def _make_context() -> ScrapeRunContext:
