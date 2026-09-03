@@ -21,7 +21,6 @@ from job_hunter_agent.run_control import (
     get_run_progress_for_source,
     run_stop_requested,
     run_shutdown_requested,
-    set_run_progress,
     set_run_progress_state,
     step_through_enabled,
 )
@@ -81,6 +80,17 @@ SOURCE_TIMEOUT_GRACE_FRACTION = 0.1
 SEEK_SOURCE_TIMEOUT_MESSAGE = "SEEK is taking longer than expected; waiting for it to finish."
 LINKEDIN_SOURCE_TIMEOUT_MESSAGE = "LinkedIn is taking longer than expected; waiting for it to finish."
 APSJOBS_SOURCE_TIMEOUT_MESSAGE = "APSJobs is taking longer than expected; waiting for it to finish."
+
+
+def _set_seek_source_progress(text: str, *, stage: str) -> None:
+    message = str(text or "").strip()
+    set_run_progress_state(
+        message,
+        stage=stage,
+        source=SOURCE_SEEK,
+        headline=message,
+        determinate=False,
+    )
 
 
 def _exception_message(exc: Exception) -> str:
@@ -338,7 +348,7 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
         )
         if assisted_verification_enabled:
             logger.warning("[SEEK] %s", SEEK_ASSISTED_BROWSER_SESSION_ENABLED)
-            set_run_progress(SEEK_ASSISTED_BROWSER_SESSION_ENABLED)
+            _set_seek_source_progress(SEEK_ASSISTED_BROWSER_SESSION_ENABLED, stage="verification")
         _seek_kwargs: dict[str, Any] = dict(
             profile=context.profile,
             search_targets=search_targets,
@@ -372,7 +382,7 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
                 SEEK_BOT_CHALLENGE,
                 SEEK_TIMEOUT_NO_CARDS,
             }:
-                set_run_progress(_exception_message(exc))
+                _set_seek_source_progress(_exception_message(exc), stage="error")
                 _record_source_warning(
                     source=SOURCE_SEEK,
                     severity="warning",
@@ -393,7 +403,7 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
                 )
                 raise
             if not headless:
-                set_run_progress(_exception_message(exc))
+                _set_seek_source_progress(_exception_message(exc), stage="error")
                 _record_source_warning(
                     source=SOURCE_SEEK,
                     severity="warning",
@@ -430,7 +440,7 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
                     "[SEEK] Headless SEEK run hit %s but AWS browser session mode is disabled",
                     failure_class,
                 )
-                set_run_progress(_exception_message(exc))
+                _set_seek_source_progress(_exception_message(exc), stage="error")
                 _record_source_warning(
                     source=SOURCE_SEEK,
                     severity="warning",
@@ -466,7 +476,7 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
                 "[SEEK] Headless SEEK run hit %s; retrying with AWS browser session",
                 failure_class,
             )
-            set_run_progress("SEEK needs human verification. Open the AWS browser session and complete the check.")
+            _set_seek_source_progress("SEEK needs human verification. Open the AWS browser session and complete the check.", stage="verification")
             try:
                 kept, audit, skills = seek_scrape_to_records(**_seek_kwargs, headless=False)
             except BotChallengeDetected as retry_exc:
@@ -479,14 +489,14 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
                     SEEK_BOT_CHALLENGE,
                     SEEK_TIMEOUT_NO_CARDS,
                 }:
-                    set_run_progress(str(retry_exc))
+                    _set_seek_source_progress(str(retry_exc), stage="error")
                     raise
                 logger.warning(
                     "[SEEK] Visible SEEK retry was still blocked (%s); continuing without SEEK results: %s",
                     retry_failure_class,
                     retry_exc,
                 )
-                set_run_progress(_exception_message(retry_exc))
+                _set_seek_source_progress(_exception_message(retry_exc), stage="error")
                 _record_source_warning(
                     source=SOURCE_SEEK,
                     severity="warning",

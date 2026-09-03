@@ -9,7 +9,7 @@ from fastapi import APIRouter, Body
 
 from job_hunter_agent import server_helpers as srv
 from job_hunter_agent.routes.responses import json_response
-from job_hunter_agent.run_control import clear_run_stop_request
+from job_hunter_agent.run_control import begin_run_progress_scope, end_run_progress_scope
 from job_hunter_agent.source_connector import ensure_llm_runtime_ready
 
 logger = logging.getLogger(__name__)
@@ -134,18 +134,21 @@ def api_run(body: dict = Body(default_factory=dict)):  # type: ignore[no-untyped
             },
         )
 
+    progress_scope = None
     try:
-        clear_run_stop_request()
         if search_settings:
             srv.patch_profile({"search_settings": search_settings})
+        progress_scope = begin_run_progress_scope(bind_current_context=False)
         ctx = contextvars.copy_context()
         threading.Thread(
             target=ctx.run,
-            args=(partial(srv._run_scrape_job, force_refresh=force_refresh),),
+            args=(partial(srv._run_scrape_job, force_refresh=force_refresh, progress_scope=progress_scope),),
             daemon=True,
         ).start()
     except Exception as exc:
-        srv._set_run_in_progress(False)
+        if progress_scope is not None:
+            end_run_progress_scope(progress_scope)
+        srv._finish_run(srv.RUN_STATUS_IDLE)
         return json_response({"error": str(exc)}, 400)
 
     last_run = srv._read_last_run_timestamp()

@@ -108,6 +108,7 @@ from job_hunter_agent.release_metadata import (
 from job_hunter_agent.run_control import (
     RunInterruptedError,
     begin_run_progress_scope,
+    bind_run_progress_scope,
     clear_run_shutdown_request,
     clear_run_stop_request,
     end_run_progress_scope,
@@ -1089,14 +1090,6 @@ def get_docs() -> list[dict[str, str]]:
     return docs
 
 
-def _set_run_in_progress(value: bool) -> None:
-    """Compatibility mutator for callers that only own the running flag."""
-    global _run_in_progress, _run_started_at
-    with _run_state_lock:
-        _run_in_progress = bool(value)
-        if not _run_in_progress:
-            _run_started_at = None
-
 
 def _finish_run(terminal_status: str) -> None:
     """Atomically close the active run and retain its final elapsed total."""
@@ -1847,9 +1840,11 @@ def _write_run_stats_field(key: str, value: object) -> None:
         logger.warning("Could not write run_stats.%s: %s", key, write_exc)
 
 
-def _run_scrape_job(*, force_refresh: bool = False) -> None:
+def _run_scrape_job(*, force_refresh: bool = False, progress_scope: object | None = None) -> None:
     """Own one background scrape lifecycle from start through terminal state."""
-    progress_scope = begin_run_progress_scope()
+    owned_scope = progress_scope or begin_run_progress_scope()
+    if progress_scope is not None:
+        bind_run_progress_scope(owned_scope)
     try:
         scrape_jobs_direct(force_refresh=force_refresh)
         if run_shutdown_requested():
@@ -1888,7 +1883,7 @@ def _run_scrape_job(*, force_refresh: bool = False) -> None:
             if stopped
             else RUN_STATUS_IDLE
         )
-        end_run_progress_scope(progress_scope)
+        end_run_progress_scope(owned_scope)
         clear_run_shutdown_request()
         clear_run_stop_request()
 

@@ -55,7 +55,7 @@ from job_hunter_agent.record_schema import (
     RECORD_SALARY_KEY,
     RECORD_TITLE_KEY,
 )
-from job_hunter_agent.run_control import run_stop_requested, set_run_progress, set_run_progress_state
+from job_hunter_agent.run_control import run_stop_requested, set_run_progress_state
 from job_hunter_agent.scrapers.base import (
     BaseJobScraper,
     _build_initial_source_metadata,

@@ -10,12 +10,12 @@ import pytest
 from job_hunter_agent import run_control
 
 
-def test_set_run_progress_logs_changed_progress(caplog):
+def test_set_run_progress_state_logs_changed_progress(caplog):
     run_control.clear_run_progress()
     caplog.clear()
     caplog.set_level(logging.DEBUG, logger="job_hunter_agent.run_control")
 
-    run_control.set_run_progress("Waiting for SEEK\nLinkedIn complete")
+    run_control.set_run_progress_state("Waiting for SEEK\nLinkedIn complete", stage="verification", headline="Waiting for SEEK")
 
     assert any(
         "RUN_PROGRESS" in record.getMessage()
@@ -24,16 +24,22 @@ def test_set_run_progress_logs_changed_progress(caplog):
     )
 
 
-def test_set_run_progress_skips_duplicate_progress_log(caplog):
+def test_set_run_progress_state_skips_duplicate_progress_log(caplog):
     run_control.clear_run_progress()
     caplog.set_level(logging.DEBUG, logger="job_hunter_agent.run_control")
 
-    run_control.set_run_progress("Starting SEEK")
+    run_control.set_run_progress_state("Starting SEEK", stage="starting", source="seek", headline="Starting SEEK")
     caplog.clear()
 
-    run_control.set_run_progress("Starting SEEK")
+    run_control.set_run_progress_state("Starting SEEK", stage="starting", source="seek", headline="Starting SEEK")
 
     assert caplog.records == []
+
+
+def test_set_run_progress_state_rejects_text_only_progress():
+    run_control.clear_run_progress()
+    with pytest.raises(ValueError, match="requires structured detail"):
+        run_control.set_run_progress_state("Starting SEEK")
 
 
 def test_set_run_progress_state_stores_and_returns_text():
@@ -317,8 +323,8 @@ def test_detached_worker_cannot_overwrite_new_run_progress():
 
     new_scope = run_control.begin_run_progress_scope()
     try:
-        run_control.set_run_progress("New run progress")
-        old_context.run(run_control.set_run_progress, "Late old worker progress")
+        run_control.set_run_progress_state("New run progress", stage="source_collection", source="seek", headline="New run progress")
+        old_context.run(run_control.set_run_progress_state, "Late old worker progress", stage="source_collection", source="seek", headline="Late old worker progress")
         assert run_control.get_run_progress() == "New run progress"
     finally:
         run_control.end_run_progress_scope(new_scope)
@@ -329,7 +335,7 @@ def test_second_concurrent_run_scope_is_rejected_without_replacing_active_scope(
     try:
         with pytest.raises(RuntimeError, match="already owns the active run-control scope"):
             contextvars.Context().run(run_control.begin_run_progress_scope)
-        run_control.set_run_progress("Active run still owns progress")
+        run_control.set_run_progress_state("Active run still owns progress", stage="source_collection", source="seek", headline="Active run still owns progress")
         assert run_control.get_run_progress() == "Active run still owns progress"
     finally:
         run_control.end_run_progress_scope(scope)
