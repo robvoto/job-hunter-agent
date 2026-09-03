@@ -311,3 +311,43 @@ def test_backfill_reports_unattributable_rows_instead_of_dropping_them(ledger_db
     assert summary["events_imported"] == 1
     assert summary["skipped_no_employer"] == 1
     assert summary["skipped_no_date"] == 1
+
+
+# --- date normalisation -----------------------------------------------------
+
+
+def test_iso_dates_pass_through_unchanged():
+    assert backfill.normalise_event_date("2026-04-02") == "2026-04-02"
+
+
+def test_slash_dates_are_read_month_first_and_zero_padded():
+    assert backfill.normalise_event_date("8/19/2026") == "2026-08-19"
+    assert backfill.normalise_event_date("4/4/2024") == "2024-04-04"
+
+
+def test_trailing_time_is_discarded_not_treated_as_a_parse_failure():
+    assert backfill.normalise_event_date("8/7/2026 11:03:22") == "2026-08-07"
+    assert backfill.normalise_event_date("2026-04-02T09:00:00+10:00") == "2026-04-02"
+
+
+def test_an_unrecognised_shape_returns_empty_rather_than_a_plausible_guess():
+    for value in ("", "   ", "not a date", "19/8/26", "Aug 19 2026", None):
+        assert backfill.normalise_event_date(value) == ""
+
+
+def test_an_impossible_month_is_rejected_rather_than_silently_swapped():
+    assert backfill.normalise_event_date("19/8/2026") == ""
+
+
+def test_backfill_normalises_mixed_date_shapes_onto_one_scale(ledger_db):
+    rows = [
+        _history_row(1, "Northwind Systems", "Analyst", "8/19/2026"),
+        _history_row(2, "Northwind Systems", "Analyst", "2026-04-02"),
+    ]
+    backfill.backfill_from_rejection_history(
+        "u1", db_path=ledger_db, load_history=lambda: rows
+    )
+    rollup = store.get_employer_outcome("u1", "Northwind Systems", db_path=ledger_db)
+    # Ordering only works once both shapes are on the same scale.
+    assert rollup["first_event_date"] == "2026-04-02"
+    assert rollup["last_event_date"] == "2026-08-19"

@@ -13,11 +13,44 @@ silently dropped and never guessed at.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from job_hunter_agent import employer_outcome_store as store
 
 logger = logging.getLogger(__name__)
+
+_ISO_DATE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})")
+_SLASH_DATE = re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{4})")
+
+
+def normalise_event_date(raw: str) -> str:
+    """Return an ISO yyyy-mm-dd date, or "" when the value is not a date.
+
+    The rejection sheet stores two shapes: ISO, and a slash form. The slash form
+    is month-first, and that is measured rather than assumed: of the slash dates
+    in the store, 154 carry a value above 12 in the second position, which is
+    only possible if that position is the day. No value exceeds 12 in the first
+    position, so the reading is consistent across the whole set.
+
+    Anything that matches neither shape returns "" so the caller reports it,
+    rather than being coerced into a plausible-looking wrong date.
+    """
+    value = str(raw or "").strip()
+    if not value:
+        return ""
+
+    iso = _ISO_DATE.match(value)
+    if iso:
+        return f"{iso.group(1)}-{iso.group(2)}-{iso.group(3)}"
+
+    slash = _SLASH_DATE.match(value)
+    if slash:
+        month, day, year = int(slash.group(1)), int(slash.group(2)), slash.group(3)
+        if 1 <= month <= 12 and 1 <= day <= 31:
+            return f"{year}-{month:02d}-{day:02d}"
+    return ""
+
 
 
 def _default_history_loader() -> list[dict]:
@@ -45,11 +78,13 @@ def backfill_from_rejection_history(
 
     for row in rows:
         employer = str(row.get("company") or "").strip()
-        event_date = str(row.get("date") or "").strip()
+        event_date = normalise_event_date(row.get("date"))
         if not employer:
             skipped_no_employer += 1
             continue
         if not event_date:
+            # Covers both a missing date and one in an unrecognised shape. Both
+            # are reported in the summary rather than guessed at.
             skipped_no_date += 1
             continue
 
