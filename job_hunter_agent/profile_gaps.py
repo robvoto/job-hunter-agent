@@ -10,7 +10,7 @@ import re
 
 from job_hunter_agent.llm_protocol import (
     LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES,
-    LLM_COVERAGE_IMPORTANCE_REQUIRED,
+    LLM_COVERAGE_IMPORTANCE_MANDATORY,
 )
 
 STATUS_UNKNOWN = "unknown"
@@ -197,7 +197,7 @@ def resolve_custom_blocker(raw_text: str, requirement_coverage: list[dict]) -> d
     (case/whitespace-insensitive) against a requirement_coverage item's
     canonical_requirement/matched_job_text/requirement, where that item is
     profile_action_allowed (canonical_requirement is a genuine single concept,
-    not just a display label) and importance == required, resolves. No
+    not just a display label) and importance == mandatory, resolves. No
     substring/fuzzy matching, so a broad or generic term cannot silently match
     a specific requirement.
     """
@@ -237,7 +237,7 @@ def resolve_custom_blocker(raw_text: str, requirement_coverage: list[dict]) -> d
             continue
         importance = str(item.get("importance") or "").strip().lower()
         canonical_key = _normalize_for_match(canonical_requirement)
-        if importance == LLM_COVERAGE_IMPORTANCE_REQUIRED:
+        if importance == LLM_COVERAGE_IMPORTANCE_MANDATORY:
             required_matches[canonical_key] = item
         elif non_required_match is None:
             non_required_match = item
@@ -253,7 +253,7 @@ def resolve_custom_blocker(raw_text: str, requirement_coverage: list[dict]) -> d
                 "reason_code": CUSTOM_BLOCKER_REASON_RESOLVED,
                 "canonical_requirement": str(item.get("canonical_requirement") or "").strip(),
                 "requirement_type": str(item.get("requirement_type") or "").strip().lower(),
-                "importance": LLM_COVERAGE_IMPORTANCE_REQUIRED,
+                "importance": LLM_COVERAGE_IMPORTANCE_MANDATORY,
                 "matched_job_text": str(item.get("matched_job_text") or "").strip(),
             }
         )

@@ -414,13 +414,13 @@ def build_pre_review_risk_signals(
 
     if capability_matches["must_not"]:
         missing.append(
-            f"Missing required requirement: {list_to_phrase(capability_matches['must_not'][:2]).capitalize()}"
+            f"Missing mandatory requirement: {list_to_phrase(capability_matches['must_not'][:2]).capitalize()}"
         )
 
     eligibility_missing = find_profile_eligibility_matches(details_text, profile)["do_not_have"]
     if eligibility_missing:
         missing_clearance.append(
-            f"Missing required requirement: {list_to_phrase(eligibility_missing[:2]).capitalize()}"
+            f"Missing mandatory requirement: {list_to_phrase(eligibility_missing[:2]).capitalize()}"
         )
 
     if capability_matches["limited_depth"]:

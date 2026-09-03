@@ -852,13 +852,13 @@
   color: var(--text-muted);
 }
 
-.job-req-importance--required {
+.job-req-importance--mandatory {
   border-color: color-mix(in srgb, var(--state-warning-border) 70%, var(--border-subtle));
   background: color-mix(in srgb, var(--state-warning-bg) 82%, var(--bg-surface));
   color: var(--state-warning-text);
 }
 
-.job-req-importance--expected {
+.job-req-importance--strongly-preferred {
   border-color: color-mix(in srgb, var(--state-info-border) 70%, var(--border-subtle));
   background: color-mix(in srgb, var(--state-info-bg) 82%, var(--bg-surface));
   color: var(--state-info-text);

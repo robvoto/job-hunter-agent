@@ -284,7 +284,7 @@ def _seed_kept_job(email: str) -> None:
                     {
                         "capability_name": "Backend engineering",
                         "status": "supported",
-                        "importance": "required",
+                        "importance": "mandatory",
                     }
                 ],
             }
@@ -325,7 +325,7 @@ def _seed_linkedin_freshness_job(email: str) -> None:
                     {
                         "capability_name": "Stakeholder engagement",
                         "status": "supported",
-                        "importance": "required",
+                        "importance": "mandatory",
                     }
                 ],
             }

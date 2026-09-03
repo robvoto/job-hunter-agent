@@ -153,7 +153,7 @@ def test_init_migrates_stored_requirement_importance_values_once(tmp_path):
             item["importance"]
             for item in migrated["last_kept_snapshot"]["requirement_coverage"]
         ]
-        assert importances == ["required", "expected", "preferred", "bonus"]
+        assert importances == ["mandatory", "strongly_preferred", "preferred", "bonus"]
         assert conn.execute(
             "SELECT COUNT(*) FROM schema_migrations WHERE name = ?",
             ("requirement_importance_terminology_v1",),

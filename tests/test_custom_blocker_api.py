@@ -45,7 +45,7 @@ def _salesforce_coverage():
             "requirement": "Salesforce experience",
             "requirement_type": "capability",
             "canonical_requirement": "Salesforce",
-            "importance": "required",
+            "importance": "mandatory",
             "matched_job_text": "Salesforce experience",
             "profile_action_allowed": True,
         }

@@ -232,8 +232,8 @@ The main score includes requirement coverage and the occupation alignment adjust
 | Candidate capability level | Strong / working / basic / low determines coverage credit. |
 | Candidate eligibility fact | True eligibility support counts as covered; false or missing facts do not. |
 | Stored role duration evidence | Explicit "X years/months" requirements are downgraded to `partially_supported` (with the gap shown) when the LLM-named `role_experience` family cannot prove the threshold, and left for review when no family safely resolves. Duration is never stored on the profile. |
-| Required gaps | Shown as warnings with zero additional score effect. |
-| Required weak coverage | Shown as warnings with zero additional score effect. |
+| Mandatory gaps | Shown as warnings with zero additional score effect. |
+| Mandatory weak coverage | Shown as warnings with zero additional score effect. |
 | Unknown mapped capability or eligibility fact | Logged to `output/uncertainty.jsonl` and the admin warning store. |
 
 ### 3. Context entries
@@ -491,6 +491,6 @@ Unsafe changes without explicit approval:
 - changing requirement importance weights
 - changing capability level credits
 - adding new scoring categories
-- making required gaps auto-reject
+- making mandatory gaps auto-reject
 - changing deterministic shortcut thresholds
 - making signal registry entries add direct score points

@@ -43,7 +43,7 @@ _SNAPSHOT = {
         {"kind": "date_mismatch", "evidence": "LinkedIn shows 2d old, external page shows 21d old."}
     ],
     "requirement_coverage": [
-        {"capability_name": "Stakeholder engagement", "status": "supported", "importance": "required"}
+        {"capability_name": "Stakeholder engagement", "status": "supported", "importance": "mandatory"}
     ],
 }
 
