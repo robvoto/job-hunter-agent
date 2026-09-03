@@ -1593,8 +1593,6 @@ def render_job_card(
             "run_date": str(_cand_hist.get("run_date") or "").strip(),
             "confidence": _ch_confidence,
             "evidence": str(_cand_hist.get("llm_evidence") or "").strip(),
-            "match_confidence": str(_cand_hist.get("_match_confidence") or "").strip().lower(),
-            "match_reason": str(_cand_hist.get("_company_match_reason") or "").strip(),
         }
     score_percent = max(min(int(fit_points), 100), 0)
     score_html = (
@@ -2351,16 +2349,11 @@ def render_job_card(
         _ch_run_date = _cand_hist_details["run_date"]
         _ch_confidence = _cand_hist_details["confidence"]
         _ch_evidence_raw = _cand_hist_details["evidence"]
-        _ch_match_confidence = _cand_hist_details["match_confidence"]
-        _ch_match_reason = _cand_hist_details["match_reason"]
         # Skip the details block when there's nothing actionable to show — low
         # confidence with no evidence or role means the LLM failed at import and
         # the only data is the raw company name from the sheet, which the badge
         # already signals.
         if not (_ch_confidence == "low" and not _ch_evidence_raw and not _ch_role):
-            _ch_evidence = (
-                _ch_evidence_raw[:100] + "..." if len(_ch_evidence_raw) > 100 else _ch_evidence_raw
-            )
             _ch_formatted_date = (
                 format_timestamp_label(_ch_run_date, include_time=False)
                 if _ch_run_date
@@ -2374,30 +2367,16 @@ def render_job_card(
                 _ch_items.append(f"{_workspace_label('candidate_history_labels', 'role_prefix')} {_ch_role}")
             if _ch_evidence_raw:
                 _ch_items.append(
-                    f"{_workspace_label('candidate_history_labels', 'evidence_prefix')} {_ch_evidence}"
+                    f"{_workspace_label('candidate_history_labels', 'evidence_prefix')} {_ch_evidence_raw}"
                 )
-            # Keep application-history diagnostics in the record for debugging,
-            # but keep them out of the normal candidate-facing card details.
-            if active_debug_mode:
-                if _ch_confidence:
-                    _ch_items.append(
-                        f"{_workspace_label('candidate_history_labels', 'confidence_prefix')} {_ch_confidence}"
-                    )
-                if _ch_match_confidence:
-                    _ch_items.append(
-                        f"{_workspace_label('candidate_history_labels', 'company_match_confidence_prefix')} "
-                        f"{_ch_match_confidence}"
-                    )
-                if _ch_match_reason:
-                    _ch_items.append(
-                        f"{_workspace_label('candidate_history_labels', 'company_match_reason_prefix')} "
-                        f"{_ch_match_reason}"
-                    )
-                if _cand_hist_review_reason:
-                    _ch_items.append(
-                        f"{_workspace_label('candidate_history_labels', 'review_reason_prefix')} "
-                        f"{_cand_hist_review_reason}"
-                    )
+            # The classification/company-match confidence values were noise even in
+            # debug and have been dropped. The review reason stays debug-only: it is
+            # the one diagnostic that explains why a row was flagged for a human.
+            if active_debug_mode and _cand_hist_review_reason:
+                _ch_items.append(
+                    f"{_workspace_label('candidate_history_labels', 'review_reason_prefix')} "
+                    f"{_cand_hist_review_reason}"
+                )
             candidate_history_html = (
                 '<div class="job-insight-group is-secondary job-candidate-history">'
                 f"<strong>{safe_html(_workspace_label('candidate_history_labels', 'summary'))}</strong>"

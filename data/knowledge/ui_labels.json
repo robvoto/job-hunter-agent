@@ -1033,14 +1033,11 @@
     "eligibility_gate_prefix": "Eligibility gate:",
     "occupation_alignment_prefix": "Occupation alignment:"
   },
-  "candidate_history_labels_description": "Labels for the candidate application history debug panel on job cards.",
+  "candidate_history_labels_description": "Labels for the candidate application history panel on job cards. review_reason_prefix is debug-only.",
   "candidate_history_labels": {
     "summary": "Candidate application history",
     "role_prefix": "Role:",
     "evidence_prefix": "Evidence:",
-    "confidence_prefix": "Confidence:",
-    "company_match_confidence_prefix": "Company match confidence:",
-    "company_match_reason_prefix": "Company match reason:",
     "review_reason_prefix": "Review reason:"
   },
   "profile_field_labels_description": "Display labels and help text for profile/settings preference fields (engagement type, contract length, work mode, sector, salary, review-gating messages) sourced by job_hunter_agent/profile_store.py.",
