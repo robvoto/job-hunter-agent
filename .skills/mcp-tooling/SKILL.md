@@ -33,11 +33,12 @@ Use for project filesystem/tool access and whenever MCP execution is unreliable.
 5. If `HUMAN_MCP_SECURE` fails, retry once with a smaller/minimal diagnostic through the same connector. Do not switch Job Hunter repo connectors unless the human explicitly authorises the documented ngrok fallback.
 6. Report the exact failing layer: connector, command, path, encoding, permission, or application logic.
 
-## Human MCP contract stability
-- Treat exposed Human MCP action names and schemas as a stable versioned interface for ChatGPT.
-- Do not rename or remove an existing action, change an existing required argument, or change an existing argument type without an explicit versioned migration.
-- Prefer backward-compatible changes: add optional arguments, add new actions, or change only the internal Python implementation behind an existing action contract.
-- Internal implementation may evolve freely as long as the published v1 tool contract remains compatible.
+## Human MCP external contract stability — explicit exception
+- This section applies only to the published Human MCP tool interface consumed outside Job Hunter. It is an explicit exception to Job Hunter's pre-live canonical-contract rule; it must never be used to justify compatibility code in Job Hunter business logic, persistence, payloads, caches, UI contracts, or internal APIs.
+- Treat exposed Human MCP action names and schemas as a stable versioned external interface for ChatGPT.
+- Do not rename or remove an existing published action, change an existing required argument, or change an existing argument type without an explicit versioned external-contract change.
+- For that external interface only, prefer additive changes such as optional arguments or new actions, or change only the internal implementation behind an unchanged published action contract.
+- Internal Human MCP implementation may evolve freely while the published external tool contract remains stable.
 
 ## Existing signed-in browser control
 Runtime-specific: use only when Human MCP browser tools are exposed.

@@ -24,7 +24,7 @@ Keep agent instructions useful, small, current, and non-contradictory.
 - Remove stale architecture claims when verified wrong.
 - Do not edit agent-specific files to redefine rules owned by `AGENTS.md`, `docs/PROJECT_CONTEXT.md`, or `.skills/*/SKILL.md`; point back to the owning file instead.
 - Avoid duplicating the same rule across many files.
-- Preserve important project constraints: no hardcoding, Google Sheet backlog source of truth, Excel export compatibility only when explicitly used, Definition of Done, and do-not-pick-Done-items.
+- Preserve important project constraints: no hardcoding, Google Sheet backlog source of truth, Excel export support only when the workflow explicitly uses the export, Definition of Done, and do-not-pick-Done-items.
 - If unsure whether information is stale, mark it for review instead of rewriting as fact.
 
 ## Cross-agent portability
