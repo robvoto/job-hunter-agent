@@ -34,7 +34,11 @@ from job_hunter_agent.global_settings import (
     get_search_plan_min_corroboration_samples,
     get_search_plan_max_age_minutes,
 )
-from job_hunter_agent.io_utils import DEBUG_CAPTURE_SOURCE_PAYLOADS, write_source_payload_debug
+from job_hunter_agent.io_utils import (
+    DEBUG_CAPTURE_SOURCE_PAYLOADS,
+    load_parsing_rules,
+    write_source_payload_debug,
+)
 from job_hunter_agent.job_review_pipeline import (
     ReviewPipelineContext,
     ReviewPipelineHooks,
@@ -56,6 +60,7 @@ from job_hunter_agent.record_schema import (
     RECORD_DETAILS_TEXT_KEY,
     RECORD_JOB_KEY,
     RECORD_JOB_QUALITY_SIGNALS_KEY,
+    RECORD_IS_REPOSTED_KEY,
     RECORD_LOCATION_KEY,
     RECORD_POSTED_AGE_DAYS_KEY,
     RECORD_SALARY_KEY,
@@ -168,12 +173,9 @@ def _fetch_jobspy_with_timeout(search_params: dict, timeout_seconds: float):
 
 
 def _fetch_job_html(record: dict) -> str:
-    raw_fields = record.get("source_metadata", {}).get("raw_source_fields", {})
-    if not isinstance(raw_fields, dict):
-        raw_fields = {}
-    url = str(
-        raw_fields.get("job_url_direct") or raw_fields.get("job_url") or record.get("url") or ""
-    ).strip()
+    # ``job_url_direct`` is the employer/ATS destination, not the LinkedIn
+    # vacancy. LinkedIn status and age must come from this vacancy's own page.
+    url = str(record.get(RECORD_URL_KEY) or "").strip()
     if not url:
         return ""
     request = Request(url, headers={"User-Agent": "Mozilla/5.0"})
@@ -184,14 +186,125 @@ def _fetch_job_html(record: dict) -> str:
         return ""
 
 
-def _extract_linkedin_posted_age_days(html: str, run_date) -> float | None:
-    if not html:
-        return None
+def _linkedin_job_header_rules() -> dict:
+    rules = load_parsing_rules().get("linkedin_job_header_rules")
+    if not isinstance(rules, dict):
+        raise ValueError("parsing_rules.json must define linkedin_job_header_rules")
+    class_tokens = rules.get("container_class_tokens")
+    closed_status_text = rules.get("closed_status_text")
+    reposted_label = str(rules.get("reposted_label") or "").strip()
+    if not isinstance(class_tokens, list) or not class_tokens:
+        raise ValueError(
+            "parsing_rules.json must define linkedin_job_header_rules.container_class_tokens"
+        )
+    if not isinstance(closed_status_text, list) or not closed_status_text:
+        raise ValueError(
+            "parsing_rules.json must define linkedin_job_header_rules.closed_status_text"
+        )
+    if not reposted_label:
+        raise ValueError(
+            "parsing_rules.json must define linkedin_job_header_rules.reposted_label"
+        )
+    return {
+        "container_class_tokens": {
+            str(value).strip() for value in class_tokens if str(value).strip()
+        },
+        "closed_status_text": [
+            str(value).strip().lower()
+            for value in closed_status_text
+            if str(value).strip()
+        ],
+        "reposted_label": reposted_label.lower(),
+    }
 
-    visible_text = re.sub(r"<script\b.*?</script>|<style\b.*?</style>", " ", html, flags=re.I | re.S)
-    visible_text = re.sub(r"<[^>]+>", " ", visible_text)
-    visible_text = re.sub(r"\s+", " ", visible_text).strip().lower()
-    return parse_visible_posted_age_days(visible_text, run_date)
+
+class _LinkedInJobHeaderParser(HTMLParser):
+    """Capture text only from LinkedIn's current-vacancy header container."""
+
+    _VOID_TAGS = frozenset(
+        {
+            "area", "base", "br", "col", "embed", "hr", "img", "input",
+            "link", "meta", "param", "source", "track", "wbr",
+        }
+    )
+
+    def __init__(self, container_class_tokens: set[str]) -> None:
+        super().__init__(convert_charrefs=True)
+        self._container_class_tokens = container_class_tokens
+        self._depth = 0
+        self._capture_from_depth: int | None = None
+        self._captured = False
+        self._chunks: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        if tag.lower() in self._VOID_TAGS:
+            return
+        self._depth += 1
+        if self._capture_from_depth is None and not self._captured:
+            class_tokens = set(str(dict(attrs).get("class") or "").split())
+            if class_tokens.intersection(self._container_class_tokens):
+                self._capture_from_depth = self._depth
+
+    def handle_startendtag(self, tag, attrs) -> None:
+        if tag.lower() in self._VOID_TAGS:
+            return
+        self.handle_starttag(tag, attrs)
+        self.handle_endtag(tag)
+
+    def handle_endtag(self, tag: str) -> None:
+        if self._capture_from_depth is not None and self._depth == self._capture_from_depth:
+            self._capture_from_depth = None
+            self._captured = True
+        self._depth = max(0, self._depth - 1)
+
+    def handle_data(self, data: str) -> None:
+        if self._capture_from_depth is not None:
+            self._chunks.append(data)
+
+    @property
+    def text(self) -> str:
+        return re.sub(r"\s+", " ", " ".join(self._chunks)).strip()
+
+
+def _extract_linkedin_job_header_evidence(html: str, run_date) -> dict:
+    rules = _linkedin_job_header_rules()
+    parser = _LinkedInJobHeaderParser(rules["container_class_tokens"])
+    if html:
+        try:
+            parser.feed(html)
+            parser.close()
+        except (TypeError, ValueError):
+            return {
+                "header_text": "",
+                "is_closed": False,
+                "is_reposted": False,
+                "posted_age_days": None,
+            }
+
+    header_text = parser.text
+    normalized_header = header_text.lower()
+    is_closed = any(
+        phrase in normalized_header for phrase in rules["closed_status_text"]
+    )
+    reposted_label = rules["reposted_label"]
+    reposted_text = re.sub(
+        rf"\b{re.escape(reposted_label)}\b",
+        "posted",
+        header_text,
+        count=1,
+        flags=re.IGNORECASE,
+    )
+    posted_age_days = parse_visible_posted_age_days(reposted_text, run_date)
+    is_reposted = bool(
+        re.search(rf"\b{re.escape(reposted_label)}\b", normalized_header)
+        and posted_age_days is not None
+    )
+    return {
+        "header_text": header_text,
+        "is_closed": is_closed,
+        "is_reposted": is_reposted,
+        "posted_age_days": posted_age_days,
+    }
 
 
 _JOB_URL_DIRECT_CODE_RE = re.compile(r'<code[^>]*id="applyUrl"[^>]*>(.*?)</code>', re.I | re.S)
@@ -894,27 +1007,29 @@ class LinkedInScraper(BaseJobScraper):
         kept_records: list[dict],
         skill_observations: list[dict],
     ) -> None:
-        """Run current review logic on live or cached source evidence.
-
-        No LinkedIn job-page network fetch happens above this point: native-ID dedup
-        (seen_job_keys) and the pre-detail gate must both clear a card before
-        _fetch_linkedin_detail_evidence performs the single bounded detail fetch.
-        """
+        """Run review after capturing authoritative LinkedIn header evidence."""
         job_key = str(record.get(RECORD_JOB_KEY) or "").strip()
         if job_key and job_key in seen_job_keys:
             logger.debug("%s duplicate job_key=%s across LinkedIn targets; skipping", target_tag, job_key)
             return
         if job_key:
             seen_job_keys.add(job_key)
+        detail_fetched = False
+        if self.source_name == SOURCE_LINKEDIN:
+            closed_signals = self._fetch_linkedin_detail_evidence(record)
+            detail_fetched = True
+            if closed_signals:
+                record[RECORD_JOB_QUALITY_SIGNALS_KEY] = closed_signals
         pre_outcome, record, _, should_fetch_details = review_pre_detail_normalized_job(
             record, review_context
         )
         outcome = pre_outcome
         record_skill_observations: list[dict] = []
         if pre_outcome["decision"] == "KEEP" and should_fetch_details:
-            closed_signals = self._fetch_linkedin_detail_evidence(record)
-            if closed_signals:
-                record[RECORD_JOB_QUALITY_SIGNALS_KEY] = closed_signals
+            if not detail_fetched:
+                closed_signals = self._fetch_linkedin_detail_evidence(record)
+                if closed_signals:
+                    record[RECORD_JOB_QUALITY_SIGNALS_KEY] = closed_signals
             outcome, record, record_skill_observations = review_post_detail_normalized_job(
                 record, review_context, hooks=self._build_review_hooks()
             )
@@ -990,6 +1105,7 @@ class LinkedInScraper(BaseJobScraper):
                         current_record.get(RECORD_POSTED_AGE_DAYS_KEY),
                         rules,
                         run_date,
+                        detect_closed=False,
                     )
                 )
 
@@ -1013,22 +1129,15 @@ class LinkedInScraper(BaseJobScraper):
     def _fetch_linkedin_detail_evidence(self, record: dict) -> list[dict]:
         """One bounded LinkedIn job-page fetch, reused for every field that needs it.
 
-        Only called once a card has survived native-ID dedup and the cheap
-        pre-detail gates (review_pre_detail_normalized_job returned
-        should_fetch_details=True) -- never during discovery/card review. JobSpy's
-        own discovery call runs with linkedin_fetch_description=False, so this is
-        the only per-job LinkedIn page fetch in the pipeline; its evidence is reused
-        for description, apply-method metadata, posted-age backfill, and closed-job
-        signals rather than independently re-fetching the same page multiple times.
+        The page is fetched once per vacancy after native-ID dedup. Header evidence
+        is captured before pre-detail review so a closed listing cannot reach an LLM;
+        the same page response supplies description and apply metadata if the job
+        remains eligible. JobSpy discovery runs with linkedin_fetch_description=False.
 
-        Returns the closed-job signals found, if any; description/apply-url/posted-age
-        evidence is applied directly onto ``record``.
+        Returns the closed-job signals found, if any; header, description, apply-url,
+        and posted-age evidence is applied directly onto ``record``.
         """
-        from job_hunter_agent.job_quality import (  # noqa: PLC0415
-            SIGNAL_KIND_JOB_CLOSED,
-            detect_external_date_signals,
-            load_dodgy_job_rules,
-        )
+        from job_hunter_agent.job_quality import SIGNAL_KIND_JOB_CLOSED  # noqa: PLC0415
 
         html = _fetch_job_html(record)
         if not html:
@@ -1051,15 +1160,34 @@ class LinkedInScraper(BaseJobScraper):
                 source_metadata["raw_source_fields"] = raw_fields
             record["source_metadata"] = source_metadata
 
-        run_date = datetime.fromisoformat(self.run_iso).date()
-        if record.get(RECORD_POSTED_AGE_DAYS_KEY) is None:
-            posted_age_days = _extract_linkedin_posted_age_days(html, run_date)
-            if posted_age_days is not None:
-                record[RECORD_POSTED_AGE_DAYS_KEY] = posted_age_days
+        source_metadata = record.get("source_metadata")
+        apply_url = (
+            str(source_metadata.get("apply_url") or "").strip()
+            if isinstance(source_metadata, dict)
+            else ""
+        )
+        record[RECORD_APPLY_METHOD_KEY] = classify_linkedin_apply_method(
+            apply_url, str(record.get(RECORD_URL_KEY) or "").strip()
+        )
 
-        rules = load_dodgy_job_rules()
-        signals = detect_external_date_signals(html, None, rules, run_date)
-        return [signal for signal in signals if signal.get("kind") == SIGNAL_KIND_JOB_CLOSED]
+        run_date = datetime.fromisoformat(self.run_iso).date()
+        header = _extract_linkedin_job_header_evidence(html, run_date)
+        posted_age_days = header["posted_age_days"]
+        if posted_age_days is not None:
+            record[RECORD_POSTED_AGE_DAYS_KEY] = posted_age_days
+        if header["is_reposted"]:
+            record[RECORD_IS_REPOSTED_KEY] = True
+
+        if not header["is_closed"]:
+            return []
+        return [
+            {
+                "kind": SIGNAL_KIND_JOB_CLOSED,
+                "label": "Job Closed",
+                "evidence": "LinkedIn's current vacancy header says no longer accepting applications.",
+                "needs_review": False,
+            }
+        ]
 
     def _fetch_jobspy(self, target: dict):
         search_params = {

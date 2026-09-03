@@ -1,7 +1,7 @@
 {
   "kind": "system_config",
   "name": "parsing_rules",
-  "version": 15,
+  "version": 16,
   "stopwords_description": "Common filler words stripped during title parsing and token matching.",
   "stopwords": [
     "a",
@@ -172,6 +172,21 @@
       "d": 1,
       "y": 365
     }
+  },
+  "linkedin_job_header_rules_description": "LinkedIn-specific selectors and labels used only within the current vacancy's job header.",
+  "linkedin_job_header_rules": {
+    "container_class_tokens": [
+      "job-details-jobs-unified-top-card__container",
+      "job-details-jobs-unified-top-card__container--two-pane",
+      "job-details-jobs-unified-top-card__primary-description-container",
+      "job-details-jobs-unified-top-card__primary-description",
+      "jobs-unified-top-card__primary-description",
+      "top-card-layout__second-subline"
+    ],
+    "closed_status_text": [
+      "no longer accepting applications"
+    ],
+    "reposted_label": "reposted"
   },
   "strength_coefficients": {
     "description": "Strength multipliers for capability rule levels. Used by capability_rule_strength to weight evidence.",

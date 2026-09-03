@@ -79,7 +79,7 @@ Primary modules:
 
 * `scrapers/seek_runner.py` — SEEK scrape loop, card review dispatch, parallel detail fetch, result collection
 * `scrapers/seek.py` — SEEK low-level page helpers, selectors, URL building, detail payload fetch
-* `scrapers/linkedin.py` — LinkedIn via python-jobspy; owns bounded target concurrency, truthful collection-health accounting, and the configurable consecutive-failure circuit breaker
+* `scrapers/linkedin.py` — LinkedIn via python-jobspy card discovery plus canonical-vacancy header/detail evidence; owns bounded target concurrency, truthful collection-health accounting, and the configurable consecutive-failure circuit breaker
 * `scrapers/apsjobs.py` — APSJobs Playwright scraper for government-seeking profiles
 * `source_runner.py` — routes enabled sources; checks the persisted per-source discovery snapshot before running a board search; enabled sources run concurrently via `ThreadPoolExecutor` with isolated mutable state per source when more than one source is active; distinguishes worker completion from source health (`healthy`, `partial_failure`, `full_failure`, `stopped`); commits discovery snapshots only for complete successful collections; step-through keeps the run serial for manual inspection; SEEK can pause a visible persistent browser for manual verification when the assisted flag is enabled
 * `source_discovery_cache.py` — persists normalized pre-decision source evidence and bounded LinkedIn failure state; it never stores final fit decisions. Failed, partial, stopped, or interrupted collections cannot overwrite a known-good success snapshot.

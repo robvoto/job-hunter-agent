@@ -697,7 +697,11 @@ def _mark_original_posted_date_unverified(record: dict) -> None:
     record[RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY] = ORIGINAL_POSTED_DATE_STATUS_UNVERIFIED
     record[RECORD_ORIGINAL_POSTED_DATE_KEY] = ""
     record[RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY] = None
-    record[RECORD_IS_REPOSTED_KEY] = None
+    # An explicit LinkedIn header label is authoritative source evidence and
+    # must survive the optional external-ATS comparison when that comparison is
+    # unavailable. Only clear an unresolved comparison result.
+    if record.get(RECORD_IS_REPOSTED_KEY) is not True:
+        record[RECORD_IS_REPOSTED_KEY] = None
 
 
 def _apply_external_posting_date_evidence(
@@ -761,7 +765,10 @@ def _apply_external_posting_date_evidence(
         record[RECORD_IS_REPOSTED_KEY] = None
         return
 
-    record[RECORD_IS_REPOSTED_KEY] = original_age_days > normalized_board_age_days
+    record[RECORD_IS_REPOSTED_KEY] = bool(
+        record.get(RECORD_IS_REPOSTED_KEY) is True
+        or original_age_days > normalized_board_age_days
+    )
 
 
 def _call_hook(
