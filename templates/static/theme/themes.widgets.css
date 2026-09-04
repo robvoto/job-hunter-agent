@@ -102,7 +102,8 @@
 .help-drawer summary,
 .workflow-drawer-summary,
 .side-panel summary,
-.rejection-first-use summary {
+.rejection-first-use summary,
+.job-insights summary {
   cursor: pointer;
   list-style: none;
 }
@@ -116,7 +117,8 @@
 .help-drawer summary::-webkit-details-marker,
 .workflow-drawer-summary::-webkit-details-marker,
 .side-panel summary::-webkit-details-marker,
-.rejection-first-use summary::-webkit-details-marker {
+.rejection-first-use summary::-webkit-details-marker,
+.job-insights summary::-webkit-details-marker {
   display: none;
 }
 
