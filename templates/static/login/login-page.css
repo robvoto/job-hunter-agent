@@ -253,6 +253,27 @@
   flex: 0 0 auto;
 }
 
+/* Action row for access-gate cards (request-access and friends). These pages
+   load only login-page.css, not settings-page.css, so the `.panel-actions`
+   class the markup borrows has no layout here unless it is defined below.
+   Without this rule the stacked <form> buttons collapse together with no gap. */
+.login-card .panel-actions {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--surface-gap-md);
+}
+
+.login-card .panel-actions form {
+  width: min(100%, 340px);
+  margin: 0;
+}
+
+.login-card .panel-actions .jh-button {
+  width: 100%;
+}
+
 .login-workspace-note {
   width: 100%;
   margin-top: 22px;
