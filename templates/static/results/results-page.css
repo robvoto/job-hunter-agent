@@ -376,14 +376,17 @@
   line-height: 1.55;
 }
 
-/* Collapsed teaser: always exactly two lines at full card width. The ▾
-   toggle expands to the full description. */
+/* Collapsed teaser: up to three lines at full card width, with the last line
+   fading out so it reads as "there is more". The ▾ toggle sits on its own line
+   below and expands to the full description. */
 .job-summary-expand:not([open]) .job-summary-text {
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
   overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 66%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 66%, transparent 100%);
 }
 
 .job-summary-expand {
@@ -409,29 +412,25 @@
   display: inline;
 }
 
+/* The toggle is its own centred row under the teaser: a large, obvious ▾. */
 .job-summary-toggle {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  margin-left: 5px;
-  vertical-align: baseline;
+  width: fit-content;
+  margin: 4px auto 0;
+  padding: 2px 14px;
+  border-radius: 999px;
   color: var(--accent);
 }
 
-/* While collapsed, sit the toggle at the end of the clamped second line and
-   fade the truncated text out behind it. */
-.job-summary-expand:not([open]) .job-summary-toggle {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  margin-left: 0;
-  padding-left: 2.4rem;
-  background: linear-gradient(to right, transparent, var(--card-bg) 1.4rem);
+.job-summary-expand summary:hover .job-summary-toggle {
+  background: var(--bg-muted);
 }
 
 .job-summary-toggle-icon::before {
   content: "▾";
-  font-size: 1rem;
+  font-size: 1.5rem;
   line-height: 1;
   transition: transform 0.18s ease;
 }

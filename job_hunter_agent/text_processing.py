@@ -4,6 +4,13 @@ import re
 from functools import lru_cache
 from typing import List, Optional, Set
 
+# Upper bound on the stored role-summary / teaser snippet. This is a payload
+# bound only: the job card clamps the teaser to a fixed number of lines in CSS
+# (`-webkit-line-clamp` in results-page.css), so this must stay comfortably
+# longer than those lines render on a wide card, otherwise a mid-sentence "..."
+# trims the teaser before the visual clamp does.
+ROLE_SUMMARY_SNIPPET_MAX = 600
+
 _ESCAPED_LIST_MARKER_RE = re.compile(r"(?<!\S)\\\*(?=\s+\S)")
 _STRUCTURED_SUMMARY_PREFIXES = (
     "role:",
@@ -219,7 +226,11 @@ def synthesize_role_snapshot(record: dict) -> str:
     if teaser and teaser != "N/A" and not _is_generic_summary_text(teaser):
         summary = f"{summary} {teaser}".strip()
 
-    return summarize_snippet(summary, max_length=220) if summary else "Role summary not available."
+    return (
+        summarize_snippet(summary, max_length=ROLE_SUMMARY_SNIPPET_MAX)
+        if summary
+        else "Role summary not available."
+    )
 
 
 def description_summary_snippet(record: dict, details_text: str) -> str:
@@ -241,7 +252,7 @@ def description_summary_snippet(record: dict, details_text: str) -> str:
         if _looks_like_generic_job_summary(snippet, title, company):
             continue
 
-        return summarize_snippet(snippet, max_length=220)
+        return summarize_snippet(snippet, max_length=ROLE_SUMMARY_SNIPPET_MAX)
 
     return ""
 
@@ -352,7 +363,7 @@ def build_role_summary(record: dict, details_text: str, profile: Optional[dict] 
         and not _is_generic_summary_text(teaser)
         and not _is_structured_summary_snippet(teaser)
     ):
-        return summarize_snippet(teaser, max_length=220)
+        return summarize_snippet(teaser, max_length=ROLE_SUMMARY_SNIPPET_MAX)
 
     domain_focus = ""
 
