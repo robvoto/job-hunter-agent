@@ -272,7 +272,7 @@ def test_toggle_switch_variants_are_not_half_copied():
     label at all -- the title lives in the surrounding row instead. A label that
     mixes the compact class with an inline toggle-switch-title (or a full-variant
     label missing toggle-switch-copy) is a half-copied pattern, not a documented
-    variant -- see docs/UI_COMPONENT_MAP.md and .skills/dashboard-ui/SKILL.md.
+    variant -- see docs/UI_COMPONENT_MAP.md and .agents/skills/dashboard-ui/SKILL.md.
     """
     search_files = sorted((REPO_ROOT / "templates").rglob("*.html")) + sorted(
         (REPO_ROOT / "templates" / "static").rglob("*.js")

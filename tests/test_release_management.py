@@ -18,7 +18,7 @@ RELEASE_SCRIPT = REPO_ROOT / "scripts" / "release-jobhunter.sh"
 ROOT_RELEASE_WRAPPER = REPO_ROOT / "release"
 DEPLOY_RELEASE_SCRIPT = REPO_ROOT / "scripts" / "ec2" / "deploy-jobhunter-release.sh"
 DEPLOY_LATEST_SCRIPT = REPO_ROOT / "scripts" / "ec2" / "deploy-jobhunter-latest.sh"
-RELEASE_SKILL = REPO_ROOT / ".skills" / "release-management" / "SKILL.md"
+RELEASE_SKILL = REPO_ROOT / ".agents/skills" / "release-management" / "SKILL.md"
 
 
 def _run(

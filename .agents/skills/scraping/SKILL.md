@@ -7,12 +7,12 @@ description: Use ONLY for SEEK, LinkedIn, and APSJobs discovery/scraping, source
 
 Use before editing SEEK, LinkedIn, or APSJobs discovery/scrapers, source health/cache behaviour, or scraped job data shape.
 
-See `.skills/scraping/DETAILS.md` for detailed work-mode extraction, source-specific rules, debug logging, and scraper run diagnosis.
+See `.agents/skills/scraping/DETAILS.md` for detailed work-mode extraction, source-specific rules, debug logging, and scraper run diagnosis.
 
 ## Load order
 1. Read `AGENTS.md`.
 2. Read this skill.
-3. Read `.skills/scraping/DETAILS.md` only for detailed work-mode extraction, source-specific rules, debug logging, or scraper run diagnosis.
+3. Read `.agents/skills/scraping/DETAILS.md` only for detailed work-mode extraction, source-specific rules, debug logging, or scraper run diagnosis.
 
 ## Non-negotiable rules
 - Scrapers collect evidence; they do not decide fit, score, rank, or reject beyond source/search validity guards.
@@ -37,7 +37,7 @@ See `.skills/scraping/DETAILS.md` for detailed work-mode extraction, source-spec
 - `SOURCE_COMPLETE` means the source worker finished. Use explicit health markers such as `SOURCE_FAILED` / `SOURCE_PARTIAL` and the structured source status to describe whether collection actually succeeded.
 - Do not treat search keywords as job-level work-mode proof.
 - **Search-semantics boundary:** user-facing role/preference labels, canonical occupation/taxonomy identity, machine-facing source queries, seniority or other ranking/eligibility preferences, and source-cache signatures are separate contracts. Do not make one automatically own or overwrite another merely to simplify search planning.
-- Any change to how profile/user values become SEEK, LinkedIn, or APSJobs query terms is a business-semantics change. Before implementation, follow `.skills/code-change/SKILL.md`'s approval gate and show the exact before/after query set for representative current values, including whether the number of source targets increases or decreases and whether discovery becomes broader or narrower.
+- Any change to how profile/user values become SEEK, LinkedIn, or APSJobs query terms is a business-semantics change. Before implementation, follow `.agents/skills/code-change/SKILL.md`'s approval gate and show the exact before/after query set for representative current values, including whether the number of source targets increases or decreases and whether discovery becomes broader or narrower.
 - Search-term derivation must not be implemented as hardcoded role lists or one-off title exceptions. If the desired mapping between a user role and a machine query is not already an approved product contract, stop and ask rather than inventing it.
 - Changing search-term inputs or cache/signature composition must include an explicit cache-impact statement: which discovery snapshots/search plans/reviews become invalid, which remain reusable, and why. A cache-version bump must not invalidate a more expensive independent cache unless that cache's own behavioural contract actually changed.
 

@@ -1,20 +1,20 @@
 ---
 name: instruction-maintenance
-description: "Use ONLY when editing agent instruction files: AGENTS.md, adapter files, .skills, DETAILS.md, or docs that define agent workflow. Do NOT use for product/code changes."
+description: "Use ONLY when editing agent instruction files: AGENTS.md, adapter files, .agents/skills, DETAILS.md, or docs that define agent workflow. Do NOT use for product/code changes."
 ---
 
 # Skill: Instruction Maintenance
 
-Use when editing `AGENTS.md`, agent-specific instruction files, `.skills/*/SKILL.md`, or important project markdown that guides agents.
+Use when editing `AGENTS.md`, agent-specific instruction files, `.agents/skills/*/SKILL.md`, or important project markdown that guides agents.
 
 ## Purpose
 Keep agent instructions useful, small, current, and non-contradictory.
 
 ## Source hierarchy
 - `AGENTS.md`: project-wide rules all agents should read first.
-- Agent-specific files such as `CLAUDE.md`: thin pointers/adapters only. Do not duplicate core rules there.
-- `.skills/*/SKILL.md`: compact domain rules loaded only for that work area.
-- `.skills/*/DETAILS.md`: longer reference material split out of a noisy skill.
+- Agent-specific adapter files, when present, are self-contained thin bootstrap layers. Shared project docs/tests must not enumerate or depend on particular adapter filenames. Do not duplicate core rules in adapters.
+- `.agents/skills/*/SKILL.md`: compact domain rules loaded only for that work area.
+- `.agents/skills/*/DETAILS.md`: longer reference material split out of a noisy skill.
 - `docs/*`: human/reference documentation, not agent operating rules unless explicitly linked.
 - Google Sheet backlog: planning/tracking only, not instructions.
 
@@ -22,16 +22,16 @@ Keep agent instructions useful, small, current, and non-contradictory.
 - Prefer deleting or moving noise over adding more instructions.
 - Keep `SKILL.md` files concise. If a skill grows too large, move detailed examples/patterns to `DETAILS.md` and keep `SKILL.md` as the loader/rule summary.
 - Remove stale architecture claims when verified wrong.
-- Do not edit agent-specific files to redefine rules owned by `AGENTS.md`, `docs/PROJECT_CONTEXT.md`, or `.skills/*/SKILL.md`; point back to the owning file instead.
+- Do not edit agent-specific files to redefine rules owned by `AGENTS.md`, `docs/PROJECT_CONTEXT.md`, or `.agents/skills/*/SKILL.md`; point back to the owning file instead.
 - Avoid duplicating the same rule across many files.
 - Preserve important project constraints: no hardcoding, Google Sheet backlog source of truth, Excel export support only when the workflow explicitly uses the export, Definition of Done, and do-not-pick-Done-items.
 - If unsure whether information is stale, mark it for review instead of rewriting as fact.
 
 ## Cross-agent portability
-- Shared `AGENTS.md` and `.skills/*` rules must be usable by ChatGPT, Codex, Claude, Cline, or another coding agent. Describe the required capability/behaviour first; do not assume every runtime exposes the same tool namespace.
+- Shared `AGENTS.md` and `.agents/skills/*` rules must be runtime-neutral. Describe required capability/behaviour first; do not assume a particular agent product, adapter filename, or tool namespace.
 - Runtime-specific tool names, connector names, local paths, or browser bridges are allowed only in the owning tooling/project-context instruction and must be explicitly scoped to the runtime where they exist.
 - A local coding agent already running in the repository may use its direct filesystem/shell. A connector-based runtime should use its authorised connector and documented fallback. Neither should be told to invoke a tool that runtime does not expose.
-- Do not create parallel copies of domain rules for Codex, Claude, or ChatGPT. Keep shared behaviour in `AGENTS.md`/skills and keep agent adapters thin.
+- Do not create parallel agent-specific copies of domain rules. Keep shared behaviour in `AGENTS.md`/skills; each runtime adapter owns only its own bootstrap.
 - Examples are explanatory only. Do not let an example title, company, user profile, location, threshold, or observed phrase become an implementation rule.
 
 ## Audit checklist
@@ -63,10 +63,11 @@ When cleaning instructions, check:
 - Do not create duplicate rules in several skills. Link or route to the single owner.
 
 ## Ongoing maintenance
-- When new instructions are added, check whether they made the wrong file bigger.
-- If a rule is universal, keep it short in `AGENTS.md`.
-- If a rule is area-specific, move it to the relevant skill.
+- When a durable rule should apply across future sessions, first put it in the existing skill that owns that behaviour.
+- If no suitable skill exists, create a focused skill and add it to `.agents/skills/INDEX.md`; do not use `AGENTS.md` as the fallback dumping ground.
+- Keep `AGENTS.md` as routing plus only genuinely universal, stable rules. It may point to an owner but must not duplicate the owner's detailed instructions.
 - If a rule needs examples or long explanation, move those details to `DETAILS.md` or `docs/*`.
+- When new instructions are added, check whether they made the wrong file bigger or duplicated an existing owner.
 - After any instruction-structure cleanup, update `docs/AGENT_OPERATING_MODEL.md` and `docs/DOC_INDEX.md` if ownership or structure changed.
 
 ## Do not

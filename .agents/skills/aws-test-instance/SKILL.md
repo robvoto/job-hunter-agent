@@ -7,12 +7,12 @@ description: Use ONLY for the Job Hunter AWS test EC2 instance, AWS CLI or SSM a
 
 Use before diagnosing Job Hunter behaviour on the shared AWS test box or when an agent needs the exact EC2/SSM/log paths for that host.
 
-See `.skills/aws-test-instance/DETAILS.md` for the exact instance facts, file paths, and ready-to-run AWS CLI commands.
+See `.agents/skills/aws-test-instance/DETAILS.md` for the exact instance facts, file paths, and ready-to-run AWS CLI commands.
 
 ## Load order
 1. Read `AGENTS.md`.
 2. Read this skill.
-3. Read `.skills/aws-test-instance/DETAILS.md` when the task needs AWS instance facts, SSM commands, service ownership, or known-host failure modes.
+3. Read `.agents/skills/aws-test-instance/DETAILS.md` when the task needs AWS instance facts, SSM commands, service ownership, or known-host failure modes.
 
 ## Trigger
 Use this skill when the user mentions any of:
@@ -36,9 +36,9 @@ Use this skill when the user mentions any of:
 ## Ownership
 - AWS host facts and standard diagnosis workflow: this skill + `DETAILS.md`
 - EC2 service wrapper: `scripts/ec2/start-aws-browser-session.sh`
-- App-level scraping logic: `.skills/scraping/SKILL.md`
-- Workspace/UI behaviour: `.skills/dashboard-ui/SKILL.md`
-- Release/deploy flow: `.skills/release-management/SKILL.md`
+- App-level scraping logic: `.agents/skills/scraping/SKILL.md`
+- Workspace/UI behaviour: `.agents/skills/dashboard-ui/SKILL.md`
+- Release/deploy flow: `.agents/skills/release-management/SKILL.md`
 
 ## Validation
 - Record the exact AWS CLI or SSM command used for diagnosis.

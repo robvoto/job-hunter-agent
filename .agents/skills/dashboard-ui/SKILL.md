@@ -7,12 +7,12 @@ description: Use ONLY for workspace/dashboard/settings UI routes, templates, scr
 
 Use before editing workspace/dashboard pages, settings UI surfaces, templates, workspace routes, or score/highlight display.
 
-See `.skills/dashboard-ui/DETAILS.md` for component maps, layout patterns, and longer examples.
+See `.agents/skills/dashboard-ui/DETAILS.md` for component maps, layout patterns, and longer examples.
 
 ## Load order
 1. Read `AGENTS.md` first.
 2. Read this skill.
-3. If the change touches a detailed pattern listed below, read `.skills/dashboard-ui/DETAILS.md` for the specific section only.
+3. If the change touches a detailed pattern listed below, read `.agents/skills/dashboard-ui/DETAILS.md` for the specific section only.
 
 ## Non-negotiable rules
 - UI displays canonical data; it must not recreate filtering, scoring, or preference logic.

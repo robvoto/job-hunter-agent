@@ -212,6 +212,47 @@ def test_doc_index_points_to_canonical_docs_index():
     assert "`docs/INDEX.md`" in doc_index
 
 
+def test_agents_routes_durable_rules_through_skills():
+    agents = (ROOT_DIR / "AGENTS.md").read_text(encoding="utf-8")
+    skills_index = (ROOT_DIR / ".agents/skills" / "INDEX.md").read_text(encoding="utf-8")
+
+    assert ".agents/skills/INDEX.md" in agents
+    assert ".agents/skills/instruction-maintenance/SKILL.md" in agents
+    assert "create a focused skill" in agents
+    assert "Detailed rules belong inside each skill" in skills_index
+
+
+def test_legacy_skills_root_does_not_return():
+    assert not (ROOT_DIR / ".skills").exists(), "Use the canonical .agents/skills repository skill root"
+    assert (ROOT_DIR / ".agents" / "skills" / "INDEX.md").exists()
+
+
+def test_all_active_skills_are_indexed_and_discoverable():
+    skills_root = ROOT_DIR / ".agents/skills"
+    skills_index = (skills_root / "INDEX.md").read_text(encoding="utf-8")
+
+    for skill_path in sorted(skills_root.glob("*/SKILL.md")):
+        text = skill_path.read_text(encoding="utf-8")
+        skill_name = skill_path.parent.name
+        assert text.startswith("---\n"), f"{skill_path} must start with YAML frontmatter"
+        assert f"name: {skill_name}" in text, f"{skill_path} frontmatter name must match its folder"
+        assert "description:" in text, f"{skill_path} must include a routing description"
+        assert f"`{skill_name}/SKILL.md`" in skills_index, f"{skill_name} is missing from .agents/skills/INDEX.md"
+
+
+def test_top_level_docs_are_routed_from_docs_index():
+    docs_root = ROOT_DIR / "docs"
+    docs_index = (docs_root / "INDEX.md").read_text(encoding="utf-8")
+    excluded = {"INDEX.md", "CLINE_MEMORY.md"}
+
+    missing = [
+        path.name
+        for path in sorted(docs_root.glob("*.md"))
+        if path.name not in excluded and path.name not in docs_index
+    ]
+    assert not missing, "Top-level docs must be routed from docs/INDEX.md: " + ", ".join(missing)
+
+
 def test_jobhunter_status_defaults_to_concise_summary():
     script = (ROOT_DIR / "scripts" / "ec2" / "jobhunter-status.sh").read_text(encoding="utf-8")
 
@@ -332,14 +373,14 @@ def test_scoring_and_operations_docs_cover_fit_evidence_and_run_summary_semantic
 
 
 def test_repository_runtime_commands_use_uv_and_classify_missing_binaries_correctly():
-    agents = (ROOT_DIR / "AGENTS.md").read_text(encoding="utf-8")
+    tooling_skill = (ROOT_DIR / ".agents/skills" / "mcp-tooling" / "SKILL.md").read_text(encoding="utf-8")
     operations = (ROOT_DIR / "docs" / "OPERATIONS.md").read_text(encoding="utf-8")
     aws_launcher = (
         ROOT_DIR / "scripts" / "ec2" / "start-aws-browser-session.sh"
     ).read_text(encoding="utf-8")
 
-    assert "Never invoke bare `python`, `python3`, `pytest`, or `ruff`" in agents
-    assert "not a database, application, or repository-access failure" in agents
+    assert "Never invoke bare `python`, `python3`, `pytest`, or `ruff`" in tooling_skill
+    assert "not a database, application, repository-access, or dependency failure" in tooling_skill
     assert "uv run python -m job_hunter_agent.source_connector" in operations
     assert "\npython -m job_hunter_agent.source_connector" not in operations
     assert "set -- uv run python -m job_hunter_agent.fastapi_app --rebuild" in aws_launcher
