@@ -1,4 +1,4 @@
-﻿# ---- Python ----
+# ---- Python ----
 __pycache__/
 *.py[cod]
 *.pyo
@@ -55,7 +55,6 @@ test_tmp.db
 ignore/
 fix_xlsx_view.py
 angular-log-prj-7cc59b5b73a0.json
-CLAUDE.md
 docs/archived-skills/
 
 # ---- Click-testing (Playwright E2E) artifacts ----

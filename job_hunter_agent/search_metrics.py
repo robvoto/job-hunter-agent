@@ -4,7 +4,7 @@ Purely observational logging for one source search target (one search_term x
 location combination). Consumed only by humans/learning review via structured
 logs — must never gate scraping decisions, retire a search term, or otherwise
 feed back into runtime behaviour from a single run. See the search-plan
-ownership rules in `.skills/scraping/SKILL.md`.
+ownership rules in `.agents/skills/scraping/SKILL.md`.
 """
 
 from __future__ import annotations

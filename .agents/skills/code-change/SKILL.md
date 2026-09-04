@@ -27,7 +27,7 @@ Use before modifying existing code.
 - Do not collapse related concepts into one source of truth merely to simplify code. A user/display label, canonical classification or identity, machine-facing query, ranking/eligibility preference, and cache invalidation contract are separate unless the product explicitly defines them as equivalent.
 - Treat changed regression-test expectations as a warning signal, not automatic evidence that the implementation is correct. If a refactor requires changing an existing expectation about discovery, rejection, scoring, user intent, or cache reuse, apply the business-semantics approval gate before updating the test.
 - If code is deciding what human language means, classify that as semantic interpretation before coding. Do not implement semantic interpretation with regexes, keyword/phrase lists, substring checks, hand-authored synonym tables, or string-to-boolean word maps; use the owning LLM/schema/managed-knowledge path, or fail/log for review when meaning is unresolved. (Example: JH-286 — `profile_fact_resolved` is an explicit LLM-owned bool, not a text-equality heuristic, gating whether `canonical_requirement` is trusted as a single resolved concept.)
-- Load `.skills/no-hardcoding/SKILL.md` if the change touches thresholds, mappings, labels, schema fields, defaults, or rule IDs. Do not rely on this trigger alone — it depends on recognizing the change as label-related, which is easy to miss on incidental edits. Any edit to a designated owner module (see `.skills/no-hardcoding/SKILL.md`'s Enforcement section) must run `tests/test_no_hardcoding.py` regardless of what the change looks like.
+- Load `.agents/skills/no-hardcoding/SKILL.md` if the change touches thresholds, mappings, labels, schema fields, defaults, or rule IDs. Do not rely on this trigger alone — it depends on recognizing the change as label-related, which is easy to miss on incidental edits. Any edit to a designated owner module (see `.agents/skills/no-hardcoding/SKILL.md`'s Enforcement section) must run `tests/test_no_hardcoding.py` regardless of what the change looks like.
 - If a task is likely owned by one module, search that owner first and stop once you find the source of truth.
 - When a symptom is visible in the UI, inspect the rendered template, injected bootstrap data, and owning normaliser in parallel before editing.
 
@@ -49,7 +49,7 @@ A code change is done only when:
 3. The solution is not an unapproved fallback, hardcoding, heuristic, compatibility shim, or dead path.
 4. Current project patterns are followed.
 5. Relevant docs, skills, or operations notes are updated when affected.
-6. **If the task came from a backlog item (human-supplied JH ID or agent-picked row), the backlog row is always updated before reporting done** — `Implementation State`, `Implementation Date`, `Implemented By`, `Evidence` — via `.skills/backlog-management/SKILL.md`. This is not conditional on whether it seems "affected"; it is a required last step whenever a backlog row exists for the task.
+6. **If the task came from a backlog item (human-supplied JH ID or agent-picked row), the backlog row is always updated before reporting done** — `Implementation State`, `Implementation Date`, `Implemented By`, `Evidence` — via `.agents/skills/backlog-management/SKILL.md`. This is not conditional on whether it seems "affected"; it is a required last step whenever a backlog row exists for the task.
 
 ## Finish format
 Report:

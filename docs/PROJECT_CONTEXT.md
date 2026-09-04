@@ -29,7 +29,7 @@ It is a strict, explainable job-fit system, not a vague recommender.
 
 ## Project-specific skill routing
 
-Use `.skills/INDEX.md` as the single skill-routing catalogue. Load the smallest matching skill, then combine with reusable skills only when the task crosses ownership boundaries. Do not duplicate the active skill list here.
+Use `.agents/skills/INDEX.md` as the single skill-routing catalogue. Load the smallest matching skill, then combine with reusable skills only when the task crosses ownership boundaries. Do not duplicate the active skill list here.
 
 ## Job Hunter non-negotiables
 
@@ -42,6 +42,6 @@ Use `.skills/INDEX.md` as the single skill-routing catalogue. Load the smallest 
 
 ## Backlog
 
-For backlog work, read `.skills/backlog-management/SKILL.md` first. Do not implement rows marked `Implementation State = Done` unless the human explicitly asks to audit, reopen, correct, or revise them.
+For backlog work, read `.agents/skills/backlog-management/SKILL.md` first. Do not implement rows marked `Implementation State = Done` unless the human explicitly asks to audit, reopen, correct, or revise them.
 
-Backlog items (tasks, stories, bugs) live only in the Google Sheet via `.skills/backlog-management/SKILL.md`. Never track them with the TodoWrite tool — TodoWrite is for in-conversation step tracking only, not backlog state.
+Backlog items (tasks, stories, bugs) live only in the Google Sheet via `.agents/skills/backlog-management/SKILL.md`. Never track them with the TodoWrite tool — TodoWrite is for in-conversation step tracking only, not backlog state.

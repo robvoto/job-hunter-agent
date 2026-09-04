@@ -120,7 +120,7 @@ Runtime path:
 
 The empty state is valid when no saved review data exists or no repeated signal meets the configured review thresholds. Do not treat the empty state as a UI failure without checking saved review data and thresholds first.
 
-For detailed maintenance rules, see `.skills/suggested-tuning/SKILL.md`.
+For detailed maintenance rules, see `.agents/skills/suggested-tuning/SKILL.md`.
 
 - `job_hunter_agent/capability_matrix.py`
   Logic for alias expansion and deterministic capability matching.

@@ -214,16 +214,21 @@ def test_doc_index_points_to_canonical_docs_index():
 
 def test_agents_routes_durable_rules_through_skills():
     agents = (ROOT_DIR / "AGENTS.md").read_text(encoding="utf-8")
-    skills_index = (ROOT_DIR / ".skills" / "INDEX.md").read_text(encoding="utf-8")
+    skills_index = (ROOT_DIR / ".agents/skills" / "INDEX.md").read_text(encoding="utf-8")
 
-    assert ".skills/INDEX.md" in agents
-    assert ".skills/instruction-maintenance/SKILL.md" in agents
+    assert ".agents/skills/INDEX.md" in agents
+    assert ".agents/skills/instruction-maintenance/SKILL.md" in agents
     assert "create a focused skill" in agents
     assert "Detailed rules belong inside each skill" in skills_index
 
 
+def test_legacy_skills_root_does_not_return():
+    assert not (ROOT_DIR / ".skills").exists(), "Use the canonical .agents/skills repository skill root"
+    assert (ROOT_DIR / ".agents" / "skills" / "INDEX.md").exists()
+
+
 def test_all_active_skills_are_indexed_and_discoverable():
-    skills_root = ROOT_DIR / ".skills"
+    skills_root = ROOT_DIR / ".agents/skills"
     skills_index = (skills_root / "INDEX.md").read_text(encoding="utf-8")
 
     for skill_path in sorted(skills_root.glob("*/SKILL.md")):
@@ -232,7 +237,7 @@ def test_all_active_skills_are_indexed_and_discoverable():
         assert text.startswith("---\n"), f"{skill_path} must start with YAML frontmatter"
         assert f"name: {skill_name}" in text, f"{skill_path} frontmatter name must match its folder"
         assert "description:" in text, f"{skill_path} must include a routing description"
-        assert f"`{skill_name}/SKILL.md`" in skills_index, f"{skill_name} is missing from .skills/INDEX.md"
+        assert f"`{skill_name}/SKILL.md`" in skills_index, f"{skill_name} is missing from .agents/skills/INDEX.md"
 
 
 def test_top_level_docs_are_routed_from_docs_index():
@@ -248,12 +253,18 @@ def test_top_level_docs_are_routed_from_docs_index():
     assert not missing, "Top-level docs must be routed from docs/INDEX.md: " + ", ".join(missing)
 
 
-def test_agent_docs_do_not_claim_missing_adapters_are_active():
+def test_claude_adapter_exists_and_stays_thin():
+    claude_path = ROOT_DIR / "CLAUDE.md"
     operating_model = (ROOT_DIR / "docs" / "AGENT_OPERATING_MODEL.md").read_text(encoding="utf-8")
     ownership_map = (ROOT_DIR / "docs" / "DOC_INDEX.md").read_text(encoding="utf-8")
 
-    assert "`CLAUDE.md` is a thin Claude adapter" not in operating_model
-    assert "| `CLAUDE.md` |" not in ownership_map
+    assert claude_path.exists()
+    claude = claude_path.read_text(encoding="utf-8")
+    assert "@AGENTS.md" in claude
+    assert "@.agents/skills/INDEX.md" in claude
+    assert len(claude) < 1000, "CLAUDE.md must remain a thin adapter, not a duplicate rule set"
+    assert "CLAUDE.md" in operating_model
+    assert "| `CLAUDE.md` |" in ownership_map
 
 
 def test_jobhunter_status_defaults_to_concise_summary():
@@ -376,7 +387,7 @@ def test_scoring_and_operations_docs_cover_fit_evidence_and_run_summary_semantic
 
 
 def test_repository_runtime_commands_use_uv_and_classify_missing_binaries_correctly():
-    tooling_skill = (ROOT_DIR / ".skills" / "mcp-tooling" / "SKILL.md").read_text(encoding="utf-8")
+    tooling_skill = (ROOT_DIR / ".agents/skills" / "mcp-tooling" / "SKILL.md").read_text(encoding="utf-8")
     operations = (ROOT_DIR / "docs" / "OPERATIONS.md").read_text(encoding="utf-8")
     aws_launcher = (
         ROOT_DIR / "scripts" / "ec2" / "start-aws-browser-session.sh"
