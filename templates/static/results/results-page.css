@@ -550,7 +550,7 @@
 }
 
 .job-insights {
-  margin: 0 0 10px;
+  margin: 0 0 var(--surface-gap-lg);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   background: var(--bg-muted);
@@ -558,6 +558,11 @@
 }
 
 .job-insights summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--control-space-xs);
+  list-style: none;
   cursor: pointer;
   font-weight: 700;
   color: var(--text-primary);
