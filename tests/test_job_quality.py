@@ -23,6 +23,7 @@ from job_hunter_agent.job_quality import (
     SIGNAL_KIND_DATE_MISMATCH,
     SIGNAL_KIND_JOB_CLOSED,
     detect_cv_farming_signals,
+    detect_expired_application_deadline,
     detect_external_date_signals,
     extract_external_original_posting_date,
     load_dodgy_job_rules,
@@ -515,6 +516,10 @@ class TestManagedKnowledgeLoading:
                 "version": 1,
                 "job_closed_indicators": ["job is no longer available"],
                 "external_date_mismatch_flag_days": 14,
+                "application_deadline_patterns": [
+                    r"applications?\s+close(?:s|d)?\s*:\s*(?P<date>\d{1,2}[- /][A-Za-z]{3,9}[- /]\d{4})"
+                ],
+                "application_deadline_date_formats": ["%d-%b-%Y"],
             },
             isolated_db,
         )
@@ -566,3 +571,21 @@ class TestManagedKnowledgeLoading:
                 "needs_review": True,
             }
         ]
+
+
+def test_explicit_past_application_deadline_is_closed(rules):
+    signals = detect_expired_application_deadline(
+        "Applications close: 25-AUG-2026 at 11:59pm AUS Eastern Standard Time",
+        rules,
+        date(2026, 9, 3),
+    )
+    assert signals and signals[0]["kind"] == SIGNAL_KIND_JOB_CLOSED
+    assert signals[0]["application_deadline"] == "2026-08-25"
+
+
+def test_future_application_deadline_is_not_closed(rules):
+    assert detect_expired_application_deadline(
+        "Applications close: 25-SEP-2026 at 11:59pm",
+        rules,
+        date(2026, 9, 3),
+    ) == []

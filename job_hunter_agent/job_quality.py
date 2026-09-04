@@ -179,6 +179,21 @@ def load_dodgy_job_rules() -> dict:
             "dodgy_job_rules.json must define a positive external_date_mismatch_flag_days"
         )
 
+    deadline_patterns = [
+        _clean_text(value)
+        for value in base_rules.get("application_deadline_patterns", [])
+        if _clean_text(value)
+    ]
+    deadline_formats = [
+        _clean_text(value)
+        for value in base_rules.get("application_deadline_date_formats", [])
+        if _clean_text(value)
+    ]
+    if not deadline_patterns or not deadline_formats:
+        raise ValueError(
+            "dodgy_job_rules.json must define application deadline patterns and date formats"
+        )
+
     return {
         "cv_farming_patterns": [
             str(entry.get("value") or "")
@@ -191,6 +206,8 @@ def load_dodgy_job_rules() -> dict:
             if _clean_text(value)
         ],
         "external_date_mismatch_flag_days": flag_days,
+        "application_deadline_patterns": deadline_patterns,
+        "application_deadline_date_formats": deadline_formats,
     }
 
 
@@ -388,6 +405,39 @@ def extract_external_original_posting_date(html: str, run_date: date) -> dict[st
         }
 
     return None
+
+
+def detect_expired_application_deadline(
+    text: str, rules: dict, run_date: date
+) -> list[dict[str, object]]:
+    """Return a hard closure signal when the ad states an explicit past deadline."""
+    cleaned = compact_whitespace(text)
+    if not cleaned:
+        return []
+    for pattern in rules["application_deadline_patterns"]:
+        match = re.search(pattern, cleaned, re.IGNORECASE)
+        if not match:
+            continue
+        raw_date = compact_whitespace(match.group("date"))
+        parsed = None
+        for date_format in rules["application_deadline_date_formats"]:
+            try:
+                parsed = datetime.strptime(raw_date, date_format).date()
+                break
+            except ValueError:
+                continue
+        if parsed is None or parsed >= run_date:
+            return []
+        return [
+            {
+                "kind": SIGNAL_KIND_JOB_CLOSED,
+                "label": "Job Closed",
+                "evidence": f"Application deadline {parsed.isoformat()} has passed.",
+                "needs_review": False,
+                "application_deadline": parsed.isoformat(),
+            }
+        ]
+    return []
 
 
 def detect_external_date_signals(

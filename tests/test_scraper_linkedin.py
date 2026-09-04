@@ -1650,3 +1650,26 @@ def test_fetch_jobspy_isolated_treats_jobspy_error_notice_as_failure(monkeypatch
 
     with pytest.raises(RuntimeError, match="429 Response - Blocked by LinkedIn"):
         _fetch_jobspy_isolated({"search_term": "project manager"})
+
+
+def test_linkedin_acu_expired_deadline_rejects_when_guest_header_hides_closed_status(monkeypatch):
+    from job_hunter_agent.scrapers import linkedin as linkedin_module
+
+    scraper = LinkedInScraper(
+        profile={}, llm_cache={}, job_history={}, applied_job_keys=set(),
+        hidden_job_keys=set(), run_iso="2026-09-03T09:00:00+10:00",
+    )
+    monkeypatch.setattr(
+        linkedin_module,
+        "_fetch_job_html",
+        lambda _record: (
+            '<div class="top-card-layout__second-subline">10 hours ago</div>'
+            '<div class="show-more-less-html__markup">'
+            'Business Analyst. Applications close: 25-AUG-2026 at 11:59pm AUS Eastern Standard Time'
+            '</div>'
+        ),
+    )
+    record = {RECORD_URL_KEY: "https://www.linkedin.com/jobs/view/4453029530"}
+    signals = scraper._fetch_linkedin_detail_evidence(record)
+    assert signals and signals[0]["kind"] == job_quality.SIGNAL_KIND_JOB_CLOSED
+    assert signals[0]["application_deadline"] == "2026-08-25"
