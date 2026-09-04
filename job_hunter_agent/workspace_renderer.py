@@ -1420,54 +1420,47 @@ def render_job_card(
             )
         )
     channel_kind = channel_signal.get("kind", "")
+    channel_badge_html = ""
     if channel_kind == "agency_or_recruiter":
         if channel_signal.get("needs_review"):
-            badges.append(
-                render_badge(
-                    _workspace_label(
-                        "workspace_card_labels",
-                        "posting_channel_likely_recruiter_badge",
-                    ),
-                    "badge-warning",
-                    _workspace_label(
-                        "workspace_card_labels",
-                        "posting_channel_likely_recruiter_tooltip",
-                    ),
-                )
-            )
-        else:
-            badges.append(
-                render_badge(
-                    _workspace_label(
-                        "workspace_card_labels",
-                        "posting_channel_agency_recruiter_badge",
-                    ),
-                    "badge-source-neutral",
-                    _workspace_label(
-                        "workspace_card_labels",
-                        "posting_channel_agency_recruiter_tooltip",
-                    ),
-                )
-            )
-    elif channel_kind == "direct_employer":
-        badges.append(
-            render_badge(
-                _workspace_label("workspace_card_labels", "posting_channel_direct_employer_badge"),
-                "badge-source-neutral",
-                _workspace_label("workspace_card_labels", "posting_channel_direct_employer_tooltip"),
-            )
-        )
-    elif channel_kind:
-        badges.append(
-            render_badge(
-                _workspace_label(
-                    "workspace_card_labels", "posting_channel_unknown_badge"),
-                "badge-archive",
+            channel_badge_html = render_badge(
                 _workspace_label(
                     "workspace_card_labels",
-                    "posting_channel_unknown_tooltip",
+                    "posting_channel_likely_recruiter_badge",
+                ),
+                "badge-warning",
+                _workspace_label(
+                    "workspace_card_labels",
+                    "posting_channel_likely_recruiter_tooltip",
                 ),
             )
+        else:
+            channel_badge_html = render_badge(
+                _workspace_label(
+                    "workspace_card_labels",
+                    "posting_channel_agency_recruiter_badge",
+                ),
+                "badge-source-neutral",
+                _workspace_label(
+                    "workspace_card_labels",
+                    "posting_channel_agency_recruiter_tooltip",
+                ),
+            )
+    elif channel_kind == "direct_employer":
+        channel_badge_html = render_badge(
+            _workspace_label("workspace_card_labels", "posting_channel_direct_employer_badge"),
+            "badge-source-neutral",
+            _workspace_label("workspace_card_labels", "posting_channel_direct_employer_tooltip"),
+        )
+    elif channel_kind:
+        channel_badge_html = render_badge(
+            _workspace_label(
+                "workspace_card_labels", "posting_channel_unknown_badge"),
+            "badge-archive",
+            _workspace_label(
+                "workspace_card_labels",
+                "posting_channel_unknown_tooltip",
+            ),
         )
     history_warning_signals = assess_history_warning_signals(record, history_clusters)
     if duplicate_links:
@@ -2511,7 +2504,7 @@ def render_job_card(
             else ""
         )
         + "</div>"
-        + f'<div class="job-company">{safe_html(company_display)}</div>'
+        + f'<div class="job-company-line"><span class="job-company">{safe_html(company_display)}</span>{channel_badge_html}</div>'
         "</div>"
         f"{score_html}"
         "</div>"
