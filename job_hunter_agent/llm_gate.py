@@ -422,41 +422,50 @@ class _LLMExperienceComponent(BaseModel):
     matched_role_family: str = ""
 
 
+class _LLMRequirementElement(BaseModel):
+    # One atomic sub-requirement inside a compound / disjunctive clause. For an
+    # atomic requirement the decomposition holds exactly one element that mirrors
+    # the row. See docs/REQUIREMENT_DECOMPOSITION_RATIONALE.md.
+    text: str = ""
+    # Bounded requirement interpretation, not a learning field: whether this
+    # element names a reusable capability concept. "uncertain" and an unresolved
+    # mandatory "non_capability" become a deterministic pending capability_concept
+    # Signal afterward (source_learning), never an LLM learning record.
+    capability_judgement: str = "capability"
+    # The reusable profile concept for this element, separate from ad wording.
+    canonical_concept: str = ""
+    # Explicit LLM judgement: true only when canonical_concept names one clear
+    # reusable atomic candidate fact, not the ad sentence restated. Deterministic
+    # code must not guess this from text equality — it only trusts the flag.
+    canonical_fact_resolved: bool = False
+    # Per-element coverage vs the candidate profile. Mainly meaningful for the
+    # branches of an OR row so the card can show which branch matched; for a
+    # single element it mirrors / derives the row status.
+    status: str = ""
+    matched_candidate_fact: str = ""
+
+
+class _LLMRequirementDecomposition(BaseModel):
+    # operator: "single" (one atomic requirement), "and" (the ad requires all
+    # elements), "or" (any element satisfies the requirement — supersedes the
+    # old named_alternatives list). Normalization rolls the row status up from
+    # the elements (and: weakest, or: strongest) and derives the row-level
+    # canonical_requirement / profile_action_allowed from the single element.
+    operator: str = "single"
+    elements: list[_LLMRequirementElement] = Field(default_factory=list)
+
+
 class _LLMRequirementCoverageItem(BaseModel):
     requirement: str
     importance: str = "preferred"
     requirement_type: str = "capability"
     requirement_subtype: str = ""
     canonical_requirement: str = ""
-    # Structural signal for whether this row is one clear fact or a vague
-    # group: the specific named alternatives/examples the ad lists (e.g.
-    # ["IIBA","CBAP","CCBA","CSPO","PSM"]), empty for an atomic requirement.
-    # Normalization gates profile-learning actions on this, not on whether
-    # canonical_requirement merely happens to be non-empty.
-    named_alternatives: list[str] = Field(
-        default_factory=list,
-        description=(
-            "Only genuine alternative ways to satisfy the requirement. Exclude optional examples, "
-            "preferences, and narrower subdomains when one clear core fact still exists."
-        ),
+    # Canonical structure for compound / disjunctive requirements. Replaces
+    # named_alternatives + canonical_fact_resolved + classification_reviewable.
+    decomposition: _LLMRequirementDecomposition = Field(
+        default_factory=_LLMRequirementDecomposition
     )
-    # Explicit LLM judgement: true only when canonical_requirement names a
-    # single reusable profile concept the model actually resolved, not the
-    # ad sentence restated. Deterministic code must not guess this from text
-    # equality — it only trusts the flag. Missing/false keeps the row
-    # visible but blocks profile-learning actions on it.
-    canonical_fact_resolved: bool = Field(
-        default=False,
-        description=(
-            "True only when canonical_requirement is one clear reusable atomic candidate fact. "
-            "When canonical_requirement is clear and there are no genuine named alternatives, "
-            "this must be true even if the source sentence contains optional examples or preferences."
-        ),
-    )
-    # Separate semantic judgement for requirement-type learning. True means the
-    # entire requirement can safely be assigned one reusable type without
-    # discarding another independently required dimension.
-    classification_reviewable: bool = False
     status: str
     matched_candidate_fact: str = ""
     matched_job_text: str = ""
@@ -1123,6 +1132,46 @@ _ALLOWED_REQUIREMENT_COVERAGE_STATUSES = frozenset(
     {"supported", "partially_supported", "not_shown", "mismatch", LLM_INVALID_COVERAGE_STATUS}
 )
 
+# Canonical requirement-decomposition vocabulary. See
+# docs/REQUIREMENT_DECOMPOSITION_RATIONALE.md.
+_REQUIREMENT_DECOMPOSITION_OPERATORS = frozenset({"single", "and", "or"})
+_REQUIREMENT_CAPABILITY_JUDGEMENTS = frozenset(
+    {"capability", "uncertain", "non_capability"}
+)
+# Strength order for rolling a compound row's status up from its elements:
+# AND rows are never stronger than their weakest element; OR rows take their
+# strongest branch. Higher rank == stronger.
+_REQUIREMENT_STATUS_RANK: dict[str, int] = {
+    "supported": 4,
+    "partially_supported": 3,
+    "not_shown": 2,
+    "mismatch": 1,
+    LLM_INVALID_COVERAGE_STATUS: 0,
+}
+
+
+def _requirement_status_rank(status: str) -> int:
+    return _REQUIREMENT_STATUS_RANK.get(status, 0)
+
+
+def partition_hidden_requirement_coverage(
+    rows: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Split normalized coverage rows into visible vs hidden partitions.
+
+    A row carrying ``hidden_reason`` (today only ``optional_non_capability``) is
+    retained for analysis/debugging but must not reach grade, gate, scoring, or
+    the normal job card. Mandatory non_capability rows are never hidden.
+    """
+    visible: list[dict[str, Any]] = []
+    hidden: list[dict[str, Any]] = []
+    for row in rows:
+        if row.get("hidden_reason"):
+            hidden.append(row)
+        else:
+            visible.append(row)
+    return visible, hidden
+
 # Importance weights used by derive_fit_review_grade.
 # mandatory requirements dominate the grade; bonus items barely affect it.
 _IMPORTANCE_WEIGHTS: dict[str, float] = {
@@ -1476,7 +1525,7 @@ def _atomicize_known_eligibility_rows(
                 [str(row.get("matched_job_text") or "")],
                 lookup,
             )
-        if len(mentions) > 1 and not (row.get("named_alternatives") or []):
+        if len(mentions) > 1 and row.get("decomposition", {}).get("operator") != "or":
             original_fact = compact_whitespace(row.get("matched_candidate_fact")).casefold()
             original_canonical = lookup.get(original_fact, "").casefold() if original_fact else ""
             for canonical in mentions:
@@ -1496,6 +1545,20 @@ def _atomicize_known_eligibility_rows(
                     covered_requirement_elements=[canonical],
                     profile_action_allowed=False,
                     status=status,
+                    decomposition={
+                        "operator": "single",
+                        "elements": [
+                            {
+                                "text": canonical,
+                                "capability_judgement": "capability",
+                                "canonical_concept": canonical,
+                                "canonical_fact_resolved": False,
+                                "status": status,
+                                "matched_candidate_fact": canonical,
+                                "element_profile_action_allowed": False,
+                            }
+                        ],
+                    },
                 )
                 normalized_rows.append(atomic)
             logger.warning(
@@ -1648,37 +1711,124 @@ def normalize_llm_requirement_coverage(
                 raw_requirement_subtype,
             )
         canonical_requirement = normalize_profile_item_name(item.get("canonical_requirement"))
-        raw_named_alternatives = item.get("named_alternatives") or []
-        if isinstance(raw_named_alternatives, str):
-            raw_named_alternatives = [raw_named_alternatives]
-        named_alternatives: list[str] = []
-        if isinstance(raw_named_alternatives, list):
-            seen_alternatives: set[str] = set()
-            for text in raw_named_alternatives:
-                cleaned_alternative = compact_whitespace(text)
-                lowered_alternative = cleaned_alternative.lower()
-                if not cleaned_alternative or lowered_alternative in seen_alternatives:
+        # Canonical decomposition of the requirement into atomic concepts.
+        # operator "single" -> one atomic concept, "and" -> every element is
+        # required, "or" -> any element satisfies the requirement. This block
+        # replaces the old named_alternatives / canonical_fact_resolved /
+        # classification_reviewable fields. See
+        # docs/REQUIREMENT_DECOMPOSITION_RATIONALE.md.
+        raw_decomposition = item.get("decomposition")
+        if not isinstance(raw_decomposition, dict):
+            raw_decomposition = {}
+        decomposition_operator = compact_whitespace(
+            raw_decomposition.get("operator")
+        ).lower()
+        if decomposition_operator not in _REQUIREMENT_DECOMPOSITION_OPERATORS:
+            decomposition_operator = "single"
+        decomposition_elements: list[dict[str, Any]] = []
+        raw_elements = raw_decomposition.get("elements")
+        if isinstance(raw_elements, list):
+            for raw_element in raw_elements:
+                if not isinstance(raw_element, dict):
                     continue
-                seen_alternatives.add(lowered_alternative)
-                named_alternatives.append(cleaned_alternative)
-        # Whether canonical_requirement resolves to a genuine single concept
-        # (vs. the ad sentence restated) is a language-understanding question,
-        # not a structural one — deterministic code must not guess it from
-        # text equality (e.g. "Java" legitimately equals its own canonical
-        # name). Trust the LLM's own explicit judgement instead.
-        canonical_fact_resolved = bool(item.get("canonical_fact_resolved"))
-        classification_reviewable = bool(item.get("classification_reviewable"))
-        # canonical_requirement is a display/interpretation label only — it is
-        # not proof the row is one safe factual profile candidate. Per the
-        # named_alternatives field contract, ANY named alternative (not just
-        # more than one) means the ad posed a disjunctive/example clause
-        # rather than one atomic concept. canonical_fact_resolved is the LLM's
-        # own explicit confirmation that canonical_requirement is a genuinely
-        # resolved concept, not restated ad prose. All three must hold for
-        # profile-learning actions to be safe.
-        profile_action_allowed = (
-            bool(canonical_requirement) and not named_alternatives and canonical_fact_resolved
+                element_concept = normalize_profile_item_name(
+                    raw_element.get("canonical_concept")
+                )
+                element_judgement = compact_whitespace(
+                    raw_element.get("capability_judgement")
+                ).lower()
+                if element_judgement not in _REQUIREMENT_CAPABILITY_JUDGEMENTS:
+                    element_judgement = "capability"
+                element_fact_resolved = bool(raw_element.get("canonical_fact_resolved"))
+                element_status = compact_whitespace(raw_element.get("status")).lower()
+                if element_status not in _ALLOWED_REQUIREMENT_COVERAGE_STATUSES:
+                    element_status = ""
+                decomposition_elements.append(
+                    {
+                        "text": compact_whitespace(raw_element.get("text")),
+                        "capability_judgement": element_judgement,
+                        "canonical_concept": element_concept,
+                        "canonical_fact_resolved": element_fact_resolved,
+                        "status": element_status,
+                        "matched_candidate_fact": compact_whitespace(
+                            raw_element.get("matched_candidate_fact")
+                        ),
+                        # Per-branch gate for an OR row's own Add action.
+                        "element_profile_action_allowed": bool(element_concept)
+                        and element_fact_resolved
+                        and element_judgement == "capability",
+                    }
+                )
+        if not decomposition_elements:
+            # LLM omitted a usable decomposition. Fail closed: one non-actionable
+            # single element mirroring the row so every consumer still sees the
+            # canonical structure.
+            decomposition_operator = "single"
+            decomposition_elements = [
+                {
+                    "text": requirement,
+                    "capability_judgement": "capability",
+                    "canonical_concept": canonical_requirement,
+                    "canonical_fact_resolved": False,
+                    "status": "",
+                    "matched_candidate_fact": "",
+                    "element_profile_action_allowed": False,
+                }
+            ]
+        single_element = (
+            decomposition_elements[0]
+            if decomposition_operator == "single" and len(decomposition_elements) == 1
+            else None
         )
+        # Roll the row status up from the elements for compound requirements: AND
+        # is never stronger than its weakest element; OR takes its strongest
+        # branch. Single rows keep the LLM's row-level status.
+        element_statuses = [
+            element["status"] for element in decomposition_elements if element["status"]
+        ]
+        if decomposition_operator == "and" and element_statuses:
+            weakest = min(element_statuses, key=_requirement_status_rank)
+            if (
+                status not in _ALLOWED_REQUIREMENT_COVERAGE_STATUSES
+                or _requirement_status_rank(weakest) < _requirement_status_rank(status)
+            ):
+                status = weakest
+        elif decomposition_operator == "or" and element_statuses:
+            status = max(element_statuses, key=_requirement_status_rank)
+        # canonical_requirement / canonical_fact_resolved / profile_action_allowed
+        # derive ONLY from a genuine single-concept row. AND/OR rows are never
+        # directly actionable and carry no row-level canonical concept; OR
+        # branches expose their own element_profile_action_allowed instead. This
+        # is the LLM's explicit judgement, not a text-equality guess.
+        if single_element is not None:
+            if not canonical_requirement and single_element["canonical_concept"]:
+                canonical_requirement = single_element["canonical_concept"]
+            canonical_fact_resolved = bool(single_element["canonical_fact_resolved"])
+            row_capability_judgement = single_element["capability_judgement"]
+        else:
+            canonical_requirement = ""
+            canonical_fact_resolved = False
+            row_capability_judgement = ""
+        profile_action_allowed = (
+            bool(canonical_requirement)
+            and canonical_fact_resolved
+            and row_capability_judgement == "capability"
+        )
+        # A non_capability single row must never silently vanish. An optional one
+        # is retained but hidden from the normal card; a mandatory one stays
+        # visible and either resolves to the smallest defensible reusable concept
+        # (actionable) or is flagged so build_ad_learning_signals() can raise a
+        # deterministic pending capability_concept Signal — no second LLM call.
+        hidden_reason = ""
+        mandatory_non_capability_unresolved = False
+        if row_capability_judgement == "non_capability":
+            if importance == LLM_COVERAGE_IMPORTANCE_MANDATORY:
+                if canonical_requirement and canonical_fact_resolved:
+                    profile_action_allowed = True
+                else:
+                    mandatory_non_capability_unresolved = True
+            else:
+                hidden_reason = "optional_non_capability"
         matched_candidate_fact = compact_whitespace(item.get("matched_candidate_fact"))
         capability_name = ""
         eligibility_name = ""
@@ -2062,7 +2212,6 @@ def normalize_llm_requirement_coverage(
             # Renderer must gate Add-to-profile / future "I don't have this"
             # actions on this, not on canonical_requirement truthiness alone.
             "profile_action_allowed": profile_action_allowed,
-            "classification_reviewable": classification_reviewable,
             "status": status,
             "matched_candidate_fact": matched_candidate_fact,
             "capability_name": capability_name,
@@ -2070,8 +2219,17 @@ def normalize_llm_requirement_coverage(
             "matched_job_text": matched_job_text,
             "profile_support": profile_support,
         }
-        if named_alternatives:
-            normalized_item["named_alternatives"] = named_alternatives
+        # Canonical structure carried on every row so consumers never guess:
+        # operator + atomic elements (each with capability_judgement and its own
+        # element_profile_action_allowed).
+        normalized_item["decomposition"] = {
+            "operator": decomposition_operator,
+            "elements": decomposition_elements,
+        }
+        if hidden_reason:
+            normalized_item["hidden_reason"] = hidden_reason
+        if mandatory_non_capability_unresolved:
+            normalized_item["mandatory_non_capability_unresolved"] = True
         if requirement_subtype:
             normalized_item["requirement_subtype"] = requirement_subtype
         if qualification_name:
@@ -2355,6 +2513,11 @@ def normalize_llm_review_payload(
                 eligibility_requirements,
                 requirement_coverage,
             )
+            # Optional non_capability rows are retained for analysis but must not
+            # reach grade, gate, scoring, or the normal card.
+            requirement_coverage, requirement_coverage_hidden = (
+                partition_hidden_requirement_coverage(requirement_coverage)
+            )
             derived_grade = derive_fit_review_grade(requirement_coverage)
             fit_review_normalized = _require_fit_review(fit_review)
             _require_complete_keep_requirement_coverage(
@@ -2424,6 +2587,7 @@ def normalize_llm_review_payload(
                     value.get("debug_reason"), max_chars=300
                 ),
                 "requirement_coverage": requirement_coverage,
+                "requirement_coverage_hidden": requirement_coverage_hidden,
             }
 
         if "learning_candidates" in value or value.get("learning_only") or "fit_review" in value:
@@ -2433,6 +2597,7 @@ def normalize_llm_review_payload(
                     value.get("learning_candidates")
                 ),
                 "requirement_coverage": [],
+                "requirement_coverage_hidden": [],
             }
 
         raise ValueError("LLM review payload is missing fit_review")
