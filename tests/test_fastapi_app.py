@@ -102,7 +102,7 @@ def test_server_step_flag_is_ignored_when_off(monkeypatch):
     assert called == []
 
 
-def test_app_lifespan_starts_and_stops_background_services(monkeypatch):
+def test_app_lifespan_starts_scheduler_and_opt_in_telegram(monkeypatch):
     calls = []
 
     monkeypatch.setattr(_fa, "_start_shared_telegram_poller", lambda: calls.append("start_telegram"))
@@ -118,7 +118,6 @@ def test_app_lifespan_starts_and_stops_background_services(monkeypatch):
     )
     monkeypatch.setattr(_fa, "_stop_shared_telegram_poller", lambda: calls.append("stop_telegram"))
     monkeypatch.setenv(_fa._SERVER_TELEGRAM_POLLER_ENV, "true")
-    monkeypatch.setenv(_fa._SERVER_SCHEDULED_AGENT_LOOP_ENV, "true")
 
     with TestClient(create_app()):
         assert calls[:2] == ["start_telegram", "start_scheduler"]
@@ -126,7 +125,7 @@ def test_app_lifespan_starts_and_stops_background_services(monkeypatch):
     assert calls == ["start_telegram", "start_scheduler", "stop_scheduler", "stop_telegram"]
 
 
-def test_app_lifespan_skips_background_services_by_default(monkeypatch):
+def test_app_lifespan_starts_scheduler_by_default_without_hidden_env_flag(monkeypatch):
     calls = []
 
     monkeypatch.setattr(_fa, "_start_shared_telegram_poller", lambda: calls.append("start_telegram"))
@@ -142,12 +141,11 @@ def test_app_lifespan_skips_background_services_by_default(monkeypatch):
     )
     monkeypatch.setattr(_fa, "_stop_shared_telegram_poller", lambda: calls.append("stop_telegram"))
     monkeypatch.delenv(_fa._SERVER_TELEGRAM_POLLER_ENV, raising=False)
-    monkeypatch.delenv(_fa._SERVER_SCHEDULED_AGENT_LOOP_ENV, raising=False)
 
     with TestClient(create_app()):
-        pass
+        assert calls == ["start_scheduler"]
 
-    assert calls == []
+    assert calls == ["start_scheduler", "stop_scheduler"]
 
 
 def test_background_service_env_flags_fail_fast_for_invalid_values(monkeypatch):

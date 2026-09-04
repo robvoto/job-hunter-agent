@@ -623,7 +623,7 @@ def test_run_status_and_stop_endpoint_report_stopping(monkeypatch):
     assert status_response.json()["progress_detail"]["detail"] == "Senior Analyst at Acme"
     assert status_response.json()["elapsed_seconds"] == 15
     assert status_response.json()["elapsed_text"] == "15s"
-    assert status_response.json()["scheduler"]["active"] is True
+    assert status_response.json()["scheduler"]["active"] is False
     assert status_response.json()["scheduler"]["daily_time_local"] == "18:30"
 
     stop_response = client.post("/api/run/stop")

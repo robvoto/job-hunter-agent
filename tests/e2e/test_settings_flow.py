@@ -140,6 +140,16 @@ def test_schedule_toggle_persists_after_reload(candidate_page):
     )
 
 
+def test_schedule_status_does_not_claim_next_run_when_scheduler_is_inactive(candidate_page):
+    page = candidate_page
+    page.goto("/settings#section-search")
+
+    status = page.locator("#schedule_runtime_status")
+    status.wait_for(state="visible")
+    expect(status).to_have_text("Scheduler unavailable — automatic runs will not start.")
+    assert "Next run:" not in (status.text_content() or "")
+
+
 def test_settings_save_confirmation_shows_linkedin_before_and_after(candidate_page):
     page = candidate_page
     page.goto("/settings#section-search")

@@ -1,8 +1,8 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 128,
-  "updated_at": "2026-09-04T03:52:58.024866+00:00",
+  "version": 129,
+  "updated_at": "2026-09-05T00:00:00+00:00",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
     "remote_label": "Remote",
@@ -966,7 +966,11 @@
     "llm_heading": "AI / LLM",
     "llm_copy": "Used for fit decisions and CV extraction. The available models are managed in Global settings.",
     "llm_model_label": "Model",
-    "llm_model_placeholder": "Select a model"
+    "llm_model_placeholder": "Select a model",
+    "schedule_status_off": "Schedule Run is off.",
+    "schedule_status_checking": "Checking scheduler status...",
+    "schedule_status_unavailable": "Scheduler unavailable \u2014 automatic runs will not start.",
+    "schedule_status_next_run_template": "Next run: {next_run}."
   },
   "search_source_labels_description": "Display labels and helper copy for search source controls.",
   "search_source_labels": {

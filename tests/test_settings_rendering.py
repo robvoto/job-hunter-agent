@@ -37,6 +37,19 @@ def test_ui_labels_json_contains_all_settings_alerts_keys():
     assert not missing, f"ui_labels.json is missing settings_alerts_labels keys: {missing}"
 
 
+
+
+def test_schedule_status_copy_is_managed_and_does_not_claim_unverified_next_run():
+    data = json.loads((_KNOWLEDGE_DIR / "ui_labels.json").read_text(encoding="utf-8"))
+    labels = data["settings_alerts_labels"]
+    js = (Path(__file__).resolve().parent.parent / "templates/static/settings/standard/settings-alerts.js").read_text(encoding="utf-8")
+
+    assert labels["schedule_status_unavailable"] == "Scheduler unavailable — automatic runs will not start."
+    assert "if (!scheduler?.active)" in js
+    assert "Next run is scheduled." not in js
+    assert "labels.schedule_status_unavailable" in js
+
+
 def test_ui_labels_json_contains_all_settings_clearances_keys():
 
     data = json.loads((_KNOWLEDGE_DIR / "ui_labels.json").read_text(encoding="utf-8"))

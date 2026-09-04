@@ -70,7 +70,6 @@ _CORS_HEADERS = "Content-Type"
 _TELEGRAM_POLLER: "_TelegramPollThread | None" = None
 _SCHEDULED_AGENT_LOOP: "_ScheduledAgentLoopThread | None" = None
 _SERVER_TELEGRAM_POLLER_ENV = "JOB_HUNTER_ENABLE_SERVER_TELEGRAM_POLLER"
-_SERVER_SCHEDULED_AGENT_LOOP_ENV = "JOB_HUNTER_ENABLE_SERVER_SCHEDULED_AGENT_LOOP"
 
 
 def _origin_from_url(value: str) -> str | None:
@@ -361,11 +360,16 @@ def _stop_shared_scheduled_agent_loop() -> None:
 @asynccontextmanager
 async def _app_lifespan(_app: FastAPI):
     telegram_enabled = _server_background_service_enabled(_SERVER_TELEGRAM_POLLER_ENV)
-    scheduler_enabled = _server_background_service_enabled(_SERVER_SCHEDULED_AGENT_LOOP_ENV)
     if telegram_enabled:
         _start_shared_telegram_poller()
-    if scheduler_enabled:
-        _start_shared_scheduled_agent_loop()
+
+    # The normal Job Hunter web runtime owns local scheduling because Schedule Run is
+    # a first-class user setting in this app.  The saved schedule remains authoritative;
+    # this thread only watches that live setting and does not persist a second enable flag.
+    # Desktop mode is still excluded inside _start_shared_scheduled_agent_loop() because
+    # that launcher owns its own process lifecycle.  AWS can later move to an external
+    # trigger (JH-264) without making the local Settings control depend on a hidden process.
+    _start_shared_scheduled_agent_loop()
     try:
         yield
     finally:
@@ -376,8 +380,7 @@ async def _app_lifespan(_app: FastAPI):
         from job_hunter_agent import server_helpers as srv
 
         srv._handle_server_shutdown()
-        if scheduler_enabled:
-            _stop_shared_scheduled_agent_loop()
+        _stop_shared_scheduled_agent_loop()
         if telegram_enabled:
             _stop_shared_telegram_poller()
 
