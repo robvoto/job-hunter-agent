@@ -69,7 +69,7 @@ cd "$APP_DIR"
 if [[ $# -eq 0 ]]; then
   # The workspace HTML is a generated artifact. Rebuild it on each service
   # start so deploy/restart always serves the current renderer output.
-  set -- python -m job_hunter_agent.fastapi_app --rebuild
+  set -- uv run python -m job_hunter_agent.fastapi_app --rebuild
 fi
 
 STARTED_AT="$(date '+%Y-%m-%d %H:%M:%S %Z')"

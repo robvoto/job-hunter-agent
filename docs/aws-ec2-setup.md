@@ -113,7 +113,7 @@ sudo chmod 640 /etc/job-hunter/job-hunter.env
 
 Fresh AWS builds must seed only the approved repo-managed JSON set.
 
-- DB/bootstrap seeding is run via `python -m job_hunter_agent.db_seed`.
+- DB/bootstrap seeding is run via `uv run python -m job_hunter_agent.db_seed`.
 - The seed flow copies only the explicit approved runtime manifest from `data/knowledge/` plus the required O*NET taxonomy JSON files.
 - Do not replace this with a recursive "copy every JSON file under data/knowledge" step.
 - Local examples, private JSON files, or ad-hoc scratch files under `data/knowledge` must never become production runtime data by accident.
@@ -164,9 +164,9 @@ Use local paths only for editing, testing, committing, and pushing code:
 Local development may run:
 
 ```bash
-python -m job_hunter_agent.fastapi_app --debug
-python -m job_hunter_agent.source_connector --no-llm
-python -m pytest
+uv run python -m job_hunter_agent.fastapi_app --debug
+uv run python -m job_hunter_agent.source_connector --no-llm
+uv run python -m pytest
 ```
 
 Do not diagnose AWS production by looking only at the local VS Code terminal.
@@ -506,7 +506,7 @@ After=network.target
 User=ubuntu
 WorkingDirectory=/home/ubuntu/job-hunter-agent
 EnvironmentFile=/etc/job-hunter/job-hunter.env
-Environment="PATH=/home/ubuntu/job-hunter-agent/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PATH=/home/ubuntu/job-hunter-agent/.venv/bin:/home/ubuntu/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="TZ=Australia/Sydney"
 Environment="JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data"
 Environment="JOB_HUNTER_OUTPUT_DIR=/var/lib/job-hunter/output"
@@ -998,7 +998,7 @@ The app reads production runtime files from `JOB_HUNTER_DATA_DIR`, currently:
 
 Versioned source JSON files live in the repo under `/home/ubuntu/job-hunter-agent/data`. Deployment must not rely on manual copying.
 
-`python -m job_hunter_agent.db_seed --upgrade` is responsible for syncing required runtime-managed files into `JOB_HUNTER_DATA_DIR`, including:
+`uv run python -m job_hunter_agent.db_seed --upgrade` is responsible for syncing required runtime-managed files into `JOB_HUNTER_DATA_DIR`, including:
 
 ```text
 config/global_settings.json
@@ -1225,7 +1225,7 @@ These values may not appear in `/etc/job-hunter/job-hunter.env`, because that fi
 `deploy-jobhunter-release` must therefore apply the same production runtime path defaults before running:
 
 ```bash
-python -m job_hunter_agent.db_seed --upgrade
+uv run python -m job_hunter_agent.db_seed --upgrade
 ```
 
 Otherwise the seed step writes required runtime files into the repo `data/` folder instead of the real production data directory.

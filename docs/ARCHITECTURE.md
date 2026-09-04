@@ -388,7 +388,7 @@ The system must not:
 Future expansion areas:
 
 * autonomous orchestration
-* OpenClaw runtime integration
+* LangGraph workflow and runtime coordination
 * application generation workflows
 * review-driven adaptive tuning
 * managed external knowledge systems

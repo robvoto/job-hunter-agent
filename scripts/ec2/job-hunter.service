@@ -6,7 +6,7 @@ After=network.target
 User=ubuntu
 WorkingDirectory=/home/ubuntu/job-hunter-agent
 EnvironmentFile=/etc/job-hunter/job-hunter.env
-Environment="PATH=/home/ubuntu/job-hunter-agent/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PATH=/home/ubuntu/job-hunter-agent/.venv/bin:/home/ubuntu/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 ## Set timezone for the process so timestamps in logs match the expected
 ## local timezone in production (helps when reading files produced by the
 ## AWS browser session wrapper and the app. This was added to ensure logs

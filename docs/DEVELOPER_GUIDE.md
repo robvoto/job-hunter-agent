@@ -259,7 +259,7 @@ The standard local formatting and linting workflow is:
 
 ```powershell
 uv sync --group dev
-python -m ruff check .
-python -m ruff format <file-or-folder>
-python -m ruff check . --fix
+uv run python -m ruff check .
+uv run python -m ruff format <file-or-folder>
+uv run python -m ruff check . --fix
 ```

@@ -14,6 +14,14 @@ This document defines:
 
 This is an operational runtime reference, not a development diary.
 
+## Command rule
+
+For all WSL/Linux and EC2 commands in this document, run Python through the
+project environment: `uv run python ...`, `uv run pytest ...`, or another
+`uv run ...` command. Do not use bare `python`, `python3`, `pytest`, or `ruff`.
+A missing bare executable is a command-launch failure; it is not a database,
+application, or repository-access failure.
+
 ---
 
 # Runtime Entry Points
@@ -25,7 +33,7 @@ This is an operational runtime reference, not a development diary.
 Primary runtime pipeline.
 
 ```powershell
-python -m job_hunter_agent.source_connector
+uv run python -m job_hunter_agent.source_connector
 ```
 
 Use `--force-refresh` on the source connector when a live-board refresh is
@@ -56,7 +64,7 @@ sources -- for example an urgent broad "any role" search that deliberately
 differs from the signed-in user's saved profile settings.
 
 ```powershell
-python -m job_hunter_agent.agent_search --base-user-id <real-user-id> --keywords "business analyst" "business support officer" --min-salary 0 --print-results
+uv run python -m job_hunter_agent.agent_search --base-user-id <real-user-id> --keywords "business analyst" "business support officer" --min-salary 0 --print-results
 ```
 
 Safety model: the command reuses `scrape_jobs_direct()` completely
@@ -86,7 +94,7 @@ capability is tracked separately as JH-293.
 Persistent automation wrapper.
 
 ```powershell
-python -m job_hunter_agent.agent_runner
+uv run python -m job_hunter_agent.agent_runner
 ```
 
 Responsibilities:
@@ -100,7 +108,7 @@ Responsibilities:
 Persistent loop:
 
 ```powershell
-python -m job_hunter_agent.agent_runner --loop
+uv run python -m job_hunter_agent.agent_runner --loop
 ```
 
 ---
@@ -227,7 +235,7 @@ Image.fromarray(d).save('installer/job_hunter_agent.ico', format='ICO',
 Local operational UI.
 
 ```powershell
-python -m job_hunter_agent.fastapi_app
+uv run python -m job_hunter_agent.fastapi_app
 ```
 
 Repo-root launcher:
@@ -239,7 +247,7 @@ Repo-root launcher:
 Debug mode:
 
 ```powershell
-python -m job_hunter_agent.fastapi_app --debug
+uv run python -m job_hunter_agent.fastapi_app --debug
 ```
 
 Repo-root launcher:
@@ -251,7 +259,7 @@ Repo-root launcher:
 Background-service rule:
 
 - the FastAPI server does not auto-start the scheduled agent loop or the shared Telegram poller
-- use `python -m job_hunter_agent.agent_runner` for persistent scheduled automation
+- use `uv run python -m job_hunter_agent.agent_runner` for persistent scheduled automation
 - desktop mode owns its own Telegram poller while the launcher is open
 - server-side background loops are opt-in only via `JOB_HUNTER_ENABLE_SERVER_TELEGRAM_POLLER=true` and/or `JOB_HUNTER_ENABLE_SERVER_SCHEDULED_AGENT_LOOP=true`
 
@@ -312,7 +320,7 @@ Primary routes:
 Disable live LLM review:
 
 ```powershell
-python -m job_hunter_agent.source_connector --no-llm
+uv run python -m job_hunter_agent.source_connector --no-llm
 ```
 
 Purpose:
@@ -329,7 +337,7 @@ Purpose:
 Rebuild workspace only:
 
 ```powershell
-python -m job_hunter_agent.source_connector --rebuild-workspace
+uv run python -m job_hunter_agent.source_connector --rebuild-workspace
 ```
 
 Purpose:
@@ -379,7 +387,7 @@ These can be regenerated from the DB or by re-running a scrape.
 ## Standard Refresh Workflow
 
 ```powershell
-python -m job_hunter_agent.source_connector
+uv run python -m job_hunter_agent.source_connector
 ```
 
 Operational sequence:
@@ -400,7 +408,7 @@ Operational sequence:
 ## Scheduled Runtime Workflow
 
 ```powershell
-python -m job_hunter_agent.agent_runner --loop
+uv run python -m job_hunter_agent.agent_runner --loop
 ```
 
 Operational sequence:
@@ -422,7 +430,7 @@ Current scheduler rule:
 ## Workspace-Only Workflow
 
 ```powershell
-python -m job_hunter_agent.source_connector --rebuild-workspace
+uv run python -m job_hunter_agent.source_connector --rebuild-workspace
 ```
 
 Purpose:
@@ -572,13 +580,13 @@ Agent runner can:
 Notification-only digest rebuild:
 
 ```powershell
-python -m job_hunter_agent.agent_runner --send-notification-no-scrape
+uv run python -m job_hunter_agent.agent_runner --send-notification-no-scrape
 ```
 
 Disable notifications:
 
 ```powershell
-python -m job_hunter_agent.agent_runner --no-notify
+uv run python -m job_hunter_agent.agent_runner --no-notify
 ```
 
 ---
@@ -591,7 +599,7 @@ python -m job_hunter_agent.agent_runner --no-notify
 py -3.11 -m venv .venv
 .venv\Scripts\Activate.ps1
 uv sync --no-dev
-python -m playwright install chromium
+uv run python -m playwright install chromium
 ```
 
 ## Database Bootstrap
@@ -599,7 +607,7 @@ python -m playwright install chromium
 Run once on first deploy (or after a DB reset) to seed knowledge, config, and signal defaults:
 
 ```bash
-python -m job_hunter_agent.db_seed
+uv run python -m job_hunter_agent.db_seed
 ```
 
 ### After deploying a new app version
@@ -611,7 +619,7 @@ python -m job_hunter_agent.db_seed
 `--upgrade` is available for manual runs or scripted deployments:
 
 ```bash
-python -m job_hunter_agent.db_seed --upgrade
+uv run python -m job_hunter_agent.db_seed --upgrade
 ```
 
 `--upgrade` uses version-aware merge logic for knowledge files:
@@ -663,7 +671,7 @@ Behavior:
 ### Hard reset (wipes user-approved additions)
 
 ```bash
-python -m job_hunter_agent.db_seed --overwrite
+uv run python -m job_hunter_agent.db_seed --overwrite
 ```
 
 `--overwrite` replaces all DB knowledge entries from the current bundled files. Use only for a full DB reset or corruption recovery — it will wipe any user-approved signal additions.
@@ -703,7 +711,7 @@ This is the clearest command when you want to check the whole project before mer
 `job_hunter_agent.test_runner` is a convenience wrapper around pytest. It does not run a separate test system.
 
 ```powershell
-python -m job_hunter_agent.test_runner
+uv run python -m job_hunter_agent.test_runner
 ```
 
 Internally, it finds the repo virtual environment and runs pytest from the repository root.
@@ -712,7 +720,7 @@ These are equivalent in purpose:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest
-python -m job_hunter_agent.test_runner
+uv run python -m job_hunter_agent.test_runner
 ```
 
 Use the wrapper only when its options make the command easier to read.
@@ -720,7 +728,7 @@ Use the wrapper only when its options make the command easier to read.
 Run only tests matching a word, such as onboarding:
 
 ```powershell
-python -m job_hunter_agent.test_runner -k onboarding
+uv run python -m job_hunter_agent.test_runner -k onboarding
 ```
 
 Equivalent direct pytest command:
@@ -732,7 +740,7 @@ Equivalent direct pytest command:
 Run in verbose mode, showing more detail about individual tests:
 
 ```powershell
-python -m job_hunter_agent.test_runner -v
+uv run python -m job_hunter_agent.test_runner -v
 ```
 
 Equivalent direct pytest command:
@@ -817,19 +825,19 @@ uv sync --group dev
 Check formatting and linting:
 
 ```powershell
-python -m ruff check .
+uv run python -m ruff check .
 ```
 
 Format changed Python files:
 
 ```powershell
-python -m ruff format <file-or-folder>
+uv run python -m ruff format <file-or-folder>
 ```
 
 Fix safe lint issues:
 
 ```powershell
-python -m ruff check . --fix
+uv run python -m ruff check . --fix
 ```
 
 Use these commands on the files you are actively changing unless the task explicitly calls for a wider cleanup.
@@ -872,7 +880,7 @@ The runtime must not:
 Rebuild workspace from saved runtime state:
 
 ```powershell
-python -m job_hunter_agent.source_connector --rebuild-workspace
+uv run python -m job_hunter_agent.source_connector --rebuild-workspace
 ```
 
 ---
@@ -882,7 +890,7 @@ python -m job_hunter_agent.source_connector --rebuild-workspace
 Reset "new-to-you" visibility:
 
 ```powershell
-python -m job_hunter_agent.source_connector --rebuild-workspace --reset-new-to-you
+uv run python -m job_hunter_agent.source_connector --rebuild-workspace --reset-new-to-you
 ```
 
 ---
@@ -988,7 +996,7 @@ Operational expansion targets:
 
 * autonomous orchestration
 * adaptive runtime diagnostics
-* OpenClaw integration
+* LangGraph workflow integration
 * multi-agent runtime coordination
 * application generation workflows
 * richer operational telemetry

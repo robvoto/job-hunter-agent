@@ -150,7 +150,7 @@ def test_aws_browser_session_scripts_are_committed():
     assert "x11vnc" in start_script
     assert "websockify" in start_script
     assert "playwright_user_data" in start_script
-    assert "python -m job_hunter_agent.fastapi_app --rebuild" in start_script
+    assert "set -- uv run python -m job_hunter_agent.fastapi_app --rebuild" in start_script
     assert "aws browser-session dependencies" in install_script.lower()
     assert "JOB_HUNTER_SMOKE_SEEK_URL" in smoke_script
     assert "cards=" in smoke_script
@@ -158,6 +158,7 @@ def test_aws_browser_session_scripts_are_committed():
     assert "curl -fsSI" in deploy_script
     assert not LEGACY_AWS_BROWSER_SESSION_WRAPPER.exists()
     assert "start-aws-browser-session.sh" in JOB_HUNTER_SERVICE_SCRIPT.read_text(encoding="utf-8")
+    assert "/home/ubuntu/.local/bin" in JOB_HUNTER_SERVICE_SCRIPT.read_text(encoding="utf-8")
     assert "run-jobhunter-browser-session.sh" not in JOB_HUNTER_SERVICE_SCRIPT.read_text(encoding="utf-8")
     assert "start-aws-browser-session.sh" in JOB_HUNTER_SERVICE_INSTALL_SCRIPT.read_text(encoding="utf-8")
 
