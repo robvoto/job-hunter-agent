@@ -193,7 +193,10 @@ def test_a_failed_lookup_and_a_clean_record_never_render_the_same():
     assert could_not_look.strip()
 
 
-def test_history_line_reports_every_count_and_the_latest_date():
+def test_history_line_reports_rejections_and_the_latest_date():
+    """Only rejections render: applied/interview/no_response have no producer
+    yet (see the guardrail comment on build_employer_outcome_check_item), so
+    showing them would present "never measured" as "confirmed zero"."""
     line = display.build_employer_outcome_check_item(
         display.resolve_employer_outcome_state(
             _rollup(applied=6, rejected=5, interview=0, no_response=1)
@@ -201,17 +204,21 @@ def test_history_line_reports_every_count_and_the_latest_date():
         _label,
     )
     assert "Northwind Systems" in line
-    assert "6" in line and "5" in line
+    assert "5" in line
     assert "2026-08-24" in line
 
 
-def test_history_line_shows_an_interview_without_hiding_rejections():
+def test_history_line_does_not_render_unmeasured_counters():
+    """applied/interview/no_response counts must never appear in the line -
+    nothing in the system currently produces those events."""
     line = display.build_employer_outcome_check_item(
         display.resolve_employer_outcome_state(_rollup(applied=2, rejected=1, interview=1)),
         _label,
     )
     assert "rejected 1" in line
-    assert "interviewed 1" in line
+    assert "applied" not in line
+    assert "interviewed" not in line
+    assert "no reply" not in line
 
 
 def test_unknown_state_raises_rather_than_rendering_something_plausible():

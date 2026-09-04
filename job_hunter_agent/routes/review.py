@@ -309,7 +309,7 @@ def api_review(body: dict = Body(...)):  # type: ignore[no-untyped-def]
                 teaser,
                 block_phrases=phrases_arg or None,
             )
-        elif action in {"unapply", "unhide"}:
+        elif action in {"unapply", "unhide", "unreject", "un_no_response"}:
             result = remove_review_key(action, job_key, url, title, company, teaser)
         else:
             result = append_review_key(action, job_key, url, title, company, teaser)

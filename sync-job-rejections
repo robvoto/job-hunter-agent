@@ -77,4 +77,25 @@ from job_hunter_agent.candidate_application_history import main
 raise SystemExit(main(["status"]))
 PY
 
+# HELP: importing rejection emails (above) and updating the "rejected before"
+# counts shown on job cards (below) are two separate steps. Skipping this step
+# means today's import sits in the file but the numbers you see in the app
+# stay frozen at whatever they were last time this ran. This step reads what
+# was just imported and rewrites those counts, per employer, in the database.
+echo "[sync-job-rejections] Refreshing employer rejection counts..."
+uv run --env-file .env python - <<'PY'
+from job_hunter_agent.user_context import set_user_context_from_admin_env, get_user_id
+set_user_context_from_admin_env()
+from job_hunter_agent.employer_outcome_backfill import backfill_from_rejection_history
+
+summary = backfill_from_rejection_history(get_user_id())
+print(
+    "[sync-job-rejections] Employer counts refreshed: "
+    f"{summary['events_imported']} events, "
+    f"{summary['employers_in_rollup']} employers, "
+    f"{summary['skipped_no_employer']} skipped (no employer), "
+    f"{summary['skipped_no_date']} skipped (no date)"
+)
+PY
+
 echo "[sync-job-rejections] Done."

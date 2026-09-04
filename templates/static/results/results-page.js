@@ -424,11 +424,33 @@
           + '<span class="review-status" aria-live="polite"></span>'
           + '</div>';
       }
+      if (action === 'rejected') {
+        return '<div class="job-actions">'
+          + '<button class="review-button review-undo jh-button jh-button--secondary jh-button--compact review-button--selected" type="button" data-review-action="unreject">'
+          + `${_rejEscapeHtml(labels.actionUndoRejectedLabel)}</button>`
+          + '<span class="review-status" aria-live="polite"></span>'
+          + '</div>';
+      }
+      if (action === 'no_response') {
+        return '<div class="job-actions">'
+          + '<button class="review-button review-undo jh-button jh-button--secondary jh-button--compact review-button--selected" type="button" data-review-action="un_no_response">'
+          + `${_rejEscapeHtml(labels.actionUndoNoResponseLabel)}</button>`
+          + '<span class="review-status" aria-live="polite"></span>'
+          + '</div>';
+      }
       // unapply / unhide land back in "potential", which needs the full
-      // applied / not-for-me / hide action set restored.
+      // applied / rejected / no-answer / not-for-me / hide action set
+      // restored - must mirror the button set workspace_renderer.py renders
+      // server-side, or a card that returns to "potential" loses buttons.
       return '<div class="job-actions">'
         + '<button class="review-button review-applied jh-button jh-button--primary jh-button--compact" type="button" data-review-action="applied">'
         + `${_rejEscapeHtml(labels.appliedBadgeLabel)}</button>`
+        + '<button class="review-button review-rejected jh-button jh-button--secondary jh-button--compact" type="button" data-review-action="rejected" '
+        + `title="${_rejEscapeHtml(labels.actionRejectedTooltip)}">`
+        + `${_rejEscapeHtml(labels.actionRejectedLabel)}</button>`
+        + '<button class="review-button review-no-response jh-button jh-button--secondary jh-button--compact" type="button" data-review-action="no_response" '
+        + `title="${_rejEscapeHtml(labels.actionNoResponseTooltip)}">`
+        + `${_rejEscapeHtml(labels.actionNoResponseLabel)}</button>`
         + '<button class="review-button review-not-for-me jh-button jh-button--danger jh-button--compact" type="button" data-review-action="not_for_me" '
         + `title="${_rejEscapeHtml(labels.actionNotForMeTooltip)}">`
         + `${_rejEscapeHtml(labels.actionNotForMeLabel)}</button>`
@@ -488,6 +510,31 @@
 
       targetGrid.appendChild(card);
       applyWorkspaceControls();
+    }
+
+    function swapReviewButtonsInPlace(card, action) {
+      // "Rejected" / "No Answer" (and their undo) don't have a dedicated
+      // workspace tab the way Applied/Hidden do, so unlike
+      // moveCardAfterReview this never relocates the card - it only swaps
+      // which buttons are showing, in place.
+      if (!card) {
+        return;
+      }
+      const sourceActions = card.querySelector('.job-actions');
+      if (!sourceActions) {
+        return;
+      }
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = reviewActionsHtmlFor(action);
+      const replacementActions = wrapper.firstElementChild;
+      if (!replacementActions) {
+        return;
+      }
+      const sourceButton = sourceActions.querySelector('.review-button');
+      replacementActions.querySelectorAll('.review-button').forEach(button => {
+        copyReviewButtonData(sourceButton, button);
+      });
+      sourceActions.replaceWith(replacementActions);
     }
 
     function applyWorkspaceControls() {
@@ -784,6 +831,10 @@
       if (action === 'unapply') return 'Removing from applied jobs...';
       if (action === 'hidden') return 'Hiding this job...';
       if (action === 'unhide') return 'Removing from hidden jobs...';
+      if (action === 'unreject') return 'Undoing rejected mark...';
+      if (action === 'un_no_response') return 'Undoing no-answer mark...';
+      if (action === 'rejected') return 'Recording rejection...';
+      if (action === 'no_response') return 'Recording no answer...';
       if (action === 'not_for_me') return 'Saving Not For Me feedback...';
       if (action === 'block_similar') return 'Saving title block...';
       return 'Saving review action...';
@@ -797,6 +848,10 @@
       if (action === 'unapply') return 'Removed from Applied jobs. It can appear again in future runs.';
       if (action === 'hidden') return 'Hidden. This role moved to Hidden jobs and can be unhidden later.';
       if (action === 'unhide') return 'Removed from Hidden jobs. It can appear again in future runs.';
+      if (action === 'unreject') return 'Undone. You can pick a different outcome for this job now.';
+      if (action === 'un_no_response') return 'Undone. You can pick a different outcome for this job now.';
+      if (action === 'rejected') return 'Recorded as rejected. This counts toward your real employer history now.';
+      if (action === 'no_response') return 'Recorded as no answer. This counts toward your real employer history now.';
       if (action === 'not_for_me') return 'Saved as Not For Me. We will learn from this without blocking similar titles yet.';
       if (action === 'block_similar') return 'Saved. Similar jobs will be blocked by title in future runs.';
       return 'Review action saved.';
@@ -870,6 +925,10 @@
         }
         if (['applied', 'unapply', 'hidden', 'unhide'].includes(action)) {
           moveCardAfterReview(card, action);
+          return;
+        }
+        if (['rejected', 'no_response', 'unreject', 'un_no_response'].includes(action)) {
+          swapReviewButtonsInPlace(card, action);
           return;
         }
         window.setTimeout(() => {

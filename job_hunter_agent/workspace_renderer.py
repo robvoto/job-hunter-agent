@@ -2413,10 +2413,20 @@ def render_job_card(
             "</div>"
         )
     elif not applied_record:
+        # "Rejected" / "No Answer" sit next to Applied because they are the
+        # same kind of signal - you telling JobHunter what actually happened,
+        # first-party, no email parsing involved. See
+        # review_history_service._record_first_party_outcome_event.
         actions_html = (
             '<div class="job-actions">'
             f'<button class="review-button review-applied jh-button jh-button--primary jh-button--compact" type="button" data-review-action="applied" {button_data_attrs}>'
             f'{safe_html(_workspace_label("workspace_card_labels", "applied_badge"))}</button>'
+            f'<button class="review-button review-rejected jh-button jh-button--secondary jh-button--compact" type="button" data-review-action="rejected" {button_data_attrs} '
+            f'title="{safe_html(_workspace_label("workspace_card_labels", "action_rejected_tooltip"))}">'
+            f'{safe_html(_workspace_label("workspace_card_labels", "action_rejected_label"))}</button>'
+            f'<button class="review-button review-no-response jh-button jh-button--secondary jh-button--compact" type="button" data-review-action="no_response" {button_data_attrs} '
+            f'title="{safe_html(_workspace_label("workspace_card_labels", "action_no_response_tooltip"))}">'
+            f'{safe_html(_workspace_label("workspace_card_labels", "action_no_response_label"))}</button>'
             f'<button class="review-button review-not-for-me jh-button jh-button--danger jh-button--compact" type="button" data-review-action="not_for_me" {button_data_attrs} '
             f'title="{safe_html(_workspace_label("workspace_card_labels", "action_not_for_me_tooltip"))}">'
             f'{safe_html(_workspace_label("workspace_card_labels", "action_not_for_me_label"))}</button>'

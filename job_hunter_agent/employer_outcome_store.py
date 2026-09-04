@@ -33,6 +33,14 @@ EVENT_REJECTED = "rejected"
 EVENT_INTERVIEW = "interview"
 EVENT_NO_RESPONSE = "no_response"
 
+# GUARDRAIL: these four are the full vocabulary this ledger supports, but only
+# EVENT_REJECTED currently has a producer (employer_outcome_backfill.py, fed by
+# the rejection-sheet import). EVENT_APPLIED, EVENT_INTERVIEW, and
+# EVENT_NO_RESPONSE are declared for a generic outcome model but nothing calls
+# record_application_event() with them yet. Before wiring a display or a scoring
+# signal to one of these three, confirm a real producer exists - do not assume
+# a count of 0 means "checked, none found." It means "never collected."
+
 VALID_EVENT_TYPES: frozenset[str] = frozenset(
     {EVENT_APPLIED, EVENT_REJECTED, EVENT_INTERVIEW, EVENT_NO_RESPONSE}
 )
@@ -41,6 +49,11 @@ SOURCE_SEEK_APPLIED = "seek_applied"
 SOURCE_GMAIL_ACK = "gmail_ack"
 SOURCE_REJECTION_SHEET = "rejection_sheet"
 SOURCE_DERIVED_SILENCE = "derived_silence"
+# The candidate clicked a review action (Applied / Rejected / No answer)
+# directly on a job card in JobHunter. This is first-party and does not need
+# an LLM to interpret an email - it should be trusted over any of the sources
+# above, and is the intended long-term replacement for SOURCE_REJECTION_SHEET.
+SOURCE_JH_MANUAL_ACTION = "jh_manual_action"
 
 VALID_SOURCES: frozenset[str] = frozenset(
     {
@@ -48,6 +61,7 @@ VALID_SOURCES: frozenset[str] = frozenset(
         SOURCE_GMAIL_ACK,
         SOURCE_REJECTION_SHEET,
         SOURCE_DERIVED_SILENCE,
+        SOURCE_JH_MANUAL_ACTION,
     }
 )
 
@@ -199,6 +213,31 @@ def rebuild_employer_outcomes(user_id: str, *, db_path: Path | None = None) -> i
                 (user_id, key, json.dumps(rollup), updated_at),
             )
     return len(grouped)
+
+
+def load_manual_action_job_keys(user_id: str, *, db_path: Path | None = None) -> set[str]:
+    """Job keys already tracked as a first-party click (SOURCE_JH_MANUAL_ACTION).
+
+    Used to stop the rejection-sheet import from double-counting an outcome
+    you already told JobHunter about directly. Only catches sheet rows that
+    carry a job_key - most historical rows do not, so this protects new
+    imports going forward rather than cleaning up old duplicates.
+    """
+    with db_conn(db_path) as conn:
+        rows = conn.execute(
+            "SELECT data FROM candidate_application_events WHERE user_id = ? AND source = ?",
+            (user_id, SOURCE_JH_MANUAL_ACTION),
+        ).fetchall()
+    job_keys: set[str] = set()
+    for (raw_data,) in rows:
+        try:
+            payload = json.loads(raw_data or "{}")
+        except (TypeError, ValueError):
+            continue
+        job_key = str(payload.get("job_key") or "").strip()
+        if job_key:
+            job_keys.add(job_key)
+    return job_keys
 
 
 def get_employer_outcome(

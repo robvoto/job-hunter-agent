@@ -75,10 +75,24 @@ def backfill_from_rejection_history(
     imported = 0
     skipped_no_employer = 0
     skipped_no_date = 0
+    skipped_already_tracked_manually = 0
+
+    # A job you already clicked Applied/Rejected/No Answer on in JobHunter is
+    # a real, first-party fact. If the same job later shows up in the
+    # rejection-sheet import too (e.g. the actual rejection email arrives
+    # after you'd already marked it yourself), importing it again would count
+    # the same real-world outcome twice in the employer rollup. This only
+    # catches it when the sheet row has a job_key - most historical rows do
+    # not, so this is a forward-looking guard, not a full duplicate cleanup.
+    manually_tracked_job_keys = store.load_manual_action_job_keys(user_id, db_path=db_path)
 
     for row in rows:
         employer = str(row.get("company") or "").strip()
         event_date = normalise_event_date(row.get("date"))
+        job_key = str(row.get("job_key") or "").strip()
+        if job_key and job_key in manually_tracked_job_keys:
+            skipped_already_tracked_manually += 1
+            continue
         if not employer:
             skipped_no_employer += 1
             continue
@@ -108,6 +122,7 @@ def backfill_from_rejection_history(
         "events_imported": imported,
         "skipped_no_employer": skipped_no_employer,
         "skipped_no_date": skipped_no_date,
+        "skipped_already_tracked_manually": skipped_already_tracked_manually,
         "employers_in_rollup": employers,
     }
     logger.info("[employer_outcome_backfill] %s", summary)

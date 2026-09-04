@@ -243,18 +243,29 @@ def extract_job_rejection_with_llm(row: dict, *, benchmark_model: str | None = N
         _log_llm_call(resp, "rejection_email_extraction", model)
     except Exception as exc:
         logger.error("Rejection email extraction failed: %s", exc)
-        return dict(_LLM_EXTRACTION_DEGRADED)
+        # Keep the real cause on the record. The generic degraded reason used
+        # to overwrite this, which meant a rate limit, an auth failure, and a
+        # timeout were all indistinguishable after the fact - you could not
+        # tell why a row failed without re-running it against live logs that
+        # are long gone by the time anyone looks.
+        degraded = dict(_LLM_EXTRACTION_DEGRADED)
+        degraded["review_reason"] = f"LLM call failed: {exc}"
+        return degraded
 
     raw = str(getattr(resp, "output_text", "") or "").strip()
     if not raw:
-        return dict(_LLM_EXTRACTION_DEGRADED)
+        degraded = dict(_LLM_EXTRACTION_DEGRADED)
+        degraded["review_reason"] = "LLM call returned an empty response"
+        return degraded
 
     try:
         parsed = _json.loads(_strip_json_fence(raw))
         return _validate_llm_extraction(parsed)
     except Exception as exc:
         logger.error("Rejection email extraction parse failed: %s | raw=%s", exc, raw[:200])
-        return dict(_LLM_EXTRACTION_DEGRADED)
+        degraded = dict(_LLM_EXTRACTION_DEGRADED)
+        degraded["review_reason"] = f"LLM output was not valid JSON: {exc}"
+        return degraded
 
 
 # ---------------------------------------------------------------------------
@@ -612,11 +623,41 @@ def _candidate_history_store_entry_to_runtime(entry: dict) -> dict:
     return runtime
 
 
+# Status text the source sheet uses for Rob's own "no reply after X days counts
+# as a rejection" rule. That rule is intentional policy, not a bug - rows
+# carrying it stay confident rejections even when the LLM (correctly) reads
+# the email itself as just a confirmation, because there is nothing to read:
+# silence is the whole signal.
+_ASSUMED_SILENCE_MARKERS = ("no response", "assumed rejection", "assumed")
+
+
 def _candidate_history_sheet_row_to_store_entry(normalized_row: dict, *, source: str) -> dict:
     status = _CANDIDATE_HISTORY_STATUS_REJECTION
     needs_review = bool(normalized_row.get("llm_needs_review", True))
     confidence = _clean(normalized_row.get("llm_confidence")).lower()
     evidence = _clean(normalized_row.get("llm_evidence"))
+
+    # GUARDRAIL: this store only ever records status="rejection" - that is a
+    # deliberate constraint (see _candidate_history_store_entry_to_runtime),
+    # not something to work around. What varies is how much to trust that
+    # label. The source sheet's raw Status column asserts "Rejection" outright
+    # for every row it hands us, but the LLM extraction sometimes reads the
+    # same email and disagrees (llm_is_rejection=False) or cannot tell
+    # (application_status="unknown", e.g. the LLM call itself failed - see
+    # extract_job_rejection_with_llm). Previously that disagreement was
+    # silently discarded and the row was stored as a confident rejection
+    # anyway. Now: unless this row is covered by Rob's explicit silence-rule,
+    # an LLM verdict that isn't an actual rejection forces confidence down to
+    # "low" and flags needs_review, so the existing confidence gate in
+    # workspace_renderer.py (which already downgrades low-confidence matches
+    # to "possible previous application" instead of "Rejected before") does
+    # its job on real data instead of being fed a rubber-stamped "high".
+    raw_source_status = _clean(normalized_row.get("status")).lower()
+    is_assumed_silence_rule = any(marker in raw_source_status for marker in _ASSUMED_SILENCE_MARKERS)
+    llm_confirms_rejection = bool(normalized_row.get("llm_is_rejection"))
+    if not llm_confirms_rejection and not is_assumed_silence_rule:
+        confidence = "low"
+        needs_review = True
     company = _clean(normalized_row.get("llm_company") or normalized_row.get("raw_company"))
     role = _clean(normalized_row.get("llm_role") or normalized_row.get("raw_role"))
     created_at = _candidate_history_now()

@@ -52,6 +52,19 @@ def build_employer_outcome_check_item(
 
     `label_lookup(key)` returns the managed label text; the caller supplies it so
     this module does not reach into the label store itself.
+
+    GUARDRAIL: only render counters this system actually has a producer for.
+    As of 2026-09, the only event type any code path ever writes via
+    `store.record_application_event` is EVENT_REJECTED (see
+    employer_outcome_backfill.py). EVENT_APPLIED, EVENT_INTERVIEW, and
+    EVENT_NO_RESPONSE exist in the vocabulary but nothing populates them, so
+    `counts.get(...)` on those keys is always 0 - not "verified zero", just
+    "never measured". Showing that as a confident number ("applied 0,
+    interviewed 0, no reply 0") told the candidate something untrue: that we
+    checked and found nothing, when we never checked at all. Do not add those
+    fields back into this template until a real producer exists for each one.
+    Rejections are the only outcome currently ledgered, so that is the only
+    count this renders.
     """
     state = str(resolved.get("state") or "")
     if state not in VALID_STATES:
@@ -70,10 +83,7 @@ def build_employer_outcome_check_item(
     counts = rollup.get("counts") or {}
     return Template(label_lookup("employer_outcome_history_template")).substitute(
         employer=rollup.get("employer_display") or "",
-        applications=counts.get(store.EVENT_APPLIED, 0),
         rejections=counts.get(store.EVENT_REJECTED, 0),
-        interviews=counts.get(store.EVENT_INTERVIEW, 0),
-        no_response=counts.get(store.EVENT_NO_RESPONSE, 0),
         last_date=rollup.get("last_event_date") or "",
     )
 

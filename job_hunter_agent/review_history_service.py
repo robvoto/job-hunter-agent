@@ -6,21 +6,28 @@ jobs) and retrieves job descriptions from history or cached search results to su
 consistent review signals across sessions.
 """
 
+import logging
 import re
 from datetime import datetime
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from job_hunter_agent.filters import (
     build_title_block_rule,
     normalize_title_block_phrase,
 )
+from job_hunter_agent import employer_outcome_store
 from job_hunter_agent.io_utils import load_job_history, save_job_history
 from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.profile_store import load_profile, save_profile
+from job_hunter_agent.user_context import get_user_id
 from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
     RECORD_FIRST_APPLIED_AT_KEY,
     RECORD_FIRST_HIDDEN_AT_KEY,
+    RECORD_FIRST_NO_RESPONSE_AT_KEY,
+    RECORD_FIRST_REJECTED_AT_KEY,
     RECORD_FIRST_SEEN_AT_KEY,
     RECORD_FIRST_VIEWED_AT_KEY,
     RECORD_FIT_SOURCE_TEXT_KEY,
@@ -28,6 +35,10 @@ from job_hunter_agent.record_schema import (
     RECORD_IS_HIDDEN_KEY,
     RECORD_JOB_KEY,
     RECORD_LAST_APPLIED_AT_KEY,
+    RECORD_LAST_NO_RESPONSE_AT_KEY,
+    RECORD_LAST_REJECTED_AT_KEY,
+    RECORD_LAST_UNREJECTED_AT_KEY,
+    RECORD_LAST_UN_NO_RESPONSE_AT_KEY,
     RECORD_LAST_BLOCK_TITLE_AT_KEY,
     RECORD_LAST_HIDDEN_AT_KEY,
     RECORD_LAST_KEPT_SNAPSHOT_KEY,
@@ -121,6 +132,44 @@ def _append_review_event(
     entry[RECORD_REVIEW_EVENTS_KEY] = events[-50:]
 
 
+def _record_first_party_outcome_event(
+    event_type: str, job_key: str, company: str, title: str, occurred_at: str
+) -> None:
+    """Ledger a real, in-app outcome click against the employer rollup.
+
+    This is the path that should eventually replace the rejection-sheet
+    import entirely: no email, no LLM guess, just the candidate telling us
+    what happened. Never lets a ledger problem break the click itself - if
+    there is no employer to attribute this to, or the ledger write fails for
+    any reason, the button still works and the job record still updates; only
+    the aggregate employer count is skipped, and that is logged so it is not
+    a silent gap.
+    """
+    employer = str(company or "").strip()
+    if not employer:
+        return
+    user_id = get_user_id()
+    if not user_id:
+        return
+    try:
+        employer_outcome_store.record_application_event(
+            user_id=user_id,
+            employer_raw=employer,
+            role_title=str(title or ""),
+            event_type=event_type,
+            event_date=occurred_at[:10],
+            source=employer_outcome_store.SOURCE_JH_MANUAL_ACTION,
+            evidence_ref=f"{job_key}:{event_type}",
+            confidence="high",
+            data={"job_key": job_key},
+        )
+        employer_outcome_store.rebuild_employer_outcomes(user_id)
+    except Exception:
+        logger.exception(
+            "Failed to record first-party outcome event: type=%s job_key=%s", event_type, job_key
+        )
+
+
 def persist_review_event(
     action: str,
     job_key: str,
@@ -161,8 +210,54 @@ def persist_review_event(
         if not entry.get(RECORD_FIRST_APPLIED_AT_KEY):
             entry[RECORD_FIRST_APPLIED_AT_KEY] = now_iso
         entry[RECORD_LAST_APPLIED_AT_KEY] = now_iso
+        _record_first_party_outcome_event(
+            employer_outcome_store.EVENT_APPLIED,
+            normalized,
+            entry.get(RECORD_COMPANY_KEY, ""),
+            entry.get(RECORD_TITLE_KEY, ""),
+            now_iso,
+        )
     elif action == "unapply":
         entry[RECORD_LAST_UNAPPLIED_AT_KEY] = now_iso
+    elif action == "rejected":
+        # You clicked this yourself - it does not need an LLM to read an email
+        # and guess. This is the real signal the rejection-sheet import exists
+        # to approximate; once this is the normal way rejections get recorded,
+        # that import should be retired rather than kept running alongside it.
+        if not entry.get(RECORD_FIRST_REJECTED_AT_KEY):
+            entry[RECORD_FIRST_REJECTED_AT_KEY] = now_iso
+        entry[RECORD_LAST_REJECTED_AT_KEY] = now_iso
+        _record_first_party_outcome_event(
+            employer_outcome_store.EVENT_REJECTED,
+            normalized,
+            entry.get(RECORD_COMPANY_KEY, ""),
+            entry.get(RECORD_TITLE_KEY, ""),
+            now_iso,
+        )
+    elif action == "unreject":
+        # Ledger events are append-only by design (see employer_outcome_store
+        # module docstring) - undo does not delete the fact that you clicked
+        # Rejected earlier, it only resets the button so you can re-record a
+        # different outcome for this job. The employer's rejected count is
+        # not decremented.
+        entry[RECORD_LAST_UNREJECTED_AT_KEY] = now_iso
+    elif action == "un_no_response":
+        entry[RECORD_LAST_UN_NO_RESPONSE_AT_KEY] = now_iso
+    elif action == "no_response":
+        # Same idea as "rejected" above: you telling us "never heard back" is
+        # a real, first-party fact. It does not need the silence-after-X-days
+        # guess the sheet import makes, because there is no guessing involved
+        # - you already know.
+        if not entry.get(RECORD_FIRST_NO_RESPONSE_AT_KEY):
+            entry[RECORD_FIRST_NO_RESPONSE_AT_KEY] = now_iso
+        entry[RECORD_LAST_NO_RESPONSE_AT_KEY] = now_iso
+        _record_first_party_outcome_event(
+            employer_outcome_store.EVENT_NO_RESPONSE,
+            normalized,
+            entry.get(RECORD_COMPANY_KEY, ""),
+            entry.get(RECORD_TITLE_KEY, ""),
+            now_iso,
+        )
     elif action == "not_for_me":
         entry[RECORD_LAST_NOT_FOR_ME_AT_KEY] = now_iso
         entry[RECORD_TIMES_NOT_FOR_ME_KEY] = int(entry.get(RECORD_TIMES_NOT_FOR_ME_KEY, 0) or 0) + 1
@@ -206,6 +301,8 @@ def append_review_key(
     list_name = {
         "applied": "applied_job_keys",
         "hidden": "hidden_job_keys",
+        "rejected": "rejected_job_keys",
+        "no_response": "no_response_job_keys",
     }.get(action)
     if not list_name:
         raise ValueError("Unsupported review action")
@@ -257,6 +354,8 @@ def remove_review_key(
     list_name = {
         "unapply": "applied_job_keys",
         "unhide": "hidden_job_keys",
+        "unreject": "rejected_job_keys",
+        "un_no_response": "no_response_job_keys",
     }.get(action)
     if not list_name:
         raise ValueError("Unsupported review action")
