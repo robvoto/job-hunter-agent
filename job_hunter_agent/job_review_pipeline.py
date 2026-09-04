@@ -212,6 +212,7 @@ from job_hunter_agent.record_schema import (
     RECORD_REJECT_REASON_KEY,
     RECORD_REVIEW_SOURCE_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
+    RECORD_REQUIREMENT_COVERAGE_HIDDEN_KEY,
     RECORD_REQUIREMENT_COVERAGE_VERSION_KEY,
     REQUIREMENT_COVERAGE_CONTRACT_VERSION,
     RECORD_REVIEWED_SIGNAL_MATCHES_KEY,
@@ -797,6 +798,9 @@ def _build_outcome(record: dict) -> dict[str, Any]:
         "llm_fit_grade": record.get(RECORD_LLM_FIT_GRADE_KEY),
         "review_source": record.get("review_source"),
         RECORD_REQUIREMENT_COVERAGE_KEY: list(record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or []),
+        RECORD_REQUIREMENT_COVERAGE_HIDDEN_KEY: list(
+            record.get(RECORD_REQUIREMENT_COVERAGE_HIDDEN_KEY) or []
+        ),
         RECORD_OCCUPATION_ALIGNMENT_KEY: record.get(RECORD_OCCUPATION_ALIGNMENT_KEY),
         RECORD_OCCUPATION_ALIGNMENT_REASON_KEY: record.get(RECORD_OCCUPATION_ALIGNMENT_REASON_KEY),
     }
@@ -971,10 +975,11 @@ def _build_requirement_classification_review_signals(record: dict) -> list[dict]
     These never contribute to scoring or an "Add eligibility" prompt (see
     normalize_llm_requirement_coverage / workspace_renderer) — they only
     become a pending Learning/Needs Review signal so a human can classify the
-    requirement as capability, eligibility, or qualification. Compound/mixed
-    rows are suppressed unless the LLM explicitly marks the whole requirement
-    safe for one reusable classification. If the LLM did not propose a type,
-    the proposal remains absent rather than being guessed.
+    requirement as capability, eligibility, or qualification. The row-level
+    ``uncertain`` requirement_type is produced deterministically by
+    ``classify_requirement_type`` (a genuine eligibility-vs-duration conflict);
+    every such row is surfaced. If the LLM did not propose a type, the proposal
+    remains absent rather than being guessed.
     """
     signals: list[dict] = []
     seen: set[str] = set()
@@ -982,10 +987,6 @@ def _build_requirement_classification_review_signals(record: dict) -> list[dict]
         if not isinstance(item, dict):
             continue
         if item.get("requirement_type") != LLM_UNCERTAIN_COVERAGE_REQUIREMENT_TYPE:
-            continue
-        if not bool(item.get("classification_reviewable")):
-            # The requirement mixes or preserves semantics that cannot be safely
-            # represented by one reusable capability/eligibility/qualification override.
             continue
         requirement = str(item.get("requirement") or "").strip()
         key = requirement.lower()
@@ -1044,6 +1045,7 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
     )
     record["llm_learning_candidates"] = []
     record[RECORD_REQUIREMENT_COVERAGE_KEY] = []
+    record[RECORD_REQUIREMENT_COVERAGE_HIDDEN_KEY] = []
     record[RECORD_OCCUPATION_ALIGNMENT_KEY] = ""
     record[RECORD_OCCUPATION_ALIGNMENT_REASON_KEY] = ""
     debug_reason = ""
@@ -1085,6 +1087,9 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         review = payload["fit_review"]
         record["llm_learning_candidates"] = []
         record[RECORD_REQUIREMENT_COVERAGE_KEY] = payload.get("requirement_coverage") or []
+        record[RECORD_REQUIREMENT_COVERAGE_HIDDEN_KEY] = (
+            payload.get("requirement_coverage_hidden") or []
+        )
         record[RECORD_REQUIREMENT_COVERAGE_VERSION_KEY] = REQUIREMENT_COVERAGE_CONTRACT_VERSION
         record[RECORD_OCCUPATION_ALIGNMENT_KEY] = str(payload.get("occupation_alignment") or "")
         record[RECORD_OCCUPATION_ALIGNMENT_REASON_KEY] = str(
@@ -1171,6 +1176,7 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
             eligibility_gate.get("reason", "") if source != "rule" else ""
         ),
         RECORD_REQUIREMENT_COVERAGE_KEY: record[RECORD_REQUIREMENT_COVERAGE_KEY],
+        RECORD_REQUIREMENT_COVERAGE_HIDDEN_KEY: record[RECORD_REQUIREMENT_COVERAGE_HIDDEN_KEY],
         RECORD_OCCUPATION_ALIGNMENT_KEY: record[RECORD_OCCUPATION_ALIGNMENT_KEY],
         RECORD_OCCUPATION_ALIGNMENT_REASON_KEY: record[RECORD_OCCUPATION_ALIGNMENT_REASON_KEY],
         "posting_channel": llm_posting_channel,
