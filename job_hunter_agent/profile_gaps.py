@@ -147,6 +147,11 @@ def compute_profile_gaps(
         status = str(item.get("status") or "").strip().lower()
         if status not in CONFIRMABLE_REQUIREMENT_STATUSES:
             continue
+        # OR requirements (decomposition.operator == "or") carry no row-level
+        # canonical_requirement and profile_action_allowed is False, so they are
+        # skipped here: a single OR branch must never be surfaced as a gap (or
+        # resolved via resolve_custom_blocker) as though that branch alone were
+        # the whole requirement. See docs/REQUIREMENT_DECOMPOSITION_RATIONALE.md.
         if item.get("profile_action_allowed") is not True:
             continue
         capability_name = str(
@@ -208,6 +213,12 @@ def resolve_custom_blocker(raw_text: str, requirement_coverage: list[dict]) -> d
     not just a display label) and importance == mandatory, resolves. No
     substring/fuzzy matching, so a broad or generic term cannot silently match
     a specific requirement.
+
+    OR requirements (decomposition.operator == "or") have no row-level
+    canonical_requirement and profile_action_allowed is False, so they never
+    resolve here: a single OR branch must never be persisted to
+    must_not_require_skills as though that branch alone were the whole mandatory
+    requirement. See docs/REQUIREMENT_DECOMPOSITION_RATIONALE.md.
     """
     query_norm = _normalize_for_match(raw_text)
     result = {

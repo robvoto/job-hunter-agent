@@ -553,6 +553,8 @@
     "requirement_group_partial_heading": "Partial matches",
     "requirement_group_attention_heading": "Needs attention",
     "requirement_group_matched_heading": "Matched",
+    "requirement_or_branches_note": "Either {options} satisfies this requirement.",
+    "requirement_or_join": " or ",
     "coverage_status_supported": "In profile",
     "coverage_status_partially_supported": "Partial match",
     "coverage_status_not_shown": "",
