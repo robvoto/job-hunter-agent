@@ -61,6 +61,7 @@ Backlog source of truth is the shared Google Sheet. `docs/backlog/` is intention
 
 | Folder | Owner |
 |---|---|
+| `.skills/INDEX.md` | Canonical skill-routing index. One short routing line per active skill. |
 | `.skills/*/SKILL.md` | One active agent workflow/domain each. Must include YAML `name` and `description`. |
 | `.skills/aws-test-instance/SKILL.md` | AWS Job Hunter test EC2 instance facts, SSM access workflow, instance-side logs, and host/runtime diagnosis. |
 | `.skills/release-management/SKILL.md` | Release version ownership, gates, tags, and publishing workflow. |

@@ -63,10 +63,11 @@ When cleaning instructions, check:
 - Do not create duplicate rules in several skills. Link or route to the single owner.
 
 ## Ongoing maintenance
-- When new instructions are added, check whether they made the wrong file bigger.
-- If a rule is universal, keep it short in `AGENTS.md`.
-- If a rule is area-specific, move it to the relevant skill.
+- When a durable rule should apply across future sessions, first put it in the existing skill that owns that behaviour.
+- If no suitable skill exists, create a focused skill and add it to `.skills/INDEX.md`; do not use `AGENTS.md` as the fallback dumping ground.
+- Keep `AGENTS.md` as routing plus only genuinely universal, stable rules. It may point to an owner but must not duplicate the owner's detailed instructions.
 - If a rule needs examples or long explanation, move those details to `DETAILS.md` or `docs/*`.
+- When new instructions are added, check whether they made the wrong file bigger or duplicated an existing owner.
 - After any instruction-structure cleanup, update `docs/AGENT_OPERATING_MODEL.md` and `docs/DOC_INDEX.md` if ownership or structure changed.
 
 ## Do not

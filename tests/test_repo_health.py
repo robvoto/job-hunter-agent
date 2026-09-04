@@ -332,14 +332,14 @@ def test_scoring_and_operations_docs_cover_fit_evidence_and_run_summary_semantic
 
 
 def test_repository_runtime_commands_use_uv_and_classify_missing_binaries_correctly():
-    agents = (ROOT_DIR / "AGENTS.md").read_text(encoding="utf-8")
+    tooling_skill = (ROOT_DIR / ".skills" / "mcp-tooling" / "SKILL.md").read_text(encoding="utf-8")
     operations = (ROOT_DIR / "docs" / "OPERATIONS.md").read_text(encoding="utf-8")
     aws_launcher = (
         ROOT_DIR / "scripts" / "ec2" / "start-aws-browser-session.sh"
     ).read_text(encoding="utf-8")
 
-    assert "Never invoke bare `python`, `python3`, `pytest`, or `ruff`" in agents
-    assert "not a database, application, or repository-access failure" in agents
+    assert "Never invoke bare `python`, `python3`, `pytest`, or `ruff`" in tooling_skill
+    assert "not a database, application, repository-access, or dependency failure" in tooling_skill
     assert "uv run python -m job_hunter_agent.source_connector" in operations
     assert "\npython -m job_hunter_agent.source_connector" not in operations
     assert "set -- uv run python -m job_hunter_agent.fastapi_app --rebuild" in aws_launcher
