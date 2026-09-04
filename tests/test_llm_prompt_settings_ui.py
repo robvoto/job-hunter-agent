@@ -24,8 +24,10 @@ def test_prompt_settings_form_uses_individual_textareas() -> None:
     assert "plain text templates inserted into the LLM system prompt" in html
     assert "Playwright selector timeout (seconds)" in html
     assert 'id="playwright_selector_timeout" type="number" min="1" max="60" step="1"' in html
-    assert "Default LinkedIn fetch timeout (seconds)" in html
-    assert 'id="search_default_linkedin_fetch_timeout_seconds" type="number" min="5" max="60" step="1"' in html
+    assert "LinkedIn fetch timeout" not in html
+    assert "linkedin_fetch_timeout_seconds" not in html
+    assert "LinkedIn no-progress watchdog (seconds)" in html
+    assert 'id="search_default_linkedin_jobspy_stall_timeout_seconds" type="number" min="30" max="300" step="1"' in html
 
 
 def test_prompt_settings_script_maps_individual_fields() -> None:

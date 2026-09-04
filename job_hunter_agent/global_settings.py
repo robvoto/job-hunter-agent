@@ -400,8 +400,10 @@ def get_description_compaction_min_retention() -> float:
     )
 
 
-def get_linkedin_fetch_timeout_seconds() -> float:
-    return float(load_global_settings()[KEY_SEARCH_SETTINGS][KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS])
+def get_linkedin_jobspy_stall_timeout_seconds() -> float:
+    return float(
+        load_global_settings()[KEY_SEARCH_SETTINGS][KEY_LINKEDIN_JOBSPY_STALL_TIMEOUT_SECONDS]
+    )
 
 
 def get_linkedin_parallel_search_workers() -> int:

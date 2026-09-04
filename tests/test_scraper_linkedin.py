@@ -13,7 +13,7 @@ from job_hunter_agent.salary import load_salary
 from job_hunter_agent.scrapers.base import _build_salary_string
 from job_hunter_agent.scrapers.linkedin import (
     LinkedInScraper,
-    _fetch_jobspy_with_timeout,
+    _fetch_jobspy_isolated,
     _extract_linkedin_job_header_evidence,
     classify_linkedin_apply_method,
 )
@@ -408,6 +408,32 @@ def test_linkedin_search_plan_prunes_trusted_redundant_role_target(monkeypatch):
     assert scraper.discovery_status["attempted_targets"] == 1
 
 
+def test_jobspy_progress_session_reports_only_changed_pagination_offsets():
+    from job_hunter_agent.scrapers.linkedin import _JobSpyProgressSession
+
+    sent: list[int | None] = []
+
+    class _ProgressConn:
+        def send(self, value):
+            sent.append(value)
+
+    class _Session:
+        headers = {}
+
+        def get(self, *args, **kwargs):
+            return (args, kwargs)
+
+    wrapped = _JobSpyProgressSession(_Session(), _ProgressConn())
+
+    wrapped.get("https://example", params={"start": 0})
+    wrapped.get("https://example", params={"start": 0})
+    wrapped.get("https://example", params={"start": 25})
+    wrapped.get("https://example", params={"start": 25})
+    wrapped.get("https://example", params={"start": 50})
+
+    assert sent == [0, 25, 50]
+
+
 def test_linkedin_jobspy_fetch_stops_immediately_when_run_stop_requested(monkeypatch):
     from job_hunter_agent.scrapers import linkedin as linkedin_module
 
@@ -415,7 +441,7 @@ def test_linkedin_jobspy_fetch_stops_immediately_when_run_stop_requested(monkeyp
         def close(self):
             return None
 
-        def poll(self, _timeout):
+        def poll(self, *_args):
             return False
 
         def recv(self):
@@ -440,27 +466,179 @@ def test_linkedin_jobspy_fetch_stops_immediately_when_run_stop_requested(monkeyp
 
     class _FakeContext:
         def __init__(self):
-            self.recv_conn = _FakeConn()
-            self.send_conn = _FakeConn()
+            self.result_recv = _FakeConn()
+            self.result_send = _FakeConn()
+            self.progress_recv = _FakeConn()
+            self.progress_send = _FakeConn()
             self.worker = _FakeWorker()
+            self.pipe_calls = 0
 
         def Pipe(self, duplex=False):
             assert duplex is False
-            return self.recv_conn, self.send_conn
+            self.pipe_calls += 1
+            return (
+                (self.result_recv, self.result_send)
+                if self.pipe_calls == 1
+                else (self.progress_recv, self.progress_send)
+            )
 
         def Process(self, **_kwargs):
             return self.worker
 
-    monkeypatch.setattr(
-        linkedin_module.multiprocessing,
-        "get_context",
-        lambda _name: _FakeContext(),
-    )
+    monkeypatch.setattr(linkedin_module.multiprocessing, "get_context", lambda _name: _FakeContext())
     monkeypatch.setattr(linkedin_module, "run_stop_requested", lambda: True)
+    monkeypatch.setattr(linkedin_module, "get_linkedin_jobspy_stall_timeout_seconds", lambda: 90.0)
 
     with pytest.raises(InterruptedError, match="cancelled due to stop request"):
-        _fetch_jobspy_with_timeout({"search_term": "project manager"}, timeout_seconds=20.0)
+        _fetch_jobspy_isolated({"search_term": "project manager"})
 
+def test_linkedin_jobspy_fetch_has_no_total_elapsed_deadline(monkeypatch):
+    from job_hunter_agent.scrapers import linkedin as linkedin_module
+
+    clock = {"value": 0.0}
+
+    class _ResultConn:
+        def close(self):
+            return None
+
+        def poll(self, *_args):
+            return True
+
+        def recv(self):
+            return ("ok", SimpleNamespace(), [])
+
+    class _ProgressConn:
+        def __init__(self):
+            self.messages = []
+
+        def close(self):
+            return None
+
+        def poll(self, *_args):
+            return bool(self.messages)
+
+        def recv(self):
+            return self.messages.pop(0)
+
+    class _SendConn:
+        def close(self):
+            return None
+
+    class _FakeWorker:
+        def __init__(self, progress_conn):
+            self.join_calls = 0
+            self.exitcode = 0
+            self.progress_conn = progress_conn
+
+        def start(self):
+            return None
+
+        def join(self, _timeout):
+            self.join_calls += 1
+            clock["value"] += 10.0
+            if self.join_calls < 8:
+                self.progress_conn.messages.append(f"search page: {self.join_calls}")
+
+        def is_alive(self):
+            return self.join_calls < 8
+
+    class _FakeContext:
+        def __init__(self):
+            self.result_recv = _ResultConn()
+            self.result_send = _SendConn()
+            self.progress_recv = _ProgressConn()
+            self.progress_send = _SendConn()
+            self.worker = _FakeWorker(self.progress_recv)
+            self.pipe_calls = 0
+
+        def Pipe(self, duplex=False):
+            assert duplex is False
+            self.pipe_calls += 1
+            return (
+                (self.result_recv, self.result_send)
+                if self.pipe_calls == 1
+                else (self.progress_recv, self.progress_send)
+            )
+
+        def Process(self, **_kwargs):
+            return self.worker
+
+    fake_context = _FakeContext()
+    monkeypatch.setattr(linkedin_module.multiprocessing, "get_context", lambda _name: fake_context)
+    monkeypatch.setattr(linkedin_module, "run_stop_requested", lambda: False)
+    monkeypatch.setattr(linkedin_module, "get_linkedin_jobspy_stall_timeout_seconds", lambda: 15.0)
+    monkeypatch.setattr(linkedin_module.time, "monotonic", lambda: clock["value"])
+
+    result = _fetch_jobspy_isolated({"search_term": "project manager"})
+
+    assert isinstance(result, SimpleNamespace)
+    assert clock["value"] == 80.0
+    assert fake_context.worker.join_calls == 8
+
+
+def test_linkedin_jobspy_stall_watchdog_stops_only_no_progress(monkeypatch):
+    from job_hunter_agent.scrapers import linkedin as linkedin_module
+
+    clock = {"value": 0.0}
+
+    class _FakeConn:
+        def close(self):
+            return None
+
+        def poll(self, *_args):
+            return False
+
+        def recv(self):
+            raise AssertionError("no result expected for stalled worker")
+
+    class _FakeWorker:
+        def __init__(self):
+            self.terminated = False
+            self.exitcode = None
+
+        def start(self):
+            return None
+
+        def join(self, _timeout):
+            clock["value"] += 10.0
+
+        def is_alive(self):
+            return not self.terminated
+
+        def terminate(self):
+            self.terminated = True
+
+    class _FakeContext:
+        def __init__(self):
+            self.result_recv = _FakeConn()
+            self.result_send = _FakeConn()
+            self.progress_recv = _FakeConn()
+            self.progress_send = _FakeConn()
+            self.worker = _FakeWorker()
+            self.pipe_calls = 0
+
+        def Pipe(self, duplex=False):
+            assert duplex is False
+            self.pipe_calls += 1
+            return (
+                (self.result_recv, self.result_send)
+                if self.pipe_calls == 1
+                else (self.progress_recv, self.progress_send)
+            )
+
+        def Process(self, **_kwargs):
+            return self.worker
+
+    fake_context = _FakeContext()
+    monkeypatch.setattr(linkedin_module.multiprocessing, "get_context", lambda _name: fake_context)
+    monkeypatch.setattr(linkedin_module, "run_stop_requested", lambda: False)
+    monkeypatch.setattr(linkedin_module, "get_linkedin_jobspy_stall_timeout_seconds", lambda: 25.0)
+    monkeypatch.setattr(linkedin_module.time, "monotonic", lambda: clock["value"])
+
+    with pytest.raises(TimeoutError, match="made no progress"):
+        _fetch_jobspy_isolated({"search_term": "project manager"})
+
+    assert fake_context.worker.terminated is True
 
 def test_linkedin_deduplicates_cards_across_multiple_search_targets(monkeypatch):
     from job_hunter_agent.scrapers import linkedin as linkedin_module
@@ -908,23 +1086,18 @@ def test_linkedin_scrape_isolates_failed_target_fetch(monkeypatch):
     assert kept_records[0]["job_key"] == "linkedin:li-healthy"
 
 
-def test_fetch_jobspy_with_timeout_uses_timeout_worker(monkeypatch):
+def test_fetch_jobspy_uses_isolated_worker_without_total_deadline(monkeypatch):
     from job_hunter_agent.scrapers import linkedin as linkedin_module
 
     captured: dict[str, object] = {}
-
-    monkeypatch.setattr(linkedin_module, "get_linkedin_fetch_timeout_seconds", lambda: 40.0)
     monkeypatch.setattr(
         linkedin_module,
-        "_fetch_jobspy_with_timeout",
-        lambda search_params, timeout_seconds: captured.update(
-            {"search_params": search_params, "timeout_seconds": timeout_seconds}
-        )
-        or SimpleNamespace(),
+        "_fetch_jobspy_isolated",
+        lambda search_params: captured.update({"search_params": search_params}) or SimpleNamespace(),
     )
 
     scraper = LinkedInScraper(
-        profile={"search_settings": {"linkedin_fetch_timeout_seconds": 20}},
+        profile={},
         llm_cache={},
         job_history={},
         applied_job_keys=set(),
@@ -942,7 +1115,6 @@ def test_fetch_jobspy_with_timeout_uses_timeout_worker(monkeypatch):
         }
     )
 
-    assert captured["timeout_seconds"] == 20.0
     assert captured["search_params"]["search_term"] == "project manager"
     assert captured["search_params"]["linkedin_fetch_description"] is False
 
@@ -1358,23 +1530,26 @@ def test_extract_linkedin_job_url_direct_reads_apply_code_element():
     assert _extract_linkedin_job_url_direct(html) == "https://employer.example.com/careers/123"
 
 
-def test_fetch_jobspy_with_timeout_surfaces_jobspy_notices_as_warnings(monkeypatch, caplog):
+def test_fetch_jobspy_isolated_surfaces_jobspy_notices_as_warnings(monkeypatch, caplog):
     from job_hunter_agent.scrapers import linkedin as linkedin_module
 
     class _FakeConn:
-        def __init__(self, payload=None):
+        def __init__(self, payload=None, *, ready=False):
             self._payload = payload
+            self._ready = ready
 
         def close(self):
             return None
 
-        def poll(self, _timeout):
-            return True
+        def poll(self, *_args):
+            return self._ready
 
         def recv(self):
             return self._payload
 
     class _FakeWorker:
+        exitcode = 0
+
         def start(self):
             return None
 
@@ -1386,25 +1561,92 @@ def test_fetch_jobspy_with_timeout_surfaces_jobspy_notices_as_warnings(monkeypat
 
     class _FakeContext:
         def __init__(self):
-            self.recv_conn = _FakeConn(
-                ("ok", SimpleNamespace(), ["429 Response - Blocked by LinkedIn"])
+            self.result_recv = _FakeConn(
+                ("ok", SimpleNamespace(), [(logging.WARNING, "temporary LinkedIn warning")]),
+                ready=True,
             )
-            self.send_conn = _FakeConn()
+            self.result_send = _FakeConn()
+            self.progress_recv = _FakeConn()
+            self.progress_send = _FakeConn()
             self.worker = _FakeWorker()
+            self.pipe_calls = 0
 
         def Pipe(self, duplex=False):
             assert duplex is False
-            return self.recv_conn, self.send_conn
+            self.pipe_calls += 1
+            return (
+                (self.result_recv, self.result_send)
+                if self.pipe_calls == 1
+                else (self.progress_recv, self.progress_send)
+            )
 
         def Process(self, **_kwargs):
             return self.worker
 
-    monkeypatch.setattr(
-        linkedin_module.multiprocessing, "get_context", lambda _name: _FakeContext()
-    )
+    monkeypatch.setattr(linkedin_module.multiprocessing, "get_context", lambda _name: _FakeContext())
+    monkeypatch.setattr(linkedin_module, "get_linkedin_jobspy_stall_timeout_seconds", lambda: 90.0)
     caplog.set_level(logging.WARNING, logger="job_hunter_agent.scrapers.linkedin")
 
-    result = _fetch_jobspy_with_timeout({"search_term": "project manager"}, timeout_seconds=20.0)
+    result = _fetch_jobspy_isolated({"search_term": "project manager"})
 
     assert isinstance(result, SimpleNamespace)
-    assert "429 Response - Blocked by LinkedIn" in caplog.text
+    assert "temporary LinkedIn warning" in caplog.text
+
+def test_fetch_jobspy_isolated_treats_jobspy_error_notice_as_failure(monkeypatch):
+    from job_hunter_agent.scrapers import linkedin as linkedin_module
+
+    class _FakeConn:
+        def __init__(self, payload=None, *, ready=False):
+            self._payload = payload
+            self._ready = ready
+
+        def close(self):
+            return None
+
+        def poll(self, *_args):
+            return self._ready
+
+        def recv(self):
+            return self._payload
+
+    class _FakeWorker:
+        exitcode = 0
+
+        def start(self):
+            return None
+
+        def join(self, _timeout):
+            return None
+
+        def is_alive(self):
+            return False
+
+    class _FakeContext:
+        def __init__(self):
+            self.result_recv = _FakeConn(
+                ("ok", SimpleNamespace(), [(logging.ERROR, "429 Response - Blocked by LinkedIn")]),
+                ready=True,
+            )
+            self.result_send = _FakeConn()
+            self.progress_recv = _FakeConn()
+            self.progress_send = _FakeConn()
+            self.worker = _FakeWorker()
+            self.pipe_calls = 0
+
+        def Pipe(self, duplex=False):
+            assert duplex is False
+            self.pipe_calls += 1
+            return (
+                (self.result_recv, self.result_send)
+                if self.pipe_calls == 1
+                else (self.progress_recv, self.progress_send)
+            )
+
+        def Process(self, **_kwargs):
+            return self.worker
+
+    monkeypatch.setattr(linkedin_module.multiprocessing, "get_context", lambda _name: _FakeContext())
+    monkeypatch.setattr(linkedin_module, "get_linkedin_jobspy_stall_timeout_seconds", lambda: 90.0)
+
+    with pytest.raises(RuntimeError, match="429 Response - Blocked by LinkedIn"):
+        _fetch_jobspy_isolated({"search_term": "project manager"})

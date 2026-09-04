@@ -23,12 +23,11 @@ from job_hunter_agent.global_settings import (
     DEFAULT_SEARCH_SETTINGS,
     KEY_DATE_RANGE_DAYS,
     KEY_LINKEDIN_EASY_APPLY_ONLY,
-    KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS,
     KEY_LINKEDIN_HOURS_OLD,
     KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
     KEY_SORT_NEWEST_FIRST,
-    get_linkedin_fetch_timeout_seconds,
+    get_linkedin_jobspy_stall_timeout_seconds,
     get_linkedin_max_consecutive_target_failures,
     get_linkedin_parallel_search_workers,
     get_search_plan_min_corroboration_samples,
@@ -97,65 +96,119 @@ job_type_rules = load_job_type()
 
 
 class _JobSpyNoticeHandler(logging.Handler):
-    """Captures JobSpy's own WARNING+/ERROR+ log lines from inside the spawned worker.
+    """Capture JobSpy WARNING/ERROR lines that its logger does not propagate."""
 
-    JobSpy logs to a "JobSpy:LinkedIn" logger with propagate=False, so messages
-    such as a 429/blocked response are otherwise invisible outside the subprocess
-    that made the request. This surfaces them back to the parent process's log.
-    """
-
-    def __init__(self, sink: list[str]) -> None:
+    def __init__(self, sink: list[tuple[int, str]]) -> None:
         super().__init__(level=logging.WARNING)
         self._sink = sink
 
     def emit(self, record: logging.LogRecord) -> None:
-        self._sink.append(self.format(record))
+        self._sink.append((record.levelno, self.format(record)))
 
 
-def _scrape_linkedin_jobs_worker(search_params: dict, send_conn) -> None:
-    jobspy_notices: list[str] = []
+class _JobSpyProgressSession:
+    """Proxy JobSpy's HTTP session and report actual LinkedIn pagination progress.
+
+    A repeated request at the same ``start`` offset is activity, but not progress.
+    The parent watchdog is reset only when the source advances to a new offset.
+    """
+
+    def __init__(self, session, progress_send_conn) -> None:
+        self._session = session
+        self._progress_send_conn = progress_send_conn
+        self._last_start = object()
+
+    def __getattr__(self, name):
+        return getattr(self._session, name)
+
+    def get(self, *args, **kwargs):
+        params = kwargs.get("params")
+        start = params.get("start") if isinstance(params, dict) else None
+        if start != self._last_start:
+            try:
+                self._progress_send_conn.send(start)
+            except (BrokenPipeError, EOFError, OSError):
+                pass
+            self._last_start = start
+        return self._session.get(*args, **kwargs)
+
+
+def _scrape_linkedin_jobs_worker(search_params: dict, send_conn, progress_send_conn) -> None:
+    jobspy_notices: list[tuple[int, str]] = []
     jobspy_logger = logging.getLogger("JobSpy:LinkedIn")
     handler = _JobSpyNoticeHandler(jobspy_notices)
     jobspy_logger.addHandler(handler)
+    original_create_session = None
+    jobspy_linkedin = None
     try:
         from jobspy import scrape_jobs  # noqa: PLC0415
+        import jobspy.linkedin as jobspy_linkedin  # noqa: PLC0415
 
+        original_create_session = jobspy_linkedin.create_session
+
+        def _create_progress_session(*args, **kwargs):
+            return _JobSpyProgressSession(
+                original_create_session(*args, **kwargs),
+                progress_send_conn,
+            )
+
+        jobspy_linkedin.create_session = _create_progress_session
         send_conn.send(("ok", scrape_jobs(**search_params), jobspy_notices))
     except Exception as exc:  # pragma: no cover - exercised through parent helper
         send_conn.send(("error", (type(exc).__name__, str(exc)), jobspy_notices))
     finally:
+        if jobspy_linkedin is not None and original_create_session is not None:
+            jobspy_linkedin.create_session = original_create_session
         jobspy_logger.removeHandler(handler)
+        progress_send_conn.close()
         send_conn.close()
 
 
-def _fetch_jobspy_with_timeout(search_params: dict, timeout_seconds: float):
+def _fetch_jobspy_isolated(search_params: dict):
+    """Run one JobSpy LinkedIn target in an isolated subprocess.
+
+    JobSpy already bounds each HTTP request and retry loop internally. A target
+    may legitimately span multiple such requests plus deliberate inter-page waits.
+    Job Hunter therefore watches for *lack of progress* rather than total elapsed
+    time. Only a change in JobSpy's real LinkedIn pagination ``start`` offset resets
+    the stall watchdog; repeated attempts at the same offset do not.
+    """
     ctx = multiprocessing.get_context("spawn")
     recv_conn, send_conn = ctx.Pipe(duplex=False)
+    progress_recv_conn, progress_send_conn = ctx.Pipe(duplex=False)
     worker = ctx.Process(
         target=_scrape_linkedin_jobs_worker,
-        args=(search_params, send_conn),
+        args=(search_params, send_conn, progress_send_conn),
         daemon=True,
     )
     worker.start()
     send_conn.close()
-    deadline = time.monotonic() + max(float(timeout_seconds), 0.1)
+    progress_send_conn.close()
+    stall_timeout_seconds = float(get_linkedin_jobspy_stall_timeout_seconds())
+    last_progress_at = time.monotonic()
     while worker.is_alive():
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
+        while progress_recv_conn.poll():
+            progress_recv_conn.recv()
+            last_progress_at = time.monotonic()
+        if run_stop_requested():
             worker.terminate()
             worker.join(1.0)
-            recv_conn.close()
-            raise TimeoutError(
-                f"LinkedIn jobspy fetch exceeded {int(timeout_seconds)}s for {search_params['search_term']!r}"
-            )
-        worker.join(min(0.1, remaining))
-        if worker.is_alive() and run_stop_requested():
-            worker.terminate()
-            worker.join(1.0)
+            progress_recv_conn.close()
             recv_conn.close()
             raise InterruptedError(
                 f"LinkedIn jobspy fetch cancelled due to stop request for {search_params['search_term']!r}"
             )
+        if time.monotonic() - last_progress_at > stall_timeout_seconds:
+            worker.terminate()
+            worker.join(1.0)
+            progress_recv_conn.close()
+            recv_conn.close()
+            raise TimeoutError(
+                f"LinkedIn JobSpy made no progress for {int(stall_timeout_seconds)}s "
+                f"for {search_params['search_term']!r}"
+            )
+        worker.join(0.1)
+    progress_recv_conn.close()
     if not recv_conn.poll(1.0):
         recv_conn.close()
         raise RuntimeError(
@@ -163,8 +216,13 @@ def _fetch_jobspy_with_timeout(search_params: dict, timeout_seconds: float):
         )
     status, payload, jobspy_notices = recv_conn.recv()
     recv_conn.close()
-    for notice in jobspy_notices:
-        logger.warning("[LinkedIn jobspy] %s", notice)
+    fatal_notices: list[str] = []
+    for levelno, notice in jobspy_notices:
+        logger.log(max(logging.WARNING, int(levelno)), "[LinkedIn jobspy] %s", notice)
+        if int(levelno) >= logging.ERROR:
+            fatal_notices.append(str(notice))
+    if status == "ok" and fatal_notices:
+        raise RuntimeError("LinkedIn JobSpy reported an error: " + " | ".join(fatal_notices))
     if status == "ok":
         return payload
     error_type, error_message = payload
@@ -1225,11 +1283,4 @@ class LinkedInScraper(BaseJobScraper):
             search_params["distance"] = target["distance"]
         if target.get("easy_apply") is not None:
             search_params["easy_apply"] = target["easy_apply"]
-        search_settings = get_search_settings(self.profile)
-        timeout_seconds = float(
-            search_settings.get(
-                KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS,
-                get_linkedin_fetch_timeout_seconds(),
-            )
-        )
-        return _fetch_jobspy_with_timeout(search_params, timeout_seconds)
+        return _fetch_jobspy_isolated(search_params)

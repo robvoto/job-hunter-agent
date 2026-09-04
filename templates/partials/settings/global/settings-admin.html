@@ -161,13 +161,13 @@
             <input id="search_default_linkedin_results_per_search" type="number" min="5" max="100" step="1">
             <div class="field-help">Default result budget for each LinkedIn search. Valid range: <span id="search_default_linkedin_results_per_search_bounds"></span>.</div>
 
-            <label for="search_default_linkedin_fetch_timeout_seconds">Default LinkedIn fetch timeout (seconds)</label>
-            <input id="search_default_linkedin_fetch_timeout_seconds" type="number" min="5" max="60" step="1">
-            <div class="field-help">Maximum time allowed for one LinkedIn jobspy search before that target is aborted. Valid range: <span id="search_default_linkedin_fetch_timeout_seconds_bounds"></span>.</div>
+            <label for="search_default_linkedin_jobspy_stall_timeout_seconds">LinkedIn no-progress watchdog (seconds)</label>
+            <input id="search_default_linkedin_jobspy_stall_timeout_seconds" type="number" min="30" max="300" step="1">
+            <div class="field-help">Stops a JobSpy target only when its real LinkedIn pagination stops advancing for this long. It does not limit total target duration. The whole-source safety ceiling scales from parallel target waves plus one review/cleanup wave. Valid range: <span id="search_default_linkedin_jobspy_stall_timeout_seconds_bounds"></span>.</div>
 
             <label for="search_default_linkedin_parallel_search_workers">Default LinkedIn parallel search workers</label>
             <input id="search_default_linkedin_parallel_search_workers" type="number" min="1" max="10" step="1">
-            <div class="field-help">How many LinkedIn jobspy search targets may fetch concurrently instead of waiting for each other's timeout in turn. Valid range: <span id="search_default_linkedin_parallel_search_workers_bounds"></span>.</div>
+            <div class="field-help">How many LinkedIn JobSpy search targets may fetch concurrently instead of running them serially. Valid range: <span id="search_default_linkedin_parallel_search_workers_bounds"></span>.</div>
 
 
             <label class="toggle-switch" for="search_default_sort_newest_first">
@@ -284,11 +284,11 @@
             <label for="search_limit_linkedin_results_per_search_max">LinkedIn results maximum</label>
             <input id="search_limit_linkedin_results_per_search_max" type="number" min="1" max="1000" step="1">
 
-            <label for="search_limit_linkedin_fetch_timeout_seconds_min">LinkedIn fetch timeout minimum (seconds)</label>
-            <input id="search_limit_linkedin_fetch_timeout_seconds_min" type="number" min="1" max="300" step="1">
-            <label for="search_limit_linkedin_fetch_timeout_seconds_max">LinkedIn fetch timeout maximum (seconds)</label>
-            <input id="search_limit_linkedin_fetch_timeout_seconds_max" type="number" min="1" max="300" step="1">
-            <div class="field-help">Allowed range for the LinkedIn result budget per search term.</div>
+            <label for="search_limit_linkedin_jobspy_stall_timeout_seconds_min">LinkedIn no-progress watchdog minimum (seconds)</label>
+            <input id="search_limit_linkedin_jobspy_stall_timeout_seconds_min" type="number" min="1" max="3600" step="1">
+            <label for="search_limit_linkedin_jobspy_stall_timeout_seconds_max">LinkedIn no-progress watchdog maximum (seconds)</label>
+            <input id="search_limit_linkedin_jobspy_stall_timeout_seconds_max" type="number" min="1" max="3600" step="1">
+            <div class="field-help">Allowed range for the JobSpy no-progress watchdog. This is not a total LinkedIn search timeout.</div>
 
             <label for="search_limit_linkedin_parallel_search_workers_min">LinkedIn parallel search workers minimum</label>
             <input id="search_limit_linkedin_parallel_search_workers_min" type="number" min="1" max="10000" step="1">

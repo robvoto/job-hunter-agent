@@ -30,8 +30,8 @@ from job_hunter_agent.global_settings import (
     KEY_DATE_RANGE_DAYS,
     KEY_LIMITS,
     KEY_LINKEDIN_EASY_APPLY_ONLY,
-    KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS,
     KEY_LINKEDIN_HOURS_OLD,
+    KEY_LINKEDIN_JOBSPY_STALL_TIMEOUT_SECONDS,
     KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
     KEY_LOCATIONS_MAX_SELECTED,
@@ -1076,6 +1076,8 @@ def patch_profile(patch: dict[str, Any]) -> dict[str, Any]:
 
 def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
     merged = deep_merge(copy.deepcopy(DEFAULT_SEARCH_SETTINGS), settings or {})
+    # JobSpy stall protection is global runtime safety, not candidate search intent.
+    merged.pop(KEY_LINKEDIN_JOBSPY_STALL_TIMEOUT_SECONDS, None)
     search_limits = load_global_settings()[KEY_LIMITS]["search"]
 
     try:
@@ -1136,25 +1138,6 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
             KEY_LINKEDIN_RESULTS_PER_SEARCH
         ]
         logger.warning("Failed to normalise linkedin_results_per_search: %s", exc)
-
-    try:
-        merged[KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS] = max(
-            search_limits[KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS]["min"],
-            min(
-                int(
-                    merged.get(
-                        KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS,
-                        DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS],
-                    )
-                ),
-                search_limits[KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS]["max"],
-            ),
-        )
-    except Exception as exc:
-        merged[KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS] = DEFAULT_SEARCH_SETTINGS[
-            KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS
-        ]
-        logger.warning("Failed to normalise linkedin_fetch_timeout_seconds: %s", exc)
 
     try:
         merged[KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS] = max(

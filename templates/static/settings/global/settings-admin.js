@@ -34,7 +34,7 @@ export const JobHunterAdminSettings = (function () {
     search_default_apsjobs_enabled: ['search_settings', 'apsjobs_enabled'],
     search_default_linkedin_hours_old: ['search_settings', 'linkedin_hours_old'],
     search_default_linkedin_results_per_search: ['search_settings', 'linkedin_results_per_search'],
-    search_default_linkedin_fetch_timeout_seconds: ['search_settings', 'linkedin_fetch_timeout_seconds'],
+    search_default_linkedin_jobspy_stall_timeout_seconds: ['search_settings', 'linkedin_jobspy_stall_timeout_seconds'],
     search_default_linkedin_parallel_search_workers: ['search_settings', 'linkedin_parallel_search_workers'],
     search_default_sort_newest_first: ['search_settings', 'sort_newest_first'],
     search_default_linkedin_easy_apply_only: ['search_settings', 'linkedin_easy_apply_only'],
@@ -54,8 +54,8 @@ export const JobHunterAdminSettings = (function () {
     search_limit_linkedin_hours_old_max: ['limits.search', 'linkedin_hours_old'],
     search_limit_linkedin_results_per_search_min: ['limits.search', 'linkedin_results_per_search'],
     search_limit_linkedin_results_per_search_max: ['limits.search', 'linkedin_results_per_search'],
-    search_limit_linkedin_fetch_timeout_seconds_min: ['limits.search', 'linkedin_fetch_timeout_seconds'],
-    search_limit_linkedin_fetch_timeout_seconds_max: ['limits.search', 'linkedin_fetch_timeout_seconds'],
+    search_limit_linkedin_jobspy_stall_timeout_seconds_min: ['limits.search', 'linkedin_jobspy_stall_timeout_seconds'],
+    search_limit_linkedin_jobspy_stall_timeout_seconds_max: ['limits.search', 'linkedin_jobspy_stall_timeout_seconds'],
     search_limit_linkedin_parallel_search_workers_min: ['limits.search', 'linkedin_parallel_search_workers'],
     search_limit_linkedin_parallel_search_workers_max: ['limits.search', 'linkedin_parallel_search_workers'],
     salary_limit_minimum_salary_yearly_max: ['limits.salary', 'minimum_salary_yearly'],
@@ -246,7 +246,7 @@ export const JobHunterAdminSettings = (function () {
     setChoiceGroupValue('seek_max_pages', searchDefaults.seek_max_pages);
     setFieldValue('search_default_linkedin_hours_old', searchDefaults.linkedin_hours_old);
     setFieldValue('search_default_linkedin_results_per_search', searchDefaults.linkedin_results_per_search);
-    setFieldValue('search_default_linkedin_fetch_timeout_seconds', searchDefaults.linkedin_fetch_timeout_seconds);
+    setFieldValue('search_default_linkedin_jobspy_stall_timeout_seconds', searchDefaults.linkedin_jobspy_stall_timeout_seconds);
     setFieldValue('search_default_linkedin_parallel_search_workers', searchDefaults.linkedin_parallel_search_workers);
     setToggleChecked('search_default_sort_newest_first', searchDefaults.sort_newest_first !== false);
     const liEasyApply = searchDefaults[LINKEDIN_EASY_APPLY_ONLY];
@@ -254,7 +254,7 @@ export const JobHunterAdminSettings = (function () {
     setBounds('search_default_date_range_days', searchLimits.date_range_days);
     setBounds('search_default_linkedin_hours_old', searchLimits.linkedin_hours_old);
     setBounds('search_default_linkedin_results_per_search', searchLimits.linkedin_results_per_search);
-    setBounds('search_default_linkedin_fetch_timeout_seconds', searchLimits.linkedin_fetch_timeout_seconds);
+    setBounds('search_default_linkedin_jobspy_stall_timeout_seconds', searchLimits.linkedin_jobspy_stall_timeout_seconds);
     setBounds('search_default_linkedin_parallel_search_workers', searchLimits.linkedin_parallel_search_workers);
     setFieldValue('default_country_suffix', defaultCountrySuffix);
     setFieldValue('session_max_age_days', playwrightSettings.session_max_age_days);
@@ -278,7 +278,7 @@ export const JobHunterAdminSettings = (function () {
     setOptionalFieldText('search_default_seek_max_pages_bounds', rangeText(searchLimits.seek_max_pages));
     setOptionalFieldText('search_default_linkedin_hours_old_bounds', rangeText(searchLimits.linkedin_hours_old));
     setOptionalFieldText('search_default_linkedin_results_per_search_bounds', rangeText(searchLimits.linkedin_results_per_search));
-    setOptionalFieldText('search_default_linkedin_fetch_timeout_seconds_bounds', rangeText(searchLimits.linkedin_fetch_timeout_seconds));
+    setOptionalFieldText('search_default_linkedin_jobspy_stall_timeout_seconds_bounds', rangeText(searchLimits.linkedin_jobspy_stall_timeout_seconds));
     setOptionalFieldText('search_default_linkedin_parallel_search_workers_bounds', rangeText(searchLimits.linkedin_parallel_search_workers));
 
     setFieldValue('evidence_primary_weight', evidenceWeights.primary_candidate_profile_context);
@@ -350,8 +350,8 @@ export const JobHunterAdminSettings = (function () {
     setFieldValue('search_limit_linkedin_hours_old_max', searchLimits.linkedin_hours_old?.max);
     setFieldValue('search_limit_linkedin_results_per_search_min', searchLimits.linkedin_results_per_search?.min);
     setFieldValue('search_limit_linkedin_results_per_search_max', searchLimits.linkedin_results_per_search?.max);
-    setFieldValue('search_limit_linkedin_fetch_timeout_seconds_min', searchLimits.linkedin_fetch_timeout_seconds?.min);
-    setFieldValue('search_limit_linkedin_fetch_timeout_seconds_max', searchLimits.linkedin_fetch_timeout_seconds?.max);
+    setFieldValue('search_limit_linkedin_jobspy_stall_timeout_seconds_min', searchLimits.linkedin_jobspy_stall_timeout_seconds?.min);
+    setFieldValue('search_limit_linkedin_jobspy_stall_timeout_seconds_max', searchLimits.linkedin_jobspy_stall_timeout_seconds?.max);
     setFieldValue('search_limit_linkedin_parallel_search_workers_min', searchLimits.linkedin_parallel_search_workers?.min);
     setFieldValue('search_limit_linkedin_parallel_search_workers_max', searchLimits.linkedin_parallel_search_workers?.max);
     setCurrencyFieldValue('salary_limit_minimum_salary_yearly_max', salaryLimits.minimum_salary_yearly?.max ?? '');
@@ -441,7 +441,7 @@ export const JobHunterAdminSettings = (function () {
         })(),
         linkedin_hours_old: readNumber('search_default_linkedin_hours_old', currentSearch.linkedin_hours_old),
         linkedin_results_per_search: readNumber('search_default_linkedin_results_per_search', currentSearch.linkedin_results_per_search),
-        linkedin_fetch_timeout_seconds: readNumber('search_default_linkedin_fetch_timeout_seconds', currentSearch.linkedin_fetch_timeout_seconds),
+        linkedin_jobspy_stall_timeout_seconds: readNumber('search_default_linkedin_jobspy_stall_timeout_seconds', currentSearch.linkedin_jobspy_stall_timeout_seconds),
         linkedin_parallel_search_workers: readNumber('search_default_linkedin_parallel_search_workers', currentSearch.linkedin_parallel_search_workers),
         sort_newest_first: Boolean(document.getElementById('search_default_sort_newest_first')?.checked),
         [LINKEDIN_EASY_APPLY_ONLY]: (() => {
@@ -471,9 +471,9 @@ export const JobHunterAdminSettings = (function () {
             min: readNumber('search_limit_linkedin_results_per_search_min', currentSearchLimits.linkedin_results_per_search?.min),
             max: readNumber('search_limit_linkedin_results_per_search_max', currentSearchLimits.linkedin_results_per_search?.max),
           },
-          linkedin_fetch_timeout_seconds: {
-            min: readNumber('search_limit_linkedin_fetch_timeout_seconds_min', currentSearchLimits.linkedin_fetch_timeout_seconds?.min),
-            max: readNumber('search_limit_linkedin_fetch_timeout_seconds_max', currentSearchLimits.linkedin_fetch_timeout_seconds?.max),
+          linkedin_jobspy_stall_timeout_seconds: {
+            min: readNumber('search_limit_linkedin_jobspy_stall_timeout_seconds_min', currentSearchLimits.linkedin_jobspy_stall_timeout_seconds?.min),
+            max: readNumber('search_limit_linkedin_jobspy_stall_timeout_seconds_max', currentSearchLimits.linkedin_jobspy_stall_timeout_seconds?.max),
           },
           linkedin_parallel_search_workers: {
             min: readNumber('search_limit_linkedin_parallel_search_workers_min', currentSearchLimits.linkedin_parallel_search_workers?.min),

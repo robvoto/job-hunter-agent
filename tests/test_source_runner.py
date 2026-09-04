@@ -726,6 +726,90 @@ def test_parallel_runner_logs_source_start_and_complete_blocks(monkeypatch, capl
     assert "[LINKEDIN][SOURCE_COMPLETE]" in caplog.text
 
 
+def test_linkedin_source_runtime_budget_scales_with_parallel_target_waves(monkeypatch):
+    from job_hunter_agent.scrapers import linkedin as linkedin_module
+
+    context = _make_context([SOURCE_LINKEDIN])
+    context.search_settings["linkedin_parallel_search_workers"] = 3
+    monkeypatch.setattr(
+        linkedin_module,
+        "build_linkedin_search_targets",
+        lambda *_args, **_kwargs: [{"search_term": f"Role {i}"} for i in range(12)],
+    )
+    monkeypatch.setattr(
+        source_runner,
+        "get_linkedin_jobspy_stall_timeout_seconds",
+        lambda: 90.0,
+    )
+
+    budget = source_runner._linkedin_source_runtime_budget(context)
+
+    assert budget.target_count == 12
+    assert budget.worker_count == 3
+    assert budget.target_waves == 4
+    assert budget.seconds == 450.0
+
+
+def test_linkedin_source_runtime_limit_stops_entire_parallel_run(monkeypatch):
+    context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
+    seek_observed_stop = threading.Event()
+    linkedin_observed_stop = threading.Event()
+    warnings: list[dict] = []
+
+    def cooperative_seek(ctx):
+        deadline = time.time() + 1
+        while time.time() < deadline and not run_control.run_stop_requested():
+            time.sleep(0.002)
+        if run_control.run_stop_requested():
+            seek_observed_stop.set()
+        return _seek_result(source_collection_complete=False)
+
+    def cooperative_linkedin(ctx):
+        deadline = time.time() + 1
+        while time.time() < deadline and not run_control.run_stop_requested():
+            time.sleep(0.002)
+        if run_control.run_stop_requested():
+            linkedin_observed_stop.set()
+        return _li_result(source_collection_complete=False)
+
+    monkeypatch.setattr(source_runner, "_run_seek_source", cooperative_seek)
+    monkeypatch.setattr(source_runner, "_run_linkedin_source", cooperative_linkedin)
+    monkeypatch.setattr(
+        source_runner,
+        "_linkedin_source_runtime_budget",
+        lambda _ctx: source_runner.LinkedInSourceRuntimeBudget(
+            seconds=0.03,
+            target_count=6,
+            worker_count=3,
+            target_waves=2,
+        ),
+    )
+    monkeypatch.setattr(source_runner, "SOURCE_HEARTBEAT_SECONDS", 60)
+    monkeypatch.setattr(
+        source_runner,
+        "record_system_warning",
+        lambda **kwargs: warnings.append(kwargs) or kwargs,
+    )
+
+    scope = run_control.begin_run_progress_scope()
+    try:
+        run_enabled_sources(context)
+        assert seek_observed_stop.is_set()
+        assert linkedin_observed_stop.is_set()
+        assert context.source_failure_message == (
+            "LinkedIn failed: source runtime exceeded workload limit 0.03s for "
+            "6 targets across 3 workers (2 target waves)."
+        )
+        progress = run_control.get_run_progress_detail()
+        assert progress is not None
+        assert progress["stage"] == "error"
+        assert progress["source"] == SOURCE_LINKEDIN
+        assert progress["headline"] == "LinkedIn is taking too long"
+        assert any(warning["category"] == "source_timeout" for warning in warnings)
+    finally:
+        run_control.end_run_progress_scope(scope)
+
+
 def test_parallel_source_failure_stops_remaining_sources_and_preserves_failure(monkeypatch):
     context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
     seek_observed_stop = threading.Event()
@@ -757,6 +841,36 @@ def test_parallel_source_failure_stops_remaining_sources_and_preserves_failure(m
         assert progress["stage"] == "error"
         assert progress["source"] == SOURCE_LINKEDIN
         assert progress["headline"] == "LinkedIn failed"
+    finally:
+        run_control.end_run_progress_scope(scope)
+
+
+def test_parallel_partial_source_failure_also_stops_remaining_sources(monkeypatch):
+    context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
+    seek_observed_stop = threading.Event()
+
+    def cooperative_seek(ctx):
+        deadline = time.time() + 1
+        while time.time() < deadline and not run_control.run_stop_requested():
+            time.sleep(0.005)
+        if run_control.run_stop_requested():
+            seek_observed_stop.set()
+        return _seek_result(source_collection_complete=False)
+
+    def partial_linkedin(ctx):
+        return _li_result(
+            kept_records=[{"job_key": "linkedin:partial"}],
+            source_collection_complete=False,
+        )
+
+    monkeypatch.setattr(source_runner, "_run_seek_source", cooperative_seek)
+    monkeypatch.setattr(source_runner, "_run_linkedin_source", partial_linkedin)
+
+    scope = run_control.begin_run_progress_scope()
+    try:
+        run_enabled_sources(context)
+        assert seek_observed_stop.is_set()
+        assert context.source_failure_message == "LinkedIn failed: source collection was incomplete"
     finally:
         run_control.end_run_progress_scope(scope)
 

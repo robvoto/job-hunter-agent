@@ -6,7 +6,10 @@ import pytest
 
 from job_hunter_agent import global_settings
 from job_hunter_agent.database import db_conn, init_db
-from job_hunter_agent.global_settings import KEY_LINKEDIN_EASY_APPLY_ONLY
+from job_hunter_agent.global_settings import (
+    KEY_LINKEDIN_EASY_APPLY_ONLY,
+    KEY_LINKEDIN_JOBSPY_STALL_TIMEOUT_SECONDS,
+)
 from job_hunter_agent.paths import GLOBAL_SETTINGS_PATH
 from job_hunter_agent.settings.global_settings_normalization import normalize_global_settings
 
@@ -32,7 +35,7 @@ def test_save_global_settings_normalizes_values(isolated_db):
                 "seek_max_pages": "12",
                 "linkedin_hours_old": "48",
                 "linkedin_results_per_search": "40",
-                "linkedin_fetch_timeout_seconds": "18",
+                KEY_LINKEDIN_JOBSPY_STALL_TIMEOUT_SECONDS: "75",
                 "sort_newest_first": "true",
                 KEY_LINKEDIN_EASY_APPLY_ONLY: "true",
             },
@@ -41,7 +44,7 @@ def test_save_global_settings_normalizes_values(isolated_db):
                 "seek_max_pages": {"min": 1, "max": 12},
                 "linkedin_hours_old": {"min": 1, "max": 72},
                 "linkedin_results_per_search": {"min": 5, "max": 40},
-                "linkedin_fetch_timeout_seconds": {"min": 5, "max": 30},
+                KEY_LINKEDIN_JOBSPY_STALL_TIMEOUT_SECONDS: {"min": 30, "max": 120},
             },
             "preference_weights": {
                 "fit": "1.5",
@@ -112,12 +115,12 @@ def test_save_global_settings_normalizes_values(isolated_db):
     assert saved["search_settings"]["seek_enabled"] is False
     assert saved["search_settings"]["linkedin_enabled"] is True
     assert saved["search_settings"]["apsjobs_enabled"] is False
-    assert saved["search_settings"]["linkedin_fetch_timeout_seconds"] == 18
+    assert saved["search_settings"][KEY_LINKEDIN_JOBSPY_STALL_TIMEOUT_SECONDS] == 75
 
     assert saved["search_settings"][KEY_LINKEDIN_EASY_APPLY_ONLY] is True
 
     assert saved["limits"]["search"]["seek_max_pages"]["max"] == 12
-    assert saved["limits"]["search"]["linkedin_fetch_timeout_seconds"]["max"] == 30
+    assert saved["limits"]["search"][KEY_LINKEDIN_JOBSPY_STALL_TIMEOUT_SECONDS]["max"] == 120
 
     assert saved["preference_weights"]["salary"] == 1.25
 
@@ -385,6 +388,7 @@ def test_normalize_global_settings_defaults_source_toggles_when_runtime_seed_is_
             "sort_newest_first": True,
             "linkedin_hours_old": 24,
             "linkedin_results_per_search": 25,
+            "linkedin_jobspy_stall_timeout_seconds": 90,
             "apsjobs_results_per_search": 25,
         },
     )
@@ -394,7 +398,7 @@ def test_normalize_global_settings_defaults_source_toggles_when_runtime_seed_is_
     assert normalized["search_settings"]["seek_enabled"] is True
     assert normalized["search_settings"]["linkedin_enabled"] is True
     assert normalized["search_settings"]["apsjobs_enabled"] is True
-    assert normalized["search_settings"]["linkedin_fetch_timeout_seconds"] == 40
+    assert normalized["search_settings"][KEY_LINKEDIN_JOBSPY_STALL_TIMEOUT_SECONDS] == 90
 
 
 def test_upgrade_global_settings_from_file_preserves_existing_admin_values(
