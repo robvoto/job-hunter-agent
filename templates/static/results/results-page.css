@@ -6,7 +6,8 @@
 .job-card {
   --card-accent: var(--border-strong);
   --card-accent-bg: var(--bg-muted);
-  background: color-mix(in srgb, var(--bg-surface) 78%, var(--bg-page));
+  --card-bg: color-mix(in srgb, var(--bg-surface) 78%, var(--bg-page));
+  background: var(--card-bg);
   border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border-subtle));
   border-radius: 14px;
   padding: 22px 20px;
@@ -373,11 +374,16 @@
   color: var(--text-primary);
   font-size: 1.02rem;
   line-height: 1.55;
-  /* Cap the line length to a readable measure so the teaser wraps onto
-     multiple rows instead of stretching to a single line on wide cards,
-     and hold a two-line floor for very short summaries. */
-  max-width: 78ch;
-  min-height: 3.1em;
+}
+
+/* Collapsed teaser: always exactly two lines at full card width. The ▾
+   toggle expands to the full description. */
+.job-summary-expand:not([open]) .job-summary-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
 }
 
 .job-summary-expand {
@@ -396,6 +402,7 @@
 
 .job-summary-expand .job-summary {
   margin-bottom: 0;
+  position: relative;
 }
 
 .job-summary-text {
@@ -409,6 +416,17 @@
   margin-left: 5px;
   vertical-align: baseline;
   color: var(--accent);
+}
+
+/* While collapsed, sit the toggle at the end of the clamped second line and
+   fade the truncated text out behind it. */
+.job-summary-expand:not([open]) .job-summary-toggle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  margin-left: 0;
+  padding-left: 2.4rem;
+  background: linear-gradient(to right, transparent, var(--card-bg) 1.4rem);
 }
 
 .job-summary-toggle-icon::before {
