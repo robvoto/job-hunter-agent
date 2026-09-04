@@ -437,6 +437,7 @@ def test_scrape_jobs_direct_forces_headed_browser_in_persistent_mode(monkeypatch
             dashboard_min_score=0,
             reset_new_to_you=False,
             headless=True,
+            source_failure_message="",
         ),
     )
     monkeypatch.setattr(
@@ -462,6 +463,51 @@ def test_scrape_jobs_direct_forces_headed_browser_in_persistent_mode(monkeypatch
 
     assert result == "done"
     assert captured["headless"] is False
+
+
+def test_scrape_jobs_direct_finalizes_before_surfacing_source_failure(monkeypatch):
+    monkeypatch.setattr("job_hunter_agent.profile_store.profile_exists", lambda: True)
+    monkeypatch.setattr(source_connector, "get_user_id_for_runtime", lambda: "test-user")
+    monkeypatch.setattr(source_connector, "load_profile", lambda: {"candidate_capabilities": [{}]})
+    monkeypatch.setattr(source_connector, "require_profile_ready_for_review", lambda profile: None)
+    context = SimpleNamespace(
+        search_settings={"keywords": "Business Analyst", "locations": ["Sydney"]},
+        profile={},
+        enabled_sources=["linkedin", "seek"],
+        configured_seek_max_pages=1,
+        configured_date_range=7,
+        dashboard_debug_mode=False,
+        no_llm_mode=True,
+        dashboard_min_score=0,
+        reset_new_to_you=False,
+        headless=True,
+        source_failure_message="LinkedIn failed: 9 LinkedIn targets timed out",
+    )
+    monkeypatch.setattr(source_connector, "build_scrape_run_context", lambda argv: context)
+    monkeypatch.setattr(
+        "job_hunter_agent.global_settings.get_playwright_headless", lambda: True
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.global_settings.get_playwright_browser_mode", lambda: "persistent"
+    )
+    monkeypatch.setattr(source_connector, "ensure_llm_runtime_ready", lambda *, no_llm_mode: None)
+    monkeypatch.setattr(source_connector, "run_enabled_sources", lambda ctx: ([], [], []))
+    events = []
+    monkeypatch.setattr(
+        source_connector,
+        "finalize_scrape_run",
+        lambda *args, **kwargs: events.append("finalized") or "done",
+    )
+    monkeypatch.setattr(
+        source_connector,
+        "clear_run_stop_request",
+        lambda: events.append("stop_cleared"),
+    )
+
+    with pytest.raises(RuntimeError, match="LinkedIn failed: 9 LinkedIn targets timed out"):
+        source_connector.scrape_jobs_direct()
+
+    assert events == ["finalized", "stop_cleared"]
 
 
 def test_scrape_jobs_direct_rejects_missing_llm_provider_before_source_run(monkeypatch):

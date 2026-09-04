@@ -91,6 +91,11 @@ class ScrapeRunContext:
 
     source_cache_stats: dict[str, dict[str, Any]] | None = None
 
+    # Set only when a live enabled source fails and the coordinator initiates
+    # fail-fast cancellation of the remaining sources. Finalization still runs
+    # so valid cache/history work completed before the failure can be persisted.
+    source_failure_message: str = ""
+
     # Shared by all source workers; exact identity coordination must happen
     # before source-specific detail and fit review is paid for.
     identity_registry: RunIdentityRegistry = field(default_factory=RunIdentityRegistry)

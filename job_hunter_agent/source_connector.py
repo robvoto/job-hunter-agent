@@ -26,6 +26,7 @@ from job_hunter_agent.run_control import (
     RunInterruptedError,
     begin_run_progress_scope,
     clear_run_progress,
+    clear_run_stop_request,
     enable_step_through,
     end_run_progress_scope,
     run_control_scope_active,
@@ -214,7 +215,14 @@ def _scrape_jobs_direct_scoped(*, trigger_label: str, force_refresh: bool = Fals
     kept_records, audit_rows, skill_observations = run_enabled_sources(context)
     if run_shutdown_requested():
         raise RunInterruptedError("Server shutdown interrupted source collection.")
-    return finalize_scrape_run(context, kept_records, audit_rows, skill_observations)
+    workspace_result = finalize_scrape_run(context, kept_records, audit_rows, skill_observations)
+    if context.source_failure_message:
+        # The stop event was raised internally to halt sibling source workers.
+        # Clear it before raising so the server records a failed run rather than
+        # misreporting the source failure as a user-requested cancellation.
+        clear_run_stop_request()
+        raise RuntimeError(context.source_failure_message)
+    return workspace_result
 
 
 if __name__ == "__main__":

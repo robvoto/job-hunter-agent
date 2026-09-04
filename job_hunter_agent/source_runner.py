@@ -19,6 +19,7 @@ from job_hunter_agent.record_schema import (
 from job_hunter_agent.run_context import ScrapeRunContext
 from job_hunter_agent.run_control import (
     get_run_progress_for_source,
+    request_run_stop,
     run_stop_requested,
     run_shutdown_requested,
     set_run_progress_state,
@@ -191,6 +192,38 @@ def _source_health(result: SourceRunResult) -> str:
     if result.kept_records or result.audit_rows:
         return "partial_failure"
     return "full_failure"
+
+
+def _request_fail_fast_for_source_failure(
+    context: ScrapeRunContext, result: SourceRunResult
+) -> bool:
+    """Stop the rest of a run when one enabled source has actually failed.
+
+    Timeout warnings alone are not failures. A user-requested stop also retains
+    its own cancellation semantics and is never relabelled as a source failure.
+    """
+    if result.error is None or run_stop_requested() or context.source_failure_message:
+        return False
+
+    source_label = get_source_display_label(result.source)
+    error_message = _exception_message(result.error)
+    failure_message = f"{source_label} failed: {error_message}"
+    context.source_failure_message = failure_message
+    logger.error(
+        "[%s][RUN_FAIL_FAST] %s; stopping remaining enabled sources.",
+        result.source.upper(),
+        failure_message,
+    )
+    set_run_progress_state(
+        failure_message,
+        stage="error",
+        source=result.source,
+        headline=f"{source_label} failed",
+        detail="Stopping the remaining enabled sources.",
+        determinate=False,
+    )
+    request_run_stop()
+    return True
 
 
 def _source_search_signature(context: ScrapeRunContext, source: str) -> str:
@@ -1291,14 +1324,15 @@ def _run_sources_in_parallel(
                     error=TimeoutError(message),
                     source_collection_complete=False,
                 )
-                set_run_progress_state(
-                    message,
-                    stage="error",
-                    source=source,
-                    headline=f"{source_label} stopped after timeout",
-                    detail="Continuing with results collected so far.",
-                    determinate=False,
-                )
+                if not context.source_failure_message:
+                    set_run_progress_state(
+                        message,
+                        stage="error",
+                        source=source,
+                        headline=f"{source_label} stopped after timeout",
+                        detail="Continuing with results collected so far.",
+                        determinate=False,
+                    )
 
             for future in list(pending):
                 source = futures[future]
@@ -1337,13 +1371,14 @@ def _run_sources_in_parallel(
                     results_by_source[source] = result
                     elapsed_s = time.monotonic() - started_at[source]
                     _log_source_complete(result, elapsed_s=elapsed_s)
+                    failure_triggered = _request_fail_fast_for_source_failure(context, result)
                     pending_source_set = {futures[pending_future] for pending_future in pending}
                     remaining_sources = [
                         pending_source
                         for pending_source in source_order
                         if pending_source in pending_source_set
                     ]
-                    if pending:
+                    if pending and not failure_triggered and not context.source_failure_message:
                         progress_text = _parallel_completion_progress(source, remaining_sources)
                         set_run_progress_state(
                             progress_text,
@@ -1358,7 +1393,11 @@ def _run_sources_in_parallel(
                         source.upper(),
                         int(time.monotonic() - started_at[source]),
                     )
-                    results_by_source[source] = SourceRunResult(source=source, error=exc)
+                    result = SourceRunResult(
+                        source=source, error=exc, source_collection_complete=False
+                    )
+                    results_by_source[source] = result
+                    _request_fail_fast_for_source_failure(context, result)
     finally:
         executor.shutdown(wait=False, cancel_futures=True)
 
@@ -1412,7 +1451,10 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
         for source in enabled_source_order:
             if run_stop_requested():
                 break
-            results.append(_run_source_with_scope(source, _get_source_runner(source), context))
+            result = _run_source_with_scope(source, _get_source_runner(source), context)
+            results.append(result)
+            if _request_fail_fast_for_source_failure(context, result):
+                break
     elif len(enabled_source_order) > 1:
         parallel_labels = list_to_phrase(
             [get_source_display_label(source) for source in enabled_source_order]
