@@ -62,6 +62,8 @@ A skill may state which tool type is needed, but must not pretend a tool exists 
 
 ## Skill discovery rule
 
+Use `.skills/INDEX.md` as the routing map. Keep one short entry per active skill so agents can choose the smallest relevant owner without loading every skill.
+
 Every active skill must have frontmatter:
 
 ```yaml

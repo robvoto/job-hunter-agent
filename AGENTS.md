@@ -1,60 +1,48 @@
 # Agent Instructions
 
-## Failure handling invariant
+Minimal always-loaded routing instructions. This file is not the project manual and must stay small.
 
-- Any failed tool call, shell command, merge, or validation is a stop condition. Tell the human immediately; do not silently continue or substitute another path.
-- Diagnose the root cause before retrying. When the human has already authorised the work, fix the root cause and add/update the owning skill, guard, or regression test when the failure exposes a repeatable process gap.
-- Validate ES-module browser JavaScript with module-aware syntax checking (for example `node --input-type=module --check < file.js`) rather than plain `node --check file.js` when Node would otherwise treat `.js` as CommonJS.
+## Default workflow
 
-## Purpose
+1. Use `docs/INDEX.md` to find the smallest relevant project document.
+2. Use `.skills/INDEX.md` to choose the smallest relevant task skill or skill combination.
+3. Read the selected skill before changing code, configuration, instructions, Git state, runtime behaviour, or UI.
+4. Inspect the current files/state before editing. Do not load the whole repository unless the task genuinely requires a broad audit.
+5. For any branch/worktree, commit, push, PR, merge, or `main` integration action, use `.skills/git-lifecycle/SKILL.md`.
 
-Always-loaded agent loader. Keep this file project-agnostic and small.
+## Durable rule placement
 
-Project-specific context lives in `docs/PROJECT_CONTEXT.md`.
+When a lesson or rule should apply beyond the current chat/session:
 
-Shared setup/standards pointers live in `docs/STANDARDS_INDEX.md`.
+- First place it in the existing skill that owns that behaviour.
+- If no suitable skill exists, create a focused skill and add it to `.skills/INDEX.md`.
+- Add detail to `DETAILS.md` or project docs when it is too large for a skill.
+- Do not add implementation-specific, runtime-specific, UI-specific, Git-specific, tooling-specific, or incident-specific detail to this file.
+- `AGENTS.md` may point to the owner; it must not duplicate the owner's detailed rules.
 
-Never add agent-specific memory or session history to this shared loader.
+Use `.skills/instruction-maintenance/SKILL.md` whenever changing agent instructions, skills, adapters, or instruction structure.
 
-## Load only what is needed
+## Navigation
 
-1. Read this file.
-2. If project context is needed, read `docs/PROJECT_CONTEXT.md`.
-3. If changing project setup, docs, AGENTS.md, skills, config, runtime commands, tests, env examples, packaging, templates, AI model/provider defaults, cost logging, approval workflows, or long-running workflows, read `docs/STANDARDS_INDEX.md` first.
-4. Load the relevant skill or smallest necessary combination of skills from `.skills/`. Use one domain skill plus reusable skills such as `code-change`, `no-hardcoding`, or `css-design-system` when the task crosses those boundaries.
-5. Before any branch/worktree, commit, push, PR, merge, or `main`-integration action, load `.skills/git-lifecycle/SKILL.md`.
-6. Read only linked details, docs, code, or git history needed for the task.
-
-Do not read every skill, every doc, or the whole repo.
-
-## Skill selection
-
-Use each skill's YAML frontmatter `name` and `description`.
-
-Reusable defaults:
-
-- `code-change`: code, tests, runtime implementation.
-- `instruction-maintenance`: AGENTS, adapter files, skills, instruction docs.
-- `no-hardcoding`: config, schema, thresholds, labels, defaults, fallback values, business rules.
-- `css-design-system`: CSS, spacing, layout, reusable components, theme tokens.
-- `mcp-tooling`: repository/filesystem and connected-service access plus tool/transport failure recovery; runtime-specific connector names are scoped inside that skill.
-- `git-lifecycle`: branch/worktree, commit, push, PR, merge, and verified `main` integration.
-
-### UI task routing (required, not optional)
-
-Any task touching templates, CSS, JS, or a rendered screen must load the UI-domain skill (`dashboard-ui` or `onboarding-ui`, whichever owns the surface) **together with** `css-design-system`, not either alone. If the page also has its own skill, load that too. Before writing a new selector, class, or component markup, check `docs/UI_COMPONENT_MAP.md` for an existing pattern to reuse. A missing reusable pattern is a reason to add it centrally (theme file + map entry), not to invent a page-local one-off. If no shared pattern fits or the correct central extension is unclear, stop and ask the human before creating a page-specific visual exception.
-
-Project-specific skills live in `docs/PROJECT_CONTEXT.md`.
+- Project context: `docs/PROJECT_CONTEXT.md`
+- Project documentation index: `docs/INDEX.md`
+- Task skills: `.skills/INDEX.md`
+- Shared project standards pointers: `docs/STANDARDS_INDEX.md`
 
 ## Universal rules
 
-- Keep changes small and scoped.
-- Repository text files use LF line endings. `.gitattributes` and `.editorconfig` are authoritative; do not preserve or introduce CRLF. Before every commit, run `git diff --check` and inspect staged/touched text files with `git ls-files --eol`; any `w/crlf` or `w/mixed` touched file must be normalized to LF. Broad repository-wide normalization is a separate maintenance change and must not be mixed into unrelated dirty feature work.
-- Assume multiple clients or agents may be editing this worktree in parallel. Before editing, tell the user, inspect `git status`, and preserve unexpected changes; do not overwrite, revert, stash, or commit another client's work without explicit coordination.
-- When multiple agents/sessions may work on the same repo concurrently, isolate each code change in its own git branch + worktree (not the shared/main checkout); delete both once the change is merged or abandoned.
-- **Running-server lifecycle invariant:** do not stop, restart, replace, or otherwise disturb an already-running user/developer server merely to load changes, finish a merge, clean configuration/state, or perform agent housekeeping. Prefer an isolated test process/port for validation. Touch the existing server lifecycle only when a genuine test or validation step requires it; keep that intervention bounded to the test and restore normal operation afterward.
-- Do not add hidden fallbacks, dead paths, compatibility shims, or broad exception swallowing unless explicitly approved.
-- Do not silently drop, default, or reclassify required data into invisibility; if a match cannot be proven, keep the item visible with an explicit unresolved status or fail loudly if the pipeline requires a hard stop.
-- Do not hardcode business behaviour when config, schema, profile, or knowledge should own it.
-- Surface missing or invalid required data clearly.
-- Prefer small, single-purpose modules over monoliths.
+- Never guess or invent; inspect the authoritative source first.
+- Keep context and changes bounded to what the task requires.
+- Do not hardcode behaviour that belongs in config, schema, profile, knowledge, or another authoritative owner.
+- Do not add hidden fallbacks, compatibility shims, dead paths, or broad exception swallowing unless explicitly approved.
+- Do not claim completion without validation evidence.
+- Preserve unrelated work when other agents or sessions may be active.
+- Route specialised behaviour through its owning skill instead of expanding this file.
+
+## Finish report
+
+Report only what matters:
+- what changed;
+- validation performed and result;
+- remaining risk or follow-up;
+- for Git work, the integration state required by `.skills/git-lifecycle/SKILL.md`.
