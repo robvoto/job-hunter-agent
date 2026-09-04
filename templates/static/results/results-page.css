@@ -633,6 +633,24 @@
   border-top: 1px solid var(--border-subtle);
 }
 
+/* Every row keeps the same box, but tinted faintly by which section it's in —
+   consistent shape across the card, still a quick color hint without reading
+   the heading, and much lower saturation than the old per-item flag colors. */
+.job-requirement-group--partial .job-requirement-title-line {
+  background: color-mix(in srgb, var(--state-warning-bg) 45%, var(--bg-chip-subtle));
+  border-color: color-mix(in srgb, var(--state-warning-border) 35%, var(--border-subtle));
+}
+
+.job-requirement-group--attention .job-requirement-title-line {
+  background: color-mix(in srgb, var(--state-error-bg) 45%, var(--bg-chip-subtle));
+  border-color: color-mix(in srgb, var(--state-error-border) 35%, var(--border-subtle));
+}
+
+.job-requirement-group--matched .job-requirement-title-line {
+  background: color-mix(in srgb, var(--state-success-bg) 45%, var(--bg-chip-subtle));
+  border-color: color-mix(in srgb, var(--state-success-border) 35%, var(--border-subtle));
+}
+
 .job-requirement-subtype + .job-requirement-subtype {
   margin-top: var(--surface-gap-lg);
   padding-top: var(--surface-pad-block-md);
@@ -665,6 +683,13 @@
 .job-insight-group.is-secondary ul {
   color: var(--text-muted);
   font-size: var(--text-role-body-compact-font-size);
+}
+
+/* Requirement rows are primary content the user needs to read and act on,
+   not secondary/de-emphasized detail — override the muted default the
+   general secondary-panel rule above applies to every other ul here. */
+.job-insight-group.is-secondary .job-requirement-list {
+  color: var(--text-primary);
 }
 
 .job-insight-group li {
@@ -710,8 +735,7 @@
 
 .job-requirement-item {
   display: block;
-  padding: 4px 0;
-  border-radius: var(--radius-sm);
+  padding: 2px 0;
 }
 
 .job-requirement-item--has-action {
@@ -726,7 +750,7 @@
   color: var(--text-muted);
 }
 
-.job-requirement-item--confirmed-do-not-have {
+.job-requirement-item--confirmed-do-not-have .job-requirement-title-line {
   background: color-mix(in srgb, var(--state-error-bg) 55%, transparent);
   color: var(--state-error-text);
 }
@@ -735,7 +759,7 @@
   color: var(--text-primary);
 }
 
-.job-requirement-item--invalid {
+.job-requirement-item--invalid .job-requirement-title-line {
   background: color-mix(in srgb, var(--state-warning-bg) 40%, transparent);
   color: var(--text-primary);
 }
@@ -751,6 +775,10 @@
   align-items: center;
   gap: var(--control-space-xs);
   font-weight: var(--text-role-status-font-weight);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-chip-subtle);
+  border: 1px solid var(--border-subtle);
 }
 
 .job-requirement-badges {
@@ -783,16 +811,16 @@
 
 /* Same warning-tier row background as --invalid, so required-but-unproven
    requirements get consistent visual weight regardless of which panel they render in. */
-.job-requirement-item--partially-supported {
+.job-requirement-item--partially-supported .job-requirement-title-line {
   background: color-mix(in srgb, var(--state-warning-bg) 40%, transparent);
 }
 
 /* mandatory + not_shown: same red urgency as mismatch — user needs to review this gap */
-.job-requirement-item--mandatory-not-shown {
+.job-requirement-item--mandatory-not-shown .job-requirement-title-line {
   background: color-mix(in srgb, var(--state-error-bg) 40%, transparent);
 }
 
-.job-requirement-item--mismatch {
+.job-requirement-item--mismatch .job-requirement-title-line {
   background: color-mix(in srgb, var(--state-error-bg) 55%, transparent);
 }
 
@@ -825,6 +853,11 @@
   margin-top: 4px;
 }
 
+.req-coverage-detail--profile-review {
+  margin-top: 8px;
+  padding-left: 10px;
+}
+
 .req-coverage-tag {
   display: inline-flex;
   align-items: center;
@@ -832,7 +865,7 @@
   border-radius: var(--control-radius-pill);
   border: 1px solid color-mix(in srgb, var(--selection-accent) 22%, var(--border-subtle));
   background: color-mix(in srgb, var(--selection-accent) 10%, var(--bg-surface));
-  color: var(--text-secondary);
+  color: var(--text-primary);
   font-size: 0.68rem;
   font-weight: 700;
   line-height: 1.2;
@@ -858,7 +891,7 @@
 
 .profile-gap-strength-prompt {
   font-weight: 700;
-  color: var(--text-secondary);
+  color: var(--text-primary);
 }
 
 .job-requirement-note {
@@ -874,28 +907,29 @@
   color: var(--text-muted);
 }
 
+/* Mandatory/Preferred/etc are importance tiers, not match state — match state is
+   already carried by the Partial matches / Needs attention / Matched headings.
+   These stay on the neutral chip palette (no warning/info/success hue) so they
+   don't visually compete with the headings or the action buttons. Mandatory is
+   simply the strongest neutral weight; lower tiers step down in weight only. */
 .job-req-importance--mandatory {
-  border-color: color-mix(in srgb, var(--state-warning-border) 70%, var(--border-subtle));
-  background: color-mix(in srgb, var(--state-warning-bg) 82%, var(--bg-surface));
-  color: var(--state-warning-text);
-}
-
-.job-req-importance--strongly-preferred {
-  border-color: color-mix(in srgb, var(--state-info-border) 70%, var(--border-subtle));
-  background: color-mix(in srgb, var(--state-info-bg) 82%, var(--bg-surface));
-  color: var(--state-info-text);
-}
-
-.job-req-importance--preferred {
-  border-color: color-mix(in srgb, var(--selection-accent) 24%, var(--border-chip-subtle));
-  background: color-mix(in srgb, var(--selection-accent) 12%, var(--bg-chip-subtle));
+  border-color: var(--border-strong);
   color: var(--text-primary);
 }
 
+.job-req-importance--strongly-preferred {
+  border-color: var(--border-chip-subtle);
+  color: var(--text-muted);
+}
+
+.job-req-importance--preferred {
+  border-color: var(--border-chip-subtle);
+  color: var(--text-muted);
+}
+
 .job-req-importance--bonus {
-  border-color: color-mix(in srgb, var(--state-success-border) 70%, var(--border-subtle));
-  background: color-mix(in srgb, var(--state-success-bg) 82%, var(--bg-surface));
-  color: var(--state-success-text);
+  border-color: var(--border-chip-subtle);
+  color: var(--text-muted);
 }
 
 .job-insight-unavailable strong {
