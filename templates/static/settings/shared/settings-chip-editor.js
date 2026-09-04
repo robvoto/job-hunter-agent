@@ -1,5 +1,4 @@
 import { formatRemoveItemLabel } from '../../common/action-buttons.js';
-import { confirmRoleFamily } from '../../common/role-family.js';
 import { escapeHtml, toLines, rulesToText, textToRules, settingsField } from './settings-utils.js';
 
 const titleTierLabels = window.__JOB_HUNTER_TITLE_TIER_LABELS__ || {};
@@ -169,16 +168,6 @@ export const JobHunterChipEditor = (function () {
     return true;
   }
 
-  async function addRoleChipValue(id) {
-    const editor = chipEditors[id];
-    const input = editor ? settingsField(editor.inputId) : null;
-    if (!editor || !input) return false;
-    if (id !== 'target_roles' && id !== 'also_consider_roles') return addChipValue(id);
-    const resolved = await confirmRoleFamily(input.value);
-    if (!resolved) return false;
-    return addChipValue(id, resolved);
-  }
-
   function removeChipValue(id, index) {
     const editor = chipEditors[id];
     if (!editor) return;
@@ -196,28 +185,18 @@ export const JobHunterChipEditor = (function () {
     renderChipEditor(id);
   }
 
-  async function flushChipEditorInputs() {
-    for (const id of Object.keys(chipEditors)) {
+  function flushChipEditorInputs() {
+    Object.keys(chipEditors).forEach(id => {
       const input = settingsField(chipEditors[id].inputId);
-      if (input && input.value.trim()) {
-        if (id === 'target_roles' || id === 'also_consider_roles') {
-          await addRoleChipValue(id);
-        } else {
-          addChipValue(id);
-        }
-      }
-    }
+      if (input && input.value.trim()) addChipValue(id);
+    });
   }
 
   function initEventHandlers(markDirty) {
     document.addEventListener('click', e => {
       const addBtn = e.target.closest('[data-add-chip]');
       if (addBtn) {
-        addRoleChipValue(resolveChipEditorId(addBtn.dataset.addChip)).then((added) => {
-          if (added) markDirty();
-        }).catch((error) => {
-          window.alert(error.message);
-        });
+        if (addChipValue(resolveChipEditorId(addBtn.dataset.addChip))) markDirty();
         return;
       }
       const removeBtn = e.target.closest('[data-remove-chip]');
@@ -231,11 +210,7 @@ export const JobHunterChipEditor = (function () {
       const input = e.target.closest('[data-chip-input]');
       if (!input || e.key !== 'Enter') return;
       e.preventDefault();
-      addRoleChipValue(resolveChipEditorId(input.dataset.chipInput)).then((added) => {
-        if (added) markDirty();
-      }).catch((error) => {
-        window.alert(error.message);
-      });
+      if (addChipValue(resolveChipEditorId(input.dataset.chipInput))) markDirty();
     });
   }
 
