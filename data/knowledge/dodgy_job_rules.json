@@ -1,7 +1,7 @@
 {
   "kind": "managed_knowledge",
   "name": "dodgy_job_rules",
-  "version": 2,
+  "version": 3,
   "job_closed_indicators": [
     "job (?:is )?no longer available",
     "this job has expired",
@@ -16,5 +16,16 @@
     "job expired",
     "listing expired"
   ],
-  "external_date_mismatch_flag_days": 14
+  "external_date_mismatch_flag_days": 14,
+  "application_deadline_patterns": [
+    "applications?\\s+close(?:s|d)?\\s*:\\s*(?P<date>\\d{1,2}[- /][A-Za-z]{3,9}[- /]\\d{4}|\\d{4}-\\d{2}-\\d{2}|\\d{1,2}/\\d{1,2}/\\d{4})"
+  ],
+  "application_deadline_date_formats": [
+    "%d-%b-%Y",
+    "%d-%B-%Y",
+    "%d %b %Y",
+    "%d %B %Y",
+    "%Y-%m-%d",
+    "%d/%m/%Y"
+  ]
 }

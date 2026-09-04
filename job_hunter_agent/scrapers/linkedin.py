@@ -1216,7 +1216,11 @@ class LinkedInScraper(BaseJobScraper):
         Returns the closed-job signals found, if any; header, description, apply-url,
         and posted-age evidence is applied directly onto ``record``.
         """
-        from job_hunter_agent.job_quality import SIGNAL_KIND_JOB_CLOSED  # noqa: PLC0415
+        from job_hunter_agent.job_quality import (  # noqa: PLC0415
+            SIGNAL_KIND_JOB_CLOSED,
+            detect_expired_application_deadline,
+            load_dodgy_job_rules,
+        )
 
         html = _fetch_job_html(record)
         if not html:
@@ -1256,6 +1260,12 @@ class LinkedInScraper(BaseJobScraper):
             record[RECORD_POSTED_AGE_DAYS_KEY] = posted_age_days
         if header["is_reposted"]:
             record[RECORD_IS_REPOSTED_KEY] = True
+
+        deadline_signals = detect_expired_application_deadline(
+            description, load_dodgy_job_rules(), run_date
+        )
+        if deadline_signals:
+            return deadline_signals
 
         if not header["is_closed"]:
             return []
