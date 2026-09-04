@@ -48,6 +48,7 @@ Runbooks are for live incident-style procedures. They should contain exact comma
 | `docs/ALIAS_LOGIC_RATIONALE.md` | Alias/title matching rationale. Candidate to merge into a future decision log. |
 | `docs/CAPABILITY_AGING_RATIONALE.md` | Capability aging/strength rationale. Candidate to merge into a future decision log. |
 | `docs/OCCUPATION_TAXONOMY_RATIONALE.md` | Occupation taxonomy rationale. Candidate to merge into a future decision log. |
+| `docs/REQUIREMENT_DECOMPOSITION_RATIONALE.md` | Fit-review `decomposition` block: AND/OR requirement semantics and bounded `capability_judgement`. Candidate to merge into a future decision log. |
 | `docs/candidate_application_history_sync.md` | Candidate application history sync notes. Candidate to merge into operations/config governance. |
 
 ## Backlog

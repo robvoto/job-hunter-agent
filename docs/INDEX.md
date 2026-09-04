@@ -34,3 +34,4 @@ Use this as the canonical documentation routing index for the repo. It should st
 - [ALIAS_LOGIC_RATIONALE.md](ALIAS_LOGIC_RATIONALE.md) — alias/title matching rationale and historical decisions.
 - [CAPABILITY_AGING_RATIONALE.md](CAPABILITY_AGING_RATIONALE.md) — capability recency/aging rationale.
 - [OCCUPATION_TAXONOMY_RATIONALE.md](OCCUPATION_TAXONOMY_RATIONALE.md) — occupation taxonomy ownership, matching rationale, and refresh process.
+- [REQUIREMENT_DECOMPOSITION_RATIONALE.md](REQUIREMENT_DECOMPOSITION_RATIONALE.md) — the fit-review `decomposition` block, AND/OR requirement semantics, and bounded `capability_judgement`.
