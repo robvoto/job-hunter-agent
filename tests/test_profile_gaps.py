@@ -183,3 +183,41 @@ def test_compute_gaps_excludes_item_without_profile_action_allowed():
     missing_flag_item = dict(unresolved_item)
     del missing_flag_item["profile_action_allowed"]
     assert compute_profile_gaps([missing_flag_item], [], []) == []
+
+
+_PARTIAL_MATCH_ITEM = {
+    "requirement": "IT systems and infrastructure project management",
+    "status": "partially_supported",
+    "requirement_type": "capability",
+    "capability_name": "Agile delivery management",
+    "canonical_requirement": "IT systems and infrastructure project management",
+    "matched_job_text": "Lead IT infrastructure projects",
+    "profile_action_allowed": True,
+    "matched_candidate_fact": "Agile delivery management",
+}
+
+
+def test_compute_gaps_partial_match_is_actionable_for_exact_canonical_requirement():
+    # The LLM matched an adjacent capability the candidate holds, so the row is
+    # partially_supported. The exact requested concept is still missing, so it
+    # must be surfaced as a confirmable gap keyed on the exact canonical
+    # requirement -- not the adjacent matched_candidate_fact.
+    adjacent_confirmed = [
+        {"name": "Agile delivery management", "level": "strong", "aliases": []}
+    ]
+    gaps = compute_profile_gaps([_PARTIAL_MATCH_ITEM], adjacent_confirmed, [])
+    assert len(gaps) == 1
+    assert gaps[0]["capability_name"] == "IT systems and infrastructure project management"
+    assert gaps[0]["status"] == "partially_supported"
+    assert gaps[0]["matched_candidate_fact"] == "Agile delivery management"
+
+
+def test_compute_gaps_partial_match_skipped_when_exact_canonical_already_confirmed():
+    exact_confirmed = [
+        {
+            "name": "IT systems and infrastructure project management",
+            "level": "strong",
+            "aliases": ["infrastructure project management"],
+        }
+    ]
+    assert compute_profile_gaps([_PARTIAL_MATCH_ITEM], exact_confirmed, []) == []

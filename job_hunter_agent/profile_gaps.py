@@ -21,7 +21,17 @@ CUSTOM_BLOCKER_REASON_NOT_REQUIRED = "not_required"
 CUSTOM_BLOCKER_REASON_INVALID_INPUT = "invalid_input"
 STATUS_CONFIRMED_HAVE = "confirmed_have"
 STATUS_CONFIRMED_DO_NOT_HAVE = "confirmed_do_not_have"
-_CONFIRMABLE_REQUIREMENT_STATUSES = frozenset({"not_shown", "mismatch", "invalid"})
+# Coverage statuses whose row may offer a profile-confirm action (Add capability /
+# "I don't have this"). This is the single owner of that policy: routes/review.py
+# imports it for the /api/profile-gap gate, and workspace_renderer.py mirrors it in
+# css-modifier space (partially_supported -> "partially-supported",
+# not_shown + mandatory -> "mandatory-not-shown", not_shown -> "not-shown").
+# partially_supported is included so an unconfirmed partial row is not a dead end:
+# the row stays a Partial match, but the exact requested canonical_requirement can
+# still be added when it is not already a confirmed profile fact.
+CONFIRMABLE_REQUIREMENT_STATUSES = frozenset(
+    {"not_shown", "mismatch", "invalid", "partially_supported"}
+)
 PROFILE_GAP_JOB_REQUIREMENT_TEXT_KEY = "job_requirement_text"
 _ELIGIBILITY_TRUE_KEYS = frozenset({"true", "yes", "y", "1", "have", "has", "held", "present"})
 _ELIGIBILITY_FALSE_KEYS = frozenset({"false", "no", "n", "0", "absent", "missing", "none", "not"})
@@ -135,7 +145,7 @@ def compute_profile_gaps(
         if not isinstance(item, dict):
             continue
         status = str(item.get("status") or "").strip().lower()
-        if status not in _CONFIRMABLE_REQUIREMENT_STATUSES:
+        if status not in CONFIRMABLE_REQUIREMENT_STATUSES:
             continue
         if item.get("profile_action_allowed") is not True:
             continue

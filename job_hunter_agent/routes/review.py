@@ -17,6 +17,7 @@ from job_hunter_agent.llm_protocol import (
     LLM_PROFILE_RESOLUTION_NEW,
 )
 from job_hunter_agent.profile_gaps import (
+    CONFIRMABLE_REQUIREMENT_STATUSES,
     STATUS_CONFIRMED_DO_NOT_HAVE,
     STATUS_CONFIRMED_HAVE,
     classify_requirement_status,
@@ -340,7 +341,11 @@ def api_rule_title_block_delete(body: dict = Body(...)):  # type: ignore[no-unty
 
 
 _PROFILE_GAP_VALID_ACTIONS = frozenset({"confirm_have", "confirm_do_not_have"})
-_PROFILE_GAP_CONFIRMABLE_STATUSES = frozenset({"not_shown", "mismatch", "invalid"})
+# Owned by profile_gaps.CONFIRMABLE_REQUIREMENT_STATUSES. A partially_supported row is
+# confirmable too: api_profile_gap re-checks classify_requirement_status below and
+# returns already_present when the canonical fact is present, so an already-covered
+# partial cannot double-add.
+_PROFILE_GAP_CONFIRMABLE_STATUSES = CONFIRMABLE_REQUIREMENT_STATUSES
 
 
 def _profile_gap_name_key(value: str) -> str:

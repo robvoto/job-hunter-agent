@@ -468,6 +468,112 @@ def test_render_job_card_omits_gap_actions_for_vague_or_alternative_requirement(
     assert "gap-btn" not in html
 
 
+def test_render_job_card_partial_match_is_actionable_for_exact_requirement():
+    # The LLM matched the requirement to an adjacent capability the candidate
+    # holds ("Agile methodologies"), so the row stays a Partial match. Because
+    # the exact requested concept is not itself in the profile, the row must
+    # still offer an Add action for that exact concept — not the adjacent one.
+    html = workspace_renderer.render_job_card(
+        {
+            "requirement_coverage": [
+                {
+                    "requirement": "IT systems and infrastructure project management",
+                    "requirement_type": "capability",
+                    "status": "partially_supported",
+                    "capability_name": "Agile methodologies",
+                    "matched_candidate_fact": "Agile methodologies",
+                    "matched_job_text": "Lead IT infrastructure projects",
+                    "canonical_requirement": "IT systems and infrastructure project management",
+                    "profile_action_allowed": True,
+                    "profile_support": ["agile delivery"],
+                    "covered_requirement_elements": ["project management"],
+                }
+            ],
+        },
+        _capability_profile(),
+    )
+
+    assert "Partial matches" in html
+    assert 'data-action="confirm_have"' in html
+    assert (
+        'data-capability-name="IT systems and infrastructure project management"'
+        in html
+    )
+    # The adjacent capability must never be offered as the exact requested one.
+    assert 'data-capability-name="Agile methodologies"' not in html
+
+
+def test_render_job_card_partial_match_no_action_when_exact_capability_confirmed():
+    # canonical_requirement resolves to a capability the candidate already holds
+    # (via alias "stakeholder engagement"): nothing to add, so no gap buttons.
+    html = workspace_renderer.render_job_card(
+        {
+            "requirement_coverage": [
+                {
+                    "requirement": "Stakeholder engagement across delivery teams",
+                    "requirement_type": "capability",
+                    "status": "partially_supported",
+                    "capability_name": "Agile methodologies",
+                    "matched_candidate_fact": "Agile methodologies",
+                    "matched_job_text": "Engage stakeholders across teams",
+                    "canonical_requirement": "stakeholder engagement",
+                    "profile_action_allowed": True,
+                    "profile_support": ["agile delivery"],
+                    "covered_requirement_elements": ["stakeholders"],
+                }
+            ],
+        },
+        _capability_profile(),
+    )
+
+    assert "Partial matches" in html
+    assert "gap-btn" not in html
+    assert 'data-action="confirm_have"' not in html
+
+
+def test_render_job_card_requirement_groups_ordered_attention_partial_matched():
+    html = workspace_renderer.render_job_card(
+        {
+            "requirement_coverage": [
+                {
+                    "requirement": "Kubernetes administration",
+                    "requirement_type": "capability",
+                    "status": "not_shown",
+                    "canonical_requirement": "Kubernetes administration",
+                    "profile_action_allowed": True,
+                    "matched_job_text": "Operate Kubernetes clusters",
+                },
+                {
+                    "requirement": "IT systems and infrastructure project management",
+                    "requirement_type": "capability",
+                    "status": "partially_supported",
+                    "capability_name": "Agile methodologies",
+                    "matched_candidate_fact": "Agile methodologies",
+                    "canonical_requirement": "IT systems and infrastructure project management",
+                    "profile_action_allowed": True,
+                    "profile_support": ["agile delivery"],
+                    "covered_requirement_elements": ["project management"],
+                },
+                {
+                    "requirement": "Agile delivery",
+                    "requirement_type": "capability",
+                    "status": "supported",
+                    "capability_name": "Agile methodologies",
+                    "matched_candidate_fact": "Agile methodologies",
+                    "matched_job_text": "Deliver in agile teams",
+                    "profile_support": ["agile"],
+                },
+            ],
+        },
+        _capability_profile(),
+    )
+
+    attention_at = html.index(">Needs attention</strong>")
+    partial_at = html.index(">Partial matches</strong>")
+    matched_at = html.index(">Matched</strong>")
+    assert attention_at < partial_at < matched_at
+
+
 def test_build_ad_learning_signals_registers_pending_capability_signals(monkeypatch):
     monkeypatch.setattr(
         source_learning,
