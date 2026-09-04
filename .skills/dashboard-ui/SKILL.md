@@ -83,6 +83,28 @@ When a rejection history match exists, the expanded `<details>` section shows:
 
 The badge ("Rejected before" / "Possible previous application") is determined by status + confidence. The expanded section must not repeat the status label. The LLM classification confidence and the company-match confidence/reason diagnostics are intentionally not rendered anywhere — they were noise even in debug. The matcher still records them on the record (`_match_confidence`, `_company_match_reason`) for other consumers.
 
+## Truncated / expandable card text (teasers, summaries)
+
+Start from the established web pattern instead of re-deriving it. For preview
+text in a card grid:
+- Clamp with `-webkit-line-clamp` (never `max-width` in `ch`, never `min-height`)
+  so every card is the same height. Clamp is a maximum, not a minimum — if the
+  text is short the row still collapses, so the upstream snippet must be long
+  enough to fill the clamp on a wide card (see `ROLE_SUMMARY_SNIPPET_MAX` in
+  `text_processing.py`).
+- Three lines is the floor for an "adequate" preview; two often isn't.
+- Fade the last visible line (`mask-image` gradient) so "there is more" reads
+  without extra copy.
+- Only show the expand affordance when content is genuinely hidden behind it.
+- Make the control obvious: its own row, large target. A bare ▾ is fine (Rob's
+  preference) but it must be big, not a tiny inline glyph.
+- No "show less" control is needed; the collapsed state does the job.
+
+Sources this is drawn from: Baymard Institute (line-clamp in card grids;
+guideline: only show the expand control when 2+ lines are actually hidden),
+LogRocket "Truncate with style" (line-clamp mechanics + fade), Thumbprint /
+Thumbtack design system (truncation component), Educative (CSS line-clamp).
+
 ## Validation
 - Check the rendered page or smallest relevant browser/template path.
 - Run targeted tests where available.
