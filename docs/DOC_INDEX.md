@@ -12,7 +12,6 @@ Use this file to decide where information belongs. Do not create a new markdown 
 |---|---|
 | `README.md` | Project overview, quick start, and links to deeper docs. |
 | `AGENTS.md` | Tiny reusable agent loader only. |
-| `CLAUDE.md` | Thin Claude-specific adapter. |
 | `.clinerules/` | Thin Cline-specific adapter rules. |
 | `docs/INDEX.md` | Canonical documentation routing index. |
 

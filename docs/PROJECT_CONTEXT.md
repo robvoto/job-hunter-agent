@@ -29,26 +29,7 @@ It is a strict, explainable job-fit system, not a vague recommender.
 
 ## Project-specific skill routing
 
-Choose the best matching skill. Combine with reusable skills such as `code-change`, `no-hardcoding`, or `css-design-system` when relevant.
-
-| Skill | Use for |
-|---|---|
-| `.skills/backlog-management/SKILL.md` + `google-drive:google-sheets` | Google Sheet backlog rows, state, evidence, and live spreadsheet reads/writes |
-| `.skills/job-filtering/SKILL.md` | Deterministic filters, hard blockers, reject reasons |
-| `.skills/scoring-ranking/SKILL.md` | Fit score, ranking, scoring explanations |
-| `.skills/profile-extraction/SKILL.md` | CV/profile extraction and normalization |
-| `.skills/signal-registry/SKILL.md` | Approved learning signal lifecycle |
-| `.skills/preferences/SKILL.md` | Location, contract, government, salary, work mode preferences |
-| `.skills/aws-test-instance/SKILL.md` | AWS Job Hunter test EC2 host facts, SSM/CLI diagnosis, instance-side logs, service restarts, and browser-session runtime issues |
-| `.skills/release-management/SKILL.md` | Application versions, release gates, Git tags, and release publishing |
-| `.skills/dashboard-ui/SKILL.md` | Workspace and settings UI |
-| `.skills/onboarding-ui/SKILL.md` | Onboarding wizard, upload, reset/resume flow |
-| `.skills/scraping/SKILL.md` | SEEK/LinkedIn scraping and raw evidence capture |
-| `.skills/ad-learning/SKILL.md` | Extracting learning candidates from job ads |
-| `.skills/knowledge-management/SKILL.md` | Managed knowledge/config sources and loaders |
-| `.skills/mcp-tooling/SKILL.md` | WSL/filesystem/Google connector access and MCP failure recovery |
-| `.skills/history-dedup/SKILL.md` | Job history, viewed/applied/hidden state, deduplication |
-| `.skills/suggested-tuning/SKILL.md` | Settings > Optimise > Suggested Tuning |
+Use `.skills/INDEX.md` as the single skill-routing catalogue. Load the smallest matching skill, then combine with reusable skills only when the task crosses ownership boundaries. Do not duplicate the active skill list here.
 
 ## Job Hunter non-negotiables
 

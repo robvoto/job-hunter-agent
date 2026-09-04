@@ -12,7 +12,7 @@ Keep agent instructions useful, small, current, and non-contradictory.
 
 ## Source hierarchy
 - `AGENTS.md`: project-wide rules all agents should read first.
-- Agent-specific files such as `CLAUDE.md`: thin pointers/adapters only. Do not duplicate core rules there.
+- Agent-specific adapter files, when present: thin pointers only. Do not duplicate core rules there or document an adapter as active when the file does not exist.
 - `.skills/*/SKILL.md`: compact domain rules loaded only for that work area.
 - `.skills/*/DETAILS.md`: longer reference material split out of a noisy skill.
 - `docs/*`: human/reference documentation, not agent operating rules unless explicitly linked.

@@ -222,6 +222,40 @@ def test_agents_routes_durable_rules_through_skills():
     assert "Detailed rules belong inside each skill" in skills_index
 
 
+def test_all_active_skills_are_indexed_and_discoverable():
+    skills_root = ROOT_DIR / ".skills"
+    skills_index = (skills_root / "INDEX.md").read_text(encoding="utf-8")
+
+    for skill_path in sorted(skills_root.glob("*/SKILL.md")):
+        text = skill_path.read_text(encoding="utf-8")
+        skill_name = skill_path.parent.name
+        assert text.startswith("---\n"), f"{skill_path} must start with YAML frontmatter"
+        assert f"name: {skill_name}" in text, f"{skill_path} frontmatter name must match its folder"
+        assert "description:" in text, f"{skill_path} must include a routing description"
+        assert f"`{skill_name}/SKILL.md`" in skills_index, f"{skill_name} is missing from .skills/INDEX.md"
+
+
+def test_top_level_docs_are_routed_from_docs_index():
+    docs_root = ROOT_DIR / "docs"
+    docs_index = (docs_root / "INDEX.md").read_text(encoding="utf-8")
+    excluded = {"INDEX.md", "CLINE_MEMORY.md"}
+
+    missing = [
+        path.name
+        for path in sorted(docs_root.glob("*.md"))
+        if path.name not in excluded and path.name not in docs_index
+    ]
+    assert not missing, "Top-level docs must be routed from docs/INDEX.md: " + ", ".join(missing)
+
+
+def test_agent_docs_do_not_claim_missing_adapters_are_active():
+    operating_model = (ROOT_DIR / "docs" / "AGENT_OPERATING_MODEL.md").read_text(encoding="utf-8")
+    ownership_map = (ROOT_DIR / "docs" / "DOC_INDEX.md").read_text(encoding="utf-8")
+
+    assert "`CLAUDE.md` is a thin Claude adapter" not in operating_model
+    assert "| `CLAUDE.md` |" not in ownership_map
+
+
 def test_jobhunter_status_defaults_to_concise_summary():
     script = (ROOT_DIR / "scripts" / "ec2" / "jobhunter-status.sh").read_text(encoding="utf-8")
 

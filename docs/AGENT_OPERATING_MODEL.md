@@ -19,7 +19,7 @@ Keep always-loaded instructions small and reliable. Agents should load only the 
    - Owns product goal, runtime truth, repo-root and LangGraph orchestration details, project-specific source hierarchy, project-specific skill routing, non-negotiables, startup/run notes, and a pointer to backlog workflow.
    - Points to `.skills/backlog-management/SKILL.md` for backlog details instead of duplicating the full workflow.
 
-3. Agent adapter files: `CLAUDE.md` and `.clinerules/*`
+3. Agent adapter files, when present (currently `.clinerules/*`)
    - Thin adapters for a specific agent environment.
    - Point to `AGENTS.md`, `docs/PROJECT_CONTEXT.md`, the relevant skill owner, and any genuinely agent-specific context.
    - Must not redefine shared project rules, commands, architecture, backlog workflow, testing workflow, or Definition of Done.
@@ -77,28 +77,7 @@ The description is important because agent systems often discover skills from na
 
 ## Active skills
 
-| Skill | Purpose |
-|---|---|
-| `ad-learning` | Pending job-ad learning candidates. |
-| `aws-test-instance` | AWS Job Hunter test EC2 instance facts, SSM diagnosis, instance-side logs, and browser-session host issues. |
-| `backlog-management` | Google Sheet backlog rows, JH IDs, priorities, duplicates, implementation state, evidence, and human review flags. |
-| `code-change` | Code/test/runtime implementation workflow, validation, and Definition of Done. |
-| `css-design-system` | CSS, spacing, layout, reusable components, and theme tokens. |
-| `dashboard-ui` | Workspace and settings UI, including workspace output sync. |
-| `history-dedup` | Job history, saved/viewed/applied/hidden state, duplicate identity. |
-| `instruction-maintenance` | AGENTS, adapter files, skills, and instruction docs. |
-| `mcp-tooling` | Repository/filesystem and connected-service access, including runtime-scoped Human MCP browser/Gmail tooling and failure recovery. |
-| `job-filtering` | Deterministic pass/fail filters, hard blockers, and reject reasons. |
-| `knowledge-management` | Managed knowledge/config/source-of-truth ownership. |
-| `no-hardcoding` | Config, schema, thresholds, labels, defaults, fallback values, rule IDs, and business-rule ownership. |
-| `onboarding-ui` | Onboarding wizard, upload, reset/resume flow, and search-basics UI. |
-| `preferences` | Candidate preferences and preference-to-filter handoff. |
-| `profile-extraction` | CV/profile extraction and normalization. |
-| `release-management` | Application versions, release preparation, release gates, Git tags, and publishing. |
-| `scoring-ranking` | Fit scoring, ranking, and score explanations. |
-| `scraping` | SEEK, LinkedIn, and APSJobs discovery/scraping, source health, caching, and source data shape. |
-| `signal-registry` | Signal lifecycle, approval, and governance. |
-| `suggested-tuning` | Settings > Optimise > Suggested Tuning workflow. |
+`.skills/INDEX.md` is the single current catalogue of active skills and their routing descriptions. Do not maintain a second active-skill list here.
 
 ## Archived skills
 
@@ -139,6 +118,5 @@ Local `docs/backlog/backlog_review.xlsx` is archive/export/reference only unless
 - Hardcoding/config/schema/default/fallback ownership lives in `.skills/no-hardcoding/SKILL.md`.
 - Skills use discovery frontmatter (`name` and `description`) so agents can route by skill metadata instead of hardcoded trigger lists in `AGENTS.md`.
 - Codex uses the shared `AGENTS.md` + skills model; no duplicate Codex rules are maintained.
-- `CLAUDE.md` is a thin Claude adapter only.
 - `.clinerules/` is the thin Cline adapter layer.
 - `docs/CLINE_MEMORY.md` is retained for Cline-specific durable context and must not be linked from shared `AGENTS.md`.
