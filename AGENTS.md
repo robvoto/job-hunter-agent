@@ -4,7 +4,6 @@
 
 - Any failed tool call, shell command, merge, or validation is a stop condition. Tell the human immediately; do not silently continue or substitute another path.
 - Diagnose the root cause before retrying. When the human has already authorised the work, fix the root cause and add/update the owning skill, guard, or regression test when the failure exposes a repeatable process gap.
-- For every Python command run from this repository (WSL/Linux or EC2), use the project runner: `uv run python ...`, `uv run pytest ...`, or another `uv run ...` command. Never invoke bare `python`, `python3`, `pytest`, or `ruff`, and never fall back to a bare command when `uv` fails. A missing bare executable is a command-launch failure, not a database, application, or repository-access failure.
 - Validate ES-module browser JavaScript with module-aware syntax checking (for example `node --input-type=module --check < file.js`) rather than plain `node --check file.js` when Node would otherwise treat `.js` as CommonJS.
 
 ## Purpose
