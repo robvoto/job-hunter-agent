@@ -2397,10 +2397,21 @@ def render_job_card(
     )
 
     if applied_record:
+        # "Rejected" / "No Answer" belong here, not on a not-yet-applied job:
+        # they are outcomes of an application that already happened, the same
+        # kind of first-party signal Applied is - you telling JobHunter what
+        # actually happened, no email parsing involved. See
+        # review_history_service._record_first_party_outcome_event.
         actions_html = (
             '<div class="job-actions">'
             f'<button class="review-button review-undo jh-button jh-button--primary jh-button--compact review-button--selected" type="button" data-review-action="unapply" {button_data_attrs}>'
             f'{safe_html(_workspace_label("workspace_card_labels", "action_undo_applied_label"))}</button>'
+            f'<button class="review-button review-rejected jh-button jh-button--secondary jh-button--compact" type="button" data-review-action="rejected" {button_data_attrs} '
+            f'title="{safe_html(_workspace_label("workspace_card_labels", "action_rejected_tooltip"))}">'
+            f'{safe_html(_workspace_label("workspace_card_labels", "action_rejected_label"))}</button>'
+            f'<button class="review-button review-no-response jh-button jh-button--secondary jh-button--compact" type="button" data-review-action="no_response" {button_data_attrs} '
+            f'title="{safe_html(_workspace_label("workspace_card_labels", "action_no_response_tooltip"))}">'
+            f'{safe_html(_workspace_label("workspace_card_labels", "action_no_response_label"))}</button>'
             '<span class="review-status" aria-live="polite"></span>'
             "</div>"
         )
@@ -2413,20 +2424,10 @@ def render_job_card(
             "</div>"
         )
     elif not applied_record:
-        # "Rejected" / "No Answer" sit next to Applied because they are the
-        # same kind of signal - you telling JobHunter what actually happened,
-        # first-party, no email parsing involved. See
-        # review_history_service._record_first_party_outcome_event.
         actions_html = (
             '<div class="job-actions">'
             f'<button class="review-button review-applied jh-button jh-button--primary jh-button--compact" type="button" data-review-action="applied" {button_data_attrs}>'
             f'{safe_html(_workspace_label("workspace_card_labels", "applied_badge"))}</button>'
-            f'<button class="review-button review-rejected jh-button jh-button--secondary jh-button--compact" type="button" data-review-action="rejected" {button_data_attrs} '
-            f'title="{safe_html(_workspace_label("workspace_card_labels", "action_rejected_tooltip"))}">'
-            f'{safe_html(_workspace_label("workspace_card_labels", "action_rejected_label"))}</button>'
-            f'<button class="review-button review-no-response jh-button jh-button--secondary jh-button--compact" type="button" data-review-action="no_response" {button_data_attrs} '
-            f'title="{safe_html(_workspace_label("workspace_card_labels", "action_no_response_tooltip"))}">'
-            f'{safe_html(_workspace_label("workspace_card_labels", "action_no_response_label"))}</button>'
             f'<button class="review-button review-not-for-me jh-button jh-button--danger jh-button--compact" type="button" data-review-action="not_for_me" {button_data_attrs} '
             f'title="{safe_html(_workspace_label("workspace_card_labels", "action_not_for_me_tooltip"))}">'
             f'{safe_html(_workspace_label("workspace_card_labels", "action_not_for_me_label"))}</button>'
@@ -2555,10 +2556,17 @@ def render_section(
             "</div>"
         )
     else:
+        # When header_nav is present (the Applied/Hidden tab bar), the tabs
+        # already say which section this is ("Applied (32)", "Hidden (97)").
+        # Repeating it as an <h2> right below the tab the user just clicked
+        # is a redundant duplicate label, not a second piece of information -
+        # drop the heading in that case and keep it only when there is no
+        # nav to say the same thing.
+        heading_html = "" if header_nav else f"<h2>{safe_html(title)}</h2>"
         results_header = (
             '<div class="section-head section-head--with-nav">'
             f"{header_nav}"
-            f"<h2>{safe_html(title)}</h2>"
+            f"{heading_html}"
             f"{header_tools}"
             "</div>"
         )

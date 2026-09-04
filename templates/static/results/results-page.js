@@ -408,14 +408,29 @@
       }
     }
 
+    function appliedActionsHtml(labels) {
+      // Rejected/No Answer are outcomes of an application, so they only ever
+      // appear alongside Undo Applied - matches workspace_renderer.py's
+      // `if applied_record:` branch. unreject/un_no_response return here too,
+      // since undoing a rejection lands you back at "applied", not at
+      // "never applied".
+      return '<div class="job-actions">'
+        + '<button class="review-button review-undo jh-button jh-button--primary jh-button--compact review-button--selected" type="button" data-review-action="unapply">'
+        + `${_rejEscapeHtml(labels.actionUndoAppliedLabel)}</button>`
+        + '<button class="review-button review-rejected jh-button jh-button--secondary jh-button--compact" type="button" data-review-action="rejected" '
+        + `title="${_rejEscapeHtml(labels.actionRejectedTooltip)}">`
+        + `${_rejEscapeHtml(labels.actionRejectedLabel)}</button>`
+        + '<button class="review-button review-no-response jh-button jh-button--secondary jh-button--compact" type="button" data-review-action="no_response" '
+        + `title="${_rejEscapeHtml(labels.actionNoResponseTooltip)}">`
+        + `${_rejEscapeHtml(labels.actionNoResponseLabel)}</button>`
+        + '<span class="review-status" aria-live="polite"></span>'
+        + '</div>';
+    }
+
     function reviewActionsHtmlFor(action) {
       const labels = (window.__JOB_HUNTER_WORKSPACE__ && window.__JOB_HUNTER_WORKSPACE__.labels) || {};
-      if (action === 'applied') {
-        return '<div class="job-actions">'
-          + '<button class="review-button review-undo jh-button jh-button--primary jh-button--compact review-button--selected" type="button" data-review-action="unapply">'
-          + `${_rejEscapeHtml(labels.actionUndoAppliedLabel)}</button>`
-          + '<span class="review-status" aria-live="polite"></span>'
-          + '</div>';
+      if (action === 'applied' || action === 'unreject' || action === 'un_no_response') {
+        return appliedActionsHtml(labels);
       }
       if (action === 'hidden') {
         return '<div class="job-actions">'
@@ -439,18 +454,12 @@
           + '</div>';
       }
       // unapply / unhide land back in "potential", which needs the full
-      // applied / rejected / no-answer / not-for-me / hide action set
-      // restored - must mirror the button set workspace_renderer.py renders
-      // server-side, or a card that returns to "potential" loses buttons.
+      // applied / not-for-me / hide action set restored - must mirror the
+      // button set workspace_renderer.py renders server-side, or a card that
+      // returns to "potential" loses buttons.
       return '<div class="job-actions">'
         + '<button class="review-button review-applied jh-button jh-button--primary jh-button--compact" type="button" data-review-action="applied">'
         + `${_rejEscapeHtml(labels.appliedBadgeLabel)}</button>`
-        + '<button class="review-button review-rejected jh-button jh-button--secondary jh-button--compact" type="button" data-review-action="rejected" '
-        + `title="${_rejEscapeHtml(labels.actionRejectedTooltip)}">`
-        + `${_rejEscapeHtml(labels.actionRejectedLabel)}</button>`
-        + '<button class="review-button review-no-response jh-button jh-button--secondary jh-button--compact" type="button" data-review-action="no_response" '
-        + `title="${_rejEscapeHtml(labels.actionNoResponseTooltip)}">`
-        + `${_rejEscapeHtml(labels.actionNoResponseLabel)}</button>`
         + '<button class="review-button review-not-for-me jh-button jh-button--danger jh-button--compact" type="button" data-review-action="not_for_me" '
         + `title="${_rejEscapeHtml(labels.actionNotForMeTooltip)}">`
         + `${_rejEscapeHtml(labels.actionNotForMeLabel)}</button>`
