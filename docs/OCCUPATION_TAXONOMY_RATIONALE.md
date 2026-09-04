@@ -84,8 +84,8 @@ If new taxonomy behaviour requires rule data, put that data in approved knowledg
 
 ## Related project rules
 
-- `.skills/job-filtering/SKILL.md`: deterministic filters must be explicit, approved, and visible; uncertain signals should not become hidden false-negative gates.
-- `.skills/no-hardcoding/SKILL.md`: business judgement, mappings, thresholds, source rules, and reusable knowledge must not be hidden in Python feature code.
+- `.agents/skills/job-filtering/SKILL.md`: deterministic filters must be explicit, approved, and visible; uncertain signals should not become hidden false-negative gates.
+- `.agents/skills/no-hardcoding/SKILL.md`: business judgement, mappings, thresholds, source rules, and reusable knowledge must not be hidden in Python feature code.
 - `docs/CONFIG_AND_RULES_GOVERNANCE.md`: Python is the engine; knowledge files hold rule libraries; Admin/global settings hold operational knobs; tests enforce architecture.
 
 ## Full Job Titles data and target-query safety

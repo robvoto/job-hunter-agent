@@ -5,28 +5,28 @@ Minimal always-loaded routing instructions. This file is not the project manual 
 ## Default workflow
 
 1. Use `docs/INDEX.md` to find the smallest relevant project document.
-2. Use `.skills/INDEX.md` to choose the smallest relevant task skill or skill combination.
+2. Use `.agents/skills/INDEX.md` to choose the smallest relevant task skill or skill combination.
 3. Read the selected skill before changing code, configuration, instructions, Git state, runtime behaviour, or UI.
 4. Inspect the current files/state before editing. Do not load the whole repository unless the task genuinely requires a broad audit.
-5. For any branch/worktree, commit, push, PR, merge, or `main` integration action, use `.skills/git-lifecycle/SKILL.md`.
+5. For any branch/worktree, commit, push, PR, merge, or `main` integration action, use `.agents/skills/git-lifecycle/SKILL.md`.
 
 ## Durable rule placement
 
 When a lesson or rule should apply beyond the current chat/session:
 
 - First place it in the existing skill that owns that behaviour.
-- If no suitable skill exists, create a focused skill and add it to `.skills/INDEX.md`.
+- If no suitable skill exists, create a focused skill and add it to `.agents/skills/INDEX.md`.
 - Add detail to `DETAILS.md` or project docs when it is too large for a skill.
 - Do not add implementation-specific, runtime-specific, UI-specific, Git-specific, tooling-specific, or incident-specific detail to this file.
 - `AGENTS.md` may point to the owner; it must not duplicate the owner's detailed rules.
 
-Use `.skills/instruction-maintenance/SKILL.md` whenever changing agent instructions, skills, adapters, or instruction structure.
+Use `.agents/skills/instruction-maintenance/SKILL.md` whenever changing agent instructions, skills, adapters, or instruction structure.
 
 ## Navigation
 
 - Project context: `docs/PROJECT_CONTEXT.md`
 - Project documentation index: `docs/INDEX.md`
-- Task skills: `.skills/INDEX.md`
+- Task skills: `.agents/skills/INDEX.md`
 - Shared project standards pointers: `docs/STANDARDS_INDEX.md`
 
 ## Universal rules
@@ -45,4 +45,4 @@ Report only what matters:
 - what changed;
 - validation performed and result;
 - remaining risk or follow-up;
-- for Git work, the integration state required by `.skills/git-lifecycle/SKILL.md`.
+- for Git work, the integration state required by `.agents/skills/git-lifecycle/SKILL.md`.

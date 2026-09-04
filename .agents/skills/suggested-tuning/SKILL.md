@@ -60,7 +60,7 @@ Repeated rejection patterns are built from `rejections_by_reason` via `_build_ru
 
 Supported patterns include:
 
-- `ONET_FAR_OCCUPATION` (title didn't match target/adjacent patterns and O*NET confirmed a far occupation family; see `.skills/job-filtering/SKILL.md`)
+- `ONET_FAR_OCCUPATION` (title didn't match target/adjacent patterns and O*NET confirmed a far occupation family; see `.agents/skills/job-filtering/SKILL.md`)
 - `CARD_SPECIALIST:*`
 - `DESC_CAPABILITY_LOW:*`
 - `TITLE_BAD_KEYWORD:*`
@@ -74,7 +74,7 @@ This writes to `reject_description_phrase_rules` and rebuilds the workspace afte
 
 ## Optimization suggestions (uncertain titles)
 
-`build_title_optimization_suggestions()` is a separate, softer signal from rule suggestions above: titles where O*NET could not confidently classify the occupation family (`onet_classification.result == "uncertain"`) on a row that was ultimately rejected for some other reason downstream. It reads `onet_classification` directly rather than `title_reason`/`reject_reason`, since those fields get overwritten or reused once a row proceeds past the title gate — see `.skills/job-filtering/SKILL.md`.
+`build_title_optimization_suggestions()` is a separate, softer signal from rule suggestions above: titles where O*NET could not confidently classify the occupation family (`onet_classification.result == "uncertain"`) on a row that was ultimately rejected for some other reason downstream. It reads `onet_classification` directly rather than `title_reason`/`reject_reason`, since those fields get overwritten or reused once a row proceeds past the title gate — see `.agents/skills/job-filtering/SKILL.md`.
 
 ## Files to inspect first
 

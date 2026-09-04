@@ -5,12 +5,12 @@ description: Use ONLY for onboarding wizard/search-basics UI, onboarding templat
 
 # Onboarding UI
 
-See `.skills/onboarding-ui/DETAILS.md` for module ownership notes, UI component maps, reset/resume behaviour, and longer examples.
+See `.agents/skills/onboarding-ui/DETAILS.md` for module ownership notes, UI component maps, reset/resume behaviour, and longer examples.
 
 ## Load order
 1. Read `AGENTS.md` first.
 2. Read this skill.
-3. If module ownership or field-specific behaviour matters, read `.skills/onboarding-ui/DETAILS.md` for the relevant section only.
+3. If module ownership or field-specific behaviour matters, read `.agents/skills/onboarding-ui/DETAILS.md` for the relevant section only.
 
 ## Non-negotiable rules
 - Keep canonical values in the owning server normaliser, DB-backed profile/settings source, or bootstrap source.

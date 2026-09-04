@@ -2,7 +2,7 @@
 
 Quick reference for every interactive widget pattern in settings and onboarding. Before adding a new control, find the closest match here and reuse the pattern.
 
-**Governance rule:** before creating any new component, selector, or DOM structure, search this table first. If the closest match isn't an exact fit, extend that entry rather than inventing a parallel pattern. A missing reusable pattern gets added here and to the owning central CSS file — it does not get patched separately into one page. If the shared extension is unclear or the agent believes the screen genuinely needs a page-specific visual pattern, stop and ask the human before creating that exception. See `.skills/dashboard-ui/SKILL.md` and `.skills/css-design-system/SKILL.md` for the enforcement rules this table backs.
+**Governance rule:** before creating any new component, selector, or DOM structure, search this table first. If the closest match isn't an exact fit, extend that entry rather than inventing a parallel pattern. A missing reusable pattern gets added here and to the owning central CSS file — it does not get patched separately into one page. If the shared extension is unclear or the agent believes the screen genuinely needs a page-specific visual pattern, stop and ask the human before creating that exception. See `.agents/skills/dashboard-ui/SKILL.md` and `.agents/skills/css-design-system/SKILL.md` for the enforcement rules this table backs.
 
 ---
 

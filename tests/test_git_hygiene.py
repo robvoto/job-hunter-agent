@@ -1,6 +1,6 @@
 """Fail the suite when merged task branches are left behind.
 
-`.skills/git-lifecycle/SKILL.md` already requires deleting a task branch and
+`.agents/skills/git-lifecycle/SKILL.md` already requires deleting a task branch and
 worktree once the work is in main, and `scripts/check-git-closure.sh` already
 implements the check. Neither stopped seventeen stale worktrees accumulating,
 because both rely on an agent choosing to run them at the right moment.
@@ -42,7 +42,7 @@ def _branches_with_work_in_progress() -> set[str]:
     * locked - a session has deliberately marked the worktree as in use.
     * dirty  - the worktree holds uncommitted changes.
 
-    `.skills/git-lifecycle` says outright that a worktree with modified, staged,
+    `.agents/skills/git-lifecycle` says outright that a worktree with modified, staged,
     conflicted or untracked files must not be deleted, and that its work must
     never be discarded to make cleanup pass. Flagging those here would push
     exactly that. `scripts/check-git-closure.sh` still reports them, so they stay
@@ -96,5 +96,5 @@ def test_no_local_branch_fully_merged_into_main_is_left_behind():
     assert not stale, (
         "These branches are fully merged into main and must be deleted "
         "(remove any worktree holding them, then git branch -d <name>), "
-        f"per .skills/git-lifecycle post-merge cleanup: {sorted(stale)}"
+        f"per .agents/skills/git-lifecycle post-merge cleanup: {sorted(stale)}"
     )

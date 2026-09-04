@@ -8,7 +8,7 @@ Cline-specific durable context for this repository. This file is loaded only thr
 2. Read this file.
 3. Read `docs/PROJECT_CONTEXT.md` only when product context, runtime truth, or domain routing is needed.
 4. Read `docs/STANDARDS_INDEX.md` before changing setup, instructions, docs, config, templates, tests, packaging, providers, costs, approvals, or long-running workflows.
-5. Load only the relevant `.skills/*/SKILL.md` files.
+5. Load only the relevant `.agents/skills/*/SKILL.md` files.
 
 ## Repository and runtime
 
@@ -20,7 +20,7 @@ Cline-specific durable context for this repository. This file is loaded only thr
 ## Backlog
 
 - Canonical backlog: `https://docs.google.com/spreadsheets/d/1-D7RzYB3R39dOmUFZvvsDlWpDfIVn3eRajEae9b7OX0/edit?gid=218702820#gid=218702820`.
-- Follow `.skills/backlog-management/SKILL.md`.
+- Follow `.agents/skills/backlog-management/SKILL.md`.
 - Use the authorised Human MCP / Google Sheets tools for reads and writes.
 - Never substitute public CSV export, a local workbook, copied data, GitHub issues, or memory for the live sheet.
 - A backlog task is not done until the live row is updated and re-read for verification.
@@ -56,4 +56,4 @@ Cline-specific durable context for this repository. This file is loaded only thr
 
 ## Self-edit restriction
 
-Do not edit `AGENTS.md`, `.clinerules/`, `docs/CLINE_MEMORY.md`, `docs/AGENT_OPERATING_MODEL.md`, `docs/DOC_INDEX.md`, or `.skills/` unless the human explicitly requested instruction maintenance. Product work must not rewrite the agent's own instructions.
+Do not edit `AGENTS.md`, `.clinerules/`, `docs/CLINE_MEMORY.md`, `docs/AGENT_OPERATING_MODEL.md`, `docs/DOC_INDEX.md`, or `.agents/skills/` unless the human explicitly requested instruction maintenance. Product work must not rewrite the agent's own instructions.
