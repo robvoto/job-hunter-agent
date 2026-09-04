@@ -59,9 +59,15 @@ from job_hunter_agent.profile_gaps import (
     CUSTOM_BLOCKER_REASON_NOT_REQUIRED,
     CUSTOM_BLOCKER_REASON_NO_MATCH,
     CUSTOM_BLOCKER_REASON_RESOLVED,
+    STATUS_UNKNOWN,
+    classify_requirement_status,
 )
 from job_hunter_agent.profile_store import (
     ENGAGEMENT_TYPE_OPTIONS,
+    KEY_CANDIDATE_CAPABILITIES,
+    KEY_CANDIDATE_ELIGIBILITY,
+    KEY_CANDIDATE_ELIGIBILITY_FACTS,
+    KEY_CANDIDATE_QUALIFICATIONS,
     KEY_MUST_NOT_REQUIRED_SKILLS,
     get_match_levels,
     get_scoring_rules,
@@ -1904,16 +1910,41 @@ def render_job_card(
         )
         profile_review_html = ""
         canonical_requirement = compact_whitespace(str(row.get("canonical_requirement") or ""))
+        row_requirement_type = str(row.get("requirement_type") or "capability").strip().lower()
+        # A partial match already names an adjacent profile fact in
+        # matched_candidate_fact; the exact requested concept
+        # (canonical_requirement) is only worth an Add action when it is NOT
+        # itself already a confirmed profile fact. The other actionable statuses
+        # (mismatch / not_shown / invalid) imply not-confirmed already, so this
+        # extra check is scoped to the partial case.
+        exact_requirement_confirmed = (
+            css_modifier == "partially-supported"
+            and bool(canonical_requirement)
+            and classify_requirement_status(
+                canonical_requirement,
+                active_profile.get(KEY_CANDIDATE_CAPABILITIES) or [],
+                active_profile.get(KEY_MUST_NOT_REQUIRED_SKILLS) or [],
+                active_profile.get(KEY_CANDIDATE_ELIGIBILITY) or [],
+                active_profile.get(KEY_CANDIDATE_ELIGIBILITY_FACTS) or [],
+                requirement_type=row_requirement_type,
+                candidate_qualifications=active_profile.get(KEY_CANDIDATE_QUALIFICATIONS) or [],
+            )
+            != STATUS_UNKNOWN
+        )
         # profile_action_allowed (not canonical_requirement truthiness alone) is the
         # safety gate: an unresolved/vague group can still carry a display label
-        # without being safe to prefill into the candidate's profile.
+        # without being safe to prefill into the candidate's profile. The status
+        # list mirrors profile_gaps.CONFIRMABLE_REQUIREMENT_STATUSES in
+        # css-modifier space (partially_supported -> "partially-supported",
+        # not_shown + mandatory -> "mandatory-not-shown", not_shown -> "not-shown").
         if canonical_requirement and row.get("profile_action_allowed") and css_modifier in (
             "mismatch",
             "not-shown",
             "mandatory-not-shown",
             "unknown",
             "invalid",
-        ) and not is_uncertain_classification:
+            "partially-supported",
+        ) and not is_uncertain_classification and not exact_requirement_confirmed:
             is_eligibility = bool(row.get("is_eligibility"))
             is_qualification = bool(row.get("is_qualification"))
             action_label_key = (
@@ -1986,10 +2017,11 @@ def render_job_card(
         rows: dict[str, dict[str, Any]],
         attention_prefix_html: str = "",
     ) -> str:
-        """Split rows into a 'needs attention' group (surfaced first) and a
-        'matched' group, each internally sorted by importance tier. This keeps
-        Job Requirements, Eligibility, and Qualifications panels consistent: gaps are
-        always the first thing a user sees, regardless of which panel."""
+        """Split rows into three groups, rendered in order: 'needs attention'
+        (surfaced first), then 'partial matches', then 'matched'. Each group is
+        internally sorted by importance tier. This keeps Job Requirements,
+        Eligibility, and Qualifications panels consistent: gaps are always the
+        first thing a user sees, regardless of which panel."""
         partial_keys: list[str] = []
         attention_keys: list[str] = []
         matched_keys: list[str] = []
@@ -2023,14 +2055,14 @@ def render_job_card(
 
         return (
             _render_requirement_group_block(
-                _workspace_label("workspace_card_labels", "requirement_group_partial_heading"),
-                partial_items_html,
-                "partial",
-            )
-            + _render_requirement_group_block(
                 _workspace_label("workspace_card_labels", "requirement_group_attention_heading"),
                 attention_items_html,
                 "attention",
+            )
+            + _render_requirement_group_block(
+                _workspace_label("workspace_card_labels", "requirement_group_partial_heading"),
+                partial_items_html,
+                "partial",
             )
             + _render_requirement_group_block(
                 _workspace_label("workspace_card_labels", "requirement_group_matched_heading"),

@@ -1000,3 +1000,114 @@ def test_profile_gap_confirm_have_invalid_existing_target_fails_closed_without_s
     )
     assert resp.status_code == 400
     assert saved_profiles == []
+
+
+def test_profile_gap_confirm_have_partial_match_resolves_exact_canonical_not_adjacent_fact(
+    client, monkeypatch
+):
+    # A partially_supported row: fit-review matched an adjacent capability the
+    # candidate already holds ("Agile delivery management" in
+    # matched_candidate_fact), but the exact requested concept
+    # (canonical_requirement) is still missing. confirm_have must add the exact
+    # canonical concept, never the adjacent fact, and must not disturb the
+    # adjacent capability.
+    job_key = "job-partial"
+    monkeypatch.setattr(
+        "job_hunter_agent.routes.review.load_job_history",
+        lambda: _job_history_with_requirement_coverage(
+            job_key,
+            [
+                {
+                    "requirement": "IT systems and infrastructure project management",
+                    "requirement_type": "capability",
+                    "status": "partially_supported",
+                    "capability_name": "Agile delivery management",
+                    "canonical_requirement": "IT systems and infrastructure project management",
+                    "matched_job_text": "Lead IT infrastructure projects",
+                    "profile_action_allowed": True,
+                    "matched_candidate_fact": "Agile delivery management",
+                }
+            ],
+        ),
+    )
+    existing_profile = {
+        "candidate_capabilities": [
+            {"name": "Agile delivery management", "level": "strong", "aliases": []},
+        ],
+        "must_not_require_skills": [],
+    }
+    saved_profiles = []
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+    )
+    _mock_profile_storage_resolution(
+        monkeypatch, "new", "IT systems and infrastructure project management"
+    )
+
+    resp = client.post(
+        "/api/profile-gap",
+        json={
+            "job_key": job_key,
+            "capability_name": "IT systems and infrastructure project management",
+            "action": "confirm_have",
+            "capability_level": "strong",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
+    assert resp.json()["confirmed_fact"] == "IT systems and infrastructure project management"
+    names = [c["name"] for c in saved_profiles[0]["candidate_capabilities"]]
+    assert "IT systems and infrastructure project management" in names
+    assert "Agile delivery management" in names
+
+
+def test_profile_gap_confirm_have_partial_match_already_present_does_not_double_add(
+    client, monkeypatch
+):
+    job_key = "job-partial-present"
+    monkeypatch.setattr(
+        "job_hunter_agent.routes.review.load_job_history",
+        lambda: _job_history_with_requirement_coverage(
+            job_key,
+            [
+                {
+                    "requirement": "Cloud computing (AWS) experience",
+                    "requirement_type": "capability",
+                    "status": "partially_supported",
+                    "capability_name": "Cloud platforms",
+                    "canonical_requirement": "Cloud computing (AWS)",
+                    "matched_job_text": "AWS platform experience",
+                    "profile_action_allowed": True,
+                    "matched_candidate_fact": "Cloud platforms",
+                }
+            ],
+        ),
+    )
+    existing_profile = {
+        "candidate_capabilities": [
+            {"name": "Cloud computing (AWS)", "level": "strong", "aliases": []},
+        ],
+        "must_not_require_skills": [],
+    }
+    saved_profiles = []
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+    )
+
+    resp = client.post(
+        "/api/profile-gap",
+        json={
+            "job_key": job_key,
+            "capability_name": "Cloud computing (AWS)",
+            "action": "confirm_have",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["change_kind"] == "already_present"
+    assert saved_profiles == [], "an already-covered partial must not add the capability again"
