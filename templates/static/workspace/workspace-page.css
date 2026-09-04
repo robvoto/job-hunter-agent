@@ -449,12 +449,15 @@ body {
 @container (min-width: 56rem) {
   .workspace-control-band {
     grid-auto-flow: column;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    /* Each group takes its own content width (shrinking if pressed) and the
+       leftover space is shared between the two gaps rather than pooling into
+       one wide void -- Job boards stays hard left, Sort hard right. */
+    grid-auto-columns: minmax(0, max-content);
+    justify-content: space-between;
     align-items: start;
-    gap: var(--surface-gap-lg);
+    column-gap: var(--surface-gap-lg);
   }
 
-  /* Quick filters take the slack so Job boards stays left and Sort sits right. */
   .workspace-control-band > .workspace-control-group {
     min-width: 0;
   }
