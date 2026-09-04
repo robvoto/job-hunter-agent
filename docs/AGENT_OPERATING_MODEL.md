@@ -19,13 +19,11 @@ Keep always-loaded instructions small and reliable. Agents should load only the 
    - Owns product goal, runtime truth, repo-root and LangGraph orchestration details, project-specific source hierarchy, project-specific skill routing, non-negotiables, startup/run notes, and a pointer to backlog workflow.
    - Points to `.agents/skills/backlog-management/SKILL.md` for backlog details instead of duplicating the full workflow.
 
-3. Agent adapter files (`CLAUDE.md` and `.clinerules/*`)
-   - Thin adapters for a specific agent environment.
-   - Point to `AGENTS.md`, `docs/PROJECT_CONTEXT.md`, the relevant skill owner, and any genuinely agent-specific context.
-   - Must not redefine shared project rules, commands, architecture, backlog workflow, testing workflow, or Definition of Done.
-   - `CLAUDE.md` is a thin Claude Code adapter that imports `AGENTS.md` and `.agents/skills/INDEX.md`; it must not duplicate shared rules.
-   - Cline-specific durable context lives in `docs/CLINE_MEMORY.md` and is loaded only through `.clinerules/`.
-   - No separate Codex rule set is maintained. Codex tasks use `AGENTS.md` plus the same shared skills; task handoffs should explicitly tell Codex to read `AGENTS.md` when its runtime has not already loaded it.
+3. Agent-specific adapter files, when present
+   - Each adapter owns only that runtime's bootstrap/integration behaviour.
+   - Shared project instructions must not enumerate, require, test, or depend on specific agent adapter filenames.
+   - An adapter may point to `AGENTS.md`, `docs/PROJECT_CONTEXT.md`, or `.agents/skills/INDEX.md`, but shared owners must not point back to the adapter.
+   - Do not duplicate shared project rules, commands, architecture, testing workflow, or Definition of Done inside an adapter.
 
 4. `.agents/skills/*/SKILL.md`
    - Compact scoped instructions for one work area.
@@ -118,13 +116,3 @@ Local `docs/backlog/backlog_review.xlsx` is archive/export/reference only unless
 - Backlog workflow lives in `.agents/skills/backlog-management/SKILL.md`.
 - Hardcoding/config/schema/default/fallback ownership lives in `.agents/skills/no-hardcoding/SKILL.md`.
 - Skills use discovery frontmatter (`name` and `description`) so agents can route by skill metadata instead of hardcoded trigger lists in `AGENTS.md`.
-- Codex uses the shared `AGENTS.md` + native `.agents/skills/` discovery; no duplicate Codex rules are maintained.
-- Claude Code uses the thin root `CLAUDE.md` adapter to import the same shared routing.
-- `.clinerules/` is the thin Cline adapter layer.
-- `docs/CLINE_MEMORY.md` is retained for Cline-specific durable context and must not be linked from shared `AGENTS.md`.
-## External design references
-
-- OpenAI Codex skills: `https://developers.openai.com/codex/skills` — canonical `.agents/skills/` repository discovery and progressive skill loading.
-- Anthropic Claude Code project memory: `https://docs.anthropic.com/en/docs/claude-code/memory` — root `CLAUDE.md` project instructions and `@path` imports used by the thin Claude adapter.
-
-These references justify discovery/adapter structure only. Job Hunter's behavioural rules remain owned by this repository's `AGENTS.md`, skills, tests, and canonical project standards.

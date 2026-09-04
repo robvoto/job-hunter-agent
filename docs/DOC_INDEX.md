@@ -12,8 +12,6 @@ Use this file to decide where information belongs. Do not create a new markdown 
 |---|---|
 | `README.md` | Project overview, quick start, and links to deeper docs. |
 | `AGENTS.md` | Tiny reusable agent loader only. |
-| `CLAUDE.md` | Thin Claude Code adapter importing shared AGENTS/skill routing. |
-| `.clinerules/` | Thin Cline-specific adapter rules. |
 | `docs/INDEX.md` | Canonical documentation routing index. |
 
 ## Core Docs
@@ -21,7 +19,6 @@ Use this file to decide where information belongs. Do not create a new markdown 
 | File | Owner |
 |---|---|
 | `docs/PROJECT_CONTEXT.md` | Job Hunter product context, runtime truth, repo-root path, project-specific skill routing, startup/run notes, backlog pointer. |
-| `docs/CLINE_MEMORY.md` | Cline-specific durable session context; loaded through `.clinerules/`, never through shared `AGENTS.md`. |
 | `docs/AGENT_OPERATING_MODEL.md` | Agent instruction layering, skill discovery, adapter ownership, tool-vs-skill rules, active/archived skill summary. |
 | `docs/ARCHITECTURE.md` | System design, runtime layers, and module ownership. |
 | `docs/PRINCIPLES.md` | Product and decision philosophy. |

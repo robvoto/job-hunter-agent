@@ -253,20 +253,6 @@ def test_top_level_docs_are_routed_from_docs_index():
     assert not missing, "Top-level docs must be routed from docs/INDEX.md: " + ", ".join(missing)
 
 
-def test_claude_adapter_exists_and_stays_thin():
-    claude_path = ROOT_DIR / "CLAUDE.md"
-    operating_model = (ROOT_DIR / "docs" / "AGENT_OPERATING_MODEL.md").read_text(encoding="utf-8")
-    ownership_map = (ROOT_DIR / "docs" / "DOC_INDEX.md").read_text(encoding="utf-8")
-
-    assert claude_path.exists()
-    claude = claude_path.read_text(encoding="utf-8")
-    assert "@AGENTS.md" in claude
-    assert "@.agents/skills/INDEX.md" in claude
-    assert len(claude) < 1000, "CLAUDE.md must remain a thin adapter, not a duplicate rule set"
-    assert "CLAUDE.md" in operating_model
-    assert "| `CLAUDE.md` |" in ownership_map
-
-
 def test_jobhunter_status_defaults_to_concise_summary():
     script = (ROOT_DIR / "scripts" / "ec2" / "jobhunter-status.sh").read_text(encoding="utf-8")
 

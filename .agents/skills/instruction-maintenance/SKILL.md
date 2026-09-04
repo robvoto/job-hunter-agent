@@ -12,7 +12,7 @@ Keep agent instructions useful, small, current, and non-contradictory.
 
 ## Source hierarchy
 - `AGENTS.md`: project-wide rules all agents should read first.
-- Agent-specific adapter files are thin pointers only. `CLAUDE.md` imports shared routing for Claude Code; `.clinerules/*` is the Cline adapter layer. Do not duplicate core rules in adapters.
+- Agent-specific adapter files, when present, are self-contained thin bootstrap layers. Shared project docs/tests must not enumerate or depend on particular adapter filenames. Do not duplicate core rules in adapters.
 - `.agents/skills/*/SKILL.md`: compact domain rules loaded only for that work area.
 - `.agents/skills/*/DETAILS.md`: longer reference material split out of a noisy skill.
 - `docs/*`: human/reference documentation, not agent operating rules unless explicitly linked.
@@ -28,10 +28,10 @@ Keep agent instructions useful, small, current, and non-contradictory.
 - If unsure whether information is stale, mark it for review instead of rewriting as fact.
 
 ## Cross-agent portability
-- Shared `AGENTS.md` and `.agents/skills/*` rules must be usable by ChatGPT, Codex, Claude, Cline, or another coding agent. Describe the required capability/behaviour first; do not assume every runtime exposes the same tool namespace.
+- Shared `AGENTS.md` and `.agents/skills/*` rules must be runtime-neutral. Describe required capability/behaviour first; do not assume a particular agent product, adapter filename, or tool namespace.
 - Runtime-specific tool names, connector names, local paths, or browser bridges are allowed only in the owning tooling/project-context instruction and must be explicitly scoped to the runtime where they exist.
 - A local coding agent already running in the repository may use its direct filesystem/shell. A connector-based runtime should use its authorised connector and documented fallback. Neither should be told to invoke a tool that runtime does not expose.
-- Do not create parallel copies of domain rules for Codex, Claude, or ChatGPT. Keep shared behaviour in `AGENTS.md`/skills and keep agent adapters thin.
+- Do not create parallel agent-specific copies of domain rules. Keep shared behaviour in `AGENTS.md`/skills; each runtime adapter owns only its own bootstrap.
 - Examples are explanatory only. Do not let an example title, company, user profile, location, threshold, or observed phrase become an implementation rule.
 
 ## Audit checklist
