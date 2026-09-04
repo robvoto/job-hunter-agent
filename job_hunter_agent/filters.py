@@ -85,12 +85,10 @@ def analyze_title_filters(title: str, profile: dict[str, Any] | None = None) -> 
     result["normalized_title"] = normalized_title
     result["matched_pattern"] = matched_primary_pattern or matched_secondary_pattern
 
-    for rule in profile.get("reject_title_rules", []):
-        pattern = rule.get("pattern", "")
-        reason = rule.get("reason", f"TITLE_REJECT:{pattern}")
-        if pattern and re.search(pattern, normalized_title):
-            result["reason"] = reason
-            return result
+    title_block_ok, title_block_reason = passes_title_block_filters(normalized_title, profile)
+    if not title_block_ok:
+        result["reason"] = title_block_reason
+        return result
 
     if is_direct_match:
         if _has_numeric_title_level(normalized_title):
@@ -109,6 +107,25 @@ def analyze_title_filters(title: str, profile: dict[str, Any] | None = None) -> 
 
     result.update({"ok": False, "reason": "TITLE_NOT_TARGET", "match_family": "none"})
     return result
+
+
+def passes_title_block_filters(
+    title: str, profile: dict[str, Any] | None = None
+) -> Tuple[bool, str]:
+    """Apply only explicit user title-block rules to a stored job title."""
+
+    normalized_title = normalize_title_text(str(title or ""))
+    if not normalized_title:
+        return True, "OK"
+
+    active_profile = profile if isinstance(profile, dict) else load_profile()
+    for rule in active_profile.get("reject_title_rules", []):
+        pattern = rule.get("pattern", "")
+        reason = rule.get("reason", f"TITLE_REJECT:{pattern}")
+        if pattern and re.search(pattern, normalized_title):
+            return False, str(reason)
+
+    return True, "OK"
 
 
 def normalize_title_block_phrase(value: str) -> str:

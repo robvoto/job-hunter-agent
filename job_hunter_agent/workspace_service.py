@@ -69,6 +69,7 @@ from job_hunter_agent.workspace_renderer import (
 
 WORKSPACE_DEBUG_MODE = DEBUG_MODE
 passes_title_filters = _filters.passes_title_filters
+passes_title_block_filters = _filters.passes_title_block_filters
 
 
 def _label_from_options(options: tuple[dict[str, Any], ...], value: object, default: str) -> str:
@@ -166,6 +167,18 @@ def is_workspace_eligible(
             "[WORKSPACE_ELIGIBLE][LLM_INCOMPLETE] job=%s title=%r — excluded from workspace: complete LLM keep data is required",
             record.get("job_key", "<unknown>"),
             str(record.get("title") or "").strip(),
+        )
+        return False
+
+    title_block_ok, title_block_reason = passes_title_block_filters(
+        str(record.get("title") or ""), profile
+    )
+    if not title_block_ok:
+        logger.debug(
+            "[WORKSPACE_ELIGIBLE][TITLE_BLOCK] job=%s title=%r — excluded: %s",
+            record.get("job_key", "<unknown>"),
+            str(record.get("title") or "").strip(),
+            title_block_reason,
         )
         return False
 
