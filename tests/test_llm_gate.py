@@ -326,13 +326,26 @@ def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
                 "requirement_type": "capability",
                 "canonical_requirement": "",
                 "profile_action_allowed": False,
-                "classification_reviewable": False,
                 "status": "supported",
                 "matched_candidate_fact": "Stakeholder Engagement",
                 "capability_name": "Stakeholder Engagement",
                 "eligibility_name": "",
                 "matched_job_text": "work with stakeholders",
                 "profile_support": ["stakeholder management"],
+                "decomposition": {
+                    "operator": "single",
+                    "elements": [
+                        {
+                            "text": "Stakeholder engagement",
+                            "capability_judgement": "capability",
+                            "canonical_concept": "",
+                            "canonical_fact_resolved": False,
+                            "status": "",
+                            "matched_candidate_fact": "",
+                            "element_profile_action_allowed": False,
+                        }
+                    ],
+                },
             },
             {
                 "requirement": "Process mapping",
@@ -340,15 +353,29 @@ def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
                 "requirement_type": "capability",
                 "canonical_requirement": "",
                 "profile_action_allowed": False,
-                "classification_reviewable": False,
                 "status": "partially_supported",
                 "matched_candidate_fact": "Process Mapping",
                 "capability_name": "Process Mapping",
                 "eligibility_name": "",
                 "matched_job_text": "map the current process",
                 "profile_support": ["process mapping"],
+                "decomposition": {
+                    "operator": "single",
+                    "elements": [
+                        {
+                            "text": "Process mapping",
+                            "capability_judgement": "capability",
+                            "canonical_concept": "",
+                            "canonical_fact_resolved": False,
+                            "status": "",
+                            "matched_candidate_fact": "",
+                            "element_profile_action_allowed": False,
+                        }
+                    ],
+                },
             },
         ],
+        "requirement_coverage_hidden": [],
     }
 
 
@@ -1273,7 +1300,14 @@ def test_requirement_coverage_prompt_reserves_dedicated_eligibility_output():
     guidance = llm_gate.build_requirement_coverage_guidance()
     assert "eligibility_requirements are separate and do not consume this limit" in guidance
     assert '"eligibility_requirements"' in llm_gate.LLM_FIT_REVIEW_PROMPT_SHAPE
-    assert '"classification_reviewable":true|false' in llm_gate.LLM_FIT_REVIEW_PROMPT_SHAPE
+    assert (
+        '"decomposition":{"operator":"single|and|or","elements":['
+        in llm_gate.LLM_FIT_REVIEW_PROMPT_SHAPE
+    )
+    assert (
+        '"capability_judgement":"capability|uncertain|non_capability"'
+        in llm_gate.LLM_FIT_REVIEW_PROMPT_SHAPE
+    )
     assert '"requirement_subtype":"..."' in llm_gate.LLM_FIT_REVIEW_PROMPT_SHAPE
 
 
@@ -1659,9 +1693,9 @@ def test_normalize_coverage_accepts_profile_capability_aliases():
 
 
 def test_normalize_coverage_allows_profile_action_for_clear_single_fact():
-    # A requirement that resolves to exactly one named concept, with no
-    # competing alternatives, and an explicit canonical_fact_resolved=True
-    # judgement, is safe to offer as an Add-to-profile action.
+    # A requirement that decomposes to exactly one atomic element, with an
+    # explicit element canonical_fact_resolved=True capability judgement, is
+    # safe to offer as an Add-to-profile action.
     result = llm_gate.normalize_llm_requirement_coverage(
         [
             {
@@ -1669,7 +1703,18 @@ def test_normalize_coverage_allows_profile_action_for_clear_single_fact():
                 "importance": "mandatory",
                 "requirement_type": "qualification",
                 "canonical_requirement": "CBAP",
-                "canonical_fact_resolved": True,
+                "decomposition": {
+                    "operator": "single",
+                    "elements": [
+                        {
+                            "text": "CBAP certification",
+                            "capability_judgement": "capability",
+                            "canonical_concept": "CBAP",
+                            "canonical_fact_resolved": True,
+                            "status": "not_shown",
+                        }
+                    ],
+                },
                 "status": "not_shown",
                 "matched_job_text": "CBAP certification is required.",
                 "profile_support": [],
@@ -1680,14 +1725,14 @@ def test_normalize_coverage_allows_profile_action_for_clear_single_fact():
 
     assert result[0]["canonical_requirement"] == "CBAP"
     assert result[0]["profile_action_allowed"] is True
-    assert "named_alternatives" not in result[0]
+    assert result[0]["decomposition"]["operator"] == "single"
 
 
 def test_normalize_coverage_allows_short_atomic_requirement_echoing_its_own_text():
     # A short atomic requirement's canonical name can legitimately equal the
     # requirement text verbatim (e.g. "Java"). The LLM owns that semantic
-    # judgement via canonical_fact_resolved; deterministic code must not guess
-    # it from text equality.
+    # judgement via the element canonical_fact_resolved flag; deterministic code
+    # must not guess it from text equality.
     result = llm_gate.normalize_llm_requirement_coverage(
         [
             {
@@ -1695,7 +1740,18 @@ def test_normalize_coverage_allows_short_atomic_requirement_echoing_its_own_text
                 "importance": "mandatory",
                 "requirement_type": "capability",
                 "canonical_requirement": "Java",
-                "canonical_fact_resolved": True,
+                "decomposition": {
+                    "operator": "single",
+                    "elements": [
+                        {
+                            "text": "Java",
+                            "capability_judgement": "capability",
+                            "canonical_concept": "Java",
+                            "canonical_fact_resolved": True,
+                            "status": "not_shown",
+                        }
+                    ],
+                },
                 "status": "not_shown",
                 "matched_job_text": "Java",
                 "profile_support": [],
@@ -1717,7 +1773,18 @@ def test_normalize_coverage_blocks_profile_action_for_compound_row_with_existing
                 "importance": "preferred",
                 "requirement_type": "capability",
                 "canonical_requirement": "jira & confluence",
-                "canonical_fact_resolved": True,
+                "decomposition": {
+                    "operator": "single",
+                    "elements": [
+                        {
+                            "text": "Jira, Confluence and Microsoft Office 365",
+                            "capability_judgement": "capability",
+                            "canonical_concept": "jira & confluence",
+                            "canonical_fact_resolved": True,
+                            "status": "not_shown",
+                        }
+                    ],
+                },
                 "status": "not_shown",
                 "matched_job_text": (
                     "Strong knowledge of Jira, Confluence and Microsoft Office 365, "
@@ -1744,8 +1811,9 @@ def test_normalize_coverage_blocks_profile_action_for_compound_row_with_existing
 
 
 def test_normalize_coverage_blocks_profile_action_when_canonical_fact_resolved_is_missing():
-    # A canonical label alone is not a profile-learning decision. Missing the
-    # LLM-owned canonical_fact_resolved judgement fails closed.
+    # A canonical label alone is not a profile-learning decision. With no
+    # decomposition the row falls back to a synthesized non-actionable element,
+    # so profile_action_allowed fails closed.
     result = llm_gate.normalize_llm_requirement_coverage(
         [
             {
@@ -1765,21 +1833,31 @@ def test_normalize_coverage_blocks_profile_action_when_canonical_fact_resolved_i
     assert result[0]["profile_action_allowed"] is False
 
 
-def test_normalize_coverage_blocks_profile_action_for_invented_umbrella_label():
-    # Even if the model still produces a display label for a vague group
-    # (e.g. an invented "Agile Certification" summary), more than one named
-    # alternative means it is not one confirmed fact — profile_action_allowed
-    # must stay False regardless of canonical_requirement being non-empty.
+def test_normalize_coverage_blocks_profile_action_for_or_group_of_alternatives():
+    # A disjunctive clause (any one of several certifications) decomposes to an
+    # operator="or" row. An OR row is never directly actionable: it carries no
+    # row-level canonical_requirement and profile_action_allowed stays False,
+    # while every branch is preserved as its own element.
     result = llm_gate.normalize_llm_requirement_coverage(
         [
             {
                 "requirement": "Tertiary qualifications or BA/Agile certifications (IIBA, CBAP, CCBA, CSPO, PSM) are a bonus.",
                 "importance": "bonus",
                 "requirement_type": "qualification",
-                "canonical_requirement": "Agile Certification",
-                "named_alternatives": ["IIBA", "CBAP", "CCBA", "CSPO", "PSM"],
-                "profile_resolution": "new",
-                "profile_target": "Agile Certification",
+                "canonical_requirement": "",
+                "decomposition": {
+                    "operator": "or",
+                    "elements": [
+                        {
+                            "text": name,
+                            "capability_judgement": "capability",
+                            "canonical_concept": name,
+                            "canonical_fact_resolved": True,
+                            "status": "not_shown",
+                        }
+                        for name in ("IIBA", "CBAP", "CCBA", "CSPO", "PSM")
+                    ],
+                },
                 "status": "not_shown",
                 "matched_job_text": "Tertiary qualifications or BA/Agile certifications (IIBA, CBAP, CCBA, CSPO, PSM) are a bonus.",
                 "profile_support": [],
@@ -1788,25 +1866,47 @@ def test_normalize_coverage_blocks_profile_action_for_invented_umbrella_label():
         valid_qualification_names={},
     )
 
-    assert result[0]["canonical_requirement"] == "Agile Certification"
+    assert result[0]["canonical_requirement"] == ""
     assert result[0]["profile_action_allowed"] is False
-    assert result[0]["named_alternatives"] == ["IIBA", "CBAP", "CCBA", "CSPO", "PSM"]
+    assert result[0]["decomposition"]["operator"] == "or"
+    assert [el["canonical_concept"] for el in result[0]["decomposition"]["elements"]] == [
+        "IIBA",
+        "CBAP",
+        "CCBA",
+        "CSPO",
+        "PSM",
+    ]
+    # Each branch is independently resolvable even though the row is not.
+    assert all(
+        el["element_profile_action_allowed"] is True
+        for el in result[0]["decomposition"]["elements"]
+    )
 
 
-def test_normalize_coverage_blocks_profile_action_for_bare_issuer_alternative():
-    # A certifying body name (IIBA) picked out as one alternative among a
-    # named-alternatives list must not become a standalone profile-actionable
-    # qualification just because canonical_requirement happens to be set.
+def test_normalize_coverage_blocks_row_profile_action_for_or_group_but_keeps_branches():
+    # A certifying body name (IIBA) that is one branch of an OR clause must not
+    # become a standalone profile-actionable qualification at the row level; the
+    # row stays non-actionable while each branch is preserved.
     result = llm_gate.normalize_llm_requirement_coverage(
         [
             {
                 "requirement": "IIBA, CBAP, or CCBA certification preferred.",
                 "importance": "preferred",
                 "requirement_type": "qualification",
-                "canonical_requirement": "IIBA",
-                "named_alternatives": ["IIBA", "CBAP", "CCBA"],
-                "profile_resolution": "new",
-                "profile_target": "IIBA",
+                "canonical_requirement": "",
+                "decomposition": {
+                    "operator": "or",
+                    "elements": [
+                        {
+                            "text": name,
+                            "capability_judgement": "capability",
+                            "canonical_concept": name,
+                            "canonical_fact_resolved": True,
+                            "status": "not_shown",
+                        }
+                        for name in ("IIBA", "CBAP", "CCBA")
+                    ],
+                },
                 "status": "not_shown",
                 "matched_job_text": "IIBA, CBAP, or CCBA certification preferred.",
                 "profile_support": [],
@@ -1816,22 +1916,33 @@ def test_normalize_coverage_blocks_profile_action_for_bare_issuer_alternative():
     )
 
     assert result[0]["profile_action_allowed"] is False
+    assert result[0]["decomposition"]["operator"] == "or"
+    assert len(result[0]["decomposition"]["elements"]) == 3
 
 
-def test_normalize_coverage_blocks_profile_action_for_single_named_alternative():
-    # "CBAP or equivalent" is still a disjunctive/example clause even though
-    # only one alternative could be named — a lone named alternative does not
-    # make the clause atomic, so profile_action_allowed must stay False.
+def test_normalize_coverage_blocks_profile_action_for_single_branch_or_clause():
+    # "CBAP or equivalent" is still a disjunctive clause even though only one
+    # branch could be named. An operator="or" row is never a single actionable
+    # concept, so profile_action_allowed must stay False.
     result = llm_gate.normalize_llm_requirement_coverage(
         [
             {
                 "requirement": "CBAP or equivalent certification required.",
                 "importance": "mandatory",
                 "requirement_type": "qualification",
-                "canonical_requirement": "CBAP",
-                "named_alternatives": ["CBAP"],
-                "profile_resolution": "new",
-                "profile_target": "CBAP",
+                "canonical_requirement": "",
+                "decomposition": {
+                    "operator": "or",
+                    "elements": [
+                        {
+                            "text": "CBAP",
+                            "capability_judgement": "capability",
+                            "canonical_concept": "CBAP",
+                            "canonical_fact_resolved": True,
+                            "status": "not_shown",
+                        }
+                    ],
+                },
                 "status": "not_shown",
                 "matched_job_text": "CBAP or equivalent certification required.",
                 "profile_support": [],
@@ -1854,7 +1965,18 @@ def test_normalize_coverage_keeps_and_joined_requirements_independently_actionab
                 "importance": "mandatory",
                 "requirement_type": "eligibility",
                 "canonical_requirement": "Australian Citizenship",
-                "canonical_fact_resolved": True,
+                "decomposition": {
+                    "operator": "single",
+                    "elements": [
+                        {
+                            "text": "Australian Citizenship",
+                            "capability_judgement": "capability",
+                            "canonical_concept": "Australian Citizenship",
+                            "canonical_fact_resolved": True,
+                            "status": "not_shown",
+                        }
+                    ],
+                },
                 "status": "not_shown",
                 "matched_job_text": "Australian Citizenship is required",
                 "profile_support": [],
@@ -1864,7 +1986,18 @@ def test_normalize_coverage_keeps_and_joined_requirements_independently_actionab
                 "importance": "mandatory",
                 "requirement_type": "eligibility",
                 "canonical_requirement": "NV2",
-                "canonical_fact_resolved": True,
+                "decomposition": {
+                    "operator": "single",
+                    "elements": [
+                        {
+                            "text": "NV2 Security Clearance",
+                            "capability_judgement": "capability",
+                            "canonical_concept": "NV2",
+                            "canonical_fact_resolved": True,
+                            "status": "not_shown",
+                        }
+                    ],
+                },
                 "status": "not_shown",
                 "matched_job_text": "NV2 Security Clearance is required",
                 "profile_support": [],
@@ -1988,7 +2121,6 @@ def test_normalize_coverage_marks_conflicting_classification_uncertain(monkeypat
                 "requirement": "5+ years working in a security clearance environment",
                 "importance": "mandatory",
                 "requirement_type": "capability",
-                "classification_reviewable": True,
                 "status": "supported",
                 "matched_candidate_fact": "",
             }
@@ -1996,7 +2128,6 @@ def test_normalize_coverage_marks_conflicting_classification_uncertain(monkeypat
     )
 
     assert result[0]["requirement_type"] == "uncertain"
-    assert result[0]["classification_reviewable"] is True
     assert result[0]["status"] == "invalid"
     assert result[0]["llm_proposed_requirement_type"] == "capability"
     assert warnings
@@ -2057,20 +2188,23 @@ def test_normalize_coverage_drops_eligibility_subtype_from_qualification():
     assert "requirement_subtype" not in result[0]
 
 
-def test_normalize_coverage_legacy_payload_is_not_classification_reviewable():
+def test_normalize_coverage_payload_without_decomposition_fails_closed():
     result = llm_gate.normalize_llm_requirement_coverage(
         [
             {
-                "requirement": "Unresolved requirement from an older cached review",
+                "requirement": "Unresolved requirement with no decomposition supplied",
                 "importance": "mandatory",
                 "requirement_type": "capability",
+                "canonical_requirement": "Some Concept",
                 "status": "not_shown",
                 "matched_candidate_fact": "",
             }
         ]
     )
 
-    assert result[0]["classification_reviewable"] is False
+    # No decomposition -> one synthesized non-actionable single element.
+    assert result[0]["decomposition"]["operator"] == "single"
+    assert result[0]["profile_action_allowed"] is False
 
 
 def test_normalize_coverage_preserves_malformed_required_requirement():

@@ -164,14 +164,27 @@ def _raw_item(case: CapturedRequirement) -> dict:
         "importance": case.expected_importance,
         "requirement_type": case.llm_type,
         "canonical_requirement": case.canonical_requirement,
-        # Simulated LLM output: a resolved canonical concept is only trusted
-        # when the fixture actually supplies one, matching how a real LLM
-        # response would leave this false for an unresolved/compound clause.
-        "canonical_fact_resolved": bool(case.canonical_requirement),
         "status": case.status,
         "matched_candidate_fact": case.matched_candidate_fact,
         "matched_job_text": case.matched_job_text or case.wording,
         "profile_support": list(case.profile_support),
+        # Canonical single-concept decomposition. A resolved canonical concept is
+        # only trusted when the fixture actually supplies one, matching how a real
+        # LLM response would leave canonical_fact_resolved false for an
+        # unresolved / compound clause.
+        "decomposition": {
+            "operator": "single",
+            "elements": [
+                {
+                    "text": case.wording,
+                    "capability_judgement": "capability",
+                    "canonical_concept": case.canonical_requirement,
+                    "canonical_fact_resolved": bool(case.canonical_requirement),
+                    "status": case.status,
+                    "matched_candidate_fact": case.matched_candidate_fact,
+                }
+            ],
+        },
     }
 
 

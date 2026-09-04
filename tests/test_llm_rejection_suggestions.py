@@ -431,15 +431,29 @@ def test_normalize_llm_review_payload_fit_review_shape():
                 "requirement_type": "capability",
                 "canonical_requirement": "",
                 "profile_action_allowed": False,
-                "classification_reviewable": False,
                 "status": "supported",
                 "matched_candidate_fact": "Stakeholder engagement",
                 "capability_name": "Stakeholder engagement",
                 "eligibility_name": "",
                 "matched_job_text": "stakeholder engagement",
                 "profile_support": ["stakeholder management"],
+                "decomposition": {
+                    "operator": "single",
+                    "elements": [
+                        {
+                            "text": "Strong stakeholder engagement",
+                            "capability_judgement": "capability",
+                            "canonical_concept": "",
+                            "canonical_fact_resolved": False,
+                            "status": "",
+                            "matched_candidate_fact": "",
+                            "element_profile_action_allowed": False,
+                        }
+                    ],
+                },
             }
         ],
+        "requirement_coverage_hidden": [],
     }
 
 
@@ -482,13 +496,26 @@ def test_request_learning_payload_uses_fit_review_only_schema(monkeypatch):
                     "requirement_type": "capability",
                     "canonical_requirement": "",
                     "profile_action_allowed": False,
-                    "classification_reviewable": False,
                     "status": "supported",
                     "matched_candidate_fact": "stakeholder management",
                     "capability_name": "stakeholder management",
                     "eligibility_name": "",
                     "matched_job_text": "work with stakeholders",
                     "profile_support": ["stakeholder management"],
+                    "decomposition": {
+                        "operator": "single",
+                        "elements": [
+                            {
+                                "text": "Stakeholder engagement",
+                                "capability_judgement": "capability",
+                                "canonical_concept": "",
+                                "canonical_fact_resolved": False,
+                                "status": "",
+                                "matched_candidate_fact": "",
+                                "element_profile_action_allowed": False,
+                            }
+                        ],
+                    },
                 },
                 {
                 "requirement": "Process mapping",
@@ -496,14 +523,28 @@ def test_request_learning_payload_uses_fit_review_only_schema(monkeypatch):
                     "requirement_type": "capability",
                     "canonical_requirement": "",
                     "profile_action_allowed": False,
-                    "classification_reviewable": False,
                     "status": "partially_supported",
                     "matched_candidate_fact": "process mapping",
                     "capability_name": "process mapping",
                     "eligibility_name": "",
                     "matched_job_text": "map the current process",
                     "profile_support": ["process mapping"],
+                    "decomposition": {
+                        "operator": "single",
+                        "elements": [
+                            {
+                                "text": "Process mapping",
+                                "capability_judgement": "capability",
+                                "canonical_concept": "",
+                                "canonical_fact_resolved": False,
+                                "status": "",
+                                "matched_candidate_fact": "",
+                                "element_profile_action_allowed": False,
+                            }
+                        ],
+                    },
                 },
         ],
+        "requirement_coverage_hidden": [],
     }
     assert fake_client.responses.calls[0]["text_format"].__name__ == "_LLMFitReviewPayload"

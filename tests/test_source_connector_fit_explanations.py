@@ -438,9 +438,9 @@ def test_capability_coverage_uses_capabilities_panel_heading():
 
 
 def test_render_job_card_omits_gap_actions_for_vague_or_alternative_requirement():
-    # A clause the LLM only resolved to named_alternatives (e.g. "CBAP or
-    # equivalent") never gets profile_action_allowed=True. It must stay
-    # visible as an unresolved requirement but show no confirmation buttons.
+    # A disjunctive clause (e.g. "CBAP or equivalent") decomposes to an OR row
+    # and never gets profile_action_allowed=True. It must stay visible as an
+    # unresolved requirement but show no confirmation buttons.
     requirement = "CBAP, Agile BA, or equivalent certifications"
     html = workspace_renderer.render_job_card(
         {
@@ -4709,7 +4709,18 @@ def test_canonical_fact_resolved_true_flows_through_to_add_to_profile_button():
                 "importance": "mandatory",
                 "requirement_type": "capability",
                 "canonical_requirement": "Responsible AI",
-                "canonical_fact_resolved": True,
+                "decomposition": {
+                    "operator": "single",
+                    "elements": [
+                        {
+                            "text": "responsible AI principles",
+                            "capability_judgement": "capability",
+                            "canonical_concept": "Responsible AI",
+                            "canonical_fact_resolved": True,
+                            "status": "not_shown",
+                        }
+                    ],
+                },
                 "status": "not_shown",
                 "matched_job_text": "Working knowledge of responsible AI principles",
                 "profile_support": [],
@@ -4742,7 +4753,7 @@ def test_canonical_fact_resolved_true_flows_through_to_add_to_profile_button():
     assert 'data-action="confirm_have" data-capability-name="Responsible AI"' in html
 
 
-def test_canonical_fact_resolved_false_suppresses_add_to_profile_button():
+def test_compound_and_row_suppresses_add_to_profile_button():
     coverage = llm_gate.normalize_llm_requirement_coverage(
         [
             {
@@ -4750,7 +4761,25 @@ def test_canonical_fact_resolved_false_suppresses_add_to_profile_button():
                 "importance": "mandatory",
                 "requirement_type": "capability",
                 "canonical_requirement": "User stories and acceptance criteria",
-                "canonical_fact_resolved": False,
+                "decomposition": {
+                    "operator": "and",
+                    "elements": [
+                        {
+                            "text": "user stories",
+                            "capability_judgement": "capability",
+                            "canonical_concept": "User stories",
+                            "canonical_fact_resolved": True,
+                            "status": "not_shown",
+                        },
+                        {
+                            "text": "acceptance criteria",
+                            "capability_judgement": "capability",
+                            "canonical_concept": "Acceptance criteria",
+                            "canonical_fact_resolved": True,
+                            "status": "not_shown",
+                        },
+                    ],
+                },
                 "status": "not_shown",
                 "matched_job_text": "Write testable user stories and acceptance criteria",
                 "profile_support": [],
