@@ -485,6 +485,117 @@ def test_mandatory_non_capability_without_safe_concept_stays_visible_and_pending
     )
 
 
+def test_mandatory_or_all_non_capability_branches_stay_visible_as_one_pending_signal(
+    monkeypatch,
+):
+    # The exact hole: a mandatory OR requirement whose every branch is an
+    # unresolved non_capability. It must stay fully visible, never become
+    # profile-actionable, and raise exactly ONE pending capability_concept
+    # Signal that keeps both branches and the OR relationship — never one
+    # misleading capability minted from a single branch.
+    monkeypatch.setattr(
+        source_learning,
+        "signal_in_approved_knowledge",
+        lambda category, signal, aliases=None: (False, ""),
+    )
+    or_row = {
+        "requirement": "Be a cultural fit or a mission-driven self-starter",
+        "importance": "mandatory",
+        "requirement_type": "capability",
+        "canonical_requirement": "",
+        "decomposition": {
+            "operator": "or",
+            "elements": [
+                {
+                    "text": "cultural fit",
+                    "capability_judgement": "non_capability",
+                    "canonical_concept": "",
+                    "canonical_fact_resolved": False,
+                    "status": "not_shown",
+                },
+                {
+                    "text": "mission-driven self-starter",
+                    "capability_judgement": "non_capability",
+                    "canonical_concept": "",
+                    "canonical_fact_resolved": False,
+                    "status": "not_shown",
+                },
+            ],
+        },
+        "status": "not_shown",
+        "matched_job_text": "Be a cultural fit or a mission-driven self-starter",
+    }
+    real_row = {
+        "requirement": "Experience with stakeholder management",
+        "importance": "mandatory",
+        "requirement_type": "capability",
+        "canonical_requirement": "Stakeholder management",
+        "decomposition": _single("Stakeholder management", status="not_shown"),
+        "status": "not_shown",
+        "matched_job_text": "Experience with stakeholder management",
+    }
+    payload = llm_gate.normalize_llm_review_payload(
+        {
+            "decision": "KEEP",
+            "grade": "SOLID",
+            "requirement_coverage": [or_row, real_row],
+        },
+        valid_capability_names={},
+    )
+
+    # Never hidden — the whole OR requirement stays on the card.
+    assert [row["requirement"] for row in payload["requirement_coverage"]] == [
+        "Be a cultural fit or a mission-driven self-starter",
+        "Experience with stakeholder management",
+    ]
+    assert payload["requirement_coverage_hidden"] == []
+    row = payload["requirement_coverage"][0]
+    assert row["decomposition"]["operator"] == "or"
+    assert row["profile_action_allowed"] is False
+    assert row["canonical_requirement"] == ""
+    assert row["mandatory_non_capability_unresolved"] is True
+
+    # Never surfaced as a single-concept gap or resolved by one branch name.
+    gaps = compute_profile_gaps(
+        payload["requirement_coverage"],
+        [{"name": "Stakeholder management", "level": "working"}],
+        [],
+    )
+    assert gaps == []
+    assert (
+        resolve_custom_blocker("cultural fit", payload["requirement_coverage"])[
+            "reason_code"
+        ]
+        == CUSTOM_BLOCKER_REASON_NO_MATCH
+    )
+
+    signals = source_learning.build_ad_learning_signals(
+        _learning_record(payload["requirement_coverage"]),
+        "Be a cultural fit or a mission-driven self-starter",
+        profile={},
+    )
+    concept_signals = [
+        sig for sig in signals if sig["suggested_category"] == "capability_concept"
+    ]
+    # Exactly one Signal for the OR row — not one per branch.
+    assert concept_signals == [
+        {
+            "signal": "cultural fit or mission-driven self-starter",
+            "suggested_category": "capability_concept",
+            "original_texts": [
+                "cultural fit",
+                "mission-driven self-starter",
+                "Be a cultural fit or a mission-driven self-starter",
+            ],
+        }
+    ]
+    # No standalone single-branch capability was minted.
+    assert not any(
+        sig["signal"] in {"cultural fit", "mission-driven self-starter"}
+        for sig in signals
+    )
+
+
 def test_no_removed_decomposition_fields_survive_normalization():
     item = {
         "requirement": "A degree or equivalent experience",

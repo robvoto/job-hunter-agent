@@ -1814,11 +1814,13 @@ def normalize_llm_requirement_coverage(
             and canonical_fact_resolved
             and row_capability_judgement == "capability"
         )
-        # A non_capability single row must never silently vanish. An optional one
-        # is retained but hidden from the normal card; a mandatory one stays
-        # visible and either resolves to the smallest defensible reusable concept
-        # (actionable) or is flagged so build_ad_learning_signals() can raise a
-        # deterministic pending capability_concept Signal — no second LLM call.
+        # A non_capability requirement must never silently vanish. An optional
+        # single row is retained but hidden from the normal card; a mandatory one
+        # (single, or a compound and/or row whose every branch is non_capability)
+        # stays visible and either resolves to the smallest defensible reusable
+        # concept (actionable) or is flagged so build_ad_learning_signals() can
+        # raise a deterministic pending capability_concept Signal — no second LLM
+        # call.
         hidden_reason = ""
         mandatory_non_capability_unresolved = False
         if row_capability_judgement == "non_capability":
@@ -1829,6 +1831,23 @@ def normalize_llm_requirement_coverage(
                     mandatory_non_capability_unresolved = True
             else:
                 hidden_reason = "optional_non_capability"
+        elif (
+            single_element is None
+            and decomposition_operator in ("and", "or")
+            and importance == LLM_COVERAGE_IMPORTANCE_MANDATORY
+            and decomposition_elements
+            and all(
+                element["capability_judgement"] == "non_capability"
+                for element in decomposition_elements
+            )
+        ):
+            # A mandatory AND/OR requirement whose branches are every one a
+            # non_capability the LLM could not resolve must never silently
+            # vanish. The row stays visible and non-actionable (no single branch
+            # is minted into a standalone capability); the flag lets
+            # build_ad_learning_signals() raise ONE pending capability_concept
+            # Signal that preserves every branch and the AND/OR relationship.
+            mandatory_non_capability_unresolved = True
         matched_candidate_fact = compact_whitespace(item.get("matched_candidate_fact"))
         capability_name = ""
         eligibility_name = ""

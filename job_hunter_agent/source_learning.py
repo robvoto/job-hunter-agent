@@ -280,10 +280,36 @@ def build_ad_learning_signals(
             continue
         row_job_text = compact_whitespace(row.get("matched_job_text") or "")
         decomposition = row.get("decomposition")
-        elements = (
-            decomposition.get("elements") if isinstance(decomposition, dict) else None
-        ) or []
+        decomposition = decomposition if isinstance(decomposition, dict) else {}
+        operator = compact_whitespace(decomposition.get("operator") or "")
+        elements = decomposition.get("elements") or []
         mandatory_unresolved = bool(row.get("mandatory_non_capability_unresolved"))
+
+        # A mandatory AND/OR requirement the normalizer could not resolve to any
+        # safe single capability becomes ONE pending capability_concept Signal
+        # that keeps every branch and the relationship word — never one
+        # misleading capability minted from a single branch.
+        if mandatory_unresolved and operator in ("and", "or"):
+            branch_labels: list[str] = []
+            branch_texts: list[str] = []
+            for element in elements:
+                if not isinstance(element, dict):
+                    continue
+                concept = compact_whitespace(element.get("canonical_concept") or "")
+                element_text = compact_whitespace(element.get("text") or "")
+                label = concept or element_text
+                if label:
+                    branch_labels.append(label)
+                if element_text:
+                    branch_texts.append(element_text)
+            if branch_labels:
+                _add(
+                    f" {operator} ".join(branch_labels),
+                    CATEGORY_CAPABILITY_CONCEPT,
+                    [*branch_texts, row_job_text],
+                )
+            continue
+
         for element in elements:
             if not isinstance(element, dict):
                 continue

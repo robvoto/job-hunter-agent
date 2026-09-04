@@ -107,6 +107,15 @@ deterministic code (`source_learning.build_ad_learning_signals`).
     `not_shown`, `profile_action_allowed = False`) **and** `build_ad_learning_signals`
     creates a pending `capability_concept` Signal. No second LLM call is made — the
     derivation is deterministic or it stays visible-and-pending.
+  - **Mandatory AND / OR row, every branch `non_capability` and unresolved**: the same
+    guarantee applies to the compound row itself. It is never hidden, never
+    profile-actionable, and no single branch is minted into a standalone capability.
+    `mandatory_non_capability_unresolved` is set on the compound row, and
+    `build_ad_learning_signals` emits **exactly one** pending `capability_concept` Signal
+    whose `signal` text joins every branch label with the relationship word (` or ` /
+    ` and `) and whose `original_texts` carry each branch `text` plus the row
+    `matched_job_text` — preserving all branches and the AND / OR relationship in one
+    candidate rather than one misleading candidate per branch.
 
 ### Deterministic classification-review path is unchanged
 
@@ -198,12 +207,12 @@ mandatory requirement.
 | Area | Change |
 |------|--------|
 | `llm_gate.py` schema | `_LLMRequirementCoverageItem`: drop `named_alternatives`, `canonical_fact_resolved`, `classification_reviewable`; add `decomposition: _LLMRequirementDecomposition` (`_LLMRequirementDecomposition` / `_LLMRequirementElement`). |
-| `llm_gate.normalize_llm_requirement_coverage` | Parse + validate `decomposition`; roll row `status` (`and` weakest-only-lower, `or` strongest); derive row `canonical_requirement` / `profile_action_allowed` from the `single` element; add `element_profile_action_allowed`; tag optional `non_capability` rows `hidden_reason="optional_non_capability"`; resolve or hold-and-flag mandatory `non_capability`. |
+| `llm_gate.normalize_llm_requirement_coverage` | Parse + validate `decomposition`; roll row `status` (`and` weakest-only-lower, `or` strongest); derive row `canonical_requirement` / `profile_action_allowed` from the `single` element; add `element_profile_action_allowed`; tag optional `non_capability` rows `hidden_reason="optional_non_capability"`; resolve or hold-and-flag mandatory `non_capability` (single rows, and compound `and` / `or` rows whose every branch is an unresolved `non_capability`). |
 | `llm_gate.normalize_llm_review_payload` + non-review path | Partition normalized rows into visible `requirement_coverage` and `requirement_coverage_hidden`; grade / gate / freeze run on the visible partition only. |
 | `llm_protocol.py` | Rewrite `LLM_FIT_REVIEW_PROMPT_SHAPE` / `LLM_FIT_REVIEW_DEBUG_PROMPT_SHAPE` to the `decomposition` shape. `LLM_UNCERTAIN_COVERAGE_REQUIREMENT_TYPE` retained (deterministic path only). |
 | `data/knowledge/llm_requirement_coverage_defaults.json` | Rewrite the named-alternatives / `canonical_fact_resolved` / `classification_reviewable` guidance lines as `decomposition` guidance. Bump `version`. |
 | `job_review_pipeline.py` | `_build_requirement_classification_review_signals`: drop the `classification_reviewable` gate. Freeze `requirement_coverage_hidden` onto kept records. |
-| `source_learning.build_ad_learning_signals` | Emit pending `capability_concept` Signals from `capability_judgement == "uncertain"` elements and from unresolved mandatory `non_capability` elements. |
+| `source_learning.build_ad_learning_signals` | Emit pending `capability_concept` Signals from `capability_judgement == "uncertain"` elements and from unresolved mandatory `non_capability` elements. A flagged compound `and` / `or` row yields **one** combined Signal joining every branch label with the relationship word, not one per branch. |
 | `fit_scoring.py` | No rollup change (row-level `status` / `requirement_type` survive). Hidden rows are already absent from `requirement_coverage`. |
 | `workspace_renderer.py` | Per-element rendering for `and` / `or` rows; OR-group "either X or Y" line + one primary Add for the closest branch; optional `non_capability` rows are already absent. |
 | `profile_gaps.py` | No logic change — `and` / `or` exclusion is structural. Comment added noting the OR-branch guarantee. |
@@ -234,6 +243,11 @@ mandatory requirement.
   actionable `single` capability row.
 - Mandatory `non_capability` row without a safe concept → stays visible (`not_shown`,
   not actionable) **and** a pending `capability_concept` Signal is created.
+- Mandatory `or` (or `and`) row where every branch is an unresolved `non_capability` →
+  the whole row stays visible and non-actionable, is never surfaced as a single-concept
+  gap or blocker, and produces **exactly one** pending `capability_concept` Signal that
+  joins all branch labels with the relationship word and keeps every branch `text` plus
+  the row `matched_job_text` as evidence — never one candidate per branch.
 - Deterministic `classify_requirement_type` conflict (eligibility term + duration) → still
   a pending `requirement_classification_review` signal, with no `classification_reviewable`
   field present anywhere.
