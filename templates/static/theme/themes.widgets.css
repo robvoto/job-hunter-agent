@@ -1245,6 +1245,30 @@
   border-top: var(--workspace-control-section-border);
 }
 
+/* Horizontal control band -- a wrapper around sibling .workspace-control-group
+   blocks that share one row at wide widths (Match Controls; see
+   docs/UI_COMPONENT_MAP.md). Grid placement and the row/stack breakpoint are the
+   owning page's job; this modifier owns only the shared section-divider
+   behaviour so it is never duplicated per page:
+   - the divider before the group that follows the band is preserved (the global
+     `.workspace-control-group + .workspace-control-group` above stops matching
+     once the band wrapper sits between them in the DOM);
+   - once the banded groups sit side by side, the vertical sibling separators
+     between them are dropped so no stray lines appear. Stacked, the global rule
+     still applies and the separators return untouched.
+   Keep the 56rem row/stack breakpoint in sync with workspace-page.css. */
+.workspace-control-band + .workspace-control-group {
+  padding-top: var(--workspace-control-section-padding-top);
+  border-top: var(--workspace-control-section-border);
+}
+
+@container (min-width: 56rem) {
+  .workspace-control-band > .workspace-control-group + .workspace-control-group {
+    padding-top: 0;
+    border-top: 0;
+  }
+}
+
 .workspace-control-group-title {
   margin: 0;
   color: var(--text-muted);

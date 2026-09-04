@@ -435,6 +435,31 @@ body {
   margin-bottom: 0;
 }
 
+/* Match Controls band -- layout only. The .workspace-control-band separator
+   behaviour is the central modifier in themes.widgets.css; here we own just the
+   grid and the row/stack breakpoint. Stacked (narrow) it is a plain vertical
+   grid, so the shared .workspace-control-group separators apply as normal; at
+   >=56rem panel-container width it becomes a 3-column row (Job boards / Quick
+   filters / Sort). Keep the 56rem breakpoint in sync with themes.widgets.css. */
+.workspace-control-band {
+  display: grid;
+  gap: var(--surface-gap-md);
+}
+
+@container (min-width: 56rem) {
+  .workspace-control-band {
+    grid-auto-flow: column;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: start;
+    gap: var(--surface-gap-lg);
+  }
+
+  /* Quick filters take the slack so Job boards stays left and Sort sits right. */
+  .workspace-control-band > .workspace-control-group {
+    min-width: 0;
+  }
+}
+
 .workspace-quick-filters,
 .workspace-board-filter__choices {
   display: flex;
