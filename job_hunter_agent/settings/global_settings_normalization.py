@@ -1233,7 +1233,7 @@ def normalize_global_settings(
             KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS: _require_int(
                 search_source,
                 KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS,
-                _search_setting_default_int(KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS, 20),
+                _search_setting_default_int(KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS, 40),
                 normalized_search_limits[KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS]["min"],
                 normalized_search_limits[KEY_LINKEDIN_FETCH_TIMEOUT_SECONDS]["max"],
             ),

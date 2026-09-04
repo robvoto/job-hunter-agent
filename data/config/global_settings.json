@@ -19,7 +19,7 @@
     "sort_newest_first": true,
     "linkedin_hours_old": 24,
     "linkedin_results_per_search": 25,
-    "linkedin_fetch_timeout_seconds": 20,
+    "linkedin_fetch_timeout_seconds": 40,
     "linkedin_parallel_search_workers": 3,
     "linkedin_easy_apply_only": null,
     "apsjobs_results_per_search": 25,

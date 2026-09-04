@@ -394,7 +394,7 @@ def test_normalize_global_settings_defaults_source_toggles_when_runtime_seed_is_
     assert normalized["search_settings"]["seek_enabled"] is True
     assert normalized["search_settings"]["linkedin_enabled"] is True
     assert normalized["search_settings"]["apsjobs_enabled"] is True
-    assert normalized["search_settings"]["linkedin_fetch_timeout_seconds"] == 20
+    assert normalized["search_settings"]["linkedin_fetch_timeout_seconds"] == 40
 
 
 def test_upgrade_global_settings_from_file_preserves_existing_admin_values(
