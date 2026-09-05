@@ -85,6 +85,25 @@
       resultsHelper.hidden = false;
     }
 
+    function initSnapshotRolesToggle() {
+      const value = document.getElementById('snapshot_roles_value');
+      const toggle = document.getElementById('snapshot_roles_toggle');
+      if (!value || !toggle) {
+        return;
+      }
+      value.classList.add('snapshot-meta-value--clamped');
+      if (value.scrollHeight <= value.clientHeight + 1) {
+        value.classList.remove('snapshot-meta-value--clamped');
+        return;
+      }
+      toggle.hidden = false;
+      toggle.addEventListener('click', () => {
+        const expanded = toggle.getAttribute('aria-expanded') === 'true';
+        toggle.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+        value.classList.toggle('snapshot-meta-value--clamped', expanded);
+      });
+    }
+
     function dismissResultsHelper() {
       if (resultsHelper) {
         resultsHelper.hidden = true;
@@ -1125,6 +1144,7 @@
     loadWorkspacePagination();
     setActiveWorkspace((window.location.hash || '#potential').replace('#', ''), false, false);
     showResultsHelperIfNeeded();
+    initSnapshotRolesToggle();
     hydrateViewedState();
     // Rejection-learning panel
     let _rejectionPendingButton = null;

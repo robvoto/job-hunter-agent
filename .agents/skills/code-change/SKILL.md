@@ -14,6 +14,7 @@ Use before modifying existing code.
 - Keep changes small and scoped.
 - Temporary helper scripts must be removed before finishing. If a helper script is intentionally kept, it must have a short top-of-file purpose comment explaining what it is for and when to use/delete it.
 - New non-obvious modules, functions, flows, ownership boundaries, or integration points must include concise comments explaining intent and ownership. Comments should not repeat the code line-by-line.
+- **Python rationale/help rule:** when Python code transforms a user-entered value, changes discovery/filtering/matching semantics, derives a machine-facing value from a human-facing value, or otherwise implements a non-obvious business decision, leave concise in-code help (docstring and/or nearby rationale comment) stating **why the transformation exists**, what value remains authoritative, whether the derived value is persisted or transient, and where in the lifecycle it is used. For executable/operational Python scripts, also keep `--help`/usage text current when behaviour or arguments change. The goal is that a later agent can understand the business reason without reconstructing it from git history.
 - Prefer small, single-purpose modules over large monolithic files.
 - If the proposed approach is a workaround, legacy pattern, anti-pattern, or unnecessary monolith, say so before editing: name the pattern, explain why it is suboptimal, and state the professional alternative.
 - If a better approach is feasible within scope, ask before using the weaker one.
