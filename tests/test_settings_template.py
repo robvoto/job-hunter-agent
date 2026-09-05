@@ -365,6 +365,8 @@ def test_settings_page_renders_admin_link_only_for_admins(monkeypatch):
 
     admin_html = client.get("/settings").text
 
+    assert "Job Hunter searches each preferred and alternative role separately" in admin_html
+    assert "__JOB_HUNTER_TITLE_TIER_ROLE_SEARCH_HELP__" not in admin_html
     assert 'class="sidebar-admin-badge"' in admin_html
 
     assert 'href="/global-settings"' in admin_html

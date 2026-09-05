@@ -63,6 +63,7 @@ def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
     assert "Preferred roles" in html
     assert "Alternative roles" in html
     assert "Job Hunter searches each preferred and alternative role separately" in html
+    assert "__JOB_HUNTER_TITLE_TIER_ROLE_SEARCH_HELP__" not in html
     assert 'id="review_search_keywords"' not in html
     assert "Add a preferred role" in html
     assert "Add an alternative role" in html
@@ -104,6 +105,20 @@ def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
     assert 'class="settings-subpanel-actions"' in html
     assert 'class="summary-field-list"' in html
     assert 'class="summary-field__value"' in html
+
+
+
+def test_role_entry_does_not_call_role_family_confirmation():
+    root = Path(__file__).resolve().parents[1]
+    onboarding_js = (root / "templates" / "static" / "onboarding" / "onboarding-flow.js").read_text(encoding="utf-8")
+    settings_js = (
+        root / "templates" / "static" / "settings" / "shared" / "settings-chip-editor.js"
+    ).read_text(encoding="utf-8")
+
+    assert "confirmRoleFamily" not in onboarding_js
+    assert "confirmRoleFamily" not in settings_js
+    assert "role-family.js" not in onboarding_js
+    assert "role-family.js" not in settings_js
 
 
 def test_onboarding_flow_does_not_expose_search_keyword_concept():

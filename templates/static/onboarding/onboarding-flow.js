@@ -7,7 +7,6 @@ import * as onboardingSettingsUtils from '../settings/shared/settings-utils.js';
 import * as onboardingCurrencyUi from '../common/currency-input.js';
 import * as onboardingLocationUi from '../common/location-options.js';
 import * as onboardingCapabilityUi from '../common/capability-ui.js';
-import { confirmRoleFamily } from '../common/role-family.js';
 
 const {
   applyProfileDefaults,
@@ -284,13 +283,10 @@ function moveReviewTitle(sourceList, sourceIndex, targetList) {
   renderReviewStep();
 }
 
-async function addReviewTitle(targetList, value) {
+function addReviewTitle(targetList, value) {
   const cleaned = normalizeReviewTitle(value);
   if (!cleaned) return;
-  const roleFamily = await confirmRoleFamily(cleaned);
-  if (!roleFamily) return;
-  const confirmed = normalizeReviewTitle(roleFamily);
-  const key = normalizeReviewTitleKey(confirmed);
+  const key = normalizeReviewTitleKey(cleaned);
   const target = targetList === 'primary' ? onboardingPage.reviewTargetTitles : onboardingPage.reviewSecondaryTitles;
   const other = targetList === 'primary' ? onboardingPage.reviewSecondaryTitles : onboardingPage.reviewTargetTitles;
   const otherIndex = other.findIndex((item) => normalizeReviewTitleKey(item) === key);
@@ -298,7 +294,7 @@ async function addReviewTitle(targetList, value) {
     other.splice(otherIndex, 1);
   }
   if (!target.some((item) => normalizeReviewTitleKey(item) === key)) {
-    target.push(confirmed);
+    target.push(cleaned);
   }
   const normalized = normalizeReviewTitleLists(onboardingPage.reviewTargetTitles, onboardingPage.reviewSecondaryTitles);
   onboardingPage.setReviewTargetTitles(normalized.primary);
@@ -934,15 +930,15 @@ flowRefs.wizardProgressSteps?.addEventListener('click', (event) => {
   setStep(targetStep);
 });
 
-flowRefs.reviewAddTargetTitle.addEventListener('click', async () => {
+flowRefs.reviewAddTargetTitle.addEventListener('click', () => {
   const input = flowRefs.reviewTargetTitlesInput;
-  await addReviewTitle('primary', input.value);
+  addReviewTitle('primary', input.value);
   input.value = '';
 });
 
-flowRefs.reviewAddSecondaryTitle.addEventListener('click', async () => {
+flowRefs.reviewAddSecondaryTitle.addEventListener('click', () => {
   const input = flowRefs.reviewSecondaryTitlesInput;
-  await addReviewTitle('secondary', input.value);
+  addReviewTitle('secondary', input.value);
   input.value = '';
 });
 

@@ -400,6 +400,10 @@ def _render_template_with_locations(
         )
 
         html = html.replace(
+            "__JOB_HUNTER_TITLE_TIER_ROLE_SEARCH_HELP__", title_tier_labels["role_search_help"]
+        )
+
+        html = html.replace(
             "__JOB_HUNTER_TITLE_TIER_TARGET_ROLES_LABEL__", title_tier_labels["target_roles_label"]
         )
 
@@ -645,6 +649,7 @@ def _render_template_with_locations(
         onboarding_page_labels = srv.load_onboarding_page_labels()
 
         onboarding_replacements = {
+            "__JOB_HUNTER_TITLE_TIER_ROLE_SEARCH_HELP__": title_tier_labels["role_search_help"],
             "__JOB_HUNTER_TITLE_TIER_TARGET_ROLES_LABEL__": title_tier_labels["target_roles_label"],
             "__JOB_HUNTER_TITLE_TIER_TARGET_ROLES_HELP__": title_tier_labels["target_roles_help"],
             "__JOB_HUNTER_TITLE_TIER_TARGET_ROLES_PLACEHOLDER__": title_tier_labels[

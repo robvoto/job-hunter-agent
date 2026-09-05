@@ -321,3 +321,37 @@ def test_capability_related_skills_beyond_alias_limit_survive_settings_save(cand
     assert expanded_aliases.locator(".cap-alias-chip-label").count() == len(
         related_skills
     ) - 2, "all confirmed Related Skills beyond the preview must survive the round trip"
+
+
+def test_role_entry_adds_directly_without_role_family_popup(candidate_page):
+    page = candidate_page
+    dialogs: list[str] = []
+    page.on("dialog", lambda dialog: (dialogs.append(dialog.message), dialog.dismiss()))
+
+    page.goto("/settings#section-matrix")
+    role_help = page.locator("#section-matrix .search-settings-subcard").first.locator(".panel-copy").first
+    expect(role_help).to_contain_text("Job Hunter searches each preferred and alternative role separately")
+    expect(role_help).not_to_contain_text("__JOB_HUNTER_TITLE_TIER_ROLE_SEARCH_HELP__")
+
+    role_input = page.locator("#target_roles_add")
+    role_input.fill("Implementation Consultant")
+    page.locator('[data-add-chip="target_roles"]').click()
+
+    expect(page.locator("#target_roles_chips")).to_contain_text("Implementation Consultant")
+    assert dialogs == []
+
+    alternative_input = page.locator("#also_consider_roles_add")
+    alternative_input.fill("SAP S/4HANA Consultant")
+    page.locator('[data-add-chip="also_consider_roles"]').click()
+
+    expect(page.locator("#also_consider_roles_chips")).to_contain_text("SAP S/4HANA Consultant")
+    assert dialogs == []
+
+    save_btn = page.locator("#save_settings_btn")
+    expect(save_btn).to_be_enabled()
+    save_btn.click()
+    expect(page.locator("#status")).to_contain_text("Settings saved successfully.")
+
+    page.reload()
+    expect(page.locator("#target_roles_chips")).to_contain_text("Implementation Consultant")
+    expect(page.locator("#also_consider_roles_chips")).to_contain_text("SAP S/4HANA Consultant")
