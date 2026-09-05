@@ -91,7 +91,7 @@ capability is tracked separately as JH-293.
 
 ### Agent Runner
 
-Persistent automation wrapper.
+Standalone CLI wrapper for direct/manual agent execution and scheduler diagnostics. Normal local app scheduling is owned by the FastAPI runtime; operators do not need to launch this as a second process for Settings → Run & Schedule to work.
 
 ```powershell
 uv run python -m job_hunter_agent.agent_runner
@@ -99,13 +99,12 @@ uv run python -m job_hunter_agent.agent_runner
 
 Responsibilities:
 
-* orchestrate scheduled execution
-* trigger refresh runs
+* trigger direct refresh runs
 * generate digest summaries
 * send notifications
-* maintain scheduled runtime loop
+* provide a standalone scheduler loop for diagnostics or deliberately separate runtimes
 
-Persistent loop:
+Standalone loop (diagnostic/separate-runtime use only):
 
 ```powershell
 uv run python -m job_hunter_agent.agent_runner --loop
@@ -258,10 +257,11 @@ Repo-root launcher:
 
 Background-service rule:
 
-- the FastAPI server does not auto-start the scheduled agent loop or the shared Telegram poller
-- use `uv run python -m job_hunter_agent.agent_runner` for persistent scheduled automation
-- desktop mode owns its own Telegram poller while the launcher is open
-- server-side background loops are opt-in only via `JOB_HUNTER_ENABLE_SERVER_TELEGRAM_POLLER=true` and/or `JOB_HUNTER_ENABLE_SERVER_SCHEDULED_AGENT_LOOP=true`
+- the normal FastAPI runtime owns the local scheduled-agent loop so Settings → Run & Schedule works without a second hidden process
+- the saved per-user `schedule.enabled` and `daily_time_local` settings remain the scheduler source of truth and are read live by the loop
+- desktop mode does not start this web-owned scheduler thread because the desktop launcher owns its process lifecycle
+- the shared Telegram poller remains opt-in via `JOB_HUNTER_ENABLE_SERVER_TELEGRAM_POLLER=true`
+- a future AWS/external scheduler can replace the in-process clock watcher without changing the normal search pipeline (tracked separately as JH-264)
 
 Server logs:
 
@@ -406,6 +406,8 @@ Operational sequence:
 ---
 
 ## Scheduled Runtime Workflow
+
+The normal local FastAPI runtime starts the scheduler watcher automatically. The standalone command below is only for diagnostics or a deliberately separate runtime:
 
 ```powershell
 uv run python -m job_hunter_agent.agent_runner --loop

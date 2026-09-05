@@ -42,35 +42,37 @@ export const JobHunterAlertsSettings = (function () {
 
   function renderScheduleStatus(settings, payload) {
     const panel = document.getElementById('schedule_runtime_status');
-    if (!panel) return;
+    const labels = loadAlertsLabels();
+    if (!panel || !labels) return;
     const scheduleEnabled = Boolean(settings?.schedule?.enabled);
     const scheduler = payload?.scheduler || null;
     if (!scheduleEnabled) {
       panel.dataset.state = 'stopped';
-      panel.textContent = 'Schedule Run is off.';
+      panel.textContent = labels.schedule_status_off;
       return;
     }
-    if (!scheduler) {
+    if (!scheduler?.active) {
       panel.dataset.state = 'unknown';
-      panel.textContent = 'Next run is scheduled.';
+      panel.textContent = labels.schedule_status_unavailable;
       return;
     }
     const nextRun = formatScheduleDateTime(scheduler.next_run_at);
-    if (nextRun) {
-      panel.dataset.state = scheduler.active ? 'running' : 'stopped';
-      panel.textContent = `Next run: ${nextRun}.`;
+    if (!nextRun) {
+      panel.dataset.state = 'unknown';
+      panel.textContent = labels.schedule_status_unavailable;
       return;
     }
-    panel.dataset.state = 'unknown';
-    panel.textContent = 'Next run is scheduled.';
+    panel.dataset.state = 'running';
+    panel.textContent = labels.schedule_status_next_run_template.replace('{next_run}', nextRun);
   }
 
   async function refreshScheduleStatus(settings) {
     const requestId = ++scheduleStatusRequestId;
     const panel = document.getElementById('schedule_runtime_status');
-    if (panel) {
+    const labels = loadAlertsLabels();
+    if (panel && labels) {
       panel.dataset.state = 'unknown';
-      panel.textContent = 'Checking next run...';
+      panel.textContent = labels.schedule_status_checking;
     }
     try {
       const response = await jobHunterFetch('/api/run-status', { method: 'GET' });
@@ -79,9 +81,9 @@ export const JobHunterAlertsSettings = (function () {
       if (requestId !== scheduleStatusRequestId) return;
       renderScheduleStatus(settings, payload);
     } catch {
-      if (requestId !== scheduleStatusRequestId || !panel) return;
+      if (requestId !== scheduleStatusRequestId || !panel || !labels) return;
       panel.dataset.state = 'unknown';
-      panel.textContent = 'Next run is scheduled.';
+      panel.textContent = labels.schedule_status_unavailable;
     }
   }
 

@@ -104,3 +104,56 @@ def test_run_agent_loop_stops_cleanly_when_stop_requested(monkeypatch):
 
     assert saved_states
     assert STATE_SCHEDULER_LAST_SEEN_AT in saved_states[0]
+
+
+def test_run_agent_loop_executes_and_records_success(monkeypatch):
+    saved_states = []
+    run_calls = []
+
+    class _FakeStopEvent:
+        def __init__(self) -> None:
+            self._set = False
+
+        def is_set(self) -> bool:
+            return self._set
+
+        def wait(self, _seconds: float) -> bool:
+            self._set = True
+            return True
+
+    monkeypatch.setattr(
+        "job_hunter_agent.agent_runner.load_user_settings",
+        lambda _user_id, create_if_missing=True: {
+            "schedule": {
+                "enabled": True,
+                "daily_time_local": "09:00",
+                "loop_sleep_seconds": 300,
+            }
+        },
+    )
+    monkeypatch.setattr("job_hunter_agent.agent_runner.load_agent_state", lambda: dict(saved_states[-1]) if saved_states else {})
+    monkeypatch.setattr(
+        "job_hunter_agent.agent_runner.save_agent_state",
+        lambda state: saved_states.append(dict(state)) or state,
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.agent_runner.evaluate_schedule_action",
+        lambda state, daily_time_local, now, loop_started_at: SCHEDULE_ACTION_RUN,
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.agent_runner.run_agent_once",
+        lambda **kwargs: run_calls.append(kwargs) or {
+            "summary_path": "/tmp/agent_last_summary.txt",
+            "summary_text": "Scheduled summary",
+            "summary": {"run_finished_at": "2026-09-05T09:01:00+10:00"},
+        },
+    )
+
+    run_agent_loop(stop_event=_FakeStopEvent())
+
+    assert run_calls == [
+        {"no_scrape": False, "notify": True, "scrape_trigger": "scheduled daily runner"}
+    ]
+    assert any(state.get("last_scheduled_status") == "running" for state in saved_states)
+    assert saved_states[-1]["last_scheduled_status"] == "succeeded"
+    assert saved_states[-1]["last_scheduled_finished_at"] == "2026-09-05T09:01:00+10:00"

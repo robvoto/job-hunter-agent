@@ -171,9 +171,12 @@ def test_micro_utility_action_is_smaller_than_compact_actions():
     renderer = (ROOT_DIR / "job_hunter_agent" / "workspace_renderer.py").read_text(encoding="utf-8")
 
     block = primitives.split(".jh-button--micro {", 1)[1].split("}", 1)[0]
-    assert "min-height: 27px;" in block
-    assert "padding: 3px 8px;" in block
-    assert "font-size: 0.74rem;" in block
+    # Deliberately shrunk from 27px/3px 8px/0.74rem in "Job card capability UI
+    # cleanup" (38a3ec3) so the micro action reads closer in scale to the
+    # surrounding requirement-row text. Still strictly smaller than --compact.
+    assert "min-height: 22px;" in block
+    assert "padding: 2px 6px;" in block
+    assert "font-size: 0.7rem;" in block
     assert "title-block-btn workspace-text-action workspace-text-action--muted" in renderer
     assert ".title-block-btn.jh-button {" not in widgets
     assert ".gap-btn.jh-button:not(.jh-button--micro) {" in primitives

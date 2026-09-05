@@ -51,6 +51,16 @@ The canonical list is `signal_schema.VALID_SIGNAL_CATEGORIES`:
 - The fit review LLM schema (`_LLMFitReviewPayload`) has no `learning_candidates` field
 - Do not add learning category guidance to the fit review prompt; the fit-review schema has no learning fields and category names must not leak into capability names
 
+**Bounded requirement interpretation is allowed on the fit-review schema.** The
+`requirement_coverage` / `eligibility_requirements` `decomposition` block — `operator`
+(`single`/`and`/`or`), atomic `elements[]`, and per-element `capability_judgement`
+(`capability`/`uncertain`/`non_capability`) — is requirement *interpretation*, not a
+learning field. The LLM never names a signal category and never emits a learning record.
+Pending Signals derived from that interpretation (e.g. a `capability_concept` pending
+Signal for an `uncertain` element or an unresolved mandatory `non_capability` element) are
+still created **deterministically afterward** by `build_ad_learning_signals()`. See
+`docs/REQUIREMENT_DECOMPOSITION_RATIONALE.md`.
+
 **Consequence:** jobs decided by the full LLM review produce no LLM-proposed learning candidates. Any learning-only candidate must still use a category from `signal_schema.VALID_SIGNAL_CATEGORIES`.
 
 ## Capability alias review map

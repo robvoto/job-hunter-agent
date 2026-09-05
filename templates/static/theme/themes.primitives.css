@@ -340,14 +340,16 @@ body.job-hunter-wait-active {
   display: none;
 }
 
-.wait-state__explainer > summary::after {
+.wait-state__explainer > summary::after,
+.job-insights > summary::after {
   content: "\25BE";
   color: var(--accent);
   line-height: 1;
   transition: transform 0.18s ease;
 }
 
-.wait-state__explainer[open] > summary::after {
+.wait-state__explainer[open] > summary::after,
+.job-insights[open] > summary::after {
   transform: rotate(180deg);
 }
 

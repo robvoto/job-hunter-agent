@@ -252,9 +252,21 @@
   font-size: 0.98rem;
   font-weight: 600;
   line-height: 1.35;
-  margin-top: 2px;
   letter-spacing: 0.01em;
   text-transform: capitalize;
+}
+
+.job-company-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.job-company-line .badge {
+  padding: 3px 8px;
+  font-size: 0.7rem;
 }
 
 .match-tile {
@@ -538,7 +550,7 @@
 }
 
 .job-insights {
-  margin: 0 0 10px;
+  margin: 0 0 var(--surface-gap-lg);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   background: var(--bg-muted);
@@ -546,6 +558,11 @@
 }
 
 .job-insights summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--control-space-xs);
+  list-style: none;
   cursor: pointer;
   font-weight: 700;
   color: var(--text-primary);
@@ -914,7 +931,7 @@
    simply the strongest neutral weight; lower tiers step down in weight only. */
 .job-req-importance--mandatory {
   border-color: var(--border-strong);
-  color: var(--text-primary);
+  color: color-mix(in srgb, var(--text-primary) 78%, var(--text-muted));
 }
 
 .job-req-importance--strongly-preferred {

@@ -352,6 +352,10 @@ _SETTINGS_ALERTS_LABEL_KEYS = (
     "llm_copy",
     "llm_model_label",
     "llm_model_placeholder",
+    "schedule_status_off",
+    "schedule_status_checking",
+    "schedule_status_unavailable",
+    "schedule_status_next_run_template",
 )
 
 _SETTINGS_CLEARANCES_LABEL_KEYS = (

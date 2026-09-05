@@ -127,8 +127,6 @@ def api_run_status():  # type: ignore[no-untyped-def]
     progress = get_run_progress()
     progress_detail = get_run_progress_detail()
     scheduler = srv._read_scheduler_status()
-    if status in {srv.RUN_STATUS_RUNNING, srv.RUN_STATUS_STOPPING}:
-        scheduler["active"] = True
 
     return json_response(
         {

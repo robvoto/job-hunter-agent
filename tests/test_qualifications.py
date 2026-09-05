@@ -109,11 +109,10 @@ def test_matching_qualification_passes_and_maps_to_canonical_profile_name():
 
 
 def test_compound_qualification_mapping_stays_unresolved_without_atomic_profile_match():
-    # canonical_fact_resolved is intentionally omitted here (defaults False) to
-    # simulate an LLM response that never confirmed a resolved concept — the
-    # compound blob copied into canonical_requirement/matched_candidate_fact
-    # must not be trusted as a safe profile-learning action regardless of its
-    # text content.
+    # No decomposition is supplied, so the normalizer falls back to a single
+    # synthesized non-actionable element — the compound blob copied into
+    # canonical_requirement/matched_candidate_fact must not be trusted as a safe
+    # profile-learning action regardless of its text content.
     coverage = llm_gate.normalize_llm_requirement_coverage(
         [
             {

@@ -1420,54 +1420,47 @@ def render_job_card(
             )
         )
     channel_kind = channel_signal.get("kind", "")
+    channel_badge_html = ""
     if channel_kind == "agency_or_recruiter":
         if channel_signal.get("needs_review"):
-            badges.append(
-                render_badge(
-                    _workspace_label(
-                        "workspace_card_labels",
-                        "posting_channel_likely_recruiter_badge",
-                    ),
-                    "badge-warning",
-                    _workspace_label(
-                        "workspace_card_labels",
-                        "posting_channel_likely_recruiter_tooltip",
-                    ),
-                )
-            )
-        else:
-            badges.append(
-                render_badge(
-                    _workspace_label(
-                        "workspace_card_labels",
-                        "posting_channel_agency_recruiter_badge",
-                    ),
-                    "badge-source-neutral",
-                    _workspace_label(
-                        "workspace_card_labels",
-                        "posting_channel_agency_recruiter_tooltip",
-                    ),
-                )
-            )
-    elif channel_kind == "direct_employer":
-        badges.append(
-            render_badge(
-                _workspace_label("workspace_card_labels", "posting_channel_direct_employer_badge"),
-                "badge-source-neutral",
-                _workspace_label("workspace_card_labels", "posting_channel_direct_employer_tooltip"),
-            )
-        )
-    elif channel_kind:
-        badges.append(
-            render_badge(
-                _workspace_label(
-                    "workspace_card_labels", "posting_channel_unknown_badge"),
-                "badge-archive",
+            channel_badge_html = render_badge(
                 _workspace_label(
                     "workspace_card_labels",
-                    "posting_channel_unknown_tooltip",
+                    "posting_channel_likely_recruiter_badge",
+                ),
+                "badge-warning",
+                _workspace_label(
+                    "workspace_card_labels",
+                    "posting_channel_likely_recruiter_tooltip",
                 ),
             )
+        else:
+            channel_badge_html = render_badge(
+                _workspace_label(
+                    "workspace_card_labels",
+                    "posting_channel_agency_recruiter_badge",
+                ),
+                "badge-source-neutral",
+                _workspace_label(
+                    "workspace_card_labels",
+                    "posting_channel_agency_recruiter_tooltip",
+                ),
+            )
+    elif channel_kind == "direct_employer":
+        channel_badge_html = render_badge(
+            _workspace_label("workspace_card_labels", "posting_channel_direct_employer_badge"),
+            "badge-source-neutral",
+            _workspace_label("workspace_card_labels", "posting_channel_direct_employer_tooltip"),
+        )
+    elif channel_kind:
+        channel_badge_html = render_badge(
+            _workspace_label(
+                "workspace_card_labels", "posting_channel_unknown_badge"),
+            "badge-archive",
+            _workspace_label(
+                "workspace_card_labels",
+                "posting_channel_unknown_tooltip",
+            ),
         )
     history_warning_signals = assess_history_warning_signals(record, history_clusters)
     if duplicate_links:
@@ -1985,13 +1978,89 @@ def render_job_card(
                 f'{confirm_have_html}{confirm_not_have_html}'
                 '</span>'
             )
+        # OR requirement: every acceptable branch stays visible so the candidate
+        # sees the whole requirement, even though at most one primary Add action
+        # is offered (for the closest unmet branch) to keep the card uncluttered.
+        # resolve_custom_blocker / profile-gap must never treat that single
+        # branch as the entire mandatory requirement — see
+        # docs/REQUIREMENT_DECOMPOSITION_RATIONALE.md.
+        or_branch_html = ""
+        decomposition = (
+            row.get("decomposition") if isinstance(row.get("decomposition"), dict) else {}
+        )
+        if decomposition.get("operator") == "or":
+            branch_elements = [
+                el for el in (decomposition.get("elements") or []) if isinstance(el, dict)
+            ]
+            branch_labels = [
+                compact_whitespace(str(el.get("canonical_concept") or el.get("text") or ""))
+                for el in branch_elements
+            ]
+            branch_labels = [label for label in branch_labels if label]
+            if len(branch_labels) >= 2:
+                join_text = _workspace_label("workspace_card_labels", "requirement_or_join")
+                note_template = _workspace_label(
+                    "workspace_card_labels", "requirement_or_branches_note"
+                )
+                options_text = join_text.join(branch_labels)
+                note_text = (
+                    note_template.replace("{options}", options_text)
+                    if "{options}" in note_template
+                    else f"{note_template} {options_text}".strip()
+                )
+                branch_note_html = (
+                    '<span class="job-requirement-note job-requirement-note--or">'
+                    f"{safe_html(note_text)}</span>"
+                )
+                primary_branch = ""
+                if (
+                    css_modifier not in ("supported", "partially-supported")
+                    and not is_uncertain_classification
+                ):
+                    for el in branch_elements:
+                        if not el.get("element_profile_action_allowed"):
+                            continue
+                        concept = compact_whitespace(str(el.get("canonical_concept") or ""))
+                        if not concept:
+                            continue
+                        if (
+                            classify_requirement_status(
+                                concept,
+                                active_profile.get(KEY_CANDIDATE_CAPABILITIES) or [],
+                                active_profile.get(KEY_MUST_NOT_REQUIRED_SKILLS) or [],
+                                active_profile.get(KEY_CANDIDATE_ELIGIBILITY) or [],
+                                active_profile.get(KEY_CANDIDATE_ELIGIBILITY_FACTS) or [],
+                                requirement_type=row_requirement_type,
+                                candidate_qualifications=active_profile.get(
+                                    KEY_CANDIDATE_QUALIFICATIONS
+                                )
+                                or [],
+                            )
+                            == STATUS_UNKNOWN
+                        ):
+                            primary_branch = concept
+                            break
+                branch_action_html = ""
+                if primary_branch and not profile_review_html:
+                    branch_confirm_have_html = (
+                        '<button type="button" class="jh-button jh-button--primary jh-button--micro job-requirement-action gap-btn" '
+                        f'data-action="confirm_have" data-capability-name="{safe_html(primary_branch)}" '
+                        f'title="{safe_html(_workspace_label("workspace_card_labels", "add_to_profile_action_title"))}">'
+                        '<span aria-hidden="true">+</span>'
+                        f'<span>{safe_html(_workspace_label("workspace_card_labels", "add_to_profile_action_label"))} · {safe_html(primary_branch)}</span></button>'
+                    )
+                    branch_action_html = (
+                        '<span class="req-coverage-detail req-coverage-detail--profile-review">'
+                        f"{branch_confirm_have_html}</span>"
+                    )
+                or_branch_html = branch_note_html + branch_action_html
         html = (
             f'<li class="job-requirement-item job-requirement-item--{safe_html(css_modifier)}">'
             f'<span class="job-requirement-text">'
             f'<span class="job-requirement-title-line">'
             f'{safe_html(req_text)}{importance_html}'
             f'</span>'
-            f'{profile_review_html}{detail_html}{experience_note_html}'
+            f'{profile_review_html}{or_branch_html}{detail_html}{experience_note_html}'
             f"</span>"
             f"</li>"
         )
@@ -2138,6 +2207,11 @@ def render_job_card(
             # label. Add-to-profile must gate on this, not just on canonical_requirement
             # being non-empty.
             row["profile_action_allowed"] = bool(item.get("profile_action_allowed"))
+            row["decomposition"] = (
+                item.get("decomposition")
+                if isinstance(item.get("decomposition"), dict)
+                else {}
+            )
             row["importance"] = str(item.get("importance") or "preferred").strip().lower()
             row["is_eligibility"] = is_eligibility
             row["is_qualification"] = is_qualification
@@ -2511,7 +2585,7 @@ def render_job_card(
             else ""
         )
         + "</div>"
-        + f'<div class="job-company">{safe_html(company_display)}</div>'
+        + f'<div class="job-company-line"><span class="job-company">{safe_html(company_display)}</span>{channel_badge_html}</div>'
         "</div>"
         f"{score_html}"
         "</div>"

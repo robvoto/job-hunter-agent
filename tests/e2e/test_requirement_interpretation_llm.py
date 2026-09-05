@@ -169,7 +169,7 @@ def test_real_llm_resolves_optional_financial_examples_to_one_core_profile_fact(
         assert "financial" in canonical and "experience" in canonical, row
         assert "banking" not in canonical and "insurance" not in canonical, row
         assert row.get("profile_action_allowed") is True, row
-        assert not row.get("named_alternatives"), row
+        assert row.get("decomposition", {}).get("operator") == "single", row
 
 
 @pytest.mark.llm_e2e
