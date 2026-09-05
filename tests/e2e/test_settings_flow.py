@@ -327,5 +327,21 @@ def test_role_entry_adds_directly_without_role_family_popup(candidate_page):
     role_input.fill("Implementation Consultant")
     page.locator('[data-add-chip="target_roles"]').click()
 
-    expect(page.locator("#target_roles_chips")).to_contain_text("implementation consultant")
+    expect(page.locator("#target_roles_chips")).to_contain_text("Implementation Consultant")
     assert dialogs == []
+
+    alternative_input = page.locator("#also_consider_roles_add")
+    alternative_input.fill("SAP S/4HANA Consultant")
+    page.locator('[data-add-chip="also_consider_roles"]').click()
+
+    expect(page.locator("#also_consider_roles_chips")).to_contain_text("SAP S/4HANA Consultant")
+    assert dialogs == []
+
+    save_btn = page.locator("#save_settings_btn")
+    expect(save_btn).to_be_enabled()
+    save_btn.click()
+    expect(page.locator("#status")).to_contain_text("Settings saved successfully.")
+
+    page.reload()
+    expect(page.locator("#target_roles_chips")).to_contain_text("Implementation Consultant")
+    expect(page.locator("#also_consider_roles_chips")).to_contain_text("SAP S/4HANA Consultant")
