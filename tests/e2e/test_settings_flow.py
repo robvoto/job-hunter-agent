@@ -53,6 +53,16 @@ def _seed_candidate_capabilities(email: str, capabilities: list[dict[str, object
         set_user_id(None)
 
 
+def _seed_schedule_enabled(email: str) -> None:
+    """Enable Schedule Run so the test exercises scheduler availability, not the off state."""
+    from job_hunter_agent.auth import get_or_create_user
+    from job_hunter_agent.user_settings import save_user_settings
+
+    admin_email = os.environ["JOB_HUNTER_ADMIN_EMAIL"]
+    user = get_or_create_user(email, admin_email)
+    save_user_settings(user["user_id"], {"schedule": {"enabled": True}})
+
+
 def test_contract_length_uses_light_dismiss_popover(candidate_page):
     _seed_contract_preferences("candidate@e2e.test")
 
@@ -141,6 +151,8 @@ def test_schedule_toggle_persists_after_reload(candidate_page):
 
 
 def test_schedule_status_does_not_claim_next_run_when_scheduler_is_inactive(candidate_page):
+    _seed_schedule_enabled("candidate@e2e.test")
+
     page = candidate_page
     page.goto("/settings#section-search")
 
