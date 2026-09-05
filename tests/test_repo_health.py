@@ -218,6 +218,8 @@ def test_agents_routes_durable_rules_through_skills():
 
     assert ".agents/skills/INDEX.md" in agents
     assert ".agents/skills/instruction-maintenance/SKILL.md" in agents
+    assert ".agents/skills/mcp-tooling/SKILL.md" in agents
+    assert "before the first repository/tool command" in agents
     assert "create a focused skill" in agents
     assert "Detailed rules belong inside each skill" in skills_index
 
@@ -380,10 +382,29 @@ def test_repository_runtime_commands_use_uv_and_classify_missing_binaries_correc
     ).read_text(encoding="utf-8")
 
     assert "Never invoke bare `python`, `python3`, `pytest`, or `ruff`" in tooling_skill
+    assert "never reach into another worktree's `.venv`" in tooling_skill
+    assert "Do not invent or pass a `timeout` argument" in tooling_skill
+    assert "node --input-type=module --check < path/to/file.js" in tooling_skill
+    assert "Never use plain `node --check path/to/file.js`" in tooling_skill
+    assert "never run the entire pytest suite in one connector call" in tooling_skill
+    assert "do not background it" in tooling_skill
+    assert "./scripts/run-pytest-mcp.sh 1 3" in tooling_skill
     assert "not a database, application, repository-access, or dependency failure" in tooling_skill
     assert "uv run python -m job_hunter_agent.source_connector" in operations
     assert "\npython -m job_hunter_agent.source_connector" not in operations
     assert "set -- uv run python -m job_hunter_agent.fastapi_app --rebuild" in aws_launcher
+
+
+def test_mcp_pytest_runner_uses_contiguous_serial_slices():
+    script_path = ROOT_DIR / "scripts" / "run-pytest-mcp.sh"
+    script = script_path.read_text(encoding="utf-8")
+
+    assert script_path.stat().st_mode & 0o111
+    assert "find tests -maxdepth 1 -type f -name 'test_*.py' | sort" in script
+    assert "chunk=$(( (count + total - 1) / total ))" in script
+    assert 'selected=("${files[@]:start:chunk}")' in script
+    assert 'exec uv run pytest -q --tb=short "${selected[@]}"' in script
+    assert "-n 6" not in script
 
 
 def test_architecture_and_user_guide_document_raw_cv_retention_decision():

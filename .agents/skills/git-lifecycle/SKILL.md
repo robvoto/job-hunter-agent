@@ -29,7 +29,7 @@ The human should not need to remember Git mechanics.
 
 - Any failed tool call, shell command, merge, or validation is a stop condition: report the failure immediately and do not silently continue down the same line of work.
 - Diagnose the root cause before retrying. If the human has already authorised fixing the task, fix the root cause and add a durable guard/instruction/test when the failure reveals a repeatable process gap.
-- In WSL worktrees, use the repository runtime (`uv run python`) rather than assuming a bare `python` executable exists.
+- In WSL worktrees, use the repository runtime (`uv run ...`) rather than assuming a bare Python/test executable exists. In a ChatGPT/Human MCP connector run, never run the whole pytest suite in one connector call; use the three separate serial `./scripts/run-pytest-mcp.sh N 3` calls owned by `mcp-tooling`.
 - For browser JavaScript that uses ES-module syntax in a repo where `.js` is not declared as Node ESM, validate with `node --input-type=module --check < path/to/file.js`; do not run plain `node --check path/to/file.js`, which will misparse valid `export`/`import` syntax as CommonJS.
 
 ## Before integration
