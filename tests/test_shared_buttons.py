@@ -65,8 +65,8 @@ def test_compact_actions_are_rectangular_and_strength_choices_are_separate():
     assert "border: 0;" in widgets
     assert "overflow: visible;" in widgets
     strength_block = widgets.rsplit(".choice-strip > .choice-card--strength {", 1)[1].split("}", 1)[0]
-    assert "min-height: 36px;" in strength_block
-    assert "padding: 6px 14px;" in strength_block
+    assert "min-height: var(--control-height-md);" in strength_block
+    assert "padding: var(--control-pad-block-sm) var(--control-pad-inline-sm);" in strength_block
     assert "border-radius: var(--radius-sm);" in strength_block
 
 

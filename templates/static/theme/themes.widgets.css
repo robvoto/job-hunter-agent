@@ -635,8 +635,8 @@
 
 .choice-strip > .choice-card--strength {
   position: relative;
-  min-height: 36px;
-  padding: 6px 14px;
+  min-height: var(--control-height-md);
+  padding: var(--control-pad-block-sm) var(--control-pad-inline-sm);
   border-radius: var(--radius-sm);
   overflow: hidden;
 }
