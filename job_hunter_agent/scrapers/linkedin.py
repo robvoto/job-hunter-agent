@@ -186,9 +186,16 @@ def _fetch_jobspy_isolated(search_params: dict):
     progress_send_conn.close()
     stall_timeout_seconds = float(get_linkedin_jobspy_stall_timeout_seconds())
     last_progress_at = time.monotonic()
+    progress_channel_open = True
     while worker.is_alive():
-        while progress_recv_conn.poll():
-            progress_recv_conn.recv()
+        while progress_channel_open and progress_recv_conn.poll():
+            try:
+                progress_recv_conn.recv()
+            except EOFError:
+                # The worker closes the progress pipe before it exits. EOF means
+                # no more pagination signals are coming, not that the scrape failed.
+                progress_channel_open = False
+                break
             last_progress_at = time.monotonic()
         if run_stop_requested():
             worker.terminate()
