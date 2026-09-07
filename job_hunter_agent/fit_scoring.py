@@ -684,6 +684,10 @@ def format_requirement_fit_diagnostics_block(
 
 
 def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -> List[dict]:
+    # JH-298: behavioural-expectation rows are partitioned into
+    # RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY upstream (llm_gate) and are never
+    # in RECORD_REQUIREMENT_COVERAGE_KEY, so they add zero to both the numerator
+    # and the denominator here. Do not re-merge the two lists.
     coverage = record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or []
     if not isinstance(coverage, list) or not coverage:
         return [{"label": "Requirement Fit: no requirements to score", "value": 0, "section": "requirement_fit"}]

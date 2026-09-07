@@ -668,6 +668,21 @@
   border-color: color-mix(in srgb, var(--state-success-border) 35%, var(--border-subtle));
 }
 
+/* JH-298: behavioural expectations are read-only employer context, not a scored
+   match state. Neutral palette only — it must never read as a gap or a pass. */
+.job-requirement-group--working-style strong.job-requirement-group-heading {
+  color: var(--state-neutral-text);
+}
+
+.job-requirement-group--working-style .job-requirement-group-heading::before {
+  background: var(--state-neutral-border);
+}
+
+.job-requirement-group--working-style .job-requirement-title-line {
+  background: color-mix(in srgb, var(--state-neutral-bg) 55%, var(--bg-chip-subtle));
+  border-color: color-mix(in srgb, var(--state-neutral-border) 35%, var(--border-subtle));
+}
+
 .job-requirement-subtype + .job-requirement-subtype {
   margin-top: var(--surface-gap-lg);
   padding-top: var(--surface-pad-block-md);
@@ -947,6 +962,16 @@
 .job-req-importance--bonus {
   border-color: var(--border-chip-subtle);
   color: var(--text-muted);
+}
+
+/* JH-298: "Employer context — not assessed" marker on behavioural rows. Neutral,
+   no action affordance, visually quieter than any coverage-status pill. */
+.job-req-not-assessed {
+  margin-left: 6px;
+  border-color: var(--state-neutral-border);
+  background: color-mix(in srgb, var(--state-neutral-bg) 70%, var(--bg-surface));
+  color: var(--state-neutral-text);
+  font-weight: var(--text-role-label-font-weight);
 }
 
 .job-insight-unavailable strong {

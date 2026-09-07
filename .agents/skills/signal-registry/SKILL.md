@@ -61,6 +61,14 @@ Signal for an `uncertain` element or an unresolved mandatory `non_capability` el
 still created **deterministically afterward** by `build_ad_learning_signals()`. See
 `docs/REQUIREMENT_DECOMPOSITION_RATIONALE.md`.
 
+**Behavioural-expectation rows never mint pending signals (JH-298).** Capability
+rows the fit-review LLM tags `requirement_kind=behavioural_expectation` are
+partitioned into the record's `requirement_coverage_behavioural` field before
+`build_ad_learning_signals()` runs, which iterates `requirement_coverage` only.
+Generic conduct / disposition wording ("works autonomously", "attention to
+detail", "willingness to embrace AI") therefore produces no pending
+`capability_concept` Signal and no AI-development capability concept.
+
 **Consequence:** jobs decided by the full LLM review produce no LLM-proposed learning candidates. Any learning-only candidate must still use a category from `signal_schema.VALID_SIGNAL_CATEGORIES`.
 
 ## Capability alias review map

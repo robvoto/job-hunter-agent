@@ -8,6 +8,9 @@ from job_hunter_agent.record_schema import (
     RECORD_LLM_COST_USD_KEY,
     RECORD_LLM_INPUT_TOKENS_KEY,
     RECORD_LLM_OUTPUT_TOKENS_KEY,
+    RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY,
+    RECORD_REQUIREMENT_COVERAGE_HIDDEN_KEY,
+    RECORD_REQUIREMENT_COVERAGE_KEY,
     RECORD_SOURCE_METADATA_KEY,
     RECORD_TITLE_KEY,
     SOURCE_POSTER_COMPANY_INDUSTRY_KEY,
@@ -620,6 +623,60 @@ def test_resolve_llm_review_payload_explicit_recruiter_metadata_skips_dedicated_
     payload = source_learning.resolve_llm_review_payload(record, {})
 
     assert payload["posting_channel"]["kind"] == "unknown"
+
+
+def test_behavioural_expectation_rows_never_mint_pending_capability_concept(monkeypatch):
+    # JH-298: build_ad_learning_signals reads requirement_coverage (+ hidden),
+    # never requirement_coverage_behavioural. Generic conduct wording — including
+    # "willingness to embrace AI" — must produce no pending capability_concept.
+    monkeypatch.setattr(
+        source_learning,
+        "signal_in_approved_knowledge",
+        lambda category, signal, aliases=None: (False, ""),
+    )
+    behavioural_rows = [
+        {
+            "requirement": text,
+            "importance": "preferred",
+            "requirement_type": "capability",
+            "requirement_kind": "behavioural_expectation",
+            "behavioural_expectation": True,
+            "status": "not_assessed",
+            "capability_name": "",
+            "canonical_requirement": "",
+            "matched_job_text": text,
+            "decomposition": {
+                "operator": "single",
+                "elements": [
+                    {
+                        "text": text,
+                        "capability_judgement": "uncertain",
+                        "canonical_concept": text,
+                        "canonical_fact_resolved": False,
+                        "status": "not_shown",
+                    }
+                ],
+            },
+        }
+        for text in (
+            "Works autonomously with minimal supervision",
+            "A genuine willingness to embrace AI in day-to-day work",
+        )
+    ]
+    record = {
+        RECORD_TITLE_KEY: "Business Analyst",
+        RECORD_COMPANY_KEY: "Acme",
+        RECORD_REQUIREMENT_COVERAGE_KEY: [],
+        RECORD_REQUIREMENT_COVERAGE_HIDDEN_KEY: [],
+        RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY: behavioural_rows,
+    }
+
+    signals = source_learning.build_ad_learning_signals(
+        record,
+        "Works autonomously. A genuine willingness to embrace AI in day-to-day work.",
+        profile={},
+    )
+    assert [s for s in signals if s["suggested_category"] == "capability_concept"] == []
 
 
 def test_deterministic_review_does_not_reject_potential_title_before_llm():

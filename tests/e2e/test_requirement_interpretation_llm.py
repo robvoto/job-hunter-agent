@@ -351,3 +351,107 @@ def test_real_llm_requirement_semantics_use_cheap_model_and_production_normaliza
         canonical = str(row.get("canonical_requirement") or "").lower()
         requirement = str(row.get("requirement") or "").lower()
         assert not canonical or canonical != requirement
+
+
+BEHAVIOURAL_AD_TEXT = """Real SEEK — Example Consulting, seek:00000042
+About you:
+- You work autonomously with minimal supervision
+- You are adaptable and comfortable working through ambiguity
+- Strong attention to detail and sound judgement
+- Naturally curious with a growth mindset
+- A willingness to embrace new technology, including AI
+
+What you'll do:
+- Deliver projects end to end
+- Facilitate stakeholder workshops and requirements elicitation sessions
+"""
+
+
+@pytest.mark.llm_e2e
+@pytest.mark.timeout(90)
+@pytest.mark.skipif(
+    not (_ALLOW_LLM and _HAS_REAL_KEY),
+    reason=(
+        "Real-LLM semantic contract is opt-in only. Set JOB_HUNTER_E2E_ALLOW_LLM=1 "
+        "and a real OPENAI_API_KEY to run it."
+    ),
+)
+def test_real_llm_separates_behavioural_expectations_from_professional_capabilities(
+    monkeypatch,
+):
+    """JH-298: generic personal-conduct wording must be classified
+    requirement_kind=behavioural_expectation, partitioned into
+    requirement_coverage_behavioural with a not_assessed status, and kept out of
+    scoring / learning. Observable professional activities in the same ad
+    ("deliver projects", "facilitate stakeholder workshops") must stay
+    professional_capability and score. This can only be proven through the real
+    requirement-interpretation boundary — normalization alone cannot show the
+    model actually made the classification.
+    """
+    from conftest import _cheapest_llm_model
+
+    from job_hunter_agent import llm_gate, source_learning
+    from job_hunter_agent.record_schema import (
+        RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY,
+        RECORD_REQUIREMENT_COVERAGE_KEY,
+    )
+
+    model = _cheapest_llm_model()
+    profile = {
+        "candidate_capabilities": [
+            {"name": "Project delivery", "level": "strong"},
+            {"name": "Stakeholder engagement", "level": "strong"},
+        ],
+        "candidate_eligibility": [],
+        "candidate_qualifications": [],
+    }
+    monkeypatch.setattr(llm_gate, "load_profile", lambda: profile)
+    monkeypatch.setattr(llm_gate, "_log_llm_model_once", lambda: model)
+
+    payload = llm_gate._request_learning_payload(BEHAVIOURAL_AD_TEXT, fit_review=True)
+    assert payload.get("llm_cost_usd", 0.0) <= REAL_LLM_COST_CEILING_USD
+
+    scored = payload["requirement_coverage"]
+    behavioural = payload["requirement_coverage_behavioural"]
+    assert behavioural, "real model classified no behavioural expectations"
+
+    # Every behavioural row is display-only and structurally inert.
+    for row in behavioural:
+        assert row["requirement_type"] == "capability", row
+        assert row.get("requirement_kind") == "behavioural_expectation", row
+        assert row["status"] == llm_gate.LLM_NOT_ASSESSED_COVERAGE_STATUS, row
+        assert row.get("profile_action_allowed") is not True, row
+        assert not row.get("canonical_requirement"), row
+        assert not row.get("capability_name"), row
+
+    behavioural_blob = " ".join(_row_text(row) for row in behavioural)
+    for phrase in ("autonomous", "ambiguity", "attention to detail", "curious", "ai"):
+        assert phrase in behavioural_blob, (phrase, behavioural_blob)
+
+    # The professional activities stay scored capabilities.
+    delivery_rows = _rows_with(scored, "deliver", "projects")
+    workshop_rows = [r for r in scored if "workshop" in _row_text(r) or "elicitation" in _row_text(r)]
+    assert delivery_rows and all(r["requirement_type"] == "capability" for r in delivery_rows)
+    assert all(
+        r.get("requirement_kind", "professional_capability") == "professional_capability"
+        for r in delivery_rows
+    )
+    assert workshop_rows and all(r["requirement_type"] == "capability" for r in workshop_rows)
+
+    # No behavioural row leaks into scoring or mints a pending capability signal.
+    scored_blob = " ".join(_row_text(row) for row in scored)
+    for phrase in ("work autonomously", "growth mindset", "willingness to embrace"):
+        assert phrase not in scored_blob, (phrase, scored_blob)
+
+    record = {
+        RECORD_REQUIREMENT_COVERAGE_KEY: scored,
+        RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY: behavioural,
+    }
+    signals = source_learning.build_ad_learning_signals(record, BEHAVIOURAL_AD_TEXT)
+    signal_blob = " ".join(
+        str(sig.get("signal") or "").lower()
+        for sig in signals
+        if sig.get("suggested_category") == "capability_concept"
+    )
+    for banned in ("ai development", "artificial intelligence", "machine learning", "genai"):
+        assert banned not in signal_blob, (banned, signal_blob)

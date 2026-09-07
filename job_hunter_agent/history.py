@@ -35,6 +35,7 @@ from job_hunter_agent.record_schema import (
     POSTING_CHANNEL_CLASSIFIER_VERSION,
     POSTING_CHANNEL_VERSION_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
+    RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY,
     RECORD_REQUIREMENT_COVERAGE_VERSION_KEY,
     REQUIREMENT_COVERAGE_CONTRACT_VERSION,
     RECORD_SOURCE_METADATA_KEY,
@@ -89,6 +90,7 @@ KEEP_SNAPSHOT_FIELDS = (
     "role_snapshot",
     "fit_highlights",
     RECORD_REQUIREMENT_COVERAGE_KEY,
+    RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY,
     RECORD_REQUIREMENT_COVERAGE_VERSION_KEY,
     "soft_risk_reasons",
     "missing_profile_support",
@@ -332,6 +334,11 @@ def apply_kept_job_reuse(record: dict, history_entry: dict) -> dict:
     if not record.get(RECORD_REQUIREMENT_COVERAGE_KEY):
         record[RECORD_REQUIREMENT_COVERAGE_KEY] = (
             snapshot.get(RECORD_REQUIREMENT_COVERAGE_KEY) or []
+        )
+
+    if not record.get(RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY):
+        record[RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY] = (
+            snapshot.get(RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY) or []
         )
 
     if not record.get(RECORD_POSTING_CHANNEL_EVIDENCE_KEY):

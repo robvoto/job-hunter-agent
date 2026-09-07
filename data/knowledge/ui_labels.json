@@ -1,8 +1,8 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 129,
-  "updated_at": "2026-09-05T00:00:00+00:00",
+  "version": 130,
+  "updated_at": "2026-09-07T00:00:00+00:00",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
     "remote_label": "Remote",
@@ -553,6 +553,7 @@
     "requirement_group_partial_heading": "Partial matches",
     "requirement_group_attention_heading": "Needs attention",
     "requirement_group_matched_heading": "Matched",
+    "requirement_group_working_style_heading": "Working style / behavioural expectations",
     "requirement_or_branches_note": "Either {options} satisfies this requirement.",
     "requirement_or_join": " or ",
     "coverage_status_supported": "In profile",
@@ -562,6 +563,7 @@
     "coverage_status_classification_review": "Needs classification/review",
     "coverage_status_mismatch": "Not in profile",
     "coverage_status_invalid": "Needs review",
+    "coverage_status_not_assessed": "Employer context — not assessed",
     "importance_preferred": "Preferred",
     "importance_bonus": "Bonus",
     "title_block_button_label": "Hide similar titles",

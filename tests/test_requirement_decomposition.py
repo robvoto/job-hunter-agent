@@ -18,6 +18,7 @@ from job_hunter_agent.profile_gaps import (
     resolve_custom_blocker,
 )
 from job_hunter_agent.record_schema import (
+    RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY,
     RECORD_REQUIREMENT_COVERAGE_HIDDEN_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
 )
@@ -611,3 +612,191 @@ def test_no_removed_decomposition_fields_survive_normalization():
 
     for dead_field in ("named_alternatives", "classification_reviewable"):
         assert dead_field not in row
+
+
+# --------------------------------------------------------------------------- #
+# JH-298 — behavioural expectations vs professional capabilities
+# --------------------------------------------------------------------------- #
+
+
+_NOT_ASSESSED = llm_gate.LLM_NOT_ASSESSED_COVERAGE_STATUS
+
+
+def _behavioural_item(requirement: str, *, importance: str = "preferred") -> dict:
+    return {
+        "requirement": requirement,
+        "importance": importance,
+        "requirement_type": "capability",
+        "requirement_kind": "behavioural_expectation",
+        # The LLM over-stated all of these — normalization must discard them.
+        "canonical_requirement": "made up concept",
+        "capability_name": "made up concept",
+        "status": "supported",
+        "matched_candidate_fact": "some unrelated fact",
+        "matched_job_text": requirement,
+        "decomposition": {
+            "operator": "single",
+            "elements": [
+                {
+                    "text": requirement,
+                    "capability_judgement": "capability",
+                    "canonical_concept": "made up concept",
+                    "canonical_fact_resolved": True,
+                    "status": "supported",
+                }
+            ],
+        },
+    }
+
+
+def test_behavioural_capability_row_is_display_only_and_partitioned_out():
+    rows = _normalize(
+        _behavioural_item("Works autonomously with minimal supervision"),
+        valid_capability_names={"made up concept": "Made Up Concept"},
+    )
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["requirement_kind"] == "behavioural_expectation"
+    assert row["behavioural_expectation"] is True
+    # Display-only: never a scored status, never actionable, no canonical concept.
+    assert row["status"] == _NOT_ASSESSED
+    assert _NOT_ASSESSED not in llm_gate._ALLOWED_REQUIREMENT_COVERAGE_STATUSES
+    assert row["profile_action_allowed"] is False
+    assert row["canonical_requirement"] == ""
+    assert row["capability_name"] == ""
+    assert row["matched_candidate_fact"] == ""
+    for element in row["decomposition"]["elements"]:
+        assert element["element_profile_action_allowed"] is False
+        assert element["matched_candidate_fact"] == ""
+
+    kept, behavioural = llm_gate.partition_behavioural_requirement_coverage(rows)
+    assert kept == []
+    assert behavioural == rows
+
+
+def test_professional_capability_kind_is_retained_and_scored():
+    item = {
+        "requirement": "Facilitate stakeholder workshops",
+        "importance": "mandatory",
+        "requirement_type": "capability",
+        "requirement_kind": "professional_capability",
+        "canonical_requirement": "",
+        "decomposition": _single("workshop facilitation", status="supported"),
+        "status": "supported",
+        "matched_candidate_fact": "workshop facilitation",
+        "matched_job_text": "Facilitate stakeholder workshops",
+    }
+    rows = _normalize(item, valid_capability_names={})
+    assert rows[0]["requirement_kind"] == "professional_capability"
+    assert "behavioural_expectation" not in rows[0]
+    kept, behavioural = llm_gate.partition_behavioural_requirement_coverage(rows)
+    assert kept == rows
+    assert behavioural == []
+
+
+def test_missing_requirement_kind_defaults_to_professional_with_warning(monkeypatch):
+    warnings: list[dict] = []
+    monkeypatch.setattr(
+        llm_gate,
+        "record_system_warning",
+        lambda **kwargs: warnings.append(kwargs) or kwargs,
+    )
+    item = {
+        "requirement": "SQL query authoring",
+        "importance": "preferred",
+        "requirement_type": "capability",
+        "canonical_requirement": "",
+        "decomposition": _single("SQL", status="not_shown"),
+        "status": "not_shown",
+        "matched_job_text": "SQL query authoring",
+    }
+    rows = _normalize(item, valid_capability_names={})
+    assert rows[0]["requirement_kind"] == "professional_capability"
+    assert any(
+        w["context"]["reason"] == "requirement_kind_defaulted" for w in warnings
+    )
+
+
+def test_decompose_before_classify_splits_mixed_sentence():
+    payload = llm_gate.normalize_llm_review_payload(
+        {
+            "decision": "KEEP",
+            "grade": "SOLID",
+            "requirement_coverage": [
+                _behavioural_item("work through ambiguity"),
+                _behavioural_item("manage complexity"),
+                {
+                    "requirement": "deliver projects",
+                    "importance": "mandatory",
+                    "requirement_type": "capability",
+                    "requirement_kind": "professional_capability",
+                    "canonical_requirement": "",
+                    "decomposition": _single("project delivery", status="supported"),
+                    "status": "supported",
+                    "matched_candidate_fact": "project delivery",
+                    "matched_job_text": "deliver projects",
+                },
+            ],
+        },
+        valid_capability_names={"made up concept": "Made Up Concept"},
+    )
+    scored = [r["requirement"] for r in payload["requirement_coverage"]]
+    behavioural = [r["requirement"] for r in payload["requirement_coverage_behavioural"]]
+    assert scored == ["deliver projects"]
+    assert sorted(behavioural) == ["manage complexity", "work through ambiguity"]
+    assert all(
+        r["status"] == _NOT_ASSESSED
+        for r in payload["requirement_coverage_behavioural"]
+    )
+
+
+def test_eligibility_and_qualification_rows_never_get_requirement_kind():
+    elig = {
+        "requirement": "Australian citizenship",
+        "importance": "mandatory",
+        "requirement_type": "eligibility",
+        "requirement_kind": "behavioural_expectation",  # nonsensical — must be dropped
+        "canonical_requirement": "",
+        "decomposition": _single("Australian citizenship", status="not_shown"),
+        "status": "not_shown",
+        "matched_job_text": "Australian citizenship",
+    }
+    qual = {
+        "requirement": "Bachelor degree",
+        "importance": "mandatory",
+        "requirement_type": "qualification",
+        "requirement_kind": "professional_capability",
+        "canonical_requirement": "",
+        "decomposition": _single("Bachelor degree", status="not_shown"),
+        "status": "not_shown",
+        "matched_job_text": "Bachelor degree",
+    }
+    elig_rows = _normalize(elig, valid_eligibility_names={})
+    qual_rows = _normalize(qual, valid_qualification_names={})
+    assert elig_rows[0]["requirement_kind"] == ""
+    assert qual_rows[0]["requirement_kind"] == ""
+
+
+def test_behavioural_rows_render_read_only_under_working_style_heading():
+    behavioural = _normalize(
+        _behavioural_item("Excellent communication skills", importance="mandatory"),
+        valid_capability_names={"made up concept": "Made Up Concept"},
+    )
+    record = _or_record([])
+    record[RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY] = behavioural
+    html = workspace_renderer.render_job_card(record, _render_profile())
+
+    heading = "Working style / behavioural expectations"
+    not_assessed_label = "Employer context — not assessed"
+
+    assert "job-requirement-group--working-style" in html
+    assert heading in html
+    assert "Excellent communication skills" in html
+    assert not_assessed_label in html
+    # Read-only: no profile actions rendered for the behavioural row.
+    working_style_fragment = html.split("job-requirement-group--working-style", 1)[1]
+    assert 'data-action="confirm_have"' not in working_style_fragment
+    assert 'data-action="' not in working_style_fragment
+    # Not surfaced as a scored gap.
+    assert "job-requirement-item--working-style" in html
+    assert "job-requirement-group--attention" not in html

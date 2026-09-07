@@ -429,6 +429,7 @@ def test_normalize_llm_review_payload_fit_review_shape():
                 "requirement": "Strong stakeholder engagement",
                 "importance": "preferred",
                 "requirement_type": "capability",
+                "requirement_kind": "professional_capability",
                 "canonical_requirement": "",
                 "profile_action_allowed": False,
                 "status": "supported",
@@ -454,6 +455,7 @@ def test_normalize_llm_review_payload_fit_review_shape():
             }
         ],
         "requirement_coverage_hidden": [],
+        "requirement_coverage_behavioural": [],
     }
 
 
@@ -494,6 +496,7 @@ def test_request_learning_payload_uses_fit_review_only_schema(monkeypatch):
                     "requirement": "Stakeholder engagement",
                     "importance": "preferred",
                     "requirement_type": "capability",
+                    "requirement_kind": "professional_capability",
                     "canonical_requirement": "",
                     "profile_action_allowed": False,
                     "status": "supported",
@@ -521,6 +524,7 @@ def test_request_learning_payload_uses_fit_review_only_schema(monkeypatch):
                 "requirement": "Process mapping",
                     "importance": "preferred",
                     "requirement_type": "capability",
+                    "requirement_kind": "professional_capability",
                     "canonical_requirement": "",
                     "profile_action_allowed": False,
                     "status": "partially_supported",
@@ -546,5 +550,6 @@ def test_request_learning_payload_uses_fit_review_only_schema(monkeypatch):
                 },
         ],
         "requirement_coverage_hidden": [],
+        "requirement_coverage_behavioural": [],
     }
     assert fake_client.responses.calls[0]["text_format"].__name__ == "_LLMFitReviewPayload"

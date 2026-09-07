@@ -24,6 +24,9 @@ class CapturedRequirement:
     matched_job_text: str = ""
     profile_support: tuple[str, ...] = ()
     canonical_field: str = ""
+    # JH-298: the LLM's requirement_kind on a capability row. "" means the fixture
+    # does not exercise the axis (row is a professional capability by default).
+    llm_kind: str = ""
 
 
 @pytest.fixture()
@@ -159,7 +162,7 @@ def _profile_lookups() -> dict[str, dict[str, str]]:
 
 
 def _raw_item(case: CapturedRequirement) -> dict:
-    return {
+    item = {
         "requirement": case.wording,
         "importance": case.expected_importance,
         "requirement_type": case.llm_type,
@@ -186,6 +189,12 @@ def _raw_item(case: CapturedRequirement) -> dict:
             ],
         },
     }
+    # JH-298: only attach requirement_kind when the fixture exercises the axis, so
+    # the existing rows keep testing the "field absent -> professional default"
+    # production path unchanged.
+    if case.llm_kind:
+        item["requirement_kind"] = case.llm_kind
+    return item
 
 
 @pytest.mark.parametrize(
@@ -438,3 +447,173 @@ def test_compound_preferred_qualification_stays_one_non_gating_row():
     assert fit_scoring.eligibility_gate_diagnostics(
         {"requirement_coverage": normalized}, {"candidate_qualifications": []}
     )["status"] == fit_scoring.ELIGIBILITY_GATE_NOT_APPLICABLE
+
+
+# --------------------------------------------------------------------------- #
+# JH-298 — behavioural expectation vs professional capability regression (AC-6)
+# --------------------------------------------------------------------------- #
+#
+# Rows mirror the conversation ads that motivated JH-298: generic personal-conduct
+# wording must classify as requirement_kind="behavioural_expectation" (capability
+# type retained), get forced to not_assessed / non-actionable, partition into
+# requirement_coverage_behavioural, and stay out of scoring and profile gaps.
+# Observable professional activities in the same ads ("deliver projects",
+# "document processes") must stay professional_capability and score as today.
+
+_BEHAVIOURAL = llm_gate.LLM_REQUIREMENT_KIND_BEHAVIOURAL
+_PROFESSIONAL = llm_gate.LLM_REQUIREMENT_KIND_PROFESSIONAL
+_NOT_ASSESSED = llm_gate.LLM_NOT_ASSESSED_COVERAGE_STATUS
+
+
+def _kind_case(
+    source_job: str,
+    wording: str,
+    llm_kind: str,
+    *,
+    canonical_requirement: str = "",
+    status: str = "not_shown",
+) -> CapturedRequirement:
+    return CapturedRequirement(
+        source_job,
+        wording,
+        "capability",
+        "preferred",
+        "capability",
+        canonical_requirement=canonical_requirement,
+        matched_candidate_fact=canonical_requirement,
+        status=status,
+        matched_job_text=wording,
+        canonical_field="capability_name" if canonical_requirement else "",
+        llm_kind=llm_kind,
+    )
+
+
+_KIND_REGRESSION_CASES: tuple[CapturedRequirement, ...] = (
+    # IPH — autonomy / adaptability are dispositions, not capabilities.
+    _kind_case("iph", "Works autonomously with minimal supervision", _BEHAVIOURAL),
+    _kind_case("iph", "Adaptable and comfortable with change", _BEHAVIOURAL),
+    # GM3 — mixed sentence decomposed upstream: the conduct atom is behavioural,
+    # "deliver projects" is a professional capability that still scores.
+    _kind_case("gm3", "Able to work through ambiguity", _BEHAVIOURAL),
+    _kind_case(
+        "gm3",
+        "Deliver projects end to end",
+        _PROFESSIONAL,
+        canonical_requirement="Project delivery",
+        status="supported",
+    ),
+    # Tranzformd — documentation is an observable professional activity; "attention
+    # to detail / sound judgement" is a personal quality.
+    _kind_case(
+        "tranzformd",
+        "Produce technical process documentation",
+        _PROFESSIONAL,
+        canonical_requirement="Process documentation",
+        status="supported",
+    ),
+    _kind_case("tranzformd", "Strong attention to detail and sound judgement", _BEHAVIOURAL),
+    # Nestlé — curiosity / adaptability / "willingness to embrace AI" are
+    # behavioural; the AI clause must never become an AI-development capability.
+    _kind_case("nestle", "Naturally curious with a growth mindset", _BEHAVIOURAL),
+    _kind_case(
+        "nestle",
+        "Willingness to embrace new technology including AI",
+        _BEHAVIOURAL,
+        canonical_requirement="AI development",
+        status="supported",
+    ),
+)
+
+
+def _kind_lookups() -> dict[str, dict[str, str]]:
+    return {
+        "capability": {
+            "project delivery": "Project delivery",
+            "process documentation": "Process documentation",
+            "ai development": "AI development",
+        }
+    }
+
+
+@pytest.mark.parametrize(
+    "case",
+    [c for c in _KIND_REGRESSION_CASES if c.llm_kind == _BEHAVIOURAL],
+    ids=lambda c: c.wording,
+)
+def test_ac6_behavioural_ad_wording_is_display_only_capability(case):
+    normalized = llm_gate.normalize_llm_requirement_coverage(
+        [_raw_item(case)],
+        valid_capability_names=_kind_lookups()["capability"],
+    )
+    assert len(normalized) == 1
+    row = normalized[0]
+    assert row["requirement_type"] == "capability", case.wording
+    assert row["requirement_kind"] == _BEHAVIOURAL, case.wording
+    assert row["behavioural_expectation"] is True, case.wording
+    assert row["status"] == _NOT_ASSESSED, case.wording
+    assert row["profile_action_allowed"] is False, case.wording
+    # Over-stated canonical / match fields from the LLM are discarded, so a
+    # "willingness to embrace AI" line can never surface as an AI capability.
+    assert row["canonical_requirement"] == "", case.wording
+    assert row["capability_name"] == "", case.wording
+    assert row["matched_candidate_fact"] == "", case.wording
+
+
+@pytest.mark.parametrize(
+    "case",
+    [c for c in _KIND_REGRESSION_CASES if c.llm_kind == _PROFESSIONAL],
+    ids=lambda c: c.wording,
+)
+def test_ac6_professional_ad_wording_stays_scored_capability(case):
+    normalized = llm_gate.normalize_llm_requirement_coverage(
+        [_raw_item(case)],
+        valid_capability_names=_kind_lookups()["capability"],
+    )
+    row = normalized[0]
+    assert row["requirement_kind"] == _PROFESSIONAL, case.wording
+    assert "behavioural_expectation" not in row, case.wording
+    assert row["status"] == "supported", case.wording
+    assert row["capability_name"] == case.canonical_requirement, case.wording
+
+
+def test_ac6_full_ad_payload_partitions_behavioural_and_scores_professional():
+    payload = llm_gate.normalize_llm_review_payload(
+        {
+            "decision": "KEEP",
+            "grade": "STRONG",
+            "requirement_coverage": [_raw_item(c) for c in _KIND_REGRESSION_CASES],
+        },
+        valid_capability_names=_kind_lookups()["capability"],
+    )
+
+    scored = payload["requirement_coverage"]
+    behavioural = payload["requirement_coverage_behavioural"]
+
+    scored_text = {row["requirement"] for row in scored}
+    behavioural_text = {row["requirement"] for row in behavioural}
+
+    assert scored_text == {
+        "Deliver projects end to end",
+        "Produce technical process documentation",
+    }
+    assert behavioural_text == {
+        c.wording for c in _KIND_REGRESSION_CASES if c.llm_kind == _BEHAVIOURAL
+    }
+    assert all(row["status"] == _NOT_ASSESSED for row in behavioural)
+    # No behavioural row leaks an AI-development (or any) capability concept.
+    assert all(not row.get("capability_name") for row in behavioural)
+    assert all(not row.get("canonical_requirement") for row in behavioural)
+
+    # Scoring and gaps only ever see the scored partition.
+    record = {"requirement_coverage": scored}
+    record_with_behavioural = {
+        "requirement_coverage": scored,
+        "requirement_coverage_behavioural": behavioural,
+    }
+    profile = {"candidate_capabilities": [], "candidate_eligibility": []}
+    assert fit_scoring.requirement_fit_diagnostics(record_with_behavioural, profile)[
+        "total_requirement_weight"
+    ] == fit_scoring.requirement_fit_diagnostics(record, profile)["total_requirement_weight"]
+
+    gaps = compute_profile_gaps(behavioural, [], [], candidate_eligibility=[])
+    assert gaps == []

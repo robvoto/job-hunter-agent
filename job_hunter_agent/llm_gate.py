@@ -64,6 +64,7 @@ from job_hunter_agent.llm_protocol import (
     LLM_ALLOWED_GRADES,
     LLM_ALLOWED_OCCUPATION_ALIGNMENTS,
     LLM_ALLOWED_POSTING_CHANNEL_KINDS,
+    LLM_ALLOWED_REQUIREMENT_KINDS,
     LLM_ALLOWED_TITLE_JUDGMENT_VERDICTS,
     LLM_COVERAGE_IMPORTANCE_BONUS,
     LLM_COVERAGE_IMPORTANCE_STRONGLY_PREFERRED,
@@ -79,6 +80,7 @@ from job_hunter_agent.llm_protocol import (
     LLM_INVALID_OCCUPATION_ALIGNMENT,
     LLM_INVALID_POSTING_CHANNEL_KIND,
     LLM_LEARNING_ONLY_PROMPT_SHAPE,
+    LLM_NOT_ASSESSED_COVERAGE_STATUS,
     LLM_PROFILE_RESOLUTION_EXISTING,
     LLM_PROFILE_RESOLUTION_NEW,
     LLM_PROFILE_RESOLUTION_UNRESOLVED,
@@ -104,6 +106,8 @@ from job_hunter_agent.llm_protocol import (
     LLM_PROMPT_TARGET_ROLES_HEADER,
     LLM_PROMPT_USE_VISIBLE_STRINGS,
     LLM_REJECTION_SUGGESTIONS_JSON_SHAPE,
+    LLM_REQUIREMENT_KIND_BEHAVIOURAL,
+    LLM_REQUIREMENT_KIND_PROFESSIONAL,
     LLM_SECTION_LABEL_CLASSIFICATION_SHAPE,
     LLM_TITLE_JUDGMENT_SHAPE,
     LLM_UNCERTAIN_COVERAGE_REQUIREMENT_TYPE,
@@ -459,6 +463,10 @@ class _LLMRequirementCoverageItem(BaseModel):
     requirement: str
     importance: str = "preferred"
     requirement_type: str = "capability"
+    # JH-298 second axis, meaningful only when requirement_type == "capability".
+    # "behavioural_expectation" rows are generic personal-conduct wording and are
+    # partitioned out of scoring / gaps / learning by normalization.
+    requirement_kind: str = "professional_capability"
     requirement_subtype: str = ""
     canonical_requirement: str = ""
     # Canonical structure for compound / disjunctive requirements. Replaces
@@ -886,7 +894,7 @@ def build_profile_storage_resolution_guidance() -> str:
 # Shared cache namespace/profile lifecycle. Fit review and title judgement each
 # have their own contract version so changing one does not invalidate the other.
 LLM_CACHE_SCHEMA_VERSION = 3
-FIT_REVIEW_CACHE_CONTRACT_VERSION = 5
+FIT_REVIEW_CACHE_CONTRACT_VERSION = 6
 TITLE_JUDGMENT_CACHE_CONTRACT_VERSION = 1
 POSTING_CHANNEL_LLM_CACHE_CONTRACT_VERSION = 1
 
@@ -1152,6 +1160,28 @@ _REQUIREMENT_STATUS_RANK: dict[str, int] = {
 
 def _requirement_status_rank(status: str) -> int:
     return _REQUIREMENT_STATUS_RANK.get(status, 0)
+
+
+def partition_behavioural_requirement_coverage(
+    rows: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Split normalized coverage rows into non-behavioural vs behavioural (JH-298).
+
+    A row carrying ``behavioural_expectation`` is generic personal-conduct /
+    disposition wording. It stays visible on the card as employer context (its own
+    read-only "Working style" group) but must contribute zero to the Requirement
+    Fit numerator and denominator, never seed a profile gap, custom blocker, or
+    pending learning signal. Structural exclusion by partition — not a per-consumer
+    skip flag — is the guarantee.
+    """
+    kept: list[dict[str, Any]] = []
+    behavioural: list[dict[str, Any]] = []
+    for row in rows:
+        if row.get("behavioural_expectation"):
+            behavioural.append(row)
+        else:
+            kept.append(row)
+    return kept, behavioural
 
 
 def partition_hidden_requirement_coverage(
@@ -1662,6 +1692,7 @@ def normalize_llm_requirement_coverage(
             item.get("requirement_type") or item.get("type")
         ).lower()
         raw_requirement_subtype = compact_whitespace(item.get("requirement_subtype")).lower()
+        raw_requirement_kind = compact_whitespace(item.get("requirement_kind")).lower()
         requirement_type_before = raw_requirement_type or "capability"
         status_before = status
         if raw_requirement_type:
@@ -1703,6 +1734,33 @@ def normalize_llm_requirement_coverage(
         else:
             requirement_type = LLM_INVALID_COVERAGE_REQUIREMENT_TYPE
             requirement_type_is_valid = False
+        # JH-298: the professional-capability vs behavioural-expectation axis is
+        # only meaningful on a genuine `capability` row. Non-capability rows carry
+        # an empty kind. Deterministic code trusts the LLM's classification here —
+        # it is semantic interpretation, not a keyword gate — and only structurally
+        # validates the token, defaulting a missing/garbled value to
+        # professional_capability (the safe, scored option) with a warning so a
+        # silent omission is visible.
+        if requirement_type_is_valid and requirement_type == "capability":
+            if raw_requirement_kind in LLM_ALLOWED_REQUIREMENT_KINDS:
+                requirement_kind = raw_requirement_kind
+            else:
+                requirement_kind = LLM_REQUIREMENT_KIND_PROFESSIONAL
+                _record_requirement_coverage_warning(
+                    requirement=requirement,
+                    importance=importance,
+                    requirement_type_before=requirement_type_before,
+                    requirement_type_after=requirement_type,
+                    status_before=status_before,
+                    status_after=status,
+                    proposed_matched_candidate_fact="",
+                    proposed_capability_name="",
+                    proposed_eligibility_name="",
+                    matched_job_text=matched_job_text,
+                    reason="requirement_kind_defaulted",
+                )
+        else:
+            requirement_kind = ""
         requirement_subtype = ""
         if requirement_type_is_valid and requirement_type == "eligibility":
             requirement_subtype = classify_requirement_subtype(
@@ -1775,6 +1833,52 @@ def normalize_llm_requirement_coverage(
                     "element_profile_action_allowed": False,
                 }
             ]
+        if requirement_kind == LLM_REQUIREMENT_KIND_BEHAVIOURAL:
+            # JH-298: generic personal-conduct / disposition wording. It stays
+            # visible as employer context but is structurally excluded from
+            # scoring, profile gaps, custom blockers and pending-signal learning.
+            # It is emitted here with a display-only status and no actionable
+            # fields, then partitioned into requirement_coverage_behavioural by
+            # partition_behavioural_requirement_coverage(). The scored-status
+            # gauntlet below is deliberately skipped so a behavioural row can
+            # never acquire supported/partially_supported.
+            key = requirement.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            for element in decomposition_elements:
+                element["matched_candidate_fact"] = ""
+                element["canonical_fact_resolved"] = False
+                element["element_profile_action_allowed"] = False
+            behavioural_item: dict[str, Any] = {
+                "requirement": requirement,
+                "importance": importance,
+                "requirement_type": requirement_type,
+                "requirement_kind": LLM_REQUIREMENT_KIND_BEHAVIOURAL,
+                "behavioural_expectation": True,
+                "canonical_requirement": "",
+                "profile_action_allowed": False,
+                "status": LLM_NOT_ASSESSED_COVERAGE_STATUS,
+                "matched_candidate_fact": "",
+                "capability_name": "",
+                "eligibility_name": "",
+                "matched_job_text": matched_job_text,
+                "profile_support": [],
+                "decomposition": {
+                    "operator": decomposition_operator,
+                    "elements": decomposition_elements,
+                },
+            }
+            if role_defining := bool(item.get("role_defining")):
+                behavioural_item["role_defining"] = True
+            if role_defining_group := compact_whitespace(item.get("role_defining_group")):
+                behavioural_item["role_defining_group"] = role_defining_group
+            if requirement_type != "eligibility":
+                if non_eligibility_count >= max_items:
+                    continue
+                non_eligibility_count += 1
+            results.append(behavioural_item)
+            continue
         single_element = (
             decomposition_elements[0]
             if decomposition_operator == "single" and len(decomposition_elements) == 1
@@ -2227,6 +2331,10 @@ def normalize_llm_requirement_coverage(
             "requirement": requirement,
             "importance": importance,
             "requirement_type": requirement_type,
+            # JH-298: "" for non-capability rows, "professional_capability" for a
+            # scored capability. Behavioural rows never reach here — they are
+            # emitted and short-circuited above.
+            "requirement_kind": requirement_kind,
             "canonical_requirement": canonical_requirement,
             # Renderer must gate Add-to-profile / future "I don't have this"
             # actions on this, not on canonical_requirement truthiness alone.
@@ -2532,6 +2640,12 @@ def normalize_llm_review_payload(
                 eligibility_requirements,
                 requirement_coverage,
             )
+            # JH-298: behavioural-expectation rows are pulled out first — they
+            # render as read-only employer context and contribute nothing to
+            # grade, gate, scoring, gaps, blockers, or learning.
+            requirement_coverage, requirement_coverage_behavioural = (
+                partition_behavioural_requirement_coverage(requirement_coverage)
+            )
             # Optional non_capability rows are retained for analysis but must not
             # reach grade, gate, scoring, or the normal card.
             requirement_coverage, requirement_coverage_hidden = (
@@ -2607,6 +2721,7 @@ def normalize_llm_review_payload(
                 ),
                 "requirement_coverage": requirement_coverage,
                 "requirement_coverage_hidden": requirement_coverage_hidden,
+                "requirement_coverage_behavioural": requirement_coverage_behavioural,
             }
 
         if "learning_candidates" in value or value.get("learning_only") or "fit_review" in value:
@@ -2617,6 +2732,7 @@ def normalize_llm_review_payload(
                 ),
                 "requirement_coverage": [],
                 "requirement_coverage_hidden": [],
+                "requirement_coverage_behavioural": [],
             }
 
         raise ValueError("LLM review payload is missing fit_review")

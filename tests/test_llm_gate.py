@@ -324,6 +324,7 @@ def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
                 "requirement": "Stakeholder engagement",
                 "importance": "preferred",
                 "requirement_type": "capability",
+                "requirement_kind": "professional_capability",
                 "canonical_requirement": "",
                 "profile_action_allowed": False,
                 "status": "supported",
@@ -351,6 +352,7 @@ def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
                 "requirement": "Process mapping",
                 "importance": "preferred",
                 "requirement_type": "capability",
+                "requirement_kind": "professional_capability",
                 "canonical_requirement": "",
                 "profile_action_allowed": False,
                 "status": "partially_supported",
@@ -376,6 +378,7 @@ def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
             },
         ],
         "requirement_coverage_hidden": [],
+        "requirement_coverage_behavioural": [],
     }
 
 
@@ -1628,14 +1631,18 @@ def test_normalize_coverage_converts_invalid_capability_match_to_not_shown(monke
     assert result[0]["capability_name"] == ""
     assert result[0]["eligibility_name"] == ""
     assert warnings
-    assert warnings[0]["severity"] == "info"
-    assert warnings[0]["category"] == "llm_requirement_coverage"
-    assert warnings[0]["source"] == "llm_gate"
-    assert warnings[0]["context"]["reason"] == "invalid_capability_match"
-    assert warnings[0]["context"]["requirement_type_before"] == "capability"
-    assert warnings[0]["context"]["status_before"] == "supported"
-    assert warnings[0]["context"]["status_after"] == "not_shown"
-    assert warnings[0]["fingerprint"] == llm_gate.make_system_warning_fingerprint(
+    # A capability row without an explicit requirement_kind also emits a
+    # requirement_kind_defaulted warning (JH-298); select the match warning by reason.
+    match_warning = next(
+        w for w in warnings if w["context"]["reason"] == "invalid_capability_match"
+    )
+    assert match_warning["severity"] == "info"
+    assert match_warning["category"] == "llm_requirement_coverage"
+    assert match_warning["source"] == "llm_gate"
+    assert match_warning["context"]["requirement_type_before"] == "capability"
+    assert match_warning["context"]["status_before"] == "supported"
+    assert match_warning["context"]["status_after"] == "not_shown"
+    assert match_warning["fingerprint"] == llm_gate.make_system_warning_fingerprint(
         "SAP experience",
         "capability",
         "supported",

@@ -17,6 +17,24 @@ LLM_ALLOWED_COVERAGE_IMPORTANCES = frozenset(
 )
 
 LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES = frozenset({"capability", "eligibility", "qualification"})
+
+# Second axis on `capability` requirement rows only (JH-298). A professional
+# capability is an observable skill / activity / domain that belongs in the
+# candidate profile and is scored. A behavioural expectation is generic personal
+# conduct or disposition wording ("works autonomously", "attention to detail",
+# "willingness to embrace AI") that stays visible as employer context but is
+# never scored, never a profile gap, and never learned. Deterministic code trusts
+# the LLM's answer here — it is semantic interpretation, not a keyword gate. See
+# docs/REQUIREMENT_DECOMPOSITION_RATIONALE.md.
+LLM_REQUIREMENT_KIND_PROFESSIONAL = "professional_capability"
+LLM_REQUIREMENT_KIND_BEHAVIOURAL = "behavioural_expectation"
+LLM_ALLOWED_REQUIREMENT_KINDS = frozenset(
+    {LLM_REQUIREMENT_KIND_PROFESSIONAL, LLM_REQUIREMENT_KIND_BEHAVIOURAL}
+)
+# Display-only status forced onto behavioural-expectation rows. Deliberately kept
+# outside the scored status vocabulary so a leaked row can never earn credit.
+LLM_NOT_ASSESSED_COVERAGE_STATUS = "not_assessed"
+
 LLM_EXPERIENCE_COMPONENT_DURATION = "duration"
 LLM_EXPERIENCE_COMPONENT_ROLE_ACTIVITY = "role_or_activity"
 LLM_EXPERIENCE_COMPONENT_QUALIFIER = "qualifier"
@@ -68,7 +86,7 @@ LLM_FIT_REVIEW_PROMPT_SHAPE = (
     '"requirement_type":"eligibility","requirement_subtype":"...","canonical_requirement":"...","decomposition":{"operator":"single|and|or","elements":[{"text":"...","capability_judgement":"capability|uncertain|non_capability","canonical_concept":"...","canonical_fact_resolved":true|false,"status":"supported|partially_supported|not_shown|mismatch","matched_candidate_fact":"..."}]},"status":"supported|partially_supported|not_shown|mismatch",'
     '"matched_candidate_fact":"...","matched_job_text":"...","profile_support":["..."],"covered_requirement_elements":["..."],"experience_components":[{"kind":"duration|role_or_activity|qualifier","text":"...","profile_supported":true|false,"profile_evidence":["..."],"matched_role_family":"..."}],"role_defining":true|false,"role_defining_group":"..."}],'
     '"requirement_coverage":[{"requirement":"...","importance":"mandatory|strongly_preferred|preferred|bonus",'
-    '"requirement_type":"capability|eligibility|qualification","requirement_subtype":"...","canonical_requirement":"...","decomposition":{"operator":"single|and|or","elements":[{"text":"...","capability_judgement":"capability|uncertain|non_capability","canonical_concept":"...","canonical_fact_resolved":true|false,"status":"supported|partially_supported|not_shown|mismatch","matched_candidate_fact":"..."}]},"status":"supported|partially_supported|not_shown|mismatch",'
+    '"requirement_type":"capability|eligibility|qualification","requirement_kind":"professional_capability|behavioural_expectation","requirement_subtype":"...","canonical_requirement":"...","decomposition":{"operator":"single|and|or","elements":[{"text":"...","capability_judgement":"capability|uncertain|non_capability","canonical_concept":"...","canonical_fact_resolved":true|false,"status":"supported|partially_supported|not_shown|mismatch","matched_candidate_fact":"..."}]},"status":"supported|partially_supported|not_shown|mismatch",'
     '"matched_candidate_fact":"...","matched_job_text":"...","profile_support":["..."],"covered_requirement_elements":["..."],"experience_components":[{"kind":"duration|role_or_activity|qualifier","text":"...","profile_supported":true|false,"profile_evidence":["..."],"matched_role_family":"..."}],"role_defining":true|false,"role_defining_group":"..."}],'
     '"debug_reason":"..."}'
 )
@@ -80,7 +98,7 @@ LLM_FIT_REVIEW_DEBUG_PROMPT_SHAPE = (
     '"requirement_type":"eligibility","requirement_subtype":"...","canonical_requirement":"...","decomposition":{"operator":"single|and|or","elements":[{"text":"...","capability_judgement":"capability|uncertain|non_capability","canonical_concept":"...","canonical_fact_resolved":true|false,"status":"supported|partially_supported|not_shown|mismatch","matched_candidate_fact":"..."}]},"status":"supported|partially_supported|not_shown|mismatch",'
     '"matched_candidate_fact":"...","matched_job_text":"...","profile_support":["..."],"covered_requirement_elements":["..."],"experience_components":[{"kind":"duration|role_or_activity|qualifier","text":"...","profile_supported":true|false,"profile_evidence":["..."],"matched_role_family":"..."}],"role_defining":true|false,"role_defining_group":"..."}],'
     '"requirement_coverage":[{"requirement":"...","importance":"mandatory|strongly_preferred|preferred|bonus",'
-    '"requirement_type":"capability|eligibility|qualification","requirement_subtype":"...","canonical_requirement":"...","decomposition":{"operator":"single|and|or","elements":[{"text":"...","capability_judgement":"capability|uncertain|non_capability","canonical_concept":"...","canonical_fact_resolved":true|false,"status":"supported|partially_supported|not_shown|mismatch","matched_candidate_fact":"..."}]},"status":"supported|partially_supported|not_shown|mismatch",'
+    '"requirement_type":"capability|eligibility|qualification","requirement_kind":"professional_capability|behavioural_expectation","requirement_subtype":"...","canonical_requirement":"...","decomposition":{"operator":"single|and|or","elements":[{"text":"...","capability_judgement":"capability|uncertain|non_capability","canonical_concept":"...","canonical_fact_resolved":true|false,"status":"supported|partially_supported|not_shown|mismatch","matched_candidate_fact":"..."}]},"status":"supported|partially_supported|not_shown|mismatch",'
     '"matched_candidate_fact":"...","match_source":"capability_name|related_skill|eligibility|qualification",'
     '"matched_profile_term":"...","matched_job_text":"...","profile_support":["..."],"covered_requirement_elements":["..."],"experience_components":[{"kind":"duration|role_or_activity|qualifier","text":"...","profile_supported":true|false,"profile_evidence":["..."],"matched_role_family":"..."}],"role_defining":true|false,"role_defining_group":"..."}],'
     '"debug_reason":"..."}'

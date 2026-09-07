@@ -82,6 +82,57 @@ The eligibility gate, grade derivation, hard-reject check, eligibility diagnosti
 `_atomicize_known_eligibility_rows` continue to read the row-level `requirement_type` and
 row-level `status` and need no per-element rework.
 
+### Row-level `requirement_kind` — behavioural expectations vs professional capabilities (JH-298)
+
+A second row-level axis on **`capability` rows only**, set by the fit-review LLM:
+
+- **`professional_capability`** — an observable skill / activity / domain / tool /
+  deliverable that belongs in the candidate profile and is scored. Interpersonal
+  activities performed as professional work (stakeholder facilitation, negotiation,
+  workshop facilitation, requirements elicitation, team leadership) are
+  `professional_capability`.
+- **`behavioural_expectation`** — generic personal-conduct / disposition / mindset
+  wording: "works autonomously", "excellent communication skills" (as a trait),
+  "adaptable", "attention to detail", "proactive", "curious", "willingness to
+  embrace AI". These are real employer signals but are **not** capabilities the
+  candidate profile tracks or that scoring should reward or penalise.
+
+`eligibility` and `qualification` rows never carry `requirement_kind` (empty string).
+
+A missing / unrecognised value on a capability row defaults to
+`professional_capability` (the safe, scored option) and records a
+`requirement_kind_defaulted` requirement-coverage warning so a silent omission is
+visible. The classification is trusted from the LLM — it is semantic
+interpretation, not a keyword gate — and only the token is structurally validated.
+
+**Decompose before classifying.** A mixed sentence is split into atoms first, then
+each atom is classified independently. "work through ambiguity, manage complexity
+and deliver projects" → "work through ambiguity" and "manage complexity" are
+`behavioural_expectation`; "deliver projects" stays `professional_capability` and
+scores.
+
+**Structural exclusion by partition.** `normalize_llm_requirement_coverage` emits a
+behavioural row with `status` forced to the display-only value `not_assessed`
+(deliberately **outside** `_ALLOWED_REQUIREMENT_COVERAGE_STATUSES` so a leaked row
+can never satisfy a scored-status check), `profile_action_allowed = False`, and a
+`behavioural_expectation: true` marker, with all matched-fact / canonical / element
+action fields cleared. `partition_behavioural_requirement_coverage()` then moves
+those rows into the record field `requirement_coverage_behavioural`, frozen next to
+`requirement_coverage`. Because scoring (`fit_scoring`), profile gaps / custom
+blockers (`profile_gaps`), and learning (`source_learning`) all read only
+`requirement_coverage`, behavioural rows contribute **zero** to the Requirement Fit
+numerator and denominator, never become a gap or blocker candidate, and never mint
+a pending `capability_concept` signal — guaranteed by construction, not by a
+per-consumer skip flag. The renderer reads `requirement_coverage_behavioural`
+separately and shows it in a read-only "Working style / behavioural expectations"
+group with a `not_assessed` label and no action buttons.
+
+**Contract-version bump.** `REQUIREMENT_COVERAGE_CONTRACT_VERSION` → 4 and
+`FIT_REVIEW_CACHE_CONTRACT_VERSION` → 6. Kept-job coverage snapshots and cached
+fit-review payloads produced before the split are unsafe to reuse; the history
+reuse guard forces a fresh fit review (the AC "fails closed / re-reviewed, never
+guessed" mechanism). No migration shim — stale dev caches are disposable.
+
 ### `capability_judgement` (per element)
 
 The fit-review LLM's bounded interpretation of whether the element names a reusable

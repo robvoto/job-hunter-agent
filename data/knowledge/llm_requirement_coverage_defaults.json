@@ -1,8 +1,8 @@
 {
   "kind": "system_config",
   "name": "llm_requirement_coverage_defaults",
-  "version": 24,
-  "updated_at": "2026-09-04",
+  "version": 25,
+  "updated_at": "2026-09-07",
   "description": "Managed default guidance for LLM requirement coverage decomposition behaviour.",
   "lines": [
     "For requirement_coverage: semantically decompose capability and qualification requirements into atomic items. Return legal or formal entry gates separately in eligibility_requirements.",
@@ -21,6 +21,11 @@
     "Even when element.capability_judgement is \"non_capability\", still provide element.canonical_concept and element.canonical_fact_resolved whenever a smallest defensible reusable concept genuinely exists. A mandatory requirement is never dropped; a resolved concept lets it stay actionable, and an optional non_capability element is retained for analysis rather than shown on the card.",
     "A body or organisation name inside a qualification clause (e.g. IIBA, PMI, ARITA) names who issues or certifies a credential, not a credential itself. Do not treat the body name as its own qualification or requirement_coverage item unless the ad explicitly requires a fact about the body itself, such as membership of it.",
     "Do not put a whole sentence as a single item; split compound sentences into their atomic parts.",
+    "Decompose a mixed sentence into its atomic parts BEFORE classifying each part. Classify each atom independently for requirement_type and requirement_kind. Example: 'ability to work through ambiguity, manage complexity and deliver projects' becomes three rows — 'work through ambiguity' and 'manage complexity' are requirement_kind=behavioural_expectation, while 'deliver projects' is requirement_type=capability, requirement_kind=professional_capability and is scored normally.",
+    "On every requirement_type=capability row set requirement_kind. Use requirement_kind=behavioural_expectation for generic personal-conduct, disposition, mindset, or attitude wording: working autonomously or with minimal supervision, self-motivation, 'excellent communication skills' stated as a personal trait, adaptability or flexibility, resilience, attention to detail, proactiveness, curiosity, strong work ethic, positive attitude, team-player disposition, willingness or eagerness to learn, and willingness or openness to embrace or use new technology including AI tools. These rows stay visible as employer context but are never scored, never a profile gap, and never a learning signal.",
+    "Use requirement_kind=professional_capability for observable professional skills, activities, domains, tools, and deliverables — including interpersonal ones performed as a professional activity such as stakeholder facilitation, negotiation, workshop facilitation, requirements elicitation, team leadership, and running governance forums. When wording is a concrete professional activity, it is professional_capability even if it also implies a soft skill.",
+    "'Willingness to use AI', 'comfortable adopting AI tools', or 'embrace AI in your workflow' is a behavioural_expectation. Never record it as an AI development, AI engineering, machine-learning, or prompt-engineering capability, and never emit a canonical_concept for it.",
+    "requirement_kind applies only to requirement_type=capability rows. Leave it unset for eligibility and qualification rows.",
     "For each atomic requirement: assign the weakest accurate importance. Use mandatory only when the ad explicitly says required, must, essential, mandatory, or similar hard-block language. Use strongly_preferred for emphatic non-mandatory preference language such as highly desirable or strongly preferred. Use preferred for ordinary desirable/preferred/highly regarded/well regarded language. Use bonus only for explicitly optional, nice-to-have, or bonus language. Do not mark every row mandatory.",
     "Store the original job-ad sentence in matched_job_text for traceability — do not match the whole sentence directly to a capability.",
     "Use requirement_type=capability or requirement_type=qualification in requirement_coverage. Use requirement_type=eligibility in eligibility_requirements. Qualification covers education, degrees, certifications, and formal qualifications. A deterministic check still validates existing capability and eligibility mappings, but qualification interpretation is LLM-driven.",

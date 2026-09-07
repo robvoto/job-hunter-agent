@@ -81,12 +81,21 @@ RECORD_REQUIREMENT_COVERAGE_KEY = "requirement_coverage"
 # Optional non_capability requirement rows: retained for analysis/debugging but
 # excluded from grade, gate, scoring, and the normal job card.
 RECORD_REQUIREMENT_COVERAGE_HIDDEN_KEY = "requirement_coverage_hidden"
+# JH-298 behavioural-expectation rows (generic personal-conduct / disposition
+# wording). Frozen alongside requirement_coverage so the card can render them as
+# read-only employer context, but structurally excluded from grade, gate,
+# scoring, profile gaps, custom blockers, and pending-signal learning. Owned by
+# the fit-review LLM contract (llm_gate.partition_behavioural_requirement_coverage).
+RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY = "requirement_coverage_behavioural"
 RECORD_REQUIREMENT_COVERAGE_VERSION_KEY = "requirement_coverage_contract_version"
 # Bump when requirement-coverage semantics change in a way that makes persisted
 # coverage unsafe to reuse without a fresh LLM fit review.
 # v3: canonical decomposition block (operator + elements[] + capability_judgement)
 # replaces named_alternatives / canonical_fact_resolved / classification_reviewable.
-REQUIREMENT_COVERAGE_CONTRACT_VERSION = 3
+# v4 (JH-298): capability rows carry a requirement_kind axis; behavioural rows are
+# partitioned into requirement_coverage_behavioural. Old cached coverage without
+# the split is unsafe to reuse and is re-reviewed (never guessed).
+REQUIREMENT_COVERAGE_CONTRACT_VERSION = 4
 RECORD_OCCUPATION_ALIGNMENT_KEY = "occupation_alignment"
 RECORD_OCCUPATION_ALIGNMENT_REASON_KEY = "occupation_alignment_reason"
 RECORD_DESCRIPTION_COMPACTION_KEY = "description_compaction"

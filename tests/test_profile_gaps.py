@@ -7,6 +7,8 @@ from job_hunter_agent.profile_gaps import (
     STATUS_UNKNOWN,
     classify_requirement_status,
     compute_profile_gaps,
+    list_custom_blocker_candidates,
+    resolve_custom_blocker,
 )
 
 _CAPABILITY_RULES = [
@@ -163,6 +165,30 @@ def test_compute_gaps_skips_requirement_coverage_when_capability_is_must_not_req
 
 def test_compute_gaps_empty_input_returns_empty():
     assert compute_profile_gaps([], _CAPABILITY_RULES, _MUST_NOT_REQUIRE) == []
+
+
+def test_behavioural_expectation_row_is_never_a_gap_or_blocker_candidate():
+    # JH-298: behavioural rows live in requirement_coverage_behavioural and are
+    # never passed to these functions. Even if one leaks through, its forced
+    # not_assessed status + profile_action_allowed=False must yield nothing.
+    behavioural_row = {
+        "requirement": "Works autonomously with minimal supervision",
+        "requirement_type": "capability",
+        "requirement_kind": "behavioural_expectation",
+        "behavioural_expectation": True,
+        "status": "not_assessed",
+        "capability_name": "",
+        "canonical_requirement": "",
+        "matched_job_text": "Works autonomously with minimal supervision",
+        "profile_action_allowed": False,
+        "matched_candidate_fact": "",
+    }
+    assert compute_profile_gaps([behavioural_row], [], []) == []
+    assert list_custom_blocker_candidates([behavioural_row]) == []
+    assert (
+        resolve_custom_blocker("autonomy", [behavioural_row])["reason_code"]
+        == "no_match"
+    )
 
 
 def test_compute_gaps_excludes_item_without_profile_action_allowed():

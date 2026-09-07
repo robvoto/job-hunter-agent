@@ -94,6 +94,7 @@ from job_hunter_agent.record_schema import (
     RECORD_IS_REPOSTED_KEY,
     RECORD_POTENTIAL_DUPLICATE_LINKS_KEY,
     RECORD_REJECT_REASON_KEY,
+    RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
     RECORD_REVIEW_SOURCE_KEY,
     RECORD_TITLE_REASON_KEY,
@@ -1329,6 +1330,13 @@ def render_job_card(
     raw_coverage = display_record.get(RECORD_REQUIREMENT_COVERAGE_KEY)
     raw_coverage_is_list = isinstance(raw_coverage, list)
     coverage_rows = raw_coverage if isinstance(raw_coverage, list) else []
+    # JH-298: behavioural-expectation rows are a separate frozen list. They are
+    # rendered read-only ("Working style") and never fed to the scored requirement
+    # groups, the profile-action controls, or _css_modifier_for_row.
+    raw_behavioural_coverage = display_record.get(RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY)
+    behavioural_coverage_rows = (
+        raw_behavioural_coverage if isinstance(raw_behavioural_coverage, list) else []
+    )
     duplicate_links = record.get(RECORD_DUPLICATE_LINKS_KEY)
     if not isinstance(duplicate_links, list):
         duplicate_links = []
@@ -2081,6 +2089,61 @@ def render_job_card(
             f"</div>"
         )
 
+    def _render_behavioural_expectations_block(rows: list[Any]) -> str:
+        """JH-298: read-only "Working style / behavioural expectations" group.
+
+        Deliberately does NOT reuse _render_requirement_row_html /
+        _css_modifier_for_row: these rows carry no coverage status, no
+        profile-review controls, and must never look like a scored gap. Each item
+        is just the ad wording, an importance badge, and a plain
+        "not assessed" label.
+        """
+        items_html = ""
+        for raw_row in rows:
+            if not isinstance(raw_row, dict):
+                continue
+            req_text = compact_whitespace(str(raw_row.get("requirement") or ""))
+            if not req_text:
+                continue
+            importance = str(raw_row.get("importance") or "").strip().lower()
+            importance_label = (
+                _workspace_label(
+                    "workspace_card_labels",
+                    importance_label_keys.get(importance, "importance_preferred"),
+                )
+                if importance
+                else ""
+            )
+            importance_html = (
+                f'<span class="job-req-importance jh-badge job-req-importance--{safe_html(importance.replace("_", "-"))}">'
+                f"{safe_html(importance_label)}</span>"
+                if importance_label
+                else ""
+            )
+            items_html += (
+                '<li class="job-requirement-item job-requirement-item--working-style">'
+                '<span class="job-requirement-text">'
+                '<span class="job-requirement-title-line">'
+                f"{safe_html(req_text)}{importance_html}"
+                '<span class="job-req-not-assessed jh-badge">'
+                f'{safe_html(_workspace_label("workspace_card_labels", "coverage_status_not_assessed"))}'
+                "</span>"
+                "</span>"
+                "</span>"
+                "</li>"
+            )
+        if not items_html:
+            return ""
+        return (
+            '<div class="job-insight-group is-secondary job-requirement-group '
+            'job-requirement-group--working-style">'
+            '<strong class="job-requirement-group-heading">'
+            f'{safe_html(_workspace_label("workspace_card_labels", "requirement_group_working_style_heading"))}'
+            "</strong>"
+            f'<ul class="job-requirement-list">{items_html}</ul>'
+            "</div>"
+        )
+
     def _render_requirement_sections_html(
         order: list[str],
         rows: dict[str, dict[str, Any]],
@@ -2262,10 +2325,15 @@ def render_job_card(
             f'<span class="job-requirement-text">{safe_html(occ_text)}</span></li>'
         )
 
+    behavioural_expectations_html = _render_behavioural_expectations_block(
+        behavioural_coverage_rows
+    )
     show_job_requirements_panel = (
-        bool(merged_requirement_rows or occupation_row_html)
+        bool(merged_requirement_rows or occupation_row_html or behavioural_expectations_html)
         if has_coverage
-        else bool(raw_coverage_is_list or occupation_row_html)
+        else bool(
+            raw_coverage_is_list or occupation_row_html or behavioural_expectations_html
+        )
     )
     if show_job_requirements_panel:
         requirement_sections_html = _render_requirement_sections_html(
@@ -2283,7 +2351,9 @@ def render_job_card(
                     "ui_labels.json is missing requirement_taxonomy_labels.capability_panel_label"
                 )
 
-        panel_body_html = requirement_sections_html or (
+        # Working-style rows render after the scored groups as read-only employer
+        # context — never in the empty-state branch's place.
+        panel_body_html = (requirement_sections_html + behavioural_expectations_html) or (
             '<div class="job-insight-group is-secondary">'
             f'<p class="job-requirements-empty">{safe_html(_workspace_label("workspace_card_labels", "job_requirements_empty_state"))}</p>'
             "</div>"

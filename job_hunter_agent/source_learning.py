@@ -271,6 +271,10 @@ def build_ad_learning_signals(
     # rows the normalizer could not resolve to a defensible reusable concept.
     # The LLM never names a signal category — this derivation is all deterministic.
     # See docs/REQUIREMENT_DECOMPOSITION_RATIONALE.md.
+    # JH-298: RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY is deliberately NOT
+    # merged in. Behavioural-expectation wording ("works autonomously",
+    # "willingness to embrace AI") must never mint a pending capability_concept
+    # signal; structural exclusion by omission is the guarantee.
     coverage_rows = [
         *(record.get(RECORD_REQUIREMENT_COVERAGE_KEY) or []),
         *(record.get(RECORD_REQUIREMENT_COVERAGE_HIDDEN_KEY) or []),

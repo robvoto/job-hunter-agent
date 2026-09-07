@@ -144,6 +144,10 @@ def compute_profile_gaps(
     for item in requirement_coverage:
         if not isinstance(item, dict):
             continue
+        # JH-298: behavioural-expectation rows are held in
+        # requirement_coverage_behavioural and never passed in here, so they can
+        # never become a gap. Their forced "not_assessed" status is also outside
+        # CONFIRMABLE_REQUIREMENT_STATUSES as a second line of defence.
         status = str(item.get("status") or "").strip().lower()
         if status not in CONFIRMABLE_REQUIREMENT_STATUSES:
             continue

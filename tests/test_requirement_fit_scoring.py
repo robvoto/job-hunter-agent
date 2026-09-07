@@ -477,6 +477,61 @@ def test_requirement_fit_not_shown_and_mismatch_are_zero_and_counted():
     assert "mismatch 1" in label
 
 
+def test_behavioural_coverage_key_adds_zero_to_numerator_and_denominator():
+    """JH-298: fit_scoring reads only requirement_coverage. A populated
+    requirement_coverage_behavioural must not move any score component."""
+    scored = [
+        {
+            "requirement": "Stakeholder engagement",
+            "importance": "mandatory",
+            "requirement_type": "capability",
+            "requirement_kind": "professional_capability",
+            "status": "supported",
+            "capability_name": "stakeholder engagement",
+            "matched_candidate_fact": "stakeholder engagement",
+        }
+    ]
+    behavioural = [
+        {
+            "requirement": "Works autonomously",
+            "importance": "mandatory",
+            "requirement_type": "capability",
+            "requirement_kind": "behavioural_expectation",
+            "behavioural_expectation": True,
+            "status": llm_gate.LLM_NOT_ASSESSED_COVERAGE_STATUS,
+            "capability_name": "",
+            "matched_candidate_fact": "",
+        },
+        {
+            "requirement": "Excellent communication skills",
+            "importance": "strongly_preferred",
+            "requirement_type": "capability",
+            "requirement_kind": "behavioural_expectation",
+            "behavioural_expectation": True,
+            "status": llm_gate.LLM_NOT_ASSESSED_COVERAGE_STATUS,
+            "capability_name": "",
+            "matched_candidate_fact": "",
+        },
+    ]
+    baseline = _record(scored)
+    with_behavioural = _record(scored, requirement_coverage_behavioural=behavioural)
+
+    base_diag = fit_scoring.requirement_fit_diagnostics(baseline, _profile())
+    beh_diag = fit_scoring.requirement_fit_diagnostics(with_behavioural, _profile())
+
+    assert beh_diag["final_requirement_fit"] == base_diag["final_requirement_fit"]
+    assert beh_diag["earned_weighted_credit"] == base_diag["earned_weighted_credit"]
+    assert beh_diag["total_requirement_weight"] == base_diag["total_requirement_weight"]
+    assert fit_scoring.fit_score(with_behavioural, _profile()) == fit_scoring.fit_score(
+        baseline, _profile()
+    )
+
+    audit = fit_scoring.requirement_fit_audit_rows(with_behavioural, _profile())
+    audit_requirements = {row["requirement"] for row in audit}
+    assert "Works autonomously" not in audit_requirements
+    assert "Excellent communication skills" not in audit_requirements
+
+
 def test_requirement_fit_unknown_mapped_capability_logs_uncertainty(tmp_path, monkeypatch):
     uncertainty_log = tmp_path / "uncertainty.jsonl"
     monkeypatch.setattr(fit_scoring, "UNCERTAINTY_LOG_PATH", uncertainty_log)
