@@ -74,6 +74,9 @@ def test_global_settings_admin_js_handles_seek_assisted_verification_toggle():
     assert "seek_assisted_verification_enabled" in js
     assert "playwrightSettings.seek_assisted_verification_enabled === true" in js
     assert "document.getElementById('seek_assisted_verification_enabled').checked" in js
+    assert "seek_manual_verification_timeout_ms" in js
+    assert "playwrightSettings.seek_manual_verification_timeout_ms" in js
+    assert "readSecondsAsMilliseconds(" in js
     assert "playwright_browser_mode" in js
     assert "playwrightSettings.playwright_browser_mode || 'ephemeral'" in js
     assert "playwright_browser_mode:" in js
@@ -105,6 +108,8 @@ def test_global_settings_page_renders_admin_partial(monkeypatch):
     assert 'id="source_document_allowed_suffixes"' in html
     assert 'id="playwright_browser_mode"' in html
     assert 'id="seek_assisted_verification_enabled"' in html
+    assert 'id="seek_manual_verification_timeout_ms"' in html
+    assert "SEEK manual verification wait (seconds)" in html
     assert "linkedin_fetch_timeout_seconds" not in html
     assert 'id="search_default_linkedin_jobspy_stall_timeout_seconds"' in html
     assert "It does not limit total LinkedIn runtime" in html

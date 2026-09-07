@@ -437,6 +437,12 @@ def get_seek_assisted_verification_enabled() -> bool:
     )
 
 
+def get_seek_manual_verification_timeout_ms() -> int:
+    return int(
+        load_global_settings()["playwright_settings"][KEY_SEEK_MANUAL_VERIFICATION_TIMEOUT_MS]
+    )
+
+
 def get_salary_limits() -> dict[str, dict[str, int]]:
     return load_global_settings()[KEY_LIMITS]["salary"]
 

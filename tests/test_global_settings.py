@@ -454,6 +454,20 @@ def _load_managed_global_settings_payload() -> dict:
     return json.loads(GLOBAL_SETTINGS_PATH.read_text(encoding="utf-8-sig"))
 
 
+def test_managed_seek_manual_verification_timeout_has_safe_bounds():
+    payload = _load_managed_global_settings_payload()
+    assert payload["playwright_settings"]["seek_manual_verification_timeout_ms"] == 120000
+
+    normalized = normalize_global_settings(payload, strict_managed=True)
+    assert normalized["playwright_settings"]["seek_manual_verification_timeout_ms"] == 120000
+
+    payload["playwright_settings"]["seek_manual_verification_timeout_ms"] = 29000
+    with pytest.raises(
+        ValueError, match=r"seek_manual_verification_timeout_ms must be between 30000 and 300000"
+    ):
+        normalize_global_settings(payload, strict_managed=True)
+
+
 def test_managed_global_settings_requires_requirement_coverage_max_items():
     payload = _load_managed_global_settings_payload()
     del payload["llm_settings"]["llm_prompt_settings"]["requirement_coverage_max_items"]

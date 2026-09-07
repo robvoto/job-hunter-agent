@@ -39,6 +39,7 @@ from job_hunter_agent.global_settings import (
     get_search_plan_max_age_minutes,
     get_search_plan_min_corroboration_samples,
     get_seek_assisted_verification_enabled,
+    get_seek_manual_verification_timeout_ms,
 )
 from job_hunter_agent.scrapers.apsjobs import APSJobsScraper
 from job_hunter_agent.scrapers.seek import build_seek_search_targets
@@ -463,6 +464,7 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
             playwright_viewport_width=context.playwright_viewport_width,
             playwright_viewport_height=context.playwright_viewport_height,
             playwright_selector_timeout=context.playwright_selector_timeout,
+            seek_manual_verification_timeout_ms=get_seek_manual_verification_timeout_ms(),
             seek_parallel_detail_workers=context.seek_parallel_detail_workers,
             assisted_verification_enabled=assisted_verification_enabled,
             discovery_records=cached_records,

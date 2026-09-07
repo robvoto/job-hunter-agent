@@ -398,6 +398,7 @@ def test_seek_sign_in_wall_stops_target_without_error_progress(monkeypatch, capl
         use_persistent_browser=False,
         assisted_verification_enabled=False,
         playwright_selector_timeout=5000,
+        seek_manual_verification_timeout_ms=120000,
     )
 
     assert recovered is False
@@ -459,6 +460,7 @@ def test_seek_visible_cloudflare_challenge_surfaces_action_before_it_clears(monk
             use_persistent_browser=False,
             assisted_verification_enabled=False,
             playwright_selector_timeout=5000,
+            seek_manual_verification_timeout_ms=120000,
         )
         is False
     )
@@ -500,12 +502,13 @@ def test_seek_bot_challenge_wait_succeeds_when_cards_appear(monkeypatch):
             use_persistent_browser=True,
             assisted_verification_enabled=True,
             playwright_selector_timeout=5000,
+            seek_manual_verification_timeout_ms=120000,
         )
         is True
     )
     assert calls == [(
         'article[data-automation="normalJob"], article[data-automation="premiumJob"]',
-        5000,
+        120000,
     )]
 
 
@@ -532,15 +535,16 @@ def test_seek_bot_challenge_wait_succeeds_in_visible_browser_without_assisted_fl
             _ChallengePage(),
             "[SEEK p1/3]",
             headless=False,
-            use_persistent_browser=True,
+            use_persistent_browser=False,
             assisted_verification_enabled=False,
             playwright_selector_timeout=5000,
+            seek_manual_verification_timeout_ms=120000,
         )
         is True
     )
     assert calls == [(
         'article[data-automation="normalJob"], article[data-automation="premiumJob"]',
-        5000,
+        120000,
     )]
 
 
@@ -568,6 +572,7 @@ def test_seek_bot_challenge_timeout_raises_classified_bot_challenge(monkeypatch)
             use_persistent_browser=True,
             assisted_verification_enabled=True,
             playwright_selector_timeout=5000,
+            seek_manual_verification_timeout_ms=120000,
         )
     except BotChallengeDetected as exc:
         assert exc.failure_class == SEEK_BOT_CHALLENGE
@@ -596,6 +601,7 @@ def test_seek_human_verification_recovery_continues_without_bot_challenge(monkey
             use_persistent_browser=True,
             assisted_verification_enabled=True,
             playwright_selector_timeout=5000,
+            seek_manual_verification_timeout_ms=120000,
         )
         is True
     )
@@ -622,6 +628,7 @@ def test_seek_human_verification_timeout_raises_classified_bot_challenge(monkeyp
             use_persistent_browser=True,
             assisted_verification_enabled=True,
             playwright_selector_timeout=5000,
+            seek_manual_verification_timeout_ms=120000,
         )
     except BotChallengeDetected as exc:
         assert exc.failure_class == SEEK_HUMAN_VERIFICATION

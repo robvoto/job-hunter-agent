@@ -321,6 +321,7 @@ def _wait_for_seek_bot_challenge_or_manual_verification(
     use_persistent_browser: bool,
     assisted_verification_enabled: bool,
     playwright_selector_timeout: int,
+    seek_manual_verification_timeout_ms: int,
 ) -> bool:
     _CF_AUTO_RESOLVE_TIMEOUT_MS = 15000
 
@@ -400,13 +401,21 @@ def _wait_for_seek_bot_challenge_or_manual_verification(
         headless,
         use_persistent_browser,
     )
-    if use_persistent_browser and not headless:
+    if not headless:
+        browser_noun = "browser session" if use_persistent_browser else "browser window"
         _set_seek_status_progress(
-            "SEEK needs verification. Open the AWS browser session and complete the check.",
+            f"Action required: SEEK verification. Check the SEEK {browser_noun} now and complete any CAPTCHA or human-verification prompt. Job Hunter will continue automatically.",
             stage="verification",
         )
+        logger.warning(
+            "[SEEK][WAITING_FOR_USER_VERIFICATION] %s waiting up to %dms for manual verification",
+            page_tag,
+            seek_manual_verification_timeout_ms,
+        )
         try:
-            list_page.wait_for_selector(SELECTOR_CARDS, timeout=playwright_selector_timeout)
+            list_page.wait_for_selector(
+                SELECTOR_CARDS, timeout=seek_manual_verification_timeout_ms
+            )
         except Exception as exc:
             logger.warning(
                 "[SEEK][USER_VERIFICATION_TIMEOUT] %s challenge did not resolve in time",
@@ -416,7 +425,13 @@ def _wait_for_seek_bot_challenge_or_manual_verification(
                 "SEEK is showing a bot challenge page and did not reach job cards.",
                 failure_class=SEEK_BOT_CHALLENGE,
             ) from exc
-        logger.info("[SEEK][BOT_CHALLENGE_RESOLVED] %s continuing scrape after verification", page_tag)
+        logger.info(
+            "[SEEK][USER_VERIFICATION_RESOLVED] %s continuing scrape after verification",
+            page_tag,
+        )
+        _set_seek_status_progress(
+            "SEEK verification cleared; continuing search.", stage="source_collection"
+        )
         return True
 
     raise BotChallengeDetected(
@@ -437,6 +452,7 @@ def _handle_seek_list_page_failure(
     use_persistent_browser: bool,
     assisted_verification_enabled: bool,
     playwright_selector_timeout: int,
+    seek_manual_verification_timeout_ms: int,
 ) -> bool:
     page_title = str(snapshot["title"])
     if failure_class == SEEK_HUMAN_VERIFICATION:
@@ -448,9 +464,9 @@ def _handle_seek_list_page_failure(
             headless,
             use_persistent_browser,
         )
-        if use_persistent_browser and not headless:
+        if not headless:
             page_recovered = _wait_for_seek_user_verification(
-                list_page, page_tag, playwright_selector_timeout
+                list_page, page_tag, seek_manual_verification_timeout_ms
             )
             if page_recovered:
                 logger.debug(
@@ -465,8 +481,7 @@ def _handle_seek_list_page_failure(
                 failure_class=SEEK_HUMAN_VERIFICATION,
             ) from exc
         logger.warning(
-            "%s assisted SEEK verification requires AWS browser session access; "
-            "on AWS this needs VNC/noVNC or secure admin port forwarding",
+            "%s SEEK verification cannot be completed while the browser is headless",
             page_tag,
         )
         _set_seek_status_progress(_SEEK_FAILURE_MESSAGES[SEEK_HUMAN_VERIFICATION], stage="verification")
@@ -483,10 +498,16 @@ def _handle_seek_list_page_failure(
             headless,
             use_persistent_browser,
         )
-        if use_persistent_browser and not headless:
-            _set_seek_status_progress("SEEK needs verification. Open the AWS browser session and complete the check.", stage="verification")
+        if not headless:
+            browser_noun = "browser session" if use_persistent_browser else "browser window"
+            _set_seek_status_progress(
+                f"Action required: SEEK verification. Check the SEEK {browser_noun} now and complete any CAPTCHA or human-verification prompt. Job Hunter will continue automatically.",
+                stage="verification",
+            )
             try:
-                list_page.wait_for_selector(SELECTOR_CARDS, timeout=playwright_selector_timeout)
+                list_page.wait_for_selector(
+                    SELECTOR_CARDS, timeout=seek_manual_verification_timeout_ms
+                )
             except Exception as wait_exc:
                 logger.warning(
                     "[SEEK][USER_VERIFICATION_TIMEOUT] %s challenge did not resolve in time",
@@ -496,7 +517,13 @@ def _handle_seek_list_page_failure(
                     _SEEK_FAILURE_MESSAGES[SEEK_BOT_CHALLENGE],
                     failure_class=SEEK_BOT_CHALLENGE,
                 ) from wait_exc
-            logger.info("[SEEK][BOT_CHALLENGE_RESOLVED] %s continuing scrape after verification", page_tag)
+            logger.info(
+                "[SEEK][USER_VERIFICATION_RESOLVED] %s continuing scrape after verification",
+                page_tag,
+            )
+            _set_seek_status_progress(
+                "SEEK verification cleared; continuing search.", stage="source_collection"
+            )
             return True
         _set_seek_status_progress(_SEEK_FAILURE_MESSAGES[SEEK_BOT_CHALLENGE], stage="error")
         raise BotChallengeDetected(
@@ -1268,6 +1295,7 @@ def seek_scrape_to_records(
     playwright_viewport_width: int,
     playwright_viewport_height: int,
     playwright_selector_timeout: int,
+    seek_manual_verification_timeout_ms: int,
     seek_parallel_detail_workers: int,
     headless: bool,
     assisted_verification_enabled: bool,
@@ -1493,6 +1521,7 @@ def seek_scrape_to_records(
                                 use_persistent_browser=use_persistent_browser,
                                 assisted_verification_enabled=assisted_verification_enabled,
                                 playwright_selector_timeout=playwright_selector_timeout,
+                                seek_manual_verification_timeout_ms=seek_manual_verification_timeout_ms,
                             )
                             if not bot_challenge_resolved:
                                 list_page.wait_for_selector(
@@ -1518,6 +1547,7 @@ def seek_scrape_to_records(
                                 use_persistent_browser=use_persistent_browser,
                                 assisted_verification_enabled=assisted_verification_enabled,
                                 playwright_selector_timeout=playwright_selector_timeout,
+                                seek_manual_verification_timeout_ms=seek_manual_verification_timeout_ms,
                             )
                             if failure_class == SEEK_SIGN_IN_WALL:
                                 stop_target = True

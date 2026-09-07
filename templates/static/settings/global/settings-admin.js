@@ -43,6 +43,7 @@ export const JobHunterAdminSettings = (function () {
     playwright_headless: ['playwright_settings', 'headless'],
     playwright_browser_mode: ['playwright_settings', 'playwright_browser_mode'],
     seek_assisted_verification_enabled: ['playwright_settings', 'seek_assisted_verification_enabled'],
+    seek_manual_verification_timeout_ms: ['playwright_settings', 'seek_manual_verification_timeout_ms'],
     playwright_viewport_width: ['playwright_settings', 'playwright_viewport_width'],
     playwright_viewport_height: ['playwright_settings', 'playwright_viewport_height'],
     playwright_selector_timeout: ['playwright_settings', 'playwright_selector_timeout'],
@@ -269,6 +270,12 @@ export const JobHunterAdminSettings = (function () {
       playwrightSettings.playwright_browser_mode || 'ephemeral',
     );
     requireElement('seek_assisted_verification_enabled').checked = playwrightSettings.seek_assisted_verification_enabled === true;
+    setFieldValue(
+      'seek_manual_verification_timeout_ms',
+      playwrightSettings.seek_manual_verification_timeout_ms === undefined
+        ? ''
+        : Number(playwrightSettings.seek_manual_verification_timeout_ms) / PLAYWRIGHT_TIMEOUT_MS_PER_SECOND,
+    );
     setFieldValue('playwright_viewport_width', playwrightSettings.playwright_viewport_width);
     setFieldValue('playwright_viewport_height', playwrightSettings.playwright_viewport_height);
     setFieldValue(
@@ -636,6 +643,10 @@ export const JobHunterAdminSettings = (function () {
         playwright_browser_mode:
           document.getElementById('playwright_browser_mode').value || currentPlaywright.playwright_browser_mode,
         seek_assisted_verification_enabled: document.getElementById('seek_assisted_verification_enabled').checked,
+        seek_manual_verification_timeout_ms: readSecondsAsMilliseconds(
+          'seek_manual_verification_timeout_ms',
+          currentPlaywright.seek_manual_verification_timeout_ms,
+        ),
         playwright_viewport_width: readNumber('playwright_viewport_width', currentPlaywright.playwright_viewport_width),
         playwright_viewport_height: readNumber('playwright_viewport_height', currentPlaywright.playwright_viewport_height),
         playwright_selector_timeout: readSecondsAsMilliseconds(

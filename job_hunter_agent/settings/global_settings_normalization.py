@@ -113,6 +113,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_PLAYWRIGHT_VIEWPORT_HEIGHT,
     KEY_PLAYWRIGHT_VIEWPORT_WIDTH,
     KEY_SEEK_ASSISTED_VERIFICATION_ENABLED,
+    KEY_SEEK_MANUAL_VERIFICATION_TIMEOUT_MS,
     KEY_SESSION_MAX_AGE_DAYS,
     KEY_PREFERENCE_WEIGHTS,
     KEY_POSTED_AGE_BADGE_THRESHOLD_DAYS,
@@ -1415,6 +1416,13 @@ def normalize_global_settings(
             KEY_PLAYWRIGHT_BROWSER_MODE: browser_mode,
             KEY_SEEK_ASSISTED_VERIFICATION_ENABLED: bool(
                 playwright_source.get(KEY_SEEK_ASSISTED_VERIFICATION_ENABLED, False)
+            ),
+            KEY_SEEK_MANUAL_VERIFICATION_TIMEOUT_MS: _require_int(
+                playwright_source,
+                KEY_SEEK_MANUAL_VERIFICATION_TIMEOUT_MS,
+                DEFAULT_PLAYWRIGHT_SETTINGS[KEY_SEEK_MANUAL_VERIFICATION_TIMEOUT_MS],
+                30000,
+                300000,
             ),
             KEY_SESSION_MAX_AGE_DAYS: _require_int(
                 playwright_source, KEY_SESSION_MAX_AGE_DAYS, 7, 1, 365

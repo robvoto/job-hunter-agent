@@ -147,6 +147,7 @@ def _base_scrape_kwargs(**overrides) -> dict:
         playwright_viewport_width=1400,
         playwright_viewport_height=900,
         playwright_selector_timeout=8000,
+        seek_manual_verification_timeout_ms=120000,
         seek_parallel_detail_workers=1,
         headless=True,
         assisted_verification_enabled=False,
