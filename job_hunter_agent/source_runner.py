@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import contextvars
 import logging
-import math
 import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
@@ -33,12 +32,9 @@ from job_hunter_agent.global_settings import (
     KEY_DATE_RANGE_DAYS,
     KEY_LINKEDIN_EASY_APPLY_ONLY,
     KEY_LINKEDIN_HOURS_OLD,
-    KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
     KEY_SEEK_MAX_PAGES,
     KEY_SORT_NEWEST_FIRST,
-    get_linkedin_jobspy_stall_timeout_seconds,
-    get_linkedin_parallel_search_workers,
     get_linkedin_stale_fallback_max_age_minutes,
     get_search_plan_max_age_minutes,
     get_search_plan_min_corroboration_samples,
@@ -1048,12 +1044,12 @@ SOURCE_RUNNER_NAMES: dict[str, str] = {
 }
 
 
-def _log_source_timeout_warning(
+def _log_source_slow_warning(
     source: str, message: str, *, elapsed_s: float | None = None
 ) -> None:
     source_progress = get_run_progress_for_source(source)
     logger.warning(
-        "[%s][SOURCE_TIMEOUT] elapsed_s=%s progress=%r message=%s",
+        "[%s][SOURCE_SLOW] elapsed_s=%s progress=%r message=%s",
         source.upper(),
         int(elapsed_s) if elapsed_s is not None else -1,
         source_progress or "(none)",
@@ -1062,19 +1058,19 @@ def _log_source_timeout_warning(
     source_label = get_source_display_label(source)
     set_run_progress_state(
         message,
-        stage="error",
+        stage="source_collection",
         source=source,
-        headline=f"{source_label} timed out",
-        detail="Stopping the source and preserving completed results.",
+        headline=f"{source_label} is still running",
+        detail="Processing is continuing; this is a slow-source warning, not a failure.",
         determinate=False,
     )
     record_system_warning(
-        severity="warning",
-        category="source_timeout",
+        severity="info",
+        category="source_slow",
         source=source,
         message=message,
         fingerprint=make_system_warning_fingerprint(
-            "source_timeout",
+            "source_slow",
             source,
             message,
         ),
@@ -1133,90 +1129,6 @@ def _source_stop_cleanup_seconds(source: str) -> float:
         SOURCE_TIMEOUT_GRACE_MAX_SECONDS,
         max(SOURCE_TIMEOUT_GRACE_MIN_SECONDS, soft_timeout * SOURCE_TIMEOUT_GRACE_FRACTION),
     )
-
-
-@dataclass(frozen=True)
-class LinkedInSourceRuntimeBudget:
-    seconds: float
-    target_count: int
-    worker_count: int
-    target_waves: int
-
-
-def _linkedin_source_runtime_budget(context: ScrapeRunContext) -> LinkedInSourceRuntimeBudget:
-    """Return a workload-aware whole-LinkedIn source ceiling.
-
-    One target wave gets one managed JobSpy no-progress budget. One additional
-    wave is reserved for deterministic row review and cooperative cleanup. This
-    scales with real configured workload instead of imposing another fixed total
-    duration on every LinkedIn run.
-    """
-    from job_hunter_agent.scrapers.linkedin import build_linkedin_search_targets  # noqa: PLC0415
-
-    configured_targets = build_linkedin_search_targets(context.search_settings, context.profile)
-    target_count = max(1, len(configured_targets))
-    raw_workers = context.search_settings.get(KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS)
-    if raw_workers in (None, ""):
-        raw_workers = get_linkedin_parallel_search_workers()
-    worker_count = max(1, min(int(raw_workers), target_count))
-    target_waves = max(1, math.ceil(target_count / worker_count))
-    stall_seconds = max(0.1, float(get_linkedin_jobspy_stall_timeout_seconds()))
-    return LinkedInSourceRuntimeBudget(
-        seconds=(target_waves + 1) * stall_seconds,
-        target_count=target_count,
-        worker_count=worker_count,
-        target_waves=target_waves,
-    )
-
-
-def _request_source_runtime_stop(
-    context: ScrapeRunContext,
-    *,
-    source: str,
-    budget: LinkedInSourceRuntimeBudget,
-    elapsed_s: float,
-) -> None:
-    source_label = get_source_display_label(source)
-    detail = (
-        f"workload limit {budget.seconds:g}s for {budget.target_count} targets across "
-        f"{budget.worker_count} workers ({budget.target_waves} target waves)"
-    )
-    failure_message = f"{source_label} failed: source runtime exceeded {detail}."
-    if not context.source_failure_message:
-        context.source_failure_message = failure_message
-    logger.error(
-        "[%s][SOURCE_RUNTIME_LIMIT] elapsed_s=%d limit_s=%s targets=%d workers=%d waves=%d",
-        source.upper(),
-        int(elapsed_s),
-        budget.seconds,
-        budget.target_count,
-        budget.worker_count,
-        budget.target_waves,
-    )
-    _record_source_warning(
-        source=source,
-        severity="error",
-        category="source_timeout",
-        message=failure_message,
-        run_id=context.run_iso,
-        context={
-            "elapsed_s": int(elapsed_s),
-            "runtime_limit_seconds": budget.seconds,
-            "target_count": budget.target_count,
-            "worker_count": budget.worker_count,
-            "target_waves": budget.target_waves,
-        },
-        fingerprint_parts=("source_runtime_limit", source, budget.target_count, budget.worker_count),
-    )
-    set_run_progress_state(
-        failure_message,
-        stage="error",
-        source=source,
-        headline=f"{source_label} is taking too long",
-        detail="Stopping the remaining enabled sources.",
-        determinate=False,
-    )
-    request_run_stop()
 
 
 def _log_source_start(source: str, *, execution_mode: str) -> None:
@@ -1335,17 +1247,6 @@ def _run_sources_in_parallel(
         for future, source in futures.items()
     }
     timeout_messages = {future: _source_timeout_message(source) for future, source in futures.items()}
-    linkedin_runtime_budget = (
-        _linkedin_source_runtime_budget(context)
-        if SOURCE_LINKEDIN in source_order
-        else None
-    )
-    hard_deadlines = {
-        future: started_at[source] + linkedin_runtime_budget.seconds
-        for future, source in futures.items()
-        if source == SOURCE_LINKEDIN and linkedin_runtime_budget is not None
-    }
-    runtime_limit_triggered: set[Any] = set()
     timeout_warned: set[Any] = set()
     next_heartbeat_at = {
         source: started_at[source] + SOURCE_HEARTBEAT_SECONDS for source in source_order
@@ -1357,27 +1258,6 @@ def _run_sources_in_parallel(
     try:
         while pending:
             now = time.monotonic()
-
-            expired_runtime_limits = [
-                future
-                for future in list(pending)
-                if future in hard_deadlines
-                and future not in runtime_limit_triggered
-                and not future.done()
-                and now >= hard_deadlines[future]
-                and not run_stop_requested()
-            ]
-            for future in expired_runtime_limits:
-                source = futures[future]
-                runtime_limit_triggered.add(future)
-                if linkedin_runtime_budget is None:
-                    raise RuntimeError("LinkedIn runtime deadline is missing its workload budget")
-                _request_source_runtime_stop(
-                    context,
-                    source=source,
-                    budget=linkedin_runtime_budget,
-                    elapsed_s=now - started_at[source],
-                )
 
             if run_stop_requested():
                 for future in pending:
@@ -1395,7 +1275,7 @@ def _run_sources_in_parallel(
             for future in newly_timed_out:
                 source = futures[future]
                 elapsed_s = now - started_at[source]
-                _log_source_timeout_warning(
+                _log_source_slow_warning(
                     source,
                     timeout_messages[future],
                     elapsed_s=elapsed_s,
@@ -1483,8 +1363,6 @@ def _run_sources_in_parallel(
             for future in pending:
                 if future not in timeout_warned:
                     next_deadline_candidates.append(warn_deadlines[future])
-                if future in hard_deadlines and future not in runtime_limit_triggered:
-                    next_deadline_candidates.append(hard_deadlines[future])
                 if future in stop_deadlines:
                     next_deadline_candidates.append(stop_deadlines[future])
             if next_deadline_candidates:

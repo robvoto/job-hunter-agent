@@ -21,6 +21,7 @@
     "linkedin_results_per_search": 25,
     "linkedin_jobspy_stall_timeout_seconds": 90,
     "linkedin_parallel_search_workers": 3,
+    "linkedin_parallel_review_workers": 3,
     "linkedin_easy_apply_only": null,
     "apsjobs_results_per_search": 25,
     "playwright_viewport_width": 1400,
@@ -54,6 +55,10 @@
         "max": 300
       },
       "linkedin_parallel_search_workers": {
+        "min": 1,
+        "max": 10
+      },
+      "linkedin_parallel_review_workers": {
         "min": 1,
         "max": 10
       },
@@ -516,7 +521,7 @@
       "learning_candidates_max_output_tokens": 500,
       "rejection_blocker_suggestions_max_output_tokens": 300,
       "capability_naming_max_output_tokens": 500,
-      "title_judgment_max_output_tokens": 80,
+      "title_judgment_max_output_tokens": 160,
       "profile_extraction_max_output_tokens": 2000,
       "job_description_max_chars": 5000,
       "cv_evidence_json_chars": 12000,

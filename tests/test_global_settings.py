@@ -502,6 +502,27 @@ def test_managed_global_settings_rejects_temperature_outside_api_range(temperatu
         normalize_global_settings(payload, strict_managed=True)
 
 
+def test_managed_title_judgment_budget_is_large_enough_for_luna_structured_output():
+    payload = _load_managed_global_settings_payload()
+
+    normalized = normalize_global_settings(payload, strict_managed=True)
+
+    assert (
+        normalized["llm_settings"]["llm_prompt_settings"]["title_judgment_max_output_tokens"]
+        == 160
+    )
+
+
+def test_managed_global_settings_rejects_title_judgment_budget_that_can_truncate_luna():
+    payload = _load_managed_global_settings_payload()
+    payload["llm_settings"]["llm_prompt_settings"]["title_judgment_max_output_tokens"] = 80
+
+    with pytest.raises(
+        ValueError, match=r"title_judgment_max_output_tokens must be between 160 and 500"
+    ):
+        normalize_global_settings(payload, strict_managed=True)
+
+
 def test_managed_global_settings_rejects_invalid_fit_decision_output_tokens():
     payload = _load_managed_global_settings_payload()
     payload["llm_settings"]["llm_prompt_settings"]["fit_decision_max_output_tokens"] = 0

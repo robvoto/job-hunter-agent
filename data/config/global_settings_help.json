@@ -22,7 +22,8 @@
         "sort_newest_first": "When true, workspace/search defaults prefer newer listings first.",
         "linkedin_hours_old": "How fresh LinkedIn listings must be, measured in hours.",
         "linkedin_results_per_search": "Maximum LinkedIn results collected per keyword/location search pair.",
-        "linkedin_jobspy_stall_timeout_seconds": "Maximum time Job Hunter allows one LinkedIn JobSpy target to make no pagination progress. This is not a total target-duration limit. Job Hunter also derives the whole-LinkedIn safety ceiling from the number of parallel target waves plus one review/cleanup wave.",
+        "linkedin_jobspy_stall_timeout_seconds": "Maximum time Job Hunter allows one LinkedIn JobSpy target to make no pagination progress. This is a per-target stall watchdog, not a total LinkedIn runtime limit.",
+        "linkedin_parallel_review_workers": "Maximum number of LinkedIn jobs reviewed concurrently after source-native deduplication. Search concurrency and review concurrency are separate controls.",
         "linkedin_easy_apply_only": "Optional LinkedIn Easy Apply filter. Null means do not force either direction.",
         "playwright_viewport_width": "Browser viewport width used by Playwright source connectors.",
         "playwright_viewport_height": "Browser viewport height used by Playwright source connectors.",
@@ -36,7 +37,8 @@
         "seek_max_pages": "Allowed min/max for the SEEK page crawl cap.",
         "linkedin_hours_old": "Allowed min/max for LinkedIn listing freshness in hours.",
         "linkedin_results_per_search": "Allowed min/max for LinkedIn results per search pair.",
-        "linkedin_jobspy_stall_timeout_seconds": "Allowed min/max for the LinkedIn JobSpy no-progress watchdog in seconds."
+        "linkedin_jobspy_stall_timeout_seconds": "Allowed min/max for the LinkedIn JobSpy no-progress watchdog in seconds.",
+        "linkedin_parallel_review_workers": "Allowed min/max for concurrent LinkedIn job reviews."
       }
     },
     "limits.salary": {

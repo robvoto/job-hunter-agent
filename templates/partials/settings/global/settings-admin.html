@@ -163,11 +163,15 @@
 
             <label for="search_default_linkedin_jobspy_stall_timeout_seconds">LinkedIn no-progress watchdog (seconds)</label>
             <input id="search_default_linkedin_jobspy_stall_timeout_seconds" type="number" min="30" max="300" step="1">
-            <div class="field-help">Stops a JobSpy target only when its real LinkedIn pagination stops advancing for this long. It does not limit total target duration. The whole-source safety ceiling scales from parallel target waves plus one review/cleanup wave. Valid range: <span id="search_default_linkedin_jobspy_stall_timeout_seconds_bounds"></span>.</div>
+            <div class="field-help">Stops a JobSpy target only when its real LinkedIn pagination stops advancing for this long. It does not limit total LinkedIn runtime. Valid range: <span id="search_default_linkedin_jobspy_stall_timeout_seconds_bounds"></span>.</div>
 
             <label for="search_default_linkedin_parallel_search_workers">Default LinkedIn parallel search workers</label>
             <input id="search_default_linkedin_parallel_search_workers" type="number" min="1" max="10" step="1">
             <div class="field-help">How many LinkedIn JobSpy search targets may fetch concurrently instead of running them serially. Valid range: <span id="search_default_linkedin_parallel_search_workers_bounds"></span>.</div>
+
+            <label for="search_default_linkedin_parallel_review_workers">Default LinkedIn parallel review workers</label>
+            <input id="search_default_linkedin_parallel_review_workers" type="number" min="1" max="10" step="1">
+            <div class="field-help">How many LinkedIn vacancies may run detail and LLM review concurrently after deduplication. Valid range: <span id="search_default_linkedin_parallel_review_workers_bounds"></span>.</div>
 
 
             <label class="toggle-switch" for="search_default_sort_newest_first">
@@ -295,6 +299,12 @@
             <label for="search_limit_linkedin_parallel_search_workers_max">LinkedIn parallel search workers maximum</label>
             <input id="search_limit_linkedin_parallel_search_workers_max" type="number" min="1" max="10000" step="1">
             <div class="field-help">Allowed range for how many LinkedIn search targets may fetch concurrently.</div>
+
+            <label for="search_limit_linkedin_parallel_review_workers_min">LinkedIn parallel review workers minimum</label>
+            <input id="search_limit_linkedin_parallel_review_workers_min" type="number" min="1" max="10000" step="1">
+            <label for="search_limit_linkedin_parallel_review_workers_max">LinkedIn parallel review workers maximum</label>
+            <input id="search_limit_linkedin_parallel_review_workers_max" type="number" min="1" max="10000" step="1">
+            <div class="field-help">Allowed range for how many LinkedIn vacancy reviews may run concurrently.</div>
 
             <h3 class="panel-subheading">Salary limits</h3>
 

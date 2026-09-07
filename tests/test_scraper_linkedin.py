@@ -2,6 +2,8 @@
 
 from datetime import date
 import logging
+import threading
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -712,6 +714,50 @@ def test_linkedin_jobspy_stall_watchdog_stops_only_no_progress(monkeypatch):
         _fetch_jobspy_isolated({"search_term": "project manager"})
 
     assert fake_context.worker.terminated is True
+
+def test_linkedin_review_batch_runs_independent_jobs_in_parallel(monkeypatch):
+    scraper = LinkedInScraper(
+        profile={},
+        llm_cache={},
+        job_history={},
+        applied_job_keys=set(),
+        hidden_job_keys=set(),
+        run_iso="2026-09-07T20:00:00+10:00",
+    )
+    review_context = SimpleNamespace()
+    lock = threading.Lock()
+    active = 0
+    max_active = 0
+
+    def fake_review(record, _context, _target_tag):
+        nonlocal active, max_active
+        with lock:
+            active += 1
+            max_active = max(max_active, active)
+        time.sleep(0.03)
+        with lock:
+            active -= 1
+        return record, []
+
+    monkeypatch.setattr(scraper, "_review_discovered_record", fake_review)
+    monkeypatch.setattr(
+        "job_hunter_agent.scrapers.linkedin._set_linkedin_run_progress",
+        lambda *_args, **_kwargs: None,
+    )
+
+    results = scraper._review_record_batch(
+        [(1, {"job_key": "linkedin:1"}), (2, {"job_key": "linkedin:2"}), (3, {"job_key": "linkedin:3"})],
+        review_context,
+        target_tag="[LinkedIn target 1/1]",
+        target_index=1,
+        total_targets=1,
+        total_rows=3,
+        max_workers=3,
+    )
+
+    assert max_active >= 2
+    assert [row_index for row_index, _, _ in results] == [1, 2, 3]
+
 
 def test_linkedin_deduplicates_cards_across_multiple_search_targets(monkeypatch):
     from job_hunter_agent.scrapers import linkedin as linkedin_module

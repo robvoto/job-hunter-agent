@@ -79,6 +79,7 @@ def test_search_settings_clamp_source_fetch_limits():
             "linkedin_hours_old": 999,
             "linkedin_results_per_search": 1,
             "linkedin_jobspy_stall_timeout_seconds": 999,
+            "linkedin_parallel_review_workers": 9,
             KEY_LINKEDIN_EASY_APPLY_ONLY: "false",
         }
     )
@@ -95,6 +96,7 @@ def test_search_settings_clamp_source_fetch_limits():
 
     assert normalized["linkedin_results_per_search"] == 5
     assert "linkedin_jobspy_stall_timeout_seconds" not in normalized
+    assert "linkedin_parallel_review_workers" not in normalized
 
     assert normalized[KEY_LINKEDIN_EASY_APPLY_ONLY] is False
 

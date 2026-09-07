@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import logging
 import copy
+import contextvars
 import multiprocessing
 import re
 import time
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from datetime import datetime
 from html.parser import HTMLParser
 from typing import List
@@ -29,6 +30,7 @@ from job_hunter_agent.global_settings import (
     KEY_SORT_NEWEST_FIRST,
     get_linkedin_jobspy_stall_timeout_seconds,
     get_linkedin_max_consecutive_target_failures,
+    get_linkedin_parallel_review_workers,
     get_linkedin_parallel_search_workers,
     get_search_plan_min_corroboration_samples,
     get_search_plan_max_age_minutes,
@@ -643,29 +645,44 @@ class LinkedInScraper(BaseJobScraper):
         )
 
         total_targets = len(targets)
+        # Review concurrency is global runtime capacity, not candidate search intent.
+        parallel_review_workers = max(1, int(get_linkedin_parallel_review_workers()))
         seen_discovered_job_keys: set[str] = set()
         probe_job_keys_by_location: dict[str, dict[str, set[str]]] = {}
         if self.discovery_records is not None:
             cached_collection_complete = True
+            cached_review_records: list[tuple[int, dict]] = []
             for index, cached_record in enumerate(self.discovery_records, start=1):
                 if run_stop_requested():
                     cached_collection_complete = False
                     break
-                cached_job_key = str(cached_record.get(RECORD_JOB_KEY) or "").strip()
-                if cached_job_key and cached_job_key in self.incremental_known_job_keys:
+                record = dict(cached_record)
+                job_key = str(record.get(RECORD_JOB_KEY) or "").strip()
+                if job_key and job_key in self.incremental_known_job_keys:
                     logger.debug(
                         "[LinkedIn] already-seen cached incremental job_key=%s; skipping review",
-                        cached_job_key,
+                        job_key,
                     )
                     continue
-                self._review_discovered_record(
-                    dict(cached_record),
+                if job_key and job_key in seen_job_keys:
+                    continue
+                if job_key:
+                    seen_job_keys.add(job_key)
+                cached_review_records.append((index, record))
+            if cached_review_records and not run_stop_requested():
+                batch_results = self._review_record_batch(
+                    cached_review_records,
                     review_context,
-                    seen_job_keys,
-                    f"[LinkedIn cached job {index}/{len(self.discovery_records)}]",
-                    kept_records,
-                    skill_observations,
+                    target_tag="[LinkedIn cached discovery]",
+                    target_index=1,
+                    total_targets=1,
+                    total_rows=len(self.discovery_records),
+                    max_workers=parallel_review_workers,
                 )
+                for _, kept_record, observations in batch_results:
+                    if kept_record is not None:
+                        kept_records.append(kept_record)
+                        skill_observations.extend(observations)
             self.discovery_status["complete"] = cached_collection_complete
             return kept_records, audit_rows, skill_observations
 
@@ -689,14 +706,14 @@ class LinkedInScraper(BaseJobScraper):
                     "targets": total_targets,
                     "date_range_days": date_range_days,
                     "parallel_search_workers": parallel_search_workers,
+                    "parallel_review_workers": parallel_review_workers,
                 },
             )
         )
 
-        # Targets are fetched concurrently (bounded by parallel_search_workers) so one
-        # slow/timed-out jobspy search no longer blocks every later target behind it,
-        # but rows are still reviewed sequentially in original target order below so
-        # dedup (seen_job_keys) and shared review_context state stay deterministic.
+        # Search fetches and vacancy reviews use separate bounded concurrency. Job-key
+        # dedup happens before review submission; review results are merged in source
+        # order so concurrency changes latency, not output ordering.
         pending_fetches: dict[int, tuple[Future, float]] = {}
         next_to_submit = 0
         run_started_at = time.monotonic()
@@ -893,6 +910,7 @@ class LinkedInScraper(BaseJobScraper):
                     logger.debug("%s rows=%d", target_tag, len(rows))
 
                     total_rows = len(rows)
+                    review_records: list[tuple[int, dict]] = []
                     for row_index, (_, row) in enumerate(rows.iterrows(), start=1):
                         _set_linkedin_run_progress(
                             target_index,
@@ -947,14 +965,26 @@ class LinkedInScraper(BaseJobScraper):
                             self.discovery_capture.append(copy.deepcopy(record))
                         if is_new_discovery:
                             target_new_unique_count += 1
-                            self._review_discovered_record(
-                                record,
-                                review_context,
-                                seen_job_keys,
-                                target_tag,
-                                kept_records,
-                                skill_observations,
-                            )
+                            if job_key and job_key in seen_job_keys:
+                                continue
+                            if job_key:
+                                seen_job_keys.add(job_key)
+                            review_records.append((row_index, record))
+
+                    if review_records and not run_stop_requested():
+                        batch_results = self._review_record_batch(
+                            review_records,
+                            review_context,
+                            target_tag=target_tag,
+                            target_index=target_index,
+                            total_targets=total_targets,
+                            total_rows=total_rows,
+                            max_workers=parallel_review_workers,
+                        )
+                        for _, kept_record, observations in batch_results:
+                            if kept_record is not None:
+                                kept_records.append(kept_record)
+                                skill_observations.extend(observations)
                     if run_stop_requested():
                         logger.debug("%s stop requested after row review; ending scrape", target_tag)
                         self.discovery_status["complete"] = False
@@ -1080,22 +1110,56 @@ class LinkedInScraper(BaseJobScraper):
         )
         return kept_records, audit_rows, skill_observations
 
+    def _review_record_batch(
+        self,
+        review_records: list[tuple[int, dict]],
+        review_context: ReviewPipelineContext,
+        *,
+        target_tag: str,
+        target_index: int,
+        total_targets: int,
+        total_rows: int,
+        max_workers: int,
+    ) -> list[tuple[int, dict | None, list[dict]]]:
+        """Review independent LinkedIn vacancies concurrently, then restore source order.
+
+        Blocking detail/LLM work is per vacancy. Each worker gets a copy of the parent
+        ContextVars so user identity and cooperative stop state remain bound to the run.
+        """
+        results: list[tuple[int, dict | None, list[dict]]] = []
+        with ThreadPoolExecutor(max_workers=max(1, max_workers)) as executor:
+            futures = {
+                executor.submit(
+                    contextvars.copy_context().run,
+                    self._review_discovered_record,
+                    record,
+                    review_context,
+                    target_tag,
+                ): row_index
+                for row_index, record in review_records
+            }
+            completed = 0
+            for future in as_completed(futures):
+                row_index = futures[future]
+                kept_record, observations = future.result()
+                results.append((row_index, kept_record, observations))
+                completed += 1
+                _set_linkedin_run_progress(
+                    target_index,
+                    total_targets,
+                    row_index=min(completed, total_rows),
+                    total_rows=total_rows,
+                )
+        results.sort(key=lambda item: item[0])
+        return results
+
     def _review_discovered_record(
         self,
         record: dict,
         review_context: ReviewPipelineContext,
-        seen_job_keys: set[str],
         target_tag: str,
-        kept_records: list[dict],
-        skill_observations: list[dict],
-    ) -> None:
-        """Run review after capturing authoritative LinkedIn header evidence."""
-        job_key = str(record.get(RECORD_JOB_KEY) or "").strip()
-        if job_key and job_key in seen_job_keys:
-            logger.debug("%s duplicate job_key=%s across LinkedIn targets; skipping", target_tag, job_key)
-            return
-        if job_key:
-            seen_job_keys.add(job_key)
+    ) -> tuple[dict | None, list[dict]]:
+        """Review one LinkedIn vacancy after caller-owned deduplication."""
         detail_fetched = False
         if self.source_name == SOURCE_LINKEDIN:
             closed_signals = self._fetch_linkedin_detail_evidence(record)
@@ -1116,8 +1180,8 @@ class LinkedInScraper(BaseJobScraper):
                 record, review_context, hooks=self._build_review_hooks()
             )
         if outcome["decision"] == "KEEP":
-            skill_observations.extend(record_skill_observations)
-            kept_records.append(record)
+            return record, record_skill_observations
+        return None, []
 
     def _build_search_targets(self, search_settings: dict) -> List[dict]:
         return build_linkedin_search_targets(

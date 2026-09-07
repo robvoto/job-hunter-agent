@@ -107,7 +107,8 @@ def test_global_settings_page_renders_admin_partial(monkeypatch):
     assert 'id="seek_assisted_verification_enabled"' in html
     assert "linkedin_fetch_timeout_seconds" not in html
     assert 'id="search_default_linkedin_jobspy_stall_timeout_seconds"' in html
-    assert "It does not limit total target duration" in html
+    assert "It does not limit total LinkedIn runtime" in html
+    assert 'id="search_default_linkedin_parallel_review_workers"' in html
     assert '<option value="persistent">Persistent</option>' in html
     assert 'href="/aws-browser-session"' in html
     assert "Open AWS browser session instructions" in html
@@ -687,3 +688,7 @@ def test_admin_hydrates_parallel_worker_limit_inputs_before_save():
     assert "setFieldValue('search_limit_linkedin_parallel_search_workers_max', searchLimits.linkedin_parallel_search_workers?.max);" in js
     assert "min: readNumber('search_limit_linkedin_parallel_search_workers_min'" in js
     assert "max: readNumber('search_limit_linkedin_parallel_search_workers_max'" in js
+    assert "setFieldValue('search_limit_linkedin_parallel_review_workers_min', searchLimits.linkedin_parallel_review_workers?.min);" in js
+    assert "setFieldValue('search_limit_linkedin_parallel_review_workers_max', searchLimits.linkedin_parallel_review_workers?.max);" in js
+    assert "min: readNumber('search_limit_linkedin_parallel_review_workers_min'" in js
+    assert "max: readNumber('search_limit_linkedin_parallel_review_workers_max'" in js

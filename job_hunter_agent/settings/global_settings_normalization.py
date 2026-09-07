@@ -52,6 +52,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_LIMITS,
     KEY_LINKEDIN_EASY_APPLY_ONLY,
     KEY_LINKEDIN_ENABLED,
+    KEY_LINKEDIN_PARALLEL_REVIEW_WORKERS,
     KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS,
     KEY_SEEK_QUICK_APPLY_ONLY,
     KEY_LINKEDIN_HOURS_OLD,
@@ -390,7 +391,7 @@ def _normalize_llm_prompt_settings(
     title_judgment_max_output_tokens = _prompt_int(
         KEY_LLM_PROMPT_TITLE_JUDGMENT_MAX_OUTPUT_TOKENS,
         KEY_LLM_PROMPT_TITLE_JUDGMENT_MAX_OUTPUT_TOKENS,
-        minimum=30,
+        minimum=160,  # Luna structured title JSON can exceed 80 tokens, including reasoning.
         maximum=500,
     )
     profile_extraction_max_output_tokens = _prompt_int(
@@ -1243,6 +1244,13 @@ def normalize_global_settings(
                 _search_setting_default_int(KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS, 3),
                 normalized_search_limits[KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS]["min"],
                 normalized_search_limits[KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS]["max"],
+            ),
+            KEY_LINKEDIN_PARALLEL_REVIEW_WORKERS: _require_int(
+                search_source,
+                KEY_LINKEDIN_PARALLEL_REVIEW_WORKERS,
+                _search_setting_default_int(KEY_LINKEDIN_PARALLEL_REVIEW_WORKERS, 3),
+                normalized_search_limits[KEY_LINKEDIN_PARALLEL_REVIEW_WORKERS]["min"],
+                normalized_search_limits[KEY_LINKEDIN_PARALLEL_REVIEW_WORKERS]["max"],
             ),
             KEY_SEEK_QUICK_APPLY_ONLY: (
                 None

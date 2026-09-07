@@ -32,6 +32,7 @@ from job_hunter_agent.global_settings import (
     KEY_LINKEDIN_EASY_APPLY_ONLY,
     KEY_LINKEDIN_HOURS_OLD,
     KEY_LINKEDIN_JOBSPY_STALL_TIMEOUT_SECONDS,
+    KEY_LINKEDIN_PARALLEL_REVIEW_WORKERS,
     KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
     KEY_LOCATIONS_MAX_SELECTED,
@@ -1078,6 +1079,7 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
     merged = deep_merge(copy.deepcopy(DEFAULT_SEARCH_SETTINGS), settings or {})
     # JobSpy stall protection is global runtime safety, not candidate search intent.
     merged.pop(KEY_LINKEDIN_JOBSPY_STALL_TIMEOUT_SECONDS, None)
+    merged.pop(KEY_LINKEDIN_PARALLEL_REVIEW_WORKERS, None)
     search_limits = load_global_settings()[KEY_LIMITS]["search"]
 
     try:
