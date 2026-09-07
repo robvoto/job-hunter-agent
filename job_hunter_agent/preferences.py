@@ -85,8 +85,8 @@ def passes_preference_filters(record: dict, profile: Optional[dict] = None) -> T
             context=entry,
         )
 
-        logger.warning(
-            "[UNCERTAINTY] work_type unclear for job_key=%s — letting through (full detail in %s)",
+        logger.info(
+            "[PREFERENCE][WORK_TYPE_UNKNOWN] job_key=%s — no hard rejection; continuing by design (detail in %s)",
             entry.get("job_key", "<unknown>"),
             UNCERTAINTY_LOG_PATH,
         )
@@ -141,8 +141,8 @@ def passes_preference_filters(record: dict, profile: Optional[dict] = None) -> T
                 context=entry,
             )
 
-            logger.warning(
-                "[UNCERTAINTY] work_mode unclear for job_key=%s — letting through (full detail in %s)",
+            logger.info(
+                "[PREFERENCE][WORK_MODE_UNKNOWN] job_key=%s — no hard rejection; continuing by design (detail in %s)",
                 entry.get("job_key", "<unknown>"),
                 UNCERTAINTY_LOG_PATH,
             )

@@ -498,16 +498,10 @@ def test_scrape_jobs_direct_finalizes_before_surfacing_source_failure(monkeypatc
         "finalize_scrape_run",
         lambda *args, **kwargs: events.append("finalized") or "done",
     )
-    monkeypatch.setattr(
-        source_connector,
-        "clear_run_stop_request",
-        lambda: events.append("stop_cleared"),
-    )
-
     with pytest.raises(RuntimeError, match="LinkedIn failed: 9 LinkedIn targets timed out"):
         source_connector.scrape_jobs_direct()
 
-    assert events == ["finalized", "stop_cleared"]
+    assert events == ["finalized"]
 
 
 def test_scrape_jobs_direct_rejects_missing_llm_provider_before_source_run(monkeypatch):

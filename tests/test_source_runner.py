@@ -759,17 +759,17 @@ def test_linkedin_slow_warning_does_not_stop_a_healthy_long_running_source(monke
         run_control.end_run_progress_scope(scope)
 
 
-def test_parallel_source_failure_stops_remaining_sources_and_preserves_failure(monkeypatch):
+def test_parallel_full_source_failure_does_not_cancel_healthy_sibling(monkeypatch):
     context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
-    seek_observed_stop = threading.Event()
+    seek_completed = threading.Event()
 
-    def cooperative_seek(ctx):
-        deadline = time.time() + 1
-        while time.time() < deadline and not run_control.run_stop_requested():
-            time.sleep(0.005)
-        if run_control.run_stop_requested():
-            seek_observed_stop.set()
-        return _seek_result(source_collection_complete=False)
+    def healthy_seek(ctx):
+        time.sleep(0.05)
+        seek_completed.set()
+        return _seek_result(
+            kept_records=[{"job_key": "seek:healthy"}],
+            audit_rows=[{"job_key": "seek:healthy"}],
+        )
 
     def failed_linkedin(ctx):
         return _li_result(
@@ -777,49 +777,87 @@ def test_parallel_source_failure_stops_remaining_sources_and_preserves_failure(m
             source_collection_complete=False,
         )
 
-    monkeypatch.setattr(source_runner, "_run_seek_source", cooperative_seek)
+    monkeypatch.setattr(source_runner, "_run_seek_source", healthy_seek)
     monkeypatch.setattr(source_runner, "_run_linkedin_source", failed_linkedin)
 
     scope = run_control.begin_run_progress_scope()
     try:
-        run_enabled_sources(context)
-        assert seek_observed_stop.is_set()
-        assert context.source_failure_message == "LinkedIn failed: 9 LinkedIn targets timed out"
-        progress = run_control.get_run_progress_detail()
-        assert progress is not None
-        assert progress["stage"] == "error"
-        assert progress["source"] == SOURCE_LINKEDIN
-        assert progress["headline"] == "LinkedIn failed"
+        kept, audit, _ = run_enabled_sources(context)
+        assert seek_completed.is_set()
+        assert run_control.run_stop_requested() is False
+        assert context.source_failure_message == ""
+        assert [record["job_key"] for record in kept] == ["seek:healthy"]
+        assert [row["job_key"] for row in audit] == ["seek:healthy"]
+        assert context.source_cache_stats[SOURCE_LINKEDIN]["health"] == "full_failure"
+        assert context.source_cache_stats[SOURCE_SEEK]["health"] == "healthy"
     finally:
         run_control.end_run_progress_scope(scope)
 
 
-def test_parallel_partial_source_failure_also_stops_remaining_sources(monkeypatch):
+def test_parallel_partial_source_failure_does_not_cancel_healthy_sibling(monkeypatch):
     context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
-    seek_observed_stop = threading.Event()
+    seek_completed = threading.Event()
 
-    def cooperative_seek(ctx):
-        deadline = time.time() + 1
-        while time.time() < deadline and not run_control.run_stop_requested():
-            time.sleep(0.005)
-        if run_control.run_stop_requested():
-            seek_observed_stop.set()
-        return _seek_result(source_collection_complete=False)
+    def healthy_seek(ctx):
+        time.sleep(0.05)
+        seek_completed.set()
+        return _seek_result(
+            kept_records=[{"job_key": "seek:healthy"}],
+            audit_rows=[{"job_key": "seek:healthy"}],
+        )
 
     def partial_linkedin(ctx):
         return _li_result(
             kept_records=[{"job_key": "linkedin:partial"}],
+            audit_rows=[{"job_key": "linkedin:partial"}],
             source_collection_complete=False,
         )
 
-    monkeypatch.setattr(source_runner, "_run_seek_source", cooperative_seek)
+    monkeypatch.setattr(source_runner, "_run_seek_source", healthy_seek)
     monkeypatch.setattr(source_runner, "_run_linkedin_source", partial_linkedin)
 
     scope = run_control.begin_run_progress_scope()
     try:
+        kept, _, _ = run_enabled_sources(context)
+        assert seek_completed.is_set()
+        assert run_control.run_stop_requested() is False
+        assert context.source_failure_message == ""
+        assert {record["job_key"] for record in kept} == {"seek:healthy", "linkedin:partial"}
+        assert context.source_cache_stats[SOURCE_LINKEDIN]["health"] == "partial_failure"
+    finally:
+        run_control.end_run_progress_scope(scope)
+
+
+def test_parallel_runner_marks_overall_failure_only_when_all_sources_fully_fail(monkeypatch):
+    context = _make_context([SOURCE_SEEK, SOURCE_LINKEDIN])
+
+    monkeypatch.setattr(
+        source_runner,
+        "_run_seek_source",
+        lambda ctx: _seek_result(
+            error=RuntimeError("SEEK challenge"), source_collection_complete=False
+        ),
+    )
+    monkeypatch.setattr(
+        source_runner,
+        "_run_linkedin_source",
+        lambda ctx: _li_result(
+            error=RuntimeError("LinkedIn unavailable"), source_collection_complete=False
+        ),
+    )
+
+    scope = run_control.begin_run_progress_scope()
+    try:
         run_enabled_sources(context)
-        assert seek_observed_stop.is_set()
-        assert context.source_failure_message == "LinkedIn failed: source collection was incomplete"
+        assert run_control.run_stop_requested() is False
+        assert context.source_failure_message == (
+            "All enabled sources failed: SEEK: SEEK challenge; LinkedIn: LinkedIn unavailable"
+        )
+        progress = run_control.get_run_progress_detail()
+        assert progress is not None
+        assert progress["stage"] == "error"
+        assert progress["source"] == "generic"
+        assert progress["headline"] == "Search sources failed"
     finally:
         run_control.end_run_progress_scope(scope)
 

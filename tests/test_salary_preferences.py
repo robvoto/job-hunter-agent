@@ -135,7 +135,7 @@ def test_unknown_work_type_logs_uncertainty(tmp_path, monkeypatch, caplog):
         },
     )
 
-    with caplog.at_level(logging.WARNING, logger="job_hunter_agent.preferences"):
+    with caplog.at_level(logging.INFO, logger="job_hunter_agent.preferences"):
         ok, reason = passes_preference_filters(
             {"job_key": "seek:123", "work_type": "unknown"}, None
         )
@@ -144,7 +144,7 @@ def test_unknown_work_type_logs_uncertainty(tmp_path, monkeypatch, caplog):
 
     assert reason == "OK"
 
-    assert "[UNCERTAINTY] work_type unclear" in caplog.text
+    assert "[PREFERENCE][WORK_TYPE_UNKNOWN]" in caplog.text
 
     assert "seek:123" in caplog.text
 

@@ -19,7 +19,6 @@ from job_hunter_agent.record_schema import (
 from job_hunter_agent.run_context import ScrapeRunContext
 from job_hunter_agent.run_control import (
     get_run_progress_for_source,
-    request_run_stop,
     run_stop_requested,
     run_shutdown_requested,
     set_run_progress_state,
@@ -195,44 +194,51 @@ def _source_health(result: SourceRunResult) -> str:
     return "full_failure"
 
 
-def _request_fail_fast_for_source_failure(
-    context: ScrapeRunContext, result: SourceRunResult
-) -> bool:
-    """Stop the rest of a run when one enabled source has actually failed.
-
-    Timeout warnings alone are not failures. A user-requested stop also retains
-    its own cancellation semantics and is never relabelled as a source failure.
-    """
-    if run_stop_requested() or context.source_failure_message:
-        return False
-
-    health = _source_health(result)
-    if health == "healthy":
-        return False
-
-    source_label = get_source_display_label(result.source)
-    error_message = (
+def _source_failure_detail(result: SourceRunResult) -> str:
+    return (
         _exception_message(result.error)
         if result.error is not None
         else "source collection was incomplete"
     )
-    failure_message = f"{source_label} failed: {error_message}"
+
+
+def _record_overall_failure_if_no_usable_sources(
+    context: ScrapeRunContext, results: Sequence[SourceRunResult]
+) -> None:
+    """Fail the overall run only when every enabled source fully failed.
+
+    Source-local failures are isolated: a CAPTCHA, outage, or parser failure in one
+    connector must not cancel healthy sibling sources or discard their results.
+    Partial source results are also usable and therefore keep the overall run alive.
+    """
+    if run_stop_requested() or not results:
+        return
+
+    failed = [result for result in results if _source_health(result) == "full_failure"]
+    if len(failed) != len(results):
+        return
+
+    if len(failed) == 1:
+        result = failed[0]
+        source_label = get_source_display_label(result.source)
+        failure_message = f"{source_label} failed: {_source_failure_detail(result)}"
+    else:
+        details = "; ".join(
+            f"{get_source_display_label(result.source)}: {_source_failure_detail(result)}"
+            for result in failed
+        )
+        failure_message = f"All enabled sources failed: {details}"
+
     context.source_failure_message = failure_message
-    logger.error(
-        "[%s][RUN_FAIL_FAST] %s; stopping remaining enabled sources.",
-        result.source.upper(),
-        failure_message,
-    )
+    logger.error("[RUN_SOURCE_FAILURE] %s", failure_message)
     set_run_progress_state(
         failure_message,
         stage="error",
-        source=result.source,
-        headline=f"{source_label} failed",
-        detail="Stopping the remaining enabled sources.",
+        source="generic",
+        headline="Search sources failed",
+        detail="No enabled source produced usable results.",
         determinate=False,
     )
-    request_run_stop()
-    return True
 
 
 def _source_search_signature(context: ScrapeRunContext, source: str) -> str:
@@ -1381,14 +1387,13 @@ def _run_sources_in_parallel(
                     results_by_source[source] = result
                     elapsed_s = time.monotonic() - started_at[source]
                     _log_source_complete(result, elapsed_s=elapsed_s)
-                    failure_triggered = _request_fail_fast_for_source_failure(context, result)
                     pending_source_set = {futures[pending_future] for pending_future in pending}
                     remaining_sources = [
                         pending_source
                         for pending_source in source_order
                         if pending_source in pending_source_set
                     ]
-                    if pending and not failure_triggered and not context.source_failure_message:
+                    if pending:
                         progress_text = _parallel_completion_progress(source, remaining_sources)
                         set_run_progress_state(
                             progress_text,
@@ -1407,7 +1412,6 @@ def _run_sources_in_parallel(
                         source=source, error=exc, source_collection_complete=False
                     )
                     results_by_source[source] = result
-                    _request_fail_fast_for_source_failure(context, result)
     finally:
         executor.shutdown(wait=False, cancel_futures=True)
 
@@ -1463,8 +1467,6 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
                 break
             result = _run_source_with_scope(source, _get_source_runner(source), context)
             results.append(result)
-            if _request_fail_fast_for_source_failure(context, result):
-                break
     elif len(enabled_source_order) > 1:
         parallel_labels = list_to_phrase(
             [get_source_display_label(source) for source in enabled_source_order]
@@ -1482,6 +1484,8 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
         # Use the same monitored worker path for a single source so its timeout
         # and cooperative cancellation contract matches parallel runs.
         results = _run_sources_in_parallel(context, enabled_source_order)
+
+    _record_overall_failure_if_no_usable_sources(context, results)
 
     # Merge mutable state back into context in deterministic order.
     for result in results:
