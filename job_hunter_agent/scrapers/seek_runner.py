@@ -140,6 +140,7 @@ _WEBDRIVER_INIT = "Object.defineProperty(navigator, 'webdriver', {get: () => und
 SEEK_HUMAN_VERIFICATION = "SEEK_HUMAN_VERIFICATION"
 SEEK_BOT_CHALLENGE = "SEEK_BOT_CHALLENGE"
 SEEK_TIMEOUT_NO_CARDS = "SEEK_TIMEOUT_NO_CARDS"
+SEEK_SIGN_IN_WALL = "SEEK_SIGN_IN_WALL"
 SEEK_UNKNOWN_FAILURE = "SEEK_UNKNOWN_FAILURE"
 SEEK_ASSISTED_BROWSER_SESSION_ENABLED = "AWS-assisted SEEK browser session is enabled."
 _SEEK_HUMAN_VERIFICATION_MARKERS = (
@@ -149,6 +150,9 @@ _SEEK_HUMAN_VERIFICATION_MARKERS = (
 _SEEK_BOT_CHALLENGE_MARKERS = (
     "just a moment",
     "confirm you are human",
+)
+_SEEK_SIGN_IN_WALL_MARKERS = (
+    "sign in to see more jobs",
 )
 _SEEK_BLOCK_MARKERS = (
     "access denied",
@@ -161,6 +165,7 @@ _SEEK_FAILURE_MESSAGES = {
     ),
     SEEK_BOT_CHALLENGE: "SEEK is showing a bot challenge page and did not reach job cards.",
     SEEK_TIMEOUT_NO_CARDS: "SEEK timed out before any job cards appeared.",
+    SEEK_SIGN_IN_WALL: "SEEK reached its public sign-in boundary; continuing with the remaining searches.",
     SEEK_UNKNOWN_FAILURE: "SEEK failed before it could load job cards.",
 }
 SEEK_DETAIL_SESSION_CLOSE_TIMEOUT_SECONDS = 2.0
@@ -186,6 +191,8 @@ def _classify_seek_list_page_text(text: str) -> str:
         return "empty"
     if any(marker in lowered for marker in _SEEK_LIST_PAGE_CHALLENGE_MARKERS):
         return "challenge_page"
+    if any(marker in lowered for marker in _SEEK_SIGN_IN_WALL_MARKERS):
+        return "sign_in_wall"
     if any(marker in lowered for marker in _SEEK_LIST_PAGE_BLOCK_MARKERS):
         return "blocked_page"
     return "ok"
@@ -203,6 +210,8 @@ def _classify_seek_list_page_failure(
         return SEEK_HUMAN_VERIFICATION
     if any(marker in lowered for marker in _SEEK_BOT_CHALLENGE_MARKERS):
         return SEEK_BOT_CHALLENGE
+    if any(marker in lowered for marker in _SEEK_SIGN_IN_WALL_MARKERS):
+        return SEEK_SIGN_IN_WALL
     if selector_count == 0:
         if any(marker in lowered for marker in _SEEK_BLOCK_MARKERS):
             return SEEK_UNKNOWN_FAILURE
@@ -224,9 +233,11 @@ def _seek_list_page_diagnostics(list_page) -> dict[str, object]:
         page_url_actual = f"<url unavailable: {url_exc}>"
 
     try:
-        body_text = (list_page.inner_text("body") or "")[:500].replace("\n", " ")
+        raw_body_text = str(list_page.inner_text("body") or "")
+        body_text = raw_body_text[:500].replace("\n", " ")
     except Exception as body_exc:
-        body_text = f"<body unavailable: {body_exc}>"
+        raw_body_text = f"<body unavailable: {body_exc}>"
+        body_text = raw_body_text
 
     try:
         selector_count = list_page.locator(SELECTOR_CARDS).count()
@@ -234,8 +245,10 @@ def _seek_list_page_diagnostics(list_page) -> dict[str, object]:
         selector_count = -1
         logger.debug("[SEEK] card selector count unavailable: %s", count_exc)
 
-    page_status = _classify_seek_list_page_text(body_text)
-    failure_class = _classify_seek_list_page_failure(page_title, body_text, selector_count)
+    # Classify against the full page text so late-page overlays such as SEEK's
+    # sign-in wall are not missed; keep only a short snippet in diagnostics.
+    page_status = _classify_seek_list_page_text(raw_body_text)
+    failure_class = _classify_seek_list_page_failure(page_title, raw_body_text, selector_count)
     return {
         "title": page_title,
         "url": page_url_actual,
@@ -490,6 +503,16 @@ def _handle_seek_list_page_failure(
             _SEEK_FAILURE_MESSAGES[SEEK_BOT_CHALLENGE],
             failure_class=SEEK_BOT_CHALLENGE,
         ) from exc
+    if failure_class == SEEK_SIGN_IN_WALL:
+        logger.info(
+            "[SEEK][SIGN_IN_WALL] %s public cards are no longer available without sign-in; stopping this target cleanly",
+            page_tag,
+        )
+        _set_seek_status_progress(
+            _SEEK_FAILURE_MESSAGES[SEEK_SIGN_IN_WALL],
+            stage="source_collection",
+        )
+        return False
     if failure_class == SEEK_TIMEOUT_NO_CARDS:
         logger.debug(
             "[SEEK][TIMEOUT_NO_CARDS] %s title=%r status=%s cards=%s",
@@ -1496,7 +1519,9 @@ def seek_scrape_to_records(
                                 assisted_verification_enabled=assisted_verification_enabled,
                                 playwright_selector_timeout=playwright_selector_timeout,
                             )
-                            if failure_class in {SEEK_TIMEOUT_NO_CARDS, SEEK_UNKNOWN_FAILURE}:
+                            if failure_class == SEEK_SIGN_IN_WALL:
+                                stop_target = True
+                            elif failure_class in {SEEK_TIMEOUT_NO_CARDS, SEEK_UNKNOWN_FAILURE}:
                                 stop_target = True
                                 target_success = False
                                 target_failure_reason = failure_class

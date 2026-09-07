@@ -66,6 +66,7 @@ from job_hunter_agent.scrapers.seek_runner import (
     BotChallengeDetected,
     SEEK_BOT_CHALLENGE,
     SEEK_HUMAN_VERIFICATION,
+    SEEK_SIGN_IN_WALL,
     SEEK_TIMEOUT_NO_CARDS,
 )
 
@@ -359,6 +360,56 @@ def test_seek_list_page_failure_classification_uses_marker_priority():
     )
 
 
+def test_seek_sign_in_wall_is_classified_as_expected_public_boundary():
+    assert _classify_seek_list_page_text("Sign in to see more jobs") == "sign_in_wall"
+    assert (
+        _classify_seek_list_page_failure(
+            "SEEK jobs",
+            "Sign in to see more jobs Continue with Google Continue with Email",
+            selector_count=0,
+        )
+        == SEEK_SIGN_IN_WALL
+    )
+
+
+def test_seek_sign_in_wall_stops_target_without_error_progress(monkeypatch, caplog):
+    progress_calls = []
+    monkeypatch.setattr(
+        "job_hunter_agent.scrapers.seek_runner._set_seek_status_progress",
+        lambda message, **kwargs: progress_calls.append((message, kwargs.get("stage"))),
+    )
+    caplog.set_level(logging.INFO, logger="job_hunter_agent.scrapers.seek_runner")
+
+    recovered = _handle_seek_list_page_failure(
+        "[SEEK p4/5]",
+        object(),
+        TimeoutError("no public cards"),
+        {
+            "title": "SEEK jobs",
+            "url": "https://seek.example/?page=4",
+            "body_text": "Sign in to see more jobs",
+            "selector_count": 0,
+            "page_status": "sign_in_wall",
+            "failure_class": SEEK_SIGN_IN_WALL,
+        },
+        page_status="sign_in_wall",
+        failure_class=SEEK_SIGN_IN_WALL,
+        headless=False,
+        use_persistent_browser=False,
+        assisted_verification_enabled=False,
+        playwright_selector_timeout=5000,
+    )
+
+    assert recovered is False
+    assert progress_calls == [
+        (
+            "SEEK reached its public sign-in boundary; continuing with the remaining searches.",
+            "source_collection",
+        )
+    ]
+    assert "[SEEK][SIGN_IN_WALL]" in caplog.text
+
+
 def test_seek_user_verification_wait_succeeds_when_cards_appear(monkeypatch):
     calls = []
 
@@ -576,6 +627,24 @@ def test_seek_human_verification_timeout_raises_classified_bot_challenge(monkeyp
         assert exc.failure_class == SEEK_HUMAN_VERIFICATION
     else:  # pragma: no cover - defensive guard
         raise AssertionError("expected BotChallengeDetected")
+
+
+def test_seek_list_page_diagnostics_classifies_sign_in_wall_beyond_log_snippet():
+    page = _FakeListPage(
+        title="SEEK jobs",
+        url="https://www.seek.com.au/jobs?page=4",
+        body_text=("public listing text " * 40) + " Sign in to see more jobs",
+        card_count=0,
+    )
+
+    from job_hunter_agent.scrapers.seek_runner import _seek_list_page_diagnostics
+
+    snapshot = _seek_list_page_diagnostics(page)
+
+    assert snapshot["page_status"] == "sign_in_wall"
+    assert snapshot["failure_class"] == SEEK_SIGN_IN_WALL
+    assert "Sign in to see more jobs" not in snapshot["body_text"]
+    assert len(snapshot["body_text"]) <= 500
 
 
 def test_seek_list_page_diagnostics_logs_challenge_state(caplog):

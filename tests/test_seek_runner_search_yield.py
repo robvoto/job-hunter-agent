@@ -499,3 +499,51 @@ def test_seek_bootstrap_expands_every_probed_term_regardless_of_run_order(monkey
         by_term = {metric.search_term: metric for metric in recorded_metrics}
         assert by_term["Registered Nurse"].pages_searched == 2, order
         assert by_term["Enrolled Nurse"].pages_searched == 2, order
+
+
+def test_seek_sign_in_wall_ends_target_without_marking_query_failed(monkeypatch):
+    """A SEEK sign-in boundary is an expected public-pagination limit, not a scraper failure."""
+    list_page = _FakeListPage({"target-a": [_FakeCard("seek:public-card")]})
+    _patch_common_seek_internals(monkeypatch, list_page)
+
+    def _wait_for_challenge(page, *args, **kwargs):
+        if "page=2" in page.url:
+            raise TimeoutError("sign-in wall")
+        return True
+
+    monkeypatch.setattr(
+        seek_runner, "_wait_for_seek_bot_challenge_or_manual_verification", _wait_for_challenge
+    )
+    monkeypatch.setattr(
+        seek_runner,
+        "_log_seek_list_page_diagnostics",
+        lambda *args, **kwargs: "sign_in_wall",
+    )
+    monkeypatch.setattr(
+        seek_runner,
+        "_seek_list_page_diagnostics",
+        lambda page: {
+            "title": "SEEK jobs",
+            "url": page.url,
+            "body_text": "Sign in to see more jobs",
+            "selector_count": 0,
+            "page_status": "sign_in_wall",
+            "failure_class": seek_runner.SEEK_SIGN_IN_WALL,
+        },
+    )
+    metrics = []
+    monkeypatch.setattr(seek_runner, "record_query_yield_metric", lambda metric: metrics.append(metric))
+
+    seek_runner.seek_scrape_to_records(
+        **_base_scrape_kwargs(
+            search_targets=[_search_targets()[0]],
+            configured_seek_max_pages=2,
+            discovery_capture=[],
+        )
+    )
+
+    assert len(metrics) == 1
+    assert metrics[0].pages_searched == 1
+    assert metrics[0].discovered_count == 1
+    assert metrics[0].success is True
+    assert metrics[0].failure_reason == ""
