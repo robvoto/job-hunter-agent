@@ -377,6 +377,52 @@ def test_seek_user_verification_wait_succeeds_when_cards_appear(monkeypatch):
     )]
 
 
+def test_seek_visible_cloudflare_challenge_surfaces_action_before_it_clears(monkeypatch, caplog):
+    progress_calls = []
+
+    class _ChallengePage:
+        cleared = False
+
+        def title(self):
+            return "SEEK jobs" if self.cleared else "Just a moment"
+
+        def inner_text(self, selector):
+            assert selector == "body"
+            return "jobs loaded" if self.cleared else "confirm you are human"
+
+        def wait_for_function(self, _expression, timeout):
+            assert timeout == 15000
+            self.cleared = True
+
+    monkeypatch.setattr(
+        "job_hunter_agent.scrapers.seek_runner._set_seek_status_progress",
+        lambda message, **kwargs: progress_calls.append((message, kwargs.get("stage"))),
+    )
+    caplog.set_level(logging.INFO, logger="job_hunter_agent.scrapers.seek_runner")
+
+    assert (
+        _wait_for_seek_bot_challenge_or_manual_verification(
+            _ChallengePage(),
+            "[SEEK p5/5]",
+            headless=False,
+            use_persistent_browser=False,
+            assisted_verification_enabled=False,
+            playwright_selector_timeout=5000,
+        )
+        is False
+    )
+
+    assert progress_calls[0][1] == "verification"
+    assert progress_calls[0][0].startswith("Action required: SEEK verification")
+    assert "browser window" in progress_calls[0][0]
+    assert progress_calls[-1] == (
+        "SEEK verification cleared; continuing search.",
+        "source_collection",
+    )
+    assert "Cloudflare challenge cleared" in caplog.text
+    assert "auto-resolved" not in caplog.text
+
+
 def test_seek_bot_challenge_wait_succeeds_when_cards_appear(monkeypatch):
     calls = []
 

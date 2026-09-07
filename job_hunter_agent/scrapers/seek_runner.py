@@ -325,15 +325,22 @@ def _wait_for_seek_bot_challenge_or_manual_verification(
     if not any(marker in lowered for marker in _SEEK_BOT_CHALLENGE_MARKERS):
         return False
 
-    # Cloudflare's "Just a moment..." challenge runs JS and auto-resolves in a few seconds.
-    # Wait for the title to change before deciding human intervention is required.
+    # A Cloudflare "Just a moment..." page may auto-resolve, but it may also render
+    # a clickable human-verification control. In a visible browser, surface that
+    # immediately rather than silently waiting and hoping the user notices the tab.
     if "just a moment" in lowered:
-        logger.debug(
-            "[SEEK][BOT_CHALLENGE_DETECTED] %s title=%r — Cloudflare JS challenge; waiting up to %dms for auto-resolve",
+        logger.warning(
+            "[SEEK][BOT_CHALLENGE_DETECTED] %s title=%r — Cloudflare challenge; waiting up to %dms for it to clear",
             page_tag,
             page_title,
             _CF_AUTO_RESOLVE_TIMEOUT_MS,
         )
+        if not headless:
+            browser_noun = "browser session" if use_persistent_browser else "browser window"
+            _set_seek_status_progress(
+                f"Action required: SEEK verification. Check the SEEK {browser_noun} now and complete any CAPTCHA or human-verification prompt. Job Hunter will continue automatically.",
+                stage="verification",
+            )
         try:
             list_page.wait_for_function(
                 "() => !document.title.toLowerCase().includes('just a moment')",
@@ -349,8 +356,13 @@ def _wait_for_seek_bot_challenge_or_manual_verification(
             ).lower()
             if not any(marker in lowered for marker in _SEEK_BOT_CHALLENGE_MARKERS):
                 logger.info(
-                    "[SEEK][BOT_CHALLENGE_RESOLVED] %s Cloudflare challenge auto-resolved", page_tag
+                    "[SEEK][BOT_CHALLENGE_RESOLVED] %s Cloudflare challenge cleared", page_tag
                 )
+                if not headless:
+                    _set_seek_status_progress(
+                        "SEEK verification cleared; continuing search.",
+                        stage="source_collection",
+                    )
                 return False
         except Exception:
             logger.debug(

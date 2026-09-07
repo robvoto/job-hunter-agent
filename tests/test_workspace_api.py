@@ -637,6 +637,36 @@ def test_run_status_and_stop_endpoint_report_stopping(monkeypatch):
     assert stop_calls == [True]
 
 
+def test_verification_progress_has_priority_over_routine_parallel_source_updates():
+    routine_detail = {
+        "stage": "source_collection",
+        "source": "linkedin",
+        "headline": "LinkedIn target 2 of 6",
+        "detail": "Reviewing job 20 of 49",
+    }
+    verification_detail = {
+        "stage": "verification",
+        "source": "seek",
+        "headline": "Action required: SEEK verification",
+        "detail": "",
+    }
+
+    progress, detail = workspace_api._prioritize_verification_progress(
+        "LinkedIn target 2/6",
+        routine_detail,
+        {
+            "linkedin": {"progress": "LinkedIn target 2/6", "progress_detail": routine_detail},
+            "seek": {
+                "progress": "Action required: SEEK verification",
+                "progress_detail": verification_detail,
+            },
+        },
+    )
+
+    assert progress == "Action required: SEEK verification"
+    assert detail == verification_detail
+
+
 def test_run_status_retains_terminal_stopped_state_and_total_elapsed(monkeypatch):
     monkeypatch.setattr(
         "job_hunter_agent.fastapi_app.read_session_user",

@@ -113,6 +113,21 @@ def api_run_stats():  # type: ignore[no-untyped-def]
     return json_response({})
 
 
+
+
+def _prioritize_verification_progress(
+    progress: str,
+    progress_detail: dict | None,
+    progress_by_source: dict[str, dict],
+) -> tuple[str, dict | None]:
+    """Keep any active human-verification prompt visible over routine source updates."""
+    for source in sorted(progress_by_source):
+        snapshot = progress_by_source.get(source) or {}
+        detail = snapshot.get("progress_detail")
+        if isinstance(detail, dict) and str(detail.get("stage") or "").strip() == "verification":
+            return str(snapshot.get("progress") or "").strip(), dict(detail)
+    return progress, progress_detail
+
 @router.get("/api/run-status")
 def api_run_status():  # type: ignore[no-untyped-def]
     """Return the current run lifecycle and independently structured progress fields.
@@ -126,6 +141,11 @@ def api_run_status():  # type: ignore[no-untyped-def]
     elapsed_seconds = srv._current_run_elapsed_seconds()
     progress = get_run_progress()
     progress_detail = get_run_progress_detail()
+    progress_by_source = get_run_progress_by_source()
+    if status == srv.RUN_STATUS_RUNNING:
+        progress, progress_detail = _prioritize_verification_progress(
+            progress, progress_detail, progress_by_source
+        )
     scheduler = srv._read_scheduler_status()
 
     return json_response(
@@ -135,7 +155,7 @@ def api_run_status():  # type: ignore[no-untyped-def]
             "stop_requested": status == srv.RUN_STATUS_STOPPING,
             "progress": progress or None,
             "progress_detail": progress_detail,
-            "progress_by_source": get_run_progress_by_source(),
+            "progress_by_source": progress_by_source,
             "elapsed_seconds": elapsed_seconds,
             "elapsed_text": elapsed_text or None,
             "last_run_at": last_run,
