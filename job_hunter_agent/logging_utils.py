@@ -110,6 +110,8 @@ def render_server_session_start_block(
     *,
     started_at: datetime,
     pid: int,
+    parent_pid: int,
+    invocation: str,
     debug_mode: bool,
     rebuild_on_startup: bool,
     step_through: bool,
@@ -120,6 +122,8 @@ def render_server_session_start_block(
         f"NEW SERVER SESSION STARTED\n"
         f"Started at       : {started_at_label}\n"
         f"PID              : {int(pid)}\n"
+        f"Parent PID       : {int(parent_pid)}\n"
+        f"Invocation       : {invocation}\n"
         f"Debug mode       : {'ON (--debug)' if debug_mode else 'OFF'}\n"
         f"Startup rebuild  : {'YES (--rebuild)' if rebuild_on_startup else 'NO'}\n"
         f"Step-through     : {'ON (--step)' if step_through else 'OFF'}\n"

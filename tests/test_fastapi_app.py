@@ -4,9 +4,11 @@ import hashlib
 import importlib
 import inspect
 import logging
+import signal
 import sys
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 from starlette.requests import Request as StarletteRequest
 
@@ -158,6 +160,29 @@ def test_background_service_env_flags_fail_fast_for_invalid_values(monkeypatch):
         assert _fa._SERVER_TELEGRAM_POLLER_ENV in str(exc)
 
 
+def test_bind_server_socket_rejects_duplicate_without_touching_existing_listener():
+    first = _fa._bind_server_socket("127.0.0.1", 0)
+    port = first.getsockname()[1]
+    try:
+        with pytest.raises(_fa.ServerAddressInUseError, match="existing listener was not touched"):
+            _fa._bind_server_socket("127.0.0.1", port)
+    finally:
+        first.close()
+
+
+def test_server_shutdown_signal_is_audited_once(monkeypatch, caplog):
+    monkeypatch.setattr(_fa.os, "getpid", lambda: 4321)
+    monkeypatch.setattr(_fa.os, "getppid", lambda: 1234)
+    monkeypatch.setattr(_fa, "_SERVER_SHUTDOWN_SIGNAL_RECORDED", False)
+
+    with caplog.at_level(logging.WARNING, logger="job_hunter_agent.fastapi_app"):
+        _fa._log_server_shutdown_signal(signal.SIGTERM)
+        _fa._log_server_shutdown_signal(signal.SIGTERM)
+
+    marker = "[SERVER_SHUTDOWN_SIGNAL] pid=4321 ppid=1234 signal=SIGTERM"
+    assert caplog.text.count(marker) == 1
+
+
 def test_run_wrapper_forwards_cli_args_to_fastapi_app():
     run_script = Path("run").read_text(encoding="utf-8")
 
@@ -253,6 +278,8 @@ def test_server_session_start_banner_is_written_to_log_file(monkeypatch, tmp_pat
 
         assert "NEW SERVER SESSION STARTED" in log_content
         assert "Started at       :" in log_content
+        assert "Parent PID       :" in log_content
+        assert "Invocation       :" in log_content
         assert "Startup rebuild  : YES (--rebuild)" in log_content
     finally:
         sys.stdout = original_stdout

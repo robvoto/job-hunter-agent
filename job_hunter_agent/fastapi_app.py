@@ -22,8 +22,10 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from datetime import datetime
+import errno
 import logging
 import os
+import socket
 import re
 import sys
 import threading
@@ -64,6 +66,7 @@ from job_hunter_agent.user_context import set_user_id
 from job_hunter_agent.run_control import enable_step_through
 
 _logger = logging.getLogger(__name__)
+_SERVER_SHUTDOWN_SIGNAL_RECORDED = False
 
 _CORS_METHODS = "GET, PUT, PATCH, POST, DELETE, OPTIONS"
 _CORS_HEADERS = "Content-Type"
@@ -190,11 +193,61 @@ def _configure_server_logging() -> None:
     sys.stderr = _LineLoggingStream(_logger, logging.ERROR)
 
 
+class ServerAddressInUseError(RuntimeError):
+    """Raised before ASGI startup when another process already owns the server address."""
+
+
+def _bind_server_socket(host: str, port: int) -> socket.socket:
+    """Reserve the listen address before FastAPI lifespan services start.
+
+    Uvicorn normally binds only after ASGI startup, which means a duplicate launch
+    can start scheduler/background threads and then immediately shut them down on
+    EADDRINUSE. Pre-binding makes single-instance failure deterministic and keeps
+    the already-running server untouched. The bound socket is handed to Uvicorn.
+    """
+    family = socket.AF_INET6 if ":" in host else socket.AF_INET
+    sock = socket.socket(family=family, type=socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        sock.bind((host, int(port)))
+    except OSError as exc:
+        sock.close()
+        if exc.errno == errno.EADDRINUSE:
+            raise ServerAddressInUseError(
+                f"Job Hunter startup skipped: {host}:{port} is already in use. "
+                "The existing listener was not touched."
+            ) from exc
+        raise
+    # Listening now, before ASGI lifespan starts, makes the address reservation
+    # exclusive even with SO_REUSEADDR. asyncio/Uvicorn can adopt this socket.
+    sock.listen()
+    sock.set_inheritable(True)
+    return sock
+
+
+def _log_server_shutdown_signal(signal_number: int) -> None:
+    global _SERVER_SHUTDOWN_SIGNAL_RECORDED
+    if _SERVER_SHUTDOWN_SIGNAL_RECORDED:
+        return
+    _SERVER_SHUTDOWN_SIGNAL_RECORDED = True
+
+    from job_hunter_agent import server_helpers as srv
+
+    _logger.warning(
+        "[SERVER_SHUTDOWN_SIGNAL] pid=%d ppid=%d signal=%s",
+        os.getpid(),
+        os.getppid(),
+        srv._signal_name(signal_number),
+    )
+
+
 def _log_server_session_start(*, debug: bool, rebuild: bool, step: bool) -> None:
     _logger.info(
         render_server_session_start_block(
             started_at=datetime.now().astimezone(),
             pid=os.getpid(),
+            parent_pid=os.getppid(),
+            invocation=" ".join(sys.argv),
             debug_mode=debug,
             rebuild_on_startup=rebuild,
             step_through=step,
@@ -542,6 +595,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     _configure_server_logging()
+    try:
+        server_socket = _bind_server_socket(HOST, PORT)
+    except ServerAddressInUseError as exc:
+        _logger.error("[SERVER_START_SKIPPED] %s", exc)
+        raise SystemExit(2)
+
     _bootstrap_runtime_knowledge()
     _apply_startup_flags(step=args.step)
     _log_server_session_start(
@@ -568,6 +627,7 @@ if __name__ == "__main__":
 
     class _JobHunterUvicornServer(uvicorn.Server):
         def handle_exit(self, sig, frame):  # type: ignore[no-untyped-def]
+            _log_server_shutdown_signal(sig)
             srv._handle_server_shutdown(sig)
             super().handle_exit(sig, frame)
 
@@ -581,4 +641,7 @@ if __name__ == "__main__":
             log_config=None,
         )
     )
-    server.run()
+    try:
+        server.run(sockets=[server_socket])
+    finally:
+        server_socket.close()

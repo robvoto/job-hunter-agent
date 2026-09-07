@@ -109,6 +109,8 @@ def test_render_server_session_start_block_is_large_and_searchable():
     block = logging_utils.render_server_session_start_block(
         started_at=datetime(2026, 7, 30, 11, 45, 0),
         pid=4321,
+        parent_pid=1234,
+        invocation="python -m job_hunter_agent.fastapi_app --debug",
         debug_mode=True,
         rebuild_on_startup=True,
         step_through=False,
@@ -117,6 +119,8 @@ def test_render_server_session_start_block_is_large_and_searchable():
     assert "NEW SERVER SESSION STARTED" in block
     assert "Started at       : 2026-07-30 11:45:00" in block
     assert "PID              : 4321" in block
+    assert "Parent PID       : 1234" in block
+    assert "Invocation       : python -m job_hunter_agent.fastapi_app --debug" in block
     assert "Debug mode       : ON (--debug)" in block
     assert "Startup rebuild  : YES (--rebuild)" in block
     assert "Step-through     : OFF" in block
