@@ -1190,6 +1190,7 @@ def test_fit_score_requirement_coverage_directly_drives_requirement_fit_score():
                 {
                     "requirement": "Agile delivery",
                     "importance": "mandatory",
+                    "requirement_kind": "professional_capability",
                     "status": "supported",
                     "capability_name": "agile methodologies",
                     "matched_job_text": "agile delivery ceremonies",
@@ -1199,6 +1200,7 @@ def test_fit_score_requirement_coverage_directly_drives_requirement_fit_score():
                 {
                     "requirement": "Acceptance testing",
                     "importance": "preferred",
+                    "requirement_kind": "professional_capability",
                     "status": "supported",
                     "capability_name": "acceptance testing",
                     "matched_job_text": "acceptance criteria",
@@ -1237,6 +1239,7 @@ def test_strong_high_confidence_fit_keeps_requirement_coverage_transparency_only
         "requirement_coverage": [
             {
                 "requirement": "Agile delivery",
+                "requirement_kind": "professional_capability",
                 "status": "supported",
                 "capability_name": "agile methodologies",
                 "matched_job_text": "agile delivery",
@@ -1245,6 +1248,7 @@ def test_strong_high_confidence_fit_keeps_requirement_coverage_transparency_only
             },
             {
                 "requirement": "Acceptance testing",
+                "requirement_kind": "professional_capability",
                 "status": "supported",
                 "capability_name": "acceptance testing",
                 "matched_job_text": "acceptance criteria",
@@ -1253,6 +1257,7 @@ def test_strong_high_confidence_fit_keeps_requirement_coverage_transparency_only
             },
             {
                 "requirement": "Stakeholder engagement",
+                "requirement_kind": "professional_capability",
                 "status": "supported",
                 "capability_name": "primary stakeholder engagement",
                 "matched_job_text": "stakeholder workshops",
@@ -1407,7 +1412,7 @@ def test_fit_score_breakdown_ignores_profile_title_scoring_rule_overrides():
             "llm_fit_grade": "SOLID",
             "title_match_metadata": {"match_family": "primary"},
             "requirement_coverage": [
-                {"requirement": "Agile delivery", "importance": "mandatory", "status": "supported", "capability_name": "agile methodologies", "matched_candidate_fact": "agile methodologies"}
+                {"requirement": "Agile delivery", "importance": "mandatory", "requirement_kind": "professional_capability", "status": "supported", "capability_name": "agile methodologies", "matched_candidate_fact": "agile methodologies"}
             ],
         },
         profile,
@@ -1450,7 +1455,7 @@ def test_fit_score_breakdown_keeps_secondary_role_family_out_of_score():
             "llm_fit_grade": "SOLID",
             "title_match_metadata": {"match_family": "secondary"},
             "requirement_coverage": [
-                {"requirement": "Agile delivery", "importance": "mandatory", "status": "supported", "capability_name": "agile methodologies", "matched_candidate_fact": "agile methodologies"}
+                {"requirement": "Agile delivery", "importance": "mandatory", "requirement_kind": "professional_capability", "status": "supported", "capability_name": "agile methodologies", "matched_candidate_fact": "agile methodologies"}
             ],
         },
         _capability_profile(),
@@ -3670,6 +3675,7 @@ def test_render_job_card_debug_audit_shows_evidence_credit_and_decision_conversi
                     "requirement": "5–7 years in digital health",
                     "importance": "mandatory",
                     "requirement_type": "capability",
+                    "requirement_kind": "professional_capability",
                     "status": "supported",
                     "matched_candidate_fact": "stakeholder engagement",
                     "capability_name": "stakeholder engagement",
@@ -3690,6 +3696,7 @@ def test_render_job_card_debug_audit_shows_evidence_credit_and_decision_conversi
                     "requirement": "Domain architecture",
                     "importance": "mandatory",
                     "requirement_type": "capability",
+                    "requirement_kind": "professional_capability",
                     "status": "supported",
                     "matched_candidate_fact": "",
                     "profile_support": [],
@@ -4315,7 +4322,7 @@ def test_hard_blocked_job_still_shows_requirement_fit_evidence():
         "competitive_signals": [],
         "hard_block_reasons": ["requires SAP experience"],
         "requirement_coverage": [
-            {"requirement": "Agile delivery", "importance": "mandatory", "status": "supported", "capability_name": "agile methodologies", "matched_candidate_fact": "agile methodologies"}
+            {"requirement": "Agile delivery", "importance": "mandatory", "requirement_kind": "professional_capability", "status": "supported", "capability_name": "agile methodologies", "matched_candidate_fact": "agile methodologies"}
         ],
     }
 

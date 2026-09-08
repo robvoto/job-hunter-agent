@@ -111,7 +111,11 @@ RECORD_REQUIREMENT_COVERAGE_VERSION_KEY = "requirement_coverage_contract_version
 # v6 (JH-299): positive coverage now requires traceable same-concept evidence and
 # non-positive rows carry no matched fact / profile_support. v5 coverage can hold
 # over-stated matches, so it is re-reviewed, not migrated.
-REQUIREMENT_COVERAGE_CONTRACT_VERSION = 6
+# v7 (JH-298/JH-299 corrections): a capability row scores only when it is
+# explicitly professional_capability (missing/empty/invalid now fail closed too),
+# and same-concept evidence no longer accepts a single shared modifier token. v6
+# coverage can hold rows scored under both looser rules, so it is re-reviewed.
+REQUIREMENT_COVERAGE_CONTRACT_VERSION = 7
 RECORD_OCCUPATION_ALIGNMENT_KEY = "occupation_alignment"
 RECORD_OCCUPATION_ALIGNMENT_REASON_KEY = "occupation_alignment_reason"
 RECORD_DESCRIPTION_COMPACTION_KEY = "description_compaction"

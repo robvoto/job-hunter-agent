@@ -62,12 +62,12 @@ class _FakeParsingResponses:
                     "fit_review": {"decision": "KEEP", "grade": "SOLID"},
                     "requirement_coverage": [
                         {
-                            "requirement": "Stakeholder engagement",
+                            "requirement": "Stakeholder management",
                             "requirement_type": "capability",
                             "requirement_kind": "professional_capability",
                             "status": "supported",
                             "capability_name": "stakeholder management",
-                            "matched_job_text": "work with stakeholders",
+                            "matched_job_text": "manage stakeholders",
                             "profile_support": ["stakeholder management"],
                             "matched_candidate_fact": "stakeholder management",
                         },
@@ -500,7 +500,7 @@ def test_request_learning_payload_uses_fit_review_only_schema(monkeypatch):
         "posting_channel": {"kind": llm_gate.LLM_INVALID_POSTING_CHANNEL_KIND, "confident": False, "evidence": ""},
         "requirement_coverage": [
                 {
-                    "requirement": "Stakeholder engagement",
+                    "requirement": "Stakeholder management",
                     "importance": "preferred",
                     "requirement_type": "capability",
                     "requirement_kind": "professional_capability",
@@ -510,13 +510,13 @@ def test_request_learning_payload_uses_fit_review_only_schema(monkeypatch):
                     "matched_candidate_fact": "stakeholder management",
                     "capability_name": "stakeholder management",
                     "eligibility_name": "",
-                    "matched_job_text": "work with stakeholders",
+                    "matched_job_text": "manage stakeholders",
                     "profile_support": ["stakeholder management"],
                     "decomposition": {
                         "operator": "single",
                         "elements": [
                             {
-                                "text": "Stakeholder engagement",
+                                "text": "Stakeholder management",
                                 "capability_judgement": "capability",
                                 "canonical_concept": "",
                                 "canonical_fact_resolved": False,

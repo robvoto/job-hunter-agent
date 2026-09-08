@@ -203,20 +203,20 @@ def _candidate_qualification_lookup(profile: dict) -> dict[str, bool]:
 def _capability_row_excluded_by_kind(item: dict) -> bool:
     """JH-298 correction: scoring only credits an explicitly professional capability.
 
-    A ``capability`` row the fit-review LLM classified as anything other than
-    ``professional_capability`` (``behavioural_expectation`` or the fail-closed
-    ``unclassified``) must never contribute to the Requirement Fit numerator or
-    denominator. Those rows are already partitioned out of ``requirement_coverage``
-    upstream (``llm_gate.normalize_llm_review_payload``); this guard makes the
-    requirement explicit at the scoring site so a leaked row cannot earn or dilute
-    credit. A row with no ``requirement_kind`` at all is left to the existing
-    checks — the normalizer always assigns one in production.
+    A ``capability`` row may contribute to the Requirement Fit numerator or
+    denominator ONLY when ``requirement_kind == "professional_capability"``.
+    Missing, empty, invalid, ``behavioural_expectation`` and the fail-closed
+    ``unclassified`` are all excluded — a capability the fit-review LLM did not
+    positively tag as professional must not earn or dilute credit. Those rows are
+    already partitioned out of ``requirement_coverage`` upstream
+    (``llm_gate.normalize_llm_review_payload``); this guard makes the invariant
+    explicit at the scoring site so a leaked or untagged row cannot slip through.
     """
     requirement_type = str(item.get("requirement_type") or "capability").strip().lower()
     if requirement_type != "capability":
         return False
     explicit_kind = str(item.get("requirement_kind") or "").strip().lower()
-    return bool(explicit_kind) and explicit_kind != LLM_REQUIREMENT_KIND_PROFESSIONAL
+    return explicit_kind != LLM_REQUIREMENT_KIND_PROFESSIONAL
 
 
 def _append_requirement_mapping_uncertainty(record: dict, item: dict, detail: str) -> None:

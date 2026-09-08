@@ -467,7 +467,13 @@ class _LLMRequirementCoverageItem(BaseModel):
     # JH-298 second axis, meaningful only when requirement_type == "capability".
     # "behavioural_expectation" rows are generic personal-conduct wording and are
     # partitioned out of scoring / gaps / learning by normalization.
-    requirement_kind: str = "professional_capability"
+    #
+    # JH-298 correction (follow-up): the default is empty, NOT
+    # "professional_capability". A model that omits the field must reach
+    # normalization as an absent value so it fails closed to `unclassified`; a
+    # non-empty default here silently converts every omission into a scoring row
+    # and defeats the fail-closed contract.
+    requirement_kind: str = ""
     requirement_subtype: str = ""
     canonical_requirement: str = ""
     # Canonical structure for compound / disjunctive requirements. Replaces
@@ -902,7 +908,11 @@ LLM_CACHE_SCHEMA_VERSION = 3
 # v8 (JH-299): tightened requirement-evidence integrity + non-positive-row sweep.
 # Bumping rotates the fit-review cache namespace so stored reviews are recomputed
 # under the new contract; there is no pre-live data to migrate.
-FIT_REVIEW_CACHE_CONTRACT_VERSION = 8
+# v9 (JH-298/JH-299 corrections): an omitted requirement_kind now fails closed
+# (the structured-output default is empty, not professional_capability), and the
+# same-concept evidence check no longer accepts a single shared modifier token.
+# v8 caches can hold rows scored under both looser rules, so the namespace rotates.
+FIT_REVIEW_CACHE_CONTRACT_VERSION = 9
 TITLE_JUDGMENT_CACHE_CONTRACT_VERSION = 1
 POSTING_CHANNEL_LLM_CACHE_CONTRACT_VERSION = 1
 
@@ -1441,6 +1451,33 @@ def _semantic_match_tokens(value: str) -> set[str]:
     return normalized
 
 
+def _same_lemma(first: str, second: str) -> bool:
+    """True when two content tokens are the same word in a different inflection.
+
+    This is a structural morphology check in the same family as the suffix
+    stripping in ``_semantic_match_tokens`` — it makes no per-word judgement and
+    holds no word list. Two tokens unify when they are identical, or when the
+    shorter one (>= 5 chars) is the longer one minus at most a one-character
+    inflectional tail: "delivery"/"deliver", "facilitation"/"facilitate",
+    "analysis"/"analyst" unify; "governance"/"development" and
+    "management"/"facilitation" do not. It exists so the concept check below can
+    treat "Project delivery" and "Deliver projects" as one concept without a
+    heavier stemmer, while still rejecting a shared modifier such as "AI" or
+    "stakeholder".
+    """
+    if first == second:
+        return True
+    shorter, longer = (first, second) if len(first) <= len(second) else (second, first)
+    if len(shorter) < 5:
+        return False
+    shared = 0
+    for left, right in zip(shorter, longer):
+        if left != right:
+            break
+        shared += 1
+    return shared >= len(shorter) - 1
+
+
 def _has_meaningful_requirement_evidence(
     requirement: str,
     matched_job_text: str,
@@ -1451,11 +1488,13 @@ def _has_meaningful_requirement_evidence(
     """Require evidence for an actual component of the requirement, not broad transferability.
 
     JH-299: a positive match must be traceable to the same professional concept.
-    It qualifies only when the resolved candidate fact is itself named in the
-    requirement wording, the whole requirement concept appears in the candidate
+    It qualifies only when the resolved candidate concept *is* the requirement
+    concept (every substantive token of the matched fact is named in the
+    requirement wording), the whole requirement concept appears in the candidate
     evidence, or at least two substantive tokens are shared. A single shared
-    generic word ("AI", "data", "systems", a role/title token, ...) is
-    transferable framing, not proof of the specific requirement.
+    generic word ("AI", "data", "systems", "stakeholder", a role/title token,
+    ...) is transferable framing, not proof: "AI governance" is not proven by
+    "AI development", "Stakeholder facilitation" not by "Stakeholder management".
     """
     requirement_text = " ".join(part for part in (requirement, matched_job_text) if part)
     concept_text = compact_whitespace(matched_candidate_fact)
@@ -1480,10 +1519,25 @@ def _has_meaningful_requirement_evidence(
     if specific_requirement_tokens and not specific_requirement_tokens & evidence_tokens:
         return False
 
-    # The resolved candidate concept is itself named in the requirement wording:
-    # a traceable same-concept match ("Project delivery" <-> "Deliver projects").
-    if requirement_tokens & concept_tokens:
-        return True
+    # The resolved candidate concept IS the requirement concept.
+    #   * A single-token matched fact (a specific tool / product / method name
+    #     such as "BigID", "Miro", "BPMN") proves the requirement when that exact
+    #     token is named in it — this is what an OR / multi-option requirement
+    #     ("Purview or BigID") relies on.
+    #   * A multi-word matched fact must match as a whole: every substantive token
+    #     is named in the requirement wording (identical, or the same word in
+    #     another inflection). "Project delivery" <-> "Deliver projects" passes;
+    #     "AI development" <-> "AI governance" does not, because one shared
+    #     modifier ("AI", "Data", "Stakeholder") is not the same concept.
+    if concept_tokens:
+        if len(concept_tokens) == 1:
+            if concept_tokens <= requirement_tokens:
+                return True
+        elif all(
+            any(_same_lemma(concept_token, requirement_token) for requirement_token in requirement_tokens)
+            for concept_token in concept_tokens
+        ):
+            return True
     # The whole requirement concept is present in the candidate evidence. This
     # covers a single-token specific requirement such as "BPMN 2.0" or "Miro".
     if core_requirement_tokens and core_requirement_tokens <= evidence_tokens:
@@ -2609,17 +2663,16 @@ def derive_fit_review_grade(requirement_coverage: list[dict[str, Any]]) -> str:
         requirement_type = str(item.get("requirement_type") or "capability").strip().lower()
         weight = _IMPORTANCE_WEIGHTS.get(importance, _IMPORTANCE_WEIGHTS["preferred"])
 
-        # JH-298 correction: a capability row the LLM explicitly classified as
-        # anything other than professional_capability (behavioural / unclassified)
-        # never grades. Those rows are already partitioned out upstream in the
-        # production path; this guard makes the invariant explicit so a leaked row
-        # cannot dilute or lift the grade. A row with no requirement_kind at all is
-        # left alone here — the normalizer always assigns one in production, and
-        # the grade-contract unit tests exercise bare rows.
+        # JH-298 correction (follow-up): a capability row grades only when it is
+        # explicitly professional_capability. Missing, empty, invalid, behavioural
+        # and unclassified all fail closed and never grade — the same rule the
+        # scoring site enforces (fit_scoring._capability_row_excluded_by_kind).
+        # Those rows are already partitioned out upstream in the production path;
+        # this guard makes the invariant explicit so a leaked row cannot dilute or
+        # lift the grade.
         explicit_kind = str(item.get("requirement_kind") or "").strip().lower()
         if (
             requirement_type == "capability"
-            and explicit_kind
             and explicit_kind != LLM_REQUIREMENT_KIND_PROFESSIONAL
         ):
             continue

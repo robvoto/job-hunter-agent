@@ -642,6 +642,88 @@ def test_ac6_full_ad_payload_partitions_behavioural_and_scores_professional():
     assert gaps == []
 
 
+def test_ac6_omitted_requirement_kind_through_pydantic_model_fails_closed():
+    """JH-298 correction: the fit-review structured-output model must NOT bake a
+    `professional_capability` default onto a capability row that omits
+    `requirement_kind`. A model that leaves the field out has to reach
+    normalization as an absent value so the row fails closed to `unclassified` --
+    partitioned out of `requirement_coverage`, non-scoring, non-gap. This exercises
+    the real Pydantic path (`_LLMRequirementCoverageItem` inside
+    `_LLMFitReviewPayload`), not a hand-built dict."""
+    omitted_kind_row = {
+        "requirement": "Own the enterprise AI platform roadmap",
+        "importance": "mandatory",
+        "requirement_type": "capability",
+        "status": "supported",
+        "matched_candidate_fact": "AI platform ownership",
+        "matched_job_text": "Own the enterprise AI platform roadmap",
+        # requirement_kind deliberately absent
+    }
+    professional_row = {
+        "requirement": "Deliver projects end to end",
+        "importance": "mandatory",
+        "requirement_type": "capability",
+        "requirement_kind": _PROFESSIONAL,
+        "status": "supported",
+        "canonical_requirement": "Project delivery",
+        "matched_candidate_fact": "Project delivery",
+        "matched_job_text": "Deliver projects end to end",
+    }
+
+    payload_model = llm_gate._LLMFitReviewPayload.model_validate(
+        {
+            "fit_review": {"decision": "KEEP", "grade": "STRONG"},
+            "requirement_coverage": [omitted_kind_row, professional_row],
+        }
+    )
+    dumped = payload_model.model_dump()
+
+    # The Pydantic default is empty, not "professional_capability".
+    assert dumped["requirement_coverage"][0]["requirement_kind"] == ""
+
+    normalized = llm_gate.normalize_llm_review_payload(
+        {
+            "decision": "KEEP",
+            "grade": "STRONG",
+            "requirement_coverage": dumped["requirement_coverage"],
+        },
+        valid_capability_names={
+            "project delivery": "Project delivery",
+            "ai platform ownership": "AI platform ownership",
+        },
+    )
+
+    scored = normalized["requirement_coverage"]
+    unclassified = normalized["requirement_coverage_unclassified"]
+
+    assert {row["requirement"] for row in scored} == {"Deliver projects end to end"}
+    assert {row["requirement"] for row in unclassified} == {
+        "Own the enterprise AI platform roadmap"
+    }
+    unclassified_row = unclassified[0]
+    assert unclassified_row["requirement_kind"] == "unclassified"
+    assert unclassified_row["status"] == _NOT_ASSESSED
+    assert unclassified_row["capability_name"] == ""
+    assert unclassified_row["matched_candidate_fact"] == ""
+
+    # Scoring reads only requirement_coverage, so the omitted-kind row moves
+    # neither the numerator nor the denominator.
+    profile = {"candidate_capabilities": [], "candidate_eligibility": []}
+    with_unclassified = {
+        "requirement_coverage": scored,
+        "requirement_coverage_unclassified": unclassified,
+    }
+    only_scored = {"requirement_coverage": scored}
+    assert (
+        fit_scoring.requirement_fit_diagnostics(with_unclassified, profile)[
+            "total_requirement_weight"
+        ]
+        == fit_scoring.requirement_fit_diagnostics(only_scored, profile)[
+            "total_requirement_weight"
+        ]
+    )
+
+
 # --- JH-299: evidence integrity for positive professional-capability coverage ---
 #
 # A positive coverage row must trace to specific candidate evidence that entails
@@ -656,6 +738,8 @@ _JH299_CAPABILITY_LOOKUPS: dict[str, str] = {
     "workshop facilitation": "Workshop facilitation",
     "sap": "SAP",
     "delivery leadership": "Delivery leadership",
+    "ai development": "AI development",
+    "stakeholder management": "Stakeholder management",
 }
 
 
@@ -750,6 +834,36 @@ def test_ac6_shared_ai_token_cannot_prove_ai_development():
     assert row["matched_candidate_fact"] == ""
     assert row["capability_name"] == ""
     assert "covered_requirement_elements" not in row
+
+
+@pytest.mark.parametrize(
+    "requirement, matched_candidate_fact",
+    [
+        ("AI governance", "AI development"),
+        ("Stakeholder facilitation", "Stakeholder management"),
+        ("Data governance", "Data analysis"),
+    ],
+    ids=lambda text: text,
+)
+def test_ac2_shared_modifier_token_is_not_same_concept_evidence(
+    requirement, matched_candidate_fact
+):
+    """JH-299 correction: a resolved candidate concept that shares only the
+    modifier word with the requirement ("AI", "Stakeholder", "Data") does not
+    prove the same professional concept. These three were verified false
+    positives on the production normalizer and must all come back non-positive
+    with the matched fact cleared."""
+    row = _normalize_jh299(
+        _evidence_item(
+            requirement=requirement,
+            matched_candidate_fact=matched_candidate_fact,
+            resolved_concept=matched_candidate_fact,
+        )
+    )
+    assert row["status"] == "not_shown", requirement
+    assert row["matched_candidate_fact"] == "", requirement
+    assert row["capability_name"] == "", requirement
+    assert row["decomposition"]["elements"][0]["matched_candidate_fact"] == ""
 
 
 def test_ac6_explicit_tool_evidence_stays_supported():

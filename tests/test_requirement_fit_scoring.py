@@ -17,6 +17,22 @@ def _profile():
     }
 
 
+def _stamp_professional_kind(coverage):
+    # JH-298 correction: a capability row with no requirement_kind now fails
+    # closed to `unclassified` and never scores. These fixtures are ordinary
+    # scored capabilities that predate the kind axis, so stamp
+    # professional_capability on any capability row that does not set its own
+    # kind. Tests that deliberately exercise the missing-kind axis build their
+    # coverage without this helper.
+    stamped = []
+    for row in coverage:
+        req_type = str(row.get("requirement_type") or "capability").strip().lower()
+        if req_type == "capability" and not str(row.get("requirement_kind") or "").strip():
+            row = {**row, "requirement_kind": "professional_capability"}
+        stamped.append(row)
+    return stamped
+
+
 def _record(coverage, **extra):
     record = {
         "job_key": "test:job",
@@ -24,7 +40,7 @@ def _record(coverage, **extra):
         "title": "Business Analyst",
         "llm_decision": "KEEP",
         "llm_fit_grade": "STRONG",
-        "requirement_coverage": coverage,
+        "requirement_coverage": _stamp_professional_kind(coverage),
     }
     record.update(extra)
     return record
@@ -614,6 +630,67 @@ def test_leaked_non_professional_capability_row_scores_zero_and_seeds_no_uncerta
     assert not uncertainty_log.exists() or uncertainty_log.read_text(
         encoding="utf-8"
     ).strip() == ""
+
+
+def test_capability_row_with_no_requirement_kind_adds_zero_to_numerator_and_denominator():
+    """JH-298 correction: a capability row that carries no requirement_kind at all
+    (the key absent, not just behavioural / unclassified) must fail closed at the
+    scoring site — no weight in the denominator, no credit in the numerator, and
+    not present in the audit rows. Built without the test helper so the row really
+    reaches fit_scoring with the field missing."""
+    base_coverage = [
+        {
+            "requirement": "Stakeholder engagement",
+            "importance": "mandatory",
+            "requirement_type": "capability",
+            "requirement_kind": "professional_capability",
+            "status": "supported",
+            "capability_name": "stakeholder engagement",
+            "matched_candidate_fact": "stakeholder engagement",
+        }
+    ]
+    no_kind_row = {
+        "requirement": "Own the AI platform roadmap",
+        "importance": "mandatory",
+        "requirement_type": "capability",
+        "status": "supported",
+        "capability_name": "stakeholder engagement",
+        "matched_candidate_fact": "stakeholder engagement",
+    }
+    assert "requirement_kind" not in no_kind_row
+
+    professional_only = {
+        "job_key": "test:job",
+        "source": "test",
+        "title": "Business Analyst",
+        "llm_decision": "KEEP",
+        "llm_fit_grade": "STRONG",
+        "requirement_coverage": base_coverage,
+    }
+    with_no_kind = {
+        "job_key": "test:job",
+        "source": "test",
+        "title": "Business Analyst",
+        "llm_decision": "KEEP",
+        "llm_fit_grade": "STRONG",
+        "requirement_coverage": [*base_coverage, no_kind_row],
+    }
+
+    base_diag = fit_scoring.requirement_fit_diagnostics(professional_only, _profile())
+    no_kind_diag = fit_scoring.requirement_fit_diagnostics(with_no_kind, _profile())
+
+    assert base_diag["earned_weighted_credit"] > 0
+    assert no_kind_diag["total_requirement_weight"] == base_diag["total_requirement_weight"]
+    assert no_kind_diag["earned_weighted_credit"] == base_diag["earned_weighted_credit"]
+    assert fit_scoring.fit_score(with_no_kind, _profile()) == fit_scoring.fit_score(
+        professional_only, _profile()
+    )
+
+    audit_requirements = {
+        row["requirement"]
+        for row in fit_scoring.requirement_fit_audit_rows(with_no_kind, _profile())
+    }
+    assert audit_requirements == {"Stakeholder engagement"}
 
 
 def test_requirement_fit_unknown_mapped_capability_logs_uncertainty(tmp_path, monkeypatch):

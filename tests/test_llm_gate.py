@@ -1228,10 +1228,15 @@ def test_prospend_style_partial_coverage_does_not_become_strong():
 
 
 def _cov(req: str, status: str, cap: str = "") -> dict:
+    # JH-298 correction: a capability row grades only when it is explicitly
+    # professional_capability. These grade-contract fixtures are ordinary scored
+    # capabilities, so stamp the kind; tests that exercise the behavioural /
+    # unclassified / missing-kind axis override or omit it deliberately.
     return {
         "requirement": req,
         "status": status,
         "capability_name": cap,
+        "requirement_kind": "professional_capability",
         "matched_job_text": "",
         "profile_support": [],
                "matched_candidate_fact": cap,
@@ -1373,11 +1378,14 @@ def test_empty_coverage_gives_poor():
 
 
 def _cov_imp(req: str, status: str, importance: str, cap: str = "") -> dict:
+    # JH-298 correction: see _cov — capability rows grade only when explicitly
+    # professional_capability.
     return {
         "requirement": req,
         "importance": importance,
         "status": status,
         "capability_name": cap,
+        "requirement_kind": "professional_capability",
         "matched_job_text": "",
         "profile_support": [],
                "matched_candidate_fact": cap,
@@ -3134,6 +3142,37 @@ def test_requirement_coverage_keeps_partial_match_when_evidence_covers_real_requ
             "SAP",
             ["Configured SAP finance modules for month-end close."],
             ["SAP"],
+            False,
+        ),
+        # JH-299 correction: a resolved candidate concept that only shares the
+        # modifier word with the requirement does not prove the same professional
+        # concept. These three were verified false positives on the production
+        # normalizer and must all come back non-positive.
+        (
+            "AI governance <- AI development",
+            "AI governance",
+            "AI governance",
+            "AI development",
+            [],
+            [],
+            False,
+        ),
+        (
+            "Stakeholder facilitation <- Stakeholder management",
+            "Stakeholder facilitation",
+            "Stakeholder facilitation",
+            "Stakeholder management",
+            [],
+            [],
+            False,
+        ),
+        (
+            "Data governance <- Data analysis",
+            "Data governance",
+            "Data governance",
+            "Data analysis",
+            [],
+            [],
             False,
         ),
     ],

@@ -22,6 +22,20 @@ def _profile(extra=None):
     return base
 
 
+def _stamp_professional_kind(coverage):
+    # JH-298 correction: a capability row with no requirement_kind now fails
+    # closed and never scores. These calibration fixtures are ordinary scored
+    # capabilities that predate the kind axis, so stamp professional_capability
+    # on any capability row that does not set its own kind.
+    stamped = []
+    for row in coverage:
+        req_type = str(row.get("requirement_type") or "capability").strip().lower()
+        if req_type == "capability" and not str(row.get("requirement_kind") or "").strip():
+            row = {**row, "requirement_kind": "professional_capability"}
+        stamped.append(row)
+    return stamped
+
+
 def _record(coverage, **extra):
     record = {
         "job_key": "test:job",
@@ -29,7 +43,7 @@ def _record(coverage, **extra):
         "title_reason": "OK",
         "llm_decision": "KEEP",
         "llm_fit_grade": "STRONG",
-        "requirement_coverage": coverage,
+        "requirement_coverage": _stamp_professional_kind(coverage),
     }
     record.update(extra)
     return record

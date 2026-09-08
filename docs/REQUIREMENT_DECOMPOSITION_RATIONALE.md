@@ -101,6 +101,10 @@ A second row-level axis on **`capability` rows only**, set by the fit-review LLM
 
 A missing, empty, or unrecognised `requirement_kind` on a capability row **fails
 closed to `unclassified`** — it is never defaulted to `professional_capability`.
+The fit-review structured-output model (`_LLMRequirementCoverageItem`) carries an
+**empty** `requirement_kind` default, not `professional_capability`: a model that
+omits the field must reach normalization as an absent value, or the omission is
+silently converted into a scoring row before the fail-closed check can run.
 An `unclassified` row is frozen exactly like a behavioural row: `status` forced to
 `not_assessed`, `profile_action_allowed = False`, an `unclassified_requirement_kind:
 true` marker, all matched-fact / canonical / element action fields cleared, and a
@@ -116,10 +120,12 @@ a keyword gate — and only the token is structurally validated.
 
 **Scoring requires an explicit professional classification.** A row is scored only
 when `requirement_type == "capability"` **and** `requirement_kind ==
-"professional_capability"`. Trusting `requirement_type` alone is not enough: a row
-with a bad or missing kind that somehow reached `requirement_coverage` is skipped
-by `fit_scoring` and by `derive_fit_review_grade` (it contributes to neither the
-numerator nor the denominator).
+"professional_capability"`. Missing, empty, invalid, `behavioural_expectation` and
+`unclassified` are all excluded. Trusting `requirement_type` alone is not enough,
+and neither is "exclude only a *present* non-professional kind": a row with a bad
+or **absent** kind that somehow reached `requirement_coverage` is skipped by
+`fit_scoring._capability_row_excluded_by_kind` and by `derive_fit_review_grade` (it
+contributes to neither the numerator nor the denominator).
 
 **Decompose before classifying.** A mixed sentence is split into atoms first, then
 each atom is classified independently. "work through ambiguity, manage complexity
@@ -146,12 +152,17 @@ group with a `not_assessed` label and no action buttons.
 **Contract-version bump.** The JH-298 split took
 `REQUIREMENT_COVERAGE_CONTRACT_VERSION` → 4 and `FIT_REVIEW_CACHE_CONTRACT_VERSION`
 → 6. The JH-298 correction (fail-closed `unclassified` instead of a
-`professional_capability` default, plus the explicit scoring predicate) takes them
-→ **5** and → **7**: v4 coverage may hold rows scored under the old default, so it
-is re-reviewed, not migrated. Kept-job coverage snapshots and cached fit-review
-payloads produced before the current versions are unsafe to reuse; the history
-reuse guard forces a fresh fit review (the AC "fails closed / re-reviewed, never
-guessed" mechanism). No migration shim — stale dev caches are disposable.
+`professional_capability` default, plus the explicit scoring predicate) took them
+→ 5 and → 7. The JH-298 correction follow-up — the structured-output default made
+empty so an omitted `requirement_kind` actually reaches normalization as absent,
+and the scoring / grade predicates tightened to exclude a *missing* kind as well
+as a present non-professional one — takes them → **7** and → **9** (shared with the
+JH-299 correction follow-up below). v5/v6 coverage may hold rows scored under the
+looser rules, so it is re-reviewed, not migrated. Kept-job coverage snapshots and
+cached fit-review payloads produced before the current versions are unsafe to
+reuse; the history reuse guard forces a fresh fit review (the AC "fails closed /
+re-reviewed, never guessed" mechanism). No migration shim — stale dev caches are
+disposable.
 
 ### Evidence integrity for positive coverage (JH-299)
 
@@ -169,15 +180,22 @@ closed.
   explicitly so the model does not put a bare title in `matched_candidate_fact`.
 - **`_has_meaningful_requirement_evidence` requires a traceable same-concept
   link.** A single shared content token via free-text `profile_support` is no
-  longer sufficient. A positive row survives only when the resolved candidate
-  concept is itself named in the requirement wording, **or** the whole requirement
-  concept is present in the candidate evidence, **or** requirement and evidence
-  share **at least two** substantive tokens. One shared generic word ("AI",
-  "data", "systems", a title token) is transferable framing, not proof. The
-  digit-token specificity rule is
-  unchanged: `SAP` still cannot prove `SAP S/4HANA` without evidence of the
-  versioned platform. On failure the call site forces `not_shown`, clears the
-  match, and records `generic_transferable_capability_not_requirement_evidence`.
+  longer sufficient. A positive row survives only when: the resolved candidate
+  concept **is** the requirement concept — a single-token matched fact (a specific
+  tool / product / method such as `BigID`, `Miro`, `BPMN`) named verbatim in the
+  requirement, or a multi-word matched fact whose every substantive token is named
+  in the requirement wording (identical, or the same word in another inflection via
+  `_same_lemma`, a structural morphology check with no word list); **or** the whole
+  requirement concept is present in the candidate evidence; **or** requirement and
+  evidence share **at least two** substantive tokens. One shared modifier word
+  ("AI", "data", "stakeholder", a title token) is transferable framing, not proof:
+  the production normalizer's verified false positives — `AI governance` from `AI
+  development`, `Stakeholder facilitation` from `Stakeholder management`, `Data
+  governance` from `Data analysis` — all now resolve non-positive. The digit-token
+  specificity rule is unchanged: `SAP` still cannot prove `SAP S/4HANA` without
+  evidence of the versioned platform. On failure the call site forces `not_shown`,
+  clears the match, and records
+  `generic_transferable_capability_not_requirement_evidence`.
 - **Non-positive rows carry no positive-looking evidence.** Immediately before a
   row is appended, any `capability` / `qualification` row whose final status is
   not `supported` / `partially_supported` has `matched_candidate_fact`,
@@ -193,10 +211,13 @@ closed.
 Behavioural (`not_assessed`) rows are cleared upstream by the JH-298 partition and
 never reach these guards.
 
-**Contract-version bump.** `REQUIREMENT_COVERAGE_CONTRACT_VERSION` → 6 and
-`FIT_REVIEW_CACHE_CONTRACT_VERSION` → 8. Persisted coverage and cached fit-review
-payloads from before JH-299 can hold over-stated matches, so they are re-reviewed,
-not migrated — the same fail-closed mechanism as JH-298. No migration shim.
+**Contract-version bump.** JH-299 took `REQUIREMENT_COVERAGE_CONTRACT_VERSION` → 6
+and `FIT_REVIEW_CACHE_CONTRACT_VERSION` → 8. The JH-299 correction follow-up — the
+same-concept check no longer accepts a single shared modifier token — takes them
+→ **7** and → **9** (shared with the JH-298 correction follow-up above). Persisted
+coverage and cached fit-review payloads from before the current versions can hold
+over-stated matches, so they are re-reviewed, not migrated — the same fail-closed
+mechanism as JH-298. No migration shim.
 
 ### `capability_judgement` (per element)
 
