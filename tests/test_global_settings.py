@@ -454,6 +454,14 @@ def _load_managed_global_settings_payload() -> dict:
     return json.loads(GLOBAL_SETTINGS_PATH.read_text(encoding="utf-8-sig"))
 
 
+def test_managed_seek_browser_mode_defaults_to_persistent_session():
+    payload = _load_managed_global_settings_payload()
+    assert payload["playwright_settings"]["playwright_browser_mode"] == "persistent"
+
+    normalized = normalize_global_settings(payload, strict_managed=True)
+    assert normalized["playwright_settings"]["playwright_browser_mode"] == "persistent"
+
+
 def test_managed_seek_manual_verification_timeout_has_safe_bounds():
     payload = _load_managed_global_settings_payload()
     assert payload["playwright_settings"]["seek_manual_verification_timeout_ms"] == 120000

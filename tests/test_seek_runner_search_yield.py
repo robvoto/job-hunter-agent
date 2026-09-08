@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import pytest
+
 import job_hunter_agent.record_schema as rs
 from job_hunter_agent.scrapers import seek_runner
 
@@ -212,6 +214,38 @@ def test_seek_scrape_records_query_yield_metric_per_search_target(monkeypatch):
     assert by_term["Senior Business Analyst"].new_unique_job_count == 1
     assert by_term["Senior Business Analyst"].duplicate_job_count == 1
     assert all(metric.success for metric in recorded_metrics)
+
+
+def test_seek_owned_bot_challenge_does_not_enter_second_list_page_handler(monkeypatch):
+    list_page = _FakeListPage({"target-a": [_FakeCard("seek:blocked")]})
+    _patch_common_seek_internals(monkeypatch, list_page)
+    handler_calls = []
+
+    monkeypatch.setattr(
+        seek_runner,
+        "_wait_for_seek_bot_challenge_or_manual_verification",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            seek_runner.BotChallengeDetected(
+                "SEEK partial — verification timed out",
+                failure_class=seek_runner.SEEK_BOT_CHALLENGE,
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        seek_runner,
+        "_handle_seek_list_page_failure",
+        lambda *args, **kwargs: handler_calls.append(True) or True,
+    )
+
+    with pytest.raises(seek_runner.BotChallengeDetected):
+        seek_runner.seek_scrape_to_records(
+            **_base_scrape_kwargs(
+                search_targets=[_search_targets()[0]],
+                discovery_capture=[],
+            )
+        )
+
+    assert handler_calls == []
 
 
 def test_seek_scrape_attaches_partial_results_to_late_bot_challenge(monkeypatch):

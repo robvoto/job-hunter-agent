@@ -250,7 +250,7 @@
         "playwright_viewport_width": "Browser viewport width used during scraping.",
         "playwright_viewport_height": "Browser viewport height used during scraping.",
         "playwright_selector_timeout": "Selector wait timeout in milliseconds before a browser interaction fails.",
-        "playwright_browser_mode": "Browser lifecycle mode. Ephemeral means the browser session is temporary; persistent keeps the same browser session alive and is required for Assisted SEEK verification.",
+        "playwright_browser_mode": "Browser lifecycle mode for SEEK. Persistent reuses SEEK's dedicated browser profile across searches so sign-in cookies can survive; ephemeral creates a fresh SEEK profile for each run. APSJobs uses its own separate browser profile.",
         "seek_manual_verification_timeout_ms": "How long a visible SEEK browser waits for the user to complete a CAPTCHA or human-verification prompt after automatic challenge clearance does not finish.",
         "seek_parallel_detail_workers": "Number of parallel Playwright pages used for SEEK detail-page fetches. Higher values speed up processing when many cards need description fetch + LLM review."
       }

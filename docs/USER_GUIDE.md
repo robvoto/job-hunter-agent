@@ -111,6 +111,8 @@ Search location uses one canonical AU choice only. The UI defaults to a recommen
 
 SEEK also has its own on/off switch in the Search section. Turn it off when you want to skip SEEK runs entirely while leaving the rest of your settings alone.
 
+SEEK uses a persistent browser profile by default. The first run may ask you to sign in; complete that sign-in in the open SEEK browser and later searches can reuse the saved session. If SEEK asks for a CAPTCHA or another human check, Job Hunter shows a `SEEK needs you` alert and waits once for you to complete it. If the wait expires, results already collected are kept and the run summary explains why SEEK stopped and how to retry it.
+
 Sector preference now uses the same checkbox-strip pattern as work mode and work type. Pick Public sector, Private sector, or both if you do not care which sector a role is in.
 
 ## What Admin Is For

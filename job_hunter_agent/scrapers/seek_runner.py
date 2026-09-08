@@ -40,7 +40,11 @@ from job_hunter_agent.history import (
     finalize_record,
 )
 from job_hunter_agent.job_identity import find_confirmed_identity_history_entry
-from job_hunter_agent.io_utils import DEBUG_CAPTURE_SOURCE_PAYLOADS, write_source_payload_debug
+from job_hunter_agent.io_utils import (
+    DEBUG_CAPTURE_SOURCE_PAYLOADS,
+    load_ui_labels,
+    write_source_payload_debug,
+)
 from job_hunter_agent.job_quality import detect_broad_engagement_signal
 from job_hunter_agent.job_review_pipeline import (
     ReviewPipelineContext,
@@ -48,7 +52,7 @@ from job_hunter_agent.job_review_pipeline import (
     review_post_detail_normalized_job,
     review_pre_detail_normalized_job,
 )
-from job_hunter_agent.paths import PLAYWRIGHT_USER_DATA_DIR
+from job_hunter_agent.paths import SEEK_PLAYWRIGHT_USER_DATA_DIR
 from job_hunter_agent.run_control import (
     run_stop_requested,
     set_run_progress_state,
@@ -168,6 +172,133 @@ _SEEK_FAILURE_MESSAGES = {
     SEEK_SIGN_IN_WALL: "SEEK reached its public sign-in boundary; continuing with the remaining searches.",
     SEEK_UNKNOWN_FAILURE: "SEEK failed before it could load job cards.",
 }
+
+
+def _seek_runtime_labels() -> dict[str, str]:
+    labels = load_ui_labels().get("shared_ui_labels")
+    if not isinstance(labels, dict):
+        raise ValueError("ui_labels.json is missing shared_ui_labels")
+    required = (
+        "seek_verification_headline",
+        "seek_verification_detail_template",
+        "seek_sign_in_headline",
+        "seek_sign_in_detail_template",
+        "seek_verification_cleared_detail",
+        "seek_sign_in_cleared_detail",
+        "seek_verification_timeout_warning_template",
+        "seek_sign_in_timeout_warning_template",
+        "seek_automatic_retry_failed_warning_template",
+    )
+    missing = [key for key in required if not str(labels.get(key) or "").strip()]
+    if missing:
+        raise ValueError(
+            f"ui_labels.json is missing shared_ui_labels values: {', '.join(missing)}"
+        )
+    return {key: str(labels[key]).strip() for key in required}
+
+
+def _set_seek_attention_progress(kind: str, *, use_persistent_browser: bool) -> None:
+    labels = _seek_runtime_labels()
+    browser = "browser session" if use_persistent_browser else "browser window"
+    if kind == "sign_in":
+        headline = labels["seek_sign_in_headline"]
+        detail = labels["seek_sign_in_detail_template"].format(browser=browser)
+    else:
+        headline = labels["seek_verification_headline"]
+        detail = labels["seek_verification_detail_template"].format(browser=browser)
+    set_run_progress_state(
+        detail,
+        stage="verification",
+        source="seek",
+        headline=headline,
+        detail=detail,
+        determinate=False,
+    )
+
+
+def _set_seek_attention_cleared(kind: str) -> None:
+    labels = _seek_runtime_labels()
+    detail = (
+        labels["seek_sign_in_cleared_detail"]
+        if kind == "sign_in"
+        else labels["seek_verification_cleared_detail"]
+    )
+    set_run_progress_state(
+        detail,
+        stage="source_collection",
+        source="seek",
+        headline="SEEK",
+        detail=detail,
+        determinate=False,
+    )
+
+
+def _seek_attention_timeout_message(kind: str, timeout_ms: int) -> str:
+    labels = _seek_runtime_labels()
+    key = (
+        "seek_sign_in_timeout_warning_template"
+        if kind == "sign_in"
+        else "seek_verification_timeout_warning_template"
+    )
+    return labels[key].format(seconds=max(1, int(timeout_ms) // 1000))
+
+
+def seek_automatic_retry_failed_message(reason: str) -> str:
+    labels = _seek_runtime_labels()
+    return labels["seek_automatic_retry_failed_warning_template"].format(
+        reason=str(reason or "").strip()
+    )
+
+
+def _seek_sign_in_marker_visible(list_page) -> bool:
+    try:
+        body_text = str(list_page.inner_text("body") or "").lower()
+    except Exception:
+        return False
+    return any(marker in body_text for marker in _SEEK_SIGN_IN_WALL_MARKERS)
+
+
+def _wait_for_seek_sign_in_if_needed(
+    list_page,
+    page_tag: str,
+    *,
+    headless: bool,
+    use_persistent_browser: bool,
+    playwright_selector_timeout: int,
+    seek_manual_verification_timeout_ms: int,
+    sign_in_known: bool = False,
+) -> bool:
+    """Pause one visible persistent SEEK session when sign-in is actually present.
+
+    SEEK can render its sign-in request as an overlay while public cards remain in
+    the DOM. Detect it before card processing so the user can establish a saved
+    session once; ephemeral/headless runs retain the public-boundary behaviour.
+    """
+    if not sign_in_known and not _seek_sign_in_marker_visible(list_page):
+        return False
+    if headless or not use_persistent_browser:
+        return False
+
+    logger.warning("[SEEK][SIGN_IN_REQUIRED] %s persistent SEEK session needs sign-in", page_tag)
+    _set_seek_attention_progress("sign_in", use_persistent_browser=True)
+    try:
+        list_page.wait_for_function(
+            "() => !document.body.innerText.toLowerCase().includes('sign in to see more jobs')",
+            timeout=seek_manual_verification_timeout_ms,
+        )
+        list_page.wait_for_selector(SELECTOR_CARDS, timeout=playwright_selector_timeout)
+    except Exception as exc:
+        logger.warning("[SEEK][SIGN_IN_TIMEOUT] %s sign-in did not complete in time", page_tag)
+        raise BotChallengeDetected(
+            _seek_attention_timeout_message("sign_in", seek_manual_verification_timeout_ms),
+            failure_class=SEEK_SIGN_IN_WALL,
+        ) from exc
+
+    logger.info("[SEEK][SIGN_IN_RESOLVED] %s continuing with saved session", page_tag)
+    _set_seek_attention_cleared("sign_in")
+    return True
+
+
 SEEK_DETAIL_SESSION_CLOSE_TIMEOUT_SECONDS = 2.0
 SEEK_JOB_WAIT_TIMEOUT_SECONDS = 30.0
 _SEEK_LIST_PAGE_CHALLENGE_MARKERS = (
@@ -350,10 +481,8 @@ def _wait_for_seek_bot_challenge_or_manual_verification(
             _CF_AUTO_RESOLVE_TIMEOUT_MS,
         )
         if not headless:
-            browser_noun = "browser session" if use_persistent_browser else "browser window"
-            _set_seek_status_progress(
-                f"Action required: SEEK verification. Check the SEEK {browser_noun} now and complete any CAPTCHA or human-verification prompt. Job Hunter will continue automatically.",
-                stage="verification",
+            _set_seek_attention_progress(
+                "verification", use_persistent_browser=use_persistent_browser
             )
         try:
             list_page.wait_for_function(
@@ -373,10 +502,7 @@ def _wait_for_seek_bot_challenge_or_manual_verification(
                     "[SEEK][BOT_CHALLENGE_RESOLVED] %s Cloudflare challenge cleared", page_tag
                 )
                 if not headless:
-                    _set_seek_status_progress(
-                        "SEEK verification cleared; continuing search.",
-                        stage="source_collection",
-                    )
+                    _set_seek_attention_cleared("verification")
                 return False
         except Exception:
             logger.debug(
@@ -402,10 +528,8 @@ def _wait_for_seek_bot_challenge_or_manual_verification(
         use_persistent_browser,
     )
     if not headless:
-        browser_noun = "browser session" if use_persistent_browser else "browser window"
-        _set_seek_status_progress(
-            f"Action required: SEEK verification. Check the SEEK {browser_noun} now and complete any CAPTCHA or human-verification prompt. Job Hunter will continue automatically.",
-            stage="verification",
+        _set_seek_attention_progress(
+            "verification", use_persistent_browser=use_persistent_browser
         )
         logger.warning(
             "[SEEK][WAITING_FOR_USER_VERIFICATION] %s waiting up to %dms for manual verification",
@@ -422,16 +546,16 @@ def _wait_for_seek_bot_challenge_or_manual_verification(
                 page_tag,
             )
             raise BotChallengeDetected(
-                "SEEK is showing a bot challenge page and did not reach job cards.",
+                _seek_attention_timeout_message(
+                    "verification", seek_manual_verification_timeout_ms
+                ),
                 failure_class=SEEK_BOT_CHALLENGE,
             ) from exc
         logger.info(
             "[SEEK][USER_VERIFICATION_RESOLVED] %s continuing scrape after verification",
             page_tag,
         )
-        _set_seek_status_progress(
-            "SEEK verification cleared; continuing search.", stage="source_collection"
-        )
+        _set_seek_attention_cleared("verification")
         return True
 
     raise BotChallengeDetected(
@@ -499,10 +623,8 @@ def _handle_seek_list_page_failure(
             use_persistent_browser,
         )
         if not headless:
-            browser_noun = "browser session" if use_persistent_browser else "browser window"
-            _set_seek_status_progress(
-                f"Action required: SEEK verification. Check the SEEK {browser_noun} now and complete any CAPTCHA or human-verification prompt. Job Hunter will continue automatically.",
-                stage="verification",
+            _set_seek_attention_progress(
+                "verification", use_persistent_browser=use_persistent_browser
             )
             try:
                 list_page.wait_for_selector(
@@ -514,16 +636,16 @@ def _handle_seek_list_page_failure(
                     page_tag,
                 )
                 raise BotChallengeDetected(
-                    _SEEK_FAILURE_MESSAGES[SEEK_BOT_CHALLENGE],
+                    _seek_attention_timeout_message(
+                        "verification", seek_manual_verification_timeout_ms
+                    ),
                     failure_class=SEEK_BOT_CHALLENGE,
                 ) from wait_exc
             logger.info(
                 "[SEEK][USER_VERIFICATION_RESOLVED] %s continuing scrape after verification",
                 page_tag,
             )
-            _set_seek_status_progress(
-                "SEEK verification cleared; continuing search.", stage="source_collection"
-            )
+            _set_seek_attention_cleared("verification")
             return True
         _set_seek_status_progress(_SEEK_FAILURE_MESSAGES[SEEK_BOT_CHALLENGE], stage="error")
         raise BotChallengeDetected(
@@ -531,6 +653,16 @@ def _handle_seek_list_page_failure(
             failure_class=SEEK_BOT_CHALLENGE,
         ) from exc
     if failure_class == SEEK_SIGN_IN_WALL:
+        if _wait_for_seek_sign_in_if_needed(
+            list_page,
+            page_tag,
+            headless=headless,
+            use_persistent_browser=use_persistent_browser,
+            playwright_selector_timeout=playwright_selector_timeout,
+            seek_manual_verification_timeout_ms=seek_manual_verification_timeout_ms,
+            sign_in_known=True,
+        ):
+            return True
         logger.info(
             "[SEEK][SIGN_IN_WALL] %s public cards are no longer available without sign-in; stopping this target cleanly",
             page_tag,
@@ -1399,16 +1531,16 @@ def seek_scrape_to_records(
         browser_mode,
         headless,
         assisted_verification_enabled,
-        str(PLAYWRIGHT_USER_DATA_DIR) if use_persistent_browser else "(ephemeral)",
+        str(SEEK_PLAYWRIGHT_USER_DATA_DIR) if use_persistent_browser else "(ephemeral)",
     )
 
     try:
         with sync_playwright() as playwright:
             n_detail_workers = max(1, seek_parallel_detail_workers)
             if use_persistent_browser:
-                PLAYWRIGHT_USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
+                SEEK_PLAYWRIGHT_USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
                 context = playwright.chromium.launch_persistent_context(
-                    user_data_dir=str(PLAYWRIGHT_USER_DATA_DIR),
+                    user_data_dir=str(SEEK_PLAYWRIGHT_USER_DATA_DIR),
                     headless=headless,
                     viewport={"width": playwright_viewport_width, "height": playwright_viewport_height},
                     args=_BROWSER_ARGS,
@@ -1523,10 +1655,20 @@ def seek_scrape_to_records(
                                 playwright_selector_timeout=playwright_selector_timeout,
                                 seek_manual_verification_timeout_ms=seek_manual_verification_timeout_ms,
                             )
-                            if not bot_challenge_resolved:
+                            sign_in_resolved = _wait_for_seek_sign_in_if_needed(
+                                list_page,
+                                page_tag,
+                                headless=headless,
+                                use_persistent_browser=use_persistent_browser,
+                                playwright_selector_timeout=playwright_selector_timeout,
+                                seek_manual_verification_timeout_ms=seek_manual_verification_timeout_ms,
+                            )
+                            if not bot_challenge_resolved and not sign_in_resolved:
                                 list_page.wait_for_selector(
                                     SELECTOR_CARDS, timeout=playwright_selector_timeout
                                 )
+                        except BotChallengeDetected:
+                            raise
                         except Exception as exc:
                             page_status = _log_seek_list_page_diagnostics(
                                 page_tag,
@@ -1536,7 +1678,7 @@ def seek_scrape_to_records(
                             )
                             snapshot = _seek_list_page_diagnostics(list_page)
                             failure_class = str(snapshot["failure_class"])
-                            _handle_seek_list_page_failure(
+                            page_recovered = _handle_seek_list_page_failure(
                                 page_tag,
                                 list_page,
                                 exc,
@@ -1550,7 +1692,7 @@ def seek_scrape_to_records(
                                 seek_manual_verification_timeout_ms=seek_manual_verification_timeout_ms,
                             )
                             if failure_class == SEEK_SIGN_IN_WALL:
-                                stop_target = True
+                                stop_target = not page_recovered
                             elif failure_class in {SEEK_TIMEOUT_NO_CARDS, SEEK_UNKNOWN_FAILURE}:
                                 stop_target = True
                                 target_success = False

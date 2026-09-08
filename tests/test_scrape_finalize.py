@@ -955,10 +955,10 @@ def test_build_source_breakdown_keeps_enabled_sources_with_zero_counts():
     ]
 
 
-def test_source_errors_from_cache_stats_keeps_failed_source_visible_in_summary():
+def test_source_errors_from_cache_stats_keeps_only_full_failures_in_error_section():
     assert scrape_finalize._source_errors_from_cache_stats(
         {
-            "seek": {"error": "BotChallengeDetected"},
-            "linkedin": {"error": ""},
+            "seek": {"health": "partial_failure", "error": "Verification timed out"},
+            "linkedin": {"health": "full_failure", "error": "Provider unavailable"},
         }
-    ) == ["SEEK: BotChallengeDetected"]
+    ) == ["LINKEDIN: Provider unavailable"]

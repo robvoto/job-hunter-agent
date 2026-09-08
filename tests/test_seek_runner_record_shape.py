@@ -1,6 +1,8 @@
 """Tests for seek runner record shape."""
 
 import logging
+
+import pytest
 from types import SimpleNamespace
 
 from job_hunter_agent.record_schema import (
@@ -61,6 +63,7 @@ from job_hunter_agent.scrapers.seek_runner import (
     _set_seek_run_progress,
     _seek_source_metadata,
     _wait_for_seek_bot_challenge_or_manual_verification,
+    _wait_for_seek_sign_in_if_needed,
     _wait_for_seek_user_verification,
     build_seek_card_record,
     BotChallengeDetected,
@@ -447,8 +450,12 @@ def test_seek_visible_cloudflare_challenge_surfaces_action_before_it_clears(monk
             self.cleared = True
 
     monkeypatch.setattr(
-        "job_hunter_agent.scrapers.seek_runner._set_seek_status_progress",
-        lambda message, **kwargs: progress_calls.append((message, kwargs.get("stage"))),
+        "job_hunter_agent.scrapers.seek_runner._set_seek_attention_progress",
+        lambda kind, **kwargs: progress_calls.append(("attention", kind, kwargs.get("use_persistent_browser"))),
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.scrapers.seek_runner._set_seek_attention_cleared",
+        lambda kind: progress_calls.append(("cleared", kind)),
     )
     caplog.set_level(logging.INFO, logger="job_hunter_agent.scrapers.seek_runner")
 
@@ -465,13 +472,8 @@ def test_seek_visible_cloudflare_challenge_surfaces_action_before_it_clears(monk
         is False
     )
 
-    assert progress_calls[0][1] == "verification"
-    assert progress_calls[0][0].startswith("Action required: SEEK verification")
-    assert "browser window" in progress_calls[0][0]
-    assert progress_calls[-1] == (
-        "SEEK verification cleared; continuing search.",
-        "source_collection",
-    )
+    assert progress_calls[0] == ("attention", "verification", False)
+    assert progress_calls[-1] == ("cleared", "verification")
     assert "Cloudflare challenge cleared" in caplog.text
     assert "auto-resolved" not in caplog.text
 
@@ -578,6 +580,92 @@ def test_seek_bot_challenge_timeout_raises_classified_bot_challenge(monkeypatch)
         assert exc.failure_class == SEEK_BOT_CHALLENGE
     else:  # pragma: no cover - defensive guard
         raise AssertionError("expected BotChallengeDetected")
+
+
+def test_seek_bot_challenge_timeout_message_explains_partial_and_manual_retry(monkeypatch):
+    class _TimeoutPage:
+        def title(self):
+            return "Just a moment"
+
+        def inner_text(self, selector):
+            assert selector == "body"
+            return "confirm you are human"
+
+        def wait_for_function(self, *args, **kwargs):
+            raise TimeoutError("still blocked")
+
+        def wait_for_selector(self, selector, timeout):
+            raise TimeoutError("still blocked")
+
+    with pytest.raises(BotChallengeDetected) as captured:
+        _wait_for_seek_bot_challenge_or_manual_verification(
+            _TimeoutPage(),
+            "[SEEK p1/3]",
+            headless=False,
+            use_persistent_browser=True,
+            assisted_verification_enabled=True,
+            playwright_selector_timeout=5000,
+            seek_manual_verification_timeout_ms=120000,
+        )
+
+    assert captured.value.failure_class == SEEK_BOT_CHALLENGE
+    message = str(captured.value)
+    assert "SEEK partial" in message
+    assert "120 seconds" in message
+    assert "Results collected before the block were kept" in message
+    assert "No automatic SEEK retry was attempted" in message
+
+
+def test_seek_persistent_sign_in_overlay_is_detected_even_when_cards_are_available(monkeypatch):
+    calls = []
+
+    class _OverlayPage:
+        def inner_text(self, selector):
+            assert selector == "body"
+            return "28 jobs available Sign in to see more jobs"
+
+        def wait_for_function(self, expression, timeout):
+            calls.append(("function", timeout))
+
+        def wait_for_selector(self, selector, timeout):
+            calls.append(("selector", timeout))
+
+    assert _wait_for_seek_sign_in_if_needed(
+        _OverlayPage(),
+        "[SEEK p1/3]",
+        headless=False,
+        use_persistent_browser=True,
+        playwright_selector_timeout=5000,
+        seek_manual_verification_timeout_ms=120000,
+    ) is True
+    assert calls == [("function", 120000), ("selector", 5000)]
+
+
+def test_seek_persistent_sign_in_wall_waits_once_and_resumes(monkeypatch):
+    calls = []
+
+    class _SignInPage:
+        def wait_for_function(self, expression, timeout):
+            calls.append(("function", timeout))
+            assert "sign in to see more jobs" in expression
+
+        def wait_for_selector(self, selector, timeout):
+            calls.append(("selector", timeout))
+
+    assert _handle_seek_list_page_failure(
+        "[SEEK p2/3]",
+        _SignInPage(),
+        TimeoutError("sign-in wall"),
+        {"title": "SEEK jobs", "selector_count": 0},
+        page_status="sign_in_wall",
+        failure_class=SEEK_SIGN_IN_WALL,
+        headless=False,
+        use_persistent_browser=True,
+        assisted_verification_enabled=False,
+        playwright_selector_timeout=5000,
+        seek_manual_verification_timeout_ms=120000,
+    ) is True
+    assert calls == [("function", 120000), ("selector", 5000)]
 
 
 def test_seek_human_verification_recovery_continues_without_bot_challenge(monkeypatch):

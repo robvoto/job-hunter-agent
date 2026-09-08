@@ -631,6 +631,21 @@ def test_run_status_and_stop_endpoint_report_stopping(monkeypatch):
     assert stop_calls == [True]
 
 
+def test_workspace_verification_attention_is_one_shot_and_changes_tab_title():
+    repo_root = Path(__file__).resolve().parents[1]
+    html = (repo_root / "templates" / "workspace.html").read_text(encoding="utf-8")
+    wait_state = (
+        repo_root / "templates" / "static" / "common" / "wait-state.js"
+    ).read_text(encoding="utf-8")
+
+    assert "function syncSeekAttention(progressDetail)" in html
+    assert "seekAttentionActive" in html
+    assert "document.title = SEEK_ATTENTION_TAB_TITLE" in html
+    assert "window.alert(message)" in html
+    assert "SEEK_VERIFICATION_BROWSER_ALERT" in wait_state
+    assert "SEEK_SIGN_IN_BROWSER_ALERT" in wait_state
+
+
 def test_verification_progress_has_priority_over_routine_parallel_source_updates():
     routine_detail = {
         "stage": "source_collection",

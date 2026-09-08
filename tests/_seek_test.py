@@ -2,14 +2,14 @@
 
 from playwright.sync_api import sync_playwright
 
-from job_hunter_agent.paths import PLAYWRIGHT_USER_DATA_DIR
+from job_hunter_agent.paths import SEEK_PLAYWRIGHT_USER_DATA_DIR
 from job_hunter_agent.scrapers.seek import SELECTOR_CARDS
 
 url = "https://www.seek.com.au/jobs?keywords=senior+business+analyst&where=Sydney&daterange=3&sortMode=ListedDate"
-PLAYWRIGHT_USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
+SEEK_PLAYWRIGHT_USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
 with sync_playwright() as p:
     context = p.chromium.launch_persistent_context(
-        user_data_dir=str(PLAYWRIGHT_USER_DATA_DIR),
+        user_data_dir=str(SEEK_PLAYWRIGHT_USER_DATA_DIR),
         headless=True,
         viewport={"width": 1400, "height": 900},
     )

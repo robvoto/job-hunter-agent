@@ -24,7 +24,8 @@ SERVER_LOG_PATH = OUTPUT_DIR / "server.log"
 UNCERTAINTY_LOG_PATH = OUTPUT_DIR / "uncertainty.jsonl"
 DEBUG_SOURCE_PAYLOADS_DIR = REPO_ROOT / "debug" / "source_payloads"
 # Persistent Playwright profile so local testing can reuse login state.
-PLAYWRIGHT_USER_DATA_DIR = DATA_DIR / "playwright_user_data"
+SEEK_PLAYWRIGHT_USER_DATA_DIR = DATA_DIR / "playwright_seek_user_data"
+APSJOBS_PLAYWRIGHT_USER_DATA_DIR = DATA_DIR / "playwright_apsjobs_user_data"
 
 # Web Assets (global, not per-user)
 STATIC_DIR = TEMPLATES_DIR / "static"

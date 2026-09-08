@@ -1,8 +1,8 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 130,
-  "updated_at": "2026-09-07T00:00:00+00:00",
+  "version": 131,
+  "updated_at": "2026-09-08T00:00:00+00:00",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
     "remote_label": "Remote",
@@ -256,7 +256,19 @@
     "clear_selection_label": "Clear selection",
     "remove_selected_label": "Remove selected",
     "remove_item_label": "Remove {name}",
-    "remove_item_fallback_label": "Remove item"
+    "remove_item_fallback_label": "Remove item",
+    "seek_verification_headline": "SEEK needs you",
+    "seek_verification_detail_template": "Complete the CAPTCHA or human check in the open SEEK {browser}. Job Hunter will continue automatically.",
+    "seek_sign_in_headline": "SEEK sign-in required",
+    "seek_sign_in_detail_template": "Sign in to SEEK in the open SEEK {browser}. This saved session will be reused on future searches.",
+    "seek_verification_cleared_detail": "SEEK verification cleared; continuing search.",
+    "seek_sign_in_cleared_detail": "SEEK sign-in completed; continuing search.",
+    "seek_verification_browser_alert": "SEEK needs verification. Complete the CAPTCHA or human check in the open SEEK browser.",
+    "seek_sign_in_browser_alert": "SEEK needs you to sign in. Complete sign-in in the open SEEK browser.",
+    "seek_attention_tab_title": "\u26a0 SEEK needs you \u2014 Job Hunter",
+    "seek_verification_timeout_warning_template": "SEEK partial \u2014 Cloudflare verification was not completed within {seconds} seconds. Results collected before the block were kept. No automatic SEEK retry was attempted; run search again to retry SEEK.",
+    "seek_sign_in_timeout_warning_template": "SEEK partial \u2014 sign-in was required but was not completed within {seconds} seconds. Results collected before sign-in was requested were kept. No automatic SEEK retry was attempted; sign in and run search again to retry SEEK.",
+    "seek_automatic_retry_failed_warning_template": "SEEK partial \u2014 an automatic visible SEEK retry was attempted but was still blocked. {reason} Run search again to retry SEEK."
   },
   "access_status_labels_description": "Managed copy for the Google account verification, access request, approval waitlist, and blocked-account pages.",
   "access_status_labels": {
@@ -563,7 +575,7 @@
     "coverage_status_classification_review": "Needs classification/review",
     "coverage_status_mismatch": "Not in profile",
     "coverage_status_invalid": "Needs review",
-    "coverage_status_not_assessed": "Employer context — not assessed",
+    "coverage_status_not_assessed": "Employer context \u2014 not assessed",
     "importance_preferred": "Preferred",
     "importance_bonus": "Bonus",
     "title_block_button_label": "Hide similar titles",

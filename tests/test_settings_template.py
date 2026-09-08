@@ -78,7 +78,7 @@ def test_global_settings_admin_js_handles_seek_assisted_verification_toggle():
     assert "playwrightSettings.seek_manual_verification_timeout_ms" in js
     assert "readSecondsAsMilliseconds(" in js
     assert "playwright_browser_mode" in js
-    assert "playwrightSettings.playwright_browser_mode || 'ephemeral'" in js
+    assert "playwrightSettings.playwright_browser_mode || 'persistent'" in js
     assert "playwright_browser_mode:" in js
 
 

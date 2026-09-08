@@ -18,6 +18,7 @@ from job_hunter_agent.record_schema import (
 )
 from job_hunter_agent.run_context import ScrapeRunContext
 from job_hunter_agent.run_control import (
+    get_run_progress_by_source,
     get_run_progress_for_source,
     run_stop_requested,
     run_shutdown_requested,
@@ -47,7 +48,9 @@ from job_hunter_agent.scrapers.seek_runner import (
     SEEK_ASSISTED_BROWSER_SESSION_ENABLED,
     SEEK_BOT_CHALLENGE,
     SEEK_HUMAN_VERIFICATION,
+    SEEK_SIGN_IN_WALL,
     SEEK_TIMEOUT_NO_CARDS,
+    seek_automatic_retry_failed_message,
     seek_scrape_to_records,
 )
 from job_hunter_agent.source_registry import SOURCE_APSJOBS, SOURCE_LINKEDIN, SOURCE_SEEK
@@ -490,6 +493,7 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
             if failure_class not in {
                 SEEK_HUMAN_VERIFICATION,
                 SEEK_BOT_CHALLENGE,
+                SEEK_SIGN_IN_WALL,
                 SEEK_TIMEOUT_NO_CARDS,
             }:
                 _set_seek_source_progress(_exception_message(exc), stage="error")
@@ -597,21 +601,26 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
                 if retry_failure_class not in {
                     SEEK_HUMAN_VERIFICATION,
                     SEEK_BOT_CHALLENGE,
+                    SEEK_SIGN_IN_WALL,
                     SEEK_TIMEOUT_NO_CARDS,
                 }:
                     _set_seek_source_progress(str(retry_exc), stage="error")
                     raise
+                retry_error = BotChallengeDetected(
+                    seek_automatic_retry_failed_message(_exception_message(retry_exc)),
+                    failure_class=retry_failure_class,
+                )
                 logger.warning(
                     "[SEEK] Visible SEEK retry was still blocked (%s); continuing without SEEK results: %s",
                     retry_failure_class,
-                    retry_exc,
+                    retry_error,
                 )
-                _set_seek_source_progress(_exception_message(retry_exc), stage="error")
+                _set_seek_source_progress(_exception_message(retry_error), stage="error")
                 _record_source_warning(
                     source=SOURCE_SEEK,
                     severity="warning",
                     category="source_failure",
-                    message=_exception_message(retry_exc),
+                    message=_exception_message(retry_error),
                     run_id=context.run_iso,
                     context={
                         "failure_class": retry_failure_class,
@@ -622,7 +631,7 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
                         "source_failure",
                         SOURCE_SEEK,
                         retry_failure_class,
-                        _exception_message(retry_exc),
+                        _exception_message(retry_error),
                     ),
                 )
                 return SourceRunResult(
@@ -630,7 +639,7 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
                     kept_records=_merge_partial_rows(partial_kept, retry_kept),
                     audit_rows=_merge_partial_rows(partial_audit, retry_audit),
                     skill_observations=[*partial_skills, *retry_skills],
-                    error=retry_exc,
+                    error=retry_error,
                     _job_history_snapshot=job_history,
                     _llm_cache_snapshot=llm_cache,
                     discovery_records=(cached_records if cached_records is not None else captured_records),
@@ -1064,14 +1073,21 @@ def _log_source_slow_warning(
         message,
     )
     source_label = get_source_display_label(source)
-    set_run_progress_state(
-        message,
-        stage="source_collection",
-        source=source,
-        headline=f"{source_label} is still running",
-        detail="Processing is continuing; this is a slow-source warning, not a failure.",
-        determinate=False,
+    source_snapshot = get_run_progress_by_source().get(str(source).strip().lower()) or {}
+    source_detail = source_snapshot.get("progress_detail")
+    waiting_for_human = (
+        isinstance(source_detail, dict)
+        and str(source_detail.get("stage") or "").strip() == "verification"
     )
+    if not waiting_for_human:
+        set_run_progress_state(
+            message,
+            stage="source_collection",
+            source=source,
+            headline=f"{source_label} is still running",
+            detail="Processing is continuing; this is a slow-source warning, not a failure.",
+            determinate=False,
+        )
     record_system_warning(
         severity="info",
         category="source_slow",

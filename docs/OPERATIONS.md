@@ -171,7 +171,8 @@ Behaviour:
 - On first launch the server cold-starts in up to 60 s; subsequent starts are faster.
 - If Playwright Chromium is missing a notification appears on launch; SEEK scraping will
   fail until it is installed.
-- If SEEK shows a human-verification page, enable Assisted SEEK verification in global settings and use the visible persistent browser to finish the check manually.
+- SEEK persistent browser mode uses a SEEK-only Playwright profile, separate from APSJobs, so a completed SEEK sign-in can be reused on later searches. The first persistent run may ask you to sign in once.
+- If SEEK shows sign-in or human verification in a visible browser, the workspace pins a `SEEK needs you` state and raises a one-shot browser alert. Complete the prompt in that same SEEK browser; Job Hunter waits once for the configured manual-verification window, then either resumes or records a clear partial-source warning with retry guidance.
 
 Telegram commands while the app is open:
 

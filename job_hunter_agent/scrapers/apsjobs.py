@@ -33,7 +33,7 @@ from job_hunter_agent.job_review_pipeline import (
     review_pre_detail_normalized_job,
 )
 from job_hunter_agent.job_types import load_job_type
-from job_hunter_agent.paths import PLAYWRIGHT_USER_DATA_DIR
+from job_hunter_agent.paths import APSJOBS_PLAYWRIGHT_USER_DATA_DIR
 from job_hunter_agent.posting_utils import parse_visible_posted_age_days
 from job_hunter_agent.profile_store import get_search_settings
 from job_hunter_agent.search_metrics import QueryYieldMetric, record_query_yield_metric
@@ -675,7 +675,7 @@ class APSJobsScraper(BaseJobScraper):
                 )
             return kept_records, audit_rows, skill_observations
 
-        PLAYWRIGHT_USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
+        APSJOBS_PLAYWRIGHT_USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
         collection_complete = True
         seen_discovered_job_keys: set[str] = set()
         probe_job_keys_by_location: dict[str, dict[str, set[str]]] = {}
@@ -700,7 +700,7 @@ class APSJobsScraper(BaseJobScraper):
                 # headless" setting (get_playwright_headless): APS has no
                 # assisted-verification flow that needs a visible browser.
                 context = playwright.chromium.launch_persistent_context(
-                    user_data_dir=str(PLAYWRIGHT_USER_DATA_DIR),
+                    user_data_dir=str(APSJOBS_PLAYWRIGHT_USER_DATA_DIR),
                     headless=True,
                     viewport={"width": 1400, "height": 900},
                 )

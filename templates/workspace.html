@@ -39,6 +39,10 @@
       SEARCH_STOPPING_TITLE,
       SEARCH_STOPPING_COPY,
       SEARCH_STOPPING_SUBCOPY,
+      SEEK_VERIFICATION_BROWSER_ALERT,
+      SEEK_SIGN_IN_BROWSER_ALERT,
+      SEEK_SIGN_IN_HEADLINE,
+      SEEK_ATTENTION_TAB_TITLE,
       RUN_COMPLETE_REDIRECT_DELAY_MS,
     } from '/static/common/wait-state.js';
 
@@ -64,6 +68,8 @@
     const isTestMode = document.body.dataset.testMode === 'true';
     let runStatusPollHandle = null;
     let runStatusWasActive = false;
+    let seekAttentionActive = false;
+    const workspaceDefaultDocumentTitle = document.title;
     let workspaceProfileStatus = null;
     let workspaceResultsLoadToken = 0;
 
@@ -252,6 +258,32 @@
       updateWorkspaceRunButtons();
     }
 
+    function syncSeekAttention(progressDetail) {
+      const stage = String(progressDetail?.stage || '').trim();
+      const source = String(progressDetail?.source || '').trim();
+      const needsSeekAttention = stage === 'verification' && source === 'seek';
+      if (!needsSeekAttention) {
+        if (seekAttentionActive) {
+          seekAttentionActive = false;
+          document.title = workspaceDefaultDocumentTitle;
+        }
+        return;
+      }
+
+      document.title = SEEK_ATTENTION_TAB_TITLE;
+      if (seekAttentionActive) {
+        return;
+      }
+      seekAttentionActive = true;
+      const headline = String(progressDetail?.headline || '').trim();
+      const message = headline === SEEK_SIGN_IN_HEADLINE
+        ? SEEK_SIGN_IN_BROWSER_ALERT
+        : SEEK_VERIFICATION_BROWSER_ALERT;
+      if (!isTestMode) {
+        window.alert(message);
+      }
+    }
+
     function stopRunStatusPolling() {
       if (runStatusPollHandle) {
         window.clearInterval(runStatusPollHandle);
@@ -275,6 +307,7 @@
         const payload = await response.json().catch(() => ({}));
         if (payload?.status === 'running') {
           runStatusWasActive = true;
+          syncSeekAttention(payload?.progress_detail || null);
           renderWorkspaceWait({
             title: SEARCH_RUNNING_TITLE,
             copy: SEARCH_RUNNING_COPY,
@@ -289,6 +322,7 @@
         }
         if (payload?.status === 'stopping') {
           runStatusWasActive = true;
+          syncSeekAttention(null);
           renderWorkspaceWait({
             title: SEARCH_STOPPING_TITLE,
             copy: SEARCH_STOPPING_COPY,
@@ -303,6 +337,7 @@
         }
         if (payload?.status === 'stopped' && (runStatusWasActive || waitUi.getState())) {
           runStatusWasActive = false;
+          syncSeekAttention(null);
           stopRunStatusPolling();
           renderWorkspaceWait({
             title: SEARCH_STOPPING_TITLE,
@@ -320,6 +355,7 @@
         }
         stopRunStatusPolling();
         runStatusWasActive = false;
+        syncSeekAttention(null);
         if (waitUi.getState()) {
           renderWorkspaceWait(null);
           await loadResults(String(payload?.last_run_at || '').trim());

@@ -267,7 +267,7 @@ export const JobHunterAdminSettings = (function () {
     requireElement('playwright_headless').checked = playwrightSettings.headless !== false;
     setFieldValue(
       'playwright_browser_mode',
-      playwrightSettings.playwright_browser_mode || 'ephemeral',
+      playwrightSettings.playwright_browser_mode || 'persistent',
     );
     requireElement('seek_assisted_verification_enabled').checked = playwrightSettings.seek_assisted_verification_enabled === true;
     setFieldValue(

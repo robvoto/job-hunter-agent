@@ -342,6 +342,8 @@ def _source_errors_from_cache_stats(source_cache_stats: dict | None) -> list[str
     for source, details in (source_cache_stats or {}).items():
         if not isinstance(details, dict):
             continue
+        if str(details.get("health") or "").strip() != "full_failure":
+            continue
         error = str(details.get("error") or "").strip()
         if error:
             errors.append(f"{get_source_display_label(str(source)).upper()}: {error}")
@@ -755,7 +757,7 @@ def finalize_scrape_run(
     unhealthy_messages = [
         f"{get_source_display_label(source)}: {str(state.get('error') or state.get('health') or 'unknown')}"
         for source, state in source_health.items()
-        if str(state.get("health") or "healthy") != "healthy"
+        if str(state.get("health") or "healthy") not in {"healthy", "full_failure"}
     ]
     if unhealthy_messages:
         run_stats["warnings"] = unhealthy_messages

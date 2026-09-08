@@ -540,6 +540,8 @@ def test_seek_visible_bot_challenge_returns_error_result(monkeypatch):
 
     assert calls == [True, False]
     assert result.error is not None
+    assert "automatic visible SEEK retry was attempted" in str(result.error)
+    assert "Run search again to retry SEEK" in str(result.error)
     assert result.kept_records == []
 
 
@@ -901,6 +903,31 @@ def test_run_enabled_sources_binds_source_scope_per_runner(monkeypatch):
     run_enabled_sources(context)
 
     assert captured_scopes == ["SEEK", "LINKEDIN"]
+
+
+def test_source_slow_warning_does_not_overwrite_human_verification_progress(monkeypatch):
+    scope = run_control.begin_run_progress_scope()
+    try:
+        run_control.set_run_progress_state(
+            "Complete SEEK verification",
+            stage="verification",
+            source=SOURCE_SEEK,
+            headline="SEEK needs you",
+            detail="Complete verification in the open browser.",
+            determinate=False,
+        )
+        monkeypatch.setattr(source_runner, "record_system_warning", lambda **kwargs: kwargs)
+
+        source_runner._log_source_slow_warning(
+            SOURCE_SEEK, "SEEK is taking longer than expected", elapsed_s=90
+        )
+
+        snapshot = run_control.get_run_progress_by_source()[SOURCE_SEEK]
+        assert snapshot["progress_detail"]["stage"] == "verification"
+        assert snapshot["progress_detail"]["headline"] == "SEEK needs you"
+        assert snapshot["progress"] == "Complete SEEK verification"
+    finally:
+        run_control.end_run_progress_scope(scope)
 
 
 def test_parallel_runner_keeps_results_after_timeout_warning(monkeypatch, caplog):
