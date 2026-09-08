@@ -11,6 +11,10 @@ from datetime import date
 from typing import Any, Callable
 
 from job_hunter_agent import occupation_taxonomy
+from job_hunter_agent.record_schema import (
+    REJECT_REASON_ALREADY_APPLIED_REPOST,
+    REJECT_REASON_MANUALLY_HIDDEN_REPOST,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +47,8 @@ _REASON_LABELS: dict[str, str] = {
     "REVIEW_FAILED_TIMEOUT": "LLM review timed out — not reviewed, will retry next run",
     "DET_REJECT": "deterministic reviewer rejected",
     "ALREADY_APPLIED": "you already applied to this one",
+    REJECT_REASON_ALREADY_APPLIED_REPOST: "repost of a job you already applied to",
+    REJECT_REASON_MANUALLY_HIDDEN_REPOST: "repost of a job you already hid",
     "DUPLICATE_URL": "duplicate listing",
     "DUPLICATE_JOB_KEY": "duplicate listing",
     "JOB_CLOSED": "no longer accepting applications",
@@ -119,6 +125,7 @@ from job_hunter_agent.history import apply_kept_job_reuse, can_reuse_kept_job, f
 from job_hunter_agent.job_identity import (
     find_confirmed_duplicate,
     find_confirmed_identity_history_entry,
+    find_content_repost_history_entry,
     merge_confirmed_duplicate_evidence,
     RUN_IDENTITY_CLAIM_KEY,
     RunIdentityRegistry,
@@ -1541,6 +1548,28 @@ def review_post_detail_normalized_job(
             reason=reject_reason,
             explanation="The listing appears to be closed and no longer accepting applications.",
         )
+        return _build_outcome(record), record, skill_observations
+
+    if (
+        find_content_repost_history_entry(
+            record, context.job_history, context.applied_job_keys
+        )
+        is not None
+    ):
+        record[RECORD_DECISION_KEY] = "SKIP"
+        record[RECORD_REJECT_REASON_KEY] = REJECT_REASON_ALREADY_APPLIED_REPOST
+        _finalize(record, context)
+        return _build_outcome(record), record, skill_observations
+
+    if (
+        find_content_repost_history_entry(
+            record, context.job_history, context.hidden_job_keys
+        )
+        is not None
+    ):
+        record[RECORD_DECISION_KEY] = "SKIP"
+        record[RECORD_REJECT_REASON_KEY] = REJECT_REASON_MANUALLY_HIDDEN_REPOST
+        _finalize(record, context)
         return _build_outcome(record), record, skill_observations
 
     _apply_work_type_inference(record, details_text)

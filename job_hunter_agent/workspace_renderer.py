@@ -47,6 +47,7 @@ from job_hunter_agent.posting_utils import (
     linkedin_freshness_is_unknown,
     linkedin_original_posted_is_unverified,
     original_posted_display_label,
+    parse_timestamp,
     posted_display_label,
 )
 from job_hunter_agent.preferences import (
@@ -588,6 +589,9 @@ _WORKSPACE_PAGE_LABEL_KEYS = (
     "sector_option_public",
     "sector_option_private",
     "match_level_label",
+    "reposts_label",
+    "reposts_option_hide",
+    "reposts_option_include",
     "potential_jobs_empty_state",
     "results_helper_copy",
     "results_helper_dismiss_button",
@@ -1239,6 +1243,7 @@ def render_job_card(
     applied_pool: Optional[List[dict]] = None,
     history_clusters: Optional[Dict[str, dict]] = None,
     debug_mode: Optional[bool] = None,
+    new_to_you_cutoff: Optional[datetime] = None,
 ) -> str:
     active_debug_mode = WORKSPACE_DEBUG_MODE if debug_mode is None else bool(debug_mode)
     default_country_suffix = get_default_country_suffix()
@@ -1259,6 +1264,10 @@ def render_job_card(
     hidden_record = bool(record.get("hidden"))
     is_stale = bool(record.get("is_stale"))
     seen_by_you = viewed_by_user(record)
+    first_seen_at = parse_timestamp(record.get("first_seen_at"))
+    new_to_you = not seen_by_you
+    if new_to_you_cutoff is not None:
+        new_to_you = bool(first_seen_at and first_seen_at >= new_to_you_cutoff) and not seen_by_you
     teaser_text = _clean_job_card_text(record.get("teaser") or "")
     stored_snapshot = _clean_job_card_text(record.get("role_snapshot") or "")
     if not stored_snapshot:
@@ -1427,7 +1436,7 @@ def render_job_card(
                 _workspace_label("workspace_card_labels", "hidden_badge_tooltip"),
             )
         )
-    if not applied_record and not seen_by_you:
+    if not applied_record and new_to_you:
         badges.append(
             render_badge(
                 _workspace_label("workspace_card_labels", "new_to_you_badge"),
@@ -2664,7 +2673,7 @@ def render_job_card(
     title_block_panel_id = f"{card_dom_id}-title-block"
 
     return (
-        f'<article id="{safe_html(card_dom_id)}" class="{safe_html(card_classes)}" data-fit-score="{fit_points}" data-posted-age="{posted_age_days if posted_age_days is not None else 9999}" data-salary-sort="{salary_value}" data-salary-fit="{safe_html(salary_fit_state)}" data-work-mode="{safe_html(work_mode.lower())}" data-work-type="{safe_html(display_work_type_label(record).lower())}" data-viewed="{1 if seen_by_you else 0}" data-record-kind="{record_kind}" data-fit-label="{safe_html(fit_label.lower())}" data-title-search="{safe_html((record.get("title") or "").lower())}" data-company-search="{safe_html(company_display.lower())}" data-source="{safe_html(source)}" data-posting-channel="{safe_html(channel_kind)}" data-apply-method="{safe_html(apply_method or "unknown")}">'
+        f'<article id="{safe_html(card_dom_id)}" class="{safe_html(card_classes)}" data-fit-score="{fit_points}" data-posted-age="{posted_age_days if posted_age_days is not None else 9999}" data-salary-sort="{salary_value}" data-salary-fit="{safe_html(salary_fit_state)}" data-work-mode="{safe_html(work_mode.lower())}" data-work-type="{safe_html(display_work_type_label(record).lower())}" data-viewed="{1 if seen_by_you else 0}" data-new-to-you="{1 if new_to_you else 0}" data-reposted="{1 if record.get(RECORD_IS_REPOSTED_KEY) is True else 0}" data-record-kind="{record_kind}" data-fit-label="{safe_html(fit_label.lower())}" data-title-search="{safe_html((record.get("title") or "").lower())}" data-company-search="{safe_html(company_display.lower())}" data-source="{safe_html(source)}" data-posting-channel="{safe_html(channel_kind)}" data-apply-method="{safe_html(apply_method or "unknown")}">'
         f'<div class="job-badges">{"".join(badges)}</div>'
         '<div class="job-header-row">'
         '<div class="job-header-copy">'
@@ -2729,6 +2738,7 @@ def render_section(
     debug_mode: Optional[bool] = None,
     header_tools_html: str = "",
     header_nav_html: str = "",
+    new_to_you_cutoff: Optional[datetime] = None,
 ) -> str:
     header_tools = (
         f'<div class="section-head-tools">{header_tools_html}</div>' if header_tools_html else ""
@@ -2804,6 +2814,7 @@ def render_section(
             applied_pool=applied_pool,
             history_clusters=history_clusters,
             debug_mode=debug_mode,
+            new_to_you_cutoff=new_to_you_cutoff,
         )
         for record in records
     )

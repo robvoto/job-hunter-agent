@@ -29,6 +29,7 @@ from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
     RECORD_DUPLICATE_LINKS_KEY,
     RECORD_JOB_KEY,
+    RECORD_IS_REPOSTED_KEY,
     RECORD_LOCATION_KEY,
     RECORD_RUN_STARTED_AT_KEY,
     RECORD_POTENTIAL_DUPLICATE_LINKS_KEY,
@@ -393,6 +394,133 @@ def _confirmed_duplicate_match(a: dict, b: dict) -> Optional[tuple[str, str]]:
                 return key, signature_value
 
     return None
+
+
+def _content_repost_description(record: dict) -> str:
+    """Return the strongest available description text for repost comparison."""
+
+    return str(
+        record.get(RECORD_DETAILS_TEXT_KEY)
+        or record.get("full_description")
+        or record.get("fit_source_text")
+        or ""
+    ).strip()
+
+
+def _description_shingles(text: str, size: int) -> set[tuple[str, ...]]:
+    tokens = re.findall(r"[a-z0-9]+", str(text or "").lower())
+    if len(tokens) < size:
+        return set()
+    return {tuple(tokens[index : index + size]) for index in range(len(tokens) - size + 1)}
+
+
+def are_jobs_content_reposts(a: dict, b: dict) -> bool:
+    """Return True for a high-confidence same-board repost with a changed platform id.
+
+    Platform ids are authoritative when they match, but job boards can issue a new id
+    for a repost.  We only bridge that gap when source, company and normalized title
+    agree and the full descriptions are overwhelmingly the same.  This intentionally
+    does *not* collapse same-title vacancies whose role-specific text differs.
+    """
+
+    source_a = _source_label(a)
+    source_b = _source_label(b)
+    if not source_a or source_a != source_b:
+        return False
+
+    title_a = normalize_title_text(str(a.get(RECORD_TITLE_KEY) or ""))
+    title_b = normalize_title_text(str(b.get(RECORD_TITLE_KEY) or ""))
+    if not title_a or title_a != title_b:
+        return False
+
+    company_a = str(a.get(RECORD_COMPANY_KEY) or "").strip()
+    company_b = str(b.get(RECORD_COMPANY_KEY) or "").strip()
+    if not company_a or not company_b or not company_names_weakly_match(company_a, company_b):
+        return False
+
+    location_a = _normalize_identity_text(str(a.get(RECORD_LOCATION_KEY) or ""))
+    location_b = _normalize_identity_text(str(b.get(RECORD_LOCATION_KEY) or ""))
+    if location_a and location_b and location_a != location_b:
+        return False
+
+    config = _get_identity_config()["content_repost"]
+    min_chars = int(config["min_description_chars"])
+    shingle_size = int(config["shingle_size"])
+    min_jaccard = float(config["min_jaccard"])
+    min_shorter_coverage = float(config["min_shorter_coverage"])
+
+    text_a = _content_repost_description(a)
+    text_b = _content_repost_description(b)
+    if len(text_a) < min_chars or len(text_b) < min_chars:
+        return False
+
+    shingles_a = _description_shingles(text_a, shingle_size)
+    shingles_b = _description_shingles(text_b, shingle_size)
+    if not shingles_a or not shingles_b:
+        return False
+
+    overlap = len(shingles_a & shingles_b)
+    union = len(shingles_a | shingles_b)
+    jaccard = overlap / union if union else 0.0
+    shorter_coverage = overlap / min(len(shingles_a), len(shingles_b))
+    return jaccard >= min_jaccard and shorter_coverage >= min_shorter_coverage
+
+
+def find_content_repost(record: dict, pool: Iterable[dict]) -> Optional[dict]:
+    """Return the first high-confidence content repost from the supplied pool."""
+
+    for candidate in pool:
+        if candidate is record:
+            continue
+        if are_jobs_content_reposts(record, candidate):
+            return candidate
+    return None
+
+
+def find_content_repost_history_entry(
+    record: dict, history: dict[str, dict], job_keys: Iterable[str]
+) -> Optional[dict]:
+    """Return current-schema manual-state history for a changed-id content repost."""
+
+    for job_key in job_keys:
+        entry = history.get(str(job_key or "").strip())
+        if not isinstance(entry, dict):
+            continue
+        snapshot = entry.get("last_kept_snapshot")
+        if isinstance(snapshot, dict) and are_jobs_content_reposts(record, snapshot):
+            return entry
+    return None
+
+
+def _content_repost_preference_key(record: dict) -> tuple[float, str, str]:
+    try:
+        posted_age = float(record.get("posted_age_days"))
+    except (TypeError, ValueError):
+        posted_age = 9999.0
+    first_seen = str(record.get("first_seen_at") or "")
+    job_key = _normalized_job_key(record) or str(record.get(RECORD_JOB_KEY) or "")
+    return (-posted_age, first_seen, job_key)
+
+
+def deduplicate_content_reposts(records: Iterable[dict]) -> list[dict]:
+    """Collapse high-confidence same-board reposts, preferring the fresher record."""
+
+    deduped: list[dict] = []
+    for record in records:
+        match_index = next(
+            (index for index, kept in enumerate(deduped) if are_jobs_content_reposts(record, kept)),
+            None,
+        )
+        if match_index is None:
+            deduped.append(record)
+            continue
+        record[RECORD_IS_REPOSTED_KEY] = True
+        deduped[match_index][RECORD_IS_REPOSTED_KEY] = True
+        if _content_repost_preference_key(record) > _content_repost_preference_key(
+            deduped[match_index]
+        ):
+            deduped[match_index] = record
+    return deduped
 
 
 def _duplicate_link(record: dict, matched_on: str, matched_value: str) -> dict[str, Any]:

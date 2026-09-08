@@ -18,6 +18,7 @@ from job_hunter_agent.fit_scoring import fit_score, fit_score_breakdown
 from job_hunter_agent.history import update_job_history
 from job_hunter_agent.job_review_pipeline import (
     ReviewPipelineContext,
+    ReviewPipelineHooks,
     review_post_detail_normalized_job,
     review_pre_detail_normalized_job,
 )
@@ -59,6 +60,8 @@ from job_hunter_agent.record_schema import (
     RECORD_POSTED_AGE_DAYS_KEY,
     RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
     RECORD_REJECT_REASON_KEY,
+    REJECT_REASON_ALREADY_APPLIED_REPOST,
+    REJECT_REASON_MANUALLY_HIDDEN_REPOST,
     RECORD_REQUIREMENT_COVERAGE_KEY,
     RECORD_REQUIREMENT_COVERAGE_VERSION_KEY,
     REQUIREMENT_COVERAGE_CONTRACT_VERSION,
@@ -219,6 +222,81 @@ def test_pre_detail_skips_cross_source_identity_already_applied(monkeypatch):
     assert outcome[RECORD_DECISION_KEY] == "SKIP"
     assert updated[RECORD_REJECT_REASON_KEY] == "ALREADY_APPLIED"
     assert should_fetch is False
+
+
+def test_post_detail_skips_applied_content_repost_before_fit_review(monkeypatch):
+    shared = " ".join(f"requirement{i} analysis{i} stakeholder{i} workshop{i} delivery{i}" for i in range(220))
+    context = _review_context("SEEK")
+    context.applied_job_keys = {"seek:100"}
+    context.job_history = {
+        "seek:100": {
+            "last_kept_snapshot": {
+                "job_key": "seek:100",
+                "source": "seek",
+                "company": "Acme Consulting Pty Ltd",
+                "title": "Business Analyst",
+                "location": "Sydney NSW",
+                "details_text": shared + "original ending",
+            }
+        }
+    }
+    record = _base_record("seek", "jobAdDetails", "card")
+    record.update(
+        {
+            "job_key": "seek:200",
+            "company": "Acme Consulting Pty Ltd",
+            "title": "Business Analyst",
+            "location": "Sydney NSW",
+            "details_text": shared + "reposted ending",
+            "details_status": "ok",
+            "title_reason": "OK",
+        }
+    )
+    hooks = ReviewPipelineHooks(
+        before_common_review=lambda *_args: (_ for _ in ()).throw(
+            AssertionError("applied repost must skip before fit review")
+        )
+    )
+
+    outcome, updated, _ = review_post_detail_normalized_job(record, context, hooks)
+
+    assert outcome[RECORD_DECISION_KEY] == "SKIP"
+    assert updated[RECORD_REJECT_REASON_KEY] == REJECT_REASON_ALREADY_APPLIED_REPOST
+
+
+def test_post_detail_skips_hidden_content_repost_before_fit_review():
+    shared = " ".join(f"requirement{i} analysis{i} stakeholder{i} workshop{i} delivery{i}" for i in range(220))
+    context = _review_context("SEEK")
+    context.hidden_job_keys = {"seek:100"}
+    context.job_history = {
+        "seek:100": {
+            "last_kept_snapshot": {
+                "job_key": "seek:100",
+                "source": "seek",
+                "company": "Acme Consulting Pty Ltd",
+                "title": "Business Analyst",
+                "location": "Sydney NSW",
+                "details_text": shared + "original ending",
+            }
+        }
+    }
+    record = _base_record("seek", "jobAdDetails", "card")
+    record.update(
+        {
+            "job_key": "seek:200",
+            "company": "Acme Consulting Pty Ltd",
+            "title": "Business Analyst",
+            "location": "Sydney NSW",
+            "details_text": shared + "reposted ending",
+            "details_status": "ok",
+            "title_reason": "OK",
+        }
+    )
+
+    outcome, updated, _ = review_post_detail_normalized_job(record, context)
+
+    assert outcome[RECORD_DECISION_KEY] == "SKIP"
+    assert updated[RECORD_REJECT_REASON_KEY] == REJECT_REASON_MANUALLY_HIDDEN_REPOST
 
 
 def _patch_llm_review_path(monkeypatch, payload):

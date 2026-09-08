@@ -25,6 +25,7 @@ from job_hunter_agent.record_schema import (
     RECORD_REQUIREMENT_COVERAGE_KEY,
     RECORD_REQUIREMENT_COVERAGE_VERSION_KEY,
     REQUIREMENT_COVERAGE_CONTRACT_VERSION,
+    RECORD_SOURCE_KEY,
     RECORD_SOURCE_METADATA_KEY,
     SOURCE_METADATA_SCHEMA_VERSION,
     SOURCE_METADATA_VERSION_KEY,
@@ -203,6 +204,7 @@ def test_update_job_history_persists_posting_channel_and_source_metadata_in_snap
     run_iso = datetime.now().isoformat()
     record = {
         RECORD_JOB_KEY: "linkedin:li-1",
+        RECORD_SOURCE_KEY: "linkedin",
         RECORD_URL_KEY: "https://www.linkedin.com/jobs/view/1",
         RECORD_DECISION_KEY: "KEEP",
         "llm_decision": "KEEP",
@@ -228,6 +230,8 @@ def test_update_job_history_persists_posting_channel_and_source_metadata_in_snap
     update_job_history(history, record, run_iso)
 
     snapshot = history["linkedin:li-1"][RECORD_LAST_KEPT_SNAPSHOT_KEY]
+    assert snapshot[RECORD_JOB_KEY] == "linkedin:li-1"
+    assert snapshot[RECORD_SOURCE_KEY] == "linkedin"
     assert snapshot[RECORD_POSTING_CHANNEL_EVIDENCE_KEY] == record[RECORD_POSTING_CHANNEL_EVIDENCE_KEY]
     assert snapshot[RECORD_SOURCE_METADATA_KEY] == record[RECORD_SOURCE_METADATA_KEY]
     assert snapshot[RECORD_IS_REPOSTED_KEY] is True

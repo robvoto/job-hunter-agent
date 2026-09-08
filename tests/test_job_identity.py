@@ -11,9 +11,12 @@ from job_hunter_agent.company_normalization import (
 from job_hunter_agent.job_identity import (
     annotate_potential_duplicate_links,
     are_jobs_confirmed_duplicates,
+    are_jobs_content_reposts,
     deduplicate_across_sources,
+    deduplicate_content_reposts,
     find_confirmed_duplicate,
     find_confirmed_identity_history_entry,
+    find_content_repost_history_entry,
     normalize_job_key,
 )
 from job_hunter_agent.record_schema import (
@@ -415,3 +418,117 @@ def test_dedup_company_missing_is_logged(tmp_path, monkeypatch):
     assert any(e.get("reason_code") == "DEDUP_COMPANY_MISSING" for e in entries)
     assert warnings
     assert warnings[0]["category"] == "job_identity_uncertainty"
+
+
+def _content_repost_record(job_key: str, details: str, *, posted_age_days: float = 1.0) -> dict:
+    return {
+        "job_key": job_key,
+        "source": "seek",
+        "company": "Acme Consulting Pty Ltd",
+        "title": "Senior Business Analyst",
+        "location": "Sydney NSW",
+        "details_text": details,
+        "posted_age_days": posted_age_days,
+        "first_seen_at": "2026-09-08T10:00:00+10:00",
+    }
+
+
+def test_content_repost_matches_changed_platform_id_when_description_is_near_identical():
+    shared = " ".join(f"requirement{i} analysis{i} stakeholder{i} workshop{i} delivery{i}" for i in range(220))
+    first = _content_repost_record("seek:100", shared + "original ending")
+    second = _content_repost_record("seek:200", shared + "reposted ending")
+
+    assert are_jobs_content_reposts(first, second) is True
+
+
+def test_content_repost_does_not_collapse_same_company_and_title_when_role_text_differs():
+    first = _content_repost_record(
+        "seek:100",
+        "university finance performance improvement budgeting reporting " * 120,
+    )
+    second = _content_repost_record(
+        "seek:200",
+        "investment banking wealth management trading platforms settlements " * 120,
+    )
+
+    assert are_jobs_content_reposts(first, second) is False
+
+
+def test_content_repost_deduplication_prefers_fresher_repost():
+    shared = "technology transformation stakeholder analysis operating model " * 120
+    older = _content_repost_record("seek:100", shared, posted_age_days=6.0)
+    fresher = _content_repost_record("seek:200", shared, posted_age_days=1.0)
+
+    deduped = deduplicate_content_reposts([older, fresher])
+
+    assert [record["job_key"] for record in deduped] == ["seek:200"]
+    assert deduped[0]["is_reposted"] is True
+
+
+def test_content_repost_history_requires_current_schema_snapshot_identity():
+    shared = " ".join(
+        f"requirement{i} analysis{i} stakeholder{i} workshop{i} delivery{i}"
+        for i in range(220)
+    )
+    record = {
+        "job_key": "linkedin:li-200",
+        "source": "linkedin",
+        "company": "Acme",
+        "title": "Business Analyst",
+        "location": "Sydney NSW",
+        "details_text": shared + " reposted",
+    }
+    canonical_history = {
+        "linkedin:li-100": {
+            "last_kept_snapshot": {
+                "job_key": "linkedin:li-100",
+                "source": "linkedin",
+                "company": "Acme",
+                "title": "Business Analyst",
+                "location": "Sydney NSW",
+                "full_description": shared + " original",
+            }
+        }
+    }
+    malformed_history = {
+        "linkedin:li-100": {
+            "last_kept_snapshot": {
+                "job_key": "linkedin:li-100",
+                "company": "Acme",
+                "title": "Business Analyst",
+                "location": "Sydney NSW",
+                "full_description": shared + " original",
+            }
+        }
+    }
+
+    assert (
+        find_content_repost_history_entry(record, canonical_history, {"linkedin:li-100"})
+        is canonical_history["linkedin:li-100"]
+    )
+    assert find_content_repost_history_entry(record, malformed_history, {"linkedin:li-100"}) is None
+
+
+def test_content_repost_does_not_treat_placeholder_location_as_missing_identity():
+    shared = " ".join(
+        f"requirement{i} analysis{i} stakeholder{i} workshop{i} delivery{i}"
+        for i in range(220)
+    )
+    archive_record = {
+        "job_key": "linkedin:li-200",
+        "source": "linkedin",
+        "company": "Acme",
+        "title": "Business Analyst",
+        "location": "N/A",
+        "full_description": shared + " reposted",
+    }
+    applied_record = {
+        "job_key": "linkedin:li-100",
+        "source": "linkedin",
+        "company": "Acme",
+        "title": "Business Analyst",
+        "location": "Sydney, New South Wales, Australia",
+        "full_description": shared + " original",
+    }
+
+    assert are_jobs_content_reposts(archive_record, applied_record) is False

@@ -29,7 +29,12 @@ from job_hunter_agent.history import (
 )
 from job_hunter_agent.io_utils import load_audit_rows, load_ui_labels
 from job_hunter_agent.llm_gate import get_cost_summary
-from job_hunter_agent.job_identity import deduplicate_across_sources, normalize_job_key
+from job_hunter_agent.job_identity import (
+    deduplicate_across_sources,
+    deduplicate_content_reposts,
+    find_content_repost_history_entry,
+    normalize_job_key,
+)
 from job_hunter_agent.llm_review_state import has_complete_llm_keep_data
 from job_hunter_agent.match_labels import score_to_match_label
 from job_hunter_agent.paths import REPO_ROOT
@@ -333,6 +338,18 @@ def build_workspace_record_sets(
 
     profile = scoring_profile or load_profile()
 
+    # A board may issue a new platform id when it reposts the same vacancy.
+    # Manual state must follow only high-confidence content reposts; title/company
+    # alone is deliberately insufficient because employers can advertise multiple
+    # genuinely different roles under the same title.
+    filtered_kept_records = [
+        record
+        for record in kept_records
+        if find_content_repost_history_entry(record, job_history, applied_job_keys) is None
+        and find_content_repost_history_entry(record, job_history, hidden_job_keys) is None
+    ]
+    filtered_kept_records = deduplicate_content_reposts(filtered_kept_records)
+
     is_workspace_eligible_fn = is_workspace_eligible
 
     if workspace_min_score is not None:
@@ -348,8 +365,8 @@ def build_workspace_record_sets(
                 active_workspace_min_score,
             )
 
-    return workspace_data.build_workspace_record_sets(
-        kept_records,
+    workspace_records = workspace_data.build_workspace_record_sets(
+        filtered_kept_records,
         job_history,
         applied_job_keys,
         hidden_job_keys,
@@ -364,6 +381,32 @@ def build_workspace_record_sets(
         build_applied_records_fn=build_applied_records,
         build_hidden_records_fn=build_hidden_records,
     )
+    def _not_manual_state_repost(record: dict) -> bool:
+        return (
+            find_content_repost_history_entry(record, job_history, applied_job_keys) is None
+            and find_content_repost_history_entry(record, job_history, hidden_job_keys) is None
+        )
+
+    # Archive/history construction happens after the current records are filtered,
+    # so a changed-id repost can otherwise re-enter through archive_records. Keep
+    # every Potential-derived collection aligned with the same manual-state rule.
+    for collection_key in (
+        "current_records",
+        "archive_records",
+        "recent_archive_records",
+        "stale_archive_records",
+        "shortlist_records",
+    ):
+        workspace_records[collection_key] = [
+            record
+            for record in workspace_records.get(collection_key, [])
+            if _not_manual_state_repost(record)
+        ]
+
+    workspace_records["shortlist_records"] = deduplicate_content_reposts(
+        workspace_records.get("shortlist_records", [])
+    )
+    return workspace_records
 
 
 def load_last_kept_records() -> list[dict]:
@@ -782,6 +825,7 @@ def render_html(
                 debug_mode=active_debug_mode,
                 header_tools_html=render_page_size_select_html(),
                 header_nav_html=current_tabs_html,
+                new_to_you_cutoff=run_started_at,
             ),
             "RECENT_SECTION_HTML": "",
             "ARCHIVE_LABEL": safe_html(ARCHIVE_LABEL),

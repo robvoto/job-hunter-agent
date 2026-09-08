@@ -94,3 +94,45 @@ def test_append_review_key_applied_is_idempotent_and_keeps_first_applied_at(
 
     history = load_job_history()
     assert history[JOB_KEY][RECORD_FIRST_APPLIED_AT_KEY] == first_applied_at
+
+
+def test_duplicate_append_review_request_is_true_noop(monkeypatch: pytest.MonkeyPatch):
+    refresh_calls = []
+    monkeypatch.setattr(
+        review_history_service,
+        "rebuild_workspace_after_rule_change",
+        lambda reason="", **kwargs: refresh_calls.append(reason) or "refresh-id",
+    )
+
+    first = review_history_service.append_review_key(
+        "hidden", "seek:test-idempotent-hidden", title="Business Analyst"
+    )
+    second = review_history_service.append_review_key(
+        "hidden", "seek:test-idempotent-hidden", title="Business Analyst"
+    )
+
+    assert first["state_changed"] is True
+    assert second["state_changed"] is False
+    assert second["workspace_refresh_id"] is None
+    assert second["reload_workspace"] is False
+    assert refresh_calls == ["review action saved: hidden"]
+
+
+def test_duplicate_remove_review_request_is_true_noop(monkeypatch: pytest.MonkeyPatch):
+    refresh_calls = []
+    monkeypatch.setattr(
+        review_history_service,
+        "rebuild_workspace_after_rule_change",
+        lambda reason="", **kwargs: refresh_calls.append(reason) or "refresh-id",
+    )
+    key = "seek:test-idempotent-unhide"
+    review_history_service.append_review_key("hidden", key, title="Business Analyst")
+    refresh_calls.clear()
+
+    first = review_history_service.remove_review_key("unhide", key)
+    second = review_history_service.remove_review_key("unhide", key)
+
+    assert first["state_changed"] is True
+    assert second["state_changed"] is False
+    assert second["workspace_refresh_id"] is None
+    assert refresh_calls == ["review action saved: unhide"]

@@ -8,9 +8,9 @@ description: Use ONLY for job history, viewed/applied/hidden/saved state, duplic
 Use before editing job history, viewed/applied/hidden state, posting timestamps, or deduplication.
 
 ## Rules
-- History is valuable persistent state stored in the DB; do not discard it.
-- Rebuilds must preserve viewed/applied/hidden state.
-- Scrape run outputs (run_stats, audit_records, review_data, workspace_pool) are disposable; job history is not.
+- Preserve valid **current-schema** job history and viewed/applied/hidden state; rebuilds must not lose valid user review state.
+- **Pre-live exception:** malformed, obsolete, or superseded dev/test history is disposable under the canonical-contract rule in `code-change/SKILL.md` and `no-hardcoding/SKILL.md`. Delete/reset incompatible dev data rather than adding migration, alias, fallback, or compatibility logic solely to preserve it.
+- Scrape run outputs (`run_stats`, `audit_records`, `review_data`, `workspace_pool`) are disposable. Current-schema job history is persistent; incompatible pre-live history is not.
 - History retention is centrally managed through Admin/global settings, not hardcoded in feature code.
 - Current retention knobs live in `global_settings.history_settings` and `global_settings.cache_settings`.
 - Deduplication should be stable across SEEK, LinkedIn, and APSJobs where possible; prefer source-native IDs before expensive work and cross-source identity only where evidence is strong enough.

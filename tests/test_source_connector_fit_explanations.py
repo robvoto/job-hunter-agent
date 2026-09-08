@@ -1691,6 +1691,7 @@ def test_job_card_shows_reposted_and_original_posted_dates_separately():
     )
 
     assert ">Reposted</span>" in html
+    assert 'data-reposted="1"' in html
     assert "LinkedIn reposted" in html
     assert "15 hours ago" in html
     assert "Originally posted" in html
@@ -5506,3 +5507,97 @@ def test_requirement_group_headings_have_semantic_tone_hooks():
     assert '"partial"' in source
     assert '"attention"' in source
     assert '"matched"' in source
+
+
+def test_job_card_new_to_you_uses_current_run_cutoff_not_only_unviewed_state():
+    record = {
+        "job_key": "test-old-unviewed",
+        "title": "Business Analyst",
+        "company": "Acme",
+        "url": "https://example.com/job",
+        "title_reason": "OK",
+        "content_reason": "OK",
+        "llm_fit_grade": "SOLID",
+        "location": "Sydney NSW",
+        "work_type": "Full Time",
+        "work_mode": "Hybrid",
+        "salary": "N/A",
+        "full_description": "Requirements elicitation across delivery teams. " * 40,
+        "fit_highlights": [],
+        "source": "seek",
+        "times_viewed": 0,
+        "first_seen_at": "2026-09-07T09:00:00+10:00",
+    }
+    html = workspace_renderer.render_job_card(
+        record,
+        _test_profile(),
+        new_to_you_cutoff=datetime.fromisoformat("2026-09-08T09:00:00+10:00"),
+    )
+
+    assert ">New To You<" not in html
+    assert 'data-new-to-you="0"' in html
+
+    record["first_seen_at"] = "2026-09-08T09:01:00+10:00"
+    html = workspace_renderer.render_job_card(
+        record,
+        _test_profile(),
+        new_to_you_cutoff=datetime.fromisoformat("2026-09-08T09:00:00+10:00"),
+    )
+    assert ">New To You<" in html
+    assert 'data-new-to-you="1"' in html
+
+
+def test_workspace_builder_does_not_reintroduce_applied_repost_from_archive(monkeypatch):
+    shared = " ".join(
+        f"requirement{i} analysis{i} stakeholder{i} workshop{i} delivery{i}"
+        for i in range(220)
+    )
+    repost = {
+        "job_key": "linkedin:li-200",
+        "source": "linkedin",
+        "company": "Acme",
+        "title": "Business Analyst",
+        "location": "Sydney NSW",
+        "details_text": shared + " reposted",
+        "decision": "KEEP",
+    }
+    applied_history = {
+        "linkedin:li-100": {
+            "last_kept_snapshot": {
+                "job_key": "linkedin:li-100",
+                "source": "linkedin",
+                "company": "Acme",
+                "title": "Business Analyst",
+                "location": "Sydney NSW",
+                "full_description": shared + " original",
+            }
+        }
+    }
+
+    monkeypatch.setattr(
+        workspace_service.workspace_data,
+        "build_workspace_record_sets",
+        lambda *args, **kwargs: {
+            "shortlist_records": [dict(repost)],
+            "current_records": [],
+            "archive_records": [dict(repost)],
+            "recent_archive_records": [dict(repost)],
+            "stale_archive_records": [],
+            "applied_records": [],
+            "hidden_records": [],
+        },
+    )
+
+    records = workspace_service.build_workspace_record_sets(
+        [],
+        applied_history,
+        {"linkedin:li-100"},
+        set(),
+        datetime.fromisoformat("2026-09-08T18:00:00+10:00"),
+        _test_profile(),
+        30,
+    )
+
+    assert records["shortlist_records"] == []
+    assert records["archive_records"] == []
+    assert records["recent_archive_records"] == []

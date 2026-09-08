@@ -60,6 +60,28 @@ def _normalize_config(payload: dict[str, Any]) -> dict[str, Any]:
     }
     normalized["non_identity_query_parameters"] = sorted(cleaned_query_parameters)
 
+    repost = normalized.get("content_repost")
+    if not isinstance(repost, dict):
+        raise ValueError("duplicate_rules.json must define content_repost as an object")
+    required_repost_fields = (
+        "min_description_chars",
+        "shingle_size",
+        "min_jaccard",
+        "min_shorter_coverage",
+    )
+    missing_repost_fields = [field for field in required_repost_fields if field not in repost]
+    if missing_repost_fields:
+        raise ValueError(
+            "duplicate_rules.json content_repost is missing required fields: "
+            + ", ".join(missing_repost_fields)
+        )
+    normalized["content_repost"] = {
+        "min_description_chars": int(repost["min_description_chars"]),
+        "shingle_size": int(repost["shingle_size"]),
+        "min_jaccard": float(repost["min_jaccard"]),
+        "min_shorter_coverage": float(repost["min_shorter_coverage"]),
+    }
+
     return normalized
 
 
