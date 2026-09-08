@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 132,
+  "version": 133,
   "updated_at": "2026-09-08T00:00:00+00:00",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -599,7 +599,7 @@
     "hidden_badge": "Hidden",
     "hidden_badge_tooltip": "You hid this role for now.",
     "new_to_you_badge": "New To You",
-    "new_to_you_badge_tooltip": "You have not opened this role from the workspace yet.",
+    "new_to_you_badge_tooltip": "First discovered in the latest completed search.",
     "stale_badge": "15+ Days Old",
     "stale_badge_tooltip": "This role is older, but still saved for reference.",
     "posting_channel_direct_employer_badge": "Direct employer",
@@ -751,9 +751,8 @@
     "profile_gap_already_present_template": "{fact} is already in your profile",
     "profile_gap_not_have_saved_template": "Marked {fact} as not in your profile",
     "profile_gap_error_label": "Could not update profile.",
-    "reposts_label": "Reposts",
-    "reposts_option_hide": "Hide reposts",
-    "reposts_option_include": "Include reposts"
+    "include_reposted_jobs": "Include reposted jobs",
+    "reposts_hidden_count_template": "{count} reposts hidden"
   },
   "run_summary_labels_description": "Managed labels for terminal and saved scrape-run summaries.",
   "run_summary_labels": {

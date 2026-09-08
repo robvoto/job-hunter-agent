@@ -526,13 +526,25 @@ def _load_candidate_application_history_store() -> list[dict]:
 
 def load_candidate_application_history() -> list[dict]:
     rows = _load_candidate_application_history_store()
-    return [row for row in rows if isinstance(row, dict)]
+    valid_rows = []
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError("candidate history store must contain only objects")
+        _candidate_history_store_entry_to_runtime(row)
+        valid_rows.append(row)
+    return valid_rows
 
 
 def save_candidate_application_history(records: list[dict]) -> None:
+    validated = []
+    for record in records:
+        if not isinstance(record, dict):
+            raise ValueError("candidate history store must contain only objects")
+        _candidate_history_store_entry_to_runtime(record)
+        validated.append(dict(record))
     save_json(
         _CANDIDATE_APPLICATION_HISTORY_PATH,
-        [dict(record) for record in records if isinstance(record, dict)],
+        validated,
     )
 
 
@@ -660,6 +672,13 @@ def _candidate_history_sheet_row_to_store_entry(normalized_row: dict, *, source:
         needs_review = True
     company = _clean(normalized_row.get("llm_company") or normalized_row.get("raw_company"))
     role = _clean(normalized_row.get("llm_role") or normalized_row.get("raw_role"))
+    date_value = _clean(normalized_row.get("run_date"))
+    if not date_value:
+        raise ValueError("candidate application history row is missing Run Date")
+    if not company:
+        raise ValueError("candidate application history row is missing Company")
+    if not role:
+        raise ValueError("candidate application history row is missing Role")
     created_at = _candidate_history_now()
     message_id = _clean(normalized_row.get("message_id"))
     if message_id:
@@ -676,7 +695,7 @@ def _candidate_history_sheet_row_to_store_entry(normalized_row: dict, *, source:
     return {
         "id": identifier,
         "message_id": message_id or None,
-        "date": _clean(normalized_row.get("run_date")),
+        "date": date_value,
         "company": company,
         "role": role,
         "status": status,
@@ -735,6 +754,7 @@ def _candidate_history_import_rows(raw_rows: list[dict], *, source: str) -> tupl
 
     for raw_row in raw_rows:
         cache_key = _make_cache_key(raw_row)
+        extraction_failed = False
         if cache_key in cache:
             normalized_row = dict(cache[cache_key])
             raw_role = _clean(raw_row.get("Role"))
@@ -749,13 +769,23 @@ def _candidate_history_import_rows(raw_rows: list[dict], *, source: str) -> tupl
             except Exception as exc:
                 normalized_row = _make_failed_normalized_row(raw_row, str(exc))
                 failure_count += 1
+                extraction_failed = True
             else:
                 extracted_count += 1
             cache[cache_key] = normalized_row
             updated = True
-        imported_store_rows.append(
-            _candidate_history_sheet_row_to_store_entry(normalized_row, source=source)
-        )
+        try:
+            imported_store_rows.append(
+                _candidate_history_sheet_row_to_store_entry(normalized_row, source=source)
+            )
+        except ValueError as exc:
+            # Reject malformed imports before they reach the canonical store.
+            # The failed extraction remains only in the source cache so the
+            # import summary can report it; it is never reconstructed as a
+            # reviewable history row.
+            if not extraction_failed:
+                failure_count += 1
+            logger.warning("Skipping invalid candidate history import row: %s", exc)
 
     if updated:
         _save_cache(cache)
@@ -921,18 +951,9 @@ def load_candidate_job_rejection_history() -> list[dict]:
         return []
 
     store_rows = load_candidate_application_history()
-    runtime_rows: list[dict] = []
-    invalid_count = 0
-    for row in store_rows:
-        try:
-            runtime_rows.append(_candidate_history_store_entry_to_runtime(row))
-        except Exception as exc:
-            invalid_count += 1
-            logger.warning("Invalid candidate application history store row skipped: %s", exc)
+    runtime_rows = [_candidate_history_store_entry_to_runtime(row) for row in store_rows]
 
     logger.debug("Candidate application history local store rows loaded: %d", len(runtime_rows))
-    if invalid_count:
-        logger.warning("Candidate application history invalid store rows skipped: %d", invalid_count)
     return runtime_rows
 
 

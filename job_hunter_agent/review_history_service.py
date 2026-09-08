@@ -6,25 +6,29 @@ jobs) and retrieves job descriptions from history or cached search results to su
 consistent review signals across sessions.
 """
 
+import copy
+import json
 import logging
 import re
 import threading
 from datetime import datetime
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
-_REVIEW_STATE_LOCK = threading.Lock()
-
+from job_hunter_agent import employer_outcome_store
+from job_hunter_agent.database import db_conn, ensure_user_row
 from job_hunter_agent.filters import (
     build_title_block_rule,
     normalize_title_block_phrase,
 )
-from job_hunter_agent import employer_outcome_store
 from job_hunter_agent.io_utils import load_job_history, save_job_history
 from job_hunter_agent.job_identity import normalize_job_key
-from job_hunter_agent.profile_store import load_profile, save_profile
-from job_hunter_agent.user_context import get_user_id
+from job_hunter_agent.paths import get_active_user_id
+from job_hunter_agent.profile_store import (
+    DEFAULT_PROFILE,
+    load_profile,
+    normalize_full_profile,
+    save_profile,
+)
 from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
     RECORD_FIRST_APPLIED_AT_KEY,
@@ -38,27 +42,33 @@ from job_hunter_agent.record_schema import (
     RECORD_IS_HIDDEN_KEY,
     RECORD_JOB_KEY,
     RECORD_LAST_APPLIED_AT_KEY,
-    RECORD_LAST_NO_RESPONSE_AT_KEY,
-    RECORD_LAST_REJECTED_AT_KEY,
-    RECORD_LAST_UNREJECTED_AT_KEY,
-    RECORD_LAST_UN_NO_RESPONSE_AT_KEY,
     RECORD_LAST_BLOCK_TITLE_AT_KEY,
     RECORD_LAST_HIDDEN_AT_KEY,
     RECORD_LAST_KEPT_SNAPSHOT_KEY,
+    RECORD_LAST_NO_RESPONSE_AT_KEY,
     RECORD_LAST_NOT_FOR_ME_AT_KEY,
+    RECORD_LAST_REJECTED_AT_KEY,
     RECORD_LAST_SEEN_AT_KEY,
+    RECORD_LAST_UN_NO_RESPONSE_AT_KEY,
     RECORD_LAST_UNAPPLIED_AT_KEY,
     RECORD_LAST_UNHIDDEN_AT_KEY,
+    RECORD_LAST_UNREJECTED_AT_KEY,
     RECORD_LAST_VIEWED_AT_KEY,
     RECORD_REVIEW_EVENTS_KEY,
+    RECORD_SOURCE_KEY,
     RECORD_TEASER_KEY,
     RECORD_TIMES_BLOCK_TITLE_KEY,
     RECORD_TIMES_NOT_FOR_ME_KEY,
     RECORD_TIMES_VIEWED_KEY,
     RECORD_TITLE_KEY,
     RECORD_URL_KEY,
+    validate_review_snapshot,
 )
+from job_hunter_agent.user_context import get_user_id
 from job_hunter_agent.workspace_refresh_service import rebuild_workspace_after_rule_change
+
+_REVIEW_STATE_LOCK = threading.Lock()
+logger = logging.getLogger(__name__)
 
 
 def _normalize_requirement_blocker(value: str) -> str:
@@ -173,22 +183,20 @@ def _record_first_party_outcome_event(
         )
 
 
-def persist_review_event(
+def _apply_review_event_to_entry(
+    entry: dict,
     action: str,
-    job_key: str,
+    normalized: str,
+    now_iso: str,
+    *,
     url: str = "",
     title: str = "",
     company: str = "",
     teaser: str = "",
     extra: dict | None = None,
-) -> None:
-    normalized = normalize_job_key(job_key or url)
-    if not normalized:
-        return
-
-    history = load_job_history()
-    entry = history.get(normalized, {})
-    now_iso = datetime.now().astimezone().isoformat(timespec="seconds")
+    record_outcome_event: bool = True,
+) -> dict:
+    """Apply one review event to an already-loaded canonical history entry."""
 
     entry[RECORD_JOB_KEY] = normalized
     if not entry.get(RECORD_FIRST_SEEN_AT_KEY):
@@ -213,13 +221,14 @@ def persist_review_event(
         if not entry.get(RECORD_FIRST_APPLIED_AT_KEY):
             entry[RECORD_FIRST_APPLIED_AT_KEY] = now_iso
         entry[RECORD_LAST_APPLIED_AT_KEY] = now_iso
-        _record_first_party_outcome_event(
-            employer_outcome_store.EVENT_APPLIED,
-            normalized,
-            entry.get(RECORD_COMPANY_KEY, ""),
-            entry.get(RECORD_TITLE_KEY, ""),
-            now_iso,
-        )
+        if record_outcome_event:
+            _record_first_party_outcome_event(
+                employer_outcome_store.EVENT_APPLIED,
+                normalized,
+                entry.get(RECORD_COMPANY_KEY, ""),
+                entry.get(RECORD_TITLE_KEY, ""),
+                now_iso,
+            )
     elif action == "unapply":
         entry[RECORD_LAST_UNAPPLIED_AT_KEY] = now_iso
     elif action == "rejected":
@@ -230,13 +239,14 @@ def persist_review_event(
         if not entry.get(RECORD_FIRST_REJECTED_AT_KEY):
             entry[RECORD_FIRST_REJECTED_AT_KEY] = now_iso
         entry[RECORD_LAST_REJECTED_AT_KEY] = now_iso
-        _record_first_party_outcome_event(
-            employer_outcome_store.EVENT_REJECTED,
-            normalized,
-            entry.get(RECORD_COMPANY_KEY, ""),
-            entry.get(RECORD_TITLE_KEY, ""),
-            now_iso,
-        )
+        if record_outcome_event:
+            _record_first_party_outcome_event(
+                employer_outcome_store.EVENT_REJECTED,
+                normalized,
+                entry.get(RECORD_COMPANY_KEY, ""),
+                entry.get(RECORD_TITLE_KEY, ""),
+                now_iso,
+            )
     elif action == "unreject":
         # Ledger events are append-only by design (see employer_outcome_store
         # module docstring) - undo does not delete the fact that you clicked
@@ -254,13 +264,14 @@ def persist_review_event(
         if not entry.get(RECORD_FIRST_NO_RESPONSE_AT_KEY):
             entry[RECORD_FIRST_NO_RESPONSE_AT_KEY] = now_iso
         entry[RECORD_LAST_NO_RESPONSE_AT_KEY] = now_iso
-        _record_first_party_outcome_event(
-            employer_outcome_store.EVENT_NO_RESPONSE,
-            normalized,
-            entry.get(RECORD_COMPANY_KEY, ""),
-            entry.get(RECORD_TITLE_KEY, ""),
-            now_iso,
-        )
+        if record_outcome_event:
+            _record_first_party_outcome_event(
+                employer_outcome_store.EVENT_NO_RESPONSE,
+                normalized,
+                entry.get(RECORD_COMPANY_KEY, ""),
+                entry.get(RECORD_TITLE_KEY, ""),
+                now_iso,
+            )
     elif action == "not_for_me":
         entry[RECORD_LAST_NOT_FOR_ME_AT_KEY] = now_iso
         entry[RECORD_TIMES_NOT_FOR_ME_KEY] = int(entry.get(RECORD_TIMES_NOT_FOR_ME_KEY, 0) or 0) + 1
@@ -282,6 +293,36 @@ def persist_review_event(
         extra=extra,
     )
 
+    return entry
+
+
+def persist_review_event(
+    action: str,
+    job_key: str,
+    url: str = "",
+    title: str = "",
+    company: str = "",
+    teaser: str = "",
+    extra: dict | None = None,
+) -> None:
+    normalized = normalize_job_key(job_key or url)
+    if not normalized:
+        return
+
+    history = load_job_history()
+    entry = history.get(normalized, {})
+    now_iso = datetime.now().astimezone().isoformat(timespec="seconds")
+    _apply_review_event_to_entry(
+        entry,
+        action,
+        normalized,
+        now_iso,
+        url=url,
+        title=title,
+        company=company,
+        teaser=teaser,
+        extra=extra,
+    )
     history[normalized] = entry
     save_job_history(history)
 
@@ -306,6 +347,71 @@ def _review_state_response(
     }
 
 
+def _load_profile_for_review_transaction(conn, user_id: str) -> dict:
+    row = conn.execute(
+        "SELECT data FROM user_profile WHERE user_id = ?", (user_id,)
+    ).fetchone()
+    if row is None:
+        return normalize_full_profile(copy.deepcopy(DEFAULT_PROFILE))
+    payload = json.loads(row["data"])
+    if not isinstance(payload, dict):
+        raise ValueError("user_profile in DB must contain a JSON object")
+    return normalize_full_profile(payload)
+
+
+def _save_profile_for_review_transaction(conn, user_id: str, profile: dict) -> None:
+    normalized = normalize_full_profile(profile)
+    persisted = dict(normalized)
+    persisted.pop("scoring_rules", None)
+    conn.execute(
+        """INSERT INTO user_profile (user_id, data, updated_at)
+        VALUES (?, ?, datetime('now'))
+        ON CONFLICT(user_id) DO UPDATE SET
+            data = excluded.data, updated_at = excluded.updated_at""",
+        (user_id, json.dumps(persisted, ensure_ascii=False)),
+    )
+
+
+def _load_history_entry_for_review_transaction(conn, user_id: str, normalized: str) -> dict:
+    row = conn.execute(
+        """SELECT data FROM job_history
+           WHERE user_id = ? AND job_key = ?""",
+        (user_id, normalized),
+    ).fetchone()
+    if row is None:
+        raise ValueError(
+            "Cannot save Applied/Hidden state without a canonical job-history snapshot"
+        )
+    payload = json.loads(row["data"] or "{}")
+    if not isinstance(payload, dict):
+        raise ValueError("Canonical job-history row must contain an object")
+    validate_review_snapshot(payload.get("last_kept_snapshot"), normalized)
+    return payload
+
+
+def _save_history_entry_for_review_transaction(conn, user_id: str, normalized: str, entry: dict) -> None:
+    snapshot = validate_review_snapshot(entry.get("last_kept_snapshot"), normalized)
+    source = str(snapshot[RECORD_SOURCE_KEY]).strip()
+    _, _, platform_id = normalized.partition(":")
+    conn.execute(
+        """UPDATE job_history
+           SET source = ?, platform_id = ?, title = ?, company = ?, state = ?,
+               last_seen = ?, data = ?
+         WHERE user_id = ? AND job_key = ?""",
+        (
+            source,
+            platform_id,
+            entry.get(RECORD_TITLE_KEY),
+            entry.get(RECORD_COMPANY_KEY),
+            entry.get("state", "seen"),
+            entry.get(RECORD_LAST_SEEN_AT_KEY),
+            json.dumps(entry, ensure_ascii=False),
+            user_id,
+            normalized,
+        ),
+    )
+
+
 def append_review_key(
     action: str,
     job_key: str,
@@ -327,29 +433,65 @@ def append_review_key(
     if not list_name:
         raise ValueError("Unsupported review action")
 
-    # FastAPI can execute duplicate clicks concurrently. Serialize the tiny
-    # read/modify/write section so the second identical request observes the
-    # first one's persisted state and becomes a true no-op instead of creating
-    # a duplicate history event and a second expensive workspace rebuild.
+    # BEGIN IMMEDIATE serializes this read/modify/write across threads and
+    # multiple application processes. The profile index and canonical history
+    # snapshot commit together, so Applied/Hidden cannot create an orphan key.
     with _REVIEW_STATE_LOCK:
-        profile = load_profile()
-        review_controls = profile.setdefault("review_controls", {})
-        existing = [
-            normalize_job_key(value)
-            for value in review_controls.get(list_name, [])
-            if normalize_job_key(value)
-        ]
-        if normalized in existing:
-            return _review_state_response(
-                action, normalized, len(existing), state_changed=False
-            )
+        user_id = get_active_user_id()
+        ensure_user_row(user_id)
+        outcome_event = None
+        with db_conn() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            profile = _load_profile_for_review_transaction(conn, user_id)
+            review_controls = profile.setdefault("review_controls", {})
+            existing = [
+                normalize_job_key(value)
+                for value in review_controls.get(list_name, [])
+                if normalize_job_key(value)
+            ]
+            if normalized in existing:
+                return _review_state_response(
+                    action, normalized, len(existing), state_changed=False
+                )
 
-        existing.append(normalized)
-        review_controls[list_name] = existing
-        save_profile(profile)
-        persist_review_event(
-            action, normalized, url=url, title=title, company=company, teaser=teaser
-        )
+            if action in {"applied", "hidden", "rejected", "no_response"}:
+                entry = _load_history_entry_for_review_transaction(conn, user_id, normalized)
+                now_iso = datetime.now().astimezone().isoformat(timespec="seconds")
+                _apply_review_event_to_entry(
+                    entry,
+                    action,
+                    normalized,
+                    now_iso,
+                    url=url,
+                    title=title,
+                    company=company,
+                    teaser=teaser,
+                    record_outcome_event=False,
+                )
+                if action in {"applied", "hidden"}:
+                    entry["state"] = action
+                _save_history_entry_for_review_transaction(conn, user_id, normalized, entry)
+                if action in {"applied", "rejected", "no_response"}:
+                    event_type = {
+                        "applied": employer_outcome_store.EVENT_APPLIED,
+                        "rejected": employer_outcome_store.EVENT_REJECTED,
+                        "no_response": employer_outcome_store.EVENT_NO_RESPONSE,
+                    }[action]
+                    outcome_event = (
+                        event_type,
+                        entry.get(RECORD_COMPANY_KEY, ""),
+                        entry.get(RECORD_TITLE_KEY, ""),
+                        now_iso,
+                    )
+
+            existing.append(normalized)
+            review_controls[list_name] = existing
+            _save_profile_for_review_transaction(conn, user_id, profile)
+
+        if outcome_event:
+            _record_first_party_outcome_event(
+                outcome_event[0], normalized, outcome_event[1], outcome_event[2], outcome_event[3]
+            )
 
     # Rebuild the cached snapshot in the background only. The client moves the
     # card between workspace tabs itself and must NOT full-page reload here.
@@ -385,24 +527,40 @@ def remove_review_key(
         raise ValueError("Unsupported review action")
 
     with _REVIEW_STATE_LOCK:
-        profile = load_profile()
-        review_controls = profile.setdefault("review_controls", {})
-        existing = [
-            normalize_job_key(value)
-            for value in review_controls.get(list_name, [])
-            if normalize_job_key(value)
-        ]
-        if normalized not in existing:
-            return _review_state_response(
-                action, normalized, len(existing), state_changed=False
-            )
+        user_id = get_active_user_id()
+        ensure_user_row(user_id)
+        with db_conn() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            profile = _load_profile_for_review_transaction(conn, user_id)
+            review_controls = profile.setdefault("review_controls", {})
+            existing = [
+                normalize_job_key(value)
+                for value in review_controls.get(list_name, [])
+                if normalize_job_key(value)
+            ]
+            if normalized not in existing:
+                return _review_state_response(
+                    action, normalized, len(existing), state_changed=False
+                )
 
-        updated = [value for value in existing if value != normalized]
-        review_controls[list_name] = updated
-        save_profile(profile)
-        persist_review_event(
-            action, normalized, url=url, title=title, company=company, teaser=teaser
-        )
+            updated = [value for value in existing if value != normalized]
+            review_controls[list_name] = updated
+            entry = _load_history_entry_for_review_transaction(conn, user_id, normalized)
+            now_iso = datetime.now().astimezone().isoformat(timespec="seconds")
+            _apply_review_event_to_entry(
+                entry,
+                action,
+                normalized,
+                now_iso,
+                url=url,
+                title=title,
+                company=company,
+                teaser=teaser,
+                record_outcome_event=False,
+            )
+            entry["state"] = "seen"
+            _save_history_entry_for_review_transaction(conn, user_id, normalized, entry)
+            _save_profile_for_review_transaction(conn, user_id, profile)
 
     refresh_id = rebuild_workspace_after_rule_change(f"review action saved: {action}")
     return _review_state_response(

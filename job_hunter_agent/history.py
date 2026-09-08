@@ -2,6 +2,7 @@
 
 import re
 import sys
+from datetime import datetime
 from typing import Dict, List, Optional
 
 from job_hunter_agent.company_normalization import normalize_company_name
@@ -390,6 +391,22 @@ def viewed_by_user(record: dict) -> bool:
         return False
 
     return int(record.get("times_viewed", 0) or 0) > 0
+
+
+def is_new_to_you(record: dict, latest_run_started_at: Optional[datetime]) -> bool:
+    """Return whether the vacancy was first discovered by the latest completed run.
+
+    This is intentionally independent of viewed state: an old unviewed record is
+    not new, and a current-run discovery remains current-run discovery after the
+    card is opened.
+    """
+
+    if latest_run_started_at is None:
+        return False
+    first_seen_at = parse_timestamp(record.get("first_seen_at"))
+    if first_seen_at is None:
+        return False
+    return first_seen_at >= latest_run_started_at
 
 
 def history_cluster_key_from_parts(

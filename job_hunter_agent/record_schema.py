@@ -123,6 +123,13 @@ APPLY_METHOD_EXTERNAL_APPLY = "external_apply"
 APPLY_METHOD_UNKNOWN = "unknown"
 
 RECORD_LAST_KEPT_SNAPSHOT_KEY = "last_kept_snapshot"
+REVIEW_SNAPSHOT_REQUIRED_FIELDS = (
+    RECORD_JOB_KEY,
+    RECORD_TITLE_KEY,
+    RECORD_COMPANY_KEY,
+    RECORD_URL_KEY,
+    RECORD_SOURCE_KEY,
+)
 RECORD_TIMES_KEPT_KEY = "times_kept"
 RECORD_FIRST_KEPT_AT_KEY = "first_kept_at"
 RECORD_LAST_KEPT_AT_KEY = "last_kept_at"
@@ -174,3 +181,16 @@ ORIGINAL_POSTED_DATE_STATUS_UNVERIFIED = "unverified"
 # Resolved employer outcome history attached per record. Always one of the
 # states owned by employer_outcome_display, never absent-by-accident.
 RECORD_EMPLOYER_OUTCOME_KEY = "employer_outcome"
+
+
+def validate_review_snapshot(snapshot: object, expected_job_key: str) -> dict:
+    """Validate the current job snapshot required by Applied/Hidden state."""
+
+    if not isinstance(snapshot, dict):
+        raise ValueError(f"Job history entry is missing {RECORD_LAST_KEPT_SNAPSHOT_KEY}")
+    for field in REVIEW_SNAPSHOT_REQUIRED_FIELDS:
+        if not str(snapshot.get(field) or "").strip():
+            raise ValueError(f"Job history snapshot is missing required field: {field}")
+    if str(snapshot[RECORD_JOB_KEY]).strip().lower() != str(expected_job_key).strip().lower():
+        raise ValueError("Job history snapshot job_key does not match review state")
+    return snapshot

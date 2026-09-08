@@ -60,7 +60,8 @@
     const workModeFilter = document.getElementById('work_mode_filter');
     const sectorFilter = document.getElementById('sector_filter');
     const scoreFilter = document.getElementById('score_filter');
-    const repostFilter = document.getElementById('repost_filter');
+    const includeRepostedButton = document.getElementById('include_reposted_jobs');
+    const repostsHiddenCount = document.getElementById('reposts_hidden_count');
     const quickFilterButtons = Array.from(document.querySelectorAll('[data-quick-filter]'));
     const moreFiltersButton = document.getElementById('workspace_more_filters');
     const moreFiltersContent = document.getElementById('workspace_more_filter_content');
@@ -72,6 +73,7 @@
     const workspaceTabs = Array.from(document.querySelectorAll('[data-workspace-target]'));
     const workspacePanels = Array.from(document.querySelectorAll('[data-workspace-panel]'));
     const paginationState = {};
+    const reviewInFlight = new Set();
 
     function showResultsHelperIfNeeded() {
       if (!resultsHelper) {
@@ -178,7 +180,7 @@
         workMode: workModeFilter?.value,
         sector: sectorFilter?.value,
         score: scoreFilter?.value,
-        reposts: repostFilter?.value,
+        includeReposted: includeRepostedButton?.getAttribute('aria-pressed') === 'true',
         quick: Object.fromEntries(quickFilterButtons.map(button => [button.dataset.quickFilter, button.getAttribute('aria-pressed') === 'true'])),
         sources: sourceFilterButtons.filter(button => button.dataset.sourceFilter !== 'all' && button.getAttribute('aria-pressed') === 'true').map(button => button.dataset.sourceFilter),
       };
@@ -211,7 +213,12 @@
         setSelectValueIfAvailable(workModeFilter, filters.workMode);
         setSelectValueIfAvailable(sectorFilter, filters.sector);
         setSelectValueIfAvailable(scoreFilter, filters.score);
-        setSelectValueIfAvailable(repostFilter, filters.reposts);
+        if (includeRepostedButton) {
+          includeRepostedButton.setAttribute(
+            'aria-pressed',
+            filters.includeReposted ? 'true' : 'false',
+          );
+        }
         if (Array.isArray(filters.sources) && filters.sources.length) {
           for (const button of sourceFilterButtons) {
             const source = button.dataset.sourceFilter;
@@ -261,7 +268,7 @@
       if (scoreFilter) {
         setSelectValueIfAvailable(scoreFilter, DEFAULT_SCORE_FILTER_VALUE);
       }
-      if (repostFilter) repostFilter.value = 'hide';
+      includeRepostedButton?.setAttribute('aria-pressed', 'false');
       for (const button of quickFilterButtons) {
         button.setAttribute('aria-pressed', 'false');
       }
@@ -367,7 +374,7 @@
       if (filters.sector === 'public' && cardSector !== 'public') return false;
       if (filters.sector === 'private' && cardSector === 'public') return false;
       if (filters.scoreMode !== 'all' && cardScore < Number(filters.scoreMode)) return false;
-      if (cardReposted && filters.reposts !== 'include') return false;
+      if (cardReposted && !filters.includeReposted) return false;
       const newToYou = card.dataset.newToYou === '1';
       if (filters.quickNew && !newToYou) return false;
       if (filters.quickDirect && cardPostingChannel !== 'direct_employer') return false;
@@ -572,6 +579,22 @@
       sourceActions.replaceWith(replacementActions);
     }
 
+    function updateRepostsHiddenCount(filters) {
+      if (!repostsHiddenCount) {
+        return;
+      }
+      const template = String(repostsHiddenCount.dataset.labelTemplate || '').trim();
+      if (!template || !template.includes('{count}')) {
+        throw new Error('Missing reposts hidden count label template.');
+      }
+      const potentialPanel = document.querySelector('.workspace-panel[data-workspace-panel="potential"]');
+      const repostedCards = potentialPanel
+        ? Array.from(potentialPanel.querySelectorAll('.job-card')).filter(card => card.dataset.reposted === '1')
+        : [];
+      const hiddenCount = filters.includeReposted ? 0 : repostedCards.length;
+      repostsHiddenCount.textContent = template.replace('{count}', String(hiddenCount));
+    }
+
     function applyWorkspaceControls() {
       const sortMode = sortSelect?.value || 'fit';
       const workType = workTypeFilter?.value || 'all';
@@ -582,13 +605,15 @@
         workMode: workModeFilter?.value || 'all',
         sector: sectorFilter?.value || 'all',
         scoreMode: scoreFilter?.value || 'all',
-        reposts: repostFilter?.value || 'hide',
+        includeReposted: includeRepostedButton?.getAttribute('aria-pressed') === 'true',
         quickNew: document.querySelector('[data-quick-filter="new"]')?.getAttribute('aria-pressed') === 'true',
         quickDirect: document.querySelector('[data-quick-filter="direct"]')?.getAttribute('aria-pressed') === 'true',
         sources: sourceFilterButtons.filter(button => button.dataset.sourceFilter !== 'all' && button.getAttribute('aria-pressed') === 'true').map(button => button.dataset.sourceFilter),
         quickEasy: document.querySelector('[data-quick-filter="easy"]')?.getAttribute('aria-pressed') === 'true',
       };
       const activeWorkspace = getActiveWorkspace();
+
+      updateRepostsHiddenCount(filters);
 
       for (const card of getVisibleCards()) {
         const cardScope = card.dataset.recordKind || 'current';
@@ -910,6 +935,7 @@
       const card = button.closest('.job-card');
       const status = card?.querySelector('.review-status');
       const action = button.dataset.reviewAction || extraPayload.action || '';
+      const reviewRequestKey = `${action}:${button.dataset.jobKey || ''}`;
       const requestPayload = {
         action,
         job_key: button.dataset.jobKey || '',
@@ -931,6 +957,10 @@
       if (card.dataset.reviewPending === '1') {
         return;
       }
+      if (reviewInFlight.has(reviewRequestKey)) {
+        return;
+      }
+      reviewInFlight.add(reviewRequestKey);
       card.dataset.reviewPending = '1';
 
       const buttons = card.querySelectorAll('button');
@@ -993,6 +1023,7 @@
           status.textContent = error.message || 'Could not save review action.';
         }
       } finally {
+        reviewInFlight.delete(reviewRequestKey);
         delete card.dataset.reviewPending;
       }
     }
@@ -1116,7 +1147,7 @@
       }
     });
 
-    for (const control of [sortSelect, pageSizeSelect, scopeFilter, postedFilter, workTypeFilter, workModeFilter, sectorFilter, scoreFilter, repostFilter]) {
+    for (const control of [sortSelect, pageSizeSelect, scopeFilter, postedFilter, workTypeFilter, workModeFilter, sectorFilter, scoreFilter]) {
       control?.addEventListener('change', () => {
         resetPagination();
         saveWorkspaceFilters();
@@ -1131,6 +1162,15 @@
         applyWorkspaceControls();
       });
     }
+    includeRepostedButton?.addEventListener('click', () => {
+      includeRepostedButton.setAttribute(
+        'aria-pressed',
+        includeRepostedButton.getAttribute('aria-pressed') === 'true' ? 'false' : 'true',
+      );
+      resetPagination();
+      saveWorkspaceFilters();
+      applyWorkspaceControls();
+    });
     for (const button of sourceFilterButtons) {
       button.addEventListener('click', () => {
         const source = button.dataset.sourceFilter;

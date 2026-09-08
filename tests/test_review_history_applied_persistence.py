@@ -3,11 +3,38 @@ from __future__ import annotations
 import pytest
 
 from job_hunter_agent import review_history_service
-from job_hunter_agent.io_utils import load_job_history
+from job_hunter_agent.io_utils import load_job_history, save_job_history
 from job_hunter_agent.profile_store import load_profile
 from job_hunter_agent.record_schema import RECORD_FIRST_APPLIED_AT_KEY, RECORD_LAST_APPLIED_AT_KEY
 
 JOB_KEY = "seek:test-applied-job-1"
+
+
+def _seed_reviewable_history(job_key: str, title: str = "Business Analyst") -> None:
+    source, _, platform_id = job_key.partition(":")
+    snapshot = {
+        "job_key": job_key,
+        "source": source,
+        "title": title,
+        "company": "Acme Corp",
+        "url": f"https://example.test/jobs/{platform_id}",
+    }
+    history = load_job_history()
+    entry = dict(history.get(job_key, {}))
+    entry.update(
+        {
+            "job_key": job_key,
+            "title": title,
+            "company": "Acme Corp",
+            "url": snapshot["url"],
+            "first_seen_at": "2026-09-01T00:00:00+10:00",
+            "last_seen_at": "2026-09-01T00:00:00+10:00",
+            "times_kept": 1,
+            "last_kept_snapshot": snapshot,
+        }
+    )
+    history[job_key] = entry
+    save_job_history(history)
 
 
 def test_append_review_key_applied_persists_profile_and_history(monkeypatch: pytest.MonkeyPatch):
@@ -21,6 +48,7 @@ def test_append_review_key_applied_persists_profile_and_history(monkeypatch: pyt
         "rebuild_workspace_after_rule_change",
         lambda reason="", **kwargs: None,
     )
+    _seed_reviewable_history(JOB_KEY, "Senior Backend Engineer")
 
     result = review_history_service.append_review_key(
         "applied",
@@ -57,6 +85,7 @@ def test_review_action_refreshes_workspace_in_background(monkeypatch: pytest.Mon
         "rebuild_workspace_after_rule_change",
         lambda reason="", **kwargs: refresh_calls.append((reason, kwargs)) or "refresh-id",
     )
+    _seed_reviewable_history("seek:test-hidden-job-1")
 
     result = review_history_service.append_review_key(
         "hidden",
@@ -82,6 +111,7 @@ def test_append_review_key_applied_is_idempotent_and_keeps_first_applied_at(
         "rebuild_workspace_after_rule_change",
         lambda reason="", **kwargs: None,
     )
+    _seed_reviewable_history(JOB_KEY, "Senior Backend Engineer")
 
     review_history_service.append_review_key("applied", JOB_KEY, title="Senior Backend Engineer")
     first_history = load_job_history()
@@ -103,18 +133,23 @@ def test_duplicate_append_review_request_is_true_noop(monkeypatch: pytest.Monkey
         "rebuild_workspace_after_rule_change",
         lambda reason="", **kwargs: refresh_calls.append(reason) or "refresh-id",
     )
+    _seed_reviewable_history("seek:test-idempotent-hidden")
 
     first = review_history_service.append_review_key(
         "hidden", "seek:test-idempotent-hidden", title="Business Analyst"
     )
+    first_history = load_job_history()
+    first_event_count = len(first_history["seek:test-idempotent-hidden"]["review_events"])
     second = review_history_service.append_review_key(
         "hidden", "seek:test-idempotent-hidden", title="Business Analyst"
     )
+    second_history = load_job_history()
 
     assert first["state_changed"] is True
     assert second["state_changed"] is False
     assert second["workspace_refresh_id"] is None
     assert second["reload_workspace"] is False
+    assert len(second_history["seek:test-idempotent-hidden"]["review_events"]) == first_event_count
     assert refresh_calls == ["review action saved: hidden"]
 
 
@@ -126,6 +161,7 @@ def test_duplicate_remove_review_request_is_true_noop(monkeypatch: pytest.Monkey
         lambda reason="", **kwargs: refresh_calls.append(reason) or "refresh-id",
     )
     key = "seek:test-idempotent-unhide"
+    _seed_reviewable_history(key)
     review_history_service.append_review_key("hidden", key, title="Business Analyst")
     refresh_calls.clear()
 

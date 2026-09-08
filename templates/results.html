@@ -17,7 +17,11 @@
                 <h3 class="workspace-control-group-title">$LABEL_WS_JOB_BOARDS_LABEL</h3>
                 <div class="workspace-board-filter" id="workspace_board_filter">
                   <button class="jh-filter-choice workspace-more-filters-trigger" id="workspace_more_filters" type="button" aria-expanded="false" aria-controls="workspace_more_filter_content">$LABEL_WS_MORE_FILTERS_LABEL</button>
-                  <div class="jh-filter-choice-group workspace-board-filter__choices" id="workspace_more_filter_content">$JOB_BOARD_FILTER_CHOICES_HTML</div>
+                  <div class="jh-filter-choice-group workspace-board-filter__choices" id="workspace_more_filter_content">
+                    $JOB_BOARD_FILTER_CHOICES_HTML
+                    <button class="jh-filter-choice" type="button" id="include_reposted_jobs" aria-pressed="false">$LABEL_WS_INCLUDE_REPOSTED_JOBS</button>
+                    <span class="workspace-reposts-hidden" id="reposts_hidden_count" data-label-template="$LABEL_WS_REPOSTS_HIDDEN_COUNT_TEMPLATE">$REPOSTS_HIDDEN_LABEL</span>
+                  </div>
                 </div>
               </div>
               <div class="workspace-control-group workspace-control-group--quick-filters">
@@ -79,12 +83,6 @@
                 <label class="workspace-control-field">
                   <select id="score_filter" class="jh-select" aria-label="$LABEL_WS_MATCH_LEVEL_LABEL">
                     $SCORE_FILTER_OPTIONS_HTML
-                  </select>
-                </label>
-                <label class="workspace-control-field">
-                  <select id="repost_filter" class="jh-select" aria-label="$LABEL_WS_REPOSTS_LABEL">
-                    <option value="hide" selected>$LABEL_WS_REPOSTS_OPTION_HIDE</option>
-                    <option value="include">$LABEL_WS_REPOSTS_OPTION_INCLUDE</option>
                   </select>
                 </label>
               </div>
@@ -217,6 +215,5 @@
     }
   </script>
     <script src="/static/results/results-page.js" defer></script>
-
 
 

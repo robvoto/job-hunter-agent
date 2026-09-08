@@ -17,6 +17,7 @@ from job_hunter_agent.job_identity import (
     find_confirmed_duplicate,
     find_confirmed_identity_history_entry,
     find_content_repost_history_entry,
+    find_manual_state_history_entry,
     normalize_job_key,
 )
 from job_hunter_agent.record_schema import (
@@ -507,6 +508,37 @@ def test_content_repost_history_requires_current_schema_snapshot_identity():
         is canonical_history["linkedin:li-100"]
     )
     assert find_content_repost_history_entry(record, malformed_history, {"linkedin:li-100"}) is None
+
+
+def test_manual_state_match_requires_canonical_identity_or_content_evidence():
+    history = {
+        "seek:100": {
+            "last_kept_snapshot": {
+                "job_key": "seek:100",
+                "source": "seek",
+                "title": "Business Analyst",
+                "company": "Acme",
+                "url": "https://jobs.example.test/100",
+            }
+        }
+    }
+    same_title_and_company = {
+        "job_key": "seek:200",
+        "source": "seek",
+        "title": "Business Analyst",
+        "company": "Acme",
+        "url": "https://jobs.example.test/200",
+    }
+    same_canonical_url = {**same_title_and_company, "url": "https://jobs.example.test/100"}
+
+    assert (
+        find_manual_state_history_entry(same_title_and_company, history, {"seek:100"})
+        is None
+    )
+    assert (
+        find_manual_state_history_entry(same_canonical_url, history, {"seek:100"})
+        is history["seek:100"]
+    )
 
 
 def test_content_repost_does_not_treat_placeholder_location_as_missing_identity():

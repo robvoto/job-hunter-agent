@@ -34,6 +34,7 @@ from job_hunter_agent.fit_scoring import (
 from job_hunter_agent.global_settings import get_default_country_suffix
 from job_hunter_agent.history import (
     assess_history_warning_signals,
+    is_new_to_you,
     viewed_by_user,
 )
 from job_hunter_agent.io_utils import load_ui_labels
@@ -589,9 +590,8 @@ _WORKSPACE_PAGE_LABEL_KEYS = (
     "sector_option_public",
     "sector_option_private",
     "match_level_label",
-    "reposts_label",
-    "reposts_option_hide",
-    "reposts_option_include",
+    "include_reposted_jobs",
+    "reposts_hidden_count_template",
     "potential_jobs_empty_state",
     "results_helper_copy",
     "results_helper_dismiss_button",
@@ -1264,10 +1264,7 @@ def render_job_card(
     hidden_record = bool(record.get("hidden"))
     is_stale = bool(record.get("is_stale"))
     seen_by_you = viewed_by_user(record)
-    first_seen_at = parse_timestamp(record.get("first_seen_at"))
-    new_to_you = not seen_by_you
-    if new_to_you_cutoff is not None:
-        new_to_you = bool(first_seen_at and first_seen_at >= new_to_you_cutoff) and not seen_by_you
+    new_to_you = is_new_to_you(record, new_to_you_cutoff)
     teaser_text = _clean_job_card_text(record.get("teaser") or "")
     stored_snapshot = _clean_job_card_text(record.get("role_snapshot") or "")
     if not stored_snapshot:

@@ -1572,8 +1572,10 @@ def test_job_card_uses_score_tone_as_card_accent_class():
             "full_description": "Requirements elicitation across delivery teams. " * 40,
             "fit_highlights": [],
             "source": "seek",
+            "first_seen_at": "2026-09-08T09:01:00+10:00",
         },
         _test_profile(),
+        new_to_you_cutoff=datetime.fromisoformat("2026-09-08T09:00:00+10:00"),
     )
 
     assert 'class="job-card tone-low"' in html
@@ -5546,6 +5548,15 @@ def test_job_card_new_to_you_uses_current_run_cutoff_not_only_unviewed_state():
     assert ">New To You<" in html
     assert 'data-new-to-you="1"' in html
 
+    record["times_viewed"] = 5
+    html = workspace_renderer.render_job_card(
+        record,
+        _test_profile(),
+        new_to_you_cutoff=datetime.fromisoformat("2026-09-08T09:00:00+10:00"),
+    )
+    assert ">New To You<" in html
+    assert 'data-new-to-you="1"' in html
+
 
 def test_workspace_builder_does_not_reintroduce_applied_repost_from_archive(monkeypatch):
     shared = " ".join(
@@ -5574,19 +5585,21 @@ def test_workspace_builder_does_not_reintroduce_applied_repost_from_archive(monk
         }
     }
 
-    monkeypatch.setattr(
-        workspace_service.workspace_data,
-        "build_workspace_record_sets",
-        lambda *args, **kwargs: {
-            "shortlist_records": [dict(repost)],
-            "current_records": [],
-            "archive_records": [dict(repost)],
-            "recent_archive_records": [dict(repost)],
+    captured = {}
+
+    def build_workspace_records(*args, **kwargs):
+        captured["kept_records"] = args[0]
+        return {
+            "shortlist_records": list(args[0]),
+            "current_records": list(args[0]),
+            "archive_records": [],
+            "recent_archive_records": [],
             "stale_archive_records": [],
             "applied_records": [],
             "hidden_records": [],
-        },
-    )
+        }
+
+    monkeypatch.setattr(workspace_service.workspace_data, "build_workspace_record_sets", build_workspace_records)
 
     records = workspace_service.build_workspace_record_sets(
         [],
@@ -5598,6 +5611,7 @@ def test_workspace_builder_does_not_reintroduce_applied_repost_from_archive(monk
         30,
     )
 
+    assert captured["kept_records"] == []
     assert records["shortlist_records"] == []
     assert records["archive_records"] == []
     assert records["recent_archive_records"] == []

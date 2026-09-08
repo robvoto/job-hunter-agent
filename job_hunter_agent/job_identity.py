@@ -492,6 +492,32 @@ def find_content_repost_history_entry(
     return None
 
 
+def find_manual_state_history_entry(
+    record: dict, history: dict[str, dict], job_keys: Iterable[str]
+) -> Optional[dict]:
+    """Return applied/hidden history matched through the canonical identity model.
+
+    Manual state is attached to a vacancy, not to one board listing. Exact job
+    keys, confirmed identity signatures, and high-confidence content repost
+    evidence are the only accepted bridges. Title/company similarity remains a
+    review hint and cannot suppress a vacancy here.
+    """
+
+    for job_key in job_keys:
+        entry = history.get(str(job_key or "").strip())
+        if not isinstance(entry, dict):
+            continue
+        snapshot = entry.get("last_kept_snapshot")
+        candidate = snapshot if isinstance(snapshot, dict) else entry
+        if _normalized_job_key(record) == normalize_job_key(str(job_key or "")):
+            return entry
+        if are_jobs_confirmed_duplicates(record, candidate):
+            return entry
+        if isinstance(snapshot, dict) and are_jobs_content_reposts(record, snapshot):
+            return entry
+    return None
+
+
 def _content_repost_preference_key(record: dict) -> tuple[float, str, str]:
     try:
         posted_age = float(record.get("posted_age_days"))

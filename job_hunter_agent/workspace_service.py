@@ -32,7 +32,7 @@ from job_hunter_agent.llm_gate import get_cost_summary
 from job_hunter_agent.job_identity import (
     deduplicate_across_sources,
     deduplicate_content_reposts,
-    find_content_repost_history_entry,
+    find_manual_state_history_entry,
     normalize_job_key,
 )
 from job_hunter_agent.llm_review_state import has_complete_llm_keep_data
@@ -262,7 +262,7 @@ def build_archive_records(
     run_started_at: datetime,
 ) -> list[dict]:
 
-    return workspace_data.build_archive_records(
+    records = workspace_data.build_archive_records(
         history,
         current_run_keys,
         applied_job_keys,
@@ -272,6 +272,15 @@ def build_archive_records(
         parse_timestamp_fn=parse_timestamp,
         build_history_workspace_record_fn=build_history_workspace_record,
     )
+    # The archive is another Potential input path. Apply the same canonical
+    # manual-state identity bridge here so a changed board id cannot bring an
+    # Applied/Hidden vacancy back through history after current-run filtering.
+    return [
+        record
+        for record in records
+        if find_manual_state_history_entry(record, history, applied_job_keys) is None
+        and find_manual_state_history_entry(record, history, hidden_job_keys) is None
+    ]
 
 
 def build_hidden_workspace_record(job_key: str, entry: dict, run_started_at: datetime) -> dict:
@@ -345,10 +354,9 @@ def build_workspace_record_sets(
     filtered_kept_records = [
         record
         for record in kept_records
-        if find_content_repost_history_entry(record, job_history, applied_job_keys) is None
-        and find_content_repost_history_entry(record, job_history, hidden_job_keys) is None
+        if find_manual_state_history_entry(record, job_history, applied_job_keys) is None
+        and find_manual_state_history_entry(record, job_history, hidden_job_keys) is None
     ]
-    filtered_kept_records = deduplicate_content_reposts(filtered_kept_records)
 
     is_workspace_eligible_fn = is_workspace_eligible
 
@@ -380,31 +388,9 @@ def build_workspace_record_sets(
         build_archive_records_fn=build_archive_records,
         build_applied_records_fn=build_applied_records,
         build_hidden_records_fn=build_hidden_records,
-    )
-    def _not_manual_state_repost(record: dict) -> bool:
-        return (
-            find_content_repost_history_entry(record, job_history, applied_job_keys) is None
-            and find_content_repost_history_entry(record, job_history, hidden_job_keys) is None
-        )
-
-    # Archive/history construction happens after the current records are filtered,
-    # so a changed-id repost can otherwise re-enter through archive_records. Keep
-    # every Potential-derived collection aligned with the same manual-state rule.
-    for collection_key in (
-        "current_records",
-        "archive_records",
-        "recent_archive_records",
-        "stale_archive_records",
-        "shortlist_records",
-    ):
-        workspace_records[collection_key] = [
-            record
-            for record in workspace_records.get(collection_key, [])
-            if _not_manual_state_repost(record)
-        ]
-
-    workspace_records["shortlist_records"] = deduplicate_content_reposts(
-        workspace_records.get("shortlist_records", [])
+        deduplicate_records_fn=lambda records: deduplicate_content_reposts(
+            deduplicate_across_sources(records)
+        ),
     )
     return workspace_records
 
@@ -561,6 +547,15 @@ def render_html(
     job_board_filter_choices_html = render_job_board_filter_choices()
 
     shortlist_count = len(shortlist_records)
+    reposted_count = sum(
+        1 for record in shortlist_records if record.get("is_reposted") is True
+    )
+    reposts_hidden_template = str(
+        load_workspace_page_labels()["LABEL_WS_REPOSTS_HIDDEN_COUNT_TEMPLATE"]
+    )
+    if "{count}" not in reposts_hidden_template:
+        raise ValueError("workspace_page_labels.reposts_hidden_count_template must contain {count}")
+    reposts_hidden_label = reposts_hidden_template.replace("{count}", str(reposted_count))
 
     workspace_run_id = str(
         run_stats.get("run_started_at")
@@ -815,6 +810,7 @@ def render_html(
             "SCORE_FILTER_OPTIONS_HTML": score_filter_options_html,
             "WORK_TYPE_FILTER_OPTIONS_HTML": work_type_filter_options_html,
             "JOB_BOARD_FILTER_CHOICES_HTML": job_board_filter_choices_html,
+            "REPOSTS_HIDDEN_LABEL": safe_html(reposts_hidden_label),
             "CURRENT_SECTION_HTML": render_section(
                 "Job Results",
                 shortlist_records,

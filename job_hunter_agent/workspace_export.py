@@ -9,8 +9,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from job_hunter_agent import workspace_service
 from job_hunter_agent.fit_scoring import fit_score_displayed
-from job_hunter_agent.history import viewed_by_user
+from job_hunter_agent.history import is_new_to_you
 from job_hunter_agent.io_utils import load_job_history, load_run_stats
 from job_hunter_agent.posting_utils import (
     get_manual_skip_sets,
@@ -24,7 +25,6 @@ from job_hunter_agent.system_warnings import make_system_warning_fingerprint, re
 from job_hunter_agent.text_processing import dedupe_preserve_order
 from job_hunter_agent.user_settings import get_workspace_minimum_score
 from job_hunter_agent.workspace_renderer import ARCHIVE_LABEL, _workspace_label
-from job_hunter_agent import workspace_service
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +74,11 @@ def _first_non_empty(*values: Any, default: str = "") -> str:
     return default
 
 
-def _build_badges(record: dict, workspace_state: str) -> list[str]:
+def _build_badges(
+    record: dict,
+    workspace_state: str,
+    new_to_you_cutoff: datetime | None,
+) -> list[str]:
     badges: list[str] = []
 
     if workspace_state == "applied":
@@ -83,10 +87,10 @@ def _build_badges(record: dict, workspace_state: str) -> list[str]:
         badges.append("Hidden")
     elif workspace_state == "archive":
         badges.append(ARCHIVE_LABEL)
-    elif viewed_by_user(record):
-        badges.append("Viewed")
-    else:
+    elif is_new_to_you(record, new_to_you_cutoff):
         badges.append("New To You")
+    else:
+        badges.append("Viewed")
 
     posted_age_threshold = posted_age_badge_threshold(record)
     if posted_age_threshold is not None:
@@ -97,6 +101,9 @@ def _build_badges(record: dict, workspace_state: str) -> list[str]:
         badges.append("Description Issue")
 
     badges.append(get_source_display_label(str(record.get("source") or "unknown")))
+
+    if workspace_state == "current" and record.get("is_reposted") is True:
+        badges.append(_workspace_label("workspace_card_labels", "reposted_badge"))
 
     channel_signal = record.get("posting_channel_evidence")
     if not posting_channel_evidence_is_current(channel_signal):
@@ -160,7 +167,12 @@ def _build_badges(record: dict, workspace_state: str) -> list[str]:
     return dedupe_preserve_order([badge for badge in badges if badge])
 
 
-def _build_export_job(record: dict, workspace_state: str, profile: dict[str, Any]) -> dict[str, Any]:
+def _build_export_job(
+    record: dict,
+    workspace_state: str,
+    profile: dict[str, Any],
+    new_to_you_cutoff: datetime | None,
+) -> dict[str, Any]:
     score_total = _score_total(record, profile)
     export_job = {
         "job_key": _first_non_empty(record.get("job_key")),
@@ -179,7 +191,7 @@ def _build_export_job(record: dict, workspace_state: str, profile: dict[str, Any
         "teaser": _first_non_empty(record.get("teaser"), default=""),
         "search_location": _first_non_empty(record.get("search_location"), default="N/A"),
         "search_keywords": _first_non_empty(record.get("search_keywords"), default=""),
-        "badges": _build_badges(record, workspace_state),
+        "badges": _build_badges(record, workspace_state, new_to_you_cutoff),
         "fit_highlights": list(record.get("fit_highlights") or []),
         "hard_block_reasons": list(record.get("hard_block_reasons") or []),
         "soft_risk_reasons": list(record.get("soft_risk_reasons") or []),
@@ -214,7 +226,11 @@ def _workspace_sections(workspace_records: dict[str, list[dict]]) -> list[tuple[
     ]
 
 
-def build_workspace_export_jobs(workspace_records: dict[str, list[dict]], profile: dict[str, Any]) -> list[dict[str, Any]]:
+def build_workspace_export_jobs(
+    workspace_records: dict[str, list[dict]],
+    profile: dict[str, Any],
+    new_to_you_cutoff: datetime | None,
+) -> list[dict[str, Any]]:
     jobs: list[dict[str, Any]] = []
     seen_keys: set[str] = set()
 
@@ -224,7 +240,7 @@ def build_workspace_export_jobs(workspace_records: dict[str, list[dict]], profil
             if not job_key or job_key in seen_keys:
                 continue
             seen_keys.add(job_key)
-            jobs.append(_build_export_job(record, workspace_state, profile))
+            jobs.append(_build_export_job(record, workspace_state, profile, new_to_you_cutoff))
 
     jobs.sort(
         key=lambda item: (
@@ -345,7 +361,8 @@ def export_workspace_jobs(*, mode: str = "merge") -> dict[str, Any]:
     json_path = export_dir / EXPORT_JSON_FILENAME
     md_path = export_dir / EXPORT_MD_FILENAME
 
-    jobs = build_workspace_export_jobs(workspace_records, profile)
+    new_to_you_cutoff = parse_timestamp(str(run_stats.get("run_started_at") or ""))
+    jobs = build_workspace_export_jobs(workspace_records, profile, new_to_you_cutoff)
     if normalized_mode == "merge":
         jobs = _merge_jobs(_load_existing_jobs(json_path), jobs)
 
