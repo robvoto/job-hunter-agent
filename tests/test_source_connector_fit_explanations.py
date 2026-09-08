@@ -911,6 +911,41 @@ def test_render_job_card_full_description_preserves_source_paragraphs():
     )
 
 
+def test_render_job_card_full_description_preserves_unmarked_section_lines_without_inventing_bullets():
+    full_description = (
+        "Key Responsibilities\n"
+        "Lead discovery workshops across business and technology teams\n"
+        "Translate requirements into delivery-ready stories and acceptance criteria\n"
+        "Support user acceptance testing and implementation readiness\n"
+        "What you will bring:\n"
+        "Strong stakeholder communication\n"
+        "Practical delivery experience\n"
+        "\n"
+        "About the Role\n"
+        "This remains an ordinary prose paragraph.\n"
+    )
+    html = workspace_renderer._render_full_description_html(full_description)
+
+    assert (
+        '<p class="job-full-description">Lead discovery workshops across business and technology teams</p>'
+        in html
+    )
+    assert (
+        '<p class="job-full-description">Translate requirements into delivery-ready stories and acceptance criteria</p>'
+        in html
+    )
+    assert (
+        '<p class="job-full-description">Support user acceptance testing and implementation readiness</p>'
+        in html
+    )
+    assert "Lead discovery workshops across business and technology teams Translate requirements" not in html
+    assert '<h4 class="job-full-description-heading">What you will bring</h4>' in html
+    assert '<p class="job-full-description">Strong stakeholder communication</p>' in html
+    assert '<p class="job-full-description">Practical delivery experience</p>' in html
+    assert 'class="job-full-description-list"' not in html
+    assert '<li class="job-full-description-list-item">' not in html
+
+
 def test_render_job_card_full_description_renders_headings_and_lists_semantically():
     full_description = (
         "Key Responsibilities\n"

@@ -461,3 +461,22 @@ def test_job_requirement_typography_uses_shared_semantic_tokens():
         "Use --text-role-* tokens and keep status headings in normal title case: "
         f"{violations}"
     )
+
+
+def test_job_description_reading_rhythm_uses_shared_width_token_and_normal_weight_heading():
+    tokens = (THEME_DIR / "themes.tokens.css").read_text(encoding="utf-8")
+    results_css = (
+        REPO_ROOT / "templates" / "static" / "results" / "results-page.css"
+    ).read_text(encoding="utf-8")
+
+    assert "--reading-column-max-width: 50rem;" in tokens
+    assert "width: min(100%, var(--reading-column-max-width));" in results_css
+
+    heading_rule = re.search(
+        r"\.job-full-description-heading\s*\{(?P<body>.*?)\}",
+        results_css,
+        flags=re.DOTALL,
+    )
+    assert heading_rule is not None
+    assert "font-weight: 400;" in heading_rule.group("body")
+    assert "font-weight: 700;" not in heading_rule.group("body")

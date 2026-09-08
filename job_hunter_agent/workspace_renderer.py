@@ -228,6 +228,11 @@ def _looks_like_description_heading(line: str) -> bool:
     if not words or len(words) > 9:
         return False
 
+    # A short standalone line ending in a colon already carries a structural
+    # section cue from the source, even when the publisher used sentence case.
+    if cleaned.endswith(":"):
+        return True
+
     if candidate.isupper() and any(ch.isalpha() for ch in candidate):
         return True
     if cleaned.endswith("?"):
@@ -259,8 +264,10 @@ def _render_structured_description_html(description: str) -> str:
     lines = clean_display_text_preserving_blocks(unescape(description)).split("\n")
     blocks: list[tuple[str, Any]] = []
     paragraph_lines: list[str] = []
+    section_lines: list[str] = []
     list_items: list[str] = []
     found_structure = False
+    preserve_section_lines = False
 
     def flush_paragraph() -> None:
         if not paragraph_lines:
@@ -269,6 +276,29 @@ def _render_structured_description_html(description: str) -> str:
         if paragraph:
             blocks.append(("paragraph", paragraph))
         paragraph_lines.clear()
+
+    def flush_section_lines() -> None:
+        """Preserve source line boundaries after a detected section heading.
+
+        Job boards commonly expose list-like responsibilities as separate text
+        lines without bullet characters. Once a real heading has established the
+        section boundary, keeping those source lines separate improves scanning
+        without inventing bullets or rewriting the source text. A single line
+        remains an ordinary paragraph, so already-structured prose is unchanged.
+        """
+        nonlocal preserve_section_lines
+        if not section_lines:
+            return
+        if len(section_lines) == 1:
+            blocks.append(("paragraph", compact_whitespace(section_lines[0])))
+        else:
+            blocks.extend(
+                ("paragraph", compact_whitespace(item))
+                for item in section_lines
+                if compact_whitespace(item)
+            )
+        section_lines.clear()
+        preserve_section_lines = False
 
     def flush_list() -> None:
         if not list_items:
@@ -280,6 +310,7 @@ def _render_structured_description_html(description: str) -> str:
         line = raw_line.strip()
         if not line:
             flush_paragraph()
+            flush_section_lines()
             flush_list()
             continue
 
@@ -287,32 +318,42 @@ def _render_structured_description_html(description: str) -> str:
             prefix, remainder = [part.strip() for part in line.split(" - ", 1)]
             if _looks_like_description_heading(prefix) and compact_whitespace(remainder):
                 flush_paragraph()
+                flush_section_lines()
                 flush_list()
                 blocks.append(("heading", prefix.rstrip(":").strip()))
                 paragraph_lines.append(remainder)
+                preserve_section_lines = False
                 found_structure = True
                 continue
 
         bullet_match = _DESCRIPTION_BULLET_RE.match(line)
         if bullet_match:
             flush_paragraph()
+            flush_section_lines()
             bullet_text = compact_whitespace(bullet_match.group(1))
             if bullet_text:
                 list_items.append(bullet_text)
+                preserve_section_lines = False
                 found_structure = True
             continue
 
         if _looks_like_description_heading(line):
             flush_paragraph()
+            flush_section_lines()
             flush_list()
             blocks.append(("heading", line.rstrip(":").strip()))
+            preserve_section_lines = True
             found_structure = True
             continue
 
         flush_list()
-        paragraph_lines.append(line)
+        if preserve_section_lines:
+            section_lines.append(line)
+        else:
+            paragraph_lines.append(line)
 
     flush_paragraph()
+    flush_section_lines()
     flush_list()
 
     if not blocks:

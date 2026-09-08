@@ -35,6 +35,7 @@
 
   /* Shared page layout sizing */
   --content-shell-max-width: 1360px;
+  --reading-column-max-width: 50rem;
 
   /* Shared onboarding layout sizing */
   --onboarding-shell-max-width: 980px;
