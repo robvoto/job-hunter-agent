@@ -236,7 +236,20 @@ def test_captured_rows_use_production_normalization_and_preserve_safe_profile_fi
         assert item["requirement"] == case.wording, case.wording
 
         if case.canonical_field:
-            assert item[case.canonical_field] == case.matched_candidate_fact, case.wording
+            if item["status"] in {"supported", "partially_supported"}:
+                assert item[case.canonical_field] == case.matched_candidate_fact, case.wording
+            elif case.expected_type == "eligibility":
+                # Eligibility rows carry the canonical gate identity even when
+                # not proven: eligibility_name / matched_candidate_fact name the
+                # requirement itself, not a candidate proof. JH-299 evidence
+                # integrity is scoped to capability / qualification proof.
+                assert item[case.canonical_field] == case.matched_candidate_fact, case.wording
+            else:
+                # JH-299 AC4: a non-positive capability / qualification row keeps
+                # the requirement concept (canonical_requirement / requirement)
+                # but never a positive-looking matched candidate fact.
+                assert item.get(case.canonical_field, "") == "", case.wording
+                assert item["matched_candidate_fact"] == "", case.wording
         if case.expected_type == "qualification" and not case.canonical_requirement:
             assert item["canonical_requirement"] == "", case.wording
             assert item["matched_job_text"] == (case.matched_job_text or case.wording), case.wording
@@ -417,7 +430,11 @@ def test_required_capability_gap_affects_fit_without_becoming_eligibility_gate()
     }
 
     assert normalized[0]["requirement_type"] == "capability"
-    assert normalized[0]["capability_name"] == "Client outcomes"
+    assert normalized[0]["status"] == "not_shown"
+    # JH-299 AC4: the not_shown row carries the requirement concept, not a match.
+    assert normalized[0]["capability_name"] == ""
+    assert normalized[0]["matched_candidate_fact"] == ""
+    assert normalized[0]["canonical_requirement"] == "Client outcomes"
     assert fit_scoring.fit_score(record, profile) == 0
     assert fit_scoring.eligibility_gate_diagnostics(record, profile)["status"] == (
         fit_scoring.ELIGIBILITY_GATE_NOT_APPLICABLE
@@ -623,3 +640,335 @@ def test_ac6_full_ad_payload_partitions_behavioural_and_scores_professional():
 
     gaps = compute_profile_gaps(behavioural, [], [], candidate_eligibility=[])
     assert gaps == []
+
+
+# --- JH-299: evidence integrity for positive professional-capability coverage ---
+#
+# A positive coverage row must trace to specific candidate evidence that entails
+# the same professional concept. A held role / job title proves only explicit
+# role-family facts; shared generic tokens ("AI", a vendor name) are transferable
+# framing, not proof; and a row that finishes non-positive keeps the requirement
+# concept but never a positive-looking matched fact.
+
+_JH299_CAPABILITY_LOOKUPS: dict[str, str] = {
+    "data analysis": "Data analysis",
+    "miro": "Miro",
+    "workshop facilitation": "Workshop facilitation",
+    "sap": "SAP",
+    "delivery leadership": "Delivery leadership",
+}
+
+
+def _evidence_item(
+    *,
+    requirement: str,
+    matched_candidate_fact: str,
+    status: str = "supported",
+    resolved_concept: str = "",
+    canonical_fact_resolved: bool = True,
+    profile_support: tuple[str, ...] = (),
+    covered_requirement_elements: tuple[str, ...] = (),
+    matched_job_text: str = "",
+) -> dict:
+    """A single-concept capability row as the fit-review LLM would return it,
+    with the evidence fields (profile_support / covered_requirement_elements)
+    that JH-299 validates. requirement_kind is set to professional_capability so
+    the row is scored — these cases exercise the evidence-integrity axis, not the
+    JH-298 requirement_kind fail-closed axis."""
+    return {
+        "requirement": requirement,
+        "importance": "mandatory",
+        "requirement_type": "capability",
+        "requirement_kind": llm_gate.LLM_REQUIREMENT_KIND_PROFESSIONAL,
+        "canonical_requirement": resolved_concept,
+        "status": status,
+        "matched_candidate_fact": matched_candidate_fact,
+        "matched_job_text": matched_job_text or requirement,
+        "profile_support": list(profile_support),
+        "covered_requirement_elements": list(covered_requirement_elements),
+        "decomposition": {
+            "operator": "single",
+            "elements": [
+                {
+                    "text": requirement,
+                    "capability_judgement": "capability",
+                    "canonical_concept": resolved_concept,
+                    "canonical_fact_resolved": canonical_fact_resolved,
+                    "status": status,
+                    "matched_candidate_fact": matched_candidate_fact,
+                }
+            ],
+        },
+    }
+
+
+def _normalize_jh299(raw: dict) -> dict:
+    normalized = llm_gate.normalize_llm_requirement_coverage(
+        [raw],
+        valid_capability_names=_JH299_CAPABILITY_LOOKUPS,
+    )
+    assert len(normalized) == 1
+    return normalized[0]
+
+
+@pytest.mark.parametrize(
+    "requirement",
+    [
+        "Works autonomously with minimal supervision",
+        "Exercises sound professional judgement",
+        "Advanced Jira administration",
+        "Manages senior stakeholder relationships",
+    ],
+    ids=lambda text: text,
+)
+def test_ac6_role_title_alone_cannot_prove_a_professional_capability(requirement):
+    row = _normalize_jh299(
+        _evidence_item(
+            requirement=requirement,
+            matched_candidate_fact="Senior Business Analyst",
+            canonical_fact_resolved=False,
+            profile_support=("15 years as a Senior Business Analyst across finance programs.",),
+        )
+    )
+    assert row["status"] == "not_shown", requirement
+    assert row["matched_candidate_fact"] == "", requirement
+    assert row["capability_name"] == "", requirement
+    assert row["decomposition"]["elements"][0]["matched_candidate_fact"] == ""
+
+
+def test_ac6_shared_ai_token_cannot_prove_ai_development():
+    row = _normalize_jh299(
+        _evidence_item(
+            requirement="Hands-on contribution to AI model development",
+            matched_candidate_fact="Data analysis",
+            resolved_concept="Data analysis",
+            covered_requirement_elements=("AI",),
+            profile_support=("Comfortable adopting AI tools in day-to-day analysis work.",),
+        )
+    )
+    assert row["status"] == "not_shown"
+    assert row["matched_candidate_fact"] == ""
+    assert row["capability_name"] == ""
+    assert "covered_requirement_elements" not in row
+
+
+def test_ac6_explicit_tool_evidence_stays_supported():
+    row = _normalize_jh299(
+        _evidence_item(
+            requirement="Experience building process maps in Miro",
+            matched_candidate_fact="Miro",
+            resolved_concept="Miro",
+            covered_requirement_elements=("process maps in Miro",),
+            profile_support=(
+                "Built current-state process maps in Miro for the finance transformation.",
+            ),
+        )
+    )
+    assert row["status"] == "supported"
+    assert row["capability_name"] == "Miro"
+    assert row["matched_candidate_fact"] == "Miro"
+
+
+def test_ac6_explicit_facilitation_evidence_stays_supported():
+    row = _normalize_jh299(
+        _evidence_item(
+            requirement="Facilitate discovery workshops with stakeholders",
+            matched_candidate_fact="Workshop facilitation",
+            resolved_concept="Workshop facilitation",
+            covered_requirement_elements=("facilitate discovery workshops",),
+            profile_support=(
+                "Facilitated discovery workshops with stakeholders across three programs.",
+            ),
+        )
+    )
+    assert row["status"] == "supported"
+    assert row["capability_name"] == "Workshop facilitation"
+
+
+def test_ac3_vendor_evidence_does_not_prove_versioned_platform():
+    row = _normalize_jh299(
+        _evidence_item(
+            requirement="SAP S/4HANA finance configuration",
+            matched_candidate_fact="SAP",
+            resolved_concept="SAP",
+            covered_requirement_elements=("SAP",),
+            profile_support=("Configured SAP finance modules for month-end close.",),
+        )
+    )
+    assert row["status"] == "not_shown"
+    assert row["matched_candidate_fact"] == ""
+    assert row["capability_name"] == ""
+
+
+def test_ac4_non_positive_row_from_llm_carries_no_positive_evidence():
+    row = _normalize_jh299(
+        _evidence_item(
+            requirement="Lead a portfolio of concurrent delivery programs",
+            matched_candidate_fact="Delivery leadership",
+            resolved_concept="Delivery leadership",
+            status="not_shown",
+            covered_requirement_elements=("concurrent delivery programs",),
+            profile_support=("Led concurrent delivery programs across the PMO.",),
+        )
+    )
+    assert row["status"] == "not_shown"
+    assert row["matched_candidate_fact"] == ""
+    assert row["capability_name"] == ""
+    assert row["profile_support"] == []
+    assert "covered_requirement_elements" not in row
+    assert row["decomposition"]["elements"][0]["matched_candidate_fact"] == ""
+    # The requirement concept itself is still available to profile-gap and
+    # renderer consumers; only the positive-looking match is gone.
+    assert row["canonical_requirement"] == "Delivery leadership"
+
+
+# AC7: a captured fit-review structured output as a real model returned it, with
+# two over-stated positive rows (a role title standing in for a capability, and a
+# shared "AI" token standing in for AI development), one genuine explicit match,
+# and one not_shown row the model left carrying a positive-looking fact. Run
+# through the full production normalization path (normalize_llm_review_payload),
+# the two over-claims and the dirty not_shown row must be cleaned; the genuine
+# match must survive untouched.
+_JH299_CAPTURED_FIT_REVIEW_PAYLOAD: dict = {
+    "decision": "KEEP",
+    "grade": "WEAK",
+    "requirement_coverage": [
+        {
+            "requirement": "Works autonomously with minimal supervision",
+            "importance": "mandatory",
+            "requirement_type": "capability",
+            "requirement_kind": "professional_capability",
+            "status": "supported",
+            "canonical_requirement": "",
+            "matched_candidate_fact": "Senior Business Analyst",
+            "matched_job_text": "Works autonomously with minimal supervision",
+            "profile_support": ["15 years as a Senior Business Analyst delivering finance change."],
+            "covered_requirement_elements": ["autonomously"],
+            "decomposition": {
+                "operator": "single",
+                "elements": [
+                    {
+                        "text": "Works autonomously with minimal supervision",
+                        "capability_judgement": "capability",
+                        "canonical_concept": "",
+                        "canonical_fact_resolved": False,
+                        "status": "supported",
+                        "matched_candidate_fact": "Senior Business Analyst",
+                    }
+                ],
+            },
+        },
+        {
+            "requirement": "Hands-on contribution to AI product development",
+            "importance": "mandatory",
+            "requirement_type": "capability",
+            "requirement_kind": "professional_capability",
+            "status": "supported",
+            "canonical_requirement": "Data analysis",
+            "matched_candidate_fact": "Data analysis",
+            "matched_job_text": "Hands-on contribution to AI product development",
+            "profile_support": ["Keen to adopt AI tooling across the analysis workflow."],
+            "covered_requirement_elements": ["AI"],
+            "decomposition": {
+                "operator": "single",
+                "elements": [
+                    {
+                        "text": "Hands-on contribution to AI product development",
+                        "capability_judgement": "capability",
+                        "canonical_concept": "Data analysis",
+                        "canonical_fact_resolved": True,
+                        "status": "supported",
+                        "matched_candidate_fact": "Data analysis",
+                    }
+                ],
+            },
+        },
+        {
+            "requirement": "Facilitate stakeholder workshops and elicitation sessions",
+            "importance": "mandatory",
+            "requirement_type": "capability",
+            "requirement_kind": "professional_capability",
+            "status": "supported",
+            "canonical_requirement": "Workshop facilitation",
+            "matched_candidate_fact": "Workshop facilitation",
+            "matched_job_text": "Facilitate stakeholder workshops and elicitation sessions",
+            "profile_support": [
+                "Facilitated stakeholder workshops and requirements elicitation across three programs.",
+            ],
+            "covered_requirement_elements": ["facilitate stakeholder workshops"],
+            "decomposition": {
+                "operator": "single",
+                "elements": [
+                    {
+                        "text": "Facilitate stakeholder workshops and elicitation sessions",
+                        "capability_judgement": "capability",
+                        "canonical_concept": "Workshop facilitation",
+                        "canonical_fact_resolved": True,
+                        "status": "supported",
+                        "matched_candidate_fact": "Workshop facilitation",
+                    }
+                ],
+            },
+        },
+        {
+            "requirement": "Own the enterprise data governance framework",
+            "importance": "mandatory",
+            "requirement_type": "capability",
+            "requirement_kind": "professional_capability",
+            "status": "not_shown",
+            "canonical_requirement": "Data governance",
+            "matched_candidate_fact": "Data analysis",
+            "matched_job_text": "Own the enterprise data governance framework",
+            "profile_support": ["Ran data analysis for the finance team."],
+            "covered_requirement_elements": ["data"],
+            "decomposition": {
+                "operator": "single",
+                "elements": [
+                    {
+                        "text": "Own the enterprise data governance framework",
+                        "capability_judgement": "capability",
+                        "canonical_concept": "Data governance",
+                        "canonical_fact_resolved": True,
+                        "status": "not_shown",
+                        "matched_candidate_fact": "Data analysis",
+                    }
+                ],
+            },
+        },
+    ],
+}
+
+
+def test_ac7_captured_fit_review_output_rejects_unsupported_semantic_evidence():
+    payload = llm_gate.normalize_llm_review_payload(
+        _JH299_CAPTURED_FIT_REVIEW_PAYLOAD,
+        valid_capability_names={
+            "data analysis": "Data analysis",
+            "workshop facilitation": "Workshop facilitation",
+            "data governance": "Data governance",
+        },
+    )
+    rows = {row["requirement"]: row for row in payload["requirement_coverage"]}
+
+    autonomy = rows["Works autonomously with minimal supervision"]
+    assert autonomy["status"] == "not_shown"
+    assert autonomy["matched_candidate_fact"] == ""
+    assert autonomy["capability_name"] == ""
+
+    ai = rows["Hands-on contribution to AI product development"]
+    assert ai["status"] == "not_shown"
+    assert ai["matched_candidate_fact"] == ""
+    assert ai["capability_name"] == ""
+    assert "covered_requirement_elements" not in ai
+
+    workshops = rows["Facilitate stakeholder workshops and elicitation sessions"]
+    assert workshops["status"] == "supported"
+    assert workshops["capability_name"] == "Workshop facilitation"
+    assert workshops["matched_candidate_fact"] == "Workshop facilitation"
+
+    governance = rows["Own the enterprise data governance framework"]
+    assert governance["status"] == "not_shown"
+    assert governance["matched_candidate_fact"] == ""
+    assert governance["capability_name"] == ""
+    assert governance["profile_support"] == []
+    assert governance["decomposition"]["elements"][0]["matched_candidate_fact"] == ""

@@ -106,7 +106,10 @@ RECORD_REQUIREMENT_COVERAGE_VERSION_KEY = "requirement_coverage_contract_version
 # professional_capability, and is partitioned into
 # requirement_coverage_unclassified. v4 coverage may hold rows scored under the
 # old default, so it is re-reviewed, not migrated.
-REQUIREMENT_COVERAGE_CONTRACT_VERSION = 5
+# v6 (JH-299): positive coverage now requires traceable same-concept evidence and
+# non-positive rows carry no matched fact / profile_support. v5 coverage can hold
+# over-stated matches, so it is re-reviewed, not migrated.
+REQUIREMENT_COVERAGE_CONTRACT_VERSION = 6
 RECORD_OCCUPATION_ALIGNMENT_KEY = "occupation_alignment"
 RECORD_OCCUPATION_ALIGNMENT_REASON_KEY = "occupation_alignment_reason"
 RECORD_DESCRIPTION_COMPACTION_KEY = "description_compaction"

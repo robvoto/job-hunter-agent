@@ -1011,8 +1011,9 @@ def test_normalize_llm_review_payload_distinguishes_capability_name_and_related_
                     "matched_profile_term": "requirements traceability",
                     "matched_job_text": "support technical requirements traceability",
                     "profile_support": [
-                        "Produced traceable requirements, user stories and acceptance criteria."
+                        "Owned requirements traceability matrices across delivery."
                     ],
+                    "covered_requirement_elements": ["requirements traceability"],
                     "matched_candidate_fact": "business analysis",
                 },
             ],
@@ -3085,6 +3086,72 @@ def test_requirement_coverage_keeps_partial_match_when_evidence_covers_real_requ
         valid_capability_names={"process modelling": "Process Modelling"},
     )
     assert result[0]["status"] == "partially_supported"
+
+
+@pytest.mark.parametrize(
+    "label, requirement, matched_job_text, matched_candidate_fact, profile_support, covered, expected",
+    [
+        (
+            "one shared generic token is not evidence",
+            "Hands-on AI model development",
+            "Hands-on AI model development",
+            "Data analysis",
+            ["Comfortable adopting AI tools in day-to-day work."],
+            ["AI"],
+            False,
+        ),
+        (
+            "resolved concept named in the requirement wording",
+            "Requirements traceability across delivery",
+            "support technical requirements traceability across delivery",
+            "Requirements traceability",
+            [],
+            [],
+            True,
+        ),
+        (
+            "whole single-token requirement concept present in the evidence",
+            "BPMN",
+            "Model business processes in BPMN",
+            "Process modelling",
+            ["Documented current-state flows in BPMN 2.0."],
+            [],
+            True,
+        ),
+        (
+            "two substantive shared tokens carry a broader match",
+            "Operational workflow design and case management",
+            "Operational workflow design and case management",
+            "Process modelling",
+            ["Designed operational workflow models for case management."],
+            [],
+            True,
+        ),
+        (
+            "versioned identifier needs its own evidence",
+            "SAP S/4HANA finance configuration",
+            "SAP S/4HANA finance configuration",
+            "SAP",
+            ["Configured SAP finance modules for month-end close."],
+            ["SAP"],
+            False,
+        ),
+    ],
+    ids=lambda value: value if isinstance(value, str) and " " in value else "",
+)
+def test_has_meaningful_requirement_evidence(
+    label, requirement, matched_job_text, matched_candidate_fact, profile_support, covered, expected
+):
+    assert (
+        llm_gate._has_meaningful_requirement_evidence(
+            requirement,
+            matched_job_text,
+            matched_candidate_fact,
+            profile_support,
+            covered,
+        )
+        is expected
+    ), label
 
 
 def _storage_profile():

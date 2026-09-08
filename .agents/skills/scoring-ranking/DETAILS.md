@@ -15,16 +15,22 @@ When changing these labels, bump `ui_labels.json` version so `db_seed --upgrade`
 For every `supported` or `partially_supported` capability mapping:
 
 1. Confirm the mapped capability exists in the candidate profile.
-2. Confirm candidate evidence covers at least one substantive element from the requirement wording.
-3. Do not accept thematic, occupational, or generally transferable similarity as proof.
-4. If only transferable background exists, normalize the requirement to `not_shown`, clear the matched capability, award zero credit, and record the validation reason.
-5. Preserve genuine partial matches where the evidence proves a real component of a compound requirement.
-6. Add a regression test for the reported profession and another unrelated profession/domain when the defect is generic.
+2. Confirm candidate evidence traces to the **same professional concept** as the requirement — `_has_meaningful_requirement_evidence` accepts it only when the resolved candidate concept is named in the requirement wording, or the whole requirement concept is present in the evidence, or requirement and evidence share **at least two** substantive tokens. One shared generic word ("AI", "data", a role/title token) is transferable framing, not proof.
+3. Do not accept thematic, occupational, or generally transferable similarity as proof. A held role / job title proves only explicit role-family and duration facts — never a generic capability, a behavioural expectation, autonomy, judgement, stakeholder management, or a named tool.
+4. Keep strict versioned / numbered matching: `SAP` does not prove `SAP S/4HANA` unless the versioned platform is in the evidence (digit-token rule).
+5. If only transferable background exists, normalize the requirement to `not_shown`, clear the matched capability, award zero credit, and record the validation reason (`generic_transferable_capability_not_requirement_evidence`).
+6. A row that finishes non-positive (`not_shown` / `mismatch` / `invalid`) carries **no** positive-looking evidence: `matched_candidate_fact`, `capability_name`, `qualification_name`, `profile_support`, `covered_requirement_elements`, and element-level matched facts are cleared; `canonical_requirement` / `requirement` are kept for gap and renderer consumers. `eligibility` rows are exempt (their name is the canonical gate identity, not a candidate claim).
+7. Preserve genuine partial matches where the evidence proves a real component of a compound requirement.
+8. Add a regression test for the reported profession and another unrelated profession/domain when the defect is generic.
+
+Contract versions: `REQUIREMENT_COVERAGE_CONTRACT_VERSION` = 6, `FIT_REVIEW_CACHE_CONTRACT_VERSION` = 8 (JH-299). Bumping both re-reviews pre-JH-299 coverage/caches fail-closed; no migration path.
 
 Examples of invalid partial mappings:
 - agile delivery management -> investment appraisal / ROI
 - general business analysis -> banking or telecommunications experience
 - policy interpretation -> complaints, fraud, or case-management experience
+- "Senior Business Analyst" role title -> works autonomously / sound judgement / a named tool
+- "willingness to embrace AI" -> AI/ML development
 
 Examples are diagnostic only. Do not hardcode these phrases as the rule.
 

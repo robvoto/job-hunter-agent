@@ -455,3 +455,76 @@ def test_real_llm_separates_behavioural_expectations_from_professional_capabilit
     )
     for banned in ("ai development", "artificial intelligence", "machine learning", "genai"):
         assert banned not in signal_blob, (banned, signal_blob)
+
+
+EVIDENCE_INTEGRITY_AD_TEXT = """Real SEEK — Example Digital, seek:00000099
+What you'll do:
+- Hands-on contribution to building AI/ML models in production
+- Configure and administer SAP S/4HANA finance modules
+- Build current-state process maps in Lucidchart
+
+About you:
+- A Senior Business Analyst who works autonomously and exercises sound judgement
+"""
+
+
+@pytest.mark.llm_e2e
+@pytest.mark.timeout(120)
+@pytest.mark.skipif(
+    not (_ALLOW_LLM and _HAS_REAL_KEY),
+    reason=(
+        "Real-LLM semantic contract is opt-in only. Set JOB_HUNTER_E2E_ALLOW_LLM=1 "
+        "and a real OPENAI_API_KEY to run it."
+    ),
+)
+def test_real_llm_rejects_unsupported_semantic_evidence_for_professional_capability(
+    monkeypatch,
+):
+    """JH-299: a positive requirement_coverage row must trace to specific
+    candidate evidence for the same professional concept. Against a profile that
+    only holds adjacent facts — a role title, willingness to use AI, generic SAP
+    exposure, a different diagramming tool — the real model + production
+    normalization must not return AI/ML development, SAP S/4HANA, or Lucidchart
+    as supported, and a bare role title must not prove "works autonomously".
+    """
+    from conftest import _cheapest_llm_model
+
+    from job_hunter_agent import llm_gate
+
+    model = _cheapest_llm_model()
+    profile = {
+        "candidate_capabilities": [
+            {"name": "Business analysis", "level": "strong", "aliases": ["Senior Business Analyst"]},
+            {"name": "Data analysis", "level": "strong"},
+            {"name": "Process mapping", "level": "working", "aliases": ["Visio"]},
+        ],
+        "candidate_eligibility": [],
+        "candidate_qualifications": [],
+        "role_experience": [
+            {"normalized_title": "Senior Business Analyst", "total_months": 180},
+        ],
+    }
+    monkeypatch.setattr(llm_gate, "load_profile", lambda: profile)
+    monkeypatch.setattr(llm_gate, "_log_llm_model_once", lambda: model)
+
+    payload = llm_gate._request_learning_payload(EVIDENCE_INTEGRITY_AD_TEXT, fit_review=True)
+    assert payload.get("llm_cost_usd", 0.0) <= REAL_LLM_COST_CEILING_USD
+    rows = payload["requirement_coverage"] + payload.get("requirement_coverage_behavioural", [])
+    assert rows, "real model returned no requirement coverage"
+
+    def _positive(row: dict) -> bool:
+        return row.get("status") in {"supported", "partially_supported"}
+
+    for terms in (("ai",), ("ml",), ("s/4hana",), ("s4hana",), ("lucidchart",)):
+        for row in _rows_with(payload["requirement_coverage"], *terms):
+            assert not _positive(row), row
+            assert not row.get("matched_candidate_fact"), row
+            assert not row.get("capability_name"), row
+
+    for row in payload["requirement_coverage"]:
+        if _positive(row):
+            continue
+        assert not row.get("matched_candidate_fact"), row
+        assert not row.get("profile_support"), row
+        for element in row.get("decomposition", {}).get("elements", []):
+            assert not element.get("matched_candidate_fact"), row

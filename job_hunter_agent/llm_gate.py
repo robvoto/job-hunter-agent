@@ -899,7 +899,10 @@ LLM_CACHE_SCHEMA_VERSION = 3
 # now fails closed to `unclassified` (non-scoring) instead of defaulting to
 # professional_capability. Cached fit-review payloads from v6 can hold rows that
 # were scored under the old default, so the namespace rotates rather than migrates.
-FIT_REVIEW_CACHE_CONTRACT_VERSION = 7
+# v8 (JH-299): tightened requirement-evidence integrity + non-positive-row sweep.
+# Bumping rotates the fit-review cache namespace so stored reviews are recomputed
+# under the new contract; there is no pre-live data to migrate.
+FIT_REVIEW_CACHE_CONTRACT_VERSION = 8
 TITLE_JUDGMENT_CACHE_CONTRACT_VERSION = 1
 POSTING_CHANNEL_LLM_CACHE_CONTRACT_VERSION = 1
 
@@ -1445,13 +1448,25 @@ def _has_meaningful_requirement_evidence(
     profile_support: list[str],
     covered_requirement_elements: list[str],
 ) -> bool:
-    """Require evidence for an actual component of the requirement, not broad transferability."""
+    """Require evidence for an actual component of the requirement, not broad transferability.
+
+    JH-299: a positive match must be traceable to the same professional concept.
+    It qualifies only when the resolved candidate fact is itself named in the
+    requirement wording, the whole requirement concept appears in the candidate
+    evidence, or at least two substantive tokens are shared. A single shared
+    generic word ("AI", "data", "systems", a role/title token, ...) is
+    transferable framing, not proof of the specific requirement.
+    """
     requirement_text = " ".join(part for part in (requirement, matched_job_text) if part)
-    evidence_text = " ".join(
-        part for part in (matched_candidate_fact, *profile_support) if compact_whitespace(part)
-    )
+    concept_text = compact_whitespace(matched_candidate_fact)
+    support_text = " ".join(part for part in profile_support if compact_whitespace(part))
     requirement_tokens = _semantic_match_tokens(requirement_text)
-    evidence_tokens = _semantic_match_tokens(evidence_text)
+    # The requirement field is the concept the candidate must prove; matched_job_text
+    # is only the surrounding ad sentence, so the "whole concept in evidence" check
+    # uses the narrower field and is not defeated by adjacent ad context.
+    core_requirement_tokens = _semantic_match_tokens(requirement)
+    concept_tokens = _semantic_match_tokens(concept_text)
+    evidence_tokens = concept_tokens | _semantic_match_tokens(support_text)
     if not requirement_tokens or not evidence_tokens:
         return False
 
@@ -1464,14 +1479,30 @@ def _has_meaningful_requirement_evidence(
     }
     if specific_requirement_tokens and not specific_requirement_tokens & evidence_tokens:
         return False
-    if requirement_tokens & evidence_tokens:
+
+    # The resolved candidate concept is itself named in the requirement wording:
+    # a traceable same-concept match ("Project delivery" <-> "Deliver projects").
+    if requirement_tokens & concept_tokens:
+        return True
+    # The whole requirement concept is present in the candidate evidence. This
+    # covers a single-token specific requirement such as "BPMN 2.0" or "Miro".
+    if core_requirement_tokens and core_requirement_tokens <= evidence_tokens:
+        return True
+    # A broader overlap must share at least two substantive tokens; one shared
+    # generic word is transferable framing, not requirement evidence.
+    if len(requirement_tokens & evidence_tokens) >= 2:
         return True
 
-    # The model may identify a narrower covered component, but it must be grounded
-    # in both the requirement wording and candidate evidence.
+    # The model may identify a narrower covered component, but it must be a real
+    # multi-token fragment of the requirement grounded in the candidate evidence,
+    # never one generic word standing in for the whole concept.
     for element in covered_requirement_elements:
         element_tokens = _semantic_match_tokens(element)
-        if element_tokens and element_tokens <= requirement_tokens and element_tokens & evidence_tokens:
+        if (
+            len(element_tokens) >= 2
+            and element_tokens <= requirement_tokens
+            and element_tokens & evidence_tokens
+        ):
             return True
     return False
 
@@ -2511,6 +2542,33 @@ def normalize_llm_requirement_coverage(
                     normalized_item["experience_requirement_review_family"] = unresolved_family
                 if normalized_item["status"] == "supported":
                     normalized_item["status"] = "partially_supported"
+        # JH-299: a row that did not finish supported / partially_supported must
+        # never retain a positive-looking matched fact or profile_support. Some
+        # forced-not_shown paths above already clear these; a row the LLM returned
+        # directly as not_shown / mismatch / invalid with populated evidence is
+        # swept here so no consumer or renderer can imply proof for an
+        # unsupported requirement. Behavioural (not_assessed) rows are cleared
+        # upstream and never reach this point. Eligibility rows are exempt: their
+        # matched_candidate_fact / eligibility_name carry the canonical gate
+        # identity (not a "candidate has it" claim) and _atomicize_known_eligibility_rows
+        # owns that field for the gate and mismatch checks.
+        if (
+            requirement_type != "eligibility"
+            and normalized_item["status"] not in {"supported", "partially_supported"}
+        ):
+            normalized_item["matched_candidate_fact"] = ""
+            normalized_item["capability_name"] = ""
+            normalized_item["eligibility_name"] = ""
+            normalized_item["profile_support"] = []
+            normalized_item.pop("qualification_name", None)
+            normalized_item.pop("covered_requirement_elements", None)
+            normalized_item.pop("match_source", None)
+            normalized_item.pop("matched_profile_term", None)
+            for element in normalized_item["decomposition"]["elements"]:
+                element["matched_candidate_fact"] = ""
+            for component in normalized_item.get("experience_components", []):
+                component["profile_supported"] = False
+                component["profile_evidence"] = []
         if requirement_type != "eligibility":
             if non_eligibility_count >= max_items:
                 continue

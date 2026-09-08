@@ -153,6 +153,51 @@ payloads produced before the current versions are unsafe to reuse; the history
 reuse guard forces a fresh fit review (the AC "fails closed / re-reviewed, never
 guessed" mechanism). No migration shim — stale dev caches are disposable.
 
+### Evidence integrity for positive coverage (JH-299)
+
+A `supported` / `partially_supported` `capability` row must trace to specific
+candidate evidence that entails the **same** professional concept. Three
+structural guards in `normalize_llm_requirement_coverage` enforce this; none of
+them do semantic interpretation — that stays in the managed prompt or fails
+closed.
+
+- **A held role / job title is not capability proof.** A title the candidate has
+  held (including a `role_experience` family) proves only explicit role-family and
+  duration facts. It never resolves to a `capability_name`, so the existing
+  missing-`capability_name` guard already forces such a positive row to
+  `not_shown` and clears the match. The managed prompt now states the rule
+  explicitly so the model does not put a bare title in `matched_candidate_fact`.
+- **`_has_meaningful_requirement_evidence` requires a traceable same-concept
+  link.** A single shared content token via free-text `profile_support` is no
+  longer sufficient. A positive row survives only when the resolved candidate
+  concept is itself named in the requirement wording, **or** the whole requirement
+  concept is present in the candidate evidence, **or** requirement and evidence
+  share **at least two** substantive tokens. One shared generic word ("AI",
+  "data", "systems", a title token) is transferable framing, not proof. The
+  digit-token specificity rule is
+  unchanged: `SAP` still cannot prove `SAP S/4HANA` without evidence of the
+  versioned platform. On failure the call site forces `not_shown`, clears the
+  match, and records `generic_transferable_capability_not_requirement_evidence`.
+- **Non-positive rows carry no positive-looking evidence.** Immediately before a
+  row is appended, any `capability` / `qualification` row whose final status is
+  not `supported` / `partially_supported` has `matched_candidate_fact`,
+  `capability_name`, `qualification_name`, `profile_support`,
+  `covered_requirement_elements`, `match_source`, every
+  `decomposition.elements[*].matched_candidate_fact`, and any
+  `experience_components[*]` support neutralised. `canonical_requirement` /
+  `requirement` are kept so profile-gap and renderer consumers still have the
+  concept. `eligibility` rows are exempt: their `eligibility_name` /
+  `matched_candidate_fact` are the canonical gate identity owned by
+  `_atomicize_known_eligibility_rows`, not a "candidate has it" claim.
+
+Behavioural (`not_assessed`) rows are cleared upstream by the JH-298 partition and
+never reach these guards.
+
+**Contract-version bump.** `REQUIREMENT_COVERAGE_CONTRACT_VERSION` → 6 and
+`FIT_REVIEW_CACHE_CONTRACT_VERSION` → 8. Persisted coverage and cached fit-review
+payloads from before JH-299 can hold over-stated matches, so they are re-reviewed,
+not migrated — the same fail-closed mechanism as JH-298. No migration shim.
+
 ### `capability_judgement` (per element)
 
 The fit-review LLM's bounded interpretation of whether the element names a reusable
