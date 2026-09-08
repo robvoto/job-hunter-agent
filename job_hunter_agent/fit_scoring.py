@@ -21,6 +21,7 @@ from job_hunter_agent.paths import UNCERTAINTY_LOG_PATH
 from job_hunter_agent.llm_protocol import (
     LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES,
     LLM_ALLOWED_OCCUPATION_ALIGNMENTS,
+    LLM_REQUIREMENT_KIND_PROFESSIONAL,
 )
 from job_hunter_agent.profile_store import (
     KEY_CANDIDATE_ELIGIBILITY,
@@ -199,6 +200,25 @@ def _candidate_qualification_lookup(profile: dict) -> dict[str, bool]:
     return lookup
 
 
+def _capability_row_excluded_by_kind(item: dict) -> bool:
+    """JH-298 correction: scoring only credits an explicitly professional capability.
+
+    A ``capability`` row the fit-review LLM classified as anything other than
+    ``professional_capability`` (``behavioural_expectation`` or the fail-closed
+    ``unclassified``) must never contribute to the Requirement Fit numerator or
+    denominator. Those rows are already partitioned out of ``requirement_coverage``
+    upstream (``llm_gate.normalize_llm_review_payload``); this guard makes the
+    requirement explicit at the scoring site so a leaked row cannot earn or dilute
+    credit. A row with no ``requirement_kind`` at all is left to the existing
+    checks — the normalizer always assigns one in production.
+    """
+    requirement_type = str(item.get("requirement_type") or "capability").strip().lower()
+    if requirement_type != "capability":
+        return False
+    explicit_kind = str(item.get("requirement_kind") or "").strip().lower()
+    return bool(explicit_kind) and explicit_kind != LLM_REQUIREMENT_KIND_PROFESSIONAL
+
+
 def _append_requirement_mapping_uncertainty(record: dict, item: dict, detail: str) -> None:
     raw_value = {
         "requirement": item.get("requirement"),
@@ -352,6 +372,11 @@ def requirement_fit_audit_rows(record: dict, profile: Optional[dict] = None) -> 
             continue
         requirement = compact_whitespace(str(item.get("requirement") or ""))
         if not requirement:
+            continue
+        if _capability_row_excluded_by_kind(item):
+            # JH-298 correction: keep the audit view aligned with scoring — a
+            # non-professional capability row contributes nothing, so it is not an
+            # audit row either.
             continue
         importance = str(item.get("importance") or "").strip().lower()
         if importance not in importance_weights:
@@ -720,6 +745,9 @@ def _requirement_fit_entries(record: dict, profile: dict, scoring_rules: dict) -
             continue
         requirement = compact_whitespace(str(item.get("requirement") or ""))
         if not requirement:
+            continue
+        if _capability_row_excluded_by_kind(item):
+            # Non-professional capability row: no weight, no count, no uncertainty.
             continue
         importance = str(item.get("importance") or "preferred").strip().lower()
         weight = importance_weights.get(importance, importance_weights["preferred"])

@@ -5,6 +5,49 @@ from pydantic import ValidationError
 
 from job_hunter_agent import llm_gate
 
+_PROFESSIONAL_KIND = "professional_capability"
+
+
+def _stamp_default_kind(rows):
+    """Stamp ``professional_capability`` on bare ``capability`` rows.
+
+    Since the JH-298 fail-closed correction a capability row with no
+    requirement_kind normalizes to ``unclassified`` (non-scoring) and is
+    partitioned out of ``requirement_coverage``. Fixtures in this file predate
+    the requirement_kind axis and build bare capability rows that are meant to
+    be ordinary scored professional capabilities, so stamp the professional kind
+    unless the row sets its own. Rows with an explicit kind (e.g. behavioural)
+    are left untouched.
+    """
+    stamped = []
+    for row in rows or []:
+        if (
+            isinstance(row, dict)
+            and str(row.get("requirement_type") or "capability").strip().lower()
+            == "capability"
+            and not str(row.get("requirement_kind") or "").strip()
+        ):
+            row = {**row, "requirement_kind": _PROFESSIONAL_KIND}
+        stamped.append(row)
+    return stamped
+
+
+def _norm_cov(items, **kwargs):
+    return llm_gate.normalize_llm_requirement_coverage(
+        _stamp_default_kind(items), **kwargs
+    )
+
+
+def _norm_payload(payload, **kwargs):
+    if isinstance(payload, dict) and "requirement_coverage" in payload:
+        payload = {
+            **payload,
+            "requirement_coverage": _stamp_default_kind(
+                payload.get("requirement_coverage")
+            ),
+        }
+    return llm_gate.normalize_llm_review_payload(payload, **kwargs)
+
 
 def test_openai_environment_key_enables_llm_outside_desktop(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "must-not-be-used")
@@ -104,7 +147,7 @@ def test_fit_review_prompt_excludes_learning_guidance(monkeypatch):
 
 
 def test_requirement_coverage_rejects_removed_profile_name_alias():
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [{
             "requirement": "Stakeholder engagement",
             "importance": "preferred",
@@ -121,7 +164,7 @@ def test_requirement_coverage_rejects_removed_profile_name_alias():
 
 
 def test_requirement_coverage_rejects_type_specific_input_alias():
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [{
             "requirement": "Stakeholder engagement",
             "importance": "preferred",
@@ -281,7 +324,7 @@ def test_learning_only_prompt_retains_learning_guidance():
 
 
 def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
-    payload = llm_gate.normalize_llm_review_payload(
+    payload = _norm_payload(
         {
             "decision": "KEEP",
             "grade": "EXCELLENT",
@@ -379,6 +422,7 @@ def test_normalize_llm_review_payload_derives_grade_from_requirement_coverage():
         ],
         "requirement_coverage_hidden": [],
         "requirement_coverage_behavioural": [],
+        "requirement_coverage_unclassified": [],
     }
 
 
@@ -387,7 +431,7 @@ def test_normalize_llm_review_payload_rejects_keep_without_requirement_coverage(
         llm_gate.LLMReviewValidationError,
         match="LLM KEEP review requires non-empty requirement_coverage",
     ):
-        llm_gate.normalize_llm_review_payload(
+        _norm_payload(
             {
                 "fit_review": {"decision": "KEEP", "grade": "STRONG"},
                 "requirement_coverage": [],
@@ -396,7 +440,7 @@ def test_normalize_llm_review_payload_rejects_keep_without_requirement_coverage(
 
 
 def test_normalize_llm_review_payload_downgrades_supported_when_role_duration_is_below_requirement():
-    payload = llm_gate.normalize_llm_review_payload(
+    payload = _norm_payload(
         {
             "decision": "KEEP",
             "grade": "EXCELLENT",
@@ -441,7 +485,7 @@ def test_normalize_llm_review_payload_downgrades_supported_when_role_duration_is
 
 
 def test_normalize_llm_review_payload_downgrades_supported_when_years_requirement_has_no_role_duration_match():
-    payload = llm_gate.normalize_llm_review_payload(
+    payload = _norm_payload(
         {
             "decision": "KEEP",
             "grade": "EXCELLENT",
@@ -479,8 +523,60 @@ def test_normalize_llm_review_payload_downgrades_supported_when_years_requiremen
     assert "experience_requirement_met" not in row
 
 
-def test_normalize_llm_review_payload_matches_years_requirement_against_role_variants():
+def test_normalize_llm_review_payload_partitions_missing_kind_capability_row():
+    # JH-298 correction: a capability row the LLM returned without a valid
+    # requirement_kind fails closed to `unclassified` — it is pulled out of
+    # requirement_coverage into requirement_coverage_unclassified, never scored.
     payload = llm_gate.normalize_llm_review_payload(
+        {
+            "decision": "KEEP",
+            "grade": "STRONG",
+            "requirement_coverage": [
+                {
+                    "requirement": "Own the AI platform roadmap",
+                    "importance": "mandatory",
+                    "requirement_type": "capability",
+                    # requirement_kind deliberately omitted.
+                    "status": "supported",
+                    "capability_name": "ai platform",
+                    "matched_candidate_fact": "AI Platform",
+                    "matched_job_text": "own the AI platform roadmap",
+                    "profile_support": ["Ran an AI platform program."],
+                },
+                {
+                    "requirement": "Stakeholder engagement",
+                    "importance": "mandatory",
+                    "requirement_type": "capability",
+                    "requirement_kind": "professional_capability",
+                    "status": "supported",
+                    "capability_name": "stakeholder engagement",
+                    "matched_candidate_fact": "Stakeholder Engagement",
+                    "matched_job_text": "engage stakeholders",
+                    "profile_support": ["Led stakeholder engagement."],
+                },
+            ],
+        },
+        valid_capability_names={
+            "ai platform": "AI Platform",
+            "stakeholder engagement": "Stakeholder Engagement",
+        },
+    )
+
+    assert [r["requirement"] for r in payload["requirement_coverage"]] == [
+        "Stakeholder engagement"
+    ]
+    unclassified = payload["requirement_coverage_unclassified"]
+    assert [r["requirement"] for r in unclassified] == ["Own the AI platform roadmap"]
+    leaked = unclassified[0]
+    assert leaked["requirement_kind"] == llm_gate.LLM_REQUIREMENT_KIND_UNCLASSIFIED
+    assert leaked["unclassified_requirement_kind"] is True
+    assert leaked["status"] == llm_gate.LLM_NOT_ASSESSED_COVERAGE_STATUS
+    assert leaked["capability_name"] == ""
+    assert leaked["matched_candidate_fact"] == ""
+
+
+def test_normalize_llm_review_payload_matches_years_requirement_against_role_variants():
+    payload = _norm_payload(
         {
             "decision": "KEEP",
             "grade": "EXCELLENT",
@@ -580,7 +676,7 @@ def _ba_family_role_experience(total_duration_months: int) -> list[dict]:
 
 
 def test_years_business_analysis_requirement_met_from_combined_ba_family_history():
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [_years_experience_coverage_row("Senior Business Analyst")],
         valid_capability_names={"business analysis": "Business Analysis"},
         role_experience=_ba_family_role_experience(66),
@@ -600,7 +696,7 @@ def test_years_business_analysis_requirement_met_from_combined_ba_family_history
 
 
 def test_years_business_analysis_requirement_shows_gap_when_history_is_short():
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [_years_experience_coverage_row("Business Analyst")],
         valid_capability_names={"business analysis": "Business Analysis"},
         role_experience=_ba_family_role_experience(36),
@@ -619,7 +715,7 @@ def test_years_requirement_left_for_review_when_llm_ties_no_role_family():
     # The LLM could not safely tie the duration to any saved family (empty
     # matched_role_family). The row stays visible but unresolved for review;
     # deterministic code never guesses the role relationship.
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [_years_experience_coverage_row("")],
         valid_capability_names={"business analysis": "Business Analysis"},
         role_experience=_ba_family_role_experience(66),
@@ -656,7 +752,7 @@ def test_years_requirement_for_unrelated_role_is_not_matched_from_ba_history():
             },
         ],
     }
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [row_in],
         valid_capability_names={"business analysis": "Business Analysis"},
         role_experience=_ba_family_role_experience(120),
@@ -678,7 +774,7 @@ def test_normalize_llm_review_payload_falls_back_to_model_grade_without_coverage
     # derive_fit_review_grade([]) always returns "POOR", so without a fallback the
     # model's own grade would be silently discarded and replaced with "POOR".
 
-    payload = llm_gate.normalize_llm_review_payload(
+    payload = _norm_payload(
         {
             "decision": "REJECT",
             "grade": "MISMATCH",
@@ -690,7 +786,7 @@ def test_normalize_llm_review_payload_falls_back_to_model_grade_without_coverage
 
 
 def test_normalize_llm_review_payload_debug_reason_is_capped():
-    payload = llm_gate.normalize_llm_review_payload(
+    payload = _norm_payload(
         {
             "fit_review": {"decision": "KEEP", "grade": "STRONG"},
             "debug_reason": "  A" * 200,
@@ -731,7 +827,7 @@ def _keep_payload_with_alignment(**overrides):
 
 @pytest.mark.parametrize("alignment", ["same", "adjacent", "different"])
 def test_normalize_llm_review_payload_accepts_allowed_occupation_alignments(alignment):
-    payload = llm_gate.normalize_llm_review_payload(
+    payload = _norm_payload(
         _keep_payload_with_alignment(
             occupation_alignment=alignment,
             occupation_alignment_reason=f"Matches {alignment} classification reasoning.",
@@ -745,7 +841,7 @@ def test_normalize_llm_review_payload_accepts_allowed_occupation_alignments(alig
 
 def test_normalize_llm_review_payload_degrades_invalid_occupation_alignment(caplog):
     with caplog.at_level("WARNING"):
-        payload = llm_gate.normalize_llm_review_payload(
+        payload = _norm_payload(
             _keep_payload_with_alignment(
                 occupation_alignment="totally different career",
                 occupation_alignment_reason="nonsense",
@@ -758,7 +854,7 @@ def test_normalize_llm_review_payload_degrades_invalid_occupation_alignment(capl
 
 
 def test_normalize_llm_review_payload_degrades_missing_occupation_alignment():
-    payload = llm_gate.normalize_llm_review_payload(
+    payload = _norm_payload(
         _keep_payload_with_alignment(),
         valid_capability_names={"stakeholder engagement": "Stakeholder Engagement"},
     )
@@ -770,7 +866,7 @@ def test_normalize_llm_review_payload_degrades_missing_occupation_alignment():
 def test_normalize_llm_review_payload_never_rejects_on_occupation_alignment():
     # A KEEP with invalid occupation_alignment must still succeed — occupation
     # alignment must never gate KEEP/REJECT, only adjust score downstream.
-    payload = llm_gate.normalize_llm_review_payload(
+    payload = _norm_payload(
         _keep_payload_with_alignment(occupation_alignment="not-a-real-value"),
         valid_capability_names={"stakeholder engagement": "Stakeholder Engagement"},
     )
@@ -788,6 +884,8 @@ def test_request_learning_payload_uses_single_llm_call(monkeypatch):
                 "requirement_coverage": [
                     {
                         "requirement": "Stakeholder engagement",
+                        "requirement_type": "capability",
+                        "requirement_kind": "professional_capability",
                         "status": "supported",
                         "capability_name": "Stakeholder Engagement",
                         "matched_job_text": "work with stakeholders",
@@ -835,6 +933,8 @@ def test_request_learning_payload_uses_debug_fit_review_schema_when_enabled(monk
                 "requirement_coverage": [
                     {
                         "requirement": "Stakeholder engagement",
+                        "requirement_type": "capability",
+                        "requirement_kind": "professional_capability",
                         "status": "supported",
                         "capability_name": "Stakeholder Engagement",
                         "match_source": "capability_name",
@@ -889,7 +989,7 @@ def test_normalize_llm_review_payload_distinguishes_capability_name_and_related_
         lambda: True,
     )
 
-    payload = llm_gate.normalize_llm_review_payload(
+    payload = _norm_payload(
         {
             "fit_review": {"decision": "KEEP", "grade": "STRONG"},
             "requirement_coverage": [
@@ -941,6 +1041,8 @@ def test_request_learning_payload_retries_once_on_invalid_json(monkeypatch, capl
                 "requirement_coverage": [
                     {
                         "requirement": "Stakeholder engagement",
+                        "requirement_type": "capability",
+                        "requirement_kind": "professional_capability",
                         "status": "supported",
                         "capability_name": "Stakeholder Engagement",
                         "matched_job_text": "work with stakeholders",
@@ -1005,6 +1107,8 @@ def test_request_learning_payload_returns_usage_summary(monkeypatch):
                 "requirement_coverage": [
                     {
                         "requirement": "Stakeholder engagement",
+                        "requirement_type": "capability",
+                        "requirement_kind": "professional_capability",
                         "status": "supported",
                         "capability_name": "Stakeholder Engagement",
                         "matched_job_text": "work with stakeholders",
@@ -1049,7 +1153,7 @@ def test_request_learning_payload_returns_usage_summary(monkeypatch):
 
 
 def test_strong_grade_requires_requirement_capability_evidence():
-    payload = llm_gate.normalize_llm_review_payload(
+    payload = _norm_payload(
         {
             "fit_review": {"decision": "KEEP", "grade": "STRONG"},
             "requirement_coverage": [
@@ -1079,7 +1183,7 @@ def test_strong_grade_requires_requirement_capability_evidence():
 
 
 def test_prospend_style_partial_coverage_does_not_become_strong():
-    payload = llm_gate.normalize_llm_review_payload(
+    payload = _norm_payload(
         {
             "fit_review": {"decision": "KEEP", "grade": "STRONG"},
             "requirement_coverage": [
@@ -1185,6 +1289,36 @@ def test_no_support_gives_poor():
 def test_no_support_with_mismatch_gives_mismatch():
     coverage = [_cov("req1", "mismatch"), _cov("req2", "not_shown")]
     assert llm_gate.derive_fit_review_grade(coverage) == "MISMATCH"
+
+
+def test_explicit_non_professional_capability_rows_never_grade():
+    # JH-298 correction: a behavioural / unclassified capability row that leaked
+    # past the upstream partition must neither lift nor dilute the grade.
+    base = [_cov("req1", "supported", "cap1"), _cov("req2", "supported", "cap2")]
+    assert llm_gate.derive_fit_review_grade(base) == "STRONG"
+
+    behavioural = {
+        **_cov("beh", "not_shown"),
+        "requirement_type": "capability",
+        "requirement_kind": llm_gate.LLM_REQUIREMENT_KIND_BEHAVIOURAL,
+    }
+    unclassified = {
+        **_cov("unk", "not_shown"),
+        "requirement_type": "capability",
+        "requirement_kind": llm_gate.LLM_REQUIREMENT_KIND_UNCLASSIFIED,
+    }
+    # not_shown leaked rows must not drag STRONG down.
+    assert (
+        llm_gate.derive_fit_review_grade(base + [behavioural, unclassified]) == "STRONG"
+    )
+
+    # A leaked *supported* behavioural row must not manufacture EXCELLENT either.
+    supported_behavioural = {
+        **_cov("beh2", "supported", "capX"),
+        "requirement_type": "capability",
+        "requirement_kind": llm_gate.LLM_REQUIREMENT_KIND_BEHAVIOURAL,
+    }
+    assert llm_gate.derive_fit_review_grade(base + [supported_behavioural]) == "STRONG"
 
 
 def test_mismatch_with_high_support_caps_at_weak():
@@ -1326,7 +1460,7 @@ def test_fit_review_preserves_and_splits_eligibility_outside_general_row_budget(
         }
         for index in range(8)
     ]
-    result = llm_gate.normalize_llm_review_payload(
+    result = _norm_payload(
         {
             "fit_review": {"decision": "MAYBE", "grade": "WEAK"},
             "requirement_coverage": general_rows,
@@ -1386,7 +1520,7 @@ def test_eligibility_row_after_general_limit_is_not_dropped():
             "profile_support": ["Australian Citizenship"],
         }
     )
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         rows,
         valid_eligibility_names={"australian citizenship": "Australian Citizenship"},
         max_items=8,
@@ -1435,7 +1569,7 @@ def test_normalize_llm_review_payload_overrides_keep_to_reject_on_eligibility_mi
     # The LLM itself said KEEP/EXCELLENT, but an eligibility fact is an explicit
     # mismatch (e.g. no security clearance). The deterministic gate must override the
     # model's own decision — eligibility is a hard boolean gate, not a scoring input.
-    payload = llm_gate.normalize_llm_review_payload(
+    payload = _norm_payload(
         {
             "decision": "KEEP",
             "grade": "EXCELLENT",
@@ -1457,7 +1591,7 @@ def test_normalize_llm_review_payload_overrides_keep_to_reject_on_eligibility_mi
 def test_normalize_llm_review_payload_rejects_keep_when_all_capability_coverage_is_mismatch():
     # A derived MISMATCH grade is authoritative: a job with no supported requirement
     # coverage cannot remain KEEP just because the model returned KEEP.
-    payload = llm_gate.normalize_llm_review_payload(
+    payload = _norm_payload(
         {
             "decision": "KEEP",
             "grade": "STRONG",
@@ -1508,7 +1642,7 @@ def test_normalize_coverage_includes_importance_field():
             "matched_candidate_fact": "",
         },
     ]
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         items,
         valid_capability_names={"agile methodologies": "Agile Methodologies"},
     )
@@ -1528,7 +1662,7 @@ def test_normalize_coverage_supports_eligibility_items():
             "profile_support": ["PV clearance"],
         }
     ]
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         items,
         valid_eligibility_names={"pv clearance": "PV clearance"},
     )
@@ -1556,7 +1690,7 @@ def test_normalize_coverage_converts_invalid_eligibility_match_to_not_shown(monk
             "profile_support": ["government environments"],
         }
     ]
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         items,
         valid_eligibility_names={"pv clearance": "PV clearance"},
     )
@@ -1595,7 +1729,7 @@ def test_normalize_coverage_defaults_invalid_importance_to_preferred():
             "matched_candidate_fact": "python",
         },
     ]
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         items,
         valid_capability_names={"python": "Python"},
     )
@@ -1620,7 +1754,7 @@ def test_normalize_coverage_converts_invalid_capability_match_to_not_shown(monke
             "profile_support": ["finance transformation"],
         }
     ]
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         items,
         valid_capability_names={"python": "Python"},
     )
@@ -1631,8 +1765,9 @@ def test_normalize_coverage_converts_invalid_capability_match_to_not_shown(monke
     assert result[0]["capability_name"] == ""
     assert result[0]["eligibility_name"] == ""
     assert warnings
-    # A capability row without an explicit requirement_kind also emits a
-    # requirement_kind_defaulted warning (JH-298); select the match warning by reason.
+    # This fixture is stamped with an explicit professional_capability kind by
+    # _stamp_default_kind, so the only warning is the invalid-match one; select
+    # it by reason to stay robust if other warnings are added later.
     match_warning = next(
         w for w in warnings if w["context"]["reason"] == "invalid_capability_match"
     )
@@ -1652,7 +1787,7 @@ def test_normalize_coverage_converts_invalid_capability_match_to_not_shown(monke
 
 
 def test_normalize_coverage_recovers_canonical_capability_from_profile_support():
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": "Python experience",
@@ -1678,7 +1813,7 @@ def test_normalize_coverage_recovers_canonical_capability_from_profile_support()
 
 
 def test_normalize_coverage_accepts_profile_capability_aliases():
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": "API experience",
@@ -1703,7 +1838,7 @@ def test_normalize_coverage_allows_profile_action_for_clear_single_fact():
     # A requirement that decomposes to exactly one atomic element, with an
     # explicit element canonical_fact_resolved=True capability judgement, is
     # safe to offer as an Add-to-profile action.
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": "CBAP certification is required.",
@@ -1740,7 +1875,7 @@ def test_normalize_coverage_allows_short_atomic_requirement_echoing_its_own_text
     # requirement text verbatim (e.g. "Java"). The LLM owns that semantic
     # judgement via the element canonical_fact_resolved flag; deterministic code
     # must not guess it from text equality.
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": "Java",
@@ -1773,7 +1908,7 @@ def test_normalize_coverage_allows_short_atomic_requirement_echoing_its_own_text
 
 def test_normalize_coverage_blocks_profile_action_for_compound_row_with_existing_partial_evidence():
     """A collapsed AND row must not offer a duplicate/incorrect profile action."""
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": "Experience with Jira, Confluence and Microsoft Office 365",
@@ -1821,7 +1956,7 @@ def test_normalize_coverage_blocks_profile_action_when_canonical_fact_resolved_i
     # A canonical label alone is not a profile-learning decision. With no
     # decomposition the row falls back to a synthesized non-actionable element,
     # so profile_action_allowed fails closed.
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": "CBAP certification is required.",
@@ -1845,7 +1980,7 @@ def test_normalize_coverage_blocks_profile_action_for_or_group_of_alternatives()
     # operator="or" row. An OR row is never directly actionable: it carries no
     # row-level canonical_requirement and profile_action_allowed stays False,
     # while every branch is preserved as its own element.
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": "Tertiary qualifications or BA/Agile certifications (IIBA, CBAP, CCBA, CSPO, PSM) are a bonus.",
@@ -1894,7 +2029,7 @@ def test_normalize_coverage_blocks_row_profile_action_for_or_group_but_keeps_bra
     # A certifying body name (IIBA) that is one branch of an OR clause must not
     # become a standalone profile-actionable qualification at the row level; the
     # row stays non-actionable while each branch is preserved.
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": "IIBA, CBAP, or CCBA certification preferred.",
@@ -1931,7 +2066,7 @@ def test_normalize_coverage_blocks_profile_action_for_single_branch_or_clause():
     # "CBAP or equivalent" is still a disjunctive clause even though only one
     # branch could be named. An operator="or" row is never a single actionable
     # concept, so profile_action_allowed must stay False.
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": "CBAP or equivalent certification required.",
@@ -1965,7 +2100,7 @@ def test_normalize_coverage_keeps_and_joined_requirements_independently_actionab
     # Genuinely independent AND-joined requirements must each keep their own
     # correct profile_action_allowed value — the vague-alternatives gate must
     # not bleed across unrelated rows in the same payload.
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": "Australian Citizenship is required",
@@ -2035,7 +2170,7 @@ def test_normalize_coverage_marks_invalid_requirement_type_for_review(monkeypatc
             "profile_support": ["PV clearance"],
         }
     ]
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         items,
         valid_capability_names={"pv clearance": "PV clearance"},
         valid_eligibility_names={"pv clearance": "PV clearance"},
@@ -2070,7 +2205,7 @@ def test_normalize_coverage_reclassifies_experience_wording_as_capability(monkey
         "record_system_warning",
         lambda **kwargs: warnings.append(kwargs) or kwargs,
     )
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": "5+ years supporting client outcomes",
@@ -2096,7 +2231,7 @@ def test_normalize_coverage_reclassifies_security_clearance_as_eligibility(monke
         "record_system_warning",
         lambda **kwargs: warnings.append(kwargs) or kwargs,
     )
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": "Ability to obtain Baseline security clearance",
@@ -2122,7 +2257,7 @@ def test_normalize_coverage_marks_conflicting_classification_uncertain(monkeypat
         "record_system_warning",
         lambda **kwargs: warnings.append(kwargs) or kwargs,
     )
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": "5+ years working in a security clearance environment",
@@ -2143,7 +2278,7 @@ def test_normalize_coverage_marks_conflicting_classification_uncertain(monkeypat
 
 
 def test_normalize_coverage_preserves_managed_eligibility_subtype_without_extra_llm_call():
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": "Ability to obtain Baseline security clearance",
@@ -2160,7 +2295,7 @@ def test_normalize_coverage_preserves_managed_eligibility_subtype_without_extra_
 
 
 def test_normalize_coverage_keeps_valid_llm_other_eligibility_subtype():
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": "Must satisfy a formal entry condition",
@@ -2177,7 +2312,7 @@ def test_normalize_coverage_keeps_valid_llm_other_eligibility_subtype():
 
 
 def test_normalize_coverage_drops_eligibility_subtype_from_qualification():
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": "CBAP certification",
@@ -2196,7 +2331,7 @@ def test_normalize_coverage_drops_eligibility_subtype_from_qualification():
 
 
 def test_normalize_coverage_payload_without_decomposition_fails_closed():
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": "Unresolved requirement with no decomposition supplied",
@@ -2215,7 +2350,7 @@ def test_normalize_coverage_payload_without_decomposition_fails_closed():
 
 
 def test_normalize_coverage_preserves_malformed_required_requirement():
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": "Must hold an unfamiliar professional registration",
@@ -2451,7 +2586,7 @@ def test_llm_judge_title_strict_mode_keeps_original_whitelist_style_contract():
 
 
 def test_normalize_review_rejects_model_keep_when_derived_grade_is_mismatch():
-    payload = llm_gate.normalize_llm_review_payload(
+    payload = _norm_payload(
         {
             "fit_review": {"decision": "KEEP", "grade": "STRONG"},
             "requirement_coverage": [
@@ -2525,7 +2660,7 @@ def test_llm_judge_title_returns_none_on_client_exception():
 def test_experience_duration_does_not_prove_missing_qualifier(
     requirement, qualifier, profile_support
 ):
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": requirement,
@@ -2569,7 +2704,7 @@ def test_experience_duration_does_not_prove_missing_qualifier(
 
 
 def test_unqualified_business_analyst_duration_remains_supported_from_role_history():
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": "5+ years as a Business Analyst",
@@ -2606,7 +2741,7 @@ def test_unqualified_business_analyst_duration_remains_supported_from_role_histo
 
 def test_met_experience_requirement_reconciles_not_shown_to_supported():
     requirement = "3+ years experience as Business Analyst"
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": requirement,
@@ -2648,7 +2783,7 @@ def test_incomplete_decomposition_without_qualifier_keeps_role_history_proof():
     """LLM omitted the role_or_activity fragment but tied the duration component
     to a real saved family and named no qualifier: the row must stay visible on
     the role-history proof, not be forced to a self-contradictory not_shown."""
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": "Functional Business Analysis experience",
@@ -2690,7 +2825,7 @@ def test_incomplete_decomposition_with_qualifier_still_forces_not_shown():
     """The completeness guard stays active when a qualifier is in play: an
     incomplete decomposition around a qualifier cannot be trusted, so role
     history alone must not carry the row."""
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": "5 years Business Analysis in health insurance",
@@ -2734,7 +2869,7 @@ def test_incomplete_decomposition_with_unresolved_family_still_forces_not_shown(
     """No qualifier, but the LLM tied the duration to a family the profile does
     not hold: the arithmetic never resolved, so the row cannot be carried on
     role history and stays held as before."""
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": "5+ years Python backend development",
@@ -2769,7 +2904,7 @@ def test_incomplete_decomposition_with_unresolved_family_still_forces_not_shown(
 
 
 def test_experience_qualifier_evidence_preserves_a_legitimate_partial_match():
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": "5+ years as a Business Analyst within telecommunications",
@@ -2818,7 +2953,7 @@ def test_experience_qualifier_explicit_profile_support_preserves_a_full_match():
         "5+ years’ experience as a Senior Business Analyst within the Australian Life Insurance industry"
     )
     evidence = "Delivered Senior Business Analyst work in the Australian Life Insurance industry."
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": requirement,
@@ -2862,7 +2997,7 @@ def test_experience_qualifier_explicit_profile_support_preserves_a_full_match():
 
 def test_experience_qualifier_support_requires_explicit_profile_evidence():
     requirement = "5+ years as a Business Analyst within telecommunications"
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [
             {
                 "requirement": requirement,
@@ -2919,7 +3054,7 @@ def test_requirement_coverage_rejects_broad_transferable_capability_as_partial_e
         ),
     ]
     for requirement, capability, support in examples:
-        result = llm_gate.normalize_llm_requirement_coverage(
+        result = _norm_cov(
             [{
                 "requirement": requirement,
                 "importance": "preferred",
@@ -2936,7 +3071,7 @@ def test_requirement_coverage_rejects_broad_transferable_capability_as_partial_e
 
 
 def test_requirement_coverage_keeps_partial_match_when_evidence_covers_real_requirement_component():
-    result = llm_gate.normalize_llm_requirement_coverage(
+    result = _norm_cov(
         [{
             "requirement": "Experience designing operational workflows and case management processes",
             "importance": "preferred",

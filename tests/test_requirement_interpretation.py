@@ -189,11 +189,17 @@ def _raw_item(case: CapturedRequirement) -> dict:
             ],
         },
     }
-    # JH-298: only attach requirement_kind when the fixture exercises the axis, so
-    # the existing rows keep testing the "field absent -> professional default"
-    # production path unchanged.
+    # JH-298 correction: a capability row with no requirement_kind now fails
+    # closed to `unclassified` (non-scoring). A fixture that does not exercise the
+    # kind axis represents an ordinary scored capability, so default it to
+    # professional_capability; an explicit llm_kind on the fixture wins.
     if case.llm_kind:
         item["requirement_kind"] = case.llm_kind
+    elif "capability" in (
+        str(case.llm_type).strip().lower(),
+        str(case.expected_type).strip().lower(),
+    ):
+        item["requirement_kind"] = llm_gate.LLM_REQUIREMENT_KIND_PROFESSIONAL
     return item
 
 

@@ -99,11 +99,27 @@ A second row-level axis on **`capability` rows only**, set by the fit-review LLM
 
 `eligibility` and `qualification` rows never carry `requirement_kind` (empty string).
 
-A missing / unrecognised value on a capability row defaults to
-`professional_capability` (the safe, scored option) and records a
-`requirement_kind_defaulted` requirement-coverage warning so a silent omission is
-visible. The classification is trusted from the LLM — it is semantic
-interpretation, not a keyword gate — and only the token is structurally validated.
+A missing, empty, or unrecognised `requirement_kind` on a capability row **fails
+closed to `unclassified`** — it is never defaulted to `professional_capability`.
+An `unclassified` row is frozen exactly like a behavioural row: `status` forced to
+`not_assessed`, `profile_action_allowed = False`, an `unclassified_requirement_kind:
+true` marker, all matched-fact / canonical / element action fields cleared, and a
+`requirement_kind_unclassified` requirement-coverage warning recorded.
+`partition_unclassified_requirement_coverage()` moves it into the record field
+`requirement_coverage_unclassified`, frozen next to `requirement_coverage`, so it
+is structurally excluded from grade, scoring, profile gaps / custom blockers, and
+learning until a fresh review classifies it. It is kept verbatim there for
+inspection but gets no card block of its own — `unclassified` is a transient
+fail-closed anomaly, not a display category like `behavioural_expectation`. The
+classification itself is trusted from the LLM — it is semantic interpretation, not
+a keyword gate — and only the token is structurally validated.
+
+**Scoring requires an explicit professional classification.** A row is scored only
+when `requirement_type == "capability"` **and** `requirement_kind ==
+"professional_capability"`. Trusting `requirement_type` alone is not enough: a row
+with a bad or missing kind that somehow reached `requirement_coverage` is skipped
+by `fit_scoring` and by `derive_fit_review_grade` (it contributes to neither the
+numerator nor the denominator).
 
 **Decompose before classifying.** A mixed sentence is split into atoms first, then
 each atom is classified independently. "work through ambiguity, manage complexity
@@ -127,9 +143,13 @@ per-consumer skip flag. The renderer reads `requirement_coverage_behavioural`
 separately and shows it in a read-only "Working style / behavioural expectations"
 group with a `not_assessed` label and no action buttons.
 
-**Contract-version bump.** `REQUIREMENT_COVERAGE_CONTRACT_VERSION` → 4 and
-`FIT_REVIEW_CACHE_CONTRACT_VERSION` → 6. Kept-job coverage snapshots and cached
-fit-review payloads produced before the split are unsafe to reuse; the history
+**Contract-version bump.** The JH-298 split took
+`REQUIREMENT_COVERAGE_CONTRACT_VERSION` → 4 and `FIT_REVIEW_CACHE_CONTRACT_VERSION`
+→ 6. The JH-298 correction (fail-closed `unclassified` instead of a
+`professional_capability` default, plus the explicit scoring predicate) takes them
+→ **5** and → **7**: v4 coverage may hold rows scored under the old default, so it
+is re-reviewed, not migrated. Kept-job coverage snapshots and cached fit-review
+payloads produced before the current versions are unsafe to reuse; the history
 reuse guard forces a fresh fit review (the AC "fails closed / re-reviewed, never
 guessed" mechanism). No migration shim — stale dev caches are disposable.
 

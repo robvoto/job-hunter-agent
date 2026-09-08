@@ -87,6 +87,12 @@ RECORD_REQUIREMENT_COVERAGE_HIDDEN_KEY = "requirement_coverage_hidden"
 # scoring, profile gaps, custom blockers, and pending-signal learning. Owned by
 # the fit-review LLM contract (llm_gate.partition_behavioural_requirement_coverage).
 RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY = "requirement_coverage_behavioural"
+# JH-298 correction: capability rows the fit-review LLM left without a valid
+# requirement_kind. They fail closed to `unclassified` and are frozen here,
+# structurally excluded from grade, gate, scoring, profile gaps, custom blockers,
+# and pending-signal learning — until a fresh review classifies them. Owned by
+# the fit-review LLM contract (llm_gate.partition_unclassified_requirement_coverage).
+RECORD_REQUIREMENT_COVERAGE_UNCLASSIFIED_KEY = "requirement_coverage_unclassified"
 RECORD_REQUIREMENT_COVERAGE_VERSION_KEY = "requirement_coverage_contract_version"
 # Bump when requirement-coverage semantics change in a way that makes persisted
 # coverage unsafe to reuse without a fresh LLM fit review.
@@ -95,7 +101,12 @@ RECORD_REQUIREMENT_COVERAGE_VERSION_KEY = "requirement_coverage_contract_version
 # v4 (JH-298): capability rows carry a requirement_kind axis; behavioural rows are
 # partitioned into requirement_coverage_behavioural. Old cached coverage without
 # the split is unsafe to reuse and is re-reviewed (never guessed).
-REQUIREMENT_COVERAGE_CONTRACT_VERSION = 4
+# v5 (JH-298 correction): a missing / invalid requirement_kind on a capability row
+# fails closed to `unclassified` (non-scoring) instead of defaulting to
+# professional_capability, and is partitioned into
+# requirement_coverage_unclassified. v4 coverage may hold rows scored under the
+# old default, so it is re-reviewed, not migrated.
+REQUIREMENT_COVERAGE_CONTRACT_VERSION = 5
 RECORD_OCCUPATION_ALIGNMENT_KEY = "occupation_alignment"
 RECORD_OCCUPATION_ALIGNMENT_REASON_KEY = "occupation_alignment_reason"
 RECORD_DESCRIPTION_COMPACTION_KEY = "description_compaction"

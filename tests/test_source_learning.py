@@ -41,6 +41,8 @@ def test_resolve_llm_review_payload_fit_review_cache_hit_skips_llm(monkeypatch):
             "requirement_coverage": [
                 {
                     "requirement": "Stakeholder engagement",
+                    "requirement_type": "capability",
+                    "requirement_kind": "professional_capability",
                     "status": "supported",
                     "capability_name": "stakeholder engagement",
                     "matched_job_text": "stakeholder workshops",
@@ -49,6 +51,8 @@ def test_resolve_llm_review_payload_fit_review_cache_hit_skips_llm(monkeypatch):
                 },
                 {
                     "requirement": "Process mapping",
+                    "requirement_type": "capability",
+                    "requirement_kind": "professional_capability",
                     "status": "partially_supported",
                     "capability_name": "process mapping",
                     "matched_job_text": "process mapping",
@@ -124,6 +128,8 @@ def test_resolve_llm_review_payload_cache_hit_uses_role_experience_for_years_req
             "requirement_coverage": [
                 {
                     "requirement": "5+ years experience as a Business Analyst",
+                    "requirement_type": "capability",
+                    "requirement_kind": "professional_capability",
                     "status": "supported",
                         "capability_name": "business analysis",
                         "matched_job_text": "Minimum 5+ years experience as a Business Analyst",
@@ -274,6 +280,8 @@ def test_resolve_llm_review_payload_second_equivalent_call_hits_cache(monkeypatc
             "requirement_coverage": [
                 {
                     "requirement": "Stakeholder engagement",
+                    "requirement_type": "capability",
+                    "requirement_kind": "professional_capability",
                     "status": "supported",
                     "capability_name": "stakeholder engagement",
                     "matched_job_text": "stakeholder workshops",

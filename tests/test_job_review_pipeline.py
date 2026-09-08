@@ -1538,6 +1538,7 @@ def test_llm_supported_specific_capability_without_valid_candidate_fact_gets_no_
                 "requirement": "5+ years of Salesforce configuration experience required",
                 "importance": "mandatory",
                 "requirement_type": "capability",
+                "requirement_kind": "professional_capability",
                 "status": "supported",
                 "matched_candidate_fact": "Salesforce",
                 "matched_job_text": "5+ years of Salesforce configuration experience required",

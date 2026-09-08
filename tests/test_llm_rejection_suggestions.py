@@ -63,6 +63,8 @@ class _FakeParsingResponses:
                     "requirement_coverage": [
                         {
                             "requirement": "Stakeholder engagement",
+                            "requirement_type": "capability",
+                            "requirement_kind": "professional_capability",
                             "status": "supported",
                             "capability_name": "stakeholder management",
                             "matched_job_text": "work with stakeholders",
@@ -71,6 +73,8 @@ class _FakeParsingResponses:
                         },
                         {
                             "requirement": "Process mapping",
+                            "requirement_type": "capability",
+                            "requirement_kind": "professional_capability",
                             "status": "partially_supported",
                             "capability_name": "process mapping",
                             "matched_job_text": "map the current process",
@@ -407,6 +411,8 @@ def test_normalize_llm_review_payload_fit_review_shape():
             "requirement_coverage": [
                 {
                     "requirement": "Strong stakeholder engagement",
+                    "requirement_type": "capability",
+                    "requirement_kind": "professional_capability",
                     "status": "supported",
                     "capability_name": "stakeholder engagement",
                     "matched_job_text": "stakeholder engagement",
@@ -456,6 +462,7 @@ def test_normalize_llm_review_payload_fit_review_shape():
         ],
         "requirement_coverage_hidden": [],
         "requirement_coverage_behavioural": [],
+        "requirement_coverage_unclassified": [],
     }
 
 
@@ -551,5 +558,6 @@ def test_request_learning_payload_uses_fit_review_only_schema(monkeypatch):
         ],
         "requirement_coverage_hidden": [],
         "requirement_coverage_behavioural": [],
+        "requirement_coverage_unclassified": [],
     }
     assert fake_client.responses.calls[0]["text_format"].__name__ == "_LLMFitReviewPayload"

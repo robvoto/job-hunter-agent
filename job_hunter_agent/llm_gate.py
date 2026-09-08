@@ -108,6 +108,7 @@ from job_hunter_agent.llm_protocol import (
     LLM_REJECTION_SUGGESTIONS_JSON_SHAPE,
     LLM_REQUIREMENT_KIND_BEHAVIOURAL,
     LLM_REQUIREMENT_KIND_PROFESSIONAL,
+    LLM_REQUIREMENT_KIND_UNCLASSIFIED,
     LLM_SECTION_LABEL_CLASSIFICATION_SHAPE,
     LLM_TITLE_JUDGMENT_SHAPE,
     LLM_UNCERTAIN_COVERAGE_REQUIREMENT_TYPE,
@@ -894,7 +895,11 @@ def build_profile_storage_resolution_guidance() -> str:
 # Shared cache namespace/profile lifecycle. Fit review and title judgement each
 # have their own contract version so changing one does not invalidate the other.
 LLM_CACHE_SCHEMA_VERSION = 3
-FIT_REVIEW_CACHE_CONTRACT_VERSION = 6
+# v7 (JH-298 correction): a missing / invalid requirement_kind on a capability row
+# now fails closed to `unclassified` (non-scoring) instead of defaulting to
+# professional_capability. Cached fit-review payloads from v6 can hold rows that
+# were scored under the old default, so the namespace rotates rather than migrates.
+FIT_REVIEW_CACHE_CONTRACT_VERSION = 7
 TITLE_JUDGMENT_CACHE_CONTRACT_VERSION = 1
 POSTING_CHANNEL_LLM_CACHE_CONTRACT_VERSION = 1
 
@@ -1182,6 +1187,28 @@ def partition_behavioural_requirement_coverage(
         else:
             kept.append(row)
     return kept, behavioural
+
+
+def partition_unclassified_requirement_coverage(
+    rows: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Split normalized coverage rows into classified vs unclassified (JH-298 correction).
+
+    A row carrying ``unclassified_requirement_kind`` is a ``capability`` row the
+    fit-review LLM did not tag with a valid ``requirement_kind``. Failing closed,
+    it must contribute zero to the Requirement Fit numerator and denominator,
+    never seed a profile gap, custom blocker, or pending learning signal, and
+    never be actionable — until a fresh review classifies it. Structural exclusion
+    by partition — not a per-consumer skip flag — is the guarantee.
+    """
+    kept: list[dict[str, Any]] = []
+    unclassified: list[dict[str, Any]] = []
+    for row in rows:
+        if row.get("unclassified_requirement_kind"):
+            unclassified.append(row)
+        else:
+            kept.append(row)
+    return kept, unclassified
 
 
 def partition_hidden_requirement_coverage(
@@ -1738,14 +1765,18 @@ def normalize_llm_requirement_coverage(
         # only meaningful on a genuine `capability` row. Non-capability rows carry
         # an empty kind. Deterministic code trusts the LLM's classification here —
         # it is semantic interpretation, not a keyword gate — and only structurally
-        # validates the token, defaulting a missing/garbled value to
-        # professional_capability (the safe, scored option) with a warning so a
-        # silent omission is visible.
+        # validates the token.
+        #
+        # JH-298 correction: fail closed. A missing / garbled value must NOT
+        # default to professional_capability (that let a bad kind score). It
+        # becomes `unclassified`: non-scoring, non-gap, non-learning and
+        # non-actionable until a fresh review classifies it. A warning keeps the
+        # silent omission visible; the contract-version bump forces the re-review.
         if requirement_type_is_valid and requirement_type == "capability":
             if raw_requirement_kind in LLM_ALLOWED_REQUIREMENT_KINDS:
                 requirement_kind = raw_requirement_kind
             else:
-                requirement_kind = LLM_REQUIREMENT_KIND_PROFESSIONAL
+                requirement_kind = LLM_REQUIREMENT_KIND_UNCLASSIFIED
                 _record_requirement_coverage_warning(
                     requirement=requirement,
                     importance=importance,
@@ -1757,7 +1788,7 @@ def normalize_llm_requirement_coverage(
                     proposed_capability_name="",
                     proposed_eligibility_name="",
                     matched_job_text=matched_job_text,
-                    reason="requirement_kind_defaulted",
+                    reason="requirement_kind_unclassified",
                 )
         else:
             requirement_kind = ""
@@ -1878,6 +1909,53 @@ def normalize_llm_requirement_coverage(
                     continue
                 non_eligibility_count += 1
             results.append(behavioural_item)
+            continue
+        if requirement_kind == LLM_REQUIREMENT_KIND_UNCLASSIFIED:
+            # JH-298 correction: a `capability` row the LLM did not tag with a
+            # valid requirement_kind. It is emitted with a display-only status and
+            # no actionable fields, then partitioned into
+            # requirement_coverage_unclassified by
+            # partition_unclassified_requirement_coverage(). The scored-status
+            # gauntlet below is skipped so an unclassified row can never acquire
+            # supported / partially_supported, and every scoring / gap / learning
+            # consumer reads only requirement_coverage — so the exclusion is
+            # structural, not a per-consumer skip flag.
+            key = requirement.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            for element in decomposition_elements:
+                element["matched_candidate_fact"] = ""
+                element["canonical_fact_resolved"] = False
+                element["element_profile_action_allowed"] = False
+            unclassified_item: dict[str, Any] = {
+                "requirement": requirement,
+                "importance": importance,
+                "requirement_type": requirement_type,
+                "requirement_kind": LLM_REQUIREMENT_KIND_UNCLASSIFIED,
+                "unclassified_requirement_kind": True,
+                "canonical_requirement": "",
+                "profile_action_allowed": False,
+                "status": LLM_NOT_ASSESSED_COVERAGE_STATUS,
+                "matched_candidate_fact": "",
+                "capability_name": "",
+                "eligibility_name": "",
+                "matched_job_text": matched_job_text,
+                "profile_support": [],
+                "decomposition": {
+                    "operator": decomposition_operator,
+                    "elements": decomposition_elements,
+                },
+            }
+            if role_defining := bool(item.get("role_defining")):
+                unclassified_item["role_defining"] = True
+            if role_defining_group := compact_whitespace(item.get("role_defining_group")):
+                unclassified_item["role_defining_group"] = role_defining_group
+            if requirement_type != "eligibility":
+                if non_eligibility_count >= max_items:
+                    continue
+                non_eligibility_count += 1
+            results.append(unclassified_item)
             continue
         single_element = (
             decomposition_elements[0]
@@ -2465,12 +2543,30 @@ def derive_fit_review_grade(requirement_coverage: list[dict[str, Any]]) -> str:
     required_eligibility_unresolved = False
     support_score = 0.0
     max_score = 0.0
+    graded_items = 0
 
     for item in requirement_coverage:
         status = str(item.get("status") or "").strip().lower()
         importance = str(item.get("importance") or "preferred").strip().lower()
         requirement_type = str(item.get("requirement_type") or "capability").strip().lower()
         weight = _IMPORTANCE_WEIGHTS.get(importance, _IMPORTANCE_WEIGHTS["preferred"])
+
+        # JH-298 correction: a capability row the LLM explicitly classified as
+        # anything other than professional_capability (behavioural / unclassified)
+        # never grades. Those rows are already partitioned out upstream in the
+        # production path; this guard makes the invariant explicit so a leaked row
+        # cannot dilute or lift the grade. A row with no requirement_kind at all is
+        # left alone here — the normalizer always assigns one in production, and
+        # the grade-contract unit tests exercise bare rows.
+        explicit_kind = str(item.get("requirement_kind") or "").strip().lower()
+        if (
+            requirement_type == "capability"
+            and explicit_kind
+            and explicit_kind != LLM_REQUIREMENT_KIND_PROFESSIONAL
+        ):
+            continue
+
+        graded_items += 1
 
         if status == "supported":
             supported_count += 1
@@ -2505,10 +2601,19 @@ def derive_fit_review_grade(requirement_coverage: list[dict[str, Any]]) -> str:
 
     support_ratio = support_score / max_score if max_score > 0 else 0
 
-    if supported_count == total_items and partial_count == 0:
-        return "EXCELLENT" if total_items >= 3 else "STRONG"
+    # JH-298 correction: grade against the rows that actually graded, not the raw
+    # input length — a behavioural / unclassified row skipped above must not
+    # count toward the denominator.
+    gradeable_items = graded_items if graded_items > 0 else total_items
 
-    if support_ratio >= 0.8 and partial_count <= 1 and supported_count >= max(2, total_items - 1):
+    if supported_count == gradeable_items and partial_count == 0:
+        return "EXCELLENT" if gradeable_items >= 3 else "STRONG"
+
+    if (
+        support_ratio >= 0.8
+        and partial_count <= 1
+        and supported_count >= max(2, gradeable_items - 1)
+    ):
         return "STRONG"
 
     if support_ratio >= 0.5:
@@ -2646,6 +2751,13 @@ def normalize_llm_review_payload(
             requirement_coverage, requirement_coverage_behavioural = (
                 partition_behavioural_requirement_coverage(requirement_coverage)
             )
+            # JH-298 correction: capability rows the LLM left without a valid
+            # requirement_kind fail closed to `unclassified` and are pulled out
+            # next — non-scoring, non-gap, non-learning, non-actionable until a
+            # fresh review classifies them.
+            requirement_coverage, requirement_coverage_unclassified = (
+                partition_unclassified_requirement_coverage(requirement_coverage)
+            )
             # Optional non_capability rows are retained for analysis but must not
             # reach grade, gate, scoring, or the normal card.
             requirement_coverage, requirement_coverage_hidden = (
@@ -2722,6 +2834,7 @@ def normalize_llm_review_payload(
                 "requirement_coverage": requirement_coverage,
                 "requirement_coverage_hidden": requirement_coverage_hidden,
                 "requirement_coverage_behavioural": requirement_coverage_behavioural,
+                "requirement_coverage_unclassified": requirement_coverage_unclassified,
             }
 
         if "learning_candidates" in value or value.get("learning_only") or "fit_review" in value:
@@ -2733,6 +2846,7 @@ def normalize_llm_review_payload(
                 "requirement_coverage": [],
                 "requirement_coverage_hidden": [],
                 "requirement_coverage_behavioural": [],
+                "requirement_coverage_unclassified": [],
             }
 
         raise ValueError("LLM review payload is missing fit_review")

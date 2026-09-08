@@ -31,8 +31,16 @@ LLM_REQUIREMENT_KIND_BEHAVIOURAL = "behavioural_expectation"
 LLM_ALLOWED_REQUIREMENT_KINDS = frozenset(
     {LLM_REQUIREMENT_KIND_PROFESSIONAL, LLM_REQUIREMENT_KIND_BEHAVIOURAL}
 )
-# Display-only status forced onto behavioural-expectation rows. Deliberately kept
-# outside the scored status vocabulary so a leaked row can never earn credit.
+# JH-298 correction: fail-closed state for a `capability` row whose requirement_kind
+# is missing or not one of the allowed values. It must NOT default to
+# professional_capability. An unclassified row is non-scoring, never a profile gap,
+# never a learning signal, and non-actionable until a fresh review classifies it.
+# Deliberately kept OUTSIDE LLM_ALLOWED_REQUIREMENT_KINDS so no consumer can mistake
+# it for a scorable kind.
+LLM_REQUIREMENT_KIND_UNCLASSIFIED = "unclassified"
+# Display-only status forced onto behavioural-expectation and unclassified rows.
+# Deliberately kept outside the scored status vocabulary so a leaked row can never
+# earn credit.
 LLM_NOT_ASSESSED_COVERAGE_STATUS = "not_assessed"
 
 LLM_EXPERIENCE_COMPONENT_DURATION = "duration"

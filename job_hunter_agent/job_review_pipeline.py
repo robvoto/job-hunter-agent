@@ -214,6 +214,7 @@ from job_hunter_agent.record_schema import (
     RECORD_REQUIREMENT_COVERAGE_KEY,
     RECORD_REQUIREMENT_COVERAGE_HIDDEN_KEY,
     RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY,
+    RECORD_REQUIREMENT_COVERAGE_UNCLASSIFIED_KEY,
     RECORD_REQUIREMENT_COVERAGE_VERSION_KEY,
     REQUIREMENT_COVERAGE_CONTRACT_VERSION,
     RECORD_REVIEWED_SIGNAL_MATCHES_KEY,
@@ -805,6 +806,9 @@ def _build_outcome(record: dict) -> dict[str, Any]:
         RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY: list(
             record.get(RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY) or []
         ),
+        RECORD_REQUIREMENT_COVERAGE_UNCLASSIFIED_KEY: list(
+            record.get(RECORD_REQUIREMENT_COVERAGE_UNCLASSIFIED_KEY) or []
+        ),
         RECORD_OCCUPATION_ALIGNMENT_KEY: record.get(RECORD_OCCUPATION_ALIGNMENT_KEY),
         RECORD_OCCUPATION_ALIGNMENT_REASON_KEY: record.get(RECORD_OCCUPATION_ALIGNMENT_REASON_KEY),
     }
@@ -1051,6 +1055,7 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
     record[RECORD_REQUIREMENT_COVERAGE_KEY] = []
     record[RECORD_REQUIREMENT_COVERAGE_HIDDEN_KEY] = []
     record[RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY] = []
+    record[RECORD_REQUIREMENT_COVERAGE_UNCLASSIFIED_KEY] = []
     record[RECORD_OCCUPATION_ALIGNMENT_KEY] = ""
     record[RECORD_OCCUPATION_ALIGNMENT_REASON_KEY] = ""
     debug_reason = ""
@@ -1097,6 +1102,9 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         )
         record[RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY] = (
             payload.get("requirement_coverage_behavioural") or []
+        )
+        record[RECORD_REQUIREMENT_COVERAGE_UNCLASSIFIED_KEY] = (
+            payload.get("requirement_coverage_unclassified") or []
         )
         record[RECORD_REQUIREMENT_COVERAGE_VERSION_KEY] = REQUIREMENT_COVERAGE_CONTRACT_VERSION
         record[RECORD_OCCUPATION_ALIGNMENT_KEY] = str(payload.get("occupation_alignment") or "")
@@ -1187,6 +1195,9 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
         RECORD_REQUIREMENT_COVERAGE_HIDDEN_KEY: record[RECORD_REQUIREMENT_COVERAGE_HIDDEN_KEY],
         RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY: record[
             RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY
+        ],
+        RECORD_REQUIREMENT_COVERAGE_UNCLASSIFIED_KEY: record[
+            RECORD_REQUIREMENT_COVERAGE_UNCLASSIFIED_KEY
         ],
         RECORD_OCCUPATION_ALIGNMENT_KEY: record[RECORD_OCCUPATION_ALIGNMENT_KEY],
         RECORD_OCCUPATION_ALIGNMENT_REASON_KEY: record[RECORD_OCCUPATION_ALIGNMENT_REASON_KEY],

@@ -4744,6 +4744,7 @@ def test_canonical_fact_resolved_true_flows_through_to_add_to_profile_button():
                 "requirement": "Working knowledge of responsible AI principles",
                 "importance": "mandatory",
                 "requirement_type": "capability",
+                "requirement_kind": "professional_capability",
                 "canonical_requirement": "Responsible AI",
                 "decomposition": {
                     "operator": "single",

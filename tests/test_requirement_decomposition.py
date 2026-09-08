@@ -55,7 +55,28 @@ def _or(*concepts: str, status: str = "not_shown") -> dict:
     }
 
 
-def _normalize(item: dict, **kwargs) -> list[dict]:
+def _normalize(
+    item: dict,
+    *,
+    default_capability_kind: str | None = "professional_capability",
+    **kwargs,
+) -> list[dict]:
+    """Normalize one raw coverage item.
+
+    Fixtures written before the JH-298 requirement_kind axis build bare
+    ``capability`` rows and rely on them being scored. Since the JH-298
+    fail-closed correction a capability row with no requirement_kind becomes
+    ``unclassified`` (non-scoring); to keep those fixtures on the scored path
+    this helper stamps ``professional_capability`` on a capability item that
+    does not set its own kind. Tests that exercise the missing / invalid kind
+    axis pass ``default_capability_kind=None``.
+    """
+    if (
+        default_capability_kind is not None
+        and str(item.get("requirement_type") or "").strip().lower() == "capability"
+        and not str(item.get("requirement_kind") or "").strip()
+    ):
+        item = {**item, "requirement_kind": default_capability_kind}
     return llm_gate.normalize_llm_requirement_coverage([item], **kwargs)
 
 
@@ -373,6 +394,7 @@ def test_optional_non_capability_row_is_hidden_but_retained():
         "requirement": "Be a collaborative team player who thrives on ambiguity",
         "importance": "preferred",
         "requirement_type": "capability",
+        "requirement_kind": "professional_capability",
         "canonical_requirement": "",
         "decomposition": {
             "operator": "single",
@@ -393,6 +415,7 @@ def test_optional_non_capability_row_is_hidden_but_retained():
         "requirement": "Experience with stakeholder management",
         "importance": "mandatory",
         "requirement_type": "capability",
+        "requirement_kind": "professional_capability",
         "canonical_requirement": "Stakeholder management",
         "decomposition": _single("Stakeholder management", status="not_shown"),
         "status": "not_shown",
@@ -503,6 +526,7 @@ def test_mandatory_or_all_non_capability_branches_stay_visible_as_one_pending_si
         "requirement": "Be a cultural fit or a mission-driven self-starter",
         "importance": "mandatory",
         "requirement_type": "capability",
+        "requirement_kind": "professional_capability",
         "canonical_requirement": "",
         "decomposition": {
             "operator": "or",
@@ -530,6 +554,7 @@ def test_mandatory_or_all_non_capability_branches_stay_visible_as_one_pending_si
         "requirement": "Experience with stakeholder management",
         "importance": "mandatory",
         "requirement_type": "capability",
+        "requirement_kind": "professional_capability",
         "canonical_requirement": "Stakeholder management",
         "decomposition": _single("Stakeholder management", status="not_shown"),
         "status": "not_shown",
@@ -694,7 +719,7 @@ def test_professional_capability_kind_is_retained_and_scored():
     assert behavioural == []
 
 
-def test_missing_requirement_kind_defaults_to_professional_with_warning(monkeypatch):
+def test_missing_requirement_kind_fails_closed_to_unclassified_with_warning(monkeypatch):
     warnings: list[dict] = []
     monkeypatch.setattr(
         llm_gate,
@@ -705,16 +730,99 @@ def test_missing_requirement_kind_defaults_to_professional_with_warning(monkeypa
         "requirement": "SQL query authoring",
         "importance": "preferred",
         "requirement_type": "capability",
+        # The LLM omitted requirement_kind and over-stated a match — fail closed.
+        "canonical_requirement": "made up concept",
+        "capability_name": "made up concept",
+        "status": "supported",
+        "matched_candidate_fact": "some unrelated fact",
+        "decomposition": _single("SQL", status="supported"),
+        "matched_job_text": "SQL query authoring",
+    }
+    rows = _normalize(
+        item,
+        default_capability_kind=None,
+        valid_capability_names={"made up concept": "Made Up Concept"},
+    )
+    assert len(rows) == 1
+    row = rows[0]
+    # JH-298 correction: missing kind must NOT default to professional_capability.
+    assert row["requirement_kind"] == llm_gate.LLM_REQUIREMENT_KIND_UNCLASSIFIED
+    assert row["unclassified_requirement_kind"] is True
+    # Display-only: never a scored status, never actionable, no retained match.
+    assert row["status"] == _NOT_ASSESSED
+    assert _NOT_ASSESSED not in llm_gate._ALLOWED_REQUIREMENT_COVERAGE_STATUSES
+    assert row["profile_action_allowed"] is False
+    assert row["canonical_requirement"] == ""
+    assert row["capability_name"] == ""
+    assert row["matched_candidate_fact"] == ""
+    for element in row["decomposition"]["elements"]:
+        assert element["element_profile_action_allowed"] is False
+        assert element["matched_candidate_fact"] == ""
+    assert any(
+        w["context"]["reason"] == "requirement_kind_unclassified" for w in warnings
+    )
+
+    kept, unclassified = llm_gate.partition_unclassified_requirement_coverage(rows)
+    assert kept == []
+    assert unclassified == rows
+
+
+def test_unrecognised_requirement_kind_fails_closed_to_unclassified():
+    item = {
+        "requirement": "SQL query authoring",
+        "importance": "preferred",
+        "requirement_type": "capability",
+        "requirement_kind": "totally_made_up_kind",
         "canonical_requirement": "",
         "decomposition": _single("SQL", status="not_shown"),
         "status": "not_shown",
         "matched_job_text": "SQL query authoring",
     }
-    rows = _normalize(item, valid_capability_names={})
-    assert rows[0]["requirement_kind"] == "professional_capability"
-    assert any(
-        w["context"]["reason"] == "requirement_kind_defaulted" for w in warnings
+    rows = _normalize(item, default_capability_kind=None, valid_capability_names={})
+    assert rows[0]["requirement_kind"] == llm_gate.LLM_REQUIREMENT_KIND_UNCLASSIFIED
+    assert rows[0]["unclassified_requirement_kind"] is True
+    kept, unclassified = llm_gate.partition_unclassified_requirement_coverage(rows)
+    assert kept == []
+    assert unclassified == rows
+
+
+def test_missing_kind_row_partitioned_out_of_payload():
+    payload = llm_gate.normalize_llm_review_payload(
+        {
+            "decision": "KEEP",
+            "grade": "SOLID",
+            "requirement_coverage": [
+                {
+                    "requirement": "SQL query authoring",
+                    "importance": "mandatory",
+                    "requirement_type": "capability",
+                    # requirement_kind omitted — must fail closed.
+                    "canonical_requirement": "",
+                    "decomposition": _single("SQL", status="not_shown"),
+                    "status": "not_shown",
+                    "matched_job_text": "SQL query authoring",
+                },
+                {
+                    "requirement": "deliver projects",
+                    "importance": "mandatory",
+                    "requirement_type": "capability",
+                    "requirement_kind": "professional_capability",
+                    "canonical_requirement": "",
+                    "decomposition": _single("project delivery", status="supported"),
+                    "status": "supported",
+                    "matched_candidate_fact": "project delivery",
+                    "matched_job_text": "deliver projects",
+                },
+            ],
+        },
+        valid_capability_names={},
     )
+    scored = [r["requirement"] for r in payload["requirement_coverage"]]
+    unclassified = [
+        r["requirement"] for r in payload["requirement_coverage_unclassified"]
+    ]
+    assert scored == ["deliver projects"]
+    assert unclassified == ["SQL query authoring"]
 
 
 def test_decompose_before_classify_splits_mixed_sentence():

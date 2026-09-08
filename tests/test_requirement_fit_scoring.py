@@ -40,6 +40,13 @@ def _capability_lookup(profile):
 
 
 def _normalize_capability_row(raw_row, profile, role_experience=None):
+    # JH-298 correction: a capability row with no requirement_kind now fails
+    # closed to `unclassified` (non-scoring). These fixtures are ordinary scored
+    # capabilities, so stamp professional_capability unless the row sets its own.
+    if str(raw_row.get("requirement_type") or "capability").strip().lower() == "capability" and not str(
+        raw_row.get("requirement_kind") or ""
+    ).strip():
+        raw_row = {**raw_row, "requirement_kind": "professional_capability"}
     return llm_gate.normalize_llm_requirement_coverage(
         [raw_row],
         valid_capability_names=_capability_lookup(profile),
@@ -530,6 +537,83 @@ def test_behavioural_coverage_key_adds_zero_to_numerator_and_denominator():
     audit_requirements = {row["requirement"] for row in audit}
     assert "Works autonomously" not in audit_requirements
     assert "Excellent communication skills" not in audit_requirements
+
+
+def test_leaked_non_professional_capability_row_scores_zero_and_seeds_no_uncertainty(
+    tmp_path, monkeypatch
+):
+    """JH-298 correction: scoring credits only requirement_type=capability +
+    requirement_kind=professional_capability. A capability row that leaked into
+    requirement_coverage with an explicit unclassified / garbled kind adds no
+    weight, earns no credit, and logs no mapping uncertainty; a sibling
+    professional_capability row still scores normally."""
+    uncertainty_log = tmp_path / "uncertainty.jsonl"
+    monkeypatch.setattr(fit_scoring, "UNCERTAINTY_LOG_PATH", uncertainty_log)
+
+    professional_only = _record([
+        {
+            "requirement": "Stakeholder engagement",
+            "importance": "mandatory",
+            "requirement_type": "capability",
+            "requirement_kind": "professional_capability",
+            "status": "supported",
+            "capability_name": "stakeholder engagement",
+            "matched_candidate_fact": "stakeholder engagement",
+        }
+    ])
+    with_leaked = _record([
+        {
+            "requirement": "Stakeholder engagement",
+            "importance": "mandatory",
+            "requirement_type": "capability",
+            "requirement_kind": "professional_capability",
+            "status": "supported",
+            "capability_name": "stakeholder engagement",
+            "matched_candidate_fact": "stakeholder engagement",
+        },
+        {
+            "requirement": "Own the AI platform roadmap",
+            "importance": "mandatory",
+            "requirement_type": "capability",
+            "requirement_kind": "unclassified",
+            "status": "supported",
+            "capability_name": "unknown ai platform capability",
+            "matched_job_text": "own the AI platform roadmap",
+            "matched_candidate_fact": "unknown ai platform capability",
+        },
+        {
+            "requirement": "Own the data mesh",
+            "importance": "mandatory",
+            "requirement_type": "capability",
+            "requirement_kind": "garbled",
+            "status": "supported",
+            "capability_name": "unknown data mesh capability",
+            "matched_job_text": "own the data mesh",
+            "matched_candidate_fact": "unknown data mesh capability",
+        },
+    ])
+
+    base_diag = fit_scoring.requirement_fit_diagnostics(professional_only, _profile())
+    leaked_diag = fit_scoring.requirement_fit_diagnostics(with_leaked, _profile())
+
+    assert base_diag["earned_weighted_credit"] > 0  # the professional row really scores
+    assert leaked_diag["total_requirement_weight"] == base_diag["total_requirement_weight"]
+    assert leaked_diag["earned_weighted_credit"] == base_diag["earned_weighted_credit"]
+    assert fit_scoring.fit_score(with_leaked, _profile()) == fit_scoring.fit_score(
+        professional_only, _profile()
+    )
+
+    audit_requirements = {
+        row["requirement"]
+        for row in fit_scoring.requirement_fit_audit_rows(with_leaked, _profile())
+    }
+    assert audit_requirements == {"Stakeholder engagement"}
+
+    # The leaked rows have unresolved capability names but must not log mapping
+    # uncertainty — they are excluded before that check.
+    assert not uncertainty_log.exists() or uncertainty_log.read_text(
+        encoding="utf-8"
+    ).strip() == ""
 
 
 def test_requirement_fit_unknown_mapped_capability_logs_uncertainty(tmp_path, monkeypatch):
