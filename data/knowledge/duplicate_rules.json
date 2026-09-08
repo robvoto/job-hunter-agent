@@ -1,7 +1,7 @@
 {
   "kind": "system_config",
   "name": "duplicate_rules",
-  "version": 2,
+  "version": 3,
   "source_priority": {
     "seek": 0,
     "linkedin": 1
@@ -19,5 +19,11 @@
     "mc_cid",
     "mc_eid",
     "trk"
-  ]
+  ],
+  "content_repost": {
+    "min_description_chars": 500,
+    "shingle_size": 5,
+    "min_jaccard": 0.8,
+    "min_shorter_coverage": 0.9
+  }
 }

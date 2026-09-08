@@ -8,10 +8,13 @@ consistent review signals across sessions.
 
 import logging
 import re
+import threading
 from datetime import datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+_REVIEW_STATE_LOCK = threading.Lock()
 
 from job_hunter_agent.filters import (
     build_title_block_rule,
@@ -283,6 +286,26 @@ def persist_review_event(
     save_job_history(history)
 
 
+def _review_state_response(
+    action: str,
+    normalized: str,
+    saved_count: int,
+    *,
+    state_changed: bool,
+    refresh_id: str | None = None,
+) -> dict:
+    return {
+        "ok": True,
+        "action": action,
+        "job_key": normalized,
+        "saved_count": saved_count,
+        "state_changed": state_changed,
+        "reload_workspace": bool(state_changed),
+        "workspace_refresh_async": bool(state_changed),
+        "workspace_refresh_id": refresh_id,
+    }
+
+
 def append_review_key(
     action: str,
     job_key: str,
@@ -295,9 +318,6 @@ def append_review_key(
     if not normalized:
         raise ValueError("Missing job key")
 
-    profile = load_profile()
-    review_controls = profile.setdefault("review_controls", {})
-
     list_name = {
         "applied": "applied_job_keys",
         "hidden": "hidden_job_keys",
@@ -307,31 +327,36 @@ def append_review_key(
     if not list_name:
         raise ValueError("Unsupported review action")
 
-    existing = [
-        normalize_job_key(value)
-        for value in review_controls.get(list_name, [])
-        if normalize_job_key(value)
-    ]
-    if normalized not in existing:
+    # FastAPI can execute duplicate clicks concurrently. Serialize the tiny
+    # read/modify/write section so the second identical request observes the
+    # first one's persisted state and becomes a true no-op instead of creating
+    # a duplicate history event and a second expensive workspace rebuild.
+    with _REVIEW_STATE_LOCK:
+        profile = load_profile()
+        review_controls = profile.setdefault("review_controls", {})
+        existing = [
+            normalize_job_key(value)
+            for value in review_controls.get(list_name, [])
+            if normalize_job_key(value)
+        ]
+        if normalized in existing:
+            return _review_state_response(
+                action, normalized, len(existing), state_changed=False
+            )
+
         existing.append(normalized)
-    review_controls[list_name] = existing
-    save_profile(profile)
-    persist_review_event(action, normalized, url=url, title=title, company=company, teaser=teaser)
+        review_controls[list_name] = existing
+        save_profile(profile)
+        persist_review_event(
+            action, normalized, url=url, title=title, company=company, teaser=teaser
+        )
+
     # Rebuild the cached snapshot in the background only. The client moves the
-    # card between workspace tabs itself and must NOT full-page reload here:
-    # a blocking rebuild + reload was tried and made Applied/Hide freeze for
-    # several seconds and lose the user's scroll position. workspace_refresh_async
-    # stays True so the front-end takes the in-place path, not window.reload().
+    # card between workspace tabs itself and must NOT full-page reload here.
     refresh_id = rebuild_workspace_after_rule_change(f"review action saved: {action}")
-    return {
-        "ok": True,
-        "action": action,
-        "job_key": normalized,
-        "saved_count": len(existing),
-        "reload_workspace": True,
-        "workspace_refresh_async": True,
-        "workspace_refresh_id": refresh_id,
-    }
+    return _review_state_response(
+        action, normalized, len(existing), state_changed=True, refresh_id=refresh_id
+    )
 
 
 def remove_review_key(
@@ -343,13 +368,12 @@ def remove_review_key(
     teaser: str = "",
 ) -> dict:
     normalized = normalize_job_key(job_key)
-    if not normalized and re.fullmatch(r"[a-z0-9][a-z0-9_-]*", str(job_key or "").strip().lower()):
+    if not normalized and re.fullmatch(
+        r"[a-z0-9][a-z0-9_-]*", str(job_key or "").strip().lower()
+    ):
         normalized = str(job_key).strip().lower()
     if not normalized:
         raise ValueError("Missing job key")
-
-    profile = load_profile()
-    review_controls = profile.setdefault("review_controls", {})
 
     list_name = {
         "unapply": "applied_job_keys",
@@ -360,28 +384,30 @@ def remove_review_key(
     if not list_name:
         raise ValueError("Unsupported review action")
 
-    existing = [
-        normalize_job_key(value)
-        for value in review_controls.get(list_name, [])
-        if normalize_job_key(value)
-    ]
-    updated = [value for value in existing if value != normalized]
-    review_controls[list_name] = updated
-    save_profile(profile)
-    persist_review_event(action, normalized, url=url, title=title, company=company, teaser=teaser)
-    # Background rebuild only + in-place card move on the client. See the matching
-    # comment in append_review_key: do not reintroduce a blocking rebuild or a
-    # full-page reload for review actions.
+    with _REVIEW_STATE_LOCK:
+        profile = load_profile()
+        review_controls = profile.setdefault("review_controls", {})
+        existing = [
+            normalize_job_key(value)
+            for value in review_controls.get(list_name, [])
+            if normalize_job_key(value)
+        ]
+        if normalized not in existing:
+            return _review_state_response(
+                action, normalized, len(existing), state_changed=False
+            )
+
+        updated = [value for value in existing if value != normalized]
+        review_controls[list_name] = updated
+        save_profile(profile)
+        persist_review_event(
+            action, normalized, url=url, title=title, company=company, teaser=teaser
+        )
+
     refresh_id = rebuild_workspace_after_rule_change(f"review action saved: {action}")
-    return {
-        "ok": True,
-        "action": action,
-        "job_key": normalized,
-        "saved_count": len(updated),
-        "reload_workspace": True,
-        "workspace_refresh_async": True,
-        "workspace_refresh_id": refresh_id,
-    }
+    return _review_state_response(
+        action, normalized, len(updated), state_changed=True, refresh_id=refresh_id
+    )
 
 
 def record_job_view(job_key: str, url: str = "", title: str = "") -> dict:

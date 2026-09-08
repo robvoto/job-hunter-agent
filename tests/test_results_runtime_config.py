@@ -33,6 +33,9 @@ def test_results_page_uses_runtime_workspace_config():
     assert 'class="jh-button jh-button--secondary rejection-btn-cancel"' in results_html
     assert 'class="block-admin-tip"' in results_html
     assert 'id="reset_workspace_filters"' in results_html
+    assert 'id="repost_filter"' in results_html
+    assert '<option value="hide" selected>$LABEL_WS_REPOSTS_OPTION_HIDE</option>' in results_html
+    assert '<option value="include">$LABEL_WS_REPOSTS_OPTION_INCLUDE</option>' in results_html
     assert 'class="jh-button jh-button--neutral jh-button--compact workspace-text-action workspace-text-action--reset"' in results_html
     assert 'class="workspace-text-action__icon"' in results_html
     assert 'class="ws-hero-panel"' not in results_html
@@ -57,6 +60,13 @@ def test_results_page_uses_runtime_workspace_config():
     assert "search_settings_" not in results_js
     assert "Run Search Now" not in results_js
     assert "WORKSPACE_PAGINATION_KEY" in results_js
+    assert "const repostFilter = document.getElementById('repost_filter');" in results_js
+    assert "const cardReposted = card.dataset.reposted === '1';" in results_js
+    assert "if (cardReposted && filters.reposts !== 'include') return false;" in results_js
+    assert "reposts: repostFilter?.value || 'hide'" in results_js
+    assert "if (card.dataset.reviewPending === '1')" in results_js
+    assert "card.dataset.reviewPending = '1';" in results_js
+    assert "delete card.dataset.reviewPending;" in results_js
     assert "loadWorkspacePagination();" in results_js
     assert "saveWorkspacePagination();" in results_js
     assert "window.location.reload();" in results_js
@@ -384,6 +394,9 @@ def test_rendered_workspace_html_content(tmp_path):
             "sector_option_public": "Public sector",
             "sector_option_private": "Private sector",
             "match_level_label": "Match level",
+            "reposts_label": "Reposts",
+            "reposts_option_hide": "Hide reposts",
+            "reposts_option_include": "Include reposts",
             "potential_jobs_empty_state": "No shortlist matches right now. Check your filters or broaden your search settings.",
             "results_helper_copy": "Job sites often return broad results even when the search is correct. If a title clearly doesn't match what you want, you can block similar roles directly from the title. This helps remove repeated noise from future results.",
             "results_helper_dismiss_button": "Dismiss",
@@ -458,6 +471,7 @@ def test_rendered_workspace_html_content(tmp_path):
         debug_mode=None,
         header_tools_html="",
         header_nav_html="",
+        new_to_you_cutoff=None,
     ):
         if title == "Job Results":
             captured_tools["header_tools_html"] = header_tools_html

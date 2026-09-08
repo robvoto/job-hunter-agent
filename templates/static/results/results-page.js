@@ -60,6 +60,7 @@
     const workModeFilter = document.getElementById('work_mode_filter');
     const sectorFilter = document.getElementById('sector_filter');
     const scoreFilter = document.getElementById('score_filter');
+    const repostFilter = document.getElementById('repost_filter');
     const quickFilterButtons = Array.from(document.querySelectorAll('[data-quick-filter]'));
     const moreFiltersButton = document.getElementById('workspace_more_filters');
     const moreFiltersContent = document.getElementById('workspace_more_filter_content');
@@ -177,6 +178,7 @@
         workMode: workModeFilter?.value,
         sector: sectorFilter?.value,
         score: scoreFilter?.value,
+        reposts: repostFilter?.value,
         quick: Object.fromEntries(quickFilterButtons.map(button => [button.dataset.quickFilter, button.getAttribute('aria-pressed') === 'true'])),
         sources: sourceFilterButtons.filter(button => button.dataset.sourceFilter !== 'all' && button.getAttribute('aria-pressed') === 'true').map(button => button.dataset.sourceFilter),
       };
@@ -209,6 +211,7 @@
         setSelectValueIfAvailable(workModeFilter, filters.workMode);
         setSelectValueIfAvailable(sectorFilter, filters.sector);
         setSelectValueIfAvailable(scoreFilter, filters.score);
+        setSelectValueIfAvailable(repostFilter, filters.reposts);
         if (Array.isArray(filters.sources) && filters.sources.length) {
           for (const button of sourceFilterButtons) {
             const source = button.dataset.sourceFilter;
@@ -258,6 +261,7 @@
       if (scoreFilter) {
         setSelectValueIfAvailable(scoreFilter, DEFAULT_SCORE_FILTER_VALUE);
       }
+      if (repostFilter) repostFilter.value = 'hide';
       for (const button of quickFilterButtons) {
         button.setAttribute('aria-pressed', 'false');
       }
@@ -351,6 +355,7 @@
       const cardSource = (card.dataset.source || '').toLowerCase();
       const cardPostingChannel = (card.dataset.postingChannel || 'unknown').toLowerCase();
       const cardApplyMethod = (card.dataset.applyMethod || 'unknown').toLowerCase();
+      const cardReposted = card.dataset.reposted === '1';
 
       if (filters.scopeMode === 'current' && cardScope !== 'current') return false;
       if (filters.scopeMode === 'saved' && cardScope !== 'saved') return false;
@@ -362,7 +367,9 @@
       if (filters.sector === 'public' && cardSector !== 'public') return false;
       if (filters.sector === 'private' && cardSector === 'public') return false;
       if (filters.scoreMode !== 'all' && cardScore < Number(filters.scoreMode)) return false;
-      if (filters.quickNew && viewed) return false;
+      if (cardReposted && filters.reposts !== 'include') return false;
+      const newToYou = card.dataset.newToYou === '1';
+      if (filters.quickNew && !newToYou) return false;
       if (filters.quickDirect && cardPostingChannel !== 'direct_employer') return false;
       if (filters.sources?.length && !filters.sources.includes(cardSource)) return false;
       if (filters.quickEasy && !['easy_apply', 'quick_apply'].includes(cardApplyMethod)) return false;
@@ -575,6 +582,7 @@
         workMode: workModeFilter?.value || 'all',
         sector: sectorFilter?.value || 'all',
         scoreMode: scoreFilter?.value || 'all',
+        reposts: repostFilter?.value || 'hide',
         quickNew: document.querySelector('[data-quick-filter="new"]')?.getAttribute('aria-pressed') === 'true',
         quickDirect: document.querySelector('[data-quick-filter="direct"]')?.getAttribute('aria-pressed') === 'true',
         sources: sourceFilterButtons.filter(button => button.dataset.sourceFilter !== 'all' && button.getAttribute('aria-pressed') === 'true').map(button => button.dataset.sourceFilter),
@@ -920,6 +928,11 @@
         return;
       }
 
+      if (card.dataset.reviewPending === '1') {
+        return;
+      }
+      card.dataset.reviewPending = '1';
+
       const buttons = card.querySelectorAll('button');
       buttons.forEach(item => item.disabled = true);
       status.textContent = reviewSavingMessage(action);
@@ -979,6 +992,8 @@
         } else {
           status.textContent = error.message || 'Could not save review action.';
         }
+      } finally {
+        delete card.dataset.reviewPending;
       }
     }
 
@@ -1101,7 +1116,7 @@
       }
     });
 
-    for (const control of [sortSelect, pageSizeSelect, scopeFilter, postedFilter, workTypeFilter, workModeFilter, sectorFilter, scoreFilter]) {
+    for (const control of [sortSelect, pageSizeSelect, scopeFilter, postedFilter, workTypeFilter, workModeFilter, sectorFilter, scoreFilter, repostFilter]) {
       control?.addEventListener('change', () => {
         resetPagination();
         saveWorkspaceFilters();
