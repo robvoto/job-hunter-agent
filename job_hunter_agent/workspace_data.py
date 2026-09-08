@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable, Optional
 
 from job_hunter_agent.record_schema import (
@@ -52,6 +52,19 @@ from job_hunter_agent.record_schema import (
 )
 
 logger = logging.getLogger(__name__)
+
+def _sortable_timestamp(
+    value: Optional[str],
+    parse_timestamp_fn: Callable[[Optional[str]], Optional[datetime]],
+) -> datetime:
+    """Return a UTC-aware timestamp so mixed/missing history dates sort safely."""
+    parsed = parse_timestamp_fn(value)
+    if parsed is None:
+        return datetime.min.replace(tzinfo=timezone.utc)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
 
 
 def _record_source(entry: dict, job_key: str) -> str:
@@ -203,7 +216,7 @@ def build_archive_records(
             records.append(record)
 
     records.sort(
-        key=lambda item: parse_timestamp_fn(item.get("last_kept_at")) or datetime.min,
+        key=lambda item: _sortable_timestamp(item.get("last_kept_at"), parse_timestamp_fn),
         reverse=True,
     )
 
@@ -318,8 +331,8 @@ def build_hidden_records(
 
     records.sort(
         key=lambda item: (
-            parse_timestamp_fn(item.get("last_hidden_at")) or datetime.min,
-            parse_timestamp_fn(item.get("last_seen_at")) or datetime.min,
+            _sortable_timestamp(item.get("last_hidden_at"), parse_timestamp_fn),
+            _sortable_timestamp(item.get("last_seen_at"), parse_timestamp_fn),
         ),
         reverse=True,
     )
@@ -419,8 +432,8 @@ def build_applied_records(
 
     records.sort(
         key=lambda item: (
-            parse_timestamp_fn(item.get("last_applied_at")) or datetime.min,
-            parse_timestamp_fn(item.get("last_seen_at")) or datetime.min,
+            _sortable_timestamp(item.get("last_applied_at"), parse_timestamp_fn),
+            _sortable_timestamp(item.get("last_seen_at"), parse_timestamp_fn),
         ),
         reverse=True,
     )

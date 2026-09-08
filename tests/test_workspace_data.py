@@ -3,6 +3,7 @@
 from datetime import datetime
 
 from job_hunter_agent.llm_review_state import has_complete_llm_keep_data
+from job_hunter_agent.posting_utils import parse_timestamp
 from job_hunter_agent.record_schema import (
     APPLY_METHOD_EXTERNAL_APPLY,
     ORIGINAL_POSTED_DATE_STATUS_UNVERIFIED,
@@ -10,6 +11,7 @@ from job_hunter_agent.record_schema import (
 )
 from job_hunter_agent.workspace_data import (
     build_applied_workspace_record,
+    build_hidden_records,
     build_workspace_record_sets,
     build_hidden_workspace_record,
     build_history_workspace_record,
@@ -141,6 +143,37 @@ def test_build_workspace_record_sets_excludes_applied_and_hidden_current_records
     assert [record["job_key"] for record in result["current_records"]] == ["seek:current"]
     assert [record["job_key"] for record in result["shortlist_records"]] == ["seek:current"]
 
+
+
+def test_build_hidden_records_sorts_missing_timestamp_with_timezone_aware_history():
+    history = {
+        "linkedin:missing-hidden-at": {
+            "last_seen_at": "2026-09-07T21:56:45+10:00",
+        },
+        "linkedin:normal": {
+            "last_hidden_at": "2026-09-08T08:00:00+10:00",
+            "last_seen_at": "2026-09-08T08:00:00+10:00",
+        },
+    }
+
+    records = build_hidden_records(
+        set(history),
+        history,
+        datetime(2026, 9, 8, 12, 0).astimezone(),
+        parse_timestamp_fn=parse_timestamp,
+        days_since_fn=lambda *_args, **_kwargs: 0,
+        hidden_review_days=30,
+        build_hidden_workspace_record_fn=lambda job_key, entry, _reference_time: {
+            "job_key": job_key,
+            "last_hidden_at": entry.get("last_hidden_at"),
+            "last_seen_at": entry.get("last_seen_at"),
+        },
+    )
+
+    assert [record["job_key"] for record in records] == [
+        "linkedin:normal",
+        "linkedin:missing-hidden-at",
+    ]
 
 def test_build_history_workspace_record_preserves_unknown_posting_channel_from_snapshot():
     snapshot = {
