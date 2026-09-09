@@ -636,26 +636,9 @@ body {
   flex: 0 0 auto;
 }
 
-.results-header .panel-select-label {
-  display: none;
-}
-
 .results-header__left .scope-tabs {
   grid-column: 1 / -1;
   min-width: 0;
-}
-
-.panel-select-control {
-  display: grid;
-  gap: 6px;
-}
-
-.panel-select-label {
-  color: var(--text-muted);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .results-header .section-tools {

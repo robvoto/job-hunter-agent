@@ -88,7 +88,7 @@ def test_results_page_related_card_action_focuses_existing_workspace_card():
 def test_workspace_page_size_select_is_a_shared_workspace_control():
     html = workspace_renderer.render_page_size_select_html()
 
-    assert 'class="workspace-control-field panel-select-control panel-select-control--page-size"' in html
+    assert 'class="workspace-control-field"' in html
     assert 'id="page_size_select"' in html
     assert "12 jobs per page" in html
     assert "96 jobs per page" in html
@@ -416,9 +416,6 @@ def test_rendered_workspace_html_content(tmp_path):
             "more_filters_label": "More filters",
             "job_boards_label": "Job boards",
             "job_boards_all_label": "All",
-            "show_label": "Show",
-            "show_option_all_potential": "All potential jobs",
-            "show_option_matches_last_run": "Matches last run",
             "posted_label": "Posted",
             "type_label": "Type",
             "work_mode_label": "Work mode",
@@ -640,7 +637,6 @@ def test_rendered_workspace_html_content(tmp_path):
         assert 'id="reset_workspace_filters"' in rendered_html
         assert ">Reset All Filters<" in rendered_html
         assert 'class="workspace-text-action__icon"' in rendered_html
-        assert 'aria-label="Show"' in rendered_html
         assert 'aria-label="Posted"' in rendered_html
         assert 'aria-label="Type"' in rendered_html
         assert 'aria-label="Work mode"' in rendered_html

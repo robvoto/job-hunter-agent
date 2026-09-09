@@ -579,9 +579,6 @@ _WORKSPACE_PAGE_LABEL_KEYS = (
     "more_filters_label",
     "job_boards_label",
     "job_boards_all_label",
-    "show_label",
-    "show_option_all_potential",
-    "show_option_matches_last_run",
     "posted_label",
     "type_label",
     "work_mode_label",
@@ -1146,11 +1143,14 @@ def render_page_size_options() -> str:
 
 
 def render_page_size_select_html() -> str:
+    # Jobs per page sits inline in the Match Controls > Filters grid alongside the
+    # other filter selects, so it must use the same bare workspace-control-field
+    # shape (no on-top label span). Each option text already reads "<n> jobs per
+    # page", so the control is self-describing without a separate visible label.
     labels = load_workspace_page_labels()
     jobs_per_page_label = safe_html(labels["LABEL_WS_JOBS_PER_PAGE_LABEL"])
     return (
-        '<label class="workspace-control-field panel-select-control panel-select-control--page-size" for="page_size_select">'
-        f'<span class="panel-select-label">{jobs_per_page_label}</span>'
+        '<label class="workspace-control-field">'
         f'<select id="page_size_select" class="jh-select" aria-label="{jobs_per_page_label}">'
         f"{render_page_size_options()}"
         "</select>"

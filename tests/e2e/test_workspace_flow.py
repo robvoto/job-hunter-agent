@@ -12,7 +12,7 @@ def test_workspace_loads_and_filters_are_interactive(candidate_page):
     sort_select = page.locator("#sort_select")
     sort_select.wait_for(state="visible")
 
-    for select_id in ("#scope_filter", "#posted_filter", "#work_type_filter", "#score_filter"):
+    for select_id in ("#posted_filter", "#work_type_filter", "#score_filter"):
         locator = page.locator(select_id)
         options = locator.locator("option").all()
         if len(options) > 1:

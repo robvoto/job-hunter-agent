@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 136,
+  "version": 137,
   "updated_at": "2026-09-09T00:00:00+00:00",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -682,9 +682,6 @@
     "more_filters_label": "More filters",
     "job_boards_label": "Job boards",
     "job_boards_all_label": "All",
-    "show_label": "Show",
-    "show_option_all_potential": "All potential jobs",
-    "show_option_matches_last_run": "Matches last run",
     "posted_label": "Posted",
     "type_label": "Type",
     "work_mode_label": "Work mode",

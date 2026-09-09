@@ -784,9 +784,6 @@ def render_html(
             "</details>"
         )
 
-    scope_saved_option_html = (
-        f'<option value="saved">{safe_html(ARCHIVE_LABEL)}</option>' if active_debug_mode else ""
-    )
     current_tabs_html = render_workspace_tabs_html(
         shortlist_count,
         len(applied_records),
@@ -855,7 +852,6 @@ def render_html(
             "SECTOR_PREFERENCE_LABEL": safe_html(sector_label),
             "SALARY_MIN_LABEL": safe_html(salary_min_label),
             "DATE_RANGE_LABEL": safe_html(date_range_label),
-            "SCOPE_SAVED_OPTION_HTML": scope_saved_option_html,
             "LAST_RUN_CARDS_HTML": last_run_cards_html,
             "LIFETIME_LLM_CARDS_HTML": lifetime_cards_html,
             "TARGET_SUMMARIES": safe_html(" | ".join(target_summaries) or "None"),
