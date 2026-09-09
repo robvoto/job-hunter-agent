@@ -262,7 +262,7 @@
   "history_settings": {
     "potential_retention_days": 15,
     "posted_age_badge_threshold_days": [3, 7, 15],
-    "hidden_retention_days": 15,
+    "hidden_retention_days": 60,
     "applied_retention_days": 0,
     "job_history_max_entries": 2000,
     "job_history_max_age_days": 365,

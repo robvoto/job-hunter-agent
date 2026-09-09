@@ -427,10 +427,17 @@ def _scrub_stale_job_history_payloads(
     history: Dict[str, dict],
     *,
     potential_retention_days: int,
-    hidden_retention_days: int,
+    hidden_suppression_days: int,
     now: datetime | None = None,
 ) -> tuple[Dict[str, dict], set[str]]:
-    """Scrub stale non-applied payloads without deleting minimal identity/history facts."""
+    """Scrub stale non-applied payloads without breaking hidden-repost suppression.
+
+    Potential jobs can shed their heavy payload once they leave Potential. Hidden
+    jobs are different: their description evidence is what lets a future changed-id
+    repost be recognised as the same vacancy. Keep that evidence for the longer
+    hidden-suppression window; the Hidden board itself applies its shorter display
+    retention independently.
+    """
     current_time = now or datetime.now(timezone.utc)
     scrubbed_history: Dict[str, dict] = {}
     changed_keys: set[str] = set()
@@ -446,7 +453,7 @@ def _scrub_stale_job_history_payloads(
         hidden_at = _active_hidden_at(entry)
         if hidden_at is not None:
             reference_at = hidden_at
-            retention_days = hidden_retention_days
+            retention_days = hidden_suppression_days
         else:
             reference_at = _parse_timestamp(entry.get("last_kept_at")) or _parse_timestamp(
                 entry.get("last_seen_at")
@@ -472,18 +479,25 @@ def active_hidden_job_keys_with_expiry(
     hidden_job_keys: set[str],
     history: Dict[str, dict],
     *,
-    hidden_retention_days: int,
+    suppression_retention_days: int,
     now: datetime | None = None,
 ) -> tuple[set[str], set[str]]:
-    """Return still-hidden keys and keys whose temporary Hidden state has expired."""
+    """Return hidden keys that still suppress rediscovery/reposts.
+
+    This is deliberately longer than Hidden-board display retention. A hidden card
+    may disappear from the UI while its key remains active here so the same vacancy
+    does not waste another review when a board republishes it.
+    """
     current_time = now or datetime.now(timezone.utc)
-    cutoff = current_time - timedelta(days=hidden_retention_days)
+    cutoff = current_time - timedelta(days=suppression_retention_days)
     active: set[str] = set()
     expired: set[str] = set()
     for job_key in hidden_job_keys:
         entry = history.get(job_key)
         if not isinstance(entry, dict):
-            active.add(job_key)
+            # Without history there is no trustworthy timestamp or repost evidence.
+            # Do not retain an orphan key forever or manufacture a fake Hidden card.
+            expired.add(job_key)
             continue
         hidden_at = _active_hidden_at(entry)
         if hidden_at is None:
@@ -803,7 +817,6 @@ def load_job_history() -> Dict[str, dict]:
     from job_hunter_agent.database import db_conn
     from job_hunter_agent.global_settings import (
         get_applied_retention_days,
-        get_hidden_retention_days,
         get_job_history_max_age_days,
         get_job_history_max_entries,
         get_potential_retention_days,
@@ -838,7 +851,7 @@ def load_job_history() -> Dict[str, dict]:
         pruned, scrubbed_keys = _scrub_stale_job_history_payloads(
             pruned,
             potential_retention_days=get_potential_retention_days(),
-            hidden_retention_days=get_hidden_retention_days(),
+            hidden_suppression_days=get_job_history_max_age_days(),
         )
         if removed_keys:
             conn.executemany(
@@ -860,7 +873,6 @@ def save_job_history(history: Dict[str, dict]) -> None:
     from job_hunter_agent.database import db_conn, ensure_user_row
     from job_hunter_agent.global_settings import (
         get_applied_retention_days,
-        get_hidden_retention_days,
         get_job_history_max_age_days,
         get_job_history_max_entries,
         get_potential_retention_days,
@@ -880,7 +892,7 @@ def save_job_history(history: Dict[str, dict]) -> None:
     pruned_history, _ = _scrub_stale_job_history_payloads(
         pruned_history,
         potential_retention_days=get_potential_retention_days(),
-        hidden_retention_days=get_hidden_retention_days(),
+        hidden_suppression_days=get_job_history_max_age_days(),
     )
     history.clear()
     history.update(pruned_history)

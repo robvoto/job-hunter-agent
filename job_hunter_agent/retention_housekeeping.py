@@ -8,6 +8,7 @@ from typing import Any
 
 from job_hunter_agent.global_settings import (
     get_hidden_retention_days,
+    get_job_history_max_age_days,
     get_potential_retention_days,
 )
 from job_hunter_agent.io_utils import (
@@ -27,17 +28,19 @@ def run_retention_housekeeping(
 ) -> tuple[set[str], set[str]]:
     """Apply board retention before deriving scraper/workspace manual-state sets.
 
-    Hidden is temporary: once its retention window expires the key is removed
-    from the persisted profile so the job can be reviewed again. Applied is a
-    durable user record and remains protected. Stale non-applied workspace-pool
-    rows are deleted so their full payloads/links do not linger in SQLite.
+    Hidden-board visibility is temporary, but hidden-job suppression lasts for
+    the longer job-history window so a repost does not waste another review. The
+    persisted hidden key is removed only when that suppression window expires.
+    Applied is a durable user record and remains protected. Stale workspace-pool
+    rows still follow their shorter board-retention windows.
     """
     applied_job_keys, hidden_job_keys = get_manual_skip_sets(profile)
     hidden_retention_days = get_hidden_retention_days()
+    hidden_suppression_days = get_job_history_max_age_days()
     active_hidden_job_keys, expired_hidden_job_keys = active_hidden_job_keys_with_expiry(
         hidden_job_keys,
         job_history,
-        hidden_retention_days=hidden_retention_days,
+        suppression_retention_days=hidden_suppression_days,
         now=reference_time,
     )
 
@@ -46,8 +49,9 @@ def run_retention_housekeeping(
         review_controls["hidden_job_keys"] = sorted(active_hidden_job_keys)
         save_profile(profile)
         logger.info(
-            "[RETENTION] expired %d Hidden job(s); they are eligible for review again",
+            "[RETENTION] expired %d Hidden repost-suppression key(s) after %d days",
             len(expired_hidden_job_keys),
+            hidden_suppression_days,
         )
 
     removed_pool_records = prune_workspace_pool_for_retention(

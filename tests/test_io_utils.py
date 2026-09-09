@@ -204,6 +204,12 @@ def test_save_job_history_scrubs_stale_non_applied_payload_but_keeps_applied(
 
     history = {
         "seek:stale": _entry("Stale"),
+        "seek:hidden": {
+            **_entry("Hidden"),
+            "first_hidden_at": old,
+            "last_hidden_at": old,
+            "is_hidden": True,
+        },
         "seek:applied": {
             **_entry("Applied"),
             "first_applied_at": old,
@@ -228,6 +234,11 @@ def test_save_job_history_scrubs_stale_non_applied_payload_but_keeps_applied(
     assert "teaser" not in stale["review_events"][0]
     assert stale["retention_payload_scrubbed_at"]
 
+    hidden = history["seek:hidden"]
+    assert hidden["url"] == "https://example.test/hidden"
+    assert hidden["last_kept_snapshot"]["full_description"] == "Full stale job description"
+    assert hidden["detail_evidence"]["details_text"] == "Raw stale details"
+
     applied = history["seek:applied"]
     assert applied["url"] == "https://example.test/applied"
     assert applied["last_kept_snapshot"]["full_description"] == "Full stale job description"
@@ -235,24 +246,26 @@ def test_save_job_history_scrubs_stale_non_applied_payload_but_keeps_applied(
     assert applied["detail_evidence"]["details_text"] == "Raw stale details"
 
 
-def test_hidden_review_key_expires_after_hidden_retention_window():
+def test_hidden_review_key_uses_longer_repost_suppression_window():
     now = datetime.now(timezone.utc)
     recent = (now - timedelta(days=5)).isoformat(timespec="seconds")
-    old = (now - timedelta(days=20)).isoformat(timespec="seconds")
+    old_but_suppressed = (now - timedelta(days=90)).isoformat(timespec="seconds")
+    expired_at = (now - timedelta(days=400)).isoformat(timespec="seconds")
     history = {
         "seek:recent": {"last_hidden_at": recent, "is_hidden": True},
-        "seek:expired": {"last_hidden_at": old, "is_hidden": True},
+        "seek:old": {"last_hidden_at": old_but_suppressed, "is_hidden": True},
+        "seek:expired": {"last_hidden_at": expired_at, "is_hidden": True},
     }
 
     active, expired = io_utils.active_hidden_job_keys_with_expiry(
-        {"seek:recent", "seek:expired"},
+        {"seek:recent", "seek:old", "seek:expired", "seek:orphan"},
         history,
-        hidden_retention_days=15,
+        suppression_retention_days=365,
         now=now,
     )
 
-    assert active == {"seek:recent"}
-    assert expired == {"seek:expired"}
+    assert active == {"seek:recent", "seek:old"}
+    assert expired == {"seek:expired", "seek:orphan"}
 
 
 def test_prune_occupation_title_cache_applies_age_and_entry_limits(isolated_db, monkeypatch):

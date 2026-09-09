@@ -8,19 +8,20 @@ from job_hunter_agent.database import db_conn, ensure_user_row
 from job_hunter_agent.user_context import set_user_id
 
 
-def test_housekeeping_expires_hidden_prunes_pool_and_keeps_applied(
+def test_housekeeping_keeps_hidden_suppression_after_card_retention_and_prunes_pool(
     isolated_db, monkeypatch
 ):
     now = datetime.now(timezone.utc)
     recent = (now - timedelta(days=5)).isoformat(timespec="seconds")
     old = (now - timedelta(days=20)).isoformat(timespec="seconds")
+    suppression_expired = (now - timedelta(days=400)).isoformat(timespec="seconds")
     set_user_id("test_user")
     ensure_user_row("test_user")
 
     profile = {
         "review_controls": {
             "applied_job_keys": ["seek:applied"],
-            "hidden_job_keys": ["seek:hidden-recent", "seek:hidden-expired"],
+            "hidden_job_keys": ["seek:hidden-recent", "seek:hidden-old", "seek:hidden-expired"],
         }
     }
     history = {
@@ -30,10 +31,15 @@ def test_housekeeping_expires_hidden_prunes_pool_and_keeps_applied(
             "is_hidden": True,
             "last_kept_at": old,
         },
-        "seek:hidden-expired": {
+        "seek:hidden-old": {
             "last_hidden_at": old,
             "is_hidden": True,
             "last_kept_at": old,
+        },
+        "seek:hidden-expired": {
+            "last_hidden_at": suppression_expired,
+            "is_hidden": True,
+            "last_kept_at": suppression_expired,
         },
         "seek:potential-recent": {"last_kept_at": recent},
         "seek:potential-stale": {"last_kept_at": old},
@@ -52,12 +58,16 @@ def test_housekeeping_expires_hidden_prunes_pool_and_keeps_applied(
     monkeypatch.setattr(retention_housekeeping, "save_profile", lambda value: saved_profiles.append(value))
     monkeypatch.setattr(retention_housekeeping, "get_potential_retention_days", lambda: 15)
     monkeypatch.setattr(retention_housekeeping, "get_hidden_retention_days", lambda: 15)
+    monkeypatch.setattr(retention_housekeeping, "get_job_history_max_age_days", lambda: 365)
 
     applied, hidden = retention_housekeeping.run_retention_housekeeping(profile, history, now)
 
     assert applied == {"seek:applied"}
-    assert hidden == {"seek:hidden-recent"}
-    assert profile["review_controls"]["hidden_job_keys"] == ["seek:hidden-recent"]
+    assert hidden == {"seek:hidden-recent", "seek:hidden-old"}
+    assert profile["review_controls"]["hidden_job_keys"] == [
+        "seek:hidden-old",
+        "seek:hidden-recent",
+    ]
     assert saved_profiles
 
     with db_conn(isolated_db) as conn:

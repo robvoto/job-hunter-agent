@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 137,
+  "version": 138,
   "updated_at": "2026-09-09T00:00:00+00:00",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -837,7 +837,7 @@
     "potential_retention_days_label": "Potential jobs retention (days)",
     "potential_retention_days_help": "How many days a saved non-applied job remains visible on the Potential board after it was last kept.",
     "hidden_retention_days_label": "Hidden jobs retention (days)",
-    "hidden_retention_days_help": "How many days a hidden job remains visible on the Hidden board after it was hidden.",
+    "hidden_retention_days_help": "How many days a hidden job remains visible on the Hidden board after it was hidden. Matching reposts remain suppressed for the longer job-history window.",
     "applied_retention_days_label": "Applied job history retention (days)",
     "applied_retention_days_help": "Use 0 to keep applied-job history forever. Applied history is protected from ordinary job-history pruning.",
     "repeated_listing_min_times_seen_label": "Repeated listing minimum times seen",
