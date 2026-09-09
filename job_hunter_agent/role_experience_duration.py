@@ -76,8 +76,20 @@ def apply_effective_durations(
     role_experience: Any, *, as_of: date | None = None
 ) -> list[Any]:
     """Copy ``role_experience`` with each family's ``total_duration_months`` set to
-    its effective (accrued) value. ``title_variants`` are left as stored — they
-    are prompt-informational only and never drive the duration comparison.
+    its effective (accrued) value.
+
+    ``title_variants`` are left exactly as stored. This function accrues a
+    still-current role forward only at the canonical family level, because only
+    the family row carries the per-segment ``is_current`` / ``duration_as_of``
+    timing needed to do so. A variant carries a flat ``total_duration_months``
+    with no timing, so there is nothing here to accrue.
+
+    Variant months are still consumed as scoring evidence elsewhere:
+    ``experience_requirements._variant_entries`` credits a requirement tied to a
+    specific sub-title with that variant's own stored months. That figure is an
+    extraction-time snapshot and does not tick up between profile refreshes; for
+    a variant of a still-current role it can lag the canonical family, which is
+    accepted because it only ever understates (fails safe).
     """
     if not isinstance(role_experience, list):
         return []
