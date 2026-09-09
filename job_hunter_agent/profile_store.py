@@ -1044,16 +1044,29 @@ def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
         require_phrase=True,
     )
     normalized = normalize_full_profile(profile)
+    current_capabilities = normalize_capability_rules(
+        (current or {}).get(KEY_CANDIDATE_CAPABILITIES, []),
+        (current or {}).get("onboarding_settings", {}),
+    )
+    current_capabilities_by_name = {
+        re.sub(r"\s+", " ", str(item.get("name") or "")).strip().casefold(): item
+        for item in current_capabilities
+        if isinstance(item, dict) and str(item.get("name") or "").strip()
+    }
     capabilities_to_validate = [
         item
         for item in normalized.get(KEY_CANDIDATE_CAPABILITIES, [])
         if isinstance(item, dict)
+        and current_capabilities_by_name.get(
+            re.sub(r"\s+", " ", str(item.get("name") or "")).strip().casefold()
+        )
+        != item
     ]
     if capabilities_to_validate:
         # Direct Settings/API writes have no prior semantic interpretation. The
-        # structured LLM judgement is authoritative for whether each submitted
-        # row is one atomic profile fact; this save boundary validates every row
-        # and fails closed, so no compound name can be persisted unchanged.
+        # structured LLM judgement is authoritative for whether each added or
+        # changed row is one atomic profile fact. Unchanged rows are already
+        # persisted facts and are deliberately outside this call boundary.
         from job_hunter_agent.llm_gate import llm_validate_profile_capability_atomicity
 
         judgements = llm_validate_profile_capability_atomicity(capabilities_to_validate)
