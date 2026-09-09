@@ -1,7 +1,7 @@
 {
   "kind": "system_config",
   "name": "duplicate_rules",
-  "version": 3,
+  "version": 4,
   "source_priority": {
     "seek": 0,
     "linkedin": 1
@@ -25,5 +25,12 @@
     "shingle_size": 5,
     "min_jaccard": 0.8,
     "min_shorter_coverage": 0.9
+  },
+  "cross_source_content": {
+    "min_description_chars": 800,
+    "shingle_size": 5,
+    "min_jaccard": 0.8,
+    "min_shorter_coverage": 0.9,
+    "max_posting_age_difference_days": 2
   }
 }

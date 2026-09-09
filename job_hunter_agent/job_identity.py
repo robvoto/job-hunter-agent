@@ -1,41 +1,39 @@
-"""Helpers for job identity."""
+"""Manage job identity, duplicate detection, and linking across sources.
 
-from copy import deepcopy
+This module provides functions for normalizing job keys, detecting confirmed
+and potential duplicate job postings based on various identifiers (job key, URL,
+ATS requisition ID, platform job ID), and annotating records with links to
+their duplicates. It relies on managed knowledge for duplicate rules and source
+priority to resolve conflicts.
+"""
+
+import math
 import re
 import threading
+from copy import deepcopy
 from functools import lru_cache
 from typing import Any, Callable, Iterable, List, Optional
 from urllib.parse import ParseResult, parse_qsl, urlencode, urlsplit, urlunsplit
 
-"""Manages job identity, duplicate detection, and linking across sources.
-
-
-
-This module provides functions for normalizing job keys, detecting confirmed
-
-and potential duplicate job postings based on various identifiers (job key, URL,
-
-ATS requisition ID, platform job ID), and annotating records with links to
-
-their duplicates. It relies on managed knowledge for duplicate rules and source
-
-priority to resolve conflicts."""
-
-
 from job_hunter_agent.company_normalization import company_names_weakly_match
 from job_hunter_agent.duplicate_rules import load_duplicate_rules
+from job_hunter_agent.locations import load_locations_au
 from job_hunter_agent.paths import UNCERTAINTY_LOG_PATH
 from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
+    RECORD_DETAILS_STATUS_KEY,
+    RECORD_DETAILS_TEXT_KEY,
     RECORD_DUPLICATE_LINKS_KEY,
-    RECORD_JOB_KEY,
+    RECORD_FIT_SOURCE_TEXT_KEY,
+    RECORD_FULL_DESCRIPTION_KEY,
     RECORD_IS_REPOSTED_KEY,
+    RECORD_JOB_KEY,
     RECORD_LOCATION_KEY,
-    RECORD_RUN_STARTED_AT_KEY,
     RECORD_POTENTIAL_DUPLICATE_LINKS_KEY,
+    RECORD_RUN_STARTED_AT_KEY,
+    RECORD_SOURCE_APPLY_URL_KEY,
     RECORD_SOURCE_ATS_REQUISITION_ID_KEY,
     RECORD_SOURCE_ATS_SOURCE_KEY,
-    RECORD_SOURCE_APPLY_URL_KEY,
     RECORD_SOURCE_CANONICAL_URL_KEY,
     RECORD_SOURCE_KEY,
     RECORD_SOURCE_METADATA_KEY,
@@ -44,15 +42,13 @@ from job_hunter_agent.record_schema import (
     RECORD_SOURCE_PROVENANCE_KEY,
     RECORD_TITLE_KEY,
     RECORD_URL_KEY,
-    RECORD_DETAILS_STATUS_KEY,
-    RECORD_DETAILS_TEXT_KEY,
 )
 from job_hunter_agent.runtime_helpers import append_uncertainty_log, build_uncertainty_entry
+from job_hunter_agent.source_registry import get_domain_to_source_map
 from job_hunter_agent.system_warnings import (
     make_system_warning_fingerprint,
     record_system_warning,
 )
-from job_hunter_agent.source_registry import get_domain_to_source_map
 from job_hunter_agent.title_normalization_rules import normalize_title_text
 
 RUN_IDENTITY_CLAIM_KEY = "_run_identity_claim"
@@ -393,6 +389,9 @@ def _confirmed_duplicate_match(a: dict, b: dict) -> Optional[tuple[str, str]]:
             if signature_key == key and (signature_key, signature_value) in signatures_b:
                 return key, signature_value
 
+    if _cross_source_content_duplicate_match(a, b):
+        return "cross_source_content", "title_company_location_date_description"
+
     return None
 
 
@@ -401,10 +400,21 @@ def _content_repost_description(record: dict) -> str:
 
     return str(
         record.get(RECORD_DETAILS_TEXT_KEY)
-        or record.get("full_description")
-        or record.get("fit_source_text")
+        or record.get(RECORD_FULL_DESCRIPTION_KEY)
+        or record.get(RECORD_FIT_SOURCE_TEXT_KEY)
         or ""
     ).strip()
+
+
+def _cross_source_description(record: dict) -> str:
+    """Use the longest available description so generic teasers cannot dominate."""
+
+    candidates = (
+        record.get(RECORD_FULL_DESCRIPTION_KEY),
+        record.get(RECORD_DETAILS_TEXT_KEY),
+        record.get(RECORD_FIT_SOURCE_TEXT_KEY),
+    )
+    return max((str(value or "").strip() for value in candidates), key=len, default="")
 
 
 def _description_shingles(text: str, size: int) -> set[tuple[str, ...]]:
@@ -412,6 +422,29 @@ def _description_shingles(text: str, size: int) -> set[tuple[str, ...]]:
     if len(tokens) < size:
         return set()
     return {tuple(tokens[index : index + size]) for index in range(len(tokens) - size + 1)}
+
+
+def _description_similarity_matches(text_a: str, text_b: str, config: dict[str, Any]) -> bool:
+    """Apply the configured full-description evidence test shared by repost rules."""
+
+    min_chars = int(config["min_description_chars"])
+    shingle_size = int(config["shingle_size"])
+    min_jaccard = float(config["min_jaccard"])
+    min_shorter_coverage = float(config["min_shorter_coverage"])
+
+    if len(text_a) < min_chars or len(text_b) < min_chars:
+        return False
+
+    shingles_a = _description_shingles(text_a, shingle_size)
+    shingles_b = _description_shingles(text_b, shingle_size)
+    if not shingles_a or not shingles_b:
+        return False
+
+    overlap = len(shingles_a & shingles_b)
+    union = len(shingles_a | shingles_b)
+    jaccard = overlap / union if union else 0.0
+    shorter_coverage = overlap / min(len(shingles_a), len(shingles_b))
+    return jaccard >= min_jaccard and shorter_coverage >= min_shorter_coverage
 
 
 def are_jobs_content_reposts(a: dict, b: dict) -> bool:
@@ -443,27 +476,130 @@ def are_jobs_content_reposts(a: dict, b: dict) -> bool:
     if location_a and location_b and location_a != location_b:
         return False
 
-    config = _get_identity_config()["content_repost"]
-    min_chars = int(config["min_description_chars"])
-    shingle_size = int(config["shingle_size"])
-    min_jaccard = float(config["min_jaccard"])
-    min_shorter_coverage = float(config["min_shorter_coverage"])
-
     text_a = _content_repost_description(a)
     text_b = _content_repost_description(b)
-    if len(text_a) < min_chars or len(text_b) < min_chars:
+    return _description_similarity_matches(text_a, text_b, _get_identity_config()["content_repost"])
+
+
+@lru_cache(maxsize=256)
+def _location_match_keys(value: str) -> frozenset[str]:
+    """Resolve listing location text to managed location identities for comparison."""
+
+    normalized = re.sub(r"[^a-z0-9]+", " ", str(value or "").lower()).strip()
+    if not normalized or normalized in {"n a", "na", "unknown", "not specified"}:
+        return frozenset()
+
+    keys = {normalized}
+    locations = load_locations_au()
+    state_by_capital = {
+        re.sub(r"[^a-z0-9]+", " ", str(entry.get("capital") or "").lower()).strip(): str(
+            entry.get("code") or entry.get("name") or ""
+        ).strip().lower()
+        for entry in locations.values()
+        if str(entry.get("kind") or "").strip().lower() in {"state", "territory"}
+        and str(entry.get("capital") or "").strip()
+    }
+
+    for entry in locations.values():
+        labels = [entry.get("code"), entry.get("name"), *(entry.get("aliases") or [])]
+        identity = re.sub(
+            r"[^a-z0-9]+",
+            " ",
+            str(entry.get("code") or entry.get("name") or "").lower(),
+        ).strip()
+        if not identity:
+            continue
+        for label in labels:
+            label_text = re.sub(r"[^a-z0-9]+", " ", str(label or "").lower()).strip()
+            if not label_text:
+                continue
+            if normalized == label_text or re.search(
+                rf"(?<![a-z0-9]){re.escape(label_text)}(?![a-z0-9])", normalized
+            ):
+                keys.add(identity)
+                if str(entry.get("kind") or "").strip().lower() == "city":
+                    capital_key = re.sub(
+                        r"[^a-z0-9]+", " ", str(entry.get("name") or "").lower()
+                    ).strip()
+                    if capital_key in state_by_capital:
+                        keys.add(state_by_capital[capital_key])
+                break
+    return frozenset(keys)
+
+
+def _locations_compatible(a: dict, b: dict) -> bool:
+    location_a = str(a.get(RECORD_LOCATION_KEY) or "").strip()
+    location_b = str(b.get(RECORD_LOCATION_KEY) or "").strip()
+    if not location_a or not location_b:
+        return False
+    return bool(_location_match_keys(location_a) & _location_match_keys(location_b))
+
+
+def _posting_ages_compatible(a: dict, b: dict, max_difference_days: float) -> bool:
+    # Import lazily because posting_utils imports normalize_job_key from this
+    # module; at comparison time job_identity is fully initialized.
+    from job_hunter_agent.posting_utils import (
+        posted_datetime_from_age,
+        posted_reference_time,
+    )
+
+    ages: list[float | None] = []
+    for record in (a, b):
+        try:
+            age = float(record.get("posted_age_days"))
+        except (TypeError, ValueError):
+            age = None
+        ages.append(age if age is not None and math.isfinite(age) and age >= 0 else None)
+    if ages[0] is None or ages[1] is None:
+        return True
+
+    posted_at = [
+        posted_datetime_from_age(age, posted_reference_time(record))
+        for age, record in zip(ages, (a, b))
+    ]
+    if posted_at[0] is not None and posted_at[1] is not None:
+        try:
+            return (
+                abs((posted_at[0] - posted_at[1]).total_seconds())
+                <= max_difference_days * 86400
+            )
+        except TypeError:
+            pass
+    return abs(ages[0] - ages[1]) <= max_difference_days
+
+
+def _cross_source_content_duplicate_match(a: dict, b: dict) -> bool:
+    """Confirm a cross-board vacancy only from independent metadata and full content."""
+
+    source_a = _source_label(a)
+    source_b = _source_label(b)
+    if not source_a or not source_b or source_a == source_b:
         return False
 
-    shingles_a = _description_shingles(text_a, shingle_size)
-    shingles_b = _description_shingles(text_b, shingle_size)
-    if not shingles_a or not shingles_b:
+    title_a = normalize_title_text(str(a.get(RECORD_TITLE_KEY) or ""))
+    title_b = normalize_title_text(str(b.get(RECORD_TITLE_KEY) or ""))
+    if not title_a or title_a != title_b:
         return False
 
-    overlap = len(shingles_a & shingles_b)
-    union = len(shingles_a | shingles_b)
-    jaccard = overlap / union if union else 0.0
-    shorter_coverage = overlap / min(len(shingles_a), len(shingles_b))
-    return jaccard >= min_jaccard and shorter_coverage >= min_shorter_coverage
+    company_a = str(a.get(RECORD_COMPANY_KEY) or "").strip()
+    company_b = str(b.get(RECORD_COMPANY_KEY) or "").strip()
+    if not company_a or not company_b or not company_names_weakly_match(company_a, company_b):
+        return False
+
+    if not _locations_compatible(a, b):
+        return False
+
+    config = _get_identity_config()["cross_source_content"]
+    if not _posting_ages_compatible(
+        a, b, float(config["max_posting_age_difference_days"])
+    ):
+        return False
+
+    return _description_similarity_matches(
+        _cross_source_description(a),
+        _cross_source_description(b),
+        config,
+    )
 
 
 def find_content_repost(record: dict, pool: Iterable[dict]) -> Optional[dict]:
