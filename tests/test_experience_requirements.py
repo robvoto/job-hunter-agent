@@ -8,6 +8,7 @@ from job_hunter_agent.experience_requirements import (
     extract_required_experience_months,
     resolve_role_experience_requirement,
 )
+from job_hunter_agent.role_experience_duration import effective_family_months
 
 
 def test_single_value_years_and_months_are_parsed():
@@ -62,21 +63,76 @@ def _ba_family(total_duration_months: int) -> list[dict]:
     ]
 
 
-def test_subtitle_match_is_credited_and_reported_under_the_canonical_family():
-    # The LLM tied the requirement to the "Senior Business Analyst" sub-title,
-    # which only exists as a title variant. The combined family total is used
-    # and the canonical "Business Analyst" family is reported, so a whole
-    # family's history is never mislabelled as senior-only time.
+def _ba_family_with_variant_months(
+    family_total_months: int, senior_variant_months: int
+) -> list[dict]:
+    """A Business Analyst family (family_total_months accrued) that also stores a
+    "Senior Business Analyst" variant with its own, smaller duration."""
+    return [
+        {
+            "normalized_title": "Business Analyst",
+            "total_duration_months": family_total_months,
+            "most_recent_end_year": 2025,
+            "segments": [{"duration_months": family_total_months, "is_current": False}],
+            "title_variants": [
+                {
+                    "normalized_title": "Business Analyst",
+                    "total_duration_months": 48,
+                    "most_recent_end_year": 2018,
+                },
+                {
+                    "normalized_title": "Senior Business Analyst",
+                    "total_duration_months": senior_variant_months,
+                    "most_recent_end_year": 2025,
+                },
+            ],
+        }
+    ]
+
+
+def test_subtitle_match_is_credited_with_its_own_months_not_the_family_total():
+    # JH-013 regression: the LLM tied the requirement to the "Senior Business
+    # Analyst" sub-title. Only that variant's own 36 months may be credited, not
+    # the 216-month Business Analyst family total it sits inside.
+    resolved = resolve_role_experience_requirement(
+        _duration_components("Senior Business Analyst"),
+        60,
+        _ba_family_with_variant_months(216, 36),
+    )
+
+    assert resolved["role_family_resolved"] is True
+    assert resolved["matched_role_family"] == "Senior Business Analyst"
+    assert resolved["matched_role_family_months"] == 36
+    assert resolved["experience_requirement_met"] is False
+
+
+def test_canonical_family_match_still_uses_the_whole_family_total():
+    # Naming the family itself (not a sub-title) still credits the accrued
+    # family total.
+    resolved = resolve_role_experience_requirement(
+        _duration_components("Business Analyst"),
+        60,
+        _ba_family_with_variant_months(216, 36),
+    )
+
+    assert resolved["role_family_resolved"] is True
+    assert resolved["matched_role_family"] == "Business Analyst"
+    assert resolved["matched_role_family_months"] == 216
+    assert resolved["experience_requirement_met"] is True
+
+
+def test_subtitle_without_its_own_duration_is_left_unresolved():
+    # The "Senior Business Analyst" variant carries no duration of its own, so
+    # there is nothing safe to credit and no fall-back to the family total.
     resolved = resolve_role_experience_requirement(
         _duration_components("Senior Business Analyst"),
         60,
         _ba_family(66),
     )
 
-    assert resolved["role_family_resolved"] is True
-    assert resolved["matched_role_family"] == "Business Analyst"
-    assert resolved["matched_role_family_months"] == 66
-    assert resolved["experience_requirement_met"] is True
+    assert resolved["role_family_resolved"] is False
+    assert resolved["matched_role_family"] == "Senior Business Analyst"
+    assert "matched_role_family_months" not in resolved
 
 
 def test_range_requirement_resolves_against_the_lower_bound():
@@ -169,3 +225,48 @@ def test_current_role_accrual_still_short_leaves_the_requirement_unmet():
     assert expected < 120
     assert resolved["matched_role_family_months"] == expected
     assert resolved["experience_requirement_met"] is False
+
+
+def test_matched_variant_stays_at_its_stored_snapshot_while_the_family_accrues():
+    # JH-013 architectural note: the canonical family carries a still-current
+    # segment and accrues elapsed months forward; the "Senior Business Analyst"
+    # sub-title carries only a flat stored snapshot with no timing. A
+    # requirement tied to the variant is credited with exactly that snapshot -
+    # no accrual - and it must trail the accrued family total. The staleness is
+    # one-directional (it can only understate), so it fails safe.
+    duration_as_of = "2024-01-01"
+    variant_snapshot_months = 24
+    family_row = {
+        "normalized_title": "Business Analyst",
+        "total_duration_months": 60,
+        "most_recent_end_year": 2026,
+        "segments": [
+            {"duration_months": 60, "is_current": True, "duration_as_of": duration_as_of},
+        ],
+        "title_variants": [
+            {"normalized_title": "Business Analyst", "total_duration_months": 36},
+            {
+                "normalized_title": "Senior Business Analyst",
+                "total_duration_months": variant_snapshot_months,
+                "most_recent_end_year": 2026,
+            },
+        ],
+    }
+
+    accrued_family_months = effective_family_months(family_row)
+    assert accrued_family_months > 60  # the current segment has moved on
+
+    variant_resolved = resolve_role_experience_requirement(
+        _duration_components("Senior Business Analyst"), 60, [family_row]
+    )
+    assert variant_resolved["role_family_resolved"] is True
+    assert variant_resolved["matched_role_family"] == "Senior Business Analyst"
+    assert variant_resolved["matched_role_family_months"] == variant_snapshot_months
+    assert variant_resolved["matched_role_family_months"] < accrued_family_months
+    assert variant_resolved["experience_requirement_met"] is False
+
+    family_resolved = resolve_role_experience_requirement(
+        _duration_components("Business Analyst"), 60, [family_row]
+    )
+    assert family_resolved["matched_role_family_months"] == accrued_family_months
+    assert family_resolved["experience_requirement_met"] is True
