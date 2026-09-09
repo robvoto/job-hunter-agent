@@ -1583,7 +1583,6 @@ def test_job_card_uses_score_tone_as_card_accent_class():
 
     assert 'class="job-card tone-low"' in html
     assert 'class="match-tile tone-low"' in html
-    assert ">New To You<" in html
 
 
 def test_job_card_shows_easy_apply_badge():
@@ -5516,7 +5515,7 @@ def test_requirement_group_headings_have_semantic_tone_hooks():
     assert '"matched"' in source
 
 
-def test_job_card_new_to_you_uses_current_run_cutoff_not_only_unviewed_state():
+def test_job_card_new_to_you_uses_first_discovery_in_latest_run_not_viewed_state():
     record = {
         "job_key": "test-old-unviewed",
         "title": "Business Analyst",
@@ -5545,13 +5544,18 @@ def test_job_card_new_to_you_uses_current_run_cutoff_not_only_unviewed_state():
     assert 'data-new-to-you="0"' in html
 
     record["first_seen_at"] = "2026-09-08T09:01:00+10:00"
+    record["times_viewed"] = 2
     html = workspace_renderer.render_job_card(
         record,
         _test_profile(),
         new_to_you_cutoff=datetime.fromisoformat("2026-09-08T09:00:00+10:00"),
     )
     assert ">New To You<" in html
+    assert 'data-viewed="1"' in html
     assert 'data-new-to-you="1"' in html
+
+    html_without_run_boundary = workspace_renderer.render_job_card(record, _test_profile())
+    assert 'data-new-to-you="0"' in html_without_run_boundary
 
 
 def test_workspace_builder_does_not_reintroduce_applied_repost_from_archive(monkeypatch):
