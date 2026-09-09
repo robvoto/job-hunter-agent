@@ -2036,8 +2036,9 @@ def render_job_card(
                 '</span>'
             )
         # OR requirement: every acceptable branch stays visible so the candidate
-        # sees the whole requirement, even though at most one primary Add action
-        # is offered (for the closest unmet branch) to keep the card uncluttered.
+        # sees the whole requirement, while one unresolved branch gets a precise
+        # Yes/No confirmation pair. A No applies only to that branch; it must not
+        # be interpreted as rejecting the whole OR requirement.
         # resolve_custom_blocker / profile-gap must never treat that single
         # branch as the entire mandatory requirement — see
         # docs/REQUIREMENT_DECOMPOSITION_RATIONALE.md.
@@ -2106,9 +2107,14 @@ def render_job_card(
                         '<span aria-hidden="true">+</span>'
                         f'<span>{safe_html(_workspace_label("workspace_card_labels", "add_to_profile_action_label"))} · {safe_html(primary_branch)}</span></button>'
                     )
+                    branch_confirm_not_have_html = (
+                        '<button type="button" class="jh-button jh-button--danger jh-button--micro job-requirement-action gap-btn" '
+                        f'data-action="confirm_do_not_have" data-capability-name="{safe_html(primary_branch)}">'
+                        f'{safe_html(_workspace_label("workspace_card_labels", "gap_confirm_not_have_label"))}</button>'
+                    )
                     branch_action_html = (
                         '<span class="req-coverage-detail req-coverage-detail--profile-review">'
-                        f"{branch_confirm_have_html}</span>"
+                        f"{branch_confirm_have_html}{branch_confirm_not_have_html}</span>"
                     )
                 or_branch_html = branch_note_html + branch_action_html
         html = (

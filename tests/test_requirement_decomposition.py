@@ -9,6 +9,7 @@ docs/REQUIREMENT_DECOMPOSITION_RATIONALE.md.
 from __future__ import annotations
 
 import json
+from html import unescape
 
 from job_hunter_agent import llm_gate, source_learning, workspace_renderer
 from job_hunter_agent.paths import SCORING_RULES_PATH
@@ -249,7 +250,7 @@ def test_or_row_rolls_up_to_supported_when_one_branch_is_supported():
     assert coverage[0]["canonical_requirement"] == ""
 
 
-def test_or_card_names_every_branch_and_shows_one_primary_add_action():
+def test_or_card_names_every_branch_and_shows_one_primary_confirmation_pair():
     item = {
         "requirement": "Experience with Microsoft Purview or BigID",
         "importance": "mandatory",
@@ -266,10 +267,35 @@ def test_or_card_names_every_branch_and_shows_one_primary_add_action():
     assert "Microsoft Purview" in html
     assert "BigID" in html
     assert "Either Microsoft Purview or BigID satisfies this requirement." in html
-    # Exactly one primary Add action, for the first (closest) branch.
+    # Exactly one Yes/No confirmation pair, both scoped to the first unresolved branch.
     assert html.count('data-action="confirm_have"') == 1
-    assert 'data-capability-name="Microsoft Purview"' in html
+    assert html.count('data-action="confirm_do_not_have"') == 1
+    assert html.count('data-capability-name="Microsoft Purview"') == 2
     assert 'data-capability-name="BigID"' not in html
+    assert "No, I don't have this" in unescape(html)
+
+
+def test_or_card_moves_confirmation_pair_to_next_unresolved_branch():
+    item = {
+        "requirement": "Experience with Microsoft Purview or BigID",
+        "importance": "mandatory",
+        "requirement_type": "capability",
+        "canonical_requirement": "",
+        "decomposition": _or("Microsoft Purview", "BigID"),
+        "status": "not_shown",
+        "matched_job_text": "Experience with Microsoft Purview or BigID",
+    }
+    coverage = _normalize(item, valid_capability_names={})
+    profile = _render_profile()
+    profile["must_not_require_skills"] = ["Microsoft Purview"]
+
+    html = workspace_renderer.render_job_card(_or_record(coverage), profile)
+
+    assert html.count('data-action="confirm_have"') == 1
+    assert html.count('data-action="confirm_do_not_have"') == 1
+    assert 'data-capability-name="Microsoft Purview"' not in html
+    assert html.count('data-capability-name="BigID"') == 2
+
 
 
 def test_or_branch_is_never_resolved_as_the_whole_mandatory_requirement():
