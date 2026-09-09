@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 134,
+  "version": 136,
   "updated_at": "2026-09-09T00:00:00+00:00",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -609,6 +609,7 @@
     "profile_evidence_label": "Profile evidence:",
     "profile_evidence_unconfirmed_label": "Not confirmed",
     "add_to_profile_action_label": "Yes, I have this",
+    "add_to_profile_named_alternative_action_label": "Add {capability}",
     "add_to_profile_action_title": "Confirm this capability and add it to your profile",
     "add_to_eligibility_action_label": "Add eligibility",
     "add_to_eligibility_action_title": "Add this eligibility fact to your profile",
@@ -1095,6 +1096,7 @@
     "settings_salary_daily_help_text": "Used when contract roles list a day rate.",
     "profile_review_blocking_reason_no_profile": "Create your profile before reviewing jobs.",
     "profile_review_blocking_reason_no_capabilities": "Your profile has no capability rules. Rebuild onboarding before reviewing jobs.",
+    "capability_atomicity_validation_error": "Each candidate capability must be one atomic concept. Review: {capabilities}",
     "search_keywords_length_error": "Please keep the role preference between 2 and 120 characters.",
     "search_keywords_phrase_error": "Please use at least two words for the role preference, or leave it blank."
   },

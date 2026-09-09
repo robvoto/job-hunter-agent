@@ -436,7 +436,9 @@ class _LLMRequirementElement(BaseModel):
     # element names a reusable capability concept. "uncertain" and an unresolved
     # mandatory "non_capability" become a deterministic pending capability_concept
     # Signal afterward (source_learning), never an LLM learning record.
-    capability_judgement: str = "capability"
+    # Omission must fail closed. A missing judgement cannot safely authorize a
+    # profile action for an OR branch.
+    capability_judgement: str = ""
     # The reusable profile concept for this element, separate from ad wording.
     canonical_concept: str = ""
     # Explicit LLM judgement: true only when canonical_concept names one clear
@@ -501,6 +503,14 @@ class _LLMProfileStorageResolution(BaseModel):
     resolution: str
     existing_name: str = ""
     new_name: str = ""
+
+
+class _LLMProfileCapabilityAtomicityItem(BaseModel):
+    atomic_concept: bool
+
+
+class _LLMProfileCapabilityAtomicityPayload(BaseModel):
+    items: list[_LLMProfileCapabilityAtomicityItem] = Field(default_factory=list)
 
 
 class _LLMReviewPayload(BaseModel):
@@ -621,6 +631,9 @@ OCCUPATION_ALIGNMENT_DEFAULT_LINES = _load_managed_prompt_lines("llm_occupation_
 POSTING_CHANNEL_DEFAULT_LINES = _load_managed_prompt_lines("llm_posting_channel_defaults")
 PROFILE_STORAGE_RESOLUTION_DEFAULT_LINES = _load_managed_prompt_lines(
     "llm_profile_storage_resolution_defaults"
+)
+PROFILE_CAPABILITY_ATOMICITY_DEFAULT_LINES = _load_managed_prompt_lines(
+    "llm_profile_capability_atomicity_defaults"
 )
 
 
@@ -898,6 +911,10 @@ def build_profile_storage_resolution_guidance() -> str:
     return "\n".join(f"- {line}" for line in PROFILE_STORAGE_RESOLUTION_DEFAULT_LINES)
 
 
+def build_profile_capability_atomicity_guidance() -> str:
+    return "\n".join(f"- {line}" for line in PROFILE_CAPABILITY_ATOMICITY_DEFAULT_LINES)
+
+
 # Shared cache namespace/profile lifecycle. Fit review and title judgement each
 # have their own contract version so changing one does not invalidate the other.
 LLM_CACHE_SCHEMA_VERSION = 3
@@ -912,7 +929,9 @@ LLM_CACHE_SCHEMA_VERSION = 3
 # (the structured-output default is empty, not professional_capability), and the
 # same-concept evidence check no longer accepts a single shared modifier token.
 # v8 caches can hold rows scored under both looser rules, so the namespace rotates.
-FIT_REVIEW_CACHE_CONTRACT_VERSION = 9
+# v10 (JH-300): OR-branch profile actions are restricted to explicitly named,
+# professional capability atoms; prior cached reviews must be re-reviewed.
+FIT_REVIEW_CACHE_CONTRACT_VERSION = 10
 TITLE_JUDGMENT_CACHE_CONTRACT_VERSION = 1
 POSTING_CHANNEL_LLM_CACHE_CONTRACT_VERSION = 1
 
@@ -1912,7 +1931,10 @@ def normalize_llm_requirement_coverage(
                     raw_element.get("capability_judgement")
                 ).lower()
                 if element_judgement not in _REQUIREMENT_CAPABILITY_JUDGEMENTS:
-                    element_judgement = "capability"
+                    # Semantic interpretation belongs to the structured LLM
+                    # output. Missing/invalid interpretation is unresolved, not
+                    # permission to persist a candidate capability.
+                    element_judgement = "uncertain"
                 element_fact_resolved = bool(raw_element.get("canonical_fact_resolved"))
                 element_status = compact_whitespace(raw_element.get("status")).lower()
                 if element_status not in _ALLOWED_REQUIREMENT_COVERAGE_STATUSES:
@@ -1927,8 +1949,14 @@ def normalize_llm_requirement_coverage(
                         "matched_candidate_fact": compact_whitespace(
                             raw_element.get("matched_candidate_fact")
                         ),
-                        # Per-branch gate for an OR row's own Add action.
-                        "element_profile_action_allowed": bool(element_concept)
+                        # Per-branch gate for an OR row's own Add action. JH-300
+                        # deliberately limits this exception to named,
+                        # professional capability atoms; qualification,
+                        # eligibility, vague, and behavioural alternatives stay
+                        # non-actionable under JH-286.
+                        "element_profile_action_allowed": requirement_type == "capability"
+                        and requirement_kind == LLM_REQUIREMENT_KIND_PROFESSIONAL
+                        and bool(element_concept)
                         and element_fact_resolved
                         and element_judgement == "capability",
                     }
@@ -3339,6 +3367,115 @@ def llm_resolve_profile_storage(
         normalized["profile_target"],
     )
     return normalized
+
+
+def llm_validate_profile_capability_atomicity(
+    capabilities: list[dict[str, Any]],
+    llm_client: Any = None,
+    *,
+    benchmark_model: str | None = None,
+) -> list[bool]:
+    """Return one structured atomicity judgement for each capability row.
+
+    This is the semantic interpretation boundary for direct Settings/API
+    capability writes. The save path remains deterministic: it validates the
+    returned shape and rejects every false or incomplete judgement without
+    rewriting the submitted capability name.
+    """
+    active_client = llm_client or client
+    if active_client is None:
+        raise RuntimeError("Profile capability atomicity requires an available LLM client")
+    if not isinstance(capabilities, list):
+        raise ValueError("capabilities must be a list")
+
+    payload: list[dict[str, str]] = []
+    for item in capabilities:
+        if not isinstance(item, dict):
+            raise ValueError("Each candidate capability must be an object")
+        name = compact_whitespace(item.get("name"))
+        if not name:
+            raise ValueError("Each candidate capability must have a name")
+        payload.append({"name": name})
+    if not payload:
+        return []
+
+    model = benchmark_model or _log_llm_model_once()
+    guidance = build_profile_capability_atomicity_guidance()
+    request_started = time.perf_counter()
+    logger.debug(
+        "[LLM][REQUEST] purpose=profile_capability_atomicity model=%s input_items=%d max_output_tokens=%d",
+        model,
+        len(payload),
+        get_llm_capability_naming_max_output_tokens(),
+    )
+    try:
+        resp = active_client.responses.parse(
+            model=model,
+            input=[
+                {"role": "system", "content": guidance},
+                {"role": "user", "content": _json_mod.dumps(payload, ensure_ascii=False)},
+            ],
+            max_output_tokens=get_llm_capability_naming_max_output_tokens(),
+            text_format=_LLMProfileCapabilityAtomicityPayload,
+            **_llm_generation_kwargs(model),
+        )
+        _log_llm_call(resp, "profile_capability_atomicity", model)
+    except APITimeoutError as exc:
+        raise LLMCallError(
+            "APITimeoutError: Request timed out.",
+            purpose="profile_capability_atomicity",
+            model=model,
+            is_timeout=True,
+        ) from exc
+    except APIStatusError as exc:
+        raise LLMCallError(
+            f"HTTP {exc.status_code} — {exc.message}",
+            purpose="profile_capability_atomicity",
+            model=model,
+            status_code=exc.status_code,
+        ) from exc
+    except Exception as exc:
+        raise LLMCallError(
+            f"{type(exc).__name__}: {exc}",
+            purpose="profile_capability_atomicity",
+            model=model,
+        ) from exc
+    finally:
+        logger.debug(
+            "[LLM][TIMING] purpose=profile_capability_atomicity model=%s duration_ms=%.0f",
+            model,
+            (time.perf_counter() - request_started) * 1000,
+        )
+
+    parsed = getattr(resp, "output_parsed", None)
+    if parsed is None:
+        raise LLMCallError(
+            "LLM returned no parsed profile capability atomicity judgement",
+            purpose="profile_capability_atomicity",
+            model=model,
+        )
+    items = parsed.model_dump().get("items")
+    if not isinstance(items, list) or len(items) != len(payload):
+        raise LLMCallError(
+            "LLM returned one profile capability atomicity judgement per input item",
+            purpose="profile_capability_atomicity",
+            model=model,
+        )
+    judgements: list[bool] = []
+    for item in items:
+        if not isinstance(item, dict) or not isinstance(item.get("atomic_concept"), bool):
+            raise LLMCallError(
+                "LLM returned an invalid profile capability atomicity judgement",
+                purpose="profile_capability_atomicity",
+                model=model,
+            )
+        judgements.append(item["atomic_concept"])
+    logger.debug(
+        "[LLM][RESULT] purpose=profile_capability_atomicity atomic_items=%d rejected_items=%d",
+        len(judgements),
+        sum(not value for value in judgements),
+    )
+    return judgements
 
 
 def llm_should_consider(job_description_text: str) -> Dict[str, str]:

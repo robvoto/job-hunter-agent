@@ -39,6 +39,7 @@ from job_hunter_agent.history import (
 )
 from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent.job_identity import find_confirmed_duplicate
+from job_hunter_agent.llm_protocol import LLM_REQUIREMENT_KIND_PROFESSIONAL
 from job_hunter_agent.match_labels import score_to_match_label
 from job_hunter_agent.paths import RESULTS_TEMPLATE_PATH
 from job_hunter_agent.posting_utils import (
@@ -56,6 +57,7 @@ from job_hunter_agent.preferences import (
     display_work_type_label,
 )
 from job_hunter_agent.profile_gaps import (
+    CONFIRMABLE_REQUIREMENT_STATUSES,
     CUSTOM_BLOCKER_REASON_AMBIGUOUS,
     CUSTOM_BLOCKER_REASON_INVALID_INPUT,
     CUSTOM_BLOCKER_REASON_NOT_REQUIRED,
@@ -1963,6 +1965,7 @@ def render_job_card(
         profile_review_html = ""
         canonical_requirement = compact_whitespace(str(row.get("canonical_requirement") or ""))
         row_requirement_type = str(row.get("requirement_type") or "capability").strip().lower()
+        row_requirement_kind = str(row.get("requirement_kind") or "").strip().lower()
         # A partial match already names an adjacent profile fact in
         # matched_candidate_fact; the exact requested concept
         # (canonical_requirement) is only worth an Add action when it is NOT
@@ -1996,7 +1999,10 @@ def render_job_card(
             "unknown",
             "invalid",
             "partially-supported",
-        ) and not is_uncertain_classification and not exact_requirement_confirmed:
+        ) and not is_uncertain_classification and not exact_requirement_confirmed and (
+            row_requirement_type != "capability"
+            or row_requirement_kind == LLM_REQUIREMENT_KIND_PROFESSIONAL
+        ):
             is_eligibility = bool(row.get("is_eligibility"))
             is_qualification = bool(row.get("is_qualification"))
             action_label_key = (
@@ -2038,9 +2044,10 @@ def render_job_card(
                 '</span>'
             )
         # OR requirement: every acceptable branch stays visible so the candidate
-        # sees the whole requirement, while one unresolved branch gets a precise
-        # Yes/No confirmation pair. A No applies only to that branch; it must not
-        # be interpreted as rejecting the whole OR requirement.
+        # sees the whole requirement. JH-300 additionally exposes one
+        # confirmation pair for each unresolved, named professional capability
+        # branch. A No applies only to that branch; it must not be interpreted as
+        # rejecting the whole OR requirement.
         # resolve_custom_blocker / profile-gap must never treat that single
         # branch as the entire mandatory requirement — see
         # docs/REQUIREMENT_DECOMPOSITION_RATIONALE.md.
@@ -2072,13 +2079,29 @@ def render_job_card(
                     '<span class="job-requirement-note job-requirement-note--or">'
                     f"{safe_html(note_text)}</span>"
                 )
-                primary_branch = ""
+                branch_action_html = ""
                 if (
-                    css_modifier not in ("supported", "partially-supported")
+                    row_requirement_type == "capability"
+                    and str(row.get("requirement_kind") or "").strip().lower()
+                    == LLM_REQUIREMENT_KIND_PROFESSIONAL
                     and not is_uncertain_classification
                 ):
+                    branch_actions: list[str] = []
+                    add_label_template = _workspace_label(
+                        "workspace_card_labels",
+                        "add_to_profile_named_alternative_action_label",
+                    )
+                    add_title = _workspace_label(
+                        "workspace_card_labels", "add_to_profile_action_title"
+                    )
+                    not_have_label = _workspace_label(
+                        "workspace_card_labels", "gap_confirm_not_have_label"
+                    )
                     for el in branch_elements:
-                        if not el.get("element_profile_action_allowed"):
+                        if el.get("element_profile_action_allowed") is not True:
+                            continue
+                        branch_status = str(el.get("status") or "").strip().lower()
+                        if branch_status not in CONFIRMABLE_REQUIREMENT_STATUSES:
                             continue
                         concept = compact_whitespace(str(el.get("canonical_concept") or ""))
                         if not concept:
@@ -2096,28 +2119,27 @@ def render_job_card(
                                 )
                                 or [],
                             )
-                            == STATUS_UNKNOWN
+                            != STATUS_UNKNOWN
                         ):
-                            primary_branch = concept
-                            break
-                branch_action_html = ""
-                if primary_branch and not profile_review_html:
-                    branch_confirm_have_html = (
-                        '<button type="button" class="jh-button jh-button--primary jh-button--micro job-requirement-action gap-btn" '
-                        f'data-action="confirm_have" data-capability-name="{safe_html(primary_branch)}" '
-                        f'title="{safe_html(_workspace_label("workspace_card_labels", "add_to_profile_action_title"))}">'
-                        '<span aria-hidden="true">+</span>'
-                        f'<span>{safe_html(_workspace_label("workspace_card_labels", "add_to_profile_action_label"))} · {safe_html(primary_branch)}</span></button>'
-                    )
-                    branch_confirm_not_have_html = (
-                        '<button type="button" class="jh-button jh-button--danger jh-button--micro job-requirement-action gap-btn" '
-                        f'data-action="confirm_do_not_have" data-capability-name="{safe_html(primary_branch)}">'
-                        f'{safe_html(_workspace_label("workspace_card_labels", "gap_confirm_not_have_label"))}</button>'
-                    )
-                    branch_action_html = (
-                        '<span class="req-coverage-detail req-coverage-detail--profile-review">'
-                        f"{branch_confirm_have_html}{branch_confirm_not_have_html}</span>"
-                    )
+                            continue
+                        add_label = add_label_template.replace("{capability}", concept)
+                        branch_confirm_have_html = (
+                            '<button type="button" class="jh-button jh-button--primary jh-button--micro job-requirement-action gap-btn" '
+                            f'data-action="confirm_have" data-capability-name="{safe_html(concept)}" '
+                            f'title="{safe_html(add_title)}">'
+                            '<span aria-hidden="true">+</span>'
+                            f"<span>{safe_html(add_label)}</span></button>"
+                        )
+                        branch_confirm_not_have_html = (
+                            '<button type="button" class="jh-button jh-button--danger jh-button--micro job-requirement-action gap-btn" '
+                            f'data-action="confirm_do_not_have" data-capability-name="{safe_html(concept)}">'
+                            f"{safe_html(not_have_label)}</button>"
+                        )
+                        branch_actions.append(
+                            '<span class="req-coverage-detail req-coverage-detail--profile-review">'
+                            f"{branch_confirm_have_html}{branch_confirm_not_have_html}</span>"
+                        )
+                    branch_action_html = "".join(branch_actions)
                 or_branch_html = branch_note_html + branch_action_html
         html = (
             f'<li class="job-requirement-item job-requirement-item--{safe_html(css_modifier)}">'
@@ -2320,6 +2342,7 @@ def render_job_card(
             row = target_rows[key]
             row["coverage_status"] = str(item.get("status") or "not_shown").strip().lower()
             row["requirement_type"] = raw_requirement_type
+            row["requirement_kind"] = str(item.get("requirement_kind") or "").strip().lower()
             row["requirement_subtype"] = requirement_subtype
             row["canonical_requirement"] = compact_whitespace(str(item.get("canonical_requirement") or ""))
             # Set by normalize_llm_requirement_coverage: whether canonical_requirement

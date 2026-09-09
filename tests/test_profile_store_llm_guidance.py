@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from job_hunter_agent import profile_store, review_insights
+from job_hunter_agent import llm_gate, profile_store, review_insights
 from job_hunter_agent.io_utils import load_ui_labels
 
 
@@ -30,6 +30,102 @@ def test_save_profile_does_not_persist_scoring_rules(isolated_db):
         ).fetchone()
     persisted = json.loads(row["data"])
     assert "scoring_rules" not in persisted
+
+
+def test_save_profile_rejects_llm_classified_compound_capability(isolated_db, monkeypatch):
+    monkeypatch.setattr(
+        "job_hunter_agent.llm_gate.llm_validate_profile_capability_atomicity",
+        lambda capabilities: [False for _ in capabilities],
+    )
+
+    with pytest.raises(ValueError, match="atomic concept"):
+        profile_store.save_profile(
+            {
+                **profile_store.DEFAULT_PROFILE,
+                "candidate_capabilities": [
+                    {"name": "Power BI, Excel and GIS", "level": "working"}
+                ],
+            }
+        )
+
+
+def test_save_profile_calls_atomicity_validator_for_new_capability(isolated_db, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        llm_gate,
+        "llm_validate_profile_capability_atomicity",
+        lambda capabilities: calls.append(capabilities) or [True for _ in capabilities],
+    )
+
+    saved = profile_store.save_profile(
+        {
+            **profile_store.DEFAULT_PROFILE,
+            "candidate_capabilities": [
+                {"name": "Power BI", "level": "working"}
+            ],
+        }
+    )
+
+    assert len(calls) == 1
+    assert calls[0][0]["name"] == saved["candidate_capabilities"][0]["name"]
+
+    saved["candidate_capabilities"][0]["level"] = "basic"
+    profile_store.save_profile(saved)
+
+    assert len(calls) == 2
+
+
+def test_save_profile_skips_atomicity_validator_for_unchanged_capabilities(
+    isolated_db, monkeypatch
+):
+    monkeypatch.setattr(
+        llm_gate,
+        "llm_validate_profile_capability_atomicity",
+        lambda capabilities: [True for _ in capabilities],
+    )
+    profile_store.save_profile(
+        {
+            **profile_store.DEFAULT_PROFILE,
+            "candidate_capabilities": [
+                {"name": "Power BI", "level": "working"}
+            ],
+        }
+    )
+    monkeypatch.setattr(llm_gate, "client", None)
+    monkeypatch.setattr(
+        llm_gate,
+        "llm_validate_profile_capability_atomicity",
+        lambda capabilities: pytest.fail("unchanged capabilities must not be validated"),
+    )
+
+    profile = profile_store.load_profile()
+    profile["search_settings"]["date_range_days"] = 5
+    profile_store.save_profile(profile)
+
+
+def test_save_profile_unrelated_change_succeeds_without_llm_client(
+    isolated_db, monkeypatch
+):
+    monkeypatch.setattr(
+        llm_gate,
+        "llm_validate_profile_capability_atomicity",
+        lambda capabilities: [True for _ in capabilities],
+    )
+    profile_store.save_profile(
+        {
+            **profile_store.DEFAULT_PROFILE,
+            "candidate_capabilities": [
+                {"name": "Power BI", "level": "working"}
+            ],
+        }
+    )
+    monkeypatch.setattr(llm_gate, "client", None)
+
+    profile = profile_store.load_profile()
+    profile["salary_preferences"]["minimum_salary_yearly"] = 100000
+    saved = profile_store.save_profile(profile)
+
+    assert saved["salary_preferences"]["minimum_salary_yearly"] == 100000
 
 
 def test_load_profile_rejects_unknown_top_level_field(isolated_db):

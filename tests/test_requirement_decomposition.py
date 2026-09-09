@@ -210,6 +210,29 @@ def test_or_row_neither_branch_in_profile_is_not_row_actionable_but_keeps_branch
     )
 
 
+def test_card_does_not_render_capability_action_when_requirement_kind_is_missing():
+    html = workspace_renderer.render_job_card(
+        _or_record(
+            [
+                {
+                    "requirement": "Excel experience",
+                    "requirement_type": "capability",
+                    "requirement_kind": "",
+                    "canonical_requirement": "Excel",
+                    "profile_action_allowed": True,
+                    "status": "not_shown",
+                    "matched_job_text": "Excel experience",
+                    "decomposition": _single("Excel"),
+                }
+            ]
+        ),
+        _render_profile(),
+    )
+
+    assert 'data-action="confirm_have"' not in html
+    assert 'data-action="confirm_do_not_have"' not in html
+
+
 def test_or_row_rolls_up_to_supported_when_one_branch_is_supported():
     # The LLM reports the row as satisfied by the branch that matched (row-level
     # status + matched_candidate_fact name that branch); the elements carry the
@@ -250,7 +273,7 @@ def test_or_row_rolls_up_to_supported_when_one_branch_is_supported():
     assert coverage[0]["canonical_requirement"] == ""
 
 
-def test_or_card_names_every_branch_and_shows_one_primary_confirmation_pair():
+def test_or_card_names_every_branch_and_shows_each_unresolved_confirmation_pair():
     item = {
         "requirement": "Experience with Microsoft Purview or BigID",
         "importance": "mandatory",
@@ -267,11 +290,13 @@ def test_or_card_names_every_branch_and_shows_one_primary_confirmation_pair():
     assert "Microsoft Purview" in html
     assert "BigID" in html
     assert "Either Microsoft Purview or BigID satisfies this requirement." in html
-    # Exactly one Yes/No confirmation pair, both scoped to the first unresolved branch.
-    assert html.count('data-action="confirm_have"') == 1
-    assert html.count('data-action="confirm_do_not_have"') == 1
+    # Each named, unresolved professional capability branch gets its own pair.
+    assert html.count('data-action="confirm_have"') == 2
+    assert html.count('data-action="confirm_do_not_have"') == 2
     assert html.count('data-capability-name="Microsoft Purview"') == 2
-    assert 'data-capability-name="BigID"' not in html
+    assert html.count('data-capability-name="BigID"') == 2
+    assert "Add Microsoft Purview" in unescape(html)
+    assert "Add BigID" in unescape(html)
     assert "No, I don't have this" in unescape(html)
 
 
@@ -293,6 +318,42 @@ def test_or_card_moves_confirmation_pair_to_next_unresolved_branch():
 
     assert html.count('data-action="confirm_have"') == 1
     assert html.count('data-action="confirm_do_not_have"') == 1
+    assert 'data-capability-name="Microsoft Purview"' not in html
+    assert html.count('data-capability-name="BigID"') == 2
+
+
+def test_or_card_keeps_unresolved_branch_action_when_another_branch_is_supported():
+    item = {
+        "requirement": "Experience with Microsoft Purview or BigID",
+        "importance": "mandatory",
+        "requirement_type": "capability",
+        "canonical_requirement": "",
+        "decomposition": {
+            "operator": "or",
+            "elements": [
+                {
+                    "text": "Microsoft Purview",
+                    "capability_judgement": "capability",
+                    "canonical_concept": "Microsoft Purview",
+                    "canonical_fact_resolved": True,
+                    "status": "supported",
+                },
+                {
+                    "text": "BigID",
+                    "capability_judgement": "capability",
+                    "canonical_concept": "BigID",
+                    "canonical_fact_resolved": True,
+                    "status": "not_shown",
+                },
+            ],
+        },
+        "status": "supported",
+        "matched_job_text": "Experience with Microsoft Purview or BigID",
+    }
+    coverage = _normalize(item, valid_capability_names={})
+
+    html = workspace_renderer.render_job_card(_or_record(coverage), _render_profile())
+
     assert 'data-capability-name="Microsoft Purview"' not in html
     assert html.count('data-capability-name="BigID"') == 2
 

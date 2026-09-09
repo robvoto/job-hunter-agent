@@ -2062,10 +2062,84 @@ def test_normalize_coverage_blocks_profile_action_for_or_group_of_alternatives()
         "CSPO",
         "PSM",
     ]
-    # Each branch is independently resolvable even though the row is not.
+    # JH-300 only permits branch actions for professional capability atoms;
+    # credentials and issuer alternatives remain protected by JH-286.
     assert all(
-        el["element_profile_action_allowed"] is True
+        el["element_profile_action_allowed"] is False
         for el in result[0]["decomposition"]["elements"]
+    )
+
+
+def test_normalize_or_branch_action_requires_professional_capability_kind():
+    result = _norm_cov(
+        [
+            {
+                "requirement": "Power BI or Excel experience",
+                "importance": "preferred",
+                "requirement_type": "capability",
+                "requirement_kind": "behavioural_expectation",
+                "decomposition": {
+                    "operator": "or",
+                    "elements": [
+                        {
+                            "text": name,
+                            "capability_judgement": "capability",
+                            "canonical_concept": name,
+                            "canonical_fact_resolved": True,
+                            "status": "not_shown",
+                        }
+                        for name in ("Power BI", "Excel")
+                    ],
+                },
+                "status": "not_shown",
+                "matched_job_text": "Power BI or Excel experience",
+            }
+        ],
+        valid_capability_names={},
+    )
+
+    assert result[0]["profile_action_allowed"] is False
+    assert all(
+        element["element_profile_action_allowed"] is False
+        for element in result[0]["decomposition"]["elements"]
+    )
+
+
+def test_normalize_missing_or_invalid_element_judgement_fails_closed():
+    result = _norm_cov(
+        [
+            {
+                "requirement": "Power BI or Excel experience",
+                "importance": "preferred",
+                "requirement_type": "capability",
+                "decomposition": {
+                    "operator": "or",
+                    "elements": [
+                        {
+                            "text": "Power BI",
+                            "canonical_concept": "Power BI",
+                            "canonical_fact_resolved": True,
+                            "status": "not_shown",
+                        },
+                        {
+                            "text": "Excel",
+                            "capability_judgement": "not-a-real-judgement",
+                            "canonical_concept": "Excel",
+                            "canonical_fact_resolved": True,
+                            "status": "not_shown",
+                        },
+                    ],
+                },
+                "status": "not_shown",
+                "matched_job_text": "Power BI or Excel experience",
+            }
+        ],
+        valid_capability_names={},
+    )
+
+    assert all(
+        element["element_profile_action_allowed"] is False
+        for element in result[0]["decomposition"]["elements"]
     )
 
 

@@ -25,6 +25,7 @@ APPROVED_DB_KNOWLEDGE_JSON_REL_PATHS: tuple[str, ...] = (
     "llm_learning_defaults.json",
     "llm_occupation_alignment_defaults.json",
     "llm_posting_channel_defaults.json",
+    "llm_profile_capability_atomicity_defaults.json",
     "llm_profile_storage_resolution_defaults.json",
     "llm_rejection_suggestions_defaults.json",
     "llm_requirement_coverage_defaults.json",

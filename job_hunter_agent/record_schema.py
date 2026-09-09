@@ -115,7 +115,10 @@ RECORD_REQUIREMENT_COVERAGE_VERSION_KEY = "requirement_coverage_contract_version
 # explicitly professional_capability (missing/empty/invalid now fail closed too),
 # and same-concept evidence no longer accepts a single shared modifier token. v6
 # coverage can hold rows scored under both looser rules, so it is re-reviewed.
-REQUIREMENT_COVERAGE_CONTRACT_VERSION = 7
+# v8 (JH-300): OR-branch profile actions are restricted to explicitly named,
+# professional capability atoms and all other branches remain non-actionable.
+# v7 coverage can therefore expose unsafe branch actions and is re-reviewed.
+REQUIREMENT_COVERAGE_CONTRACT_VERSION = 8
 RECORD_OCCUPATION_ALIGNMENT_KEY = "occupation_alignment"
 RECORD_OCCUPATION_ALIGNMENT_REASON_KEY = "occupation_alignment_reason"
 RECORD_DESCRIPTION_COMPACTION_KEY = "description_compaction"
