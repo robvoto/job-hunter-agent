@@ -459,7 +459,9 @@ def _run_seek_source(context: ScrapeRunContext) -> SourceRunResult:
         )
         if assisted_verification_enabled:
             logger.warning("[SEEK] %s", SEEK_ASSISTED_BROWSER_SESSION_ENABLED)
-            _set_seek_source_progress(SEEK_ASSISTED_BROWSER_SESSION_ENABLED, stage="verification")
+            # Assisted browser availability is normal startup state, not evidence of a CAPTCHA.
+            # Only actual challenge detection below may move SEEK into the verification stage.
+            _set_seek_source_progress(SEEK_ASSISTED_BROWSER_SESSION_ENABLED, stage="starting")
         _seek_kwargs: dict[str, Any] = dict(
             profile=context.profile,
             search_targets=search_targets,
