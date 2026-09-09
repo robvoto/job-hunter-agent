@@ -565,7 +565,10 @@ def _resolve_and_confirm_requirement(
             merged["aliases"] = [*existing_aliases, confirmed_fact]
             capabilities[idx] = merged
             profile[KEY_CANDIDATE_CAPABILITIES] = capabilities
-            srv.save_profile(profile)
+            srv.save_profile(
+                profile,
+                prevalidated_capability_names={profile_target},
+            )
             return {
                 "ok": True,
                 "resolution": resolution,
@@ -642,7 +645,13 @@ def _resolve_and_confirm_requirement(
                 }
             )
             profile[KEY_CANDIDATE_CAPABILITIES] = capabilities
-        srv.save_profile(profile)
+        if requirement_type == "capability":
+            srv.save_profile(
+                profile,
+                prevalidated_capability_names={profile_target},
+            )
+        else:
+            srv.save_profile(profile)
         return {
             "ok": True,
             "resolution": resolution,

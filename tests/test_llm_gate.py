@@ -3466,6 +3466,49 @@ def test_llm_resolve_profile_storage_logs_request_and_timing(monkeypatch, caplog
     assert "[LLM][TIMING] purpose=profile_storage_resolution" in caplog.text
 
 
+def test_llm_resolve_profile_storage_reuses_decision_until_profile_cache_invalidation(monkeypatch):
+    calls = []
+
+    class _Parsed:
+        def model_dump(self):
+            return {"resolution": "new", "existing_name": "", "new_name": "Java"}
+
+    class _Responses:
+        def parse(self, **kwargs):
+            calls.append(kwargs)
+            return type("_Resp", (), {"output_parsed": _Parsed(), "usage": None})()
+
+    class _Client:
+        responses = _Responses()
+
+    monkeypatch.setattr(llm_gate, "client", _Client())
+    monkeypatch.setattr(llm_gate, "_log_llm_call", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        llm_gate,
+        "get_llm_model_override_for_purpose",
+        lambda purpose: "gpt-5.6-luna" if purpose == "profile_storage_resolution" else None,
+    )
+    llm_gate.invalidate_profile_fingerprint_cache()
+    row = {
+        "requirement_type": "capability",
+        "requirement": "Java development experience",
+        "matched_job_text": "Java development experience",
+        "canonical_requirement": "Java",
+    }
+
+    first = llm_gate.llm_resolve_profile_storage(row, _storage_profile())
+    second = llm_gate.llm_resolve_profile_storage(row, _storage_profile())
+
+    assert first == second == {"resolution": "new", "profile_target": "Java"}
+    assert len(calls) == 1
+
+    llm_gate.invalidate_profile_fingerprint_cache()
+    third = llm_gate.llm_resolve_profile_storage(row, _storage_profile())
+
+    assert third == first
+    assert len(calls) == 2
+
+
 def test_llm_resolve_profile_storage_returns_validated_existing_resolution(monkeypatch):
     monkeypatch.setattr(llm_gate, "_log_llm_call", lambda *args, **kwargs: None)
     client = _FakeProfileStorageClient(resolution="existing", existing_name="Business Analysis")
