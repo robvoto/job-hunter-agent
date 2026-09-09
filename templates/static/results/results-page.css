@@ -228,6 +228,14 @@
   justify-content: flex-start;
 }
 
+.job-title-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--control-space-sm);
+  min-width: 0;
+}
+
 .job-link {
   display: inline-block;
   flex: 0 1 auto;

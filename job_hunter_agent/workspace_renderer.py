@@ -1420,6 +1420,7 @@ def render_job_card(
     source_label = get_source_display_label(source)
 
     badges = []
+    title_badges = []
     if applied_record:
         badges.append(
             render_badge(
@@ -1444,8 +1445,6 @@ def render_job_card(
                 _workspace_label("workspace_card_labels", "new_to_you_badge_tooltip"),
             )
         )
-    if seen_by_you:
-        badges.append(viewed_badge_html())
     apply_method = str(record.get(RECORD_APPLY_METHOD_KEY) or "").strip()
     if apply_method == APPLY_METHOD_EASY_APPLY:
         apply_method_label = _workspace_label("workspace_card_labels", "apply_method_easy_apply_badge")
@@ -1468,7 +1467,9 @@ def render_job_card(
         source_badge_tooltip = _workspace_label("workspace_card_labels", "source_badge_tooltip").format(
             source=source_label
         )
-    badges.append(render_badge(source_badge_label, f"badge-source-{source}", source_badge_tooltip))
+    title_badges.append(render_badge(source_badge_label, f"badge-source-{source}", source_badge_tooltip))
+    if seen_by_you:
+        title_badges.append(viewed_badge_html())
     if record.get(RECORD_IS_REPOSTED_KEY) is True and not applied_record:
         badges.append(
             render_badge(
@@ -2671,14 +2672,16 @@ def render_job_card(
     )
     card_dom_id = _workspace_job_card_id(job_key)
     title_block_panel_id = f"{card_dom_id}-title-block"
+    badges_html = f'<div class="job-badges">{"".join(badges)}</div>' if badges else ""
 
     return (
         f'<article id="{safe_html(card_dom_id)}" class="{safe_html(card_classes)}" data-fit-score="{fit_points}" data-posted-age="{posted_age_days if posted_age_days is not None else 9999}" data-salary-sort="{salary_value}" data-salary-fit="{safe_html(salary_fit_state)}" data-work-mode="{safe_html(work_mode.lower())}" data-work-type="{safe_html(display_work_type_label(record).lower())}" data-viewed="{1 if seen_by_you else 0}" data-new-to-you="{1 if new_to_you else 0}" data-reposted="{1 if record.get(RECORD_IS_REPOSTED_KEY) is True else 0}" data-record-kind="{record_kind}" data-fit-label="{safe_html(fit_label.lower())}" data-title-search="{safe_html((record.get("title") or "").lower())}" data-company-search="{safe_html(company_display.lower())}" data-source="{safe_html(source)}" data-posting-channel="{safe_html(channel_kind)}" data-apply-method="{safe_html(apply_method or "unknown")}">'
-        f'<div class="job-badges">{"".join(badges)}</div>'
+        f"{badges_html}"
         '<div class="job-header-row">'
         '<div class="job-header-copy">'
         '<div class="job-title-row">'
         f'<a class="job-link" href="{url}" target="_blank" rel="noopener noreferrer" data-job-key="{job_key}" data-job-url="{url}" data-job-title="{title}">{title}</a>'
+        f'<span class="job-title-badges">{"".join(title_badges)}</span>'
         + (
             f'<button class="title-block-btn workspace-text-action workspace-text-action--muted" type="button" data-review-action="block_similar" {button_data_attrs} aria-expanded="false" aria-controls="{safe_html(title_block_panel_id)}" title="{safe_html(_workspace_label("workspace_card_labels", "title_block_button_tooltip"))}">{safe_html(_workspace_label("workspace_card_labels", "title_block_button_label"))}</button>'
             f'<div id="{safe_html(title_block_panel_id)}" class="block-confirm" data-block-confirm hidden>'
