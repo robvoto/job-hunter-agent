@@ -1030,7 +1030,22 @@ def require_profile_ready_for_review(
     return status
 
 
-def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
+def _capability_identity_key(value: Any) -> str:
+    return re.sub(r"\s+", " ", str(value or "")).strip().casefold()
+
+
+def save_profile(
+    profile: dict[str, Any],
+    *,
+    prevalidated_capability_names: set[str] | frozenset[str] | None = None,
+) -> dict[str, Any]:
+    """Persist the profile and validate semantic atomicity for capability changes.
+
+    ``prevalidated_capability_names`` is reserved for the profile-confirmation
+    path. Those exact names already passed the requirement-coverage canonical
+    fact/actionability gate before the user explicitly confirmed them. Direct
+    Settings/API writes do not supply it and retain normal LLM validation.
+    """
     from job_hunter_agent.database import db_conn, ensure_user_row
     from job_hunter_agent.paths import get_active_user_id
 
@@ -1049,18 +1064,22 @@ def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
         (current or {}).get("onboarding_settings", {}),
     )
     current_capabilities_by_name = {
-        re.sub(r"\s+", " ", str(item.get("name") or "")).strip().casefold(): item
+        _capability_identity_key(item.get("name")): item
         for item in current_capabilities
-        if isinstance(item, dict) and str(item.get("name") or "").strip()
+        if isinstance(item, dict) and _capability_identity_key(item.get("name"))
+    }
+    prevalidated_capability_keys = {
+        _capability_identity_key(name)
+        for name in (prevalidated_capability_names or set())
+        if _capability_identity_key(name)
     }
     capabilities_to_validate = [
         item
         for item in normalized.get(KEY_CANDIDATE_CAPABILITIES, [])
         if isinstance(item, dict)
-        and current_capabilities_by_name.get(
-            re.sub(r"\s+", " ", str(item.get("name") or "")).strip().casefold()
-        )
-        != item
+        and (item_key := _capability_identity_key(item.get("name")))
+        and current_capabilities_by_name.get(item_key) != item
+        and item_key not in prevalidated_capability_keys
     ]
     if capabilities_to_validate:
         # Direct Settings/API writes have no prior semantic interpretation. The

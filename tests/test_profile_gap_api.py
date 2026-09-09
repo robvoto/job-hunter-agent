@@ -47,7 +47,7 @@ def _mock_profile_storage_resolution(monkeypatch, resolution, profile_target):
 def test_profile_gap_decide_later_is_removed(client, monkeypatch):
     saved = []
     monkeypatch.setattr(
-        "job_hunter_agent.server_helpers.save_profile", lambda p: saved.append(p) or p
+        "job_hunter_agent.server_helpers.save_profile", lambda p, **kwargs: saved.append(p) or p
     )
 
     resp = client.post(
@@ -89,12 +89,17 @@ def test_profile_gap_confirm_have_adds_canonical_capability(client, monkeypatch)
         "must_not_require_skills": [],
     }
     saved_profiles = []
+    save_kwargs = []
     monkeypatch.setattr(
         "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
     )
-    monkeypatch.setattr(
-        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
-    )
+
+    def _save_profile(profile, **kwargs):
+        saved_profiles.append(profile)
+        save_kwargs.append(kwargs)
+        return profile
+
+    monkeypatch.setattr("job_hunter_agent.server_helpers.save_profile", _save_profile)
     _mock_profile_storage_resolution(monkeypatch, "new", "Cloud computing (AWS)")
 
     first = client.post(
@@ -130,6 +135,9 @@ def test_profile_gap_confirm_have_adds_canonical_capability(client, monkeypatch)
     assert added["fit"] == "supporting"
     assert added["level"] == "strong"
     assert added["icon_key"] == "generic_capability"
+    assert save_kwargs == [
+        {"prevalidated_capability_names": {"Cloud computing (AWS)"}}
+    ]
 
 
 def test_profile_gap_confirm_have_saves_only_selected_named_or_branch(client, monkeypatch):
@@ -171,7 +179,7 @@ def test_profile_gap_confirm_have_saves_only_selected_named_or_branch(client, mo
         "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
     )
     monkeypatch.setattr(
-        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+        "job_hunter_agent.server_helpers.save_profile", lambda p, **kwargs: saved_profiles.append(p) or p
     )
     _mock_profile_storage_resolution(monkeypatch, "new", "Excel")
 
@@ -237,7 +245,7 @@ def test_profile_gap_confirm_have_rejects_storage_rename_for_new_named_branch(cl
         lambda: {"candidate_capabilities": [], "must_not_require_skills": []},
     )
     monkeypatch.setattr(
-        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+        "job_hunter_agent.server_helpers.save_profile", lambda p, **kwargs: saved_profiles.append(p) or p
     )
     _mock_profile_storage_resolution(monkeypatch, "new", "Power BI, Excel and GIS")
 
@@ -369,7 +377,7 @@ def test_profile_gap_confirm_have_is_idempotent(client, monkeypatch):
         "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
     )
     monkeypatch.setattr(
-        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+        "job_hunter_agent.server_helpers.save_profile", lambda p, **kwargs: saved_profiles.append(p) or p
     )
 
     resp = client.post(
@@ -415,7 +423,7 @@ def test_profile_gap_confirm_have_qualification_uses_canonical_requirement_not_m
         "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
     )
     monkeypatch.setattr(
-        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+        "job_hunter_agent.server_helpers.save_profile", lambda p, **kwargs: saved_profiles.append(p) or p
     )
     _mock_profile_storage_resolution(monkeypatch, "new", "CBAP")
 
@@ -458,7 +466,7 @@ def test_profile_gap_confirm_have_qualification_atomic_name_saved_unchanged(clie
         "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
     )
     monkeypatch.setattr(
-        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+        "job_hunter_agent.server_helpers.save_profile", lambda p, **kwargs: saved_profiles.append(p) or p
     )
     _mock_profile_storage_resolution(monkeypatch, "new", "PRINCE2")
 
@@ -497,7 +505,7 @@ def test_profile_gap_confirm_have_rejects_non_capability_string(client, monkeypa
         "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
     )
     monkeypatch.setattr(
-        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+        "job_hunter_agent.server_helpers.save_profile", lambda p, **kwargs: saved_profiles.append(p) or p
     )
 
     resp = client.post(
@@ -544,7 +552,7 @@ def test_profile_gap_confirm_have_rejects_capability_carrying_a_years_token(clie
         "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
     )
     monkeypatch.setattr(
-        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+        "job_hunter_agent.server_helpers.save_profile", lambda p, **kwargs: saved_profiles.append(p) or p
     )
 
     resp = client.post(
@@ -588,7 +596,7 @@ def test_profile_gap_confirm_do_not_have_adds_to_must_not_require(client, monkey
         "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
     )
     monkeypatch.setattr(
-        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+        "job_hunter_agent.server_helpers.save_profile", lambda p, **kwargs: saved_profiles.append(p) or p
     )
 
     resp = client.post(
@@ -634,7 +642,7 @@ def test_profile_gap_confirm_do_not_have_is_idempotent(client, monkeypatch):
         "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
     )
     monkeypatch.setattr(
-        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+        "job_hunter_agent.server_helpers.save_profile", lambda p, **kwargs: saved_profiles.append(p) or p
     )
 
     resp = client.post(
@@ -678,7 +686,7 @@ def test_profile_gap_confirm_have_adds_candidate_eligibility(client, monkeypatch
         "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
     )
     monkeypatch.setattr(
-        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+        "job_hunter_agent.server_helpers.save_profile", lambda p, **kwargs: saved_profiles.append(p) or p
     )
     _mock_profile_storage_resolution(monkeypatch, "new", "PV clearance")
 
@@ -727,7 +735,7 @@ def test_profile_gap_confirm_do_not_have_adds_candidate_eligibility_false(client
         "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
     )
     monkeypatch.setattr(
-        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+        "job_hunter_agent.server_helpers.save_profile", lambda p, **kwargs: saved_profiles.append(p) or p
     )
 
     resp = client.post(
@@ -791,7 +799,7 @@ def test_profile_gap_rejects_item_without_profile_action_allowed(client, monkeyp
         "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
     )
     monkeypatch.setattr(
-        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+        "job_hunter_agent.server_helpers.save_profile", lambda p, **kwargs: saved_profiles.append(p) or p
     )
 
     resp = client.post(
@@ -832,7 +840,7 @@ def test_profile_gap_rejects_qualification_item_missing_canonical_requirement(cl
         "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
     )
     monkeypatch.setattr(
-        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+        "job_hunter_agent.server_helpers.save_profile", lambda p, **kwargs: saved_profiles.append(p) or p
     )
 
     resp = client.post(
@@ -873,7 +881,7 @@ def test_profile_gap_rejects_item_missing_profile_action_allowed_flag(client, mo
         "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
     )
     monkeypatch.setattr(
-        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+        "job_hunter_agent.server_helpers.save_profile", lambda p, **kwargs: saved_profiles.append(p) or p
     )
 
     resp = client.post(
@@ -918,7 +926,7 @@ def test_profile_gap_confirm_have_existing_resolution_adds_exact_canonical_fact_
         "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
     )
     monkeypatch.setattr(
-        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+        "job_hunter_agent.server_helpers.save_profile", lambda p, **kwargs: saved_profiles.append(p) or p
     )
     _mock_profile_storage_resolution(monkeypatch, "existing", "Business Analysis")
 
@@ -977,7 +985,7 @@ def test_profile_gap_confirm_have_existing_resolution_is_idempotent_on_repeat_co
     def _load_profile():
         return dict(state["profile"])
 
-    def _save_profile(profile):
+    def _save_profile(profile, **kwargs):
         state["profile"] = profile
         saved_profiles.append(profile)
         return profile
@@ -1037,7 +1045,7 @@ def test_profile_gap_confirm_have_row_button_resolves_via_canonical_requirement_
         "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
     )
     monkeypatch.setattr(
-        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+        "job_hunter_agent.server_helpers.save_profile", lambda p, **kwargs: saved_profiles.append(p) or p
     )
     _mock_profile_storage_resolution(monkeypatch, "new", "Cloud computing (AWS)")
 
@@ -1084,7 +1092,7 @@ def test_profile_gap_confirm_have_new_resolution_is_idempotent_on_repeat_confirm
     def _load_profile():
         return dict(state["profile"])
 
-    def _save_profile(profile):
+    def _save_profile(profile, **kwargs):
         state["profile"] = profile
         saved_profiles.append(profile)
         return profile
@@ -1146,7 +1154,7 @@ def test_profile_gap_confirm_have_unresolved_resolution_fails_closed_without_sav
         "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
     )
     monkeypatch.setattr(
-        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+        "job_hunter_agent.server_helpers.save_profile", lambda p, **kwargs: saved_profiles.append(p) or p
     )
     _mock_profile_storage_resolution(monkeypatch, "unresolved", "")
 
@@ -1194,7 +1202,7 @@ def test_profile_gap_confirm_have_invalid_existing_target_fails_closed_without_s
         "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
     )
     monkeypatch.setattr(
-        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+        "job_hunter_agent.server_helpers.save_profile", lambda p, **kwargs: saved_profiles.append(p) or p
     )
 
     def _raise(canonical_item, profile):
@@ -1256,7 +1264,7 @@ def test_profile_gap_confirm_have_partial_match_resolves_exact_canonical_not_adj
         "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
     )
     monkeypatch.setattr(
-        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+        "job_hunter_agent.server_helpers.save_profile", lambda p, **kwargs: saved_profiles.append(p) or p
     )
     _mock_profile_storage_resolution(
         monkeypatch, "new", "IT systems and infrastructure project management"
@@ -1313,7 +1321,7 @@ def test_profile_gap_confirm_have_partial_match_already_present_does_not_double_
         "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
     )
     monkeypatch.setattr(
-        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+        "job_hunter_agent.server_helpers.save_profile", lambda p, **kwargs: saved_profiles.append(p) or p
     )
 
     resp = client.post(

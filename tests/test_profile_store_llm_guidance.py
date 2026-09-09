@@ -75,6 +75,36 @@ def test_save_profile_calls_atomicity_validator_for_new_capability(isolated_db, 
     assert len(calls) == 2
 
 
+def test_save_profile_skips_only_explicitly_prevalidated_capability(isolated_db, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        llm_gate,
+        "llm_validate_profile_capability_atomicity",
+        lambda capabilities: calls.append(capabilities) or [True for _ in capabilities],
+    )
+
+    saved = profile_store.save_profile(
+        {
+            **profile_store.DEFAULT_PROFILE,
+            "candidate_capabilities": [
+                {"name": "Power BI", "level": "working"}
+            ],
+        },
+        prevalidated_capability_names={"Power BI"},
+    )
+
+    assert calls == []
+
+    saved["candidate_capabilities"].append({"name": "Excel", "level": "working"})
+    profile_store.save_profile(
+        saved,
+        prevalidated_capability_names={"Power BI"},
+    )
+
+    assert len(calls) == 1
+    assert [item["name"] for item in calls[0]] == ["excel"]
+
+
 def test_save_profile_skips_atomicity_validator_for_unchanged_capabilities(
     isolated_db, monkeypatch
 ):

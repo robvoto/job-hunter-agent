@@ -168,6 +168,8 @@ MODEL_FALLBACK = DEFAULT_USER_SETTINGS["llm"]["model"]
 
 
 _profile_fingerprint_cache: str | None = None
+_profile_storage_resolution_cache: dict[str, dict[str, Any]] = {}
+_PROFILE_STORAGE_RESOLUTION_CACHE_LOCK = threading.Lock()
 
 # Cost logging --------------------------------------------------------
 _session_cost_usd: float = 0.0
@@ -346,6 +348,12 @@ def invalidate_profile_fingerprint_cache() -> None:
     """
     global _profile_fingerprint_cache
     _profile_fingerprint_cache = None
+    # A profile save can change which existing capability/qualification/eligibility
+    # row a confirmed fact should map to. Discard click-time storage decisions at
+    # the same boundary so a later confirmation is always resolved against the
+    # current profile.
+    with _PROFILE_STORAGE_RESOLUTION_CACHE_LOCK:
+        _profile_storage_resolution_cache.clear()
 
 
 def _profile_fingerprint() -> str:
@@ -3293,6 +3301,30 @@ def llm_resolve_profile_storage(
         or get_llm_model_override_for_purpose("profile_storage_resolution")
         or _log_llm_model_once()
     )
+    # The profile-confirmation UI can call this twice for one new capability:
+    # once to decide whether it maps to an existing capability, then again after
+    # the user chooses Strong/Working/Basic. Reuse that already-validated
+    # decision while the profile is unchanged instead of paying for the same LLM
+    # interpretation twice. Explicit test/benchmark clients bypass this cache.
+    cache_key = ""
+    use_resolution_cache = llm_client is None and benchmark_model is None
+    if use_resolution_cache:
+        cache_payload = _json_mod.dumps(
+            {"model": model, "guidance": guidance, "payload": payload},
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        cache_key = hashlib.sha256(cache_payload.encode("utf-8")).hexdigest()
+        with _PROFILE_STORAGE_RESOLUTION_CACHE_LOCK:
+            cached_resolution = _profile_storage_resolution_cache.get(cache_key)
+        if cached_resolution is not None:
+            logger.debug(
+                "[LLM][CACHE] purpose=profile_storage_resolution requirement_type=%s target=%r",
+                requirement_type,
+                cached_resolution.get("profile_target", ""),
+            )
+            return dict(cached_resolution)
     request_started = time.perf_counter()
     logger.debug(
         "[LLM][REQUEST] purpose=profile_storage_resolution model=%s requirement_type=%s "
@@ -3360,6 +3392,9 @@ def llm_resolve_profile_storage(
         profile=profile,
         requirement_type=requirement_type,
     )
+    if use_resolution_cache:
+        with _PROFILE_STORAGE_RESOLUTION_CACHE_LOCK:
+            _profile_storage_resolution_cache[cache_key] = dict(normalized)
     logger.debug(
         "[LLM][RESULT] purpose=profile_storage_resolution requirement_type=%s resolution=%s target=%r",
         requirement_type,
