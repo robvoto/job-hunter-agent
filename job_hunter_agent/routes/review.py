@@ -15,6 +15,7 @@ from job_hunter_agent.llm_protocol import (
     LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES,
     LLM_PROFILE_RESOLUTION_EXISTING,
     LLM_PROFILE_RESOLUTION_NEW,
+    LLM_REQUIREMENT_KIND_PROFESSIONAL,
 )
 from job_hunter_agent.profile_gaps import (
     CONFIRMABLE_REQUIREMENT_STATUSES,
@@ -390,19 +391,68 @@ def _profile_gap_confirmable_item(job_key: str, value: str) -> dict:
     if not target_name:
         return {}
     for item in _profile_gap_requirement_coverage(job_key):
-        if str(item.get("status") or "").strip().lower() not in _PROFILE_GAP_CONFIRMABLE_STATUSES:
-            continue
-        if item.get("profile_action_allowed") is not True:
-            continue
+        row_status = str(item.get("status") or "").strip().lower()
         raw_requirement_type = str(item.get("requirement_type") or "").strip().lower()
         if raw_requirement_type and raw_requirement_type not in LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES:
             continue
+        decomposition = item.get("decomposition")
+        is_or_row = isinstance(decomposition, dict) and decomposition.get("operator") == "or"
+        if row_status not in _PROFILE_GAP_CONFIRMABLE_STATUSES and not (
+            is_or_row and row_status in {"supported", "partially_supported"}
+        ):
+            continue
         canonical_requirement = str(item.get("canonical_requirement") or "").strip()
-        if not canonical_requirement:
+        if item.get("profile_action_allowed") is True and canonical_requirement:
+            capability_kind = str(item.get("requirement_kind") or "").strip().lower()
+            if (
+                raw_requirement_type != "capability"
+                or capability_kind in {"", LLM_REQUIREMENT_KIND_PROFESSIONAL}
+            ) and _profile_gap_name_key(canonical_requirement) == target_name:
+                return dict(item)
+
+        # JH-300: an OR row keeps its job-fit meaning as one disjunction, but a
+        # named professional capability branch can be confirmed independently.
+        # Build a synthetic single-atom view only for the click-time storage
+        # resolver; the persisted job coverage remains the original OR row.
+        if (
+            not is_or_row
+            or raw_requirement_type != "capability"
+            or str(item.get("requirement_kind") or "").strip().lower()
+            != LLM_REQUIREMENT_KIND_PROFESSIONAL
+        ):
             continue
-        if _profile_gap_name_key(canonical_requirement) != target_name:
+        elements = decomposition.get("elements")
+        if not isinstance(elements, list):
             continue
-        return dict(item)
+        for element in elements:
+            if not isinstance(element, dict):
+                continue
+            if element.get("element_profile_action_allowed") is not True:
+                continue
+            if str(element.get("capability_judgement") or "").strip().lower() != "capability":
+                continue
+            if element.get("canonical_fact_resolved") is not True:
+                continue
+            element_status = str(element.get("status") or "").strip().lower()
+            if element_status not in _PROFILE_GAP_CONFIRMABLE_STATUSES:
+                continue
+            element_concept = str(element.get("canonical_concept") or "").strip()
+            if not element_concept or _profile_gap_name_key(element_concept) != target_name:
+                continue
+            branch = dict(item)
+            branch["requirement"] = str(element.get("text") or element_concept).strip()
+            branch["status"] = element_status
+            branch["canonical_requirement"] = element_concept
+            branch["capability_name"] = element_concept
+            branch["matched_candidate_fact"] = str(
+                element.get("matched_candidate_fact") or ""
+            ).strip()
+            branch["profile_action_allowed"] = True
+            branch["decomposition"] = {
+                "operator": "single",
+                "elements": [dict(element)],
+            }
+            return branch
     return {}
 
 

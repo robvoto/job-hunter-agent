@@ -436,7 +436,9 @@ class _LLMRequirementElement(BaseModel):
     # element names a reusable capability concept. "uncertain" and an unresolved
     # mandatory "non_capability" become a deterministic pending capability_concept
     # Signal afterward (source_learning), never an LLM learning record.
-    capability_judgement: str = "capability"
+    # Omission must fail closed. A missing judgement cannot safely authorize a
+    # profile action for an OR branch.
+    capability_judgement: str = ""
     # The reusable profile concept for this element, separate from ad wording.
     canonical_concept: str = ""
     # Explicit LLM judgement: true only when canonical_concept names one clear
@@ -912,7 +914,9 @@ LLM_CACHE_SCHEMA_VERSION = 3
 # (the structured-output default is empty, not professional_capability), and the
 # same-concept evidence check no longer accepts a single shared modifier token.
 # v8 caches can hold rows scored under both looser rules, so the namespace rotates.
-FIT_REVIEW_CACHE_CONTRACT_VERSION = 9
+# v10 (JH-300): OR-branch profile actions are restricted to explicitly named,
+# professional capability atoms; prior cached reviews must be re-reviewed.
+FIT_REVIEW_CACHE_CONTRACT_VERSION = 10
 TITLE_JUDGMENT_CACHE_CONTRACT_VERSION = 1
 POSTING_CHANNEL_LLM_CACHE_CONTRACT_VERSION = 1
 
@@ -1912,7 +1916,10 @@ def normalize_llm_requirement_coverage(
                     raw_element.get("capability_judgement")
                 ).lower()
                 if element_judgement not in _REQUIREMENT_CAPABILITY_JUDGEMENTS:
-                    element_judgement = "capability"
+                    # Semantic interpretation belongs to the structured LLM
+                    # output. Missing/invalid interpretation is unresolved, not
+                    # permission to persist a candidate capability.
+                    element_judgement = "uncertain"
                 element_fact_resolved = bool(raw_element.get("canonical_fact_resolved"))
                 element_status = compact_whitespace(raw_element.get("status")).lower()
                 if element_status not in _ALLOWED_REQUIREMENT_COVERAGE_STATUSES:
@@ -1927,8 +1934,14 @@ def normalize_llm_requirement_coverage(
                         "matched_candidate_fact": compact_whitespace(
                             raw_element.get("matched_candidate_fact")
                         ),
-                        # Per-branch gate for an OR row's own Add action.
-                        "element_profile_action_allowed": bool(element_concept)
+                        # Per-branch gate for an OR row's own Add action. JH-300
+                        # deliberately limits this exception to named,
+                        # professional capability atoms; qualification,
+                        # eligibility, vague, and behavioural alternatives stay
+                        # non-actionable under JH-286.
+                        "element_profile_action_allowed": requirement_type == "capability"
+                        and requirement_kind == LLM_REQUIREMENT_KIND_PROFESSIONAL
+                        and bool(element_concept)
                         and element_fact_resolved
                         and element_judgement == "capability",
                     }

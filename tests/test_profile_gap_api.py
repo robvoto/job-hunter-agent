@@ -132,6 +132,116 @@ def test_profile_gap_confirm_have_adds_canonical_capability(client, monkeypatch)
     assert added["icon_key"] == "generic_capability"
 
 
+def test_profile_gap_confirm_have_saves_only_selected_named_or_branch(client, monkeypatch):
+    job_key = "job-named-tools"
+    monkeypatch.setattr(
+        "job_hunter_agent.routes.review.load_job_history",
+        lambda: _job_history_with_requirement_coverage(
+            job_key,
+            [
+                {
+                    "requirement": "Power BI, Excel, GIS or similar",
+                    "requirement_type": "capability",
+                    "requirement_kind": "professional_capability",
+                    "status": "not_shown",
+                    "canonical_requirement": "",
+                    "matched_job_text": "Power BI, Excel, GIS or similar",
+                    "profile_action_allowed": False,
+                    "decomposition": {
+                        "operator": "or",
+                        "elements": [
+                            {
+                                "text": name,
+                                "canonical_concept": name,
+                                "canonical_fact_resolved": True,
+                                "capability_judgement": "capability",
+                                "status": "not_shown",
+                                "element_profile_action_allowed": True,
+                            }
+                            for name in ("Power BI", "Excel", "GIS")
+                        ],
+                    },
+                }
+            ],
+        ),
+    )
+    existing_profile = {"candidate_capabilities": [], "must_not_require_skills": []}
+    saved_profiles = []
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+    )
+    _mock_profile_storage_resolution(monkeypatch, "new", "Excel")
+
+    response = client.post(
+        "/api/profile-gap",
+        json={
+            "job_key": job_key,
+            "capability_name": "Excel",
+            "action": "confirm_have",
+            "capability_level": "working",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["confirmed_fact"] == "Excel"
+    assert [item["name"] for item in saved_profiles[0]["candidate_capabilities"]] == [
+        "Excel"
+    ]
+
+
+def test_profile_gap_confirm_have_rejects_qualification_or_branch(client, monkeypatch):
+    job_key = "job-credential-or"
+    monkeypatch.setattr(
+        "job_hunter_agent.routes.review.load_job_history",
+        lambda: _job_history_with_requirement_coverage(
+            job_key,
+            [
+                {
+                    "requirement": "CBAP or CCBA certification",
+                    "requirement_type": "qualification",
+                    "status": "not_shown",
+                    "canonical_requirement": "",
+                    "matched_job_text": "CBAP or CCBA certification",
+                    "profile_action_allowed": False,
+                    "decomposition": {
+                        "operator": "or",
+                        "elements": [
+                            {
+                                "text": name,
+                                "canonical_concept": name,
+                                "canonical_fact_resolved": True,
+                                "capability_judgement": "capability",
+                                "status": "not_shown",
+                                "element_profile_action_allowed": False,
+                            }
+                            for name in ("CBAP", "CCBA")
+                        ],
+                    },
+                }
+            ],
+        ),
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile",
+        lambda: {"candidate_qualifications": []},
+    )
+
+    response = client.post(
+        "/api/profile-gap",
+        json={
+            "job_key": job_key,
+            "capability_name": "CBAP",
+            "action": "confirm_have",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "confirmable requirement coverage item" in response.json()["error"]
+
+
 def test_profile_gap_confirm_have_is_idempotent(client, monkeypatch):
     job_key = "job-1"
     monkeypatch.setattr(

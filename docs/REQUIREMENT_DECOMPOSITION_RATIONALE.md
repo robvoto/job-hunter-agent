@@ -272,17 +272,34 @@ Normalization adds `element_profile_action_allowed` to each element:
 
 ```
 element_profile_action_allowed =
-    bool(canonical_concept)
+    requirement_type == "capability"
+    and requirement_kind == "professional_capability"
+    and bool(canonical_concept)
     and canonical_fact_resolved
     and capability_judgement == "capability"
 ```
 
-For `operator: "or"` the card uses this to offer one primary **Add** action for the
-*closest* branch (the element with the best `status`; first element on a tie) while still
-rendering every branch's `canonical_concept` in an "either **X** or **Y**" line, so the
-requirement is never shown as if only one branch existed. For `operator: "single"` the
-row-level `profile_action_allowed` remains authoritative and the element flag simply
-mirrors it.
+For `operator: "or"`, JH-300 uses this to offer one **Add X** / **No, I don't have this**
+pair for every unresolved named professional capability branch whose element status is
+confirmable and whose exact atom is not already present or absent in the profile. The card
+still renders every branch's `canonical_concept` in an "either **X** or **Y**" line, so the
+requirement is never shown as if the alternatives were independently mandatory. Qualification
+or credential alternatives, issuer names, equivalent clauses, vague groups, behavioural
+expectations, and unresolved elements remain non-actionable. For `operator: "single"`, the
+row-level `profile_action_allowed` remains authoritative and the element flag simply mirrors
+the LLM's safe atom judgement.
+
+### Atomic capability persistence (JH-300)
+
+Profile-learning actions persist only the one canonical atom represented by the clicked
+coverage element. The original OR row remains intact for fit scoring and gap semantics; the
+click-time route creates a transient single-atom view only for the profile-storage resolver.
+The resolver may place that exact fact under an existing canonical capability as a Related
+Skill or create one new top-level capability, but it may not persist ad prose, another branch,
+an equivalent clause, a qualification, or a duration. A failed or unresolved storage decision
+fails closed without saving. Onboarding continues to rely on its structured extraction
+`atomic_concept` judgement, while direct settings/API profile writes retain the existing
+user-owned profile schema and never receive raw job-ad decomposition data.
 
 ---
 
@@ -326,11 +343,11 @@ Mandatory requirement, candidate holds neither.
 ```
 
 Card behaviour: the row renders under **Needs attention** with the line
-"Either **Microsoft Purview** or **BigID** satisfies this" and **one** primary
-"Add Microsoft Purview" action (first branch, tie on status). "BigID" is still named and is
-reachable from the row's expanded detail. Both atomic concepts and the OR relationship are
-retained on the frozen record; nothing is discarded. If the candidate later records BigID,
-re-review flips `elements[1].status` and the row rolls up to `supported`.
+"Either **Microsoft Purview** or **BigID** satisfies this" and one independent
+"Add Microsoft Purview" / "Add BigID" action pair for each unresolved branch. Both atomic
+concepts and the OR relationship are retained on the frozen record; nothing is discarded. If
+the candidate later records BigID, re-review flips `elements[1].status` and the row rolls up to
+`supported`; the Purview action remains independently governed by its own atom state.
 
 `resolve_custom_blocker("Microsoft Purview", coverage)` returns `no_match` for this row —
 the row is not `profile_action_allowed` and has no row `canonical_requirement`, so a
@@ -351,7 +368,9 @@ mandatory requirement.
 | `job_review_pipeline.py` | `_build_requirement_classification_review_signals`: drop the `classification_reviewable` gate. Freeze `requirement_coverage_hidden` onto kept records. |
 | `source_learning.build_ad_learning_signals` | Emit pending `capability_concept` Signals from `capability_judgement == "uncertain"` elements and from unresolved mandatory `non_capability` elements. A flagged compound `and` / `or` row yields **one** combined Signal joining every branch label with the relationship word, not one per branch. |
 | `fit_scoring.py` | No rollup change (row-level `status` / `requirement_type` survive). Hidden rows are already absent from `requirement_coverage`. |
-| `workspace_renderer.py` | Per-element rendering for `and` / `or` rows; OR-group "either X or Y" line + one primary Add for the closest branch; optional `non_capability` rows are already absent. |
+| `workspace_renderer.py` | Per-element rendering for `and` / `or` rows; OR-group "either X or Y" line + one Add pair per unresolved named professional capability branch; optional `non_capability` rows are already absent. |
+| `routes/review.py` | Resolve an OR click against the selected atomic capability element only; preserve the original OR row for scoring and prevent qualification/equivalent/vague branches from reaching profile storage. |
+| `profile_store.py` / onboarding | Keep persisted capability rows sourced from the existing atomic LLM onboarding path and shared profile schema; no raw ad-prose or compound OR row is written as a capability. |
 | `profile_gaps.py` | No logic change — `and` / `or` exclusion is structural. Comment added noting the OR-branch guarantee. |
 | `record_schema.py` | Add `RECORD_REQUIREMENT_COVERAGE_HIDDEN_KEY`; bump `REQUIREMENT_COVERAGE_CONTRACT_VERSION`. |
 | `.agents/skills/signal-registry/SKILL.md` | Note that bounded requirement-interpretation fields are allowed on the fit-review schema; they are not learning fields; pending Signals stay deterministic-only. |
@@ -365,9 +384,14 @@ mandatory requirement.
   `profile_action_allowed = false`, `canonical_requirement = ""`, both branch concepts
   retained, `element_profile_action_allowed` true on each.
 - `or` row, one branch in profile → row rolls up `supported`.
-- **OR UI still communicates the full requirement when only one primary action is shown**:
-  the rendered card names every branch concept and states "either / or", not just the
-  primary branch.
+- **OR UI still communicates the full requirement while exposing independent actions**:
+  the rendered card names every branch concept, states "either / or", and offers one action
+  pair per unresolved named professional capability atom.
+- **OR action safety**: named professional capability branches can be confirmed separately;
+  qualification/credential/issuer/equivalent/vague/behavioural branches cannot; a row with
+  one supported branch can still offer an action for a different unresolved safe branch.
+- **OR API isolation**: the profile-gap endpoint accepts the selected branch atom only and
+  never treats the OR row as one mandatory capability or saves another branch.
 - `resolve_custom_blocker` / `list_custom_blocker_candidates` never return an `or` (or
   `and`) branch as a resolved mandatory blocker.
 - `and` row where one element is `not_shown` → row `status` cannot exceed `not_shown` even
