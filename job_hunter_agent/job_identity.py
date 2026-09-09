@@ -528,11 +528,20 @@ def _location_match_keys(value: str) -> frozenset[str]:
 
 
 def _locations_compatible(a: dict, b: dict) -> bool:
-    location_a = str(a.get(RECORD_LOCATION_KEY) or "").strip()
-    location_b = str(b.get(RECORD_LOCATION_KEY) or "").strip()
-    if not location_a or not location_b:
-        return False
-    return bool(_location_match_keys(location_a) & _location_match_keys(location_b))
+    """Reject only an evidenced location conflict during cross-source matching.
+
+    A blank or placeholder location is missing evidence, not evidence that two
+    vacancies differ. Company, title, posting age, and trusted description
+    similarity remain required independent signals for the cross-source match.
+    """
+
+    location_keys = [
+        _location_match_keys(str(record.get(RECORD_LOCATION_KEY) or "").strip())
+        for record in (a, b)
+    ]
+    if not location_keys[0] or not location_keys[1]:
+        return True
+    return bool(location_keys[0] & location_keys[1])
 
 
 def _posting_ages_compatible(a: dict, b: dict, max_difference_days: float) -> bool:

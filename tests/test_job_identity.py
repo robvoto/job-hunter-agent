@@ -346,6 +346,68 @@ def test_cross_source_same_vacancy_merges_and_preserves_both_sources():
     }
 
 
+def test_cross_source_hcf_same_vacancy_merges_when_linkedin_location_is_missing():
+    description_parts = [
+        f"system analysis stakeholder workshop requirement{i} delivery" for i in range(180)
+    ]
+    description = " ".join(description_parts)
+    linkedin_description = " ".join(
+        description_parts[:-4]
+        + [f"system analysis stakeholder workshop vacancy_variation{i} delivery" for i in range(4)]
+    )
+    records = [
+        _cross_source_record(
+            "seek:94517731",
+            "seek",
+            description,
+            location="Sydney NSW",
+            posted_age_days=1.0,
+        ),
+        _cross_source_record(
+            "linkedin:li-4463010684",
+            "linkedin",
+            linkedin_description,
+            location="",
+            posted_age_days=2.0,
+        ),
+    ]
+
+    deduped = deduplicate_across_sources(records)
+
+    assert [record["job_key"] for record in deduped] == ["seek:94517731"]
+    assert deduped[0][RECORD_DUPLICATE_LINKS_KEY][0]["source"] == "linkedin"
+
+
+def test_cross_source_same_vacancy_merges_when_both_locations_are_missing():
+    description = " ".join(
+        f"system analysis stakeholder workshop requirement{i} delivery" for i in range(180)
+    )
+    first = _cross_source_record("seek:100", "seek", description, location="")
+    second = _cross_source_record(
+        "linkedin:200",
+        "linkedin",
+        description + " linkedin presentation variation",
+        location="",
+    )
+
+    assert are_jobs_confirmed_duplicates(first, second)
+
+
+def test_cross_source_same_vacancy_with_conflicting_locations_does_not_merge():
+    description = " ".join(
+        f"system analysis stakeholder workshop requirement{i} delivery" for i in range(180)
+    )
+    first = _cross_source_record("seek:100", "seek", description, location="Sydney NSW")
+    second = _cross_source_record(
+        "linkedin:200",
+        "linkedin",
+        description + " linkedin presentation variation",
+        location="Melbourne VIC",
+    )
+
+    assert not are_jobs_confirmed_duplicates(first, second)
+
+
 def test_cross_source_same_metadata_with_different_role_content_does_not_merge():
     generic_company_intro = (
         "HCF Australia supports members through reliable services and technology. "
