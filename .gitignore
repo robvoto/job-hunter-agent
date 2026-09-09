@@ -82,3 +82,6 @@ tmp_run_write.txt
 tmp.txt
 tmp-test.db
 !run
+
+data/playwright_apsjobs_user_data/
+data/playwright_seek_user_data/
