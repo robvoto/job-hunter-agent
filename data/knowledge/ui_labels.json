@@ -1,8 +1,8 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 132,
-  "updated_at": "2026-09-08T00:00:00+00:00",
+  "version": 133,
+  "updated_at": "2026-09-09T00:00:00+00:00",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
     "remote_label": "Remote",
@@ -599,7 +599,7 @@
     "hidden_badge": "Hidden",
     "hidden_badge_tooltip": "You hid this role for now.",
     "new_to_you_badge": "New To You",
-    "new_to_you_badge_tooltip": "You have not opened this role from the workspace yet.",
+    "new_to_you_badge_tooltip": "First discovered by Job Hunter in your latest search.",
     "stale_badge": "15+ Days Old",
     "stale_badge_tooltip": "This role is older, but still saved for reference.",
     "posting_channel_direct_employer_badge": "Direct employer",

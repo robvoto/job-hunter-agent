@@ -8,6 +8,7 @@ from job_hunter_agent.history import (
     build_detail_evidence_snapshot,
     can_reuse_detail_evidence,
     can_reuse_kept_job,
+    is_new_to_you,
     update_job_history,
 )
 from job_hunter_agent.record_schema import (
@@ -31,6 +32,23 @@ from job_hunter_agent.record_schema import (
     SOURCE_METADATA_VERSION_KEY,
     RECORD_URL_KEY,
 )
+
+
+def test_new_to_you_is_latest_run_discovery_not_unread_state():
+    cutoff = datetime.fromisoformat("2026-09-09T10:00:00+10:00")
+
+    assert is_new_to_you(
+        {"first_seen_at": "2026-09-09T10:00:01+10:00", "times_viewed": 3}, cutoff
+    ) is True
+    assert is_new_to_you(
+        {"first_seen_at": "2026-09-08T10:00:00+10:00", "times_viewed": 0}, cutoff
+    ) is False
+
+
+def test_new_to_you_fails_closed_without_latest_run_boundary():
+    assert is_new_to_you(
+        {"first_seen_at": "2026-09-09T10:00:01+10:00", "times_viewed": 0}, None
+    ) is False
 
 
 def test_history_reuse_with_url_variation():

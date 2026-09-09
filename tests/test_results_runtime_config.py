@@ -291,6 +291,7 @@ def test_job_link_click_marks_viewed_without_immediate_resort():
 
     assert "card.dataset.viewed = '1';" in mark_viewed_js
     assert "badges.insertAdjacentHTML('beforeend', WORKSPACE_CONTEXT.viewedBadgeHtml || '');" in mark_viewed_js
+    assert ".badge-new" not in mark_viewed_js
     assert "applyWorkspaceControls();" not in mark_viewed_js
     assert "markCardViewed(link);" in results_js
     assert "sendViewedBeacon(link);" in results_js
