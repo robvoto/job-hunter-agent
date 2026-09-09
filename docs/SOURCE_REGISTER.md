@@ -75,7 +75,7 @@ Design decision:
 - Both actions operate on the same LLM-resolved `canonical_requirement`; optional examples or qualifiers are not separate user confirmations.
 - `Add evidence` stores exactly that confirmed fact in the resolved profile destination.
 - `No, I don’t have this` keeps the existing negative-learning behaviour; for capability facts it adds that exact canonical fact to `must_not_require_skills`.
-- Partial matches, matched requirements, and vague/compound unresolved requirements do not expose profile-learning actions.
+- Matched exact facts have no actions. Vague or unsafe compound parents remain non-actionable; only separately resolved safe professional-capability child atoms in AND/OR decomposition may expose their own actions, while the parent requirement remains grouped and is never saved.
 - Unknown gaps are visible, not silently hidden.
 
 Limit:

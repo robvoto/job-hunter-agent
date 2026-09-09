@@ -15,13 +15,14 @@ from typing import Any, Dict, List, Optional
 from job_hunter_agent.capability_matching import build_display_competitive_risks
 from job_hunter_agent.company_normalization import normalize_company_name
 from job_hunter_agent.config import DEBUG_MODE
-from job_hunter_agent.detail_page_text import looks_like_browser_interstitial_text
 from job_hunter_agent.description_trust import (
     full_description_confidence,
     get_min_trusted_description_length,
     get_trusted_full_description,
     get_trusted_sources,
 )
+from job_hunter_agent.detail_page_text import looks_like_browser_interstitial_text
+from job_hunter_agent.employer_outcome_display import build_employer_outcome_check_item
 from job_hunter_agent.experience_requirement_display import experience_requirement_note
 from job_hunter_agent.filters import suggest_title_block_phrase
 from job_hunter_agent.fit_scoring import (
@@ -49,7 +50,6 @@ from job_hunter_agent.posting_utils import (
     linkedin_freshness_is_unknown,
     linkedin_original_posted_is_unverified,
     original_posted_display_label,
-    parse_timestamp,
     posted_display_label,
 )
 from job_hunter_agent.preferences import (
@@ -61,7 +61,6 @@ from job_hunter_agent.profile_gaps import (
     CUSTOM_BLOCKER_REASON_AMBIGUOUS,
     CUSTOM_BLOCKER_REASON_INVALID_INPUT,
     CUSTOM_BLOCKER_REASON_NOT_REQUIRED,
-    CUSTOM_BLOCKER_REASON_NO_MATCH,
     CUSTOM_BLOCKER_REASON_RESOLVED,
     STATUS_UNKNOWN,
     classify_requirement_status,
@@ -77,9 +76,6 @@ from job_hunter_agent.profile_store import (
     get_scoring_rules,
     load_profile,
 )
-from job_hunter_agent.role_analysis import posting_channel_evidence_is_current
-from job_hunter_agent.requirement_classification import load_default_eligibility_subtype
-from job_hunter_agent.employer_outcome_display import build_employer_outcome_check_item
 from job_hunter_agent.record_schema import (
     APPLY_METHOD_EASY_APPLY,
     APPLY_METHOD_QUICK_APPLY,
@@ -88,6 +84,7 @@ from job_hunter_agent.record_schema import (
     RECORD_DECISION_KEY,
     RECORD_DUPLICATE_LINKS_KEY,
     RECORD_EMPLOYER_OUTCOME_KEY,
+    RECORD_IS_REPOSTED_KEY,
     RECORD_LLM_COST_USD_KEY,
     RECORD_LLM_DECISION_KEY,
     RECORD_LLM_ELAPSED_MS_KEY,
@@ -95,7 +92,6 @@ from job_hunter_agent.record_schema import (
     RECORD_LLM_INPUT_TOKENS_KEY,
     RECORD_LLM_OUTPUT_TOKENS_KEY,
     RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY,
-    RECORD_IS_REPOSTED_KEY,
     RECORD_POTENTIAL_DUPLICATE_LINKS_KEY,
     RECORD_REJECT_REASON_KEY,
     RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY,
@@ -103,6 +99,8 @@ from job_hunter_agent.record_schema import (
     RECORD_REVIEW_SOURCE_KEY,
     RECORD_TITLE_REASON_KEY,
 )
+from job_hunter_agent.requirement_classification import load_default_eligibility_subtype
+from job_hunter_agent.role_analysis import posting_channel_evidence_is_current
 from job_hunter_agent.salary_utils import format_salary_display, salary_sort_value
 from job_hunter_agent.score_labels import (
     render_badge,
@@ -1267,7 +1265,6 @@ def render_job_card(
     applied_record = bool(record.get("applied"))
     archived = bool(record.get("archived"))
     hidden_record = bool(record.get("hidden"))
-    is_stale = bool(record.get("is_stale"))
     seen_by_you = viewed_by_user(record)
     new_to_you = is_new_to_you(record, new_to_you_cutoff)
     teaser_text = _clean_job_card_text(record.get("teaser") or "")
@@ -2043,111 +2040,114 @@ def render_job_card(
                 f'{confirm_have_html}{confirm_not_have_html}'
                 '</span>'
             )
-        # OR requirement: every acceptable branch stays visible so the candidate
-        # sees the whole requirement. JH-300 additionally exposes one
-        # confirmation pair for each unresolved, named professional capability
-        # branch. A No applies only to that branch; it must not be interpreted as
-        # rejecting the whole OR requirement.
-        # resolve_custom_blocker / profile-gap must never treat that single
-        # branch as the entire mandatory requirement — see
-        # docs/REQUIREMENT_DECOMPOSITION_RATIONALE.md.
-        or_branch_html = ""
+        # Compound professional-capability requirements keep their parent job-fit
+        # meaning, but JH-300/JH-285 allow safe actions on unresolved atomic
+        # elements. OR means any branch satisfies the row; AND means every child is
+        # required. In both cases only the clicked child fact is ever persisted.
+        compound_profile_review_html = ""
         decomposition = (
             row.get("decomposition") if isinstance(row.get("decomposition"), dict) else {}
         )
-        if decomposition.get("operator") == "or":
+        decomposition_operator = str(decomposition.get("operator") or "").strip().lower()
+        if decomposition_operator in {"and", "or"}:
             branch_elements = [
                 el for el in (decomposition.get("elements") or []) if isinstance(el, dict)
             ]
-            branch_labels = [
-                compact_whitespace(str(el.get("canonical_concept") or el.get("text") or ""))
-                for el in branch_elements
-            ]
-            branch_labels = [label for label in branch_labels if label]
-            if len(branch_labels) >= 2:
-                join_text = _workspace_label("workspace_card_labels", "requirement_or_join")
-                note_template = _workspace_label(
-                    "workspace_card_labels", "requirement_or_branches_note"
-                )
-                options_text = join_text.join(branch_labels)
-                note_text = (
-                    note_template.replace("{options}", options_text)
-                    if "{options}" in note_template
-                    else f"{note_template} {options_text}".strip()
-                )
-                branch_note_html = (
-                    '<span class="job-requirement-note job-requirement-note--or">'
-                    f"{safe_html(note_text)}</span>"
-                )
-                branch_action_html = ""
-                if (
-                    row_requirement_type == "capability"
-                    and str(row.get("requirement_kind") or "").strip().lower()
-                    == LLM_REQUIREMENT_KIND_PROFESSIONAL
-                    and not is_uncertain_classification
-                ):
-                    branch_actions: list[str] = []
-                    add_label_template = _workspace_label(
-                        "workspace_card_labels",
-                        "add_to_profile_named_alternative_action_label",
+            branch_note_html = ""
+            if decomposition_operator == "or":
+                branch_labels = [
+                    compact_whitespace(
+                        str(el.get("canonical_concept") or el.get("text") or "")
                     )
-                    add_title = _workspace_label(
-                        "workspace_card_labels", "add_to_profile_action_title"
+                    for el in branch_elements
+                ]
+                branch_labels = [label for label in branch_labels if label]
+                if len(branch_labels) >= 2:
+                    join_text = _workspace_label("workspace_card_labels", "requirement_or_join")
+                    note_template = _workspace_label(
+                        "workspace_card_labels", "requirement_or_branches_note"
                     )
-                    not_have_label = _workspace_label(
-                        "workspace_card_labels", "gap_confirm_not_have_label"
+                    options_text = join_text.join(branch_labels)
+                    note_text = (
+                        note_template.replace("{options}", options_text)
+                        if "{options}" in note_template
+                        else f"{note_template} {options_text}".strip()
                     )
-                    for el in branch_elements:
-                        if el.get("element_profile_action_allowed") is not True:
-                            continue
-                        branch_status = str(el.get("status") or "").strip().lower()
-                        if branch_status not in CONFIRMABLE_REQUIREMENT_STATUSES:
-                            continue
-                        concept = compact_whitespace(str(el.get("canonical_concept") or ""))
-                        if not concept:
-                            continue
-                        if (
-                            classify_requirement_status(
-                                concept,
-                                active_profile.get(KEY_CANDIDATE_CAPABILITIES) or [],
-                                active_profile.get(KEY_MUST_NOT_REQUIRED_SKILLS) or [],
-                                active_profile.get(KEY_CANDIDATE_ELIGIBILITY) or [],
-                                active_profile.get(KEY_CANDIDATE_ELIGIBILITY_FACTS) or [],
-                                requirement_type=row_requirement_type,
-                                candidate_qualifications=active_profile.get(
-                                    KEY_CANDIDATE_QUALIFICATIONS
-                                )
-                                or [],
+                    branch_note_html = (
+                        '<span class="job-requirement-note job-requirement-note--or">'
+                        f"{safe_html(note_text)}</span>"
+                    )
+
+            branch_action_html = ""
+            if (
+                len(branch_elements) >= 2
+                and row_requirement_type == "capability"
+                and str(row.get("requirement_kind") or "").strip().lower()
+                == LLM_REQUIREMENT_KIND_PROFESSIONAL
+                and not is_uncertain_classification
+            ):
+                branch_actions: list[str] = []
+                add_label_template = _workspace_label(
+                    "workspace_card_labels",
+                    "add_to_profile_named_alternative_action_label",
+                )
+                add_title = _workspace_label(
+                    "workspace_card_labels", "add_to_profile_action_title"
+                )
+                not_have_label = _workspace_label(
+                    "workspace_card_labels", "gap_confirm_not_have_label"
+                )
+                for el in branch_elements:
+                    if el.get("element_profile_action_allowed") is not True:
+                        continue
+                    branch_status = str(el.get("status") or "").strip().lower()
+                    if branch_status not in CONFIRMABLE_REQUIREMENT_STATUSES:
+                        continue
+                    concept = compact_whitespace(str(el.get("canonical_concept") or ""))
+                    if not concept:
+                        continue
+                    if (
+                        classify_requirement_status(
+                            concept,
+                            active_profile.get(KEY_CANDIDATE_CAPABILITIES) or [],
+                            active_profile.get(KEY_MUST_NOT_REQUIRED_SKILLS) or [],
+                            active_profile.get(KEY_CANDIDATE_ELIGIBILITY) or [],
+                            active_profile.get(KEY_CANDIDATE_ELIGIBILITY_FACTS) or [],
+                            requirement_type=row_requirement_type,
+                            candidate_qualifications=active_profile.get(
+                                KEY_CANDIDATE_QUALIFICATIONS
                             )
-                            != STATUS_UNKNOWN
-                        ):
-                            continue
-                        add_label = add_label_template.replace("{capability}", concept)
-                        branch_confirm_have_html = (
-                            '<button type="button" class="jh-button jh-button--primary jh-button--micro job-requirement-action gap-btn" '
-                            f'data-action="confirm_have" data-capability-name="{safe_html(concept)}" '
-                            f'title="{safe_html(add_title)}">'
-                            '<span aria-hidden="true">+</span>'
-                            f"<span>{safe_html(add_label)}</span></button>"
+                            or [],
                         )
-                        branch_confirm_not_have_html = (
-                            '<button type="button" class="jh-button jh-button--danger jh-button--micro job-requirement-action gap-btn" '
-                            f'data-action="confirm_do_not_have" data-capability-name="{safe_html(concept)}">'
-                            f"{safe_html(not_have_label)}</button>"
-                        )
-                        branch_actions.append(
-                            '<span class="req-coverage-detail req-coverage-detail--profile-review">'
-                            f"{branch_confirm_have_html}{branch_confirm_not_have_html}</span>"
-                        )
-                    branch_action_html = "".join(branch_actions)
-                or_branch_html = branch_note_html + branch_action_html
+                        != STATUS_UNKNOWN
+                    ):
+                        continue
+                    add_label = add_label_template.replace("{capability}", concept)
+                    branch_confirm_have_html = (
+                        '<button type="button" class="jh-button jh-button--primary jh-button--micro job-requirement-action gap-btn" '
+                        f'data-action="confirm_have" data-capability-name="{safe_html(concept)}" '
+                        f'title="{safe_html(add_title)}">'
+                        '<span aria-hidden="true">+</span>'
+                        f"<span>{safe_html(add_label)}</span></button>"
+                    )
+                    branch_confirm_not_have_html = (
+                        '<button type="button" class="jh-button jh-button--danger jh-button--micro job-requirement-action gap-btn" '
+                        f'data-action="confirm_do_not_have" data-capability-name="{safe_html(concept)}">'
+                        f"{safe_html(not_have_label)}</button>"
+                    )
+                    branch_actions.append(
+                        '<span class="req-coverage-detail req-coverage-detail--profile-review">'
+                        f"{branch_confirm_have_html}{branch_confirm_not_have_html}</span>"
+                    )
+                branch_action_html = "".join(branch_actions)
+            compound_profile_review_html = branch_note_html + branch_action_html
         html = (
             f'<li class="job-requirement-item job-requirement-item--{safe_html(css_modifier)}">'
             f'<span class="job-requirement-text">'
             f'<span class="job-requirement-title-line">'
             f'{safe_html(req_text)}{importance_html}'
             f'</span>'
-            f'{profile_review_html}{or_branch_html}{detail_html}{experience_note_html}'
+            f'{profile_review_html}{compound_profile_review_html}{detail_html}{experience_note_html}'
             f"</span>"
             f"</li>"
         )

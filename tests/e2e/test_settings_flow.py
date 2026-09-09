@@ -367,3 +367,70 @@ def test_role_entry_adds_directly_without_role_family_popup(candidate_page):
     page.reload()
     expect(page.locator("#target_roles_chips")).to_contain_text("Implementation Consultant")
     expect(page.locator("#also_consider_roles_chips")).to_contain_text("SAP S/4HANA Consultant")
+
+
+def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
+    page = candidate_page
+    decisions = []
+    review_payload = {
+        "suggested_tuning": {
+            "capability_suggestions": [
+                {
+                    "skill": "Power BI",
+                    "count": 2,
+                    "recommended_choice": "working",
+                    "recommended_label": "Working",
+                    "examples": [],
+                }
+            ],
+            "requirement_suggestions": [],
+            "optimization_suggestions": [],
+            "rule_suggestions": [],
+            "summary": {"capability_count": 1},
+        }
+    }
+
+    def handle_review_data(route):
+        route.fulfill(status=200, content_type="application/json", json=review_payload)
+
+    def handle_tuning_decision(route):
+        decisions.append(route.request.post_data_json)
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            json={
+                "ok": True,
+                "profile": {"candidate_capabilities": [], "must_not_require_skills": []},
+            },
+        )
+
+    page.route("**/api/review-data", handle_review_data)
+    page.route("**/api/tuning-decisions", handle_tuning_decision)
+    page.goto("/settings")
+    page.locator('[data-section="section-optimise"]').click()
+
+    card = page.locator("#tuning_suggestions_panel .review-card").filter(has_text="Power BI")
+    expect(card).to_be_visible()
+    no_button = card.locator(".do-not-have-skill-btn")
+    dismiss_button = card.locator(".decline-skill-btn")
+    expect(no_button).to_have_text("No, I don't have this")
+    expect(dismiss_button).to_have_text("Dismiss")
+
+    no_box = no_button.bounding_box()
+    dismiss_box = dismiss_button.bounding_box()
+    assert no_box and dismiss_box
+    assert no_box["width"] > 0 and dismiss_box["width"] > 0
+
+    with page.expect_request("**/api/tuning-decisions") as no_request:
+        no_button.click()
+    assert no_request.value.post_data_json["decisions"][0]["choice"] == "do_not_have"
+
+    # Exercise Dismiss from a fresh stable render rather than racing the async
+    # review-data rerender triggered by the previous save.
+    page.reload()
+    page.locator('[data-section="section-optimise"]').click()
+    card = page.locator("#tuning_suggestions_panel .review-card").filter(has_text="Power BI")
+    expect(card).to_be_visible()
+    with page.expect_request("**/api/tuning-decisions") as dismiss_request:
+        card.locator(".decline-skill-btn").click()
+    assert dismiss_request.value.post_data_json["decisions"][0]["choice"] == "dismiss"

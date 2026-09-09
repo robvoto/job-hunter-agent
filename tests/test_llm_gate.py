@@ -3622,3 +3622,28 @@ def test_profile_storage_items_groups_aliases_under_canonical_name():
             "aliases": ["requirements analysis", "user stories"],
         }
     ]
+
+
+def test_profile_prompt_context_includes_confirmed_absent_capabilities(monkeypatch):
+    monkeypatch.setattr(
+        llm_gate,
+        "load_profile",
+        lambda: {
+            "candidate_capabilities": [
+                {"name": "Stakeholder engagement", "level": "strong", "aliases": []}
+            ],
+            "must_not_require_skills": ["Power BI"],
+            "candidate_eligibility": [],
+            "candidate_eligibility_facts": [],
+            "candidate_qualifications": [],
+            "role_experience": [],
+            "candidate_profile_tiers": {},
+            "match_preferences": {},
+            "onboarding_settings": {},
+        },
+    )
+
+    prompt = llm_gate.build_profile_prompt_context()
+
+    assert "Confirmed absent capabilities:" in prompt
+    assert "- Power BI" in prompt

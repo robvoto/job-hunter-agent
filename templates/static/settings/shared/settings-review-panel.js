@@ -57,6 +57,7 @@ const RULE_REASON_TITLE_NOT_TARGET = 'TITLE_NOT_TARGET';
 const RULE_REASON_TITLE_BAD_KEYWORD = 'TITLE_BAD_KEYWORD';
 const RULE_REASON_ONET_UNCERTAIN_TITLE = 'ONET_UNCERTAIN_TITLE';
 const DECLINE_CAPABILITY_LABEL = capabilityLabels.decline_capability_label;
+const DISMISS_CAPABILITY_SUGGESTION_LABEL = capabilityLabels.dismiss_capability_suggestion_label;
 
 function getReviewChoiceMeta(choice) {
   if (!choice) return { label: 'Choose a strength' };
@@ -223,6 +224,8 @@ function renderRequirementCard(item) {
       </details>
       <div class="card-actions" style="margin-top:10px;">
         <button class="jh-button jh-button--primary jh-button--compact confirm-skill-btn" data-skill="${escapeHtml(item.skill || '')}" data-aliases="${escapeHtml(JSON.stringify(aliases))}">Confirm</button>
+        <button class="jh-button jh-button--danger jh-button--compact do-not-have-skill-btn" data-skill="${escapeHtml(item.skill || '')}">${escapeHtml(DECLINE_CAPABILITY_LABEL)}</button>
+        <button class="jh-button jh-button--secondary jh-button--compact decline-skill-btn" data-skill="${escapeHtml(item.skill || '')}">${escapeHtml(DISMISS_CAPABILITY_SUGGESTION_LABEL)}</button>
       </div>
     </div>
   `;
@@ -264,7 +267,8 @@ function renderSuggestedTuning(reviewData) {
         </details>
         <div class="card-actions" style="margin-top:10px;">
           <button class="jh-button jh-button--primary jh-button--compact confirm-skill-btn" data-skill="${escapeHtml(item.skill || '')}">Confirm</button>
-          <button class="jh-button jh-button--secondary jh-button--compact decline-skill-btn" data-skill="${escapeHtml(item.skill || '')}">${escapeHtml(DECLINE_CAPABILITY_LABEL)}</button>
+          <button class="jh-button jh-button--danger jh-button--compact do-not-have-skill-btn" data-skill="${escapeHtml(item.skill || '')}">${escapeHtml(DECLINE_CAPABILITY_LABEL)}</button>
+          <button class="jh-button jh-button--secondary jh-button--compact decline-skill-btn" data-skill="${escapeHtml(item.skill || '')}">${escapeHtml(DISMISS_CAPABILITY_SUGGESTION_LABEL)}</button>
         </div>
       </div>
     `,
@@ -526,6 +530,26 @@ tuningPanel?.addEventListener('click', async (e) => {
     return;
   }
 
+  const doNotHaveBtn = e.target.closest('.do-not-have-skill-btn');
+  if (doNotHaveBtn) {
+    const card = doNotHaveBtn.closest('.review-card');
+    const skill = doNotHaveBtn.dataset.skill;
+    if (!skill) return;
+    doNotHaveBtn.disabled = true;
+    doNotHaveBtn.textContent = 'Saving…';
+    try {
+      const result = await applyOneSkipDecision(skill, 'do_not_have');
+      setAppliedCardState(card, doNotHaveBtn, 'Saved');
+      if (result && result.profile) fillForm(result.profile);
+      await loadReviewData();
+    } catch (error) {
+      doNotHaveBtn.disabled = false;
+      doNotHaveBtn.textContent = DECLINE_CAPABILITY_LABEL;
+      showStatus(error.message, 'error');
+    }
+    return;
+  }
+
   const declineBtn = e.target.closest('.decline-skill-btn');
   if (declineBtn) {
     const card = declineBtn.closest('.review-card');
@@ -540,7 +564,7 @@ tuningPanel?.addEventListener('click', async (e) => {
       await loadReviewData();
     } catch (error) {
       declineBtn.disabled = false;
-      declineBtn.textContent = DECLINE_CAPABILITY_LABEL;
+      declineBtn.textContent = DISMISS_CAPABILITY_SUGGESTION_LABEL;
       showStatus(error.message, 'error');
     }
     return;

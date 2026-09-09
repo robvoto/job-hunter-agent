@@ -45,7 +45,7 @@ from job_hunter_agent.global_settings import (
 from job_hunter_agent.io_utils import (
     clear_agent_state,
     clear_audit_rows,
-    clear_candidate_application_history_runtime,
+    clear_candidate_application_history_runtime,  # noqa: F401 - public module surface
     clear_job_history,
     clear_review_data,
     clear_run_stats,
@@ -100,7 +100,7 @@ from job_hunter_agent.profile_store import (
     normalize_search_settings,
     normalize_work_mode_preferences,
     save_profile,
-    validate_search_keywords,
+    validate_search_keywords,  # noqa: F401 - public module surface
 )
 from job_hunter_agent.release_metadata import (
     load_app_release_metadata as load_app_release_metadata,
@@ -218,6 +218,7 @@ _CAPABILITY_UI_LABEL_KEYS = (
     "onboarding_empty_text",
     "onboarding_no_match_text",
     "review_strength_prompt_label",
+    "dismiss_capability_suggestion_label",
     "decline_capability_label",
 )
 _SHARED_UI_LABEL_KEYS = (

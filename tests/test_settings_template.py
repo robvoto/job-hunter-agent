@@ -697,3 +697,24 @@ def test_admin_hydrates_parallel_worker_limit_inputs_before_save():
     assert "setFieldValue('search_limit_linkedin_parallel_review_workers_max', searchLimits.linkedin_parallel_review_workers?.max);" in js
     assert "min: readNumber('search_limit_linkedin_parallel_review_workers_min'" in js
     assert "max: readNumber('search_limit_linkedin_parallel_review_workers_max'" in js
+
+
+def test_settings_review_panel_separates_factual_absence_from_dismiss():
+    js = (
+        ROOT_DIR
+        / "templates"
+        / "static"
+        / "settings"
+        / "shared"
+        / "settings-review-panel.js"
+    ).read_text(encoding="utf-8")
+    ui_labels = json.loads(
+        (ROOT_DIR / "data" / "knowledge" / "ui_labels.json").read_text(encoding="utf-8")
+    )
+
+    assert "do-not-have-skill-btn" in js
+    assert "decline-skill-btn" in js
+    assert "applyOneSkipDecision(skill, 'do_not_have')" in js
+    assert "applyOneSkipDecision(skill, 'dismiss')" in js
+    assert ui_labels["workspace_card_labels"]["gap_confirm_not_have_label"] == "No, I don't have this"
+    assert ui_labels["capability_ui_labels"]["dismiss_capability_suggestion_label"] == "Dismiss"

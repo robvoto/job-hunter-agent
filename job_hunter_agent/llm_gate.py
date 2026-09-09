@@ -23,7 +23,6 @@ from job_hunter_agent.experience_requirements import (
     extract_required_experience_months,
     resolve_role_experience_requirement,
 )
-from job_hunter_agent.role_experience_duration import apply_effective_durations
 from job_hunter_agent.global_settings import (
     KEY_LLM_PRICING_PER_1M,
     KEY_LLM_PROMPT_EVIDENCE_TIERS,
@@ -37,7 +36,6 @@ from job_hunter_agent.global_settings import (
     get_llm_fit_decision_max_output_tokens,
     get_llm_fit_review_debug_match_diagnostics_enabled,
     get_llm_job_description_max_chars,
-    get_llm_requirement_coverage_max_items,
     get_llm_learning_candidates_max_items,
     get_llm_learning_candidates_max_output_tokens,
     get_llm_max_retries,
@@ -48,6 +46,7 @@ from job_hunter_agent.global_settings import (
     get_llm_rejection_blocker_suggestions_max_output_tokens,
     get_llm_rejection_blocker_suggestions_max_words,
     get_llm_request_timeout_seconds,
+    get_llm_requirement_coverage_max_items,
     get_llm_temperature,
     get_llm_title_judgment_max_output_tokens,
     load_global_settings,
@@ -67,9 +66,9 @@ from job_hunter_agent.llm_protocol import (
     LLM_ALLOWED_REQUIREMENT_KINDS,
     LLM_ALLOWED_TITLE_JUDGMENT_VERDICTS,
     LLM_COVERAGE_IMPORTANCE_BONUS,
-    LLM_COVERAGE_IMPORTANCE_STRONGLY_PREFERRED,
-    LLM_COVERAGE_IMPORTANCE_PREFERRED,
     LLM_COVERAGE_IMPORTANCE_MANDATORY,
+    LLM_COVERAGE_IMPORTANCE_PREFERRED,
+    LLM_COVERAGE_IMPORTANCE_STRONGLY_PREFERRED,
     LLM_EXPERIENCE_COMPONENT_DURATION,
     LLM_EXPERIENCE_COMPONENT_QUALIFIER,
     LLM_EXPERIENCE_COMPONENT_ROLE_ACTIVITY,
@@ -87,6 +86,7 @@ from job_hunter_agent.llm_protocol import (
     LLM_PROMPT_CAPABILITY_LEVELS_HEADER,
     LLM_PROMPT_CAPABILITY_NAMING_INTRO,
     LLM_PROMPT_CLUSTERS_HEADER,
+    LLM_PROMPT_CONFIRMED_ABSENT_CAPABILITIES_HEADER,
     LLM_PROMPT_DEBUG_REASON_INTRO,
     LLM_PROMPT_DEFAULT_CAPABILITY_NAMING_GUIDANCE_HEADER,
     LLM_PROMPT_DEFAULT_FIT_REVIEW_GUIDANCE_HEADER,
@@ -114,7 +114,6 @@ from job_hunter_agent.llm_protocol import (
     LLM_UNCERTAIN_COVERAGE_REQUIREMENT_TYPE,
 )
 from job_hunter_agent.paths import LLM_COSTS_PATH as _LLM_COSTS_PATH
-from job_hunter_agent.record_schema import POSTING_CHANNEL_CLASSIFIER_VERSION
 
 # Import at module level to allow monkeypatching in tests
 from job_hunter_agent.profile_item_names import normalize_profile_item_name
@@ -123,17 +122,20 @@ from job_hunter_agent.profile_store import (
     KEY_CANDIDATE_ELIGIBILITY,
     KEY_CANDIDATE_ELIGIBILITY_FACTS,
     KEY_CANDIDATE_QUALIFICATIONS,
+    KEY_MUST_NOT_REQUIRED_SKILLS,
     KEY_ROLE_EXPERIENCE,
     get_candidate_profile_tier_weights,
     get_candidate_profile_tiers,
     load_clearance_ui_options,
     load_profile,
 )
+from job_hunter_agent.record_schema import POSTING_CHANNEL_CLASSIFIER_VERSION
 from job_hunter_agent.requirement_classification import (
     classify_requirement_subtype,
     classify_requirement_type,
     load_eligibility_subtypes,
 )
+from job_hunter_agent.role_experience_duration import apply_effective_durations
 from job_hunter_agent.runtime_helpers import (
     CLI_FLAG_NO_LLM,
     append_llm_cost_log,
@@ -668,6 +670,7 @@ def build_profile_prompt_context() -> str:
     prompt_templates = prompt_settings[KEY_LLM_PROMPT_TEMPLATES]
     prompt_evidence_tiers = prompt_settings[KEY_LLM_PROMPT_EVIDENCE_TIERS]
     capability_rules = profile.get(KEY_CANDIDATE_CAPABILITIES, [])
+    confirmed_absent_capabilities = profile.get(KEY_MUST_NOT_REQUIRED_SKILLS, [])
     eligibility_rules = [
         *(profile.get(KEY_CANDIDATE_ELIGIBILITY, []) or []),
         *(profile.get(KEY_CANDIDATE_ELIGIBILITY_FACTS, []) or []),
@@ -706,6 +709,13 @@ def build_profile_prompt_context() -> str:
                 if aliases:
                     label += f" ({aliases})"
                 parts.append(label)
+
+    if isinstance(confirmed_absent_capabilities, list) and confirmed_absent_capabilities:
+        parts.append(LLM_PROMPT_CONFIRMED_ABSENT_CAPABILITIES_HEADER)
+        for raw_name in confirmed_absent_capabilities[: get_llm_capability_rules_max_items()]:
+            name = normalize_profile_item_name(raw_name)
+            if name:
+                parts.append(f"- {name}")
 
     if isinstance(eligibility_rules, list) and eligibility_rules:
         parts.append(LLM_PROMPT_ELIGIBILITY_HEADER)
@@ -1957,8 +1967,10 @@ def normalize_llm_requirement_coverage(
                         "matched_candidate_fact": compact_whitespace(
                             raw_element.get("matched_candidate_fact")
                         ),
-                        # Per-branch gate for an OR row's own Add action. JH-300
-                        # deliberately limits this exception to named,
+                        # Per-element gate for compound-row profile actions. JH-300
+                        # introduced the OR-branch exception; JH-285 also uses it
+                        # for unresolved children of an AND requirement. Both are
+                        # deliberately limited to named,
                         # professional capability atoms; qualification,
                         # eligibility, vague, and behavioural alternatives stay
                         # non-actionable under JH-286.
