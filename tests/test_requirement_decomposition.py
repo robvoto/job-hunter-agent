@@ -995,3 +995,47 @@ def test_behavioural_rows_render_read_only_under_working_style_heading():
     # Not surfaced as a scored gap.
     assert "job-requirement-item--working-style" in html
     assert "job-requirement-group--attention" not in html
+
+
+def test_and_card_offers_actions_only_for_unknown_child_atom():
+    item = {
+        "requirement": "Power BI and Excel",
+        "importance": "mandatory",
+        "requirement_type": "capability",
+        "canonical_requirement": "",
+        "decomposition": {
+            "operator": "and",
+            "elements": [
+                {
+                    "text": "Power BI",
+                    "capability_judgement": "capability",
+                    "canonical_concept": "Power BI",
+                    "canonical_fact_resolved": True,
+                    "status": "not_shown",
+                },
+                {
+                    "text": "Excel",
+                    "capability_judgement": "capability",
+                    "canonical_concept": "Excel",
+                    "canonical_fact_resolved": True,
+                    "status": "not_shown",
+                },
+            ],
+        },
+        "status": "not_shown",
+        "matched_job_text": "Power BI and Excel",
+    }
+    coverage = _normalize(item, valid_capability_names={})
+    profile = _render_profile()
+    profile["candidate_capabilities"] = [
+        {"name": "Excel", "level": "working", "aliases": []}
+    ]
+
+    html = workspace_renderer.render_job_card(_or_record(coverage), profile)
+
+    assert html.count('data-action="confirm_have"') == 1
+    assert html.count('data-action="confirm_do_not_have"') == 1
+    assert html.count('data-capability-name="Power BI"') == 2
+    assert 'data-capability-name="Excel"' not in html
+    assert "Add Power BI" in unescape(html)
+    assert "Either Power BI" not in unescape(html)

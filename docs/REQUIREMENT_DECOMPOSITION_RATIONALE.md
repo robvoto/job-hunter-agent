@@ -283,11 +283,14 @@ For `operator: "or"`, JH-300 uses this to offer one **Add X** / **No, I don't ha
 pair for every unresolved named professional capability branch whose element status is
 confirmable and whose exact atom is not already present or absent in the profile. The card
 still renders every branch's `canonical_concept` in an "either **X** or **Y**" line, so the
-requirement is never shown as if the alternatives were independently mandatory. Qualification
-or credential alternatives, issuer names, equivalent clauses, vague groups, behavioural
-expectations, and unresolved elements remain non-actionable. For `operator: "single"`, the
-row-level `profile_action_allowed` remains authoritative and the element flag simply mirrors
-the LLM's safe atom judgement.
+requirement is never shown as if the alternatives were independently mandatory. JH-285 uses
+the same per-element gate for `operator: "and"`: the parent requirement remains one grouped
+all-required clause, while only unresolved safe child atoms receive their own confirmation
+controls. A known child has no controls, and the AND parent sentence is never persisted as a
+capability. Qualification or credential alternatives, issuer names, equivalent clauses, vague
+groups, behavioural expectations, and unresolved elements remain non-actionable. For
+`operator: "single"`, the row-level `profile_action_allowed` remains authoritative and the
+element flag simply mirrors the LLM's safe atom judgement.
 
 ### Atomic capability persistence (JH-300)
 

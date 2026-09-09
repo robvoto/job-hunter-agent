@@ -12,6 +12,7 @@ from job_hunter_agent.profile_store import (
     KEY_ALIASES,
     KEY_CANDIDATE_CAPABILITIES,
     KEY_LEVEL,
+    KEY_MUST_NOT_REQUIRED_SKILLS,
     KEY_NAME,
 )
 from job_hunter_agent.review_insights import apply_capability_tuning_decisions, build_review_data
@@ -507,3 +508,70 @@ def test_build_review_data_does_not_fall_back_to_raw_signal_label(monkeypatch):
     )
 
     assert result["skill_observations"] == []
+
+
+def test_apply_capability_tuning_decisions_records_factual_absence_separately_from_dismiss():
+    factual = apply_capability_tuning_decisions(
+        {KEY_CANDIDATE_CAPABILITIES: [], KEY_MUST_NOT_REQUIRED_SKILLS: []},
+        [{"skill": "Power BI", "choice": "do_not_have"}],
+    )
+
+    assert factual[KEY_MUST_NOT_REQUIRED_SKILLS] == ["Power BI"]
+    assert factual["review_controls"]["ignored_capability_suggestions"] == []
+
+    dismissed = apply_capability_tuning_decisions(
+        {KEY_CANDIDATE_CAPABILITIES: [], KEY_MUST_NOT_REQUIRED_SKILLS: []},
+        [{"skill": "Power BI", "choice": "dismiss"}],
+    )
+    assert dismissed[KEY_MUST_NOT_REQUIRED_SKILLS] == []
+    assert dismissed["review_controls"]["ignored_capability_suggestions"] == ["Power BI"]
+
+
+def test_apply_capability_tuning_decisions_positive_choice_reverses_exact_absence():
+    updated = apply_capability_tuning_decisions(
+        {
+            KEY_CANDIDATE_CAPABILITIES: [],
+            KEY_MUST_NOT_REQUIRED_SKILLS: ["Power BI", "SAP"],
+        },
+        [{"skill": "Power BI", "choice": "working"}],
+    )
+
+    assert [item[KEY_NAME] for item in updated[KEY_CANDIDATE_CAPABILITIES]] == ["Power BI"]
+    assert updated[KEY_MUST_NOT_REQUIRED_SKILLS] == ["SAP"]
+
+
+def test_build_review_data_skips_explicitly_absent_capability_suggestions(monkeypatch):
+    monkeypatch.setattr(
+        "job_hunter_agent.review_insights.get_review_settings",
+        lambda: {
+            KEY_REVIEW_MAX_EXAMPLES_PER_SKILL: 2,
+            KEY_REVIEW_MAX_SAMPLES_PER_REJECTION: 2,
+            KEY_REVIEW_CAPABILITY_SUGGESTION_MIN_COUNT: 1,
+            KEY_REVIEW_CAPABILITY_WORKING_MIN_COUNT: 3,
+            KEY_REVIEW_TITLE_NOT_TARGET_MIN_COUNT: 3,
+            KEY_REVIEW_RULE_SUGGESTION_MIN_COUNT: 2,
+        },
+    )
+    result = build_review_data(
+        audit_rows=[
+            {
+                "decision": "KEEP",
+                "url": "https://example.test/job-1",
+                "title": "Business Analyst",
+                "company": "Example Co",
+            }
+        ],
+        skill_observations=[
+            {
+                "skill": "Power BI",
+                "url": "https://example.test/job-1",
+                "title": "Business Analyst",
+            }
+        ],
+        profile={
+            KEY_CANDIDATE_CAPABILITIES: [],
+            KEY_MUST_NOT_REQUIRED_SKILLS: ["Power BI"],
+        },
+    )
+
+    assert result["suggested_tuning"]["capability_suggestions"] == []

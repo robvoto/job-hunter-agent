@@ -1335,3 +1335,325 @@ def test_profile_gap_confirm_have_partial_match_already_present_does_not_double_
     assert resp.status_code == 200
     assert resp.json()["change_kind"] == "already_present"
     assert saved_profiles == [], "an already-covered partial must not add the capability again"
+
+
+def test_profile_gap_confirm_have_saves_only_unknown_and_child_atom(client, monkeypatch):
+    job_key = "job-and-tools"
+    coverage = {
+        "requirement": "Power BI and Excel",
+        "importance": "mandatory",
+        "requirement_type": "capability",
+        "requirement_kind": "professional_capability",
+        "canonical_requirement": "",
+        "profile_action_allowed": False,
+        "status": "not_shown",
+        "matched_job_text": "Power BI and Excel",
+        "decomposition": {
+            "operator": "and",
+            "elements": [
+                {
+                    "text": "Power BI",
+                    "capability_judgement": "capability",
+                    "canonical_concept": "Power BI",
+                    "canonical_fact_resolved": True,
+                    "status": "not_shown",
+                    "element_profile_action_allowed": True,
+                },
+                {
+                    "text": "Excel",
+                    "capability_judgement": "capability",
+                    "canonical_concept": "Excel",
+                    "canonical_fact_resolved": True,
+                    "status": "not_shown",
+                    "element_profile_action_allowed": True,
+                },
+            ],
+        },
+    }
+    monkeypatch.setattr(
+        "job_hunter_agent.routes.review.load_job_history",
+        lambda: _job_history_with_requirement_coverage(job_key, [coverage]),
+    )
+    existing_profile = {
+        "candidate_capabilities": [
+            {
+                "name": "Excel",
+                "level": "working",
+                "aliases": [],
+                "icon_key": "generic_capability",
+            }
+        ],
+        "must_not_require_skills": [],
+    }
+    saved_profiles = []
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.save_profile",
+        lambda p, **kwargs: saved_profiles.append(p) or p,
+    )
+    _mock_profile_storage_resolution(monkeypatch, "new", "Power BI")
+
+    resp = client.post(
+        "/api/profile-gap",
+        json={
+            "job_key": job_key,
+            "capability_name": "Power BI",
+            "action": "confirm_have",
+            "capability_level": "working",
+        },
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["confirmed_fact"] == "Power BI"
+    names = [item["name"] for item in saved_profiles[0]["candidate_capabilities"]]
+    assert names == ["Excel", "Power BI"]
+    assert "Power BI and Excel" not in names
+
+
+def test_profile_gap_confirm_have_reverses_exact_capability_absence(client, monkeypatch):
+    job_key = "job-reverse-capability"
+    item = {
+        "requirement": "Power BI",
+        "status": "not_shown",
+        "requirement_type": "capability",
+        "requirement_kind": "professional_capability",
+        "canonical_requirement": "Power BI",
+        "matched_job_text": "Power BI",
+        "profile_action_allowed": True,
+    }
+    monkeypatch.setattr(
+        "job_hunter_agent.routes.review.load_job_history",
+        lambda: _job_history_with_requirement_coverage(job_key, [item]),
+    )
+    existing_profile = {
+        "candidate_capabilities": [],
+        "must_not_require_skills": ["Power BI", "SAP"],
+    }
+    saved_profiles = []
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.save_profile",
+        lambda p, **kwargs: saved_profiles.append(p) or p,
+    )
+    _mock_profile_storage_resolution(monkeypatch, "new", "Power BI")
+
+    resp = client.post(
+        "/api/profile-gap",
+        json={
+            "job_key": job_key,
+            "capability_name": "Power BI",
+            "action": "confirm_have",
+            "capability_level": "working",
+        },
+    )
+
+    assert resp.status_code == 200
+    saved = saved_profiles[0]
+    assert saved["must_not_require_skills"] == ["SAP"]
+    assert [item["name"] for item in saved["candidate_capabilities"]] == ["Power BI"]
+
+
+def test_profile_gap_confirm_have_reverses_generic_eligibility_false(client, monkeypatch):
+    job_key = "job-reverse-eligibility"
+    item = {
+        "requirement": "AHPRA registration",
+        "status": "not_shown",
+        "requirement_type": "eligibility",
+        "canonical_requirement": "AHPRA registration",
+        "matched_job_text": "AHPRA registration required",
+        "profile_action_allowed": True,
+    }
+    monkeypatch.setattr(
+        "job_hunter_agent.routes.review.load_job_history",
+        lambda: _job_history_with_requirement_coverage(job_key, [item]),
+    )
+    existing_profile = {
+        "candidate_capabilities": [],
+        "candidate_eligibility": [],
+        "candidate_eligibility_facts": [
+            {"name": "AHPRA registration", "value": False, "aliases": [], "evidence": []}
+        ],
+        "must_not_require_skills": [],
+    }
+    saved_profiles = []
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.save_profile",
+        lambda p, **kwargs: saved_profiles.append(p) or p,
+    )
+    _mock_profile_storage_resolution(monkeypatch, "existing", "AHPRA registration")
+
+    resp = client.post(
+        "/api/profile-gap",
+        json={
+            "job_key": job_key,
+            "capability_name": "AHPRA registration",
+            "action": "confirm_have",
+        },
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["change_kind"] == "negative_reversed"
+    assert saved_profiles[0]["candidate_eligibility_facts"][0]["value"] is True
+
+
+def test_profile_gap_confirm_have_reverses_qualification_false(client, monkeypatch):
+    job_key = "job-reverse-qualification"
+    item = {
+        "requirement": "CBAP",
+        "status": "not_shown",
+        "requirement_type": "qualification",
+        "canonical_requirement": "CBAP",
+        "matched_job_text": "CBAP required",
+        "profile_action_allowed": True,
+    }
+    monkeypatch.setattr(
+        "job_hunter_agent.routes.review.load_job_history",
+        lambda: _job_history_with_requirement_coverage(job_key, [item]),
+    )
+    existing_profile = {
+        "candidate_capabilities": [],
+        "candidate_qualifications": [
+            {"name": "CBAP", "value": False, "aliases": [], "evidence": []}
+        ],
+        "must_not_require_skills": [],
+    }
+    saved_profiles = []
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.save_profile",
+        lambda p, **kwargs: saved_profiles.append(p) or p,
+    )
+    _mock_profile_storage_resolution(monkeypatch, "existing", "CBAP")
+
+    resp = client.post(
+        "/api/profile-gap",
+        json={"job_key": job_key, "capability_name": "CBAP", "action": "confirm_have"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["change_kind"] == "negative_reversed"
+    assert saved_profiles[0]["candidate_qualifications"][0]["value"] is True
+
+
+def test_profile_gap_confirm_have_reverses_managed_clearance_false(client, monkeypatch):
+    job_key = "job-reverse-clearance"
+    item = {
+        "requirement": "Hold PV security clearance",
+        "status": "not_shown",
+        "requirement_type": "eligibility",
+        "canonical_requirement": "PV clearance",
+        "matched_job_text": "Must hold a PV clearance",
+        "profile_action_allowed": True,
+    }
+    monkeypatch.setattr(
+        "job_hunter_agent.routes.review.load_job_history",
+        lambda: _job_history_with_requirement_coverage(job_key, [item]),
+    )
+    existing_profile = {
+        "candidate_capabilities": [],
+        "candidate_eligibility": [
+            {"name": "PV clearance", "value": False, "evidence": []}
+        ],
+        "candidate_eligibility_facts": [],
+        "must_not_require_skills": [],
+    }
+    saved_profiles = []
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile", lambda: dict(existing_profile)
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.save_profile",
+        lambda p, **kwargs: saved_profiles.append(p) or p,
+    )
+    _mock_profile_storage_resolution(monkeypatch, "existing", "PV clearance")
+
+    resp = client.post(
+        "/api/profile-gap",
+        json={
+            "job_key": job_key,
+            "capability_name": "PV clearance",
+            "action": "confirm_have",
+        },
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["change_kind"] == "negative_reversed"
+    assert saved_profiles[0]["candidate_eligibility"][0]["value"] is True
+
+
+def test_tuning_decisions_do_not_have_is_factual_and_audited(client, monkeypatch):
+    saved_profiles = []
+    audit_calls = []
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile",
+        lambda: {"candidate_capabilities": [], "must_not_require_skills": []},
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.save_profile",
+        lambda p, **kwargs: saved_profiles.append(p) or p,
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.llm_gate.llm_validate_profile_capability_atomicity",
+        lambda items: [True for _ in items],
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.routes.review.record_profile_fact_confirmation",
+        lambda **kwargs: audit_calls.append(kwargs),
+    )
+
+    resp = client.post(
+        "/api/tuning-decisions",
+        json={"decisions": [{"skill": "Power BI", "choice": "do_not_have"}]},
+    )
+
+    assert resp.status_code == 200
+    assert saved_profiles[0]["must_not_require_skills"] == ["Power BI"]
+    assert saved_profiles[0]["review_controls"]["ignored_capability_suggestions"] == []
+    assert audit_calls == [
+        {
+            "fact": "Power BI",
+            "requirement_type": "capability",
+            "has_fact": False,
+            "source": "suggested_tuning",
+            "action": "do_not_have",
+            "evidence": "",
+        }
+    ]
+
+
+def test_tuning_decisions_do_not_have_rejects_non_atomic_capability(client, monkeypatch):
+    saved_profiles = []
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile",
+        lambda: {"candidate_capabilities": [], "must_not_require_skills": []},
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.save_profile",
+        lambda p, **kwargs: saved_profiles.append(p) or p,
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.llm_gate.llm_validate_profile_capability_atomicity",
+        lambda items: [False for _ in items],
+    )
+
+    resp = client.post(
+        "/api/tuning-decisions",
+        json={
+            "decisions": [
+                {"skill": "Power BI and Excel and stakeholder management", "choice": "do_not_have"}
+            ]
+        },
+    )
+
+    assert resp.status_code == 400
+    assert "Only one clear professional capability" in resp.json()["error"]
+    assert saved_profiles == []
