@@ -1640,6 +1640,7 @@ def test_job_card_shows_quick_apply_badge():
     assert 'class="badge jh-badge badge-source-seek"' in html
     assert "SEEK · Quick Apply" in html
     assert html.count('class="badge jh-badge badge-source-seek"') == 1
+    assert html.index(">Business Analyst<") < html.index("badge-source-seek")
 
 
 def test_job_card_omits_apply_method_badge_when_unknown():
@@ -3020,6 +3021,7 @@ def test_job_card_formats_opened_by_you_as_date_only():
 
     assert "Opened by you 17 Aug 2026" in html
     assert "Opened by you 17 Aug 2026 01:05 PM" not in html
+    assert html.index(">Business Analyst<") < html.index("badge-source-seek") < html.index("badge-viewed")
 
 
 def test_potential_duplicate_card_shows_compact_related_cards_section():

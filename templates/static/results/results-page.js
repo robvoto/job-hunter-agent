@@ -686,10 +686,10 @@
       const card = link.closest('.job-card');
       if (!card) return;
       card.dataset.viewed = '1';
-      const badges = card.querySelector('.job-badges');
+      const titleBadges = card.querySelector('.job-title-badges');
       if (!card.querySelector('.badge-viewed')) {
-        if (badges) {
-          badges.insertAdjacentHTML('beforeend', WORKSPACE_CONTEXT.viewedBadgeHtml || '');
+        if (titleBadges) {
+          titleBadges.insertAdjacentHTML('beforeend', WORKSPACE_CONTEXT.viewedBadgeHtml || '');
         }
       }
     }
@@ -709,9 +709,9 @@
             continue;
           }
           card.dataset.viewed = '1';
-          const badges = card.querySelector('.job-badges');
-          if (!card.querySelector('.badge-viewed') && badges) {
-            badges.insertAdjacentHTML('beforeend', WORKSPACE_CONTEXT.viewedBadgeHtml || '');
+          const titleBadges = card.querySelector('.job-title-badges');
+          if (!card.querySelector('.badge-viewed') && titleBadges) {
+            titleBadges.insertAdjacentHTML('beforeend', WORKSPACE_CONTEXT.viewedBadgeHtml || '');
           }
         }
         applyWorkspaceControls();
