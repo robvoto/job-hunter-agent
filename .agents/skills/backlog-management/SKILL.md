@@ -15,7 +15,9 @@ Use when creating, updating, deduplicating, grooming, or analysing backlog items
 - Do not add, remove, or rename columns unless explicitly agreed.
 
 ## Required skill pairing
-- For every backlog read, search, analysis, or write, use this skill together with an authorised live Google Sheets/Drive capability exposed by the current runtime. In a ChatGPT connector runtime, prefer the dedicated `Google_Drive` / Sheets connector and use the approved Human MCP Google-service fallback if needed. In Codex/Claude/local runtimes, use their authorised Sheets/API capability if one exists. If the current runtime has no authorised live-Sheet capability, stop rather than substituting a local export.
+- For every backlog read, search, analysis, or write, use this skill together with an authorised live Google Sheets capability exposed by the current runtime. In a ChatGPT connector runtime, load `.agents/skills/mcp-tooling/SKILL.md` first and use the connector route it defines. The canonical spreadsheet ID and sheet name are pinned below, so routine backlog work does not require generic Drive discovery.
+- Once live backlog access is established through one authorised connector path, keep that path for the backlog/repo investigation. Do not casually switch to a second connector merely because both are available. Escalate to a different connector only when the current authorised path genuinely lacks the required operation, and make that isolated boundary explicit.
+- In Codex/Claude/local runtimes, use their authorised live-Sheets/API capability if one exists. If the current runtime has no authorised live-Sheet capability, stop rather than substituting a local export.
 - This skill owns Job Hunter backlog rules; the Google Sheets skill owns live spreadsheet metadata, bounded reads, validation checks, precise writes, and post-write verification.
 - When the human provides the backlog URL, go directly to this spreadsheet. Do not search local exports or GitHub issues for JH IDs first.
 

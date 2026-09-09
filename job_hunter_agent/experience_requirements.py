@@ -10,6 +10,11 @@ is a semantic judgement that stays with the fit-review LLM, which receives the
 role experience matrix and returns ``matched_role_family`` on the experience
 component. There is deliberately no regex subject extraction, stemming, or
 synonym table here.
+
+Whichever name the LLM returns decides how much history is credited: a saved
+family's own canonical title credits that family's whole accrued duration; a
+title variant credits only that variant's own stored months, never the parent
+family total; anything the profile does not hold that way is left unresolved.
 """
 
 from __future__ import annotations
@@ -94,44 +99,109 @@ def _llm_matched_role_family(experience_components: list[dict[str, Any]] | None)
     return ""
 
 
-def _role_experience_family_lookup(
-    role_experience: list[dict[str, Any]] | None,
-) -> dict[str, dict[str, Any]]:
-    """Index saved role families by every name they are known under (casefolded).
+def _canonical_family_entry(row: dict[str, Any]) -> dict[str, Any]:
+    """Family-level credit: the whole accrued role-family duration.
 
-    Both the family's own ``normalized_title`` and each ``title_variants`` entry
-    resolve to the same family row, so an LLM that names a sub-title (e.g.
-    "Senior Business Analyst") still lands on the accumulated family total — and
-    ``family`` carries the canonical ``normalized_title`` so the caller reports
-    and credits the whole family, never the sub-title it was asked about.
+    ``effective_family_months`` accrues whole elapsed months onto a still-current
+    canonical role segment (see role_experience_duration). Persisted role rows
+    without segments are invalid and fail at that owner boundary.
     """
-    lookup: dict[str, dict[str, Any]] = {}
+    title = compact_whitespace(row.get("normalized_title"))
+    return {
+        "family": title,
+        "total_duration_months": effective_family_months(row),
+        "most_recent_end_year": max(int(row.get("most_recent_end_year") or 0), 0),
+    }
+
+
+def _variant_entries(row: dict[str, Any]) -> dict[str, dict[str, Any] | None]:
+    """Map each ``title_variants`` name to *that variant's own* stored duration.
+
+    A sub-title never inherits the parent family total: a requirement the LLM
+    ties to "Senior Business Analyst" is credited with the Senior Business
+    Analyst variant's own months, not the whole Business Analyst family. A
+    variant that carries no usable own duration maps to ``None`` so the caller
+    keeps the row unresolved instead of falling back to the family total.
+
+    A variant's ``total_duration_months`` is a conservative extraction-time
+    snapshot. Unlike the canonical family row it carries no ``segments`` /
+    ``duration_as_of`` timing, so no runtime accrual is applied here: the figure
+    does not tick up between profile refreshes. For a variant of a still-current
+    role it can therefore lag the canonical family total, which is accepted
+    because it only ever understates the candidate (fails safe) and the row
+    stays visible as a duration gap for review.
+    """
+    entries: dict[str, dict[str, Any] | None] = {}
+    variants = row.get("title_variants")
+    if not isinstance(variants, list):
+        return entries
+    for variant in variants:
+        if not isinstance(variant, dict):
+            continue
+        name = compact_whitespace(variant.get("normalized_title"))
+        if not name:
+            continue
+        key = name.casefold()
+        try:
+            months = int(variant.get("total_duration_months"))
+        except (TypeError, ValueError):
+            months = 0
+        if months <= 0:
+            entries.setdefault(key, None)
+            continue
+        entry = {
+            "family": name,
+            "total_duration_months": months,
+            "most_recent_end_year": max(int(variant.get("most_recent_end_year") or 0), 0),
+        }
+        if key in entries:
+            prior = entries[key]
+            if prior is None or prior["total_duration_months"] != months:
+                entries[key] = None
+        else:
+            entries[key] = entry
+    return entries
+
+
+def _resolve_saved_family(
+    name: str,
+    role_experience: list[dict[str, Any]] | None,
+) -> dict[str, Any] | None:
+    """Resolve the LLM-named role/family to a saved duration to credit.
+
+    Precedence:
+    - name equals a saved family's canonical ``normalized_title`` -> that
+      family's whole accrued total.
+    - otherwise name equals exactly one title variant that carries its own
+      stored duration -> that variant's own months (never the family total).
+    - name found only as a variant with no trustworthy own duration, or a
+      variant name whose duration is inconsistent across families, or a name
+      absent from the profile -> ``None``: the caller keeps the row unresolved
+      for human review rather than guessing.
+    """
+    key = name.casefold()
+    canonical: dict[str, dict[str, Any]] = {}
+    variant_map: dict[str, dict[str, Any] | None] = {}
     for row in role_experience or []:
         if not isinstance(row, dict):
             continue
         title = compact_whitespace(row.get("normalized_title"))
-        if not title:
-            continue
-        # effective_family_months accrues whole elapsed months onto a still-current
-        # canonical role segment (see role_experience_duration). Persisted role rows
-        # without segments are invalid and fail at that owner boundary.
-        entry = {
-            "family": title,
-            "total_duration_months": effective_family_months(row),
-            "most_recent_end_year": max(int(row.get("most_recent_end_year") or 0), 0),
-        }
-        names = {title.casefold()}
-        variants = row.get("title_variants")
-        if isinstance(variants, list):
-            for variant in variants:
-                if not isinstance(variant, dict):
-                    continue
-                variant_title = compact_whitespace(variant.get("normalized_title"))
-                if variant_title:
-                    names.add(variant_title.casefold())
-        for name in names:
-            lookup.setdefault(name, entry)
-    return lookup
+        if title:
+            canonical.setdefault(title.casefold(), _canonical_family_entry(row))
+        for vkey, ventry in _variant_entries(row).items():
+            if vkey not in variant_map:
+                variant_map[vkey] = ventry
+                continue
+            prior = variant_map[vkey]
+            if (
+                ventry is None
+                or prior is None
+                or prior["total_duration_months"] != ventry["total_duration_months"]
+            ):
+                variant_map[vkey] = None
+    if key in canonical:
+        return canonical[key]
+    return variant_map.get(key)
 
 
 def resolve_role_experience_requirement(
@@ -139,15 +209,17 @@ def resolve_role_experience_requirement(
     required_months: int | None,
     role_experience: list[dict[str, Any]] | None,
 ) -> dict[str, Any] | None:
-    """Compare a stated experience threshold against the LLM-identified family.
+    """Compare a stated experience threshold against the LLM-identified role.
 
     Returns None when the requirement states no duration. Otherwise:
-    - ``matched_role_family`` present + found in role history -> reports the
-      canonical family name, its accumulated months, and whether they meet
-      ``required_months``.
-    - ``matched_role_family`` present but absent from role history, or empty ->
-      ``role_family_resolved`` is False so the caller keeps the row unresolved
-      for human review rather than asserting a pass or a fail.
+    - the LLM's ``matched_role_family`` names a saved canonical family -> credit
+      that family's whole accrued months.
+    - it names a title variant with its own stored duration -> credit that
+      variant's own months, not the family total.
+    - it names nothing, a role the profile does not hold, or a variant with no
+      trustworthy own duration -> ``role_family_resolved`` is False so the
+      caller keeps the row unresolved for human review rather than asserting a
+      pass or a fail.
 
     The months come from ``role_experience`` captured at the last CV/profile
     refresh; they are a snapshot, not a figure that ticks up on its own.
@@ -161,18 +233,19 @@ def resolve_role_experience_requirement(
         result["role_family_resolved"] = False
         return result
 
-    saved = _role_experience_family_lookup(role_experience).get(family.casefold())
+    saved = _resolve_saved_family(family, role_experience)
     if saved is None:
-        # The LLM named a family the profile does not actually hold; do not
-        # invent a pass or a fail from that. Keep the LLM's label so the review
-        # note can say which family was looked for.
+        # The LLM named a role the profile does not hold, or only a sub-title
+        # with no duration of its own. Do not invent a pass or a fail, and do
+        # not fall back to a parent family total. Keep the LLM's label so the
+        # review note can say which role was looked for.
         result["matched_role_family"] = family
         result["role_family_resolved"] = False
         return result
 
-    # Report and credit the canonical family, never the sub-title the LLM was
-    # asked about: labelling the whole Business Analyst family total as "Senior
-    # Business Analyst" would overstate seniority.
+    # Credit and report whatever _resolve_saved_family matched: the canonical
+    # family total for a family-level tie, or the sub-title's own (smaller)
+    # months for a variant tie — a sub-title never inherits the family total.
     total_months = int(saved["total_duration_months"])
     result.update(
         {

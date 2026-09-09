@@ -628,13 +628,15 @@ def test_normalize_llm_review_payload_matches_years_requirement_against_role_var
     )
 
     row = payload["requirement_coverage"][0]
-    assert row["status"] == "supported"
     assert row["required_experience_months"] == 60
-    # The LLM named the "senior ba" sub-title, but the row reports and credits
-    # the canonical family it belongs to, never the sub-title itself.
-    assert row["matched_role_family"] == "business analyst"
-    assert row["matched_role_family_months"] == 60
-    assert row["experience_requirement_met"] is True
+    # JH-013 regression: the LLM named the "senior ba" sub-title. Only that
+    # variant's own 24 months are credited, not the 60-month business analyst
+    # family total it sits inside, so the 5-year bar is not met.
+    assert row["matched_role_family"] == "senior ba"
+    assert row["matched_role_family_months"] == 24
+    assert row["experience_requirement_met"] is False
+    assert row["experience_duration_gap"] is True
+    assert row["status"] == "partially_supported"
 
 
 def _years_experience_coverage_row(matched_role_family: str) -> dict:
@@ -675,7 +677,11 @@ def _ba_family_role_experience(total_duration_months: int) -> list[dict]:
     ]
 
 
-def test_years_business_analysis_requirement_met_from_combined_ba_family_history():
+def test_years_subtitle_without_own_duration_is_left_for_review_not_family_total():
+    # JH-013 regression: the LLM tied the requirement to the "Senior Business
+    # Analyst" sub-title, which exists only as a title variant with no duration
+    # of its own. The 66-month Business Analyst family total must NOT be
+    # borrowed; the row stays visible but unresolved for review.
     result = _norm_cov(
         [_years_experience_coverage_row("Senior Business Analyst")],
         valid_capability_names={"business analysis": "Business Analysis"},
@@ -683,16 +689,45 @@ def test_years_business_analysis_requirement_met_from_combined_ba_family_history
     )
 
     row = result[0]
-    assert row["status"] == "supported"
     assert row["required_experience_months"] == 60
-    # The LLM tied the requirement to the "Senior Business Analyst" sub-title,
-    # but the combined family total is credited and reported under the canonical
-    # "Business Analyst" family so senior time is never overstated.
-    assert row["matched_role_family"] == "Business Analyst"
-    assert row["matched_role_family_months"] == 66
-    assert row["experience_requirement_met"] is True
-    assert "experience_duration_gap" not in row
-    assert "experience_requirement_review_needed" not in row
+    assert row["experience_requirement_review_needed"] is True
+    assert row["status"] == "partially_supported"
+    assert "matched_role_family" not in row
+    assert "matched_role_family_months" not in row
+    assert "experience_requirement_met" not in row
+
+
+def test_years_subtitle_match_credits_only_the_variants_own_stored_months():
+    # A sub-title that DOES carry its own stored duration is credited with that
+    # figure alone — never the parent family total.
+    role_experience = [
+        {
+            "normalized_title": "Business Analyst",
+            "total_duration_months": 216,
+            "most_recent_end_year": 2025,
+            "segments": [{"duration_months": 216, "is_current": False}],
+            "title_variants": [
+                {"normalized_title": "Business Analyst", "total_duration_months": 48},
+                {
+                    "normalized_title": "Senior Business Analyst",
+                    "total_duration_months": 30,
+                    "most_recent_end_year": 2025,
+                },
+            ],
+        }
+    ]
+    result = _norm_cov(
+        [_years_experience_coverage_row("Senior Business Analyst")],
+        valid_capability_names={"business analysis": "Business Analysis"},
+        role_experience=role_experience,
+    )
+
+    row = result[0]
+    assert row["matched_role_family"] == "Senior Business Analyst"
+    assert row["matched_role_family_months"] == 30
+    assert row["experience_requirement_met"] is False
+    assert row["experience_duration_gap"] is True
+    assert row["status"] == "partially_supported"
 
 
 def test_years_business_analysis_requirement_shows_gap_when_history_is_short():
@@ -2027,10 +2062,84 @@ def test_normalize_coverage_blocks_profile_action_for_or_group_of_alternatives()
         "CSPO",
         "PSM",
     ]
-    # Each branch is independently resolvable even though the row is not.
+    # JH-300 only permits branch actions for professional capability atoms;
+    # credentials and issuer alternatives remain protected by JH-286.
     assert all(
-        el["element_profile_action_allowed"] is True
+        el["element_profile_action_allowed"] is False
         for el in result[0]["decomposition"]["elements"]
+    )
+
+
+def test_normalize_or_branch_action_requires_professional_capability_kind():
+    result = _norm_cov(
+        [
+            {
+                "requirement": "Power BI or Excel experience",
+                "importance": "preferred",
+                "requirement_type": "capability",
+                "requirement_kind": "behavioural_expectation",
+                "decomposition": {
+                    "operator": "or",
+                    "elements": [
+                        {
+                            "text": name,
+                            "capability_judgement": "capability",
+                            "canonical_concept": name,
+                            "canonical_fact_resolved": True,
+                            "status": "not_shown",
+                        }
+                        for name in ("Power BI", "Excel")
+                    ],
+                },
+                "status": "not_shown",
+                "matched_job_text": "Power BI or Excel experience",
+            }
+        ],
+        valid_capability_names={},
+    )
+
+    assert result[0]["profile_action_allowed"] is False
+    assert all(
+        element["element_profile_action_allowed"] is False
+        for element in result[0]["decomposition"]["elements"]
+    )
+
+
+def test_normalize_missing_or_invalid_element_judgement_fails_closed():
+    result = _norm_cov(
+        [
+            {
+                "requirement": "Power BI or Excel experience",
+                "importance": "preferred",
+                "requirement_type": "capability",
+                "decomposition": {
+                    "operator": "or",
+                    "elements": [
+                        {
+                            "text": "Power BI",
+                            "canonical_concept": "Power BI",
+                            "canonical_fact_resolved": True,
+                            "status": "not_shown",
+                        },
+                        {
+                            "text": "Excel",
+                            "capability_judgement": "not-a-real-judgement",
+                            "canonical_concept": "Excel",
+                            "canonical_fact_resolved": True,
+                            "status": "not_shown",
+                        },
+                    ],
+                },
+                "status": "not_shown",
+                "matched_job_text": "Power BI or Excel experience",
+            }
+        ],
+        valid_capability_names={},
+    )
+
+    assert all(
+        element["element_profile_action_allowed"] is False
+        for element in result[0]["decomposition"]["elements"]
     )
 
 
@@ -3355,6 +3464,49 @@ def test_llm_resolve_profile_storage_logs_request_and_timing(monkeypatch, caplog
     assert calls[0]["model"] == "gpt-5.6-luna"
     assert "[LLM][REQUEST] purpose=profile_storage_resolution" in caplog.text
     assert "[LLM][TIMING] purpose=profile_storage_resolution" in caplog.text
+
+
+def test_llm_resolve_profile_storage_reuses_decision_until_profile_cache_invalidation(monkeypatch):
+    calls = []
+
+    class _Parsed:
+        def model_dump(self):
+            return {"resolution": "new", "existing_name": "", "new_name": "Java"}
+
+    class _Responses:
+        def parse(self, **kwargs):
+            calls.append(kwargs)
+            return type("_Resp", (), {"output_parsed": _Parsed(), "usage": None})()
+
+    class _Client:
+        responses = _Responses()
+
+    monkeypatch.setattr(llm_gate, "client", _Client())
+    monkeypatch.setattr(llm_gate, "_log_llm_call", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        llm_gate,
+        "get_llm_model_override_for_purpose",
+        lambda purpose: "gpt-5.6-luna" if purpose == "profile_storage_resolution" else None,
+    )
+    llm_gate.invalidate_profile_fingerprint_cache()
+    row = {
+        "requirement_type": "capability",
+        "requirement": "Java development experience",
+        "matched_job_text": "Java development experience",
+        "canonical_requirement": "Java",
+    }
+
+    first = llm_gate.llm_resolve_profile_storage(row, _storage_profile())
+    second = llm_gate.llm_resolve_profile_storage(row, _storage_profile())
+
+    assert first == second == {"resolution": "new", "profile_target": "Java"}
+    assert len(calls) == 1
+
+    llm_gate.invalidate_profile_fingerprint_cache()
+    third = llm_gate.llm_resolve_profile_storage(row, _storage_profile())
+
+    assert third == first
+    assert len(calls) == 2
 
 
 def test_llm_resolve_profile_storage_returns_validated_existing_resolution(monkeypatch):

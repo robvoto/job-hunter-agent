@@ -293,6 +293,178 @@ def test_deduplicate_across_sources_prefers_seek_when_duplicate_appears_later():
     assert deduped[0][RECORD_DUPLICATE_LINKS_KEY][0]["source"] == "linkedin"
 
 
+def _cross_source_record(
+    job_key: str,
+    source: str,
+    description: str,
+    *,
+    location: str = "Sydney NSW",
+    posted_age_days: float | None = 1.0,
+) -> dict:
+    return {
+        "job_key": job_key,
+        "source": source,
+        "source_name": source.title(),
+        "title": "System Analyst",
+        "company": "HCF Australia",
+        "location": location,
+        "posted_age_days": posted_age_days,
+        "details_text": description,
+        "url": f"https://{source}.example/jobs/{job_key.rsplit(':', 1)[-1]}",
+        "source_metadata": {"platform_job_id": job_key.rsplit(":", 1)[-1]},
+    }
+
+
+def test_cross_source_same_vacancy_merges_and_preserves_both_sources():
+    description = " ".join(
+        f"system analysis stakeholder workshop requirement{i} delivery" for i in range(180)
+    )
+    records = [
+        _cross_source_record(
+            "linkedin:li-4463010684",
+            "linkedin",
+            description,
+            location="Sydney, New South Wales, Australia",
+            posted_age_days=2.0,
+        ),
+        _cross_source_record(
+            "seek:94517731",
+            "seek",
+            description + " seek formatting",
+            posted_age_days=1.0,
+        ),
+    ]
+
+    deduped = deduplicate_across_sources(records)
+
+    assert [record["job_key"] for record in deduped] == ["seek:94517731"]
+    survivor = deduped[0]
+    assert survivor[RECORD_DUPLICATE_LINKS_KEY][0]["source"] == "linkedin"
+    assert {entry["source"] for entry in survivor[RECORD_SOURCE_PROVENANCE_KEY]} == {
+        "seek",
+        "linkedin",
+    }
+
+
+def test_cross_source_hcf_same_vacancy_merges_when_linkedin_location_is_missing():
+    description_parts = [
+        f"system analysis stakeholder workshop requirement{i} delivery" for i in range(180)
+    ]
+    description = " ".join(description_parts)
+    linkedin_description = " ".join(
+        description_parts[:-4]
+        + [f"system analysis stakeholder workshop vacancy_variation{i} delivery" for i in range(4)]
+    )
+    records = [
+        _cross_source_record(
+            "seek:94517731",
+            "seek",
+            description,
+            location="Sydney NSW",
+            posted_age_days=1.0,
+        ),
+        _cross_source_record(
+            "linkedin:li-4463010684",
+            "linkedin",
+            linkedin_description,
+            location="",
+            posted_age_days=2.0,
+        ),
+    ]
+
+    deduped = deduplicate_across_sources(records)
+
+    assert [record["job_key"] for record in deduped] == ["seek:94517731"]
+    assert deduped[0][RECORD_DUPLICATE_LINKS_KEY][0]["source"] == "linkedin"
+
+
+def test_cross_source_same_vacancy_merges_when_both_locations_are_missing():
+    description = " ".join(
+        f"system analysis stakeholder workshop requirement{i} delivery" for i in range(180)
+    )
+    first = _cross_source_record("seek:100", "seek", description, location="")
+    second = _cross_source_record(
+        "linkedin:200",
+        "linkedin",
+        description + " linkedin presentation variation",
+        location="",
+    )
+
+    assert are_jobs_confirmed_duplicates(first, second)
+
+
+def test_cross_source_same_vacancy_with_conflicting_locations_does_not_merge():
+    description = " ".join(
+        f"system analysis stakeholder workshop requirement{i} delivery" for i in range(180)
+    )
+    first = _cross_source_record("seek:100", "seek", description, location="Sydney NSW")
+    second = _cross_source_record(
+        "linkedin:200",
+        "linkedin",
+        description + " linkedin presentation variation",
+        location="Melbourne VIC",
+    )
+
+    assert not are_jobs_confirmed_duplicates(first, second)
+
+
+def test_cross_source_same_metadata_with_different_role_content_does_not_merge():
+    generic_company_intro = (
+        "HCF Australia supports members through reliable services and technology. "
+        "This role contributes to a collaborative team and continuous improvement."
+    )
+    first = _cross_source_record(
+        "seek:100",
+        "seek",
+        generic_company_intro
+        + " "
+        + " ".join(f"claims platform data governance audit{i}" for i in range(180)),
+    )
+    second = _cross_source_record(
+        "linkedin:200",
+        "linkedin",
+        generic_company_intro
+        + " "
+        + " ".join(f"claims clinical systems patient safety nursing{i}" for i in range(180)),
+    )
+
+    assert not are_jobs_confirmed_duplicates(first, second)
+    assert len(deduplicate_across_sources([first, second])) == 2
+
+
+def test_cross_source_same_metadata_without_sufficient_description_does_not_merge():
+    first = _cross_source_record(
+        "seek:100",
+        "seek",
+        "System Analyst supports stakeholders and delivery priorities.",
+    )
+    second = _cross_source_record(
+        "linkedin:200",
+        "linkedin",
+        "System Analyst supports stakeholders and delivery priorities.",
+    )
+
+    assert not are_jobs_confirmed_duplicates(first, second)
+    assert len(deduplicate_across_sources([first, second])) == 2
+
+
+def test_cross_source_description_match_rejects_incompatible_posting_age():
+    description = " ".join(f"system analysis delivery requirement{i}" for i in range(180))
+    first = _cross_source_record("seek:100", "seek", description, posted_age_days=1.0)
+    second = _cross_source_record("linkedin:200", "linkedin", description, posted_age_days=8.0)
+
+    assert not are_jobs_confirmed_duplicates(first, second)
+
+
+def test_cross_source_rule_does_not_change_same_source_repost_behaviour():
+    description = " ".join(f"system analysis delivery requirement{i}" for i in range(180))
+    first = _cross_source_record("seek:100", "seek", description)
+    second = _cross_source_record("seek:200", "seek", description)
+
+    assert are_jobs_content_reposts(first, second)
+    assert not are_jobs_confirmed_duplicates(first, second)
+
+
 def test_company_name_normalization_strips_only_safe_legal_suffixes():
 
     assert normalize_company_name("Acme Pty Ltd") == "acme"

@@ -57,7 +57,6 @@
     const sortSelect = document.getElementById('sort_select');
     const pageSizeSelect = document.getElementById('page_size_select');
     const jobSearchInput = document.getElementById('job_search_input');
-    const scopeFilter = document.getElementById('scope_filter');
     const postedFilter = document.getElementById('posted_filter');
     const workTypeFilter = document.getElementById('work_type_filter');
     const workModeFilter = document.getElementById('work_mode_filter');
@@ -178,7 +177,6 @@
     function saveWorkspaceFilters() {
       const filters = {
         sort: sortSelect?.value,
-        scope: scopeFilter?.value,
         posted: postedFilter?.value,
         workType: workTypeFilter?.value,
         workMode: workModeFilter?.value,
@@ -210,7 +208,6 @@
         const filters = JSON.parse(saved);
         
         setSelectValueIfAvailable(sortSelect, filters.sort);
-        setSelectValueIfAvailable(scopeFilter, filters.scope);
         setSelectValueIfAvailable(postedFilter, filters.posted);
         setSelectValueIfAvailable(workTypeFilter, filters.workType);
         setSelectValueIfAvailable(workModeFilter, filters.workMode);
@@ -272,7 +269,6 @@
     function resetWorkspaceFiltersToDefaults() {
       if (sortSelect) sortSelect.value = 'fit';
       if (jobSearchInput) jobSearchInput.value = '';
-      if (scopeFilter) scopeFilter.value = 'all';
       if (postedFilter) postedFilter.value = 'all';
       if (workTypeFilter) workTypeFilter.value = 'all';
       if (workModeFilter) workModeFilter.value = 'all';
@@ -365,7 +361,6 @@
       if (!['current', 'saved'].includes(cardScope)) return false;
       if (card.dataset.reviewDismissed === '1') return false;
 
-      const viewed = card.dataset.viewed === '1';
       const cardWorkType = (card.dataset.workType || '').toLowerCase();
       const cardWorkMode = (card.dataset.workMode || '').toLowerCase();
       const cardSector = (card.dataset.roleSector || 'unknown').toLowerCase();
@@ -376,10 +371,6 @@
       const cardApplyMethod = (card.dataset.applyMethod || 'unknown').toLowerCase();
       const cardReposted = card.dataset.reposted === '1';
 
-      if (filters.scopeMode === 'current' && cardScope !== 'current') return false;
-      if (filters.scopeMode === 'saved' && cardScope !== 'saved') return false;
-      if (filters.scopeMode === 'unseen' && viewed) return false;
-      if (filters.scopeMode === 'viewed' && !viewed) return false;
       if (filters.postedLimit !== 'all' && postedAge > Number(filters.postedLimit)) return false;
       if (filters.workTypeValues && !filters.workTypeValues.includes(cardWorkType)) return false;
       if (filters.workMode !== 'all' && cardWorkMode !== filters.workMode) return false;
@@ -619,7 +610,6 @@
       const workType = workTypeFilter?.value || 'all';
       const filters = {
         searchText: jobSearchInput?.value || '',
-        scopeMode: scopeFilter?.value || 'all',
         postedLimit: postedFilter?.value || 'all',
         workTypeValues: workType !== 'all' ? workType.split('|') : null,
         workMode: workModeFilter?.value || 'all',
@@ -1154,7 +1144,7 @@
       }
     });
 
-    for (const control of [sortSelect, scopeFilter, postedFilter, workTypeFilter, workModeFilter, sectorFilter, scoreFilter, repostFilter]) {
+    for (const control of [sortSelect, postedFilter, workTypeFilter, workModeFilter, sectorFilter, scoreFilter, repostFilter]) {
       control?.addEventListener('change', () => {
         resetPagination();
         saveWorkspaceFilters();

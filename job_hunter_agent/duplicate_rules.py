@@ -1,8 +1,4 @@
-"""Helpers for duplicate rules."""
-
-from __future__ import annotations
-
-"""Manages rules for identifying duplicate job postings.
+"""Manage rules for identifying duplicate job postings.
 
 
 
@@ -13,6 +9,8 @@ are deduplicated, including defining source priority for resolving conflicts
 between duplicate entries from different job boards.
 
 """
+
+from __future__ import annotations
 
 from typing import Any
 
@@ -80,6 +78,34 @@ def _normalize_config(payload: dict[str, Any]) -> dict[str, Any]:
         "shingle_size": int(repost["shingle_size"]),
         "min_jaccard": float(repost["min_jaccard"]),
         "min_shorter_coverage": float(repost["min_shorter_coverage"]),
+    }
+
+    cross_source = normalized.get("cross_source_content")
+    if not isinstance(cross_source, dict):
+        raise ValueError("duplicate_rules.json must define cross_source_content as an object")
+    required_cross_source_fields = (
+        "min_description_chars",
+        "shingle_size",
+        "min_jaccard",
+        "min_shorter_coverage",
+        "max_posting_age_difference_days",
+    )
+    missing_cross_source_fields = [
+        field for field in required_cross_source_fields if field not in cross_source
+    ]
+    if missing_cross_source_fields:
+        raise ValueError(
+            "duplicate_rules.json cross_source_content is missing required fields: "
+            + ", ".join(missing_cross_source_fields)
+        )
+    normalized["cross_source_content"] = {
+        "min_description_chars": int(cross_source["min_description_chars"]),
+        "shingle_size": int(cross_source["shingle_size"]),
+        "min_jaccard": float(cross_source["min_jaccard"]),
+        "min_shorter_coverage": float(cross_source["min_shorter_coverage"]),
+        "max_posting_age_difference_days": float(
+            cross_source["max_posting_age_difference_days"]
+        ),
     }
 
     return normalized

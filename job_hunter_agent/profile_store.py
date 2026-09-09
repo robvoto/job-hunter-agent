@@ -1030,7 +1030,22 @@ def require_profile_ready_for_review(
     return status
 
 
-def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
+def _capability_identity_key(value: Any) -> str:
+    return re.sub(r"\s+", " ", str(value or "")).strip().casefold()
+
+
+def save_profile(
+    profile: dict[str, Any],
+    *,
+    prevalidated_capability_names: set[str] | frozenset[str] | None = None,
+) -> dict[str, Any]:
+    """Persist the profile and validate semantic atomicity for capability changes.
+
+    ``prevalidated_capability_names`` is reserved for the profile-confirmation
+    path. Those exact names already passed the requirement-coverage canonical
+    fact/actionability gate before the user explicitly confirmed them. Direct
+    Settings/API writes do not supply it and retain normal LLM validation.
+    """
     from job_hunter_agent.database import db_conn, ensure_user_row
     from job_hunter_agent.paths import get_active_user_id
 
@@ -1044,6 +1059,46 @@ def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
         require_phrase=True,
     )
     normalized = normalize_full_profile(profile)
+    current_capabilities = normalize_capability_rules(
+        (current or {}).get(KEY_CANDIDATE_CAPABILITIES, []),
+        (current or {}).get("onboarding_settings", {}),
+    )
+    current_capabilities_by_name = {
+        _capability_identity_key(item.get("name")): item
+        for item in current_capabilities
+        if isinstance(item, dict) and _capability_identity_key(item.get("name"))
+    }
+    prevalidated_capability_keys = {
+        _capability_identity_key(name)
+        for name in (prevalidated_capability_names or set())
+        if _capability_identity_key(name)
+    }
+    capabilities_to_validate = [
+        item
+        for item in normalized.get(KEY_CANDIDATE_CAPABILITIES, [])
+        if isinstance(item, dict)
+        and (item_key := _capability_identity_key(item.get("name")))
+        and current_capabilities_by_name.get(item_key) != item
+        and item_key not in prevalidated_capability_keys
+    ]
+    if capabilities_to_validate:
+        # Direct Settings/API writes have no prior semantic interpretation. The
+        # structured LLM judgement is authoritative for whether each added or
+        # changed row is one atomic profile fact. Unchanged rows are already
+        # persisted facts and are deliberately outside this call boundary.
+        from job_hunter_agent.llm_gate import llm_validate_profile_capability_atomicity
+
+        judgements = llm_validate_profile_capability_atomicity(capabilities_to_validate)
+        rejected_names = [
+            str(item.get("name") or "").strip()
+            for item, atomic in zip(capabilities_to_validate, judgements, strict=True)
+            if not atomic
+        ]
+        if rejected_names:
+            message = _profile_label(
+                "profile_field_labels", "capability_atomicity_validation_error"
+            )
+            raise ValueError(message.replace("{capabilities}", ", ".join(rejected_names)))
     persisted = dict(normalized)
     persisted.pop("scoring_rules", None)
     ensure_user_row(user_id)
