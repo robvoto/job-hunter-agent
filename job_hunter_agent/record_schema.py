@@ -115,11 +115,7 @@ RECORD_REQUIREMENT_COVERAGE_VERSION_KEY = "requirement_coverage_contract_version
 # explicitly professional_capability (missing/empty/invalid now fail closed too),
 # and same-concept evidence no longer accepts a single shared modifier token. v6
 # coverage can hold rows scored under both looser rules, so it is re-reviewed.
-# v8 (JH-013): an explicit years bar on a skill/activity narrower than a whole
-# job is credited only from a source-backed sustained span capped at the tied
-# roles' combined length, never a role-family total. v7 coverage can hold such a
-# row scored against the inflated family total, so it is re-reviewed.
-REQUIREMENT_COVERAGE_CONTRACT_VERSION = 8
+REQUIREMENT_COVERAGE_CONTRACT_VERSION = 7
 RECORD_OCCUPATION_ALIGNMENT_KEY = "occupation_alignment"
 RECORD_OCCUPATION_ALIGNMENT_REASON_KEY = "occupation_alignment_reason"
 RECORD_DESCRIPTION_COMPACTION_KEY = "description_compaction"

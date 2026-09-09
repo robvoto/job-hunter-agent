@@ -15,16 +15,6 @@ Whichever name the LLM returns decides how much history is credited: a saved
 family's own canonical title credits that family's whole accrued duration; a
 title variant credits only that variant's own stored months, never the parent
 family total; anything the profile does not hold that way is left unresolved.
-
-Skills and activities narrower than a whole job are handled separately. A skill
-merely present in the profile proves no years. A skill that appears inside a
-dated role does not thereby inherit that role's full length: the role duration
-is only a ceiling. When the fit-review LLM has read source evidence of a
-defensible sustained span, it returns ``sustained_experience_months`` plus the
-matrix role name(s) that span sits inside; this module caps that figure at the
-combined recorded length of those roles and credits the capped total. When the
-LLM establishes no sustained span the requirement stays unresolved for review
-with no invented number.
 """
 
 from __future__ import annotations
@@ -107,39 +97,6 @@ def _llm_matched_role_family(experience_components: list[dict[str, Any]] | None)
             if family:
                 return family
     return ""
-
-
-def _llm_sustained_experience_claim(
-    experience_components: list[dict[str, Any]] | None,
-) -> tuple[int, list[str]]:
-    """Return the LLM's source-backed sustained-span claim for a skill/activity.
-
-    The fit-review LLM sets ``sustained_experience_months`` and
-    ``sustained_experience_roles`` on the role_or_activity (or duration)
-    component only when it has read candidate source evidence that the
-    skill/activity was in sustained, ongoing use — not merely mentioned — within
-    the named dated role(s). Anything short of that leaves the fields unset and
-    this returns ``(0, [])`` so the caller keeps the row unresolved.
-    """
-    if not isinstance(experience_components, list):
-        return 0, []
-    for kind in (LLM_EXPERIENCE_COMPONENT_ROLE_ACTIVITY, LLM_EXPERIENCE_COMPONENT_DURATION):
-        for component in experience_components:
-            if not isinstance(component, dict) or component.get("kind") != kind:
-                continue
-            try:
-                months = int(component.get("sustained_experience_months") or 0)
-            except (TypeError, ValueError):
-                months = 0
-            raw_roles = component.get("sustained_experience_roles")
-            roles = (
-                [compact_whitespace(role) for role in raw_roles if compact_whitespace(role)]
-                if isinstance(raw_roles, list)
-                else []
-            )
-            if months > 0 and roles:
-                return months, roles
-    return 0, []
 
 
 def _canonical_family_entry(row: dict[str, Any]) -> dict[str, Any]:
@@ -255,10 +212,6 @@ def resolve_role_experience_requirement(
     """Compare a stated experience threshold against the LLM-identified role.
 
     Returns None when the requirement states no duration. Otherwise:
-    - the LLM asserted a source-backed sustained span for a skill/activity
-      (``sustained_experience_months`` + ``sustained_experience_roles``) ->
-      credit that figure capped at the combined recorded length of those
-      matrix roles; roles the profile does not hold leave the row unresolved.
     - the LLM's ``matched_role_family`` names a saved canonical family -> credit
       that family's whole accrued months.
     - it names a title variant with its own stored duration -> credit that
@@ -275,51 +228,6 @@ def resolve_role_experience_requirement(
         return None
 
     result: dict[str, Any] = {"required_experience_months": int(required_months)}
-
-    sustained_months, sustained_roles = _llm_sustained_experience_claim(
-        experience_components
-    )
-    if sustained_months > 0 and sustained_roles:
-        resolved_spans: list[dict[str, Any]] = []
-        seen_families: set[str] = set()
-        for role_name in sustained_roles:
-            saved_span = _resolve_saved_family(role_name, role_experience)
-            if saved_span is None:
-                continue
-            family_key = saved_span["family"].casefold()
-            if family_key in seen_families:
-                continue
-            seen_families.add(family_key)
-            resolved_spans.append(saved_span)
-        if not resolved_spans:
-            # The sustained use was tied only to roles the profile does not
-            # hold. Nothing safe to credit; leave it for review.
-            result["matched_role_family"] = "; ".join(sustained_roles)
-            result["role_family_resolved"] = False
-            return result
-        # The role length is a ceiling, never a floor: a skill inside a dated
-        # role does not inherit the whole role. Sum the ceilings of the distinct
-        # roles the LLM tied the sustained use to and cap the claim at that.
-        ceiling_months = sum(
-            int(span["total_duration_months"]) for span in resolved_spans
-        )
-        credited_months = min(int(sustained_months), ceiling_months)
-        result.update(
-            {
-                "matched_role_family": " + ".join(
-                    span["family"] for span in resolved_spans
-                ),
-                "role_family_resolved": True,
-                "matched_role_family_months": credited_months,
-                "matched_role_family_end_year": max(
-                    int(span["most_recent_end_year"]) for span in resolved_spans
-                ),
-                "experience_requirement_met": credited_months >= int(required_months),
-                "experience_from_sustained_use": True,
-            }
-        )
-        return result
-
     family = _llm_matched_role_family(experience_components)
     if not family:
         result["role_family_resolved"] = False
