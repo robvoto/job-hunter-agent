@@ -602,10 +602,10 @@ def test_seek_assisted_verification_sets_browser_session_enabled_message(monkeyp
     context = _make_context([SOURCE_SEEK])
     context.headless = False
     context.profile = {"search_settings": {"keywords": "Business Analyst", "locations": ["Sydney"]}}
-    messages: list[str] = []
+    progress_updates: list[tuple[str, str | None]] = []
 
     def fake_progress(message: str, **kwargs) -> None:
-        messages.append(message)
+        progress_updates.append((message, kwargs.get("stage")))
 
     def fake_seek_scrape_to_records(**kwargs):
         return ([{"job_key": "seek:1"}], [], [])
@@ -616,7 +616,11 @@ def test_seek_assisted_verification_sets_browser_session_enabled_message(monkeyp
 
     result = source_runner._run_seek_source(context)
 
-    assert any(message == "AWS-assisted SEEK browser session is enabled." for message in messages)
+    assert ("AWS-assisted SEEK browser session is enabled.", "starting") in progress_updates
+    assert not any(
+        message == "AWS-assisted SEEK browser session is enabled." and stage == "verification"
+        for message, stage in progress_updates
+    )
     assert result.error is None
     assert result.kept_records == [{"job_key": "seek:1"}]
 
