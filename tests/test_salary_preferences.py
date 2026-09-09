@@ -9,7 +9,11 @@ from job_hunter_agent.preferences import (
     passes_preference_filters,
     salary_fit_adjustment,
 )
-from job_hunter_agent.salary_utils import format_salary_display, preferred_salary_display
+from job_hunter_agent.salary_utils import (
+    format_salary_display,
+    preferred_salary_display,
+    salary_period_classification,
+)
 
 
 def _profile():
@@ -74,8 +78,18 @@ def test_salary_fit_adjustment_is_neutral_for_unsupported_periods():
     )
 
 
-def test_format_salary_display_keeps_bare_contract_rate_without_inventing_period():
-    assert format_salary_display("$125", work_type="Contract") == "$125"
+def test_bare_australian_salary_amounts_use_conservative_period_inference():
+    assert salary_period_classification("$100") == ("hourly", "inferred")
+    assert salary_period_classification("$900") == ("daily", "inferred")
+    assert salary_period_classification("$60,000") == ("annual", "inferred")
+    assert salary_period_classification("$12,000") == ("", "uncertain")
+
+
+def test_inferred_salary_period_is_visible_in_display():
+    assert format_salary_display("$125", work_type="Contract") == "$125 (likely hourly)"
+    assert format_salary_display("$900", work_type="Contract") == "$900 (likely daily)"
+    assert format_salary_display("$77,000", work_type="Full time") == "$77,000 (likely p.a.)"
+    assert format_salary_display("$12,000", work_type="Full time") == "$12,000 (period unclear)"
 
 
 def test_format_salary_display_keeps_explicit_periods():
@@ -84,6 +98,62 @@ def test_format_salary_display_keeps_explicit_periods():
 
 def test_preferred_salary_display_prefers_explicit_period_over_ambiguous_salary_text():
     assert preferred_salary_display("$15,900 tax free", "$900 per day") == "$900 per day"
+
+
+def test_bare_annual_salary_below_minimum_is_rejected():
+    profile = {
+        "salary_preferences": {
+            "minimum_salary_yearly": 100000,
+            "minimum_daily_rate": 0,
+        },
+    }
+    ok, reason = passes_preference_filters(
+        {"work_type": "Full time", "salary": "$77,000"}, profile
+    )
+    assert ok is False
+    assert reason == "PREF_SALARY_BELOW_MIN"
+
+
+def test_bare_annual_salary_plus_super_below_minimum_is_rejected():
+    profile = {
+        "salary_preferences": {
+            "minimum_salary_yearly": 100000,
+            "minimum_daily_rate": 0,
+        },
+    }
+    ok, reason = passes_preference_filters(
+        {"work_type": "Full time", "salary": "$77,000 + super"}, profile
+    )
+    assert ok is False
+    assert reason == "PREF_SALARY_BELOW_MIN"
+
+
+def test_bare_daily_rate_uses_daily_minimum_when_configured():
+    profile = {
+        "salary_preferences": {
+            "minimum_salary_yearly": 100000,
+            "minimum_daily_rate": 800,
+        },
+    }
+    ok, reason = passes_preference_filters(
+        {"work_type": "Contract", "salary": "$700"}, profile
+    )
+    assert ok is False
+    assert reason == "PREF_SALARY_BELOW_MIN"
+
+
+def test_unclear_bare_salary_period_is_not_hard_rejected():
+    profile = {
+        "salary_preferences": {
+            "minimum_salary_yearly": 100000,
+            "minimum_daily_rate": 800,
+        },
+    }
+    ok, reason = passes_preference_filters(
+        {"work_type": "Full time", "salary": "$12,000"}, profile
+    )
+    assert ok is True
+    assert reason == "OK"
 
 
 def test_unknown_work_type_still_passes_quick_card_filter(monkeypatch):

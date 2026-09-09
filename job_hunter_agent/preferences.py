@@ -25,7 +25,11 @@ from job_hunter_agent.system_warnings import (
     make_system_warning_fingerprint,
     record_system_warning,
 )
-from job_hunter_agent.salary_utils import salary_includes_super_or_package, salary_max_value
+from job_hunter_agent.salary_utils import (
+    salary_is_total_package,
+    salary_max_value,
+    salary_period_classification,
+)
 from job_hunter_agent.scoring_utils import build_scoring_source_text, extract_contract_months
 from job_hunter_agent.text_processing import compact_whitespace
 
@@ -266,43 +270,6 @@ def display_contract_duration_label(record: dict) -> str:
     return f"{contract_months} {unit}"
 
 
-def _salary_period_hint(salary_text: str) -> str:
-
-    lowered = salary_text.lower()
-
-    daily_match = bool(
-        re.search(
-            r"(?:\bper\s+day\b|\bdaily\b|\bp\.?/?d\.?\b|\bday\s+rate\b|/day\b|/d\b)",
-            lowered,
-        )
-    )
-
-    annual_match = bool(
-        re.search(r"(?:\bp\.a\.|\bper\s+annum\b|\bannually\b|/yr\b|/year\b|base\s*\+)", lowered)
-    )
-
-    if daily_match and not annual_match:
-        return "daily"
-
-    if annual_match and not daily_match:
-        return "annual"
-
-    return ""
-
-
-def _salary_has_non_comparable_period(salary_text: str) -> bool:
-
-    lowered = salary_text.lower()
-
-    return bool(
-        re.search(
-            r"\b(per\s+hour|hourly|p/h|ph|per\s+week|weekly|per\s+month|monthly)\b"
-            r"|/(?:hr|hour|wk|week|mo|month)",
-            lowered,
-        )
-    )
-
-
 def _is_full_time_contract(work_type: str) -> bool:
 
     normalized = re.sub(r"[\s_-]+", " ", compact_whitespace(work_type).lower()).strip()
@@ -359,13 +326,13 @@ def _resolve_salary_comparison(
     if not salary_text or salary_text == "N/A":
         return None
 
-    if salary_includes_super_or_package(salary_text):
+    # Total-package / inclusive-super figures are not the same basis as the
+    # user's base-salary floor. A clear "+ super" amount is different: the
+    # advertised number is the base salary and remains comparable.
+    if salary_is_total_package(salary_text):
         return None
 
-    salary_period = _salary_period_hint(salary_text)
-
-    if not salary_period and _salary_has_non_comparable_period(salary_text):
-        return None
+    salary_period, _period_confidence = salary_period_classification(salary_text)
     if not salary_period:
         return None
 

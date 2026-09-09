@@ -2,7 +2,8 @@
   "help": {
     "interval_suffix": "Display suffixes for salary intervals such as yearly, monthly, daily, and hourly.",
     "interval_divisor": "Divisors used when normalising source salary ranges into a shared scale.",
-    "currencies_with_dollar": "Currencies that should render with a dollar sign instead of a currency code prefix."
+    "currencies_with_dollar": "Currencies that should render with a dollar sign instead of a currency code prefix.",
+    "period_inference": "Conservative Australian salary/rate amount bands used only when the source omits an explicit period. Values outside these clear bands remain period-unclear rather than being guessed."
   },
   "interval_suffix": {
     "yearly": "p.a.",
@@ -15,5 +16,11 @@
     "yearly": 1000,
     "annual": 1000
   },
-  "currencies_with_dollar": ["AUD", "USD", "N/A", ""]
+  "currencies_with_dollar": ["AUD", "USD", "N/A", ""],
+  "period_inference": {
+    "annual_min": 60000,
+    "hourly_max": 250,
+    "daily_min": 300,
+    "daily_max": 3000
+  }
 }

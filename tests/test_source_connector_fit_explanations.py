@@ -3252,7 +3252,7 @@ def test_salary_fit_ignores_non_comparable_hourly_and_monthly_rates():
     assert salary_fit_adjustment({"salary": "$650 p/d"}, profile) < 0
 
 
-def test_salary_fit_ignores_yearly_package_and_including_super_amounts():
+def test_salary_fit_ignores_total_package_but_compares_plus_super_base_salary():
     profile = {
         **_test_profile(),
         "salary_preferences": {
@@ -3267,7 +3267,7 @@ def test_salary_fit_ignores_yearly_package_and_including_super_amounts():
     assert salary_fit_adjustment({"salary": "$130k incl super"}, profile) == 0
     from job_hunter_agent.score_labels import salary_fit_label
 
-    assert salary_fit_label({"salary": "$130k + super"}, profile) == "listed"
+    assert salary_fit_label({"salary": "$130k + super"}, profile) == "meets"
 
 
 def test_render_job_card_keeps_bare_contract_salary_without_invented_period():
