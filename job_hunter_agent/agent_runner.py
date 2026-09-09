@@ -11,12 +11,14 @@ manages the agent's scheduled runs, maintains runtime state, and ensures
 consistent delivery of match summaries to the user.
 """
 
+# Environment-backed paths must be loaded before importing application modules.
+# ruff: noqa: E402
+
 import argparse
 import html
 import json
-import time
-from datetime import datetime
 import threading
+from datetime import datetime
 from typing import Any
 
 from job_hunter_agent.runtime_helpers import load_repo_dotenv
