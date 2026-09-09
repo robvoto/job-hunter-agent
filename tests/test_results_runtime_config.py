@@ -85,21 +85,13 @@ def test_results_page_related_card_action_focuses_existing_workspace_card():
     assert "target.classList.add('is-related-target')" in results_js
 
 
-def test_workspace_page_size_select_is_content_sized_in_pagination_cluster():
-    root = Path(__file__).resolve().parent.parent
-    workspace_css = (
-        root / "templates" / "static" / "workspace" / "workspace-page.css"
-    ).read_text(encoding="utf-8")
+def test_workspace_page_size_select_is_a_shared_workspace_control():
+    html = workspace_renderer.render_page_size_select_html()
 
-    compact_rule = re.search(
-        r"\.results-header \.panel-select-control--page-size \.jh-select \{(?P<body>.*?)\n\}",
-        workspace_css,
-        flags=re.DOTALL,
-    )
-
-    assert compact_rule is not None
-    assert "width: auto;" in compact_rule.group("body")
-    assert "min-width: 0;" in compact_rule.group("body")
+    assert 'class="workspace-control-field panel-select-control panel-select-control--page-size"' in html
+    assert 'id="page_size_select"' in html
+    assert "12 jobs per page" in html
+    assert "96 jobs per page" in html
 
 
 def test_workspace_pagination_footer_aligns_with_panel_content_and_separates_counts():
@@ -136,7 +128,7 @@ def test_render_section_uses_results_header_sibling_layout_for_tools_and_paginat
             "Job Results",
             [{"job_key": "seek:1"}],
             "No jobs right now.",
-            header_tools_html=workspace_renderer.render_page_size_select_html(),
+            header_tools_html='<div data-test-header-tool="1">Tool</div>',
             header_nav_html=workspace_renderer.render_workspace_tabs_html(4, 0, 0),
         )
 
@@ -146,7 +138,7 @@ def test_render_section_uses_results_header_sibling_layout_for_tools_and_paginat
     assert 'class="section-head-tools"' in html
     assert 'class="results-section-panel"' in html
     assert 'class="results-section-body"' in html
-    assert 'class="panel-select-control panel-select-control--page-size"' in html
+    assert 'data-test-header-tool="1"' in html
     assert 'class="pagination-label pagination-page-label"' in html
     assert 'class="pagination-match-count"' in html
     assert 'section-head--with-tools' not in html
@@ -157,6 +149,44 @@ def test_render_section_uses_results_header_sibling_layout_for_tools_and_paginat
     assert 'class="results-pagination-footer"' in html
     assert html.count('data-page-direction="prev"') == 2
     assert html.count('data-page-direction="next"') == 2
+
+
+def test_workspace_history_section_is_pageable_without_duplicate_heading():
+    with patch(
+        "job_hunter_agent.workspace_renderer.render_job_card",
+        return_value='<article class="job-card">Card</article>',
+    ):
+        html = workspace_renderer.render_section(
+            "Applied Jobs",
+            [{"job_key": "seek:1"}],
+            "No applied jobs.",
+            header_nav_html=workspace_renderer.render_workspace_tabs_html(0, 1, 0),
+        )
+
+    assert 'class="section job-section section--results-panel"' in html
+    assert '<h2>Applied Jobs</h2>' not in html
+    assert 'data-section-id="applied-jobs"' in html
+    assert 'class="pagination-match-count"' in html
+    assert html.count('data-page-direction="prev"') == 2
+    assert html.count('data-page-direction="next"') == 2
+
+
+def test_workspace_potential_section_can_keep_job_results_heading_with_shared_tabs():
+    with patch(
+        "job_hunter_agent.workspace_renderer.render_job_card",
+        return_value='<article class="job-card">Card</article>',
+    ):
+        html = workspace_renderer.render_section(
+            "Job Results",
+            [{"job_key": "seek:1"}],
+            "No jobs right now.",
+            header_nav_html=workspace_renderer.render_workspace_tabs_html(1, 0, 0),
+            show_heading=True,
+        )
+
+    assert '<h2>Job Results</h2>' in html
+    assert 'class="section job-section section--results-panel"' in html
+    assert 'data-section-id="job-results"' in html
 
 
 def test_render_empty_results_keeps_count_controls_but_omits_footer_pagination():
@@ -376,6 +406,8 @@ def test_rendered_workspace_html_content(tmp_path):
             "sort_option_newest": "Newest posted first",
             "sort_option_highest_salary": "Highest salary first",
             "jobs_per_page_label": "Jobs Per page",
+            "job_search_label": "Find job",
+            "job_search_placeholder": "Search title or company",
             "filters_label": "Filters",
             "quick_filters_label": "Quick filters",
             "quick_filter_new_to_you": "New to you",
@@ -473,6 +505,7 @@ def test_rendered_workspace_html_content(tmp_path):
         debug_mode=None,
         header_tools_html="",
         header_nav_html="",
+        show_heading=None,
         new_to_you_cutoff=None,
     ):
         if title == "Job Results":
@@ -613,9 +646,11 @@ def test_rendered_workspace_html_content(tmp_path):
         assert 'aria-label="Work mode"' in rendered_html
         assert 'aria-label="Sector"' in rendered_html
         assert 'aria-label="Match level"' in rendered_html
-        assert 'id="page_size_select"' not in rendered_html
-        assert 'id="page_size_select"' in captured_tools["header_tools_html"]
-        assert "12 jobs per page" in captured_tools["header_tools_html"]
+        assert 'id="page_size_select"' in rendered_html
+        assert "12 jobs per page" in rendered_html
+        assert 'id="job_search_input"' in rendered_html
+        assert 'placeholder="Search title or company"' in rendered_html
+        assert captured_tools["header_tools_html"] == ""
 
         # Assert runtime config injection structure
         assert "window.__JOB_HUNTER_WORKSPACE__" in rendered_html
@@ -652,7 +687,11 @@ def test_workspace_rebuild_refreshes_llm_totals_from_current_audit_rows(monkeypa
             "llm_total_output_tokens": None,
         },
     )
-    monkeypatch.setattr(workspace_rebuild_service, "get_manual_skip_sets", lambda profile: (set(), set()))
+    monkeypatch.setattr(
+        workspace_rebuild_service,
+        "run_retention_housekeeping",
+        lambda profile, history, reference_time: (set(), set()),
+    )
     monkeypatch.setattr(workspace_rebuild_service, "load_job_history", lambda: {})
     monkeypatch.setattr(
         workspace_rebuild_service,
@@ -743,7 +782,11 @@ def test_workspace_rebuild_renders_saved_workspace_pool_when_present(monkeypatch
             "seek_max_pages": 1,
         },
     )
-    monkeypatch.setattr(workspace_rebuild_service, "get_manual_skip_sets", lambda profile: (set(), set()))
+    monkeypatch.setattr(
+        workspace_rebuild_service,
+        "run_retention_housekeeping",
+        lambda profile, history, reference_time: (set(), set()),
+    )
     monkeypatch.setattr(workspace_rebuild_service, "load_job_history", lambda: {})
     monkeypatch.setattr(
         workspace_rebuild_service,

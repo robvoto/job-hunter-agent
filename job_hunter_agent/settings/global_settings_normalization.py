@@ -26,7 +26,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     DEFAULT_SEARCH_SETTINGS,
     DEFAULT_SOURCE_DOCUMENT_SETTINGS,
     HISTORY_SETTING_LIMITS,
-    KEY_ARCHIVE_STALE_AFTER_DAYS,
+    KEY_POTENTIAL_RETENTION_DAYS,
     KEY_APSJOBS_ENABLED,
     KEY_CACHE_SETTINGS,
     KEY_CANDIDATE_APPLICATION_HISTORY,
@@ -45,7 +45,8 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_DESCRIPTION_TRUST_SETTINGS,
     KEY_EVIDENCE_TIER_WEIGHTS,
     KEY_FIT_HIGHLIGHTS,
-    KEY_HIDDEN_REVIEW_DAYS,
+    KEY_HIDDEN_RETENTION_DAYS,
+    KEY_APPLIED_RETENTION_DAYS,
     KEY_HISTORY_SETTINGS,
     KEY_JOB_HISTORY_MAX_AGE_DAYS,
     KEY_JOB_HISTORY_MAX_ENTRIES,
@@ -889,10 +890,10 @@ def normalize_global_settings(
     )
 
     normalized_history_settings = {
-        KEY_ARCHIVE_STALE_AFTER_DAYS: _require_int(
+        KEY_POTENTIAL_RETENTION_DAYS: _require_int(
             history_source,
-            KEY_ARCHIVE_STALE_AFTER_DAYS,
-            DEFAULT_HISTORY_SETTINGS[KEY_ARCHIVE_STALE_AFTER_DAYS],
+            KEY_POTENTIAL_RETENTION_DAYS,
+            DEFAULT_HISTORY_SETTINGS[KEY_POTENTIAL_RETENTION_DAYS],
             1,
             365,
         ),
@@ -905,12 +906,19 @@ def normalize_global_settings(
             min_items=1,
             max_items=6,
         ),
-        KEY_HIDDEN_REVIEW_DAYS: _require_int(
+        KEY_HIDDEN_RETENTION_DAYS: _require_int(
             history_source,
-            KEY_HIDDEN_REVIEW_DAYS,
-            DEFAULT_HISTORY_SETTINGS[KEY_HIDDEN_REVIEW_DAYS],
+            KEY_HIDDEN_RETENTION_DAYS,
+            DEFAULT_HISTORY_SETTINGS[KEY_HIDDEN_RETENTION_DAYS],
             1,
             365,
+        ),
+        KEY_APPLIED_RETENTION_DAYS: _require_int(
+            history_source,
+            KEY_APPLIED_RETENTION_DAYS,
+            DEFAULT_HISTORY_SETTINGS[KEY_APPLIED_RETENTION_DAYS],
+            0,
+            3650,
         ),
         KEY_JOB_HISTORY_MAX_ENTRIES: _require_int(
             history_source,

@@ -3,7 +3,6 @@
   <main class="page">
     <div class="workspace-layout">
       <div class="workspace-main">
-        <div class="workspace-panel" data-workspace-panel="potential">
           <section class="section filter-panel workspace-controls-panel">
             <div class="section-head workspace-controls-head">
               <h2>$LABEL_WS_MATCH_CONTROLS_HEADING</h2>
@@ -20,7 +19,7 @@
                   <div class="jh-filter-choice-group workspace-board-filter__choices" id="workspace_more_filter_content">$JOB_BOARD_FILTER_CHOICES_HTML</div>
                 </div>
               </div>
-              <div class="workspace-control-group workspace-control-group--quick-filters">
+              <div class="workspace-control-group workspace-control-group--quick-filters" data-potential-only>
                 <h3 class="workspace-control-group-title">$LABEL_WS_QUICK_FILTERS_LABEL</h3>
                 <div class="workspace-quick-filters" id="workspace_quick_filters">
                   <button class="jh-filter-choice" type="button" data-quick-filter="new" aria-pressed="false">$LABEL_WS_QUICK_FILTER_NEW_TO_YOU</button>
@@ -45,6 +44,9 @@
               <h3 class="workspace-control-group-title">$LABEL_WS_FILTERS_LABEL</h3>
               <div class="workspace-control-grid workspace-control-grid--filters">
                 <label class="workspace-control-field">
+                  <input id="job_search_input" class="jh-input" type="search" autocomplete="off" aria-label="$LABEL_WS_JOB_SEARCH_LABEL" placeholder="$LABEL_WS_JOB_SEARCH_PLACEHOLDER">
+                </label>
+                <label class="workspace-control-field" data-potential-only>
                   <select id="scope_filter" class="jh-select" aria-label="$LABEL_WS_SHOW_LABEL">
                     <option value="all" selected>$LABEL_WS_SHOW_OPTION_ALL_POTENTIAL</option>
                     <option value="current">$LABEL_WS_SHOW_OPTION_MATCHES_LAST_RUN</option>
@@ -76,20 +78,22 @@
                     <option value="private">$LABEL_WS_SECTOR_OPTION_PRIVATE</option>
                   </select>
                 </label>
-                <label class="workspace-control-field">
+                <label class="workspace-control-field" data-potential-only>
                   <select id="score_filter" class="jh-select" aria-label="$LABEL_WS_MATCH_LEVEL_LABEL">
                     $SCORE_FILTER_OPTIONS_HTML
                   </select>
                 </label>
-                <label class="workspace-control-field">
+                <label class="workspace-control-field" data-potential-only>
                   <select id="repost_filter" class="jh-select" aria-label="$LABEL_WS_REPOSTS_LABEL">
                     <option value="hide" selected>$LABEL_WS_REPOSTS_OPTION_HIDE</option>
                     <option value="include">$LABEL_WS_REPOSTS_OPTION_INCLUDE</option>
                   </select>
                 </label>
+                $PAGE_SIZE_SELECT_HTML
               </div>
             </div>
           </section>
+        <div class="workspace-panel" data-workspace-panel="potential">
           <div class="results-helper" id="results_helper" hidden>
             <p class="results-helper-copy">$LABEL_WS_RESULTS_HELPER_COPY</p>
             <button class="results-helper-dismiss" id="dismiss_results_helper" type="button">$LABEL_WS_RESULTS_HELPER_DISMISS_BUTTON</button>

@@ -154,6 +154,107 @@ def test_save_job_history_prunes_old_and_overflow_entries(isolated_db, monkeypat
     assert [row["job_key"] for row in rows] == ["seek:newest", "seek:overflow"]
 
 
+def test_save_job_history_scrubs_stale_non_applied_payload_but_keeps_applied(
+    isolated_db, monkeypatch
+):
+    from job_hunter_agent.user_context import set_user_id
+
+    monkeypatch.setattr("job_hunter_agent.global_settings.get_job_history_max_entries", lambda: 100)
+    monkeypatch.setattr("job_hunter_agent.global_settings.get_job_history_max_age_days", lambda: 3650)
+    monkeypatch.setattr("job_hunter_agent.global_settings.get_potential_retention_days", lambda: 15)
+    monkeypatch.setattr("job_hunter_agent.global_settings.get_hidden_retention_days", lambda: 15)
+    monkeypatch.setattr("job_hunter_agent.global_settings.get_applied_retention_days", lambda: 0)
+
+    now = datetime.now(timezone.utc)
+    old = (now - timedelta(days=20)).isoformat(timespec="seconds")
+    set_user_id("test_user")
+
+    def _entry(title: str) -> dict:
+        return {
+            "title": title,
+            "company": "Example Co",
+            "url": f"https://example.test/{title.lower()}",
+            "first_seen_at": old,
+            "last_seen_at": old,
+            "last_kept_at": old,
+            "times_kept": 1,
+            "last_kept_snapshot": {
+                "job_key": f"seek:{title.lower()}",
+                "source": "seek",
+                "title": title,
+                "company": "Example Co",
+                "url": f"https://example.test/{title.lower()}",
+                "full_description": "Full stale job description",
+                "fit_source_text": "Compacted stale description",
+                "source_metadata": {"apply_url": "https://apply.example.test/1"},
+            },
+            "detail_evidence": {
+                "details_text": "Raw stale details",
+                "source_metadata": {"apply_url": "https://apply.example.test/1"},
+            },
+            "review_events": [
+                {
+                    "action": "viewed",
+                    "timestamp": old,
+                    "url": f"https://example.test/{title.lower()}",
+                    "teaser": "Old teaser",
+                }
+            ],
+        }
+
+    history = {
+        "seek:stale": _entry("Stale"),
+        "seek:applied": {
+            **_entry("Applied"),
+            "first_applied_at": old,
+            "last_applied_at": old,
+        },
+    }
+
+    io_utils.save_job_history(history)
+
+    stale = history["seek:stale"]
+    assert stale["title"] == "Stale"
+    assert stale["company"] == "Example Co"
+    assert "url" not in stale
+    assert "detail_evidence" not in stale
+    assert stale["last_kept_snapshot"] == {
+        "job_key": "seek:stale",
+        "source": "seek",
+        "title": "Stale",
+        "company": "Example Co",
+    }
+    assert "url" not in stale["review_events"][0]
+    assert "teaser" not in stale["review_events"][0]
+    assert stale["retention_payload_scrubbed_at"]
+
+    applied = history["seek:applied"]
+    assert applied["url"] == "https://example.test/applied"
+    assert applied["last_kept_snapshot"]["full_description"] == "Full stale job description"
+    assert applied["last_kept_snapshot"]["url"] == "https://example.test/applied"
+    assert applied["detail_evidence"]["details_text"] == "Raw stale details"
+
+
+def test_hidden_review_key_expires_after_hidden_retention_window():
+    now = datetime.now(timezone.utc)
+    recent = (now - timedelta(days=5)).isoformat(timespec="seconds")
+    old = (now - timedelta(days=20)).isoformat(timespec="seconds")
+    history = {
+        "seek:recent": {"last_hidden_at": recent, "is_hidden": True},
+        "seek:expired": {"last_hidden_at": old, "is_hidden": True},
+    }
+
+    active, expired = io_utils.active_hidden_job_keys_with_expiry(
+        {"seek:recent", "seek:expired"},
+        history,
+        hidden_retention_days=15,
+        now=now,
+    )
+
+    assert active == {"seek:recent"}
+    assert expired == {"seek:expired"}
+
+
 def test_prune_occupation_title_cache_applies_age_and_entry_limits(isolated_db, monkeypatch):
     from job_hunter_agent.database import db_conn
 

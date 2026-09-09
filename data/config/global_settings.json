@@ -260,9 +260,10 @@
     "supplementary_candidate_profile_context": 0.25
   },
   "history_settings": {
-    "archive_stale_after_days": 15,
+    "potential_retention_days": 15,
     "posted_age_badge_threshold_days": [3, 7, 15],
-    "hidden_review_days": 30,
+    "hidden_retention_days": 15,
+    "applied_retention_days": 0,
     "job_history_max_entries": 2000,
     "job_history_max_age_days": 365,
     "repeated_listing_min_times_seen": 4,

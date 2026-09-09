@@ -48,12 +48,15 @@
       main.insertBefore(banner, main.firstChild);
     }
     const WORKSPACE_RUN_ID = String(WORKSPACE_CONTEXT.runId || '').trim() || 'workspace';
+    const WORKSPACE_USER_SCOPE = String(window.__JOB_HUNTER_USER_SCOPE__ || '').trim() || 'anonymous';
     const WORKSPACE_FILTERS_KEY = `jobHunter.workspace.filters.${WORKSPACE_RUN_ID}`;
     const WORKSPACE_PAGINATION_KEY = `jobHunter.workspace.pagination.${WORKSPACE_RUN_ID}`;
+    const WORKSPACE_PAGE_SIZE_KEY = `jobHunter.workspace.pageSize.${WORKSPACE_USER_SCOPE}`;
     const RESULTS_HELPER_DISMISSED_KEY = 'jobHunter.workspace.resultsHelperDismissed';
     const REJECTION_FIRST_USE_KEY = 'jobHunter.workspace.rejectionFirstUseSeen';
     const sortSelect = document.getElementById('sort_select');
     const pageSizeSelect = document.getElementById('page_size_select');
+    const jobSearchInput = document.getElementById('job_search_input');
     const scopeFilter = document.getElementById('scope_filter');
     const postedFilter = document.getElementById('posted_filter');
     const workTypeFilter = document.getElementById('work_type_filter');
@@ -71,6 +74,7 @@
     const dismissResultsHelperButton = document.getElementById('dismiss_results_helper');
     const workspaceTabs = Array.from(document.querySelectorAll('[data-workspace-target]'));
     const workspacePanels = Array.from(document.querySelectorAll('[data-workspace-panel]'));
+    const potentialOnlyControls = Array.from(document.querySelectorAll('[data-potential-only]'));
     const paginationState = {};
 
     function showResultsHelperIfNeeded() {
@@ -154,6 +158,9 @@
           panel.setAttribute('hidden', '');
         }
       }
+      for (const control of potentialOnlyControls) {
+        control.hidden = nextWorkspace !== 'potential';
+      }
 
       if (updateHash) {
         const targetHash = nextWorkspace === 'potential' ? '#potential' : `#${nextWorkspace}`;
@@ -171,7 +178,6 @@
     function saveWorkspaceFilters() {
       const filters = {
         sort: sortSelect?.value,
-        pageSize: pageSizeSelect?.value,
         scope: scopeFilter?.value,
         posted: postedFilter?.value,
         workType: workTypeFilter?.value,
@@ -204,7 +210,6 @@
         const filters = JSON.parse(saved);
         
         setSelectValueIfAvailable(sortSelect, filters.sort);
-        setSelectValueIfAvailable(pageSizeSelect, filters.pageSize);
         setSelectValueIfAvailable(scopeFilter, filters.scope);
         setSelectValueIfAvailable(postedFilter, filters.posted);
         setSelectValueIfAvailable(workTypeFilter, filters.workType);
@@ -224,6 +229,20 @@
             button.setAttribute('aria-pressed', filters.quick[button.dataset.quickFilter] ? 'true' : 'false');
           }
         }
+      } catch (e) {}
+    }
+
+    function savePageSizePreference() {
+      if (!pageSizeSelect) return;
+      try {
+        window.localStorage.setItem(WORKSPACE_PAGE_SIZE_KEY, pageSizeSelect.value);
+      } catch (e) {}
+    }
+
+    function loadPageSizePreference() {
+      if (!pageSizeSelect) return;
+      try {
+        setSelectValueIfAvailable(pageSizeSelect, window.localStorage.getItem(WORKSPACE_PAGE_SIZE_KEY));
       } catch (e) {}
     }
 
@@ -252,7 +271,7 @@
 
     function resetWorkspaceFiltersToDefaults() {
       if (sortSelect) sortSelect.value = 'fit';
-      if (pageSizeSelect) pageSizeSelect.value = '12';
+      if (jobSearchInput) jobSearchInput.value = '';
       if (scopeFilter) scopeFilter.value = 'all';
       if (postedFilter) postedFilter.value = 'all';
       if (workTypeFilter) workTypeFilter.value = 'all';
@@ -374,6 +393,29 @@
       if (filters.sources?.length && !filters.sources.includes(cardSource)) return false;
       if (filters.quickEasy && !['easy_apply', 'quick_apply'].includes(cardApplyMethod)) return false;
       return true;
+    }
+
+    function cardMatchesHistoryFilters(card, filters) {
+      const cardWorkType = (card.dataset.workType || '').toLowerCase();
+      const cardWorkMode = (card.dataset.workMode || '').toLowerCase();
+      const cardSector = (card.dataset.roleSector || 'unknown').toLowerCase();
+      const postedAge = Number(card.dataset.postedAge || 9999);
+      const cardSource = (card.dataset.source || '').toLowerCase();
+
+      if (filters.postedLimit !== 'all' && postedAge > Number(filters.postedLimit)) return false;
+      if (filters.workTypeValues && !filters.workTypeValues.includes(cardWorkType)) return false;
+      if (filters.workMode !== 'all' && cardWorkMode !== filters.workMode) return false;
+      if (filters.sector === 'public' && cardSector !== 'public') return false;
+      if (filters.sector === 'private' && cardSector === 'public') return false;
+      if (filters.sources?.length && !filters.sources.includes(cardSource)) return false;
+      return true;
+    }
+
+    function cardMatchesJobSearch(card, searchText) {
+      const term = String(searchText || '').trim().toLowerCase();
+      if (!term) return true;
+      return (card.dataset.titleSearch || '').includes(term)
+        || (card.dataset.companySearch || '').includes(term);
     }
 
     function updatePotentialTabCount(filters) {
@@ -576,6 +618,7 @@
       const sortMode = sortSelect?.value || 'fit';
       const workType = workTypeFilter?.value || 'all';
       const filters = {
+        searchText: jobSearchInput?.value || '',
         scopeMode: scopeFilter?.value || 'all',
         postedLimit: postedFilter?.value || 'all',
         workTypeValues: workType !== 'all' ? workType.split('|') : null,
@@ -598,9 +641,12 @@
         if (activeWorkspace === 'potential') {
           visible = cardMatchesPotentialFilters(card, filters);
         } else if (activeWorkspace === 'applied') {
-          if (cardScope !== 'applied') visible = false;
+          visible = cardScope === 'applied' && cardMatchesHistoryFilters(card, filters);
         } else if (activeWorkspace === 'hidden') {
-          if (cardScope !== 'hidden') visible = false;
+          visible = cardScope === 'hidden' && cardMatchesHistoryFilters(card, filters);
+        }
+        if (visible) {
+          visible = cardMatchesJobSearch(card, filters.searchText);
         }
 
         card.dataset.matchesFilters = visible ? '1' : '0';
@@ -1108,13 +1154,24 @@
       }
     });
 
-    for (const control of [sortSelect, pageSizeSelect, scopeFilter, postedFilter, workTypeFilter, workModeFilter, sectorFilter, scoreFilter, repostFilter]) {
+    for (const control of [sortSelect, scopeFilter, postedFilter, workTypeFilter, workModeFilter, sectorFilter, scoreFilter, repostFilter]) {
       control?.addEventListener('change', () => {
         resetPagination();
         saveWorkspaceFilters();
         applyWorkspaceControls();
       });
     }
+
+    pageSizeSelect?.addEventListener('change', () => {
+      resetPagination();
+      savePageSizePreference();
+      applyWorkspaceControls();
+    });
+
+    jobSearchInput?.addEventListener('input', () => {
+      resetPagination();
+      applyWorkspaceControls();
+    });
     for (const button of quickFilterButtons) {
       button.addEventListener('click', () => {
         button.setAttribute('aria-pressed', button.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
@@ -1148,6 +1205,7 @@
 
     showStaticExportBanner();
     loadWorkspaceFilters();
+    loadPageSizePreference();
     loadWorkspacePagination();
     setActiveWorkspace((window.location.hash || '#potential').replace('#', ''), false, false);
     showResultsHelperIfNeeded();

@@ -376,13 +376,17 @@
             <input id="history_job_history_max_age_days" type="number" min="30" max="3650" step="1">
             <div class="field-help">Maximum age for saved job-history records. Older entries are pruned automatically.</div>
 
-            <label for="history_archive_stale_after_days">Archive stale after days</label>
-            <input id="history_archive_stale_after_days" type="number" min="1" max="365" step="1">
-            <div class="field-help">How long an archived job stays fresh before the workspace treats it as stale.</div>
+            <label for="history_potential_retention_days">Potential jobs retention (days)</label>
+            <input id="history_potential_retention_days" type="number" min="1" max="365" step="1">
+            <div class="field-help">How many days a saved non-applied job remains visible on the Potential board after it was last kept.</div>
 
-            <label for="history_hidden_review_days">Hidden review days</label>
-            <input id="history_hidden_review_days" type="number" min="1" max="365" step="1">
-            <div class="field-help">How long a hidden job stays hidden before it is eligible for another review.</div>
+            <label for="history_hidden_retention_days">Hidden jobs retention (days)</label>
+            <input id="history_hidden_retention_days" type="number" min="1" max="365" step="1">
+            <div class="field-help">How many days a hidden job remains visible on the Hidden board after it was hidden.</div>
+
+            <label for="history_applied_retention_days">Applied job history retention (days)</label>
+            <input id="history_applied_retention_days" type="number" min="0" max="3650" step="1">
+            <div class="field-help">Use 0 to keep applied-job history forever. Applied jobs are protected from ordinary history pruning.</div>
 
             <label for="history_repeated_listing_min_times_seen">Repeated listing minimum times seen</label>
             <input id="history_repeated_listing_min_times_seen" type="number" min="1" max="100" step="1">

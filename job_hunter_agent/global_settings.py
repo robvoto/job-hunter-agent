@@ -241,8 +241,8 @@ def get_llm_cv_fallback_chars() -> int:
     return get_llm_prompt_setting_int(KEY_LLM_PROMPT_CV_FALLBACK_CHARS)
 
 
-def get_archive_stale_after_days() -> int:
-    return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_ARCHIVE_STALE_AFTER_DAYS])
+def get_potential_retention_days() -> int:
+    return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_POTENTIAL_RETENTION_DAYS])
 
 
 def get_posted_age_badge_threshold_days() -> tuple[int, ...]:
@@ -250,8 +250,13 @@ def get_posted_age_badge_threshold_days() -> tuple[int, ...]:
     return tuple(int(value) for value in values)
 
 
-def get_hidden_review_days() -> int:
-    return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_HIDDEN_REVIEW_DAYS])
+def get_hidden_retention_days() -> int:
+    return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_HIDDEN_RETENTION_DAYS])
+
+
+def get_applied_retention_days() -> int:
+    """Return applied-history retention in days; 0 means retain forever."""
+    return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_APPLIED_RETENTION_DAYS])
 
 
 def get_job_history_max_entries() -> int:
