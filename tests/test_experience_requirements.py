@@ -270,3 +270,149 @@ def test_matched_variant_stays_at_its_stored_snapshot_while_the_family_accrues()
     )
     assert family_resolved["matched_role_family_months"] == accrued_family_months
     assert family_resolved["experience_requirement_met"] is True
+
+
+def _skill_components(
+    activity_text: str,
+    *,
+    sustained_months: int | None = None,
+    sustained_roles: list[str] | None = None,
+) -> list[dict]:
+    """A years bar whose subject is a skill/activity narrower than a whole job."""
+    role_component: dict = {"kind": "role_or_activity", "text": activity_text}
+    if sustained_months is not None:
+        role_component["sustained_experience_months"] = sustained_months
+    if sustained_roles is not None:
+        role_component["sustained_experience_roles"] = sustained_roles
+    return [{"kind": "duration", "text": "5+ years"}, role_component]
+
+
+def _plain_family(normalized_title: str, total_duration_months: int, end_year: int) -> dict:
+    return {
+        "normalized_title": normalized_title,
+        "total_duration_months": total_duration_months,
+        "most_recent_end_year": end_year,
+        "segments": [{"duration_months": total_duration_months, "is_current": False}],
+        "title_variants": [{"normalized_title": normalized_title}],
+    }
+
+
+def test_skill_merely_named_in_a_role_does_not_inherit_the_role_length():
+    # JH-013: "5+ years BPMN" tied to a 216-month Business Analyst family, but the
+    # LLM established no sustained span. The role length is only a ceiling, so
+    # nothing is credited and the row is left for review with no number.
+    resolved = resolve_role_experience_requirement(
+        _skill_components("BPMN modelling"),
+        60,
+        [_plain_family("Business Analyst", 216, 2025)],
+    )
+
+    assert resolved["role_family_resolved"] is False
+    assert "matched_role_family_months" not in resolved
+    assert "experience_requirement_met" not in resolved
+
+
+def test_skill_sustained_span_is_credited_but_capped_at_the_role_length():
+    # The LLM read source evidence of ~90 months of sustained BPMN use inside a
+    # 216-month Business Analyst history. Only the 90 months are credited, never
+    # the whole family total.
+    role_experience = [_plain_family("Business Analyst", 216, 2025)]
+
+    resolved = resolve_role_experience_requirement(
+        _skill_components(
+            "BPMN modelling",
+            sustained_months=90,
+            sustained_roles=["Business Analyst"],
+        ),
+        60,
+        role_experience,
+    )
+
+    assert resolved["role_family_resolved"] is True
+    assert resolved["experience_from_sustained_use"] is True
+    assert resolved["matched_role_family"] == "Business Analyst"
+    assert resolved["matched_role_family_months"] == 90
+    assert resolved["experience_requirement_met"] is True
+
+    # A longer bar the sustained span cannot clear stays unmet, even though the
+    # bare family total (216) would have passed it.
+    still_short = resolve_role_experience_requirement(
+        _skill_components(
+            "BPMN modelling",
+            sustained_months=90,
+            sustained_roles=["Business Analyst"],
+        ),
+        120,
+        role_experience,
+    )
+    assert still_short["matched_role_family_months"] == 90
+    assert still_short["experience_requirement_met"] is False
+
+
+def test_skill_sustained_span_claim_over_the_role_length_is_clamped_down():
+    resolved = resolve_role_experience_requirement(
+        _skill_components(
+            "continuous improvement",
+            sustained_months=400,
+            sustained_roles=["Business Analyst"],
+        ),
+        60,
+        [_plain_family("Business Analyst", 120, 2025)],
+    )
+
+    assert resolved["matched_role_family_months"] == 120
+
+
+def test_skill_sustained_spans_sum_across_distinct_dated_roles():
+    role_experience = [
+        _plain_family("Business Analyst", 120, 2020),
+        _plain_family("Systems Analyst", 72, 2026),
+    ]
+
+    resolved = resolve_role_experience_requirement(
+        _skill_components(
+            "process modelling",
+            sustained_months=150,
+            sustained_roles=["Business Analyst", "Systems Analyst"],
+        ),
+        144,
+        role_experience,
+    )
+
+    # ceiling is 120 + 72 = 192; the 150-month claim fits under it and is summed.
+    assert resolved["matched_role_family"] == "Business Analyst + Systems Analyst"
+    assert resolved["matched_role_family_months"] == 150
+    assert resolved["matched_role_family_end_year"] == 2026
+    assert resolved["experience_requirement_met"] is True
+
+
+def test_skill_sustained_span_repeated_role_is_only_counted_once():
+    resolved = resolve_role_experience_requirement(
+        _skill_components(
+            "process modelling",
+            sustained_months=200,
+            sustained_roles=["Business Analyst", "business analyst"],
+        ),
+        60,
+        [_plain_family("Business Analyst", 120, 2025)],
+    )
+
+    # The duplicated role does not double the ceiling.
+    assert resolved["matched_role_family_months"] == 120
+
+
+def test_skill_sustained_span_tied_only_to_unheld_roles_is_left_for_review():
+    resolved = resolve_role_experience_requirement(
+        _skill_components(
+            "Kubernetes operations",
+            sustained_months=48,
+            sustained_roles=["Platform Engineer"],
+        ),
+        36,
+        [_plain_family("Business Analyst", 120, 2025)],
+    )
+
+    assert resolved["role_family_resolved"] is False
+    assert resolved["matched_role_family"] == "Platform Engineer"
+    assert "matched_role_family_months" not in resolved
+    assert "experience_requirement_met" not in resolved

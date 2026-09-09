@@ -425,6 +425,17 @@ class _LLMExperienceComponent(BaseModel):
     # deterministic layer then leaves the requirement unresolved for review
     # rather than guessing the role relationship.
     matched_role_family: str = ""
+    # Set by the LLM only for an explicit years/months bar on a skill, tool,
+    # technique, method, or activity narrower than a whole job, when candidate
+    # source evidence shows that skill in sustained, ongoing use (not merely
+    # mentioned) inside the named dated role(s). sustained_experience_months is
+    # the defensible span the evidence supports; sustained_experience_roles are
+    # the matrix role name(s) that span sits inside. The deterministic layer
+    # caps the months at those roles' combined recorded length. Left unset when
+    # no sustained span is established — the row then stays unresolved with no
+    # number, and skill presence alone never populates these.
+    sustained_experience_months: int = 0
+    sustained_experience_roles: list[str] = Field(default_factory=list)
 
 
 class _LLMRequirementElement(BaseModel):
@@ -912,7 +923,12 @@ LLM_CACHE_SCHEMA_VERSION = 3
 # (the structured-output default is empty, not professional_capability), and the
 # same-concept evidence check no longer accepts a single shared modifier token.
 # v8 caches can hold rows scored under both looser rules, so the namespace rotates.
-FIT_REVIEW_CACHE_CONTRACT_VERSION = 9
+# v10 (JH-013): an explicit years bar on a skill/activity narrower than a whole
+# job no longer inherits a role-family total. It is credited only from an
+# LLM-asserted source-backed sustained span (sustained_experience_months /
+# sustained_experience_roles), capped at the tied roles' combined length. v9
+# caches can hold such rows scored against the inflated family total.
+FIT_REVIEW_CACHE_CONTRACT_VERSION = 10
 TITLE_JUDGMENT_CACHE_CONTRACT_VERSION = 1
 POSTING_CHANNEL_LLM_CACHE_CONTRACT_VERSION = 1
 
@@ -1598,6 +1614,27 @@ def _normalize_experience_components(value: Any) -> list[dict[str, Any]]:
         matched_role_family = compact_whitespace(item.get("matched_role_family"))
         if matched_role_family:
             component["matched_role_family"] = matched_role_family
+        try:
+            sustained_experience_months = int(
+                item.get("sustained_experience_months") or 0
+            )
+        except (TypeError, ValueError):
+            sustained_experience_months = 0
+        raw_sustained_roles = item.get("sustained_experience_roles")
+        sustained_experience_roles = (
+            [
+                compact_whitespace(role)
+                for role in raw_sustained_roles
+                if compact_whitespace(role)
+            ]
+            if isinstance(raw_sustained_roles, list)
+            else []
+        )
+        # Both halves are required: a span with no role to bound it, or roles
+        # with no asserted span, establish nothing.
+        if sustained_experience_months > 0 and sustained_experience_roles:
+            component["sustained_experience_months"] = sustained_experience_months
+            component["sustained_experience_roles"] = sustained_experience_roles
         components.append(component)
     return components
 
@@ -2558,6 +2595,11 @@ def normalize_llm_requirement_coverage(
                 normalized_item["matched_role_family_months"] = experience_requirement[
                     "matched_role_family_months"
                 ]
+                if experience_requirement.get("experience_from_sustained_use"):
+                    # The credited months are a source-backed sustained-use span
+                    # for a skill/activity, capped at the tied roles' combined
+                    # length — not a whole role-family tenure.
+                    normalized_item["experience_from_sustained_use"] = True
                 if experience_requirement.get("matched_role_family_end_year"):
                     normalized_item["matched_role_family_end_year"] = experience_requirement[
                         "matched_role_family_end_year"

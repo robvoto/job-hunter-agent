@@ -802,6 +802,114 @@ def test_years_requirement_for_unrelated_role_is_not_matched_from_ba_history():
     assert "experience_requirement_met" not in row
 
 
+def _years_skill_coverage_row(
+    *, sustained_months: int | None = None, sustained_roles: list[str] | None = None
+) -> dict:
+    """A years bar on a skill narrower than a whole job (BPMN modelling)."""
+    role_component: dict = {"kind": "role_or_activity", "text": "BPMN modelling"}
+    if sustained_months is not None:
+        role_component["sustained_experience_months"] = sustained_months
+    if sustained_roles is not None:
+        role_component["sustained_experience_roles"] = sustained_roles
+    return {
+        "requirement": "5+ years BPMN modelling experience",
+        "importance": "mandatory",
+        "requirement_type": "capability",
+        "status": "supported",
+        "matched_candidate_fact": "BPMN",
+        "capability_name": "BPMN",
+        "matched_job_text": "5+ years BPMN modelling experience",
+        "profile_support": ["Modelled processes in BPMN across delivery work."],
+        "experience_components": [
+            {"kind": "duration", "text": "5+ years"},
+            role_component,
+        ],
+    }
+
+
+def test_years_skill_requirement_credits_only_the_sustained_span_not_the_family_total():
+    # JH-013: BPMN sat inside a 216-month Business Analyst history, but the LLM
+    # established ~90 months of sustained use. Only that span is credited.
+    result = _norm_cov(
+        [
+            _years_skill_coverage_row(
+                sustained_months=90, sustained_roles=["Business Analyst"]
+            )
+        ],
+        valid_capability_names={"bpmn": "BPMN"},
+        role_experience=_ba_family_role_experience(216),
+    )
+
+    row = result[0]
+    assert row["matched_role_family"] == "Business Analyst"
+    assert row["matched_role_family_months"] == 90
+    assert row["experience_from_sustained_use"] is True
+    assert row["experience_requirement_met"] is True
+    assert row["status"] == "supported"
+
+
+def test_years_skill_requirement_without_a_sustained_span_is_left_for_review():
+    # The skill is present but the LLM set no sustained span: no number is
+    # invented and the row stays visible for review.
+    result = _norm_cov(
+        [_years_skill_coverage_row()],
+        valid_capability_names={"bpmn": "BPMN"},
+        role_experience=_ba_family_role_experience(216),
+    )
+
+    row = result[0]
+    assert row["required_experience_months"] == 60
+    assert row["experience_requirement_review_needed"] is True
+    assert row["status"] == "partially_supported"
+    assert "matched_role_family_months" not in row
+    assert "experience_requirement_met" not in row
+
+
+def test_years_skill_sustained_span_short_of_the_bar_shows_a_gap():
+    # Unrelated domain (theatre nursing): 30 months of sustained wound-care use
+    # inside a 72-month Registered Nurse history, against a 4-year bar.
+    row_in = {
+        "requirement": "4+ years wound care experience",
+        "importance": "mandatory",
+        "requirement_type": "capability",
+        "status": "supported",
+        "matched_candidate_fact": "Wound Care",
+        "capability_name": "Wound Care",
+        "matched_job_text": "4+ years wound care experience",
+        "profile_support": ["Ran the wound-care clinic on a hospital ward."],
+        "experience_components": [
+            {"kind": "duration", "text": "4+ years"},
+            {
+                "kind": "role_or_activity",
+                "text": "wound care",
+                "sustained_experience_months": 30,
+                "sustained_experience_roles": ["Registered Nurse"],
+            },
+        ],
+    }
+    result = _norm_cov(
+        [row_in],
+        valid_capability_names={"wound care": "Wound Care"},
+        role_experience=[
+            {
+                "normalized_title": "Registered Nurse",
+                "total_duration_months": 72,
+                "most_recent_end_year": 2026,
+                "segments": [{"duration_months": 72, "is_current": False}],
+                "title_variants": [{"normalized_title": "Registered Nurse"}],
+            }
+        ],
+    )
+
+    row = result[0]
+    assert row["matched_role_family"] == "Registered Nurse"
+    assert row["matched_role_family_months"] == 30
+    assert row["experience_from_sustained_use"] is True
+    assert row["experience_requirement_met"] is False
+    assert row["experience_duration_gap"] is True
+    assert row["status"] == "partially_supported"
+
+
 def test_normalize_llm_review_payload_falls_back_to_model_grade_without_coverage():
 
     # REJECT decisions can legitimately have no requirement_coverage (the KEEP-only
