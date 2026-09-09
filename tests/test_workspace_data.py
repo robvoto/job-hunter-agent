@@ -58,7 +58,7 @@ def test_build_history_workspace_record_carries_requirement_coverage():
         entry,
         datetime(2026, 7, 8, tzinfo=None).astimezone(),
         days_since_fn=lambda *_args, **_kwargs: 7,
-        archive_stale_after_days=30,
+        potential_retention_days=30,
     )
 
     assert record is not None
@@ -144,6 +144,56 @@ def test_build_workspace_record_sets_excludes_applied_and_hidden_current_records
     assert [record["job_key"] for record in result["shortlist_records"]] == ["seek:current"]
 
 
+def test_build_workspace_record_sets_excludes_stale_archive_from_potential_shortlist():
+    archive = [
+        {"job_key": "seek:recent", "is_stale": False, "posted_age_days": 3},
+        {"job_key": "seek:stale", "is_stale": True, "posted_age_days": 20},
+    ]
+
+    result = build_workspace_record_sets(
+        [],
+        {},
+        set(),
+        set(),
+        datetime(2026, 9, 9),
+        profile={},
+        is_workspace_eligible_fn=lambda record, profile: True,
+        fit_score_fn=lambda record, profile: 80,
+        viewed_by_user_fn=lambda record: False,
+        normalize_job_key_fn=lambda value: value.strip().lower(),
+        parse_timestamp_fn=lambda value: None,
+        build_archive_records_fn=lambda *args: archive,
+        build_applied_records_fn=lambda *args: [],
+        build_hidden_records_fn=lambda *args: [],
+    )
+
+    assert [record["job_key"] for record in result["shortlist_records"]] == ["seek:recent"]
+    assert [record["job_key"] for record in result["stale_archive_records"]] == ["seek:stale"]
+
+
+def test_build_hidden_records_excludes_jobs_older_than_retention():
+    history = {
+        "seek:recent": {"last_hidden_at": "2026-09-04T00:00:00+10:00"},
+        "seek:expired": {"last_hidden_at": "2026-08-20T00:00:00+10:00"},
+    }
+    reference = datetime(2026, 9, 9).astimezone()
+
+    records = build_hidden_records(
+        set(history),
+        history,
+        reference,
+        parse_timestamp_fn=parse_timestamp,
+        days_since_fn=lambda value, _reference: 5 if "09-04" in str(value) else 20,
+        hidden_retention_days=15,
+        build_hidden_workspace_record_fn=lambda job_key, entry, _reference_time: {
+            "job_key": job_key,
+            "last_hidden_at": entry.get("last_hidden_at"),
+        },
+    )
+
+    assert [record["job_key"] for record in records] == ["seek:recent"]
+
+
 
 def test_build_hidden_records_sorts_missing_timestamp_with_timezone_aware_history():
     history = {
@@ -162,7 +212,7 @@ def test_build_hidden_records_sorts_missing_timestamp_with_timezone_aware_histor
         datetime(2026, 9, 8, 12, 0).astimezone(),
         parse_timestamp_fn=parse_timestamp,
         days_since_fn=lambda *_args, **_kwargs: 0,
-        hidden_review_days=30,
+        hidden_retention_days=30,
         build_hidden_workspace_record_fn=lambda job_key, entry, _reference_time: {
             "job_key": job_key,
             "last_hidden_at": entry.get("last_hidden_at"),
@@ -203,7 +253,7 @@ def test_build_history_workspace_record_preserves_unknown_posting_channel_from_s
         entry,
         datetime(2026, 7, 8, tzinfo=None).astimezone(),
         days_since_fn=lambda *_args, **_kwargs: 7,
-        archive_stale_after_days=30,
+        potential_retention_days=30,
     )
 
     assert record is not None

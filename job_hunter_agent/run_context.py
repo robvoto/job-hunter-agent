@@ -28,8 +28,8 @@ from job_hunter_agent.io_utils import (
     load_run_stats,
     write_run_attempt,
 )
-from job_hunter_agent.posting_utils import get_manual_skip_sets
 from job_hunter_agent.profile_store import get_search_settings, load_profile
+from job_hunter_agent.retention_housekeeping import run_retention_housekeeping
 from job_hunter_agent.runtime_helpers import (
     CLI_FLAG_DEBUG,
     CLI_FLAG_FORCE_REFRESH,
@@ -153,9 +153,13 @@ def build_scrape_run_context(argv: list[str] | None = None) -> ScrapeRunContext:
         1, int(DEFAULT_PLAYWRIGHT_SETTINGS.get(KEY_SEEK_PARALLEL_DETAIL_WORKERS, 3) or 3)
     )
 
-    applied_job_keys, hidden_job_keys = get_manual_skip_sets(profile)
-
     run_started_at = datetime.now().astimezone()
+    job_history = load_job_history()
+    applied_job_keys, hidden_job_keys = run_retention_housekeeping(
+        profile,
+        job_history,
+        run_started_at,
+    )
 
     run_iso = run_started_at.isoformat(timespec="seconds")
 
@@ -185,7 +189,7 @@ def build_scrape_run_context(argv: list[str] | None = None) -> ScrapeRunContext:
         previous_audit_rows=load_audit_rows(),
         previous_run_stats=load_run_stats(),
         llm_cache=load_llm_cache(),
-        job_history=load_job_history(),
+        job_history=job_history,
         enabled_sources=enabled_sources,
         no_llm_mode=has_cli_flag(active_argv, CLI_FLAG_NO_LLM),
         dashboard_debug_mode=has_cli_flag(active_argv, CLI_FLAG_DEBUG),

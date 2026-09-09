@@ -127,8 +127,9 @@
       "fields": {
         "job_history_max_entries": "Maximum number of saved job-history records kept per user before the oldest entries are pruned.",
         "job_history_max_age_days": "Maximum age for saved job-history records before they are pruned.",
-        "archive_stale_after_days": "How long archived jobs stay fresh before they are considered stale.",
-        "hidden_review_days": "How long hidden jobs stay hidden before they become eligible for review again.",
+        "potential_retention_days": "How many days a saved non-applied job remains visible on the Potential board after it was last kept.",
+        "hidden_retention_days": "How many days a hidden job remains visible on the Hidden board after it was hidden.",
+        "applied_retention_days": "How long applied-job history is retained. Use 0 to retain applied jobs forever.",
         "repeated_listing_min_times_seen": "How many times the same listing must be seen before a repeated-listing red flag can trigger.",
         "repeated_listing_min_span_days": "Minimum days between first and last sighting before repeated-listing detection can trigger.",
         "multi_listing_red_flag_min_listings": "How many similar listings from the same source/company/title cluster trigger a multi-listing red flag.",

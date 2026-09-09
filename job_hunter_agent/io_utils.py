@@ -16,6 +16,28 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from job_hunter_agent.config import AUTH_ENCODING, DEBUG_MODE, DEFAULT_ERRORS
+from job_hunter_agent.record_schema import (
+    RECORD_COMPANY_KEY,
+    RECORD_DETAILS_TEXT_KEY,
+    RECORD_FIRST_APPLIED_AT_KEY,
+    RECORD_FIRST_HIDDEN_AT_KEY,
+    RECORD_FIT_SOURCE_TEXT_KEY,
+    RECORD_FULL_DESCRIPTION_KEY,
+    RECORD_IS_HIDDEN_KEY,
+    RECORD_JOB_KEY,
+    RECORD_LAST_APPLIED_AT_KEY,
+    RECORD_LAST_HIDDEN_AT_KEY,
+    RECORD_LAST_KEPT_SNAPSHOT_KEY,
+    RECORD_LAST_UNAPPLIED_AT_KEY,
+    RECORD_LAST_UNHIDDEN_AT_KEY,
+    RECORD_LOCATION_KEY,
+    RECORD_REVIEW_EVENTS_KEY,
+    RECORD_SOURCE_KEY,
+    RECORD_TEASER_KEY,
+    RECORD_TITLE_KEY,
+    RECORD_URL_KEY,
+    RECORD_WORK_TYPE_KEY,
+)
 from job_hunter_agent.paths import (
     CANDIDATE_APPLICATION_HISTORY_CACHE_PATH,
     CV_EXTRACTION_CACHE_PATH,
@@ -308,22 +330,272 @@ def _job_history_sort_key(job_key: str, entry: dict) -> tuple[datetime, str]:
     return (last_seen, str(job_key))
 
 
+def _active_applied_at(entry: dict) -> datetime | None:
+    """Return the active application timestamp, or None after an explicit unapply."""
+    applied_at = _parse_timestamp(entry.get(RECORD_LAST_APPLIED_AT_KEY)) or _parse_timestamp(
+        entry.get(RECORD_FIRST_APPLIED_AT_KEY)
+    )
+    if applied_at is None:
+        return None
+    unapplied_at = _parse_timestamp(entry.get(RECORD_LAST_UNAPPLIED_AT_KEY))
+    if unapplied_at is not None and unapplied_at >= applied_at:
+        return None
+    return applied_at
+
+
+def _active_hidden_at(entry: dict) -> datetime | None:
+    """Return the active hidden timestamp, or None after an explicit unhide."""
+    hidden_at = _parse_timestamp(entry.get(RECORD_LAST_HIDDEN_AT_KEY)) or _parse_timestamp(
+        entry.get(RECORD_FIRST_HIDDEN_AT_KEY)
+    )
+    if hidden_at is None:
+        return None
+    unhidden_at = _parse_timestamp(entry.get(RECORD_LAST_UNHIDDEN_AT_KEY))
+    if unhidden_at is not None and unhidden_at >= hidden_at:
+        return None
+    if entry.get(RECORD_IS_HIDDEN_KEY) is False:
+        return None
+    return hidden_at
+
+
+_STALE_HISTORY_SNAPSHOT_FIELDS = (
+    RECORD_JOB_KEY,
+    RECORD_SOURCE_KEY,
+    RECORD_TITLE_KEY,
+    RECORD_COMPANY_KEY,
+    RECORD_LOCATION_KEY,
+    RECORD_WORK_TYPE_KEY,
+    "posted",
+    "original_posted_date",
+    "original_posted_date_status",
+)
+_STALE_HISTORY_PAYLOAD_SCRUBBED_AT_KEY = "retention_payload_scrubbed_at"
+
+
+def _scrub_stale_non_applied_history_entry(entry: dict, *, scrubbed_at: datetime) -> dict:
+    """Remove stale job content/links while retaining small identity and state facts."""
+    scrubbed = dict(entry)
+    for key in (
+        RECORD_URL_KEY,
+        RECORD_TEASER_KEY,
+        RECORD_FULL_DESCRIPTION_KEY,
+        RECORD_FIT_SOURCE_TEXT_KEY,
+        RECORD_DETAILS_TEXT_KEY,
+        "detail_evidence",
+        "source_metadata",
+        "source_provenance",
+        "posting_channel_evidence",
+        "duplicate_links",
+        "potential_duplicate_links",
+    ):
+        scrubbed.pop(key, None)
+
+    snapshot = entry.get(RECORD_LAST_KEPT_SNAPSHOT_KEY)
+    if isinstance(snapshot, dict):
+        scrubbed[RECORD_LAST_KEPT_SNAPSHOT_KEY] = {
+            key: snapshot.get(key)
+            for key in _STALE_HISTORY_SNAPSHOT_FIELDS
+            if snapshot.get(key) not in (None, "", [], {})
+        }
+
+    events = entry.get(RECORD_REVIEW_EVENTS_KEY)
+    if isinstance(events, list):
+        cleaned_events: list[dict] = []
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            cleaned_event = dict(event)
+            for key in (
+                RECORD_URL_KEY,
+                RECORD_TEASER_KEY,
+                RECORD_FULL_DESCRIPTION_KEY,
+                RECORD_FIT_SOURCE_TEXT_KEY,
+                RECORD_DETAILS_TEXT_KEY,
+                "source_metadata",
+                "source_provenance",
+                "posting_channel_evidence",
+            ):
+                cleaned_event.pop(key, None)
+            cleaned_events.append(cleaned_event)
+        scrubbed[RECORD_REVIEW_EVENTS_KEY] = cleaned_events
+
+    scrubbed[_STALE_HISTORY_PAYLOAD_SCRUBBED_AT_KEY] = scrubbed_at.isoformat(timespec="seconds")
+    return scrubbed
+
+
+def _scrub_stale_job_history_payloads(
+    history: Dict[str, dict],
+    *,
+    potential_retention_days: int,
+    hidden_retention_days: int,
+    now: datetime | None = None,
+) -> tuple[Dict[str, dict], set[str]]:
+    """Scrub stale non-applied payloads without deleting minimal identity/history facts."""
+    current_time = now or datetime.now(timezone.utc)
+    scrubbed_history: Dict[str, dict] = {}
+    changed_keys: set[str] = set()
+
+    for job_key, entry in history.items():
+        if not isinstance(entry, dict):
+            scrubbed_history[str(job_key)] = entry
+            continue
+        if _active_applied_at(entry) is not None:
+            scrubbed_history[str(job_key)] = entry
+            continue
+
+        hidden_at = _active_hidden_at(entry)
+        if hidden_at is not None:
+            reference_at = hidden_at
+            retention_days = hidden_retention_days
+        else:
+            reference_at = _parse_timestamp(entry.get("last_kept_at")) or _parse_timestamp(
+                entry.get("last_seen_at")
+            )
+            retention_days = potential_retention_days
+
+        if reference_at is None or reference_at >= current_time - timedelta(days=retention_days):
+            scrubbed_history[str(job_key)] = entry
+            continue
+        if entry.get(_STALE_HISTORY_PAYLOAD_SCRUBBED_AT_KEY):
+            scrubbed_history[str(job_key)] = entry
+            continue
+
+        scrubbed_history[str(job_key)] = _scrub_stale_non_applied_history_entry(
+            entry, scrubbed_at=current_time
+        )
+        changed_keys.add(str(job_key))
+
+    return scrubbed_history, changed_keys
+
+
+def active_hidden_job_keys_with_expiry(
+    hidden_job_keys: set[str],
+    history: Dict[str, dict],
+    *,
+    hidden_retention_days: int,
+    now: datetime | None = None,
+) -> tuple[set[str], set[str]]:
+    """Return still-hidden keys and keys whose temporary Hidden state has expired."""
+    current_time = now or datetime.now(timezone.utc)
+    cutoff = current_time - timedelta(days=hidden_retention_days)
+    active: set[str] = set()
+    expired: set[str] = set()
+    for job_key in hidden_job_keys:
+        entry = history.get(job_key)
+        if not isinstance(entry, dict):
+            active.add(job_key)
+            continue
+        hidden_at = _active_hidden_at(entry)
+        if hidden_at is None:
+            expired.add(job_key)
+            continue
+        if hidden_at < cutoff:
+            expired.add(job_key)
+        else:
+            active.add(job_key)
+    return active, expired
+
+
+def prune_workspace_pool_for_retention(
+    job_history: Dict[str, dict],
+    applied_job_keys: set[str],
+    hidden_job_keys: set[str],
+    *,
+    potential_retention_days: int,
+    hidden_retention_days: int,
+    now: datetime | None = None,
+) -> int:
+    """Delete stale non-applied records from the persisted workspace pool."""
+    from job_hunter_agent.database import db_conn
+    from job_hunter_agent.paths import get_active_user_id
+
+    current_time = now or datetime.now(timezone.utc)
+    user_id = get_active_user_id()
+    with db_conn() as conn:
+        row = conn.execute(
+            "SELECT data FROM workspace_pool WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        if row is None:
+            return 0
+        raw_records = json.loads(row["data"])
+        if not isinstance(raw_records, list):
+            return 0
+
+        retained_records: list[dict] = []
+        removed = 0
+        for record in raw_records:
+            if not isinstance(record, dict):
+                removed += 1
+                continue
+            job_key = str(record.get(RECORD_JOB_KEY) or "").strip().lower()
+            if not job_key:
+                removed += 1
+                continue
+            entry = job_history.get(job_key)
+            if job_key in applied_job_keys or (
+                isinstance(entry, dict) and _active_applied_at(entry) is not None
+            ):
+                retained_records.append(record)
+                continue
+            if not isinstance(entry, dict):
+                retained_records.append(record)
+                continue
+
+            if job_key in hidden_job_keys:
+                reference_at = _active_hidden_at(entry)
+                retention_days = hidden_retention_days
+            else:
+                reference_at = _parse_timestamp(entry.get("last_kept_at")) or _parse_timestamp(
+                    entry.get("last_seen_at")
+                )
+                retention_days = potential_retention_days
+
+            if reference_at is None or reference_at >= current_time - timedelta(days=retention_days):
+                retained_records.append(record)
+            else:
+                removed += 1
+
+        if removed:
+            conn.execute(
+                "UPDATE workspace_pool SET data = ?, updated_at = datetime('now') WHERE user_id = ?",
+                (json.dumps(retained_records, ensure_ascii=False), user_id),
+            )
+    return removed
+
+
 def _prune_job_history_entries(
     history: Dict[str, dict],
     *,
     max_entries: int,
     max_age_days: int,
+    applied_retention_days: int,
     now: datetime | None = None,
 ) -> tuple[Dict[str, dict], set[str]]:
     current_time = now or datetime.now(timezone.utc)
     cutoff = current_time - timedelta(days=max_age_days)
-    kept_items: list[tuple[str, dict]] = []
+    applied_cutoff = (
+        current_time - timedelta(days=applied_retention_days)
+        if applied_retention_days > 0
+        else None
+    )
+    ordinary_items: list[tuple[str, dict]] = []
+    protected_applied_items: list[tuple[str, dict]] = []
     removed_keys: set[str] = set()
 
     for job_key, entry in history.items():
         if not isinstance(entry, dict):
             removed_keys.add(str(job_key))
             continue
+
+        applied_at = _active_applied_at(entry)
+        if applied_at is not None:
+            if applied_cutoff is not None and applied_at < applied_cutoff:
+                removed_keys.add(str(job_key))
+                continue
+            protected_applied_items.append((str(job_key), entry))
+            continue
+
         latest_seen = _parse_timestamp(entry.get("last_seen_at")) or _parse_timestamp(
             entry.get("first_seen_at")
         )
@@ -333,14 +605,21 @@ def _prune_job_history_entries(
         if latest_seen < cutoff:
             removed_keys.add(str(job_key))
             continue
-        kept_items.append((str(job_key), entry))
+        ordinary_items.append((str(job_key), entry))
 
-    kept_items.sort(key=lambda item: _job_history_sort_key(item[0], item[1]), reverse=True)
-    if max_entries > 0 and len(kept_items) > max_entries:
-        overflow = kept_items[max_entries:]
+    ordinary_items.sort(key=lambda item: _job_history_sort_key(item[0], item[1]), reverse=True)
+    if max_entries > 0 and len(ordinary_items) > max_entries:
+        overflow = ordinary_items[max_entries:]
         removed_keys.update(job_key for job_key, _ in overflow)
-        kept_items = kept_items[:max_entries]
-    return dict(kept_items), removed_keys
+        ordinary_items = ordinary_items[:max_entries]
+
+    # Applied history is a durable user record, not scraper cache. It does not
+    # consume the ordinary history capacity and is retained forever when the
+    # applied retention setting is 0.
+    protected_applied_items.sort(
+        key=lambda item: _job_history_sort_key(item[0], item[1]), reverse=True
+    )
+    return dict([*protected_applied_items, *ordinary_items]), removed_keys
 
 
 def _slugify_debug_component(value: str) -> str:
@@ -523,8 +802,11 @@ def load_signal_defaults() -> Dict[str, Any]:
 def load_job_history() -> Dict[str, dict]:
     from job_hunter_agent.database import db_conn
     from job_hunter_agent.global_settings import (
+        get_applied_retention_days,
+        get_hidden_retention_days,
         get_job_history_max_age_days,
         get_job_history_max_entries,
+        get_potential_retention_days,
     )
     from job_hunter_agent.paths import get_active_user_id
 
@@ -551,11 +833,25 @@ def load_job_history() -> Dict[str, dict]:
             loaded,
             max_entries=get_job_history_max_entries(),
             max_age_days=get_job_history_max_age_days(),
+            applied_retention_days=get_applied_retention_days(),
+        )
+        pruned, scrubbed_keys = _scrub_stale_job_history_payloads(
+            pruned,
+            potential_retention_days=get_potential_retention_days(),
+            hidden_retention_days=get_hidden_retention_days(),
         )
         if removed_keys:
             conn.executemany(
                 "DELETE FROM job_history WHERE user_id = ? AND job_key = ?",
                 [(user_id, job_key) for job_key in sorted(removed_keys)],
+            )
+        if scrubbed_keys:
+            conn.executemany(
+                "UPDATE job_history SET data = ? WHERE user_id = ? AND job_key = ?",
+                [
+                    (json.dumps(pruned[job_key], ensure_ascii=False), user_id, job_key)
+                    for job_key in sorted(scrubbed_keys)
+                ],
             )
     return pruned
 
@@ -563,8 +859,11 @@ def load_job_history() -> Dict[str, dict]:
 def save_job_history(history: Dict[str, dict]) -> None:
     from job_hunter_agent.database import db_conn, ensure_user_row
     from job_hunter_agent.global_settings import (
+        get_applied_retention_days,
+        get_hidden_retention_days,
         get_job_history_max_age_days,
         get_job_history_max_entries,
+        get_potential_retention_days,
     )
     from job_hunter_agent.paths import get_active_user_id
 
@@ -576,6 +875,12 @@ def save_job_history(history: Dict[str, dict]) -> None:
         history,
         max_entries=get_job_history_max_entries(),
         max_age_days=get_job_history_max_age_days(),
+        applied_retention_days=get_applied_retention_days(),
+    )
+    pruned_history, _ = _scrub_stale_job_history_payloads(
+        pruned_history,
+        potential_retention_days=get_potential_retention_days(),
+        hidden_retention_days=get_hidden_retention_days(),
     )
     history.clear()
     history.update(pruned_history)

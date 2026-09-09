@@ -19,8 +19,8 @@ from job_hunter_agent import filters as _filters
 from job_hunter_agent.config import DEBUG_MODE, JOB_HUNTER_BASE_URL
 from job_hunter_agent.fit_scoring import fit_score_displayed
 from job_hunter_agent.global_settings import (
-    get_archive_stale_after_days,
-    get_hidden_review_days,
+    get_potential_retention_days,
+    get_hidden_retention_days,
 )
 from job_hunter_agent.history import (
     TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING,
@@ -250,7 +250,7 @@ def build_history_workspace_record(
         entry,
         run_started_at,
         days_since_fn=days_since,
-        archive_stale_after_days=get_archive_stale_after_days(),
+        potential_retention_days=get_potential_retention_days(),
     )
 
 
@@ -296,7 +296,7 @@ def build_hidden_records(
         run_started_at,
         parse_timestamp_fn=parse_timestamp,
         days_since_fn=days_since,
-        hidden_review_days=get_hidden_review_days(),
+        hidden_retention_days=get_hidden_retention_days(),
         build_hidden_workspace_record_fn=build_hidden_workspace_record,
     )
 
@@ -815,6 +815,7 @@ def render_html(
             "SCORE_FILTER_OPTIONS_HTML": score_filter_options_html,
             "WORK_TYPE_FILTER_OPTIONS_HTML": work_type_filter_options_html,
             "JOB_BOARD_FILTER_CHOICES_HTML": job_board_filter_choices_html,
+            "PAGE_SIZE_SELECT_HTML": render_page_size_select_html(),
             "CURRENT_SECTION_HTML": render_section(
                 "Job Results",
                 shortlist_records,
@@ -823,8 +824,8 @@ def render_html(
                 applied_pool=applied_records,
                 history_clusters=history_clusters,
                 debug_mode=active_debug_mode,
-                header_tools_html=render_page_size_select_html(),
                 header_nav_html=current_tabs_html,
+                show_heading=True,
                 new_to_you_cutoff=run_started_at,
             ),
             "RECENT_SECTION_HTML": "",

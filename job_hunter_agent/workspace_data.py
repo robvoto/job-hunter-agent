@@ -103,7 +103,7 @@ def build_history_workspace_record(
     run_started_at: datetime,
     *,
     days_since_fn: Callable[[Optional[str], datetime], Optional[int]],
-    archive_stale_after_days: int,
+    potential_retention_days: int,
 ) -> Optional[dict]:
 
     if int(entry.get("times_kept", 0) or 0) <= 0:
@@ -180,7 +180,7 @@ def build_history_workspace_record(
         RECORD_LAST_VIEWED_AT_KEY: entry.get(RECORD_LAST_VIEWED_AT_KEY),
         "archived": True,
         "archived_age_days": archived_age_days,
-        "is_stale": archived_age_days is not None and archived_age_days > archive_stale_after_days,
+        "is_stale": archived_age_days is not None and archived_age_days > potential_retention_days,
     }
 
 
@@ -311,7 +311,7 @@ def build_hidden_records(
     *,
     parse_timestamp_fn: Callable[[Optional[str]], Optional[datetime]],
     days_since_fn: Callable[[Optional[str], datetime], Optional[int]],
-    hidden_review_days: int,
+    hidden_retention_days: int,
     build_hidden_workspace_record_fn: Callable[[str, dict, datetime], dict],
 ) -> list[dict]:
 
@@ -324,7 +324,7 @@ def build_hidden_records(
 
         hidden_age_days = days_since_fn(hidden_at, run_started_at) if hidden_at else None
 
-        if hidden_age_days is not None and hidden_age_days > hidden_review_days:
+        if hidden_age_days is not None and hidden_age_days > hidden_retention_days:
             continue
 
         records.append(build_hidden_workspace_record_fn(job_key, entry, run_started_at))
@@ -558,8 +558,11 @@ def build_workspace_record_sets(
         key=_rank_archive_by_fit,
     )
 
+    # Potential is an active-work queue, not permanent history. Once an archived
+    # job exceeds potential_retention_days it remains available to history/dedup
+    # internals but is no longer shown on the Potential board.
     shortlist_records = sorted(
-        [*current_records, *recent_archive_records, *stale_archive_records],
+        [*current_records, *recent_archive_records],
         key=_rank_by_fit,
     )
 

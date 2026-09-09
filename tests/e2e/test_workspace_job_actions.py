@@ -33,6 +33,35 @@ def test_workspace_job_card_shows_score(workspace_job_page):
     expect(card.locator(".match-tile-label")).to_be_visible()
 
 
+def test_workspace_search_and_page_size_persist_on_potential(workspace_job_page):
+    page = workspace_job_page
+    page.goto("/workspace")
+
+    card = page.locator("[data-fit-score]").first
+    search = page.locator("#job_search_input")
+    page_size = page.locator("#page_size_select")
+    expect(search).to_be_visible()
+    expect(page_size).to_be_visible()
+
+    search.fill("Acme")
+    expect(card).to_be_visible()
+    search.fill("Company That Does Not Exist")
+    expect(card).to_be_hidden()
+    search.fill("")
+    expect(card).to_be_visible()
+
+    page_size.select_option("24")
+    expect(page_size).to_have_value("24")
+    scope = page.evaluate("window.__JOB_HUNTER_USER_SCOPE__")
+    stored = page.evaluate(
+        "scope => localStorage.getItem(`jobHunter.workspace.pageSize.${scope}`)", scope
+    )
+    assert stored == "24"
+
+    page.reload()
+    expect(page.locator("#page_size_select")).to_have_value("24")
+
+
 def test_workspace_save_action_round_trips(workspace_job_page):
     page = workspace_job_page
     page.goto("/workspace")
@@ -49,6 +78,15 @@ def test_workspace_save_action_round_trips(workspace_job_page):
     # copies share the same data-workspace-target -- any of them toggles the
     # same active-section state, so .first is fine.
     page.locator('[data-workspace-target="applied"]').first.click()
+
+    search = page.locator("#job_search_input")
+    expect(search).to_be_visible()
+    expect(page.locator("#posted_filter")).to_be_visible()
+    search.fill("Acme")
+    expect(page.locator('[data-record-kind="applied"]')).to_be_visible()
+    search.fill("Company That Does Not Exist")
+    expect(page.locator('[data-record-kind="applied"]')).to_be_hidden()
+    search.fill("")
 
     # The seeded workspace has exactly one job, so the Applied tab is empty
     # before this click. moveCardAfterReview() used to clone its replacement
@@ -83,6 +121,15 @@ def test_workspace_dismiss_action_round_trips(workspace_job_page):
     )
 
     page.locator('[data-workspace-target="hidden"]').first.click()
+
+    search = page.locator("#job_search_input")
+    expect(search).to_be_visible()
+    expect(page.locator("#posted_filter")).to_be_visible()
+    search.fill("Acme")
+    expect(page.locator('[data-record-kind="hidden"]')).to_be_visible()
+    search.fill("Company That Does Not Exist")
+    expect(page.locator('[data-record-kind="hidden"]')).to_be_hidden()
+    search.fill("")
 
     # Same empty-destination-tab case as the applied round trip above: the
     # Hidden tab starts empty for this seeded job. Assert immediately, with

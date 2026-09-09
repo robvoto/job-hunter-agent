@@ -73,8 +73,9 @@ export const JobHunterAdminSettings = (function () {
     preference_freshness_weight: ['preference_weights', 'freshness'],
     history_job_history_max_entries: ['history_settings', 'job_history_max_entries'],
     history_job_history_max_age_days: ['history_settings', 'job_history_max_age_days'],
-    history_archive_stale_after_days: ['history_settings', 'archive_stale_after_days'],
-    history_hidden_review_days: ['history_settings', 'hidden_review_days'],
+    history_potential_retention_days: ['history_settings', 'potential_retention_days'],
+    history_hidden_retention_days: ['history_settings', 'hidden_retention_days'],
+    history_applied_retention_days: ['history_settings', 'applied_retention_days'],
     history_repeated_listing_min_times_seen: ['history_settings', 'repeated_listing_min_times_seen'],
     history_repeated_listing_min_span_days: ['history_settings', 'repeated_listing_min_span_days'],
     history_multi_listing_red_flag_min_listings: ['history_settings', 'multi_listing_red_flag_min_listings'],
@@ -346,8 +347,9 @@ export const JobHunterAdminSettings = (function () {
       setFieldValue(fieldId, promptTemplates[templateKey]);
     }
 
-    setFieldValue('history_archive_stale_after_days', historySettings.archive_stale_after_days);
-    setFieldValue('history_hidden_review_days', historySettings.hidden_review_days);
+    setFieldValue('history_potential_retention_days', historySettings.potential_retention_days);
+    setFieldValue('history_hidden_retention_days', historySettings.hidden_retention_days);
+    setFieldValue('history_applied_retention_days', historySettings.applied_retention_days);
     setFieldValue('description_trust_min_trusted_description_length', descriptionTrustSettings.min_trusted_description_length);
     requireElement('description_compaction_enabled').checked = !!descriptionCompactionSettings.enabled;
     setFieldValue('description_compaction_min_chars', descriptionCompactionSettings.default_min_compacted_chars);
@@ -529,8 +531,9 @@ export const JobHunterAdminSettings = (function () {
         ...currentHistory,
         job_history_max_entries: readNumber('history_job_history_max_entries', currentHistory.job_history_max_entries),
         job_history_max_age_days: readNumber('history_job_history_max_age_days', currentHistory.job_history_max_age_days),
-        archive_stale_after_days: readNumber('history_archive_stale_after_days', currentHistory.archive_stale_after_days),
-        hidden_review_days: readNumber('history_hidden_review_days', currentHistory.hidden_review_days),
+        potential_retention_days: readNumber('history_potential_retention_days', currentHistory.potential_retention_days),
+        hidden_retention_days: readNumber('history_hidden_retention_days', currentHistory.hidden_retention_days),
+        applied_retention_days: readNumber('history_applied_retention_days', currentHistory.applied_retention_days),
         repeated_listing_min_times_seen: readNumber('history_repeated_listing_min_times_seen', currentHistory.repeated_listing_min_times_seen),
         repeated_listing_min_span_days: readNumber('history_repeated_listing_min_span_days', currentHistory.repeated_listing_min_span_days),
         multi_listing_red_flag_min_listings: readNumber('history_multi_listing_red_flag_min_listings', currentHistory.multi_listing_red_flag_min_listings),

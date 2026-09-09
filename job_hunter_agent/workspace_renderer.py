@@ -567,6 +567,8 @@ _WORKSPACE_PAGE_LABEL_KEYS = (
     "sort_option_newest",
     "sort_option_highest_salary",
     "jobs_per_page_label",
+    "job_search_label",
+    "job_search_placeholder",
     "filters_label",
     "quick_filters_label",
     "quick_filter_new_to_you",
@@ -1145,7 +1147,7 @@ def render_page_size_select_html() -> str:
     labels = load_workspace_page_labels()
     jobs_per_page_label = safe_html(labels["LABEL_WS_JOBS_PER_PAGE_LABEL"])
     return (
-        '<label class="panel-select-control panel-select-control--page-size" for="page_size_select">'
+        '<label class="workspace-control-field panel-select-control panel-select-control--page-size" for="page_size_select">'
         f'<span class="panel-select-label">{jobs_per_page_label}</span>'
         f'<select id="page_size_select" class="jh-select" aria-label="{jobs_per_page_label}">'
         f"{render_page_size_options()}"
@@ -2745,13 +2747,16 @@ def render_section(
     debug_mode: Optional[bool] = None,
     header_tools_html: str = "",
     header_nav_html: str = "",
+    show_heading: Optional[bool] = None,
     new_to_you_cutoff: Optional[datetime] = None,
 ) -> str:
     header_tools = (
         f'<div class="section-head-tools">{header_tools_html}</div>' if header_tools_html else ""
     )
     header_nav = header_nav_html or ""
-    panelized = bool(header_tools_html)
+    if show_heading is None:
+        show_heading = not (header_nav and not header_tools_html)
+    panelized = bool(header_tools_html or header_nav)
     section_classes = "section job-section"
     if panelized:
         section_classes += " section--results-panel"
@@ -2760,7 +2765,7 @@ def render_section(
     panel_body_open = '<div class="results-section-body">' if panelized else ""
     panel_body_close = "</div>" if panelized else ""
     dom_id = section_dom_id(title)
-    section_data_attribute = f' data-section-id="{safe_html(dom_id)}"' if panelized else ""
+    section_data_attribute = f' data-section-id="{safe_html(dom_id)}"'
     pagination_match_count = '<span class="pagination-match-count"></span>'
     pagination_page_label = '<span class="pagination-label pagination-page-label"></span>'
     pagination_buttons = (
@@ -2775,10 +2780,11 @@ def render_section(
         else ""
     )
     if panelized:
+        heading_html = f"<h2>{safe_html(title)}</h2>" if show_heading else ""
         results_header = (
             '<div class="results-header">'
             '<div class="results-header__left">'
-            f"<h2>{safe_html(title)}</h2>"
+            f"{heading_html}"
             f"{header_nav}"
             "</div>"
             '<div class="section-tools">'
@@ -2790,13 +2796,7 @@ def render_section(
             "</div>"
         )
     else:
-        # When header_nav is present (the Applied/Hidden tab bar), the tabs
-        # already say which section this is ("Applied (32)", "Hidden (97)").
-        # Repeating it as an <h2> right below the tab the user just clicked
-        # is a redundant duplicate label, not a second piece of information -
-        # drop the heading in that case and keep it only when there is no
-        # nav to say the same thing.
-        heading_html = "" if header_nav else f"<h2>{safe_html(title)}</h2>"
+        heading_html = f"<h2>{safe_html(title)}</h2>" if show_heading else ""
         results_header = (
             '<div class="section-head section-head--with-nav">'
             f"{header_nav}"
@@ -2806,7 +2806,7 @@ def render_section(
         )
     if not records:
         return (
-            f'<section class="{section_classes if panelized else "section"}"'
+            f'<section class="{section_classes}"'
             f"{section_data_attribute}>"
             f"{panel_open}"
             f"{results_header}"

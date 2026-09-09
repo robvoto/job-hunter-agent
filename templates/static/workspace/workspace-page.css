@@ -640,10 +640,6 @@ body {
   display: none;
 }
 
-.results-header .panel-select-control--page-size {
-  display: block;
-}
-
 .results-header__left .scope-tabs {
   grid-column: 1 / -1;
   min-width: 0;
@@ -660,12 +656,6 @@ body {
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-}
-
-/* Local layout exception: page size is a compact pagination preference, not a full-width filter. */
-.results-header .panel-select-control--page-size .jh-select {
-  width: auto;
-  min-width: 0;
 }
 
 .results-header .section-tools {
