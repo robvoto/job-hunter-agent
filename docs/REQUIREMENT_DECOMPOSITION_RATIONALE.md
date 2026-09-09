@@ -298,8 +298,9 @@ The resolver may place that exact fact under an existing canonical capability as
 Skill or create one new top-level capability, but it may not persist ad prose, another branch,
 an equivalent clause, a qualification, or a duration. A failed or unresolved storage decision
 fails closed without saving. Onboarding continues to rely on its structured extraction
-`atomic_concept` judgement, while direct settings/API profile writes retain the existing
-user-owned profile schema and never receive raw job-ad decomposition data.
+`atomic_concept` judgement. Direct settings/API profile writes are checked at the central
+profile save boundary by a separate structured atomicity judgement; the submitted name remains
+authoritative when accepted, and raw job-ad decomposition data never enters the profile schema.
 
 ---
 
@@ -370,7 +371,7 @@ mandatory requirement.
 | `fit_scoring.py` | No rollup change (row-level `status` / `requirement_type` survive). Hidden rows are already absent from `requirement_coverage`. |
 | `workspace_renderer.py` | Per-element rendering for `and` / `or` rows; OR-group "either X or Y" line + one Add pair per unresolved named professional capability branch; optional `non_capability` rows are already absent. |
 | `routes/review.py` | Resolve an OR click against the selected atomic capability element only; preserve the original OR row for scoring and prevent qualification/equivalent/vague branches from reaching profile storage. |
-| `profile_store.py` / onboarding | Keep persisted capability rows sourced from the existing atomic LLM onboarding path and shared profile schema; no raw ad-prose or compound OR row is written as a capability. |
+| `profile_store.py` / onboarding | Validate new direct capability writes at the central save boundary with a structured atomicity judgement; preserve the existing onboarding judgement and ensure no raw ad-prose or compound OR row is written as a capability. |
 | `profile_gaps.py` | No logic change — `and` / `or` exclusion is structural. Comment added noting the OR-branch guarantee. |
 | `record_schema.py` | Add `RECORD_REQUIREMENT_COVERAGE_HIDDEN_KEY`; bump `REQUIREMENT_COVERAGE_CONTRACT_VERSION`. |
 | `.agents/skills/signal-registry/SKILL.md` | Note that bounded requirement-interpretation fields are allowed on the fit-review schema; they are not learning fields; pending Signals stay deterministic-only. |

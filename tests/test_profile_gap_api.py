@@ -192,6 +192,70 @@ def test_profile_gap_confirm_have_saves_only_selected_named_or_branch(client, mo
     ]
 
 
+def test_profile_gap_confirm_have_rejects_storage_rename_for_new_named_branch(client, monkeypatch):
+    job_key = "job-named-tool-rename"
+    monkeypatch.setattr(
+        "job_hunter_agent.routes.review.load_job_history",
+        lambda: _job_history_with_requirement_coverage(
+            job_key,
+            [
+                {
+                    "requirement": "Power BI, Excel, GIS or similar",
+                    "requirement_type": "capability",
+                    "requirement_kind": "professional_capability",
+                    "status": "not_shown",
+                    "canonical_requirement": "",
+                    "profile_action_allowed": False,
+                    "decomposition": {
+                        "operator": "or",
+                        "elements": [
+                            {
+                                "text": "Excel",
+                                "canonical_concept": "Excel",
+                                "canonical_fact_resolved": True,
+                                "capability_judgement": "capability",
+                                "status": "not_shown",
+                                "element_profile_action_allowed": True,
+                            },
+                            {
+                                "text": "GIS",
+                                "canonical_concept": "GIS",
+                                "canonical_fact_resolved": True,
+                                "capability_judgement": "capability",
+                                "status": "not_shown",
+                                "element_profile_action_allowed": True,
+                            },
+                        ],
+                    },
+                }
+            ],
+        ),
+    )
+    saved_profiles = []
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile",
+        lambda: {"candidate_capabilities": [], "must_not_require_skills": []},
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.save_profile", lambda p: saved_profiles.append(p) or p
+    )
+    _mock_profile_storage_resolution(monkeypatch, "new", "Power BI, Excel and GIS")
+
+    response = client.post(
+        "/api/profile-gap",
+        json={
+            "job_key": job_key,
+            "capability_name": "Excel",
+            "action": "confirm_have",
+            "capability_level": "working",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "confirmed canonical fact" in response.json()["error"]
+    assert saved_profiles == []
+
+
 def test_profile_gap_confirm_have_rejects_qualification_or_branch(client, monkeypatch):
     job_key = "job-credential-or"
     monkeypatch.setattr(
@@ -234,6 +298,39 @@ def test_profile_gap_confirm_have_rejects_qualification_or_branch(client, monkey
         json={
             "job_key": job_key,
             "capability_name": "CBAP",
+            "action": "confirm_have",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "confirmable requirement coverage item" in response.json()["error"]
+
+
+def test_profile_gap_confirm_have_rejects_capability_row_missing_requirement_kind(
+    client, monkeypatch
+):
+    job_key = "job-missing-capability-kind"
+    monkeypatch.setattr(
+        "job_hunter_agent.routes.review.load_job_history",
+        lambda: _job_history_with_requirement_coverage(
+            job_key,
+            [
+                {
+                    "requirement": "Excel experience",
+                    "requirement_type": "capability",
+                    "status": "not_shown",
+                    "canonical_requirement": "Excel",
+                    "profile_action_allowed": True,
+                }
+            ],
+        ),
+    )
+
+    response = client.post(
+        "/api/profile-gap",
+        json={
+            "job_key": job_key,
+            "capability_name": "Excel",
             "action": "confirm_have",
         },
     )
@@ -430,6 +527,7 @@ def test_profile_gap_confirm_have_rejects_capability_carrying_a_years_token(clie
                 {
                     "requirement": "5+ years business analysis experience",
                     "requirement_type": "capability",
+                    "requirement_kind": "professional_capability",
                     "status": "not_shown",
                     "capability_name": "5 Years Business Analysis",
                     "canonical_requirement": "5 Years Business Analysis",
@@ -798,6 +896,7 @@ def test_profile_gap_confirm_have_existing_resolution_adds_exact_canonical_fact_
                 {
                     "requirement": "Write user stories and acceptance criteria",
                     "requirement_type": "capability",
+                    "requirement_kind": "professional_capability",
                     "status": "not_shown",
                     "capability_name": "Write user stories and acceptance criteria",
                     "canonical_requirement": "User stories",
@@ -854,6 +953,7 @@ def test_profile_gap_confirm_have_existing_resolution_is_idempotent_on_repeat_co
                 {
                     "requirement": "Write user stories and acceptance criteria",
                     "requirement_type": "capability",
+                    "requirement_kind": "professional_capability",
                     "status": "not_shown",
                     "capability_name": "Write user stories and acceptance criteria",
                     "canonical_requirement": "User stories",
@@ -920,6 +1020,7 @@ def test_profile_gap_confirm_have_row_button_resolves_via_canonical_requirement_
                 {
                     "requirement": "AWS cloud platform experience required",
                     "requirement_type": "capability",
+                    "requirement_kind": "professional_capability",
                     "status": "not_shown",
                     "capability_name": "",
                     "matched_candidate_fact": "",
@@ -966,6 +1067,7 @@ def test_profile_gap_confirm_have_new_resolution_is_idempotent_on_repeat_confirm
                 {
                     "requirement": "Cloud computing (AWS) experience",
                     "requirement_type": "capability",
+                    "requirement_kind": "professional_capability",
                     "status": "not_shown",
                     "capability_name": "Cloud computing (AWS)",
                     "canonical_requirement": "Cloud computing (AWS)",
@@ -1027,6 +1129,7 @@ def test_profile_gap_confirm_have_unresolved_resolution_fails_closed_without_sav
                 {
                     "requirement": "Cloud computing (AWS) experience",
                     "requirement_type": "capability",
+                    "requirement_kind": "professional_capability",
                     "status": "not_shown",
                     "capability_name": "Cloud computing (AWS)",
                     "canonical_requirement": "Cloud computing (AWS)",
@@ -1074,6 +1177,7 @@ def test_profile_gap_confirm_have_invalid_existing_target_fails_closed_without_s
                 {
                     "requirement": "Java development experience is required.",
                     "requirement_type": "capability",
+                    "requirement_kind": "professional_capability",
                     "status": "not_shown",
                     "capability_name": "Java development experience is required.",
                     "canonical_requirement": "Java",
@@ -1130,6 +1234,7 @@ def test_profile_gap_confirm_have_partial_match_resolves_exact_canonical_not_adj
                 {
                     "requirement": "IT systems and infrastructure project management",
                     "requirement_type": "capability",
+                    "requirement_kind": "professional_capability",
                     "status": "partially_supported",
                     "capability_name": "Agile delivery management",
                     "canonical_requirement": "IT systems and infrastructure project management",
@@ -1186,6 +1291,7 @@ def test_profile_gap_confirm_have_partial_match_already_present_does_not_double_
                 {
                     "requirement": "Cloud computing (AWS) experience",
                     "requirement_type": "capability",
+                    "requirement_kind": "professional_capability",
                     "status": "partially_supported",
                     "capability_name": "Cloud platforms",
                     "canonical_requirement": "Cloud computing (AWS)",

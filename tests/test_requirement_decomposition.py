@@ -210,6 +210,29 @@ def test_or_row_neither_branch_in_profile_is_not_row_actionable_but_keeps_branch
     )
 
 
+def test_card_does_not_render_capability_action_when_requirement_kind_is_missing():
+    html = workspace_renderer.render_job_card(
+        _or_record(
+            [
+                {
+                    "requirement": "Excel experience",
+                    "requirement_type": "capability",
+                    "requirement_kind": "",
+                    "canonical_requirement": "Excel",
+                    "profile_action_allowed": True,
+                    "status": "not_shown",
+                    "matched_job_text": "Excel experience",
+                    "decomposition": _single("Excel"),
+                }
+            ]
+        ),
+        _render_profile(),
+    )
+
+    assert 'data-action="confirm_have"' not in html
+    assert 'data-action="confirm_do_not_have"' not in html
+
+
 def test_or_row_rolls_up_to_supported_when_one_branch_is_supported():
     # The LLM reports the row as satisfied by the branch that matched (row-level
     # status + matched_candidate_fact name that branch); the elements carry the

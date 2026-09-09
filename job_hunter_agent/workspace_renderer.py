@@ -1965,6 +1965,7 @@ def render_job_card(
         profile_review_html = ""
         canonical_requirement = compact_whitespace(str(row.get("canonical_requirement") or ""))
         row_requirement_type = str(row.get("requirement_type") or "capability").strip().lower()
+        row_requirement_kind = str(row.get("requirement_kind") or "").strip().lower()
         # A partial match already names an adjacent profile fact in
         # matched_candidate_fact; the exact requested concept
         # (canonical_requirement) is only worth an Add action when it is NOT
@@ -1998,7 +1999,10 @@ def render_job_card(
             "unknown",
             "invalid",
             "partially-supported",
-        ) and not is_uncertain_classification and not exact_requirement_confirmed:
+        ) and not is_uncertain_classification and not exact_requirement_confirmed and (
+            row_requirement_type != "capability"
+            or row_requirement_kind == LLM_REQUIREMENT_KIND_PROFESSIONAL
+        ):
             is_eligibility = bool(row.get("is_eligibility"))
             is_qualification = bool(row.get("is_qualification"))
             action_label_key = (

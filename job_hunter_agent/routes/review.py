@@ -406,7 +406,7 @@ def _profile_gap_confirmable_item(job_key: str, value: str) -> dict:
             capability_kind = str(item.get("requirement_kind") or "").strip().lower()
             if (
                 raw_requirement_type != "capability"
-                or capability_kind in {"", LLM_REQUIREMENT_KIND_PROFESSIONAL}
+                or capability_kind == LLM_REQUIREMENT_KIND_PROFESSIONAL
             ) and _profile_gap_name_key(canonical_requirement) == target_name:
                 return dict(item)
 
@@ -521,6 +521,17 @@ def _resolve_and_confirm_requirement(
 
     resolution = resolved["resolution"]
     profile_target = resolved["profile_target"]
+
+    if resolution == LLM_PROFILE_RESOLUTION_NEW and requirement_type == "capability":
+        # The candidate confirmed canonical fact is the sole authoritative value
+        # for a new capability. The storage LLM may choose the destination, but
+        # it cannot rename or expand the fact into a different capability.
+        normalized_target = normalize_profile_item_name(profile_target)
+        if not normalized_target or normalized_target.casefold() != confirmed_fact.casefold():
+            raise ValueError(
+                "A new capability must be saved as the confirmed canonical fact."
+            )
+        profile_target = confirmed_fact
 
     if resolution == LLM_PROFILE_RESOLUTION_EXISTING:
         if requirement_type != "capability":

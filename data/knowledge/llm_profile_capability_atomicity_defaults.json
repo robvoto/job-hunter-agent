@@ -1,0 +1,15 @@
+{
+  "kind": "system_config",
+  "name": "llm_profile_capability_atomicity_defaults",
+  "version": 1,
+  "updated_at": "2026-09-09",
+  "description": "Managed guidance for validating that candidate profile capability rows each represent one atomic reusable concept before persistence.",
+  "lines": [
+    "Validate each submitted candidate profile capability independently and return one atomic_concept boolean for each input item in the same order.",
+    "Set atomic_concept=true only when the capability name represents one reusable professional concept that can stand alone as one profile fact.",
+    "Set atomic_concept=false when the name combines multiple independently testable capabilities, alternatives, unrelated domains, or a list of tools or responsibilities.",
+    "Do not split, rewrite, canonicalize, or invent capability names. This is a validation decision only; the submitted name remains authoritative when the result is true.",
+    "Judge the capability name itself, not job-ad text or inferred candidate evidence. If the meaning is ambiguous, set atomic_concept=false.",
+    "Return JSON matching the requested structured schema only. Preserve input order and return exactly one item per input capability."
+  ]
+}

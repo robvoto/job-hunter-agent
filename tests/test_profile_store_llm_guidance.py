@@ -32,6 +32,23 @@ def test_save_profile_does_not_persist_scoring_rules(isolated_db):
     assert "scoring_rules" not in persisted
 
 
+def test_save_profile_rejects_llm_classified_compound_capability(isolated_db, monkeypatch):
+    monkeypatch.setattr(
+        "job_hunter_agent.llm_gate.llm_validate_profile_capability_atomicity",
+        lambda capabilities: [False for _ in capabilities],
+    )
+
+    with pytest.raises(ValueError, match="atomic concept"):
+        profile_store.save_profile(
+            {
+                **profile_store.DEFAULT_PROFILE,
+                "candidate_capabilities": [
+                    {"name": "Power BI, Excel and GIS", "level": "working"}
+                ],
+            }
+        )
+
+
 def test_load_profile_rejects_unknown_top_level_field(isolated_db):
     from job_hunter_agent.database import db_conn, ensure_user_row
     from job_hunter_agent.user_context import get_user_id_for_runtime

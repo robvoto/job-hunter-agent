@@ -394,6 +394,7 @@ def test_render_job_card_gap_button_carries_the_capability_name_not_requirement_
                 {
                     "requirement": "Cloud computing (AWS) experience",
                     "requirement_type": "capability",
+                    "requirement_kind": "professional_capability",
                     "status": "not_shown",
                     "capability_name": "Cloud computing (AWS)",
                     "matched_job_text": "AWS platform experience",
@@ -479,6 +480,7 @@ def test_render_job_card_partial_match_is_actionable_for_exact_requirement():
                 {
                     "requirement": "IT systems and infrastructure project management",
                     "requirement_type": "capability",
+                    "requirement_kind": "professional_capability",
                     "status": "partially_supported",
                     "capability_name": "Agile methodologies",
                     "matched_candidate_fact": "Agile methodologies",
@@ -4725,6 +4727,8 @@ def test_add_to_profile_button_carries_capability_data_attributes():
             "requirement_coverage": [
                 {
                     "requirement": "Strong stakeholder management is required",
+                    "requirement_type": "capability",
+                    "requirement_kind": "professional_capability",
                     "canonical_requirement": "Stakeholder management",
                     "profile_action_allowed": True,
                     "importance": "mandatory",

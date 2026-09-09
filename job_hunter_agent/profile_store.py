@@ -1044,6 +1044,29 @@ def save_profile(profile: dict[str, Any]) -> dict[str, Any]:
         require_phrase=True,
     )
     normalized = normalize_full_profile(profile)
+    capabilities_to_validate = [
+        item
+        for item in normalized.get(KEY_CANDIDATE_CAPABILITIES, [])
+        if isinstance(item, dict)
+    ]
+    if capabilities_to_validate:
+        # Direct Settings/API writes have no prior semantic interpretation. The
+        # structured LLM judgement is authoritative for whether each submitted
+        # row is one atomic profile fact; this save boundary validates every row
+        # and fails closed, so no compound name can be persisted unchanged.
+        from job_hunter_agent.llm_gate import llm_validate_profile_capability_atomicity
+
+        judgements = llm_validate_profile_capability_atomicity(capabilities_to_validate)
+        rejected_names = [
+            str(item.get("name") or "").strip()
+            for item, atomic in zip(capabilities_to_validate, judgements, strict=True)
+            if not atomic
+        ]
+        if rejected_names:
+            message = _profile_label(
+                "profile_field_labels", "capability_atomicity_validation_error"
+            )
+            raise ValueError(message.replace("{capabilities}", ", ".join(rejected_names)))
     persisted = dict(normalized)
     persisted.pop("scoring_rules", None)
     ensure_user_row(user_id)
