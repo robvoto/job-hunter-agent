@@ -75,6 +75,7 @@
     const workspacePanels = Array.from(document.querySelectorAll('[data-workspace-panel]'));
     const potentialOnlyControls = Array.from(document.querySelectorAll('[data-potential-only]'));
     const paginationState = {};
+    const presentedActivityKeys = new Set();
 
     function showResultsHelperIfNeeded() {
       if (!resultsHelper) {
@@ -695,6 +696,53 @@
 
       for (const section of Array.from(document.querySelectorAll('.job-section'))) {
         applySectionPagination(section);
+      }
+      recordPresentedCards();
+    }
+
+    function recordPresentedCards() {
+      if (IS_STATIC_EXPORT) {
+        return;
+      }
+      const activePanel = document.querySelector(
+        `.workspace-panel[data-workspace-panel="${getActiveWorkspace()}"]`
+      );
+      if (!activePanel) {
+        return;
+      }
+      for (const card of activePanel.querySelectorAll('.job-card:not([hidden])')) {
+        const link = card.querySelector('.job-link');
+        const jobKey = String(link?.dataset.jobKey || '').trim();
+        if (!jobKey) {
+          continue;
+        }
+        const idempotencyKey = `presentation:${WORKSPACE_RUN_ID}:${getActiveWorkspace()}:${jobKey}`;
+        if (presentedActivityKeys.has(idempotencyKey)) {
+          continue;
+        }
+        presentedActivityKeys.add(idempotencyKey);
+        window.jobHunterFetch(`${API_BASE_URL}/api/activity/events`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            job_key: jobKey,
+            activity_type: 'presented',
+            agent_id: 'job_hunter',
+            source: 'job_hunter',
+            idempotency_key: idempotencyKey,
+            occurred_at: new Date().toISOString(),
+            evidence_ref: `workspace:${WORKSPACE_RUN_ID}`,
+            metadata: { workspace: getActiveWorkspace() },
+            employer_raw: card.dataset.company || '',
+            role_title: link.dataset.jobTitle || '',
+          }),
+        }).then(response => {
+          if (!response.ok) {
+            presentedActivityKeys.delete(idempotencyKey);
+          }
+        }).catch(() => {
+          presentedActivityKeys.delete(idempotencyKey);
+        });
       }
     }
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from job_hunter_agent.routes import (
+    activity,
     agent_telegram,
     auth_google,
     novnc_proxy,
@@ -24,6 +25,7 @@ def register_routes(app: FastAPI) -> None:
     """Attach all dashboard / settings HTTP routes."""
     for mod in (
         auth_google,
+        activity,
         static_docs,
         pages,
         novnc_proxy,

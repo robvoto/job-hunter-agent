@@ -2673,7 +2673,7 @@ def render_job_card(
         # they are outcomes of an application that already happened, the same
         # kind of first-party signal Applied is - you telling JobHunter what
         # actually happened, no email parsing involved. See
-        # review_history_service._record_first_party_outcome_event.
+        # review_history_service._record_first_party_activity_event.
         actions_html = (
             '<div class="job-actions">'
             f'<button class="review-button review-undo jh-button jh-button--primary jh-button--compact review-button--selected" type="button" data-review-action="unapply" {button_data_attrs}>'
@@ -2727,7 +2727,7 @@ def render_job_card(
     badges_html = f'<div class="job-badges">{"".join(badges)}</div>' if badges else ""
 
     return (
-        f'<article id="{safe_html(card_dom_id)}" class="{safe_html(card_classes)}" data-fit-score="{fit_points}" data-posted-age="{posted_age_days if posted_age_days is not None else 9999}" data-salary-sort="{salary_value}" data-salary-fit="{safe_html(salary_fit_state)}" data-work-mode="{safe_html(work_mode.lower())}" data-work-type="{safe_html(display_work_type_label(record).lower())}" data-viewed="{1 if seen_by_you else 0}" data-liked="{1 if liked_record else 0}" data-new-to-you="{1 if new_to_you else 0}" data-reposted="{1 if record.get(RECORD_IS_REPOSTED_KEY) is True else 0}" data-record-kind="{record_kind}" data-fit-label="{safe_html(fit_label.lower())}" data-title-search="{safe_html((record.get("title") or "").lower())}" data-company-search="{safe_html(company_display.lower())}" data-source="{safe_html(source)}" data-posting-channel="{safe_html(channel_kind)}" data-apply-method="{safe_html(apply_method or "unknown")}">'
+        f'<article id="{safe_html(card_dom_id)}" class="{safe_html(card_classes)}" data-fit-score="{fit_points}" data-posted-age="{posted_age_days if posted_age_days is not None else 9999}" data-salary-sort="{salary_value}" data-salary-fit="{safe_html(salary_fit_state)}" data-work-mode="{safe_html(work_mode.lower())}" data-work-type="{safe_html(display_work_type_label(record).lower())}" data-viewed="{1 if seen_by_you else 0}" data-liked="{1 if liked_record else 0}" data-new-to-you="{1 if new_to_you else 0}" data-reposted="{1 if record.get(RECORD_IS_REPOSTED_KEY) is True else 0}" data-record-kind="{record_kind}" data-fit-label="{safe_html(fit_label.lower())}" data-title-search="{safe_html((record.get("title") or "").lower())}" data-company-search="{safe_html(company_display.lower())}" data-company="{safe_html(company_display)}" data-source="{safe_html(source)}" data-posting-channel="{safe_html(channel_kind)}" data-apply-method="{safe_html(apply_method or "unknown")}">'
         f"{badges_html}"
         '<div class="job-header-row">'
         '<div class="job-header-copy">'

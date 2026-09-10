@@ -44,6 +44,7 @@ from job_hunter_agent.auth import (
     OPEN_PATHS,
     access_gate_response,
     configure_auth,
+    read_activity_user,
     read_session_user,
     verify_csrf_token,
 )
@@ -69,7 +70,7 @@ _logger = logging.getLogger(__name__)
 _SERVER_SHUTDOWN_SIGNAL_RECORDED = False
 
 _CORS_METHODS = "GET, PUT, PATCH, POST, DELETE, OPTIONS"
-_CORS_HEADERS = "Content-Type"
+_CORS_HEADERS = "Content-Type, Authorization, Idempotency-Key, X-CSRF-Token"
 _TELEGRAM_POLLER: "_TelegramPollThread | None" = None
 _SCHEDULED_AGENT_LOOP: "_ScheduledAgentLoopThread | None" = None
 _SERVER_TELEGRAM_POLLER_ENV = "JOB_HUNTER_ENABLE_SERVER_TELEGRAM_POLLER"
@@ -483,7 +484,11 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def user_context_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
-        user = read_session_user(request)
+        user = (
+            read_activity_user(request)
+            if request.url.path.startswith("/api/activity")
+            else read_session_user(request)
+        )
         set_user_id(user["user_id"] if user else None)
         return await call_next(request)
 
@@ -511,7 +516,11 @@ def create_app() -> FastAPI:
         path = request.url.path
         if path in OPEN_PATHS or path == "/favicon.ico" or path.startswith("/static/"):
             return await call_next(request)
-        user = read_session_user(request)
+        user = (
+            read_activity_user(request)
+            if path.startswith("/api/activity")
+            else read_session_user(request)
+        )
         if user is None:
             if path.startswith("/api/"):
                 return JSONResponse(

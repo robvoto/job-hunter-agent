@@ -263,6 +263,47 @@ def read_session_user(request: HTTPConnection) -> dict | None:
     }
 
 
+def read_agent_token_user(request: HTTPConnection) -> dict | None:
+    """Resolve an external-agent bearer token without accepting a user id."""
+    authorization = str(request.headers.get("authorization") or "").strip()
+    scheme, separator, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not separator or not token.strip():
+        return None
+    from job_hunter_agent.agent_token_store import authenticate_agent_token
+    from job_hunter_agent.database import get_user_access_status
+
+    identity = authenticate_agent_token(token)
+    if identity is None:
+        return None
+    user_id = identity["user_id"]
+    access_status = get_user_access_status(user_id)
+    if access_status is None:
+        return None
+    return {
+        "user_id": user_id,
+        "email": "",
+        "role": "candidate",
+        "access_status": access_status,
+        "name": "",
+        "agent_id": identity["agent_id"],
+        "token_id": identity["token_id"],
+        "auth_method": "agent_token",
+    }
+
+
+def read_activity_user(request: HTTPConnection) -> dict | None:
+    """Resolve session users or activity-scoped bearer-token users."""
+    from job_hunter_agent.activity_ledger import AGENT_JOB_HUNTER
+
+    authorization = str(request.headers.get("authorization") or "").strip()
+    if authorization:
+        return read_agent_token_user(request)
+    session_user = read_session_user(request)
+    if session_user is not None:
+        return {**session_user, "agent_id": AGENT_JOB_HUNTER, "auth_method": "session"}
+    return read_agent_token_user(request)
+
+
 def is_authenticated(request: HTTPConnection) -> bool:
     return read_session_user(request) is not None
 
