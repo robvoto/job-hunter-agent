@@ -708,6 +708,14 @@ def build_review_data(
     audit_rows: list[dict], skill_observations: list[dict], profile: dict[str, Any]
 ) -> dict:
     kept_skill_observations = _kept_skill_observations_from_audit_rows(audit_rows, profile)
+    review_controls = profile.get("review_controls") or {}
+    liked_job_keys = sorted(
+        {
+            str(job_key).strip()
+            for job_key in review_controls.get("liked_job_keys", [])
+            if str(job_key).strip()
+        }
+    )
     kept_job_urls = sorted(
         {
             str(row.get("url") or "").strip()
@@ -718,6 +726,9 @@ def build_review_data(
     return {
         "suggested_tuning": build_suggested_tuning(audit_rows, kept_skill_observations, profile),
         "kept_job_urls": kept_job_urls,
+        # Keep explicit positive user feedback in the review-data contract so
+        # future learning flows can consume it without scraping UI state.
+        "liked_job_keys": liked_job_keys,
         "skill_observations": kept_skill_observations,
         "unknown_skills": build_unknown_skill_review(kept_skill_observations, profile),
         "rejections_by_reason": build_rejection_review(audit_rows),

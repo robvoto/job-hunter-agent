@@ -987,6 +987,7 @@ def clear_current_user_search_state(*, preserve_profile: bool = True) -> dict[st
         review_controls = profile.setdefault("review_controls", {})
         review_controls["applied_job_keys"] = []
         review_controls["hidden_job_keys"] = []
+        review_controls["liked_job_keys"] = []
         save_profile(profile)
 
     user_id = get_active_user_id()

@@ -153,6 +153,10 @@ RECORD_LAST_UNHIDDEN_AT_KEY = "last_unhidden_at"
 RECORD_FIRST_APPLIED_AT_KEY = "first_applied_at"
 RECORD_LAST_APPLIED_AT_KEY = "last_applied_at"
 RECORD_LAST_UNAPPLIED_AT_KEY = "last_unapplied_at"
+RECORD_IS_LIKED_KEY = "is_liked"
+RECORD_FIRST_LIKED_AT_KEY = "first_liked_at"
+RECORD_LAST_LIKED_AT_KEY = "last_liked_at"
+RECORD_LAST_UNLIKED_AT_KEY = "last_unliked_at"
 # First-party outcome tracking: the candidate clicked "Rejected" or "No answer"
 # on this job themselves, inside JobHunter. This is the real signal the
 # rejection-sheet email import was always meant to be replaced by.

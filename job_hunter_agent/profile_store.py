@@ -303,6 +303,7 @@ DEFAULT_PROFILE = {
     "review_controls": {
         "applied_job_keys": [],
         "hidden_job_keys": [],
+        "liked_job_keys": [],
     },
     KEY_ONBOARDING_COMPLETE: False,
     "salary_preferences": {

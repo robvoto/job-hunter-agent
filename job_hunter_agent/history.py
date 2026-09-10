@@ -24,12 +24,15 @@ from job_hunter_agent.record_schema import (
     RECORD_FIT_SCORE_BREAKDOWN_KEY,
     RECORD_FIT_SCORE_KEY,
     RECORD_FIT_TONE_CLASS_KEY,
+    RECORD_FIRST_LIKED_AT_KEY,
+    RECORD_IS_LIKED_KEY,
     RECORD_IS_REPOSTED_KEY,
     RECORD_JOB_KEY,
     RECORD_LLM_COST_USD_KEY,
     RECORD_LLM_ELAPSED_MS_KEY,
     RECORD_LLM_INPUT_TOKENS_KEY,
     RECORD_LLM_OUTPUT_TOKENS_KEY,
+    RECORD_LAST_LIKED_AT_KEY,
     RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY,
     RECORD_ORIGINAL_POSTED_DATE_KEY,
     RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY,
@@ -595,6 +598,12 @@ def update_job_history(history: Dict[str, dict], record: dict, run_iso: str) -> 
     record["first_viewed_at"] = entry.get("first_viewed_at")
 
     record["last_viewed_at"] = entry.get("last_viewed_at")
+
+    # Liked is a durable user decision, so carry its canonical history state
+    # onto every freshly reviewed record for the workspace renderer.
+    record[RECORD_IS_LIKED_KEY] = bool(entry.get(RECORD_IS_LIKED_KEY, False))
+    record[RECORD_FIRST_LIKED_AT_KEY] = entry.get(RECORD_FIRST_LIKED_AT_KEY)
+    record[RECORD_LAST_LIKED_AT_KEY] = entry.get(RECORD_LAST_LIKED_AT_KEY)
 
     if record.get("decision") == "KEEP":
         if not entry.get("first_kept_at"):

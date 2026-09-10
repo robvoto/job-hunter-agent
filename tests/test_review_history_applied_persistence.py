@@ -5,7 +5,14 @@ import pytest
 from job_hunter_agent import review_history_service
 from job_hunter_agent.io_utils import load_job_history
 from job_hunter_agent.profile_store import load_profile
-from job_hunter_agent.record_schema import RECORD_FIRST_APPLIED_AT_KEY, RECORD_LAST_APPLIED_AT_KEY
+from job_hunter_agent.record_schema import (
+    RECORD_FIRST_APPLIED_AT_KEY,
+    RECORD_FIRST_LIKED_AT_KEY,
+    RECORD_IS_LIKED_KEY,
+    RECORD_LAST_APPLIED_AT_KEY,
+    RECORD_LAST_LIKED_AT_KEY,
+)
+from job_hunter_agent.user_context import set_user_id
 
 JOB_KEY = "seek:test-applied-job-1"
 
@@ -44,6 +51,64 @@ def test_append_review_key_applied_persists_profile_and_history(monkeypatch: pyt
     assert entry[RECORD_LAST_APPLIED_AT_KEY]
     assert entry["title"] == "Senior Backend Engineer"
     assert entry["company"] == "Acme Corp"
+
+
+def test_like_state_persists_and_can_be_reversed(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        review_history_service,
+        "rebuild_workspace_after_rule_change",
+        lambda reason="", **kwargs: None,
+    )
+
+    key = "seek:test-liked-job-1"
+    review_history_service.append_review_key(
+        "liked",
+        key,
+        url="https://example.test/jobs/test-liked-job-1",
+        title="Business Analyst",
+        company="Acme Corp",
+    )
+
+    profile = load_profile()
+    assert key in profile["review_controls"]["liked_job_keys"]
+    entry = load_job_history()[key]
+    assert entry[RECORD_IS_LIKED_KEY] is True
+    assert entry[RECORD_FIRST_LIKED_AT_KEY]
+    assert entry[RECORD_LAST_LIKED_AT_KEY]
+
+    review_history_service.remove_review_key("unlike", key)
+
+    profile = load_profile()
+    assert key not in profile["review_controls"]["liked_job_keys"]
+    assert load_job_history()[key][RECORD_IS_LIKED_KEY] is False
+
+
+def test_like_state_is_scoped_to_active_user(isolated_db, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        review_history_service,
+        "rebuild_workspace_after_rule_change",
+        lambda reason="", **kwargs: None,
+    )
+
+    key = "seek:test-user-scoped-liked-job-1"
+    set_user_id("user-one")
+    review_history_service.append_review_key(
+        "liked",
+        key,
+        url="https://example.test/jobs/test-user-scoped-liked-job-1",
+        title="User Scoped Engineer",
+    )
+
+    assert key in load_profile()["review_controls"]["liked_job_keys"]
+    assert load_job_history()[key][RECORD_IS_LIKED_KEY] is True
+
+    set_user_id("user-two")
+    assert key not in load_profile()["review_controls"]["liked_job_keys"]
+    assert key not in load_job_history()
+
+    set_user_id("user-one")
+    assert key in load_profile()["review_controls"]["liked_job_keys"]
+    assert load_job_history()[key][RECORD_IS_LIKED_KEY] is True
 
 
 def test_review_action_refreshes_workspace_in_background(monkeypatch: pytest.MonkeyPatch):

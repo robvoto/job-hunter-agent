@@ -84,6 +84,7 @@ from job_hunter_agent.record_schema import (
     RECORD_DECISION_KEY,
     RECORD_DUPLICATE_LINKS_KEY,
     RECORD_EMPLOYER_OUTCOME_KEY,
+    RECORD_IS_LIKED_KEY,
     RECORD_IS_REPOSTED_KEY,
     RECORD_LLM_COST_USD_KEY,
     RECORD_LLM_DECISION_KEY,
@@ -91,6 +92,7 @@ from job_hunter_agent.record_schema import (
     RECORD_LLM_FIT_GRADE_KEY,
     RECORD_LLM_INPUT_TOKENS_KEY,
     RECORD_LLM_OUTPUT_TOKENS_KEY,
+    RECORD_LAST_LIKED_AT_KEY,
     RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY,
     RECORD_POTENTIAL_DUPLICATE_LINKS_KEY,
     RECORD_REJECT_REASON_KEY,
@@ -1265,6 +1267,7 @@ def render_job_card(
     applied_record = bool(record.get("applied"))
     archived = bool(record.get("archived"))
     hidden_record = bool(record.get("hidden"))
+    liked_record = bool(record.get(RECORD_IS_LIKED_KEY))
     seen_by_you = viewed_by_user(record)
     new_to_you = is_new_to_you(record, new_to_you_cutoff)
     teaser_text = _clean_job_card_text(record.get("teaser") or "")
@@ -1442,6 +1445,14 @@ def render_job_card(
                 _workspace_label("workspace_card_labels", "new_to_you_badge"),
                 "badge-new",
                 _workspace_label("workspace_card_labels", "new_to_you_badge_tooltip"),
+            )
+        )
+    if liked_record:
+        badges.append(
+            render_badge(
+                _workspace_label("workspace_card_labels", "liked_badge"),
+                "badge-source-neutral",
+                _workspace_label("workspace_card_labels", "liked_badge_tooltip"),
             )
         )
     apply_method = str(record.get(RECORD_APPLY_METHOD_KEY) or "").strip()
@@ -1755,6 +1766,11 @@ def render_job_card(
         context_bits.append(
             f"{_workspace_label('workspace_card_labels', 'applied_badge')} "
             f"{format_timestamp_label(record.get('last_applied_at'))}"
+        )
+    if liked_record and record.get(RECORD_LAST_LIKED_AT_KEY):
+        context_bits.append(
+            f"{_workspace_label('workspace_card_labels', 'liked_badge')} "
+            f"{format_timestamp_label(record.get(RECORD_LAST_LIKED_AT_KEY))}"
         )
     if hidden_record and record.get("last_hidden_at"):
         context_bits.append(
@@ -2680,8 +2696,15 @@ def render_job_card(
             "</div>"
         )
     elif not applied_record:
+        like_action = "unlike" if liked_record else "liked"
+        like_label_key = "action_unlike_label" if liked_record else "action_like_label"
+        like_tooltip_key = "action_unlike_tooltip" if liked_record else "action_like_tooltip"
+        like_variant = "jh-button--secondary" if liked_record else "jh-button--neutral"
         actions_html = (
             '<div class="job-actions">'
+            f'<button class="review-button review-like jh-button {like_variant} jh-button--compact{" review-button--selected" if liked_record else ""}" type="button" data-review-action="{like_action}" {button_data_attrs} '
+            f'title="{safe_html(_workspace_label("workspace_card_labels", like_tooltip_key))}">'
+            f'{safe_html(_workspace_label("workspace_card_labels", like_label_key))}</button>'
             f'<button class="review-button review-applied jh-button jh-button--primary jh-button--compact" type="button" data-review-action="applied" {button_data_attrs}>'
             f'{safe_html(_workspace_label("workspace_card_labels", "applied_badge"))}</button>'
             f'<button class="review-button review-not-for-me jh-button jh-button--danger jh-button--compact" type="button" data-review-action="not_for_me" {button_data_attrs} '
@@ -2704,7 +2727,7 @@ def render_job_card(
     badges_html = f'<div class="job-badges">{"".join(badges)}</div>' if badges else ""
 
     return (
-        f'<article id="{safe_html(card_dom_id)}" class="{safe_html(card_classes)}" data-fit-score="{fit_points}" data-posted-age="{posted_age_days if posted_age_days is not None else 9999}" data-salary-sort="{salary_value}" data-salary-fit="{safe_html(salary_fit_state)}" data-work-mode="{safe_html(work_mode.lower())}" data-work-type="{safe_html(display_work_type_label(record).lower())}" data-viewed="{1 if seen_by_you else 0}" data-new-to-you="{1 if new_to_you else 0}" data-reposted="{1 if record.get(RECORD_IS_REPOSTED_KEY) is True else 0}" data-record-kind="{record_kind}" data-fit-label="{safe_html(fit_label.lower())}" data-title-search="{safe_html((record.get("title") or "").lower())}" data-company-search="{safe_html(company_display.lower())}" data-source="{safe_html(source)}" data-posting-channel="{safe_html(channel_kind)}" data-apply-method="{safe_html(apply_method or "unknown")}">'
+        f'<article id="{safe_html(card_dom_id)}" class="{safe_html(card_classes)}" data-fit-score="{fit_points}" data-posted-age="{posted_age_days if posted_age_days is not None else 9999}" data-salary-sort="{salary_value}" data-salary-fit="{safe_html(salary_fit_state)}" data-work-mode="{safe_html(work_mode.lower())}" data-work-type="{safe_html(display_work_type_label(record).lower())}" data-viewed="{1 if seen_by_you else 0}" data-liked="{1 if liked_record else 0}" data-new-to-you="{1 if new_to_you else 0}" data-reposted="{1 if record.get(RECORD_IS_REPOSTED_KEY) is True else 0}" data-record-kind="{record_kind}" data-fit-label="{safe_html(fit_label.lower())}" data-title-search="{safe_html((record.get("title") or "").lower())}" data-company-search="{safe_html(company_display.lower())}" data-source="{safe_html(source)}" data-posting-channel="{safe_html(channel_kind)}" data-apply-method="{safe_html(apply_method or "unknown")}">'
         f"{badges_html}"
         '<div class="job-header-row">'
         '<div class="job-header-copy">'

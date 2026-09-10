@@ -239,6 +239,8 @@ Each job card in the workspace can expand into up to four separate panels, so fi
 - **Requirements** — the extracted requirement list with per-item status (in profile, partial match, not in profile). The small grey subtitle under each row shows the matched capability and/or quoted ad text, while debug mode adds richer technical detail.
 - **Debug: LLM fit review** (debug mode only) — LLM decision/grade/cost, filter status, raw score breakdown, matched text, capability mapping, and reviewed-signal evidence for troubleshooting why a card was scored or filtered as it was. Hidden entirely outside debug mode.
 
+Use **Like** on a role that is worth keeping in mind. Likes are stored per user with the job's review history, remain visible as a badge on later workspace renders, and can be undone with **Unlike**. They are positive review feedback for future learning; they do not mark a role as applied or hide it from future searches.
+
 The workspace summary counts at the top of a run are operational totals for the scrape, not proof that every listed role is a strong fit.
 
 When Job Hunter explains why a role fits, the primary user-facing evidence is requirement coverage. Convenience or context signals such as location, freshness, Easy Apply / Quick Apply, viewed status, salary, and action recommendations can still appear in the UI, but they are not core fit evidence.

@@ -185,6 +185,7 @@ def test_api_clean_search_clears_search_state_and_review_buckets(monkeypatch, is
         assert profile_data["review_controls"] == {
             "applied_job_keys": [],
             "hidden_job_keys": [],
+            "liked_job_keys": [],
         }
         assert conn.execute(
             "SELECT COUNT(*) FROM user_settings WHERE user_id = ?",
