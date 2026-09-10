@@ -189,3 +189,65 @@ Decision:
 Limit:
 - ONET exact title lookup is useful but brittle for messy job-board titles and modern/composite titles.
 - ONET is an occupation-family sanity check, not the final fit decision.
+
+## Shared Job Market Map source research — 2026-09-10
+
+Purpose of this section: retain source-specific feasibility, access, and coverage evidence relevant to Job Hunter. The shared market-catalogue architecture itself now belongs to the separate Job Market Map project (`/home/robvoto/projects/job-market-map`) and must not be duplicated here. Job Hunter should consume that service through its supported API once the integration contract is implemented.
+
+### APSJobs
+
+Source:
+- https://www.apsjobs.gov.au/s/job-search
+
+Useful source facts:
+- Official APS search surface with filters including keyword, salary, APS classification, category, department/agency, employment status, state/location, office arrangement, opportunity type, and closing date.
+- Promising for systematic public-sector market discovery.
+
+Current boundary:
+- Do not claim APSJobs market coverage complete until the Job Market Map APS parser, pagination/exhaustion rules, and measured coverage are implemented.
+
+### SEEK
+
+Sources:
+- https://www.seek.com.au/content/terms/new-advertising-terms-jobsdb-th.pdf
+- https://developer.seek.com/
+- https://developer.seek.com/introduction
+
+Constraints:
+- SEEK's published terms restrict automated data gathering/screen scraping without prior written approval.
+- SEEK Developer API access requires approval and the documented API must not be assumed to provide a public Australia-wide candidate-job firehose.
+- Technical collection feasibility is therefore separate from a durable authorised production-source strategy.
+
+Live pagination evidence from 2026-09-10:
+- A signed-in Australia-wide SEEK `daterange=1` search showed roughly 8,000 results at the time of the probe.
+- Result pages exposed 32 cards each.
+- Pages through 17 returned cards; page 18 returned no matching results.
+- A single broad query therefore exposed only roughly 544 pageable cards despite the much larger reported count.
+
+Coverage consequence:
+- Never infer completeness because a broad SEEK query reaches an empty next page.
+- Whole-market SEEK collection must use bounded partitions, compare source-reported counts with collected unique IDs, subdivide oversized/incomplete partitions, and fail closed when coverage cannot be proven.
+- SQLite scale is not the immediate blocker; collection completeness is.
+
+### LinkedIn
+
+Sources:
+- https://www.linkedin.com/legal/user-agreement
+- https://www.linkedin.com/legal/crawling-terms
+- https://www.linkedin.com/help/linkedin/answer/a1340567
+
+Constraints:
+- LinkedIn prohibits unauthorised scraping/crawling/automation under its published terms and warns that automation can lead to account restrictions.
+- Existing bounded Job Hunter/Job Market Map discovery must not be treated as proof that unrestricted market-wide LinkedIn enumeration is safe, authorised, or complete.
+- LinkedIn should therefore remain explicitly measured/partial unless an authorised broader access route is established.
+
+### Ownership note
+
+This file records **source evidence only**. It does not define the shared data architecture.
+
+Current architecture discussion is intentionally separate:
+- Job Market Map: neutral market facts and collection evidence.
+- JH-305: canonical per-user activity/events shared across authorised agents.
+- Job Hunter: user-specific analysis/decision data.
+
+The exact Job Market Map <-> Job Hunter market-data/JD integration is still under design and must not be inferred from this source register.
