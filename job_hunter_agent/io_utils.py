@@ -21,14 +21,18 @@ from job_hunter_agent.record_schema import (
     RECORD_DETAILS_TEXT_KEY,
     RECORD_FIRST_APPLIED_AT_KEY,
     RECORD_FIRST_HIDDEN_AT_KEY,
+    RECORD_FIRST_LIKED_AT_KEY,
     RECORD_FIT_SOURCE_TEXT_KEY,
     RECORD_FULL_DESCRIPTION_KEY,
     RECORD_IS_HIDDEN_KEY,
+    RECORD_IS_LIKED_KEY,
     RECORD_JOB_KEY,
     RECORD_LAST_APPLIED_AT_KEY,
     RECORD_LAST_HIDDEN_AT_KEY,
+    RECORD_LAST_LIKED_AT_KEY,
     RECORD_LAST_KEPT_SNAPSHOT_KEY,
     RECORD_LAST_UNAPPLIED_AT_KEY,
+    RECORD_LAST_UNLIKED_AT_KEY,
     RECORD_LAST_UNHIDDEN_AT_KEY,
     RECORD_LOCATION_KEY,
     RECORD_REVIEW_EVENTS_KEY,
@@ -343,6 +347,21 @@ def _active_applied_at(entry: dict) -> datetime | None:
     return applied_at
 
 
+def _active_liked_at(entry: dict) -> datetime | None:
+    """Return the timestamp of an explicit like that was not undone."""
+    if entry.get(RECORD_IS_LIKED_KEY) is not True:
+        return None
+    liked_at = _parse_timestamp(entry.get(RECORD_LAST_LIKED_AT_KEY)) or _parse_timestamp(
+        entry.get(RECORD_FIRST_LIKED_AT_KEY)
+    )
+    if liked_at is None:
+        return None
+    unliked_at = _parse_timestamp(entry.get(RECORD_LAST_UNLIKED_AT_KEY))
+    if unliked_at is not None and unliked_at >= liked_at:
+        return None
+    return liked_at
+
+
 def _active_hidden_at(entry: dict) -> datetime | None:
     """Return the active hidden timestamp, or None after an explicit unhide."""
     hidden_at = _parse_timestamp(entry.get(RECORD_LAST_HIDDEN_AT_KEY)) or _parse_timestamp(
@@ -595,6 +614,7 @@ def _prune_job_history_entries(
     )
     ordinary_items: list[tuple[str, dict]] = []
     protected_applied_items: list[tuple[str, dict]] = []
+    protected_liked_items: list[tuple[str, dict]] = []
     removed_keys: set[str] = set()
 
     for job_key, entry in history.items():
@@ -605,9 +625,15 @@ def _prune_job_history_entries(
         applied_at = _active_applied_at(entry)
         if applied_at is not None:
             if applied_cutoff is not None and applied_at < applied_cutoff:
-                removed_keys.add(str(job_key))
+                if _active_liked_at(entry) is None:
+                    removed_keys.add(str(job_key))
+                    continue
+            else:
+                protected_applied_items.append((str(job_key), entry))
                 continue
-            protected_applied_items.append((str(job_key), entry))
+
+        if _active_liked_at(entry) is not None:
+            protected_liked_items.append((str(job_key), entry))
             continue
 
         latest_seen = _parse_timestamp(entry.get("last_seen_at")) or _parse_timestamp(
@@ -633,7 +659,10 @@ def _prune_job_history_entries(
     protected_applied_items.sort(
         key=lambda item: _job_history_sort_key(item[0], item[1]), reverse=True
     )
-    return dict([*protected_applied_items, *ordinary_items]), removed_keys
+    protected_liked_items.sort(
+        key=lambda item: _job_history_sort_key(item[0], item[1]), reverse=True
+    )
+    return dict([*protected_applied_items, *protected_liked_items, *ordinary_items]), removed_keys
 
 
 def _slugify_debug_component(value: str) -> str:

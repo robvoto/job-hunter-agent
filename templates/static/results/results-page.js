@@ -486,6 +486,27 @@
         + '</div>';
     }
 
+    function potentialActionsHtml(labels, liked = false) {
+      const likeAction = liked ? 'unlike' : 'liked';
+      const likeLabel = liked ? labels.actionUnlikeLabel : labels.actionLikeLabel;
+      const likeTooltip = liked ? labels.actionUnlikeTooltip : labels.actionLikeTooltip;
+      const likeVariant = liked ? 'jh-button--secondary' : 'jh-button--neutral';
+      const selected = liked ? ' review-button--selected' : '';
+      return '<div class="job-actions">'
+        + `<button class="review-button review-like jh-button ${likeVariant} jh-button--compact${selected}" type="button" data-review-action="${likeAction}" title="${_rejEscapeHtml(likeTooltip)}">`
+        + `${_rejEscapeHtml(likeLabel)}</button>`
+        + '<button class="review-button review-applied jh-button jh-button--primary jh-button--compact" type="button" data-review-action="applied">'
+        + `${_rejEscapeHtml(labels.appliedBadgeLabel)}</button>`
+        + '<button class="review-button review-not-for-me jh-button jh-button--danger jh-button--compact" type="button" data-review-action="not_for_me" '
+        + `title="${_rejEscapeHtml(labels.actionNotForMeTooltip)}">`
+        + `${_rejEscapeHtml(labels.actionNotForMeLabel)}</button>`
+        + '<button class="review-button review-hide jh-button jh-button--secondary jh-button--compact" type="button" data-review-action="hidden" '
+        + `title="${_rejEscapeHtml(labels.actionHideTooltip)}">`
+        + `${_rejEscapeHtml(labels.actionHideLabel)}</button>`
+        + '<span class="review-status" aria-live="polite"></span>'
+        + '</div>';
+    }
+
     function reviewActionsHtmlFor(action) {
       const labels = (window.__JOB_HUNTER_WORKSPACE__ && window.__JOB_HUNTER_WORKSPACE__.labels) || {};
       if (action === 'applied' || action === 'unreject' || action === 'un_no_response') {
@@ -512,21 +533,14 @@
           + '<span class="review-status" aria-live="polite"></span>'
           + '</div>';
       }
+      if (action === 'liked' || action === 'unlike') {
+        return potentialActionsHtml(labels, action === 'liked');
+      }
       // unapply / unhide land back in "potential", which needs the full
       // applied / not-for-me / hide action set restored - must mirror the
       // button set workspace_renderer.py renders server-side, or a card that
       // returns to "potential" loses buttons.
-      return '<div class="job-actions">'
-        + '<button class="review-button review-applied jh-button jh-button--primary jh-button--compact" type="button" data-review-action="applied">'
-        + `${_rejEscapeHtml(labels.appliedBadgeLabel)}</button>`
-        + '<button class="review-button review-not-for-me jh-button jh-button--danger jh-button--compact" type="button" data-review-action="not_for_me" '
-        + `title="${_rejEscapeHtml(labels.actionNotForMeTooltip)}">`
-        + `${_rejEscapeHtml(labels.actionNotForMeLabel)}</button>`
-        + '<button class="review-button review-hide jh-button jh-button--secondary jh-button--compact" type="button" data-review-action="hidden" '
-        + `title="${_rejEscapeHtml(labels.actionHideTooltip)}">`
-        + `${_rejEscapeHtml(labels.actionHideLabel)}</button>`
-        + '<span class="review-status" aria-live="polite"></span>'
-        + '</div>';
+      return potentialActionsHtml(labels);
     }
 
     function moveCardAfterReview(card, action) {
@@ -891,6 +905,7 @@
     }
 
     function reviewSavingMessage(action) {
+      const labels = (window.__JOB_HUNTER_WORKSPACE__ && window.__JOB_HUNTER_WORKSPACE__.labels) || {};
       if (action === 'applied') return 'Saving as applied...';
       if (action === 'unapply') return 'Removing from applied jobs...';
       if (action === 'hidden') return 'Hiding this job...';
@@ -900,11 +915,14 @@
       if (action === 'rejected') return 'Recording rejection...';
       if (action === 'no_response') return 'Recording no answer...';
       if (action === 'not_for_me') return 'Saving Not For Me feedback...';
+      if (action === 'liked') return labels.actionLikeSavingMessage;
+      if (action === 'unlike') return labels.actionUnlikeSavingMessage;
       if (action === 'block_similar') return 'Saving title block...';
       return 'Saving review action...';
     }
 
     function reviewSuccessMessage(action, payload) {
+      const labels = (window.__JOB_HUNTER_WORKSPACE__ && window.__JOB_HUNTER_WORKSPACE__.labels) || {};
       if (payload?.message) {
         return payload.message;
       }
@@ -917,6 +935,8 @@
       if (action === 'rejected') return 'Recorded as rejected. This counts toward your real employer history now.';
       if (action === 'no_response') return 'Recorded as no answer. This counts toward your real employer history now.';
       if (action === 'not_for_me') return 'Saved as Not For Me. We will learn from this without blocking similar titles yet.';
+      if (action === 'liked') return labels.actionLikeSuccessMessage;
+      if (action === 'unlike') return labels.actionUnlikeSuccessMessage;
       if (action === 'block_similar') return 'Saved. Similar jobs will be blocked by title in future runs.';
       return 'Review action saved.';
     }
@@ -997,6 +1017,10 @@
           return;
         }
         if (['rejected', 'no_response', 'unreject', 'un_no_response'].includes(action)) {
+          swapReviewButtonsInPlace(card, action);
+          return;
+        }
+        if (['liked', 'unlike'].includes(action)) {
           swapReviewButtonsInPlace(card, action);
           return;
         }

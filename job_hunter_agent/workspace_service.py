@@ -759,6 +759,14 @@ def render_html(
         "actionNotForMeTooltip": _card_label("action_not_for_me_tooltip"),
         "actionHideLabel": _card_label("action_hide_label"),
         "actionHideTooltip": _card_label("action_hide_tooltip"),
+        "actionLikeLabel": _card_label("action_like_label"),
+        "actionLikeTooltip": _card_label("action_like_tooltip"),
+        "actionUnlikeLabel": _card_label("action_unlike_label"),
+        "actionUnlikeTooltip": _card_label("action_unlike_tooltip"),
+        "actionLikeSavingMessage": _card_label("action_like_saving_message"),
+        "actionUnlikeSavingMessage": _card_label("action_unlike_saving_message"),
+        "actionLikeSuccessMessage": _card_label("action_like_success_message"),
+        "actionUnlikeSuccessMessage": _card_label("action_unlike_success_message"),
     }
 
     top_reject_reasons_html = "".join(

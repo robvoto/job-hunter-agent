@@ -44,6 +44,7 @@ from job_hunter_agent.record_schema import (
     RECORD_FIT_SOURCE_TEXT_KEY,
     RECORD_FIT_TONE_CLASS_KEY,
     RECORD_FULL_DESCRIPTION_KEY,
+    RECORD_IS_LIKED_KEY,
     RECORD_IS_REPOSTED_KEY,
     RECORD_LLM_DECISION_KEY,
     RECORD_LLM_FIT_GRADE_KEY,
@@ -337,6 +338,28 @@ def test_render_job_card_does_not_create_needs_confirmation_from_raw_job_require
 
     assert "Needs confirmation" not in html
     assert "job-action-rec" not in html
+
+
+def test_render_job_card_exposes_like_state_and_reversible_action():
+    base = {
+        "job_key": "seek:liked-render-test",
+        "title": "Business Analyst",
+        "company": "Example Co",
+        "url": "https://example.test/jobs/liked-render-test",
+        "source": "seek",
+        "requirement_coverage": [],
+    }
+    unliked_html = workspace_renderer.render_job_card(base, _test_profile())
+    assert 'data-review-action="liked"' in unliked_html
+    assert "Like" in unliked_html
+
+    liked_html = workspace_renderer.render_job_card(
+        {**base, RECORD_IS_LIKED_KEY: True, "last_liked_at": "2026-09-10T09:00:00+10:00"},
+        _test_profile(),
+    )
+    assert 'data-liked="1"' in liked_html
+    assert 'data-review-action="unlike"' in liked_html
+    assert "Liked" in liked_html
 
 
 def test_render_job_card_keeps_unknown_required_requirement_visible_once():

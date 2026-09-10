@@ -80,3 +80,30 @@ def test_housekeeping_keeps_hidden_suppression_after_card_retention_and_prunes_p
         "seek:hidden-recent",
         "seek:potential-recent",
     }
+
+
+def test_job_history_pruning_protects_an_active_like():
+    from job_hunter_agent import io_utils
+
+    now = datetime.now(timezone.utc)
+    old = (now - timedelta(days=400)).isoformat(timespec="seconds")
+    history = {
+        "seek:liked": {
+            "last_seen_at": old,
+            "is_liked": True,
+            "first_liked_at": old,
+            "last_liked_at": old,
+        },
+        "seek:ordinary": {"last_seen_at": old},
+    }
+
+    retained, removed = io_utils._prune_job_history_entries(
+        history,
+        max_entries=1,
+        max_age_days=365,
+        applied_retention_days=0,
+        now=now,
+    )
+
+    assert set(retained) == {"seek:liked"}
+    assert removed == {"seek:ordinary"}

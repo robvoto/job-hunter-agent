@@ -29,6 +29,7 @@ from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
     RECORD_FIRST_APPLIED_AT_KEY,
     RECORD_FIRST_HIDDEN_AT_KEY,
+    RECORD_FIRST_LIKED_AT_KEY,
     RECORD_FIRST_NO_RESPONSE_AT_KEY,
     RECORD_FIRST_REJECTED_AT_KEY,
     RECORD_FIRST_SEEN_AT_KEY,
@@ -36,6 +37,7 @@ from job_hunter_agent.record_schema import (
     RECORD_FIT_SOURCE_TEXT_KEY,
     RECORD_FULL_DESCRIPTION_KEY,
     RECORD_IS_HIDDEN_KEY,
+    RECORD_IS_LIKED_KEY,
     RECORD_JOB_KEY,
     RECORD_LAST_APPLIED_AT_KEY,
     RECORD_LAST_NO_RESPONSE_AT_KEY,
@@ -44,10 +46,12 @@ from job_hunter_agent.record_schema import (
     RECORD_LAST_UN_NO_RESPONSE_AT_KEY,
     RECORD_LAST_BLOCK_TITLE_AT_KEY,
     RECORD_LAST_HIDDEN_AT_KEY,
+    RECORD_LAST_LIKED_AT_KEY,
     RECORD_LAST_KEPT_SNAPSHOT_KEY,
     RECORD_LAST_NOT_FOR_ME_AT_KEY,
     RECORD_LAST_SEEN_AT_KEY,
     RECORD_LAST_UNAPPLIED_AT_KEY,
+    RECORD_LAST_UNLIKED_AT_KEY,
     RECORD_LAST_UNHIDDEN_AT_KEY,
     RECORD_LAST_VIEWED_AT_KEY,
     RECORD_REVIEW_EVENTS_KEY,
@@ -209,6 +213,14 @@ def persist_review_event(
     elif action == "unhide":
         entry[RECORD_IS_HIDDEN_KEY] = False
         entry[RECORD_LAST_UNHIDDEN_AT_KEY] = now_iso
+    elif action == "liked":
+        entry[RECORD_IS_LIKED_KEY] = True
+        if not entry.get(RECORD_FIRST_LIKED_AT_KEY):
+            entry[RECORD_FIRST_LIKED_AT_KEY] = now_iso
+        entry[RECORD_LAST_LIKED_AT_KEY] = now_iso
+    elif action == "unlike":
+        entry[RECORD_IS_LIKED_KEY] = False
+        entry[RECORD_LAST_UNLIKED_AT_KEY] = now_iso
     elif action == "applied":
         if not entry.get(RECORD_FIRST_APPLIED_AT_KEY):
             entry[RECORD_FIRST_APPLIED_AT_KEY] = now_iso
@@ -321,6 +333,7 @@ def append_review_key(
     list_name = {
         "applied": "applied_job_keys",
         "hidden": "hidden_job_keys",
+        "liked": "liked_job_keys",
         "rejected": "rejected_job_keys",
         "no_response": "no_response_job_keys",
     }.get(action)
@@ -378,6 +391,7 @@ def remove_review_key(
     list_name = {
         "unapply": "applied_job_keys",
         "unhide": "hidden_job_keys",
+        "unlike": "liked_job_keys",
         "unreject": "rejected_job_keys",
         "un_no_response": "no_response_job_keys",
     }.get(action)
