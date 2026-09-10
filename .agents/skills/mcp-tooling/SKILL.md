@@ -7,6 +7,16 @@ description: Use for repository/filesystem access, connected Google/browser/Gmai
 
 Use for project filesystem/tool access and whenever MCP execution is unreliable.
 
+## Multi-agent Human MCP rule
+- Many ChatGPT chats, Claude agents and MCP processes are expected and supported. Do not diagnose their mere presence as a conflict.
+- There is one shared Rob-Chrome browser broker: the canonical Human MCP server owns `127.0.0.1:8001` and `127.0.0.1:8766`; secondary MCP processes proxy browser calls and must not bind `8766`.
+- Do **not** routinely run `python E:\Programming\MCP-server\mcp_fileserver.py` manually. Use `E:\Programming\MCP-server\scripts\ensure-human-mcp.ps1`. It is idempotent and will reuse the already-running canonical server.
+- WinError 10048 on `127.0.0.1:8766` after a manual start means a duplicate canonical launch was attempted or port ownership is inconsistent; it does not mean MCP is missing. Do not kill arbitrary agents or create another browser profile.
+- For browser trouble, run `E:\Programming\MCP-server\scripts\check-browser-broker-health.ps1` and follow `E:\Programming\MCP-server\.agents\skills\browser-session-recovery\SKILL.md`.
+- Signed-in browser workflows reuse Rob's existing Chrome and each workflow owns its own tab. Server-side MCP session isolation protects cached/older schemas; explicit `page_id` targeting is preferred when the tool schema exposes it.
+- WSL processes must not assume Windows `127.0.0.1` services are reachable as WSL `127.0.0.1`. If a Windows-local Human MCP/browser broker is intentionally loopback-only, do **not** rebind it to `0.0.0.0`, open firewall ports, or start another broker just to reach it from WSL. Use the approved secure connector or a project-owned Windows-interoperability adapter that keeps the broker loopback-only.
+- Job-market collection is now separated from Job Hunter policy in `/home/robvoto/projects/job-market-map`. When Job Hunter consumes that shared market feed, prefer the Job Market Map local API contract over direct writes to its SQLite database. Job Hunter remains responsible for its own fit/scoring/application policy; the market map remains neutral.
+
 ## Source of truth
 - Job Hunter WSL repo: `/home/robvoto/projects/job-hunter-agent`.
 - In a connector-based ChatGPT runtime, use `HUMAN_MCP_SECURE` as the canonical Job Hunter repo/filesystem connector. Do not use `Human_MCP_Server` or `Local_Project_Files_Access` for Job Hunter repo access; both are obsolete for this project and may resolve to stale or unintended transport. If `HUMAN_MCP_SECURE` is not exposed or fails after one bounded corrective retry, report that specific secure-MCP registration/runtime failure and stop. Do not silently switch connectors. The only approved fallback is `Human_MCP_SERVER_NGROK_UNSAFE`, and it may be used only after the human explicitly authorises that fallback in the current conversation.
