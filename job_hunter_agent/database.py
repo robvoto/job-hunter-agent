@@ -170,10 +170,9 @@ CREATE TABLE IF NOT EXISTS candidate_application_history (
 );
 CREATE INDEX IF NOT EXISTS idx_app_history_user ON candidate_application_history(user_id);
 
--- Application outcome events (facts, append-only). One row per observed outcome
--- for a job the candidate actually applied to. `evidence_ref` points back at the
--- source record (email message id / sheet row / board activity row) so any
--- derived rollup can be audited or rebuilt. Owner: employer_outcome_store.py.
+-- Pre-JH-305 application events. This table is retained as inert legacy
+-- evidence only; the runtime never reads or writes it. Unkeyed historical rows
+-- are not migrated into the canonical activity ledger.
 CREATE TABLE IF NOT EXISTS candidate_application_events (
     user_id      TEXT NOT NULL REFERENCES users(user_id),
     event_id     TEXT NOT NULL,
@@ -194,7 +193,58 @@ CREATE INDEX IF NOT EXISTS idx_app_events_user_employer
 CREATE INDEX IF NOT EXISTS idx_app_events_user_date
     ON candidate_application_events(user_id, event_date DESC);
 
--- Derived per-employer rollup of candidate_application_events. This is a cache:
+-- Canonical per-user activity ledger. Every personal event has the current
+-- source:id job identity, managed agent identity, event time and an explicit
+-- idempotency key. Reversals are new rows; projections are disposable views.
+CREATE TABLE IF NOT EXISTS job_activity_events (
+    user_id        TEXT NOT NULL REFERENCES users(user_id),
+    event_id       TEXT NOT NULL,
+    job_key        TEXT NOT NULL,
+    activity_type  TEXT NOT NULL,
+    agent_id       TEXT NOT NULL,
+    occurred_at    TEXT NOT NULL,
+    source         TEXT NOT NULL,
+    evidence_ref   TEXT NOT NULL DEFAULT '',
+    idempotency_key TEXT NOT NULL,
+    metadata       TEXT NOT NULL DEFAULT '{}',
+    employer_key   TEXT NOT NULL DEFAULT '',
+    employer_raw   TEXT NOT NULL DEFAULT '',
+    role_title     TEXT NOT NULL DEFAULT '',
+    created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, event_id),
+    UNIQUE (user_id, idempotency_key)
+);
+CREATE INDEX IF NOT EXISTS idx_job_activity_user_job_time
+    ON job_activity_events(user_id, job_key, occurred_at, event_id);
+CREATE INDEX IF NOT EXISTS idx_job_activity_user_agent_job
+    ON job_activity_events(user_id, agent_id, job_key, occurred_at);
+CREATE INDEX IF NOT EXISTS idx_job_activity_user_employer_time
+    ON job_activity_events(user_id, employer_key, occurred_at);
+
+-- Per-user managed bearer tokens for external agents. Only token hashes are
+-- stored; plaintext is returned once at creation and cannot be recovered.
+CREATE TABLE IF NOT EXISTS agent_tokens (
+    token_id    TEXT PRIMARY KEY,
+    user_id     TEXT NOT NULL REFERENCES users(user_id),
+    agent_id    TEXT NOT NULL,
+    token_hash  TEXT NOT NULL UNIQUE,
+    label       TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL,
+    expires_at  TEXT,
+    revoked_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_agent_tokens_user
+    ON agent_tokens(user_id, created_at DESC);
+
+-- Durable per-token write window so external agents cannot create an unbounded
+-- stream of activity events across multiple AWS worker processes.
+CREATE TABLE IF NOT EXISTS agent_token_rate_windows (
+    token_id          TEXT PRIMARY KEY REFERENCES agent_tokens(token_id),
+    window_started_at TEXT NOT NULL,
+    request_count     INTEGER NOT NULL DEFAULT 0
+);
+
+-- Derived per-employer rollup of the canonical job_activity_events ledger. This is a cache:
 -- it is safe to drop and rebuild from the events table at any time, and it is
 -- never hand-edited. It stores counts and dates only, no thresholds or labels,
 -- so display rules can change without a rebuild. Owner: employer_outcome_store.py.
@@ -362,6 +412,9 @@ EXPECTED_TABLES = {
     "profile_documents",
     "candidate_application_history",
     "candidate_application_events",
+    "job_activity_events",
+    "agent_tokens",
+    "agent_token_rate_windows",
     "candidate_employer_outcomes",
     "agent_state",
     "system_warnings",

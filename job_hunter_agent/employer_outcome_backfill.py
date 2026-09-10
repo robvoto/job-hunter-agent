@@ -1,13 +1,14 @@
 """Populate the outcome ledger from evidence the application already holds.
 
-Reads the candidate rejection history that `candidate_application_history`
-already maintains and replays it as ledger events, then rebuilds the rollup.
+Reads candidate rejection history as reconciliation evidence and replays only
+rows that carry a trustworthy current job identity into the canonical ledger,
+then rebuilds the rollup.
 
 Safe to run repeatedly: events are keyed on the source record's identity, so a
 second run writes nothing new.
 
-Rows that cannot be attributed to an employer are counted and reported, never
-silently dropped and never guessed at.
+Rows without a trustworthy job identity or employer/date are counted and
+reported, never silently migrated and never guessed at.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ import re
 from typing import Any
 
 from job_hunter_agent import employer_outcome_store as store
+from job_hunter_agent.job_identity import normalize_job_key
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +77,7 @@ def backfill_from_rejection_history(
     imported = 0
     skipped_no_employer = 0
     skipped_no_date = 0
+    skipped_no_job_key = 0
     skipped_already_tracked_manually = 0
 
     # A job you already clicked Applied/Rejected/No Answer on in JobHunter is
@@ -90,7 +93,11 @@ def backfill_from_rejection_history(
         employer = str(row.get("company") or "").strip()
         event_date = normalise_event_date(row.get("date"))
         job_key = str(row.get("job_key") or "").strip()
-        if job_key and job_key in manually_tracked_job_keys:
+        normalized_job_key = normalize_job_key(job_key) if job_key else ""
+        if not normalized_job_key:
+            skipped_no_job_key += 1
+            continue
+        if normalized_job_key in manually_tracked_job_keys:
             skipped_already_tracked_manually += 1
             continue
         if not employer:
@@ -104,6 +111,7 @@ def backfill_from_rejection_history(
 
         store.record_application_event(
             user_id=user_id,
+            job_key=normalized_job_key,
             employer_raw=employer,
             role_title=str(row.get("role") or ""),
             event_type=store.EVENT_REJECTED,
@@ -112,6 +120,7 @@ def backfill_from_rejection_history(
             evidence_ref=str(row.get("message_id") or row.get("id") or ""),
             confidence=str(row.get("confidence") or ""),
             data={"evidence": row.get("evidence"), "job_key": row.get("job_key")},
+            agent_id=store.activity.AGENT_MANUAL,
             db_path=db_path,
         )
         imported += 1
@@ -122,6 +131,7 @@ def backfill_from_rejection_history(
         "events_imported": imported,
         "skipped_no_employer": skipped_no_employer,
         "skipped_no_date": skipped_no_date,
+        "skipped_no_job_key": skipped_no_job_key,
         "skipped_already_tracked_manually": skipped_already_tracked_manually,
         "employers_in_rollup": employers,
     }

@@ -68,6 +68,42 @@ This guide describes which integrations exist, which ones are packaged product b
 - The shared Google Sheet backlog is project-management infrastructure for implementation tracking, not packaged app functionality.
 - Connector/tooling used by coding agents to read or update backlog rows must not be described as an in-product user feature.
 
+## Canonical activity API and external agents
+
+JH-305 exposes one authenticated, per-user activity contract for Job Hunter and
+external agents. The API is designed for the deployed AWS HTTPS endpoint; it
+does not depend on localhost or Google browser cookies.
+
+- `POST /api/agent-tokens` creates a token from an authenticated dashboard
+  session. The plaintext token is returned once; only its hash is stored.
+- `GET /api/agent-tokens` lists token metadata, and
+  `DELETE /api/agent-tokens/{token_id}` revokes one token.
+- External agents send `Authorization: Bearer <token>` to
+  `POST /api/activity/events` and `GET /api/activity/jobs/{job_key}`.
+  `GET /api/activity/jobs/{job_key}?agent_id=chatgpt` returns same-agent
+  presentation state; omitting `agent_id` returns any-agent state.
+- `GET /api/activity/employers/{employer_key}` returns the derived employer
+  rollup for the authenticated user.
+- Activity writes by bearer tokens are bounded per token and UTC minute. The
+  default can be changed for deployment with
+  `JOB_HUNTER_ACTIVITY_RATE_LIMIT_PER_MINUTE`; a rejected write returns HTTP
+  429 and a retry interval.
+
+Managed agent IDs are `job_hunter`, `chatgpt`, `claude`, and `manual`. Gmail
+and rejection-sheet imports are evidence sources, never agents. The canonical
+activity types include append-only reversals: `liked`/`unliked`,
+`hidden`/`unhidden`, `applied`/`withdrawn`, `rejected`/`unrejected`, and
+`no_response`/`un_no_response`, plus `presented`, `viewed`, `interview`, and
+`progressed`. Every event requires a current `source:id` job identity,
+`occurred_at`, source, evidence/idempotency data, and authenticated user scope.
+Current state is ordered by event time and stable event ID, not request arrival.
+
+`job_activity_events` is the personal source of truth. `job_history`, profile
+review lists, and employer outcomes are projections. Old unkeyed
+`candidate_application_events` and other history stores remain reconciliation
+evidence only; they are not migrated without a trustworthy job identity and
+are never written by the JH-305 runtime.
+
 ## Related docs
 
 - [INDEX.md](INDEX.md)

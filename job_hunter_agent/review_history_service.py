@@ -12,19 +12,14 @@ import threading
 from datetime import datetime
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
-_REVIEW_STATE_LOCK = threading.Lock()
-
+from job_hunter_agent import activity_ledger
 from job_hunter_agent.filters import (
     build_title_block_rule,
     normalize_title_block_phrase,
 )
-from job_hunter_agent import employer_outcome_store
 from job_hunter_agent.io_utils import load_job_history, save_job_history
 from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.profile_store import load_profile, save_profile
-from job_hunter_agent.user_context import get_user_id
 from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
     RECORD_FIRST_APPLIED_AT_KEY,
@@ -40,19 +35,19 @@ from job_hunter_agent.record_schema import (
     RECORD_IS_LIKED_KEY,
     RECORD_JOB_KEY,
     RECORD_LAST_APPLIED_AT_KEY,
-    RECORD_LAST_NO_RESPONSE_AT_KEY,
-    RECORD_LAST_REJECTED_AT_KEY,
-    RECORD_LAST_UNREJECTED_AT_KEY,
-    RECORD_LAST_UN_NO_RESPONSE_AT_KEY,
     RECORD_LAST_BLOCK_TITLE_AT_KEY,
     RECORD_LAST_HIDDEN_AT_KEY,
-    RECORD_LAST_LIKED_AT_KEY,
     RECORD_LAST_KEPT_SNAPSHOT_KEY,
+    RECORD_LAST_LIKED_AT_KEY,
+    RECORD_LAST_NO_RESPONSE_AT_KEY,
     RECORD_LAST_NOT_FOR_ME_AT_KEY,
+    RECORD_LAST_REJECTED_AT_KEY,
     RECORD_LAST_SEEN_AT_KEY,
+    RECORD_LAST_UN_NO_RESPONSE_AT_KEY,
     RECORD_LAST_UNAPPLIED_AT_KEY,
-    RECORD_LAST_UNLIKED_AT_KEY,
     RECORD_LAST_UNHIDDEN_AT_KEY,
+    RECORD_LAST_UNLIKED_AT_KEY,
+    RECORD_LAST_UNREJECTED_AT_KEY,
     RECORD_LAST_VIEWED_AT_KEY,
     RECORD_REVIEW_EVENTS_KEY,
     RECORD_TEASER_KEY,
@@ -62,7 +57,11 @@ from job_hunter_agent.record_schema import (
     RECORD_TITLE_KEY,
     RECORD_URL_KEY,
 )
+from job_hunter_agent.user_context import get_user_id
 from job_hunter_agent.workspace_refresh_service import rebuild_workspace_after_rule_change
+
+logger = logging.getLogger(__name__)
+_REVIEW_STATE_LOCK = threading.Lock()
 
 
 def _normalize_requirement_blocker(value: str) -> str:
@@ -139,42 +138,47 @@ def _append_review_event(
     entry[RECORD_REVIEW_EVENTS_KEY] = events[-50:]
 
 
-def _record_first_party_outcome_event(
-    event_type: str, job_key: str, company: str, title: str, occurred_at: str
-) -> None:
-    """Ledger a real, in-app outcome click against the employer rollup.
+_ACTIVITY_BY_REVIEW_ACTION = {
+    "viewed": activity_ledger.ACTIVITY_VIEWED,
+    "liked": activity_ledger.ACTIVITY_LIKED,
+    "unlike": activity_ledger.ACTIVITY_UNLIKED,
+    "hidden": activity_ledger.ACTIVITY_HIDDEN,
+    "unhide": activity_ledger.ACTIVITY_UNHIDDEN,
+    "applied": activity_ledger.ACTIVITY_APPLIED,
+    "unapply": activity_ledger.ACTIVITY_WITHDRAWN,
+    "rejected": activity_ledger.ACTIVITY_REJECTED,
+    "unreject": activity_ledger.ACTIVITY_UNREJECTED,
+    "interview": activity_ledger.ACTIVITY_INTERVIEW,
+    "progressed": activity_ledger.ACTIVITY_PROGRESSED,
+    "no_response": activity_ledger.ACTIVITY_NO_RESPONSE,
+    "un_no_response": activity_ledger.ACTIVITY_UN_NO_RESPONSE,
+}
 
-    This is the path that should eventually replace the rejection-sheet
-    import entirely: no email, no LLM guess, just the candidate telling us
-    what happened. Never lets a ledger problem break the click itself - if
-    there is no employer to attribute this to, or the ledger write fails for
-    any reason, the button still works and the job record still updates; only
-    the aggregate employer count is skipped, and that is logged so it is not
-    a silent gap.
-    """
-    employer = str(company or "").strip()
-    if not employer:
-        return
+
+def _record_first_party_activity_event(
+    action: str,
+    job_key: str,
+    company: str,
+    title: str,
+    occurred_at: str,
+) -> None:
+    activity_type = _ACTIVITY_BY_REVIEW_ACTION.get(action)
     user_id = get_user_id()
-    if not user_id:
+    if not activity_type or not user_id:
         return
-    try:
-        employer_outcome_store.record_application_event(
-            user_id=user_id,
-            employer_raw=employer,
-            role_title=str(title or ""),
-            event_type=event_type,
-            event_date=occurred_at[:10],
-            source=employer_outcome_store.SOURCE_JH_MANUAL_ACTION,
-            evidence_ref=f"{job_key}:{event_type}",
-            confidence="high",
-            data={"job_key": job_key},
-        )
-        employer_outcome_store.rebuild_employer_outcomes(user_id)
-    except Exception:
-        logger.exception(
-            "Failed to record first-party outcome event: type=%s job_key=%s", event_type, job_key
-        )
+    activity_ledger.record_activity_event(
+        user_id=user_id,
+        job_key=job_key,
+        activity_type=activity_type,
+        agent_id=activity_ledger.AGENT_JOB_HUNTER,
+        source=activity_ledger.SOURCE_JOB_HUNTER,
+        occurred_at=occurred_at,
+        evidence_ref=f"review:{job_key}:{action}:{occurred_at}",
+        idempotency_key=f"review:{job_key}:{action}:{occurred_at}",
+        metadata={"review_action": action},
+        employer_raw=company,
+        role_title=title,
+    )
 
 
 def persist_review_event(
@@ -192,7 +196,7 @@ def persist_review_event(
 
     history = load_job_history()
     entry = history.get(normalized, {})
-    now_iso = datetime.now().astimezone().isoformat(timespec="seconds")
+    now_iso = datetime.now().astimezone().isoformat(timespec="microseconds")
 
     entry[RECORD_JOB_KEY] = normalized
     if not entry.get(RECORD_FIRST_SEEN_AT_KEY):
@@ -225,13 +229,6 @@ def persist_review_event(
         if not entry.get(RECORD_FIRST_APPLIED_AT_KEY):
             entry[RECORD_FIRST_APPLIED_AT_KEY] = now_iso
         entry[RECORD_LAST_APPLIED_AT_KEY] = now_iso
-        _record_first_party_outcome_event(
-            employer_outcome_store.EVENT_APPLIED,
-            normalized,
-            entry.get(RECORD_COMPANY_KEY, ""),
-            entry.get(RECORD_TITLE_KEY, ""),
-            now_iso,
-        )
     elif action == "unapply":
         entry[RECORD_LAST_UNAPPLIED_AT_KEY] = now_iso
     elif action == "rejected":
@@ -242,13 +239,6 @@ def persist_review_event(
         if not entry.get(RECORD_FIRST_REJECTED_AT_KEY):
             entry[RECORD_FIRST_REJECTED_AT_KEY] = now_iso
         entry[RECORD_LAST_REJECTED_AT_KEY] = now_iso
-        _record_first_party_outcome_event(
-            employer_outcome_store.EVENT_REJECTED,
-            normalized,
-            entry.get(RECORD_COMPANY_KEY, ""),
-            entry.get(RECORD_TITLE_KEY, ""),
-            now_iso,
-        )
     elif action == "unreject":
         # Ledger events are append-only by design (see employer_outcome_store
         # module docstring) - undo does not delete the fact that you clicked
@@ -266,13 +256,6 @@ def persist_review_event(
         if not entry.get(RECORD_FIRST_NO_RESPONSE_AT_KEY):
             entry[RECORD_FIRST_NO_RESPONSE_AT_KEY] = now_iso
         entry[RECORD_LAST_NO_RESPONSE_AT_KEY] = now_iso
-        _record_first_party_outcome_event(
-            employer_outcome_store.EVENT_NO_RESPONSE,
-            normalized,
-            entry.get(RECORD_COMPANY_KEY, ""),
-            entry.get(RECORD_TITLE_KEY, ""),
-            now_iso,
-        )
     elif action == "not_for_me":
         entry[RECORD_LAST_NOT_FOR_ME_AT_KEY] = now_iso
         entry[RECORD_TIMES_NOT_FOR_ME_KEY] = int(entry.get(RECORD_TIMES_NOT_FOR_ME_KEY, 0) or 0) + 1
@@ -296,6 +279,13 @@ def persist_review_event(
 
     history[normalized] = entry
     save_job_history(history)
+    _record_first_party_activity_event(
+        action,
+        normalized,
+        str(entry.get(RECORD_COMPANY_KEY) or ""),
+        str(entry.get(RECORD_TITLE_KEY) or ""),
+        now_iso,
+    )
 
 
 def _review_state_response(
@@ -431,7 +421,7 @@ def record_job_view(job_key: str, url: str = "", title: str = "") -> dict:
 
     history = load_job_history()
     entry = history.get(normalized, {})
-    now_iso = datetime.now().astimezone().isoformat(timespec="seconds")
+    now_iso = datetime.now().astimezone().isoformat(timespec="microseconds")
 
     entry[RECORD_JOB_KEY] = normalized
     if not entry.get(RECORD_FIRST_SEEN_AT_KEY):
@@ -448,6 +438,9 @@ def record_job_view(job_key: str, url: str = "", title: str = "") -> dict:
 
     history[normalized] = entry
     save_job_history(history)
+    _record_first_party_activity_event(
+        "viewed", normalized, "", str(entry.get(RECORD_TITLE_KEY) or title), now_iso
+    )
     return {
         "ok": True,
         "action": "viewed",

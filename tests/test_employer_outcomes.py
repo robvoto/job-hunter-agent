@@ -65,6 +65,7 @@ def test_unknown_event_type_is_rejected():
     with pytest.raises(ValueError):
         store.record_application_event(
             user_id="u1",
+            job_key="seek:unknown",
             employer_raw="Northwind Systems",
             role_title="Analyst",
             event_type="ghosted",
@@ -79,6 +80,7 @@ def test_event_without_evidence_reference_is_rejected():
     with pytest.raises(ValueError):
         store.record_application_event(
             user_id="u1",
+            job_key="seek:no-evidence",
             employer_raw="Northwind Systems",
             role_title="Analyst",
             event_type=store.EVENT_APPLIED,
@@ -90,9 +92,9 @@ def test_event_without_evidence_reference_is_rejected():
 
 
 def test_event_id_is_stable_so_replaying_a_backfill_cannot_double_count():
-    first = store.make_event_id(store.SOURCE_GMAIL_ACK, "msg-1", store.EVENT_APPLIED)
-    second = store.make_event_id(store.SOURCE_GMAIL_ACK, "msg-1", store.EVENT_APPLIED)
-    other = store.make_event_id(store.SOURCE_GMAIL_ACK, "msg-1", store.EVENT_REJECTED)
+    first = store.make_event_id("u1", "msg-1")
+    second = store.make_event_id("u1", "msg-1")
+    other = store.make_event_id("u1", "msg-2")
     assert first == second
     assert first != other
 
@@ -274,7 +276,7 @@ def _history_row(idx, company, role, date):
         "status": "rejection",
         "confidence": "high",
         "evidence": "",
-        "job_key": None,
+        "job_key": f"seek:row-{idx}",
     }
 
 
@@ -318,6 +320,17 @@ def test_backfill_reports_unattributable_rows_instead_of_dropping_them(ledger_db
     assert summary["events_imported"] == 1
     assert summary["skipped_no_employer"] == 1
     assert summary["skipped_no_date"] == 1
+
+
+def test_backfill_keeps_rows_without_trustworthy_job_identity_as_evidence(ledger_db):
+    row = _history_row(1, "Northwind Systems", "Analyst", "2026-02-02")
+    row["job_key"] = None
+    summary = backfill.backfill_from_rejection_history(
+        "u1", db_path=ledger_db, load_history=lambda: [row]
+    )
+    assert summary["events_imported"] == 0
+    assert summary["skipped_no_job_key"] == 1
+    assert store.get_employer_outcome("u1", "Northwind Systems", db_path=ledger_db) is None
 
 
 # --- date normalisation -----------------------------------------------------
