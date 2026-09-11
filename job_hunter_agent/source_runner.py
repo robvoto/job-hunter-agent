@@ -10,22 +10,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable, Sequence, cast
 
-from job_hunter_agent.posting_utils import current_posted_age_days
-from job_hunter_agent.record_schema import (
-    RECORD_JOB_KEY,
-    RECORD_POSTED_AGE_DAYS_KEY,
-    RECORD_RUN_STARTED_AT_KEY,
-)
-from job_hunter_agent.run_context import ScrapeRunContext
-from job_hunter_agent.run_control import (
-    get_run_progress_by_source,
-    get_run_progress_for_source,
-    run_stop_requested,
-    run_shutdown_requested,
-    set_run_progress_state,
-    step_through_enabled,
-)
-from job_hunter_agent.source_errors import PartialSourceResultsError
 from job_hunter_agent.global_settings import (
     DEFAULT_SEARCH_SETTINGS,
     KEY_APSJOBS_RESULTS_PER_SEARCH,
@@ -41,27 +25,44 @@ from job_hunter_agent.global_settings import (
     get_seek_assisted_verification_enabled,
     get_seek_manual_verification_timeout_ms,
 )
+from job_hunter_agent.incremental_search import (
+    IncrementalSearchPlan,
+    plan_incremental_search,
+    save_incremental_checkpoints,
+)
+from job_hunter_agent.logging_utils import (
+    format_log_block,
+    reset_log_source_scope,
+    set_log_source_scope,
+)
+from job_hunter_agent.posting_utils import current_posted_age_days
+from job_hunter_agent.record_schema import (
+    RECORD_JOB_KEY,
+    RECORD_POSTED_AGE_DAYS_KEY,
+    RECORD_RUN_STARTED_AT_KEY,
+)
+from job_hunter_agent.run_context import ScrapeRunContext
+from job_hunter_agent.run_control import (
+    get_run_progress_by_source,
+    get_run_progress_for_source,
+    run_shutdown_requested,
+    run_stop_requested,
+    set_run_progress_state,
+    step_through_enabled,
+)
 from job_hunter_agent.scrapers.apsjobs import APSJobsScraper
 from job_hunter_agent.scrapers.seek import build_seek_search_targets
 from job_hunter_agent.scrapers.seek_runner import (
-    BotChallengeDetected,
     SEEK_ASSISTED_BROWSER_SESSION_ENABLED,
     SEEK_BOT_CHALLENGE,
     SEEK_HUMAN_VERIFICATION,
     SEEK_SIGN_IN_WALL,
     SEEK_TIMEOUT_NO_CARDS,
+    BotChallengeDetected,
     seek_automatic_retry_failed_message,
     seek_scrape_to_records,
 )
-from job_hunter_agent.source_registry import SOURCE_APSJOBS, SOURCE_LINKEDIN, SOURCE_SEEK
-from job_hunter_agent.source_registry import get_source_display_label
-from job_hunter_agent.text_processing import list_to_phrase
-from job_hunter_agent.system_warnings import (
-    make_system_warning_fingerprint,
-    record_system_warning,
-)
-from job_hunter_agent.logging_utils import format_log_block
-from job_hunter_agent.logging_utils import reset_log_source_scope, set_log_source_scope
+from job_hunter_agent.search_plan_state import load_search_plan_state, planned_search_terms
 from job_hunter_agent.source_discovery_cache import (
     build_source_search_signature,
     load_linkedin_failure_backoff,
@@ -70,12 +71,19 @@ from job_hunter_agent.source_discovery_cache import (
     save_source_discovery_snapshot,
     save_source_failure_state,
 )
-from job_hunter_agent.incremental_search import (
-    IncrementalSearchPlan,
-    plan_incremental_search,
-    save_incremental_checkpoints,
+from job_hunter_agent.source_errors import PartialSourceResultsError
+from job_hunter_agent.source_registry import (
+    SOURCE_APSJOBS,
+    SOURCE_JOB_MARKET_MAP,
+    SOURCE_LINKEDIN,
+    SOURCE_SEEK,
+    get_source_display_label,
 )
-from job_hunter_agent.search_plan_state import load_search_plan_state, planned_search_terms
+from job_hunter_agent.system_warnings import (
+    make_system_warning_fingerprint,
+    record_system_warning,
+)
+from job_hunter_agent.text_processing import list_to_phrase
 
 logger = logging.getLogger(__name__)
 
@@ -1056,10 +1064,39 @@ def _run_apsjobs_source(context: ScrapeRunContext) -> SourceRunResult:
         )
 
 
+def _run_market_map_source(context: ScrapeRunContext) -> SourceRunResult:
+    """Run JH analysis over the supported JMM API without a JH market cache."""
+    from job_hunter_agent.market_map_source import run_market_map_source
+    from job_hunter_agent.paths import get_active_user_id
+
+    try:
+        kept, audit, skills = run_market_map_source(
+            context,
+            user_id=get_active_user_id(),
+        )
+        return SourceRunResult(
+            source=SOURCE_JOB_MARKET_MAP,
+            kept_records=kept,
+            audit_rows=audit,
+            skill_observations=skills,
+            source_cache_status="JMM",
+            source_collection_complete=True,
+        )
+    except Exception as exc:
+        logger.exception("[Job Market Map] consumer run failed")
+        return SourceRunResult(
+            source=SOURCE_JOB_MARKET_MAP,
+            error=exc,
+            source_cache_status="JMM",
+            source_collection_complete=False,
+        )
+
+
 SOURCE_RUNNER_NAMES: dict[str, str] = {
     SOURCE_SEEK: "_run_seek_source",
     SOURCE_LINKEDIN: "_run_linkedin_source",
     SOURCE_APSJOBS: "_run_apsjobs_source",
+    SOURCE_JOB_MARKET_MAP: "_run_market_map_source",
 }
 
 
@@ -1453,6 +1490,26 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
     Mutable shared state (job_history, llm_cache) is isolated per source during
     execution and merged back into context after all sources complete.
     """
+    if context.use_market_map:
+        result = _run_source_with_scope(
+            SOURCE_JOB_MARKET_MAP,
+            _run_market_map_source,
+            context,
+        )
+        context.source_cache_stats = {
+            SOURCE_JOB_MARKET_MAP: {
+                "status": result.source_cache_status,
+                "signature": "",
+                "records": len(result.kept_records),
+                "external_source_calls_avoided": False,
+                "health": _source_health(result),
+                "collection_complete": bool(result.source_collection_complete),
+                "error": _exception_message(result.error) if result.error is not None else "",
+            }
+        }
+        _record_overall_failure_if_no_usable_sources(context, [result])
+        return result.kept_records, result.audit_rows, result.skill_observations
+
     kept_records: list[dict] = []
     audit_rows: list[dict] = []
     skill_observations: list[dict] = []

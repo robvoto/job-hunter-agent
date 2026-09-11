@@ -511,6 +511,7 @@ Environment="TZ=Australia/Sydney"
 Environment="JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data"
 Environment="JOB_HUNTER_OUTPUT_DIR=/var/lib/job-hunter/output"
 Environment="JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/job_hunter.db"
+Environment="JOB_HUNTER_MARKET_MAP_BASE_URL=<deployed-jmm-api-base>/v3"
 ExecStart=/home/ubuntu/job-hunter-agent/scripts/ec2/start-aws-browser-session.sh
 Restart=always
 RestartSec=5

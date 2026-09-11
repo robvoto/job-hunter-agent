@@ -42,11 +42,12 @@ deliberately required. The `/api/run` endpoint accepts the equivalent boolean
 reuse normalized discovery snapshots; the current profile filters and review
 pipeline still run on every invocation.
 
-This command runs from the authenticated account context already present in the app. It does not accept a manual account id or scope. If no signed-in account is available, it stops and asks you to log in first.
+This command runs from the authenticated account context already present in the app. It does not accept a manual account id or scope. If no signed-in account is available, it stops and asks you to log in first. Normal discovery is Job Market Map-backed; configure `JOB_HUNTER_MARKET_MAP_BASE_URL` to the deployed JMM `/v3` API before running it. If JMM is unavailable or misconfigured, the run fails clearly and does not fall back to Job Hunter's old collectors or market cache.
 
 Responsibilities:
 
-* scrape jobs
+* consume canonical market jobs from Job Market Map
+* request current JDs from Job Market Map when detail review needs them
 * normalize job data
 * apply deterministic filtering
 * optionally run constrained LLM review

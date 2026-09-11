@@ -12,41 +12,45 @@ from job_hunter_agent.global_settings import (
     get_repeated_listing_min_span_days,
     get_repeated_listing_min_times_seen,
 )
-from job_hunter_agent.llm_review_state import has_complete_llm_keep_data
 from job_hunter_agent.job_identity import RUN_IDENTITY_CLAIM_KEY
+from job_hunter_agent.llm_review_state import has_complete_llm_keep_data
 from job_hunter_agent.posting_utils import days_since, parse_timestamp
 from job_hunter_agent.record_schema import (
+    POSTING_CHANNEL_CLASSIFIER_VERSION,
+    POSTING_CHANNEL_VERSION_KEY,
     RECORD_APPLY_METHOD_KEY,
     RECORD_DESCRIPTION_SOURCE_KEY,
     RECORD_DETAILS_STATUS_KEY,
     RECORD_DETAILS_TEXT_KEY,
+    RECORD_FIRST_LIKED_AT_KEY,
     RECORD_FIT_LABEL_KEY,
     RECORD_FIT_SCORE_BREAKDOWN_KEY,
     RECORD_FIT_SCORE_KEY,
+    RECORD_FIT_SOURCE_TEXT_KEY,
     RECORD_FIT_TONE_CLASS_KEY,
-    RECORD_FIRST_LIKED_AT_KEY,
+    RECORD_FULL_DESCRIPTION_KEY,
     RECORD_IS_LIKED_KEY,
     RECORD_IS_REPOSTED_KEY,
     RECORD_JOB_KEY,
+    RECORD_LAST_LIKED_AT_KEY,
     RECORD_LLM_COST_USD_KEY,
     RECORD_LLM_ELAPSED_MS_KEY,
     RECORD_LLM_INPUT_TOKENS_KEY,
     RECORD_LLM_OUTPUT_TOKENS_KEY,
-    RECORD_LAST_LIKED_AT_KEY,
+    RECORD_MARKET_MAP_IDENTITY_KEY,
+    RECORD_MARKET_MAP_JOB_ID_KEY,
     RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY,
     RECORD_ORIGINAL_POSTED_DATE_KEY,
     RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY,
     RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
-    POSTING_CHANNEL_CLASSIFIER_VERSION,
-    POSTING_CHANNEL_VERSION_KEY,
-    RECORD_REQUIREMENT_COVERAGE_KEY,
     RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY,
+    RECORD_REQUIREMENT_COVERAGE_KEY,
     RECORD_REQUIREMENT_COVERAGE_UNCLASSIFIED_KEY,
     RECORD_REQUIREMENT_COVERAGE_VERSION_KEY,
-    REQUIREMENT_COVERAGE_CONTRACT_VERSION,
     RECORD_SOURCE_KEY,
     RECORD_SOURCE_METADATA_KEY,
     RECORD_SOURCE_PROVENANCE_KEY,
+    REQUIREMENT_COVERAGE_CONTRACT_VERSION,
     SOURCE_METADATA_SCHEMA_VERSION,
     SOURCE_METADATA_VERSION_KEY,
 )
@@ -111,6 +115,8 @@ KEEP_SNAPSHOT_FIELDS = (
     RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
     RECORD_SOURCE_METADATA_KEY,
     RECORD_SOURCE_PROVENANCE_KEY,
+    RECORD_MARKET_MAP_IDENTITY_KEY,
+    RECORD_MARKET_MAP_JOB_ID_KEY,
 )
 
 
@@ -625,12 +631,27 @@ def update_job_history(history: Dict[str, dict], record: dict, run_iso: str) -> 
 
 
 def finalize_record(
-    history: Dict[str, dict], audit_rows: List[dict], record: dict, run_iso: str
+    history: Dict[str, dict],
+    audit_rows: List[dict],
+    record: dict,
+    run_iso: str,
+    *,
+    persist_full_description: bool = True,
 ) -> None:
     claim = record.pop(RUN_IDENTITY_CLAIM_KEY, None)
+    persisted_record = record
+    if not persist_full_description:
+        persisted_record = dict(record)
+        for field in (
+            RECORD_FULL_DESCRIPTION_KEY,
+            RECORD_DETAILS_TEXT_KEY,
+            RECORD_FIT_SOURCE_TEXT_KEY,
+            "description_compaction",
+        ):
+            persisted_record.pop(field, None)
     try:
-        update_job_history(history, record, run_iso)
-        audit_rows.append(record)
+        update_job_history(history, persisted_record, run_iso)
+        audit_rows.append(persisted_record)
     except Exception:
         if isinstance(claim, tuple) and len(claim) == 2:
             registry, token = claim
@@ -638,4 +659,4 @@ def finalize_record(
         raise
     if isinstance(claim, tuple) and len(claim) == 2:
         registry, token = claim
-        registry.finish(token, record)
+        registry.finish(token, persisted_record)

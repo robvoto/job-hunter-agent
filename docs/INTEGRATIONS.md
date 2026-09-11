@@ -4,6 +4,21 @@ This guide describes which integrations exist, which ones are packaged product b
 
 ## Packaged job-source integrations
 
+### Job Market Map (JH-306)
+
+- Normal Job Hunter discovery is consumed from JMM's supported `/v3` HTTP API.
+- Configure `JOB_HUNTER_MARKET_MAP_BASE_URL` to the deployed JMM API base,
+  including `/v3`; there is no direct SQLite access or silent scraper fallback.
+- JMM owns neutral identity, card facts, current JD storage, source collection,
+  and on-demand JD enrichment. JH owns candidate analysis and decisions.
+- JH requests a current JD from JMM only after the JH card gate says detail is
+  needed. JMM's current JD is transient analysis input; new JH workspace/history
+  records retain JMM identity and JD provenance without copying the JD.
+- JMM processing cursors are namespaced per authenticated JH user. They are
+  workflow checkpoints, not personal activity; JH-305 remains the activity owner.
+- Existing JH scraper/history data is retained only for the bounded JH-308
+  retirement path and is not a fallback source for the JMM-backed run.
+
 ### SEEK
 
 - Owner flow: `job_hunter_agent.source_connector` orchestrates the run, and `job_hunter_agent.source_runner` dispatches the SEEK source.

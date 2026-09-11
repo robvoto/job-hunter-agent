@@ -100,6 +100,10 @@ class ScrapeRunContext:
     # before source-specific detail and fit review is paid for.
     identity_registry: RunIdentityRegistry = field(default_factory=RunIdentityRegistry)
 
+    # Normal runtime discovery is JMM-backed. Tests and the temporary legacy
+    # source runner can construct an explicit false value while JH-308 retires it.
+    use_market_map: bool = False
+
 
 def build_scrape_run_context(argv: list[str] | None = None) -> ScrapeRunContext:
 
@@ -170,6 +174,11 @@ def build_scrape_run_context(argv: list[str] | None = None) -> ScrapeRunContext:
     enabled_sources = [
         source for source in profile_enabled_sources if source and source in globally_enabled_sources
     ]
+    use_market_map = True
+    if use_market_map:
+        from job_hunter_agent.source_registry import SOURCE_JOB_MARKET_MAP
+
+        enabled_sources = [SOURCE_JOB_MARKET_MAP]
 
     return ScrapeRunContext(
         profile=profile,
@@ -195,4 +204,5 @@ def build_scrape_run_context(argv: list[str] | None = None) -> ScrapeRunContext:
         dashboard_debug_mode=has_cli_flag(active_argv, CLI_FLAG_DEBUG),
         reset_new_to_you=TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING,
         force_source_refresh=has_cli_flag(active_argv, CLI_FLAG_FORCE_REFRESH),
+        use_market_map=use_market_map,
     )

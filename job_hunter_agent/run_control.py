@@ -66,7 +66,7 @@ _STEP_THROUGH_LOCK = threading.Lock()
 # Stable source identifiers used across the structured progress model and the
 # UI source-badge mapping.  Add new sources here — never invent ad-hoc strings
 # in scrapers or templates.
-VALID_SOURCES = frozenset({"seek", "linkedin", "apsjobs", "generic", None})
+VALID_SOURCES = frozenset({"seek", "linkedin", "apsjobs", "job_market_map", "generic", None})
 
 # Stage types describe *what kind* of work is happening. A current/total pair
 # represents only that bounded stage; it must never be presented as overall-run progress.

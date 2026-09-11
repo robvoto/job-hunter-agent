@@ -630,6 +630,9 @@ class ReviewPipelineContext:
     date_range_days: int = 0
     source_name: str = ""
     identity_registry: RunIdentityRegistry | None = None
+    # JMM supplies the current JD for this run. Disable reuse of old JH analysis
+    # so candidate decisions are always grounded in the JMM evidence returned now.
+    market_map_mode: bool = False
 
 
 def _find_applied_identity_match(record: dict, context: ReviewPipelineContext) -> dict | None:
@@ -793,7 +796,13 @@ def _call_hook(
 
 
 def _finalize(record: dict, context: ReviewPipelineContext) -> None:
-    finalize_record(context.job_history, context.audit_rows, record, context.run_iso)
+    finalize_record(
+        context.job_history,
+        context.audit_rows,
+        record,
+        context.run_iso,
+        persist_full_description=not context.market_map_mode,
+    )
 
 
 def _build_outcome(record: dict) -> dict[str, Any]:
@@ -1503,7 +1512,7 @@ def review_pre_detail_normalized_job(
     history_entry = context.job_history.get(job_key) or find_confirmed_identity_history_entry(
         record, context.job_history
     ) or {}
-    if not _defer_keep_reuse_until_post_detail(record) and can_reuse_kept_job(
+    if not context.market_map_mode and not _defer_keep_reuse_until_post_detail(record) and can_reuse_kept_job(
         history_entry, record, profile
     ):
         record = apply_kept_job_reuse(record, history_entry)
@@ -1608,7 +1617,7 @@ def review_post_detail_normalized_job(
     _apply_external_posting_date_evidence(record, context)
 
     history_entry = context.job_history.get(str(record.get(RECORD_JOB_KEY) or ""), {})
-    if can_reuse_kept_job(history_entry, record, profile):
+    if not context.market_map_mode and can_reuse_kept_job(history_entry, record, profile):
         record = apply_kept_job_reuse(record, history_entry)
         _freeze_fit_score_fields(record, profile)
         _finalize_job_result(record, context)

@@ -11,6 +11,8 @@ SOURCE_LINKEDIN = "linkedin"
 
 SOURCE_APSJOBS = "apsjobs"
 
+SOURCE_JOB_MARKET_MAP = "job_market_map"
+
 
 def _normalize_source_registry(payload: dict[str, Any]) -> dict[str, Any]:
 
