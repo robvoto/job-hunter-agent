@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from job_hunter_agent.database import db_conn, init_db
-from job_hunter_agent.jh308_cutover import run_cutover
+from job_hunter_agent.jh308_cutover import JobMarketMapClient, run_cutover
 
 
 class _ExactLookupClient:
@@ -140,6 +140,28 @@ def test_cutover_accepts_canonical_jh_manual_action_source():
     from job_hunter_agent.jh308_cutover import _activity_source
 
     assert _activity_source({"source": "jh_manual_action"}) == "manual"
+
+
+def test_apply_does_not_require_jmm_for_already_exact_rows(monkeypatch, tmp_path):
+    db = tmp_path / "cutover.db"
+    backup = tmp_path / "backup.sqlite"
+    init_db(db)
+    with db_conn(db) as conn:
+        conn.execute("INSERT INTO users (user_id) VALUES (?)", ("rob",))
+    _legacy_event(db, event_id="manual-applied", event_type="applied", job_key="seek:123")
+    monkeypatch.setattr(
+        "job_hunter_agent.jh308_cutover.fetch_configured_sheet_rows",
+        lambda *args, **kwargs: ([], {"status": "read", "rows": 0}),
+    )
+
+    def fail_if_called():
+        raise AssertionError("JMM is not needed for an already exact identity")
+
+    monkeypatch.setattr(JobMarketMapClient, "from_environment", staticmethod(fail_if_called))
+
+    report = run_cutover(db, target_user_id="rob", apply=True, backup_path=backup)
+
+    assert report["counters"]["activity_migrated"] == 1
 
 
 def test_cutover_is_idempotent_and_does_not_use_employer_matching(monkeypatch, tmp_path):
