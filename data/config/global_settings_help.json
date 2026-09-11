@@ -127,6 +127,7 @@
       "fields": {
         "job_history_max_entries": "Maximum number of saved job-history records kept per user before the oldest entries are pruned.",
         "job_history_max_age_days": "Maximum age for saved job-history records before they are pruned.",
+        "historical_application_evidence_max_entries": "Maximum number of preserved non-canonical historical application-evidence rows kept per user.",
         "potential_retention_days": "How many days a saved non-applied job remains visible on the Potential board after it was last kept.",
         "hidden_retention_days": "How many days a hidden job remains visible on the Hidden board after it was hidden. Hidden-job identity is retained separately for the job-history window so matching reposts can still be suppressed after the card disappears.",
         "applied_retention_days": "How long applied-job history is retained. Use 0 to retain applied jobs forever.",

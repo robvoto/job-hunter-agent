@@ -62,9 +62,11 @@ def rebuild_workspace_results(
         reference_time,
     )
 
-    kept_records = workspace_service.load_last_kept_records()
     saved_workspace_records = workspace_service.load_saved_workspace_pool()
-    render_records = saved_workspace_records or kept_records
+    # JH-306 workspace rows are JH-owned analysis over current JMM evidence.
+    # Do not reconstruct a workspace from the retired legacy audit snapshot.
+    render_records = saved_workspace_records
+    kept_records = saved_workspace_records
     audit_rows = load_audit_rows()
 
     if audit_rows:

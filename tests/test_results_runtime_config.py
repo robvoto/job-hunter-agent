@@ -332,7 +332,7 @@ def test_candidate_application_history_loader_failure_is_not_silently_masked():
     records = [{"job_key": "seek:1"}, {"job_key": "seek:2"}]
 
     with patch(
-        "job_hunter_agent.candidate_application_history.load_candidate_job_rejection_history",
+        "job_hunter_agent.historical_application_evidence.load_historical_application_evidence",
         side_effect=RuntimeError("boom"),
     ):
         with pytest.raises(RuntimeError, match="boom"):
@@ -347,7 +347,7 @@ def test_candidate_application_history_enrichment_never_syncs_from_sheet():
             "job_hunter_agent.candidate_application_history.import_candidate_rejections_from_sheet"
         ) as mock_sync,
         patch(
-            "job_hunter_agent.candidate_application_history.load_candidate_job_rejection_history",
+            "job_hunter_agent.historical_application_evidence.load_historical_application_evidence",
             return_value=[],
         ),
     ):

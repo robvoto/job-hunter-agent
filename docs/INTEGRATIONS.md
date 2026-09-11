@@ -46,12 +46,13 @@ This guide describes which integrations exist, which ones are packaged product b
 
 ## Local-only and private integrations
 
-### Candidate application history override
+### Candidate application history cutover input
 
 - Local override file: `data/runtime/rob_candidate_application_history_import.local.json`
 - Owner: `job_hunter_agent.global_settings`
-- Purpose: allow a local owner-only spreadsheet id/tab override for candidate application history import without shipping personal values in committed settings.
+- Purpose: allow the owner-only JH-308 cutover command to read the configured Job_Rejections source without shipping personal values in committed settings.
 - Boundary: this file is gitignored runtime state and must not ship in desktop builds, packaged defaults, sample data, or public docs with real values.
+- The normal runtime does not synchronise this sheet. JH-308 uses it only as bounded migration evidence and writes exact, supported identities to the canonical activity ledger; unresolved evidence stays in the noncanonical historical archive.
 
 ### Runtime-local state
 

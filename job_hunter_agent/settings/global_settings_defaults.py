@@ -30,6 +30,7 @@ KEY_HISTORY_SETTINGS = "history_settings"
 KEY_CACHE_SETTINGS = "cache_settings"
 KEY_JOB_HISTORY_MAX_ENTRIES = "job_history_max_entries"
 KEY_JOB_HISTORY_MAX_AGE_DAYS = "job_history_max_age_days"
+KEY_HISTORICAL_APPLICATION_EVIDENCE_MAX_ENTRIES = "historical_application_evidence_max_entries"
 KEY_LLM_CACHE_MAX_ENTRIES = "llm_cache_max_entries"
 KEY_LLM_CACHE_MAX_AGE_DAYS = "llm_cache_max_age_days"
 KEY_CV_EXTRACTION_CACHE_MAX_ENTRIES = "cv_extraction_cache_max_entries"
@@ -112,7 +113,6 @@ KEY_REVIEW_TITLE_NOT_TARGET_MIN_COUNT = "title_not_target_min_count"
 KEY_REVIEW_RULE_SUGGESTION_MIN_COUNT = "rule_suggestion_min_count"
 
 KEY_CANDIDATE_APPLICATION_HISTORY = "candidate_application_history"
-KEY_CANDIDATE_APPLICATION_HISTORY_SYNC_BEFORE_RUN = "sync_before_run"
 
 KEY_PRIMARY_CANDIDATE_PROFILE_CONTEXT = "primary_candidate_profile_context"
 KEY_SECONDARY_CANDIDATE_PROFILE_CONTEXT = "secondary_candidate_profile_context"
@@ -179,6 +179,7 @@ DEFAULT_HISTORY_SETTINGS = dict(_MANAGED_GLOBAL_SETTINGS_SEED.get(KEY_HISTORY_SE
 HISTORY_SETTING_LIMITS: dict[str, tuple[int, int]] = {
     KEY_JOB_HISTORY_MAX_ENTRIES: (100, 50_000),
     KEY_JOB_HISTORY_MAX_AGE_DAYS: (30, 3_650),
+    KEY_HISTORICAL_APPLICATION_EVIDENCE_MAX_ENTRIES: (100, 50_000),
     KEY_REPEATED_LISTING_MIN_TIMES_SEEN: (1, 100),
     KEY_REPEATED_LISTING_MIN_SPAN_DAYS: (1, 365),
     KEY_MULTI_LISTING_RED_FLAG_MIN_LISTINGS: (1, 100),

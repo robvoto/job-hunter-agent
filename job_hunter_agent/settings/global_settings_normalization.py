@@ -46,6 +46,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_EVIDENCE_TIER_WEIGHTS,
     KEY_FIT_HIGHLIGHTS,
     KEY_HIDDEN_RETENTION_DAYS,
+    KEY_HISTORICAL_APPLICATION_EVIDENCE_MAX_ENTRIES,
     KEY_APPLIED_RETENTION_DAYS,
     KEY_HISTORY_SETTINGS,
     KEY_JOB_HISTORY_MAX_AGE_DAYS,
@@ -933,6 +934,13 @@ def normalize_global_settings(
             DEFAULT_HISTORY_SETTINGS[KEY_JOB_HISTORY_MAX_AGE_DAYS],
             normalized_history_limits[KEY_JOB_HISTORY_MAX_AGE_DAYS]["min"],
             normalized_history_limits[KEY_JOB_HISTORY_MAX_AGE_DAYS]["max"],
+        ),
+        KEY_HISTORICAL_APPLICATION_EVIDENCE_MAX_ENTRIES: _require_int(
+            history_source,
+            KEY_HISTORICAL_APPLICATION_EVIDENCE_MAX_ENTRIES,
+            DEFAULT_HISTORY_SETTINGS[KEY_HISTORICAL_APPLICATION_EVIDENCE_MAX_ENTRIES],
+            normalized_history_limits[KEY_HISTORICAL_APPLICATION_EVIDENCE_MAX_ENTRIES]["min"],
+            normalized_history_limits[KEY_HISTORICAL_APPLICATION_EVIDENCE_MAX_ENTRIES]["max"],
         ),
         KEY_REPEATED_LISTING_MIN_TIMES_SEEN: _require_int(
             history_source,

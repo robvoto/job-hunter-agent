@@ -116,53 +116,6 @@ MSG_NO_NEW_MATCHES = (
 )
 
 
-def sync_candidate_rejection_history_before_run() -> dict[str, Any]:
-    """Refresh Apps-Script rejection history when that explicit setting is enabled.
-
-    This runs before a collection so the workspace built for that run uses the
-    latest rejection evidence. A sheet outage must not cancel the job search:
-    the last known local history remains intact and the returned warning is
-    surfaced in the scheduler status.
-    """
-    from job_hunter_agent.global_settings import (
-        get_candidate_application_history_sync_before_run,
-    )
-
-    if not get_candidate_application_history_sync_before_run():
-        return {"attempted": False, "ok": True, "message": ""}
-
-    try:
-        from job_hunter_agent.candidate_application_history import (
-            import_candidate_rejections_from_sheet,
-        )
-        from job_hunter_agent.employer_outcome_backfill import (
-            backfill_from_rejection_history,
-        )
-        from job_hunter_agent.user_context import get_user_id_for_runtime
-
-        history_summary = import_candidate_rejections_from_sheet()
-        outcome_summary = backfill_from_rejection_history(get_user_id_for_runtime())
-    except Exception as exc:
-        message = f"Rejection history sync failed: {exc}. Job collection continued."
-        print(f"[AGENT_RUNNER][WARN] {message}")
-        return {"attempted": True, "ok": False, "message": message}
-
-    message = (
-        "Rejection history synced: "
-        f"{history_summary.get('records_added', 0)} new, "
-        f"{history_summary.get('records_total', 0)} total; "
-        f"employer counts refreshed across {outcome_summary.get('employers_in_rollup', 0)} employers."
-    )
-    print(f"[AGENT_RUNNER][INFO] {message}")
-    return {
-        "attempted": True,
-        "ok": True,
-        "message": message,
-        "history": history_summary,
-        "outcomes": outcome_summary,
-    }
-
-
 def _job_key(record: dict) -> str:
     val = record.get(RECORD_JOB_KEY) or record.get(RECORD_URL_KEY)
     source = record.get(RECORD_SOURCE_KEY) or record.get(RECORD_SOURCE_NAME_KEY)
@@ -492,8 +445,6 @@ def run_agent_once(
     settings = load_user_settings(None, create_if_missing=True)
     state = load_agent_state()
     previous_records = load_last_kept_records()
-    rejection_history_sync = sync_candidate_rejection_history_before_run()
-
     if no_scrape:
         print("Rebuilding workspace from current local state...")
         rebuild_workspace_results(reason="agent runner --send-notification-no-scrape")
@@ -563,7 +514,6 @@ def run_agent_once(
         "summary_text": summary_text,
         "notifications": notification_results,
         "summary_path": str(AGENT_SUMMARY_PATH),
-        "rejection_history_sync": rejection_history_sync,
     }
 
 
@@ -642,11 +592,6 @@ def run_agent_loop(stop_event: threading.Event | None = None) -> None:
             else:
                 state = load_agent_state()
                 scheduler_message = "Scheduled run completed successfully."
-                rejection_sync_message = str(
-                    result.get("rejection_history_sync", {}).get("message") or ""
-                ).strip()
-                if rejection_sync_message:
-                    scheduler_message = f"{scheduler_message} {rejection_sync_message}"
                 state.update(
                     _scheduled_state_updates(
                         SCHEDULE_STATUS_SUCCEEDED,

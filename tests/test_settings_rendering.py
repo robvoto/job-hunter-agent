@@ -246,7 +246,6 @@ def test_admin_settings_script_exposes_system_warnings_controls():
 
     assert "initRuntimeMaintenanceControls" in js_text
     assert "/api/admin/clear-runtime-caches" in js_text
-    assert "/api/admin/clear-candidate-application-history" in js_text
     assert "/api/admin/clear-current-user-search-state" in js_text
     assert "initSystemWarningsControls" in js_text
     assert "/api/admin/system-warnings" in js_text
@@ -280,9 +279,7 @@ def test_global_settings_page_renders_system_warnings_panel(monkeypatch):
     assert 'id="runtime_maintenance_panel"' in html
     assert 'id="clear_runtime_caches_button"' in html
     assert 'id="clear_current_user_search_state_button"' in html
-    assert 'id="clear_candidate_application_history_button"' in html
-    assert "The next sync will reprocess the Google Sheet" in html
-    assert "It does not delete imported Rejection History" in html
+    assert 'id="clear_candidate_application_history_button"' not in html
     assert 'id="history_job_history_max_entries"' in html
     assert 'id="history_job_history_max_age_days"' in html
     assert 'id="cache_llm_cache_max_entries"' in html

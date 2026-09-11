@@ -220,6 +220,30 @@ class JobMarketMapClient:
             raise JobMarketMapContractError("Job Market Map lookup did not return a job")
         return payload
 
+    def lookup_source_job(self, *, source: str, source_job_id: str) -> dict[str, Any]:
+        """Resolve a source-native identity through JMM's exact lookup contract."""
+        source_value = str(source or "").strip()
+        source_id_value = str(source_job_id or "").strip()
+        if not source_value or not source_id_value:
+            raise ValueError("source and source_job_id are required for exact lookup")
+        payload = self._request(
+            "GET",
+            "/jobs/lookup",
+            query={"source": source_value, "source_job_id": source_id_value},
+        )
+        self._validate_metadata(payload)
+        job = payload.get("job")
+        if not isinstance(job, dict):
+            raise JobMarketMapContractError("Job Market Map lookup did not return a job")
+        if (
+            str(job.get("source") or "").strip().casefold() != source_value.casefold()
+            or str(job.get("source_job_id") or "").strip() != source_id_value
+        ):
+            raise JobMarketMapContractError(
+                "Job Market Map exact lookup returned a different source identity"
+            )
+        return payload
+
     def get_or_enrich_jd(self, *, jmm_job_id: int) -> dict[str, Any]:
         payload = self._request("POST", f"/jobs/{jmm_job_id}/jd")
         self._validate_metadata(payload)

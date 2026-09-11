@@ -263,43 +263,12 @@ async def api_admin_knowledge_sync(
         return json_response({"error": str(exc)}, 400)
 
 
-@router.post("/api/admin/rejection-history-sync")
-async def api_admin_rejection_history_sync(
-    request: Request,
-):  # type: ignore[no-untyped-def]
-    if not is_admin(request):
-        return auth_required_response("/api/admin/rejection-history-sync", False)
-    try:
-        from job_hunter_agent.candidate_application_history import (
-            import_candidate_rejections_from_sheet,
-        )
-
-        summary = import_candidate_rejections_from_sheet()
-        added = summary.get("records_added", 0)
-        total = summary.get("records_total", 0)
-        return json_response(
-            {"ok": True, "message": f"Synced rejection history: {added} new, {total} total."}
-        )
-    except Exception as exc:
-        return json_response({"error": str(exc)}, 400)
-
-
 @router.post("/api/admin/clear-runtime-caches")
 def api_admin_clear_runtime_caches(request: Request):  # type: ignore[no-untyped-def]
     if not is_admin(request):
         return auth_required_response("/api/admin/clear-runtime-caches", False)
     try:
         return json_response(srv.clear_runtime_caches())
-    except Exception as exc:
-        return json_response({"error": str(exc)}, 400)
-
-
-@router.post("/api/admin/clear-candidate-application-history")
-def api_admin_clear_candidate_application_history(request: Request):  # type: ignore[no-untyped-def]
-    if not is_admin(request):
-        return auth_required_response("/api/admin/clear-candidate-application-history", False)
-    try:
-        return json_response(srv.clear_candidate_application_history_runtime())
     except Exception as exc:
         return json_response({"error": str(exc)}, 400)
 

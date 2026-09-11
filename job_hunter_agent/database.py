@@ -193,6 +193,51 @@ CREATE INDEX IF NOT EXISTS idx_app_events_user_employer
 CREATE INDEX IF NOT EXISTS idx_app_events_user_date
     ON candidate_application_events(user_id, event_date DESC);
 
+-- Bounded, non-canonical historical evidence that cannot be safely attached
+-- to one exact job. This table deliberately has no job_key or JMM identity.
+CREATE TABLE IF NOT EXISTS historical_application_evidence (
+    user_id       TEXT NOT NULL REFERENCES users(user_id),
+    evidence_id   TEXT NOT NULL,
+    outcome       TEXT NOT NULL,
+    event_date    TEXT NOT NULL,
+    employer_raw  TEXT NOT NULL,
+    role_title    TEXT NOT NULL DEFAULT '',
+    source        TEXT NOT NULL,
+    evidence_ref  TEXT NOT NULL,
+    actor_id      TEXT NOT NULL DEFAULT '',
+    thread_id     TEXT NOT NULL DEFAULT '',
+    message_id    TEXT NOT NULL DEFAULT '',
+    source_url    TEXT NOT NULL DEFAULT '',
+    source_job_id TEXT NOT NULL DEFAULT '',
+    requisition_id TEXT NOT NULL DEFAULT '',
+    origin_store  TEXT NOT NULL,
+    origin_ref    TEXT NOT NULL,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, evidence_id)
+);
+CREATE INDEX IF NOT EXISTS idx_historical_application_evidence_user
+    ON historical_application_evidence(user_id, event_date DESC);
+
+-- Body-free quarantine/audit records for excluded junk, malformed rows and
+-- duplicate evidence. Quarantine is never read as application history.
+CREATE TABLE IF NOT EXISTS historical_application_quarantine (
+    user_id       TEXT NOT NULL REFERENCES users(user_id),
+    evidence_id   TEXT NOT NULL,
+    reason        TEXT NOT NULL,
+    outcome       TEXT NOT NULL DEFAULT '',
+    event_date    TEXT NOT NULL DEFAULT '',
+    employer_raw  TEXT NOT NULL DEFAULT '',
+    role_title    TEXT NOT NULL DEFAULT '',
+    source        TEXT NOT NULL DEFAULT '',
+    evidence_ref  TEXT NOT NULL DEFAULT '',
+    origin_store  TEXT NOT NULL,
+    origin_ref    TEXT NOT NULL,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, evidence_id)
+);
+CREATE INDEX IF NOT EXISTS idx_historical_application_quarantine_user
+    ON historical_application_quarantine(user_id, created_at DESC);
+
 -- Canonical per-user activity ledger. Every personal event has the current
 -- source:id job identity, managed agent identity, event time and an explicit
 -- idempotency key. Reversals are new rows; projections are disposable views.
@@ -412,6 +457,8 @@ EXPECTED_TABLES = {
     "profile_documents",
     "candidate_application_history",
     "candidate_application_events",
+    "historical_application_evidence",
+    "historical_application_quarantine",
     "job_activity_events",
     "agent_tokens",
     "agent_token_rate_windows",
