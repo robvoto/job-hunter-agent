@@ -677,12 +677,13 @@ def test_market_map_review_uses_current_jd_and_does_not_reuse_legacy_analysis(mo
     assert updated[RECORD_REQUIREMENT_COVERAGE_KEY][0]["requirement"] == (
         "Current JMM requirement"
     )
+    # JMM review must not rewrite or create a legacy JH market snapshot.
     snapshot = context.job_history["seek:301"]["last_kept_snapshot"]
-    assert snapshot[RECORD_MARKET_MAP_IDENTITY_KEY] == "seek:id:301"
+    assert RECORD_MARKET_MAP_IDENTITY_KEY not in snapshot
     assert snapshot[RECORD_REQUIREMENT_COVERAGE_KEY][0]["requirement"] == (
-        "Current JMM requirement"
+        "Legacy requirement"
     )
-    assert "full_description" not in snapshot
+    assert snapshot["full_description"] == "Legacy JH description"
     assert "details_text" not in context.audit_rows[0]
 
 
