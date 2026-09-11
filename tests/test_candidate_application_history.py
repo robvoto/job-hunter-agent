@@ -7,7 +7,6 @@ from unittest.mock import patch
 from job_hunter_agent.candidate_application_history import (
     add_candidate_rejection_record,
     enrich_records_with_application_history,
-    import_candidate_rejections_from_json,
     import_candidate_rejections_from_sheet,
     load_candidate_application_history,
     load_candidate_job_rejection_history,
@@ -381,52 +380,6 @@ def test_import_from_sheet_dedupes_by_company_role_date_when_message_id_missing(
     assert saved_rows[0]["role"] == "Business Analyst"
     assert saved_rows[0]["id"]
     assert saved_rows[0]["message_id"] is None
-
-
-def test_import_from_json_populates_local_store_without_loading_sheet(tmp_path):
-    store_path = tmp_path / "candidate_application_history.json"
-    cache_path = tmp_path / "candidate_application_history_cache.json"
-    export_path = tmp_path / "candidate_application_history_export.json"
-    export_record = {
-        "date": "2026-05-07T00:00:00.000Z",
-        "company": "Acme",
-        "role": "Business Analyst",
-        "status": "rejection",
-        "recruiter": None,
-        "source": "gmail_apps_script",
-        "evidence": "A",
-        "subject": "A",
-        "message_id": "m-json",
-        "thread_id": "t-json",
-        "original_row_number": 2,
-    }
-    export_path.write_text(json.dumps([export_record]), encoding="utf-8")
-
-    with (
-        patch(
-            "job_hunter_agent.candidate_application_history._CANDIDATE_APPLICATION_HISTORY_PATH",
-            store_path,
-        ),
-        patch(
-            "job_hunter_agent.candidate_application_history.CANDIDATE_APPLICATION_HISTORY_CACHE_PATH",
-            cache_path,
-        ),
-        patch(
-            "job_hunter_agent.candidate_application_history.fetch_candidate_job_rejection_rows"
-        ) as mock_fetch,
-        patch(
-            "job_hunter_agent.candidate_application_history.normalize_job_rejection_row"
-        ) as mock_normalize,
-    ):
-        summary = import_candidate_rejections_from_json(export_path)
-
-    assert not mock_fetch.called
-    assert not mock_normalize.called
-    assert summary["rows_fetched"] == 1
-    assert summary["records_added"] == 1
-    saved_rows = json.loads(store_path.read_text(encoding="utf-8"))
-    assert saved_rows[0]["source"] == "gmail_apps_script"
-    assert saved_rows[0]["company"] == "Acme"
 
 
 def test_add_candidate_rejection_record_appends_manual_rejection_to_local_store(tmp_path):
