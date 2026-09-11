@@ -508,6 +508,31 @@ success message. If it is interrupted, retrying is safe: existing completed
 cache entries are reused, while rows that were not persisted are processed
 again.
 
+## JH-307 legacy cutover audit
+
+Run this before any JH-308 reconciliation or retirement work. It opens the
+existing database read-only, reads the configured `Job_Rejections` CSV when
+enabled, inspects the existing local history JSON, and scans current runtime
+references to legacy market/history mechanisms. It does not run Gmail search,
+LLM extraction, JMM lookup, workspace rebuild, migration, or cleanup.
+
+```powershell
+JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data \
+JOB_HUNTER_OUTPUT_DIR=/var/lib/job-hunter/output \
+uv run python -m job_hunter_agent.jh307_audit \
+  --db /var/lib/job-hunter/data/app.db \
+  --target-user-id <rob-user-id> \
+  --local-history-user-id <rob-user-id> \
+  --sheet-user-id <rob-user-id>
+```
+
+The user IDs for the three personal scopes must be supplied explicitly. Use
+`--ownership <ignored-private-json>` for known non-personal agent, automation,
+system, test, or other users; unlisted non-target users remain unclassified and
+are never attributed to Rob. The default report is
+`output/jh307_cutover_audit.json`, which is ignored runtime state. Do not move
+that report into tracked source or commit its personal evidence.
+
 ---
 
 # Settings Runtime Model
