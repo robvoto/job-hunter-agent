@@ -281,9 +281,6 @@ def run_cutover(
     """Plan or apply the one-time JH-308 reconciliation for one user."""
     if not _text(target_user_id):
         raise ValueError("target_user_id is required")
-    if apply and client is None:
-        client = JobMarketMapClient.from_environment()
-
     sheet_rows, sheet_status = fetch_configured_sheet_rows(
         db_path,
         override_path=DATA_DIR / "runtime" / "rob_candidate_application_history_import.local.json",
@@ -337,9 +334,7 @@ def run_cutover(
         job_key = _text(record.get("job_key")).lower()
         if classification == CLASS_EXACT_IDENTITY_RECOVERABLE:
             if lookup_client is None:
-                counters["unresolved_exact_evidence"] += 1
-                pending_history.append(record)
-                continue
+                lookup_client = JobMarketMapClient.from_environment()
             try:
                 resolved = _confirmed_job_key(record, lookup_client)
             except (JobMarketMapError, CutoverBlocked, ValueError):
