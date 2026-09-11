@@ -305,6 +305,17 @@ def run_cutover(
         if backup_path is None:
             raise ValueError("backup_path is required when apply=True")
         create_backup(db_path, backup_path)
+        from job_hunter_agent.global_settings import (
+            get_historical_application_evidence_max_entries,
+        )
+
+        bound = int(
+            max_entries
+            if max_entries is not None
+            else get_historical_application_evidence_max_entries()
+        )
+        if bound < 1:
+            raise ValueError("historical evidence bound must be positive")
 
     counters: Counter[str] = Counter()
     canonical_keys = _canonical_outcome_keys(target_user_id, db_path)
@@ -392,17 +403,6 @@ def run_cutover(
             for record, reason in pending_quarantine:
                 inserted = _insert_quarantine(conn, record, reason)
                 counters["quarantine_inserted"] += int(inserted)
-            from job_hunter_agent.global_settings import (
-                get_historical_application_evidence_max_entries,
-            )
-
-            bound = int(
-                max_entries
-                if max_entries is not None
-                else get_historical_application_evidence_max_entries()
-            )
-            if bound < 1:
-                raise ValueError("historical evidence bound must be positive")
             counters["historical_pruned"] = _prune_bounded_store(
                 conn, "historical_application_evidence", target_user_id, bound
             )
