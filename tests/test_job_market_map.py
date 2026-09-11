@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
+from urllib.error import URLError
 
 import pytest
 
-from job_hunter_agent import market_map_source, source_runner
+from job_hunter_agent import market_map_source, run_context, source_runner
 from job_hunter_agent.job_market_map_client import (
     JobMarketMapClient,
     JobMarketMapContractError,
@@ -94,6 +95,66 @@ def test_client_requires_explicit_aws_ready_api_base(monkeypatch):
         JobMarketMapClient("https://jmm.example")
 
 
+def test_client_uses_exact_lookup_and_current_jd_contract():
+    requests: list[tuple[str, str]] = []
+    responses = iter(
+        [
+            _Response(
+                {
+                    "api_version": "v3",
+                    "schema_version": 6,
+                    "job": _item(9),
+                }
+            ),
+            _Response(
+                {
+                    "api_version": "v3",
+                    "schema_version": 6,
+                    "full_description": "Canonical current JD",
+                    "jd_fetched_at": "2026-09-11T12:01:00+00:00",
+                    "jd_source": "seek_job_page",
+                }
+            ),
+        ]
+    )
+
+    def opener(request, **_kwargs):
+        requests.append((request.method, request.full_url))
+        return next(responses)
+
+    client = JobMarketMapClient("https://jmm.example/v3", opener=opener)
+
+    assert client.lookup_job(identity_key="seek:id:9")["job"]["id"] == 9
+    assert client.get_or_enrich_jd(jmm_job_id=9)["jd_source"] == "seek_job_page"
+    assert requests == [
+        ("GET", "https://jmm.example/v3/jobs/lookup?identity_key=seek%3Aid%3A9"),
+        ("POST", "https://jmm.example/v3/jobs/9/jd"),
+    ]
+
+
+def test_client_fails_closed_for_transport_and_unsupported_jd_responses():
+    unavailable_client = JobMarketMapClient(
+        "https://jmm.example/v3",
+        opener=lambda *_args, **_kwargs: (_ for _ in ()).throw(URLError("offline")),
+    )
+    with pytest.raises(JobMarketMapUnavailable, match="request failed"):
+        unavailable_client.feed_page()
+
+    invalid_jd_client = JobMarketMapClient(
+        "https://jmm.example/v3",
+        opener=lambda *_args, **_kwargs: _Response(
+            {
+                "api_version": "v3",
+                "schema_version": 6,
+                "full_description": "",
+                "jd_source": "seek_job_page",
+            }
+        ),
+    )
+    with pytest.raises(JobMarketMapContractError, match="empty canonical JD"):
+        invalid_jd_client.get_or_enrich_jd(jmm_job_id=9)
+
+
 def test_market_record_keeps_jmm_identity_without_copying_jd():
     record = market_map_source.normalize_market_job(
         _item(7, full_description="Do not copy"), run_iso="2026-09-11T12:00:00+00:00"
@@ -167,6 +228,68 @@ def test_market_source_requests_current_jd_and_checkpoints_per_user(monkeypatch)
     assert len(kept) == 2
     assert all("full_description" not in record for record in kept)
     assert all("details_text" not in record for record in kept)
+
+
+def test_market_source_does_not_checkpoint_a_page_after_analysis_failure(monkeypatch):
+    checkpoints: list[int] = []
+
+    class FailedAnalysisClient:
+        @classmethod
+        def from_environment(cls):
+            return cls()
+
+        def consumer_feed_page(self, *, consumer_key, **_kwargs):
+            return _feed_page(items=[_item(10)], next_cursor=10, has_more=False)
+
+        def checkpoint(self, *, consumer_key, last_job_id, **_kwargs):
+            checkpoints.append(last_job_id)
+            return {"consumer_key": consumer_key, "last_job_id": last_job_id}
+
+    monkeypatch.setattr(market_map_source, "JobMarketMapClient", FailedAnalysisClient)
+    monkeypatch.setattr(
+        market_map_source,
+        "review_pre_detail_normalized_job",
+        lambda *_args: (_ for _ in ()).throw(RuntimeError("analysis failed")),
+    )
+    context = SimpleNamespace(
+        profile={},
+        job_history={},
+        llm_cache={},
+        applied_job_keys=set(),
+        hidden_job_keys=set(),
+        run_iso="2026-09-11T12:00:00+00:00",
+        configured_date_range=3,
+        identity_registry=None,
+    )
+
+    with pytest.raises(RuntimeError, match="analysis failed"):
+        market_map_source.run_market_map_source(context, user_id="rob")
+
+    assert checkpoints == []
+
+
+def test_normal_runtime_builds_a_jmm_only_context(monkeypatch):
+    profile = {"enabled_sources": ["seek"]}
+    monkeypatch.setattr(run_context, "load_profile", lambda: profile)
+    monkeypatch.setattr(run_context, "get_search_settings", lambda _profile: {})
+    monkeypatch.setattr(run_context, "get_workspace_minimum_score", lambda: 50)
+    monkeypatch.setattr(run_context, "get_globally_enabled_sources", lambda: ["seek"])
+    monkeypatch.setattr(
+        run_context,
+        "run_retention_housekeeping",
+        lambda *_args: (set(), set()),
+    )
+    monkeypatch.setattr(run_context, "load_job_history", lambda: {})
+    monkeypatch.setattr(run_context, "load_audit_rows", lambda: [])
+    monkeypatch.setattr(run_context, "load_run_stats", lambda: {})
+    monkeypatch.setattr(run_context, "load_llm_cache", lambda: {})
+    monkeypatch.setattr(run_context, "write_run_attempt", lambda *_args: None)
+    monkeypatch.setattr(run_context, "has_cli_flag", lambda *_args: False)
+
+    context = run_context.build_scrape_run_context([])
+
+    assert context.use_market_map is True
+    assert context.enabled_sources == ["job_market_map"]
 
 
 def test_market_map_persistence_keeps_identity_without_jd_copy():

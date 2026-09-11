@@ -53,6 +53,7 @@ from job_hunter_agent.record_schema import (
     RECORD_LLM_OUTPUT_TOKENS_KEY,
     RECORD_LLM_TITLE_JUDGMENT_KEY,
     RECORD_LOCATION_KEY,
+    RECORD_MARKET_MAP_IDENTITY_KEY,
     RECORD_ONET_CLASSIFICATION_KEY,
     RECORD_ORIGINAL_POSTED_AGE_DAYS_KEY,
     RECORD_ORIGINAL_POSTED_DATE_KEY,
@@ -60,17 +61,17 @@ from job_hunter_agent.record_schema import (
     RECORD_POSTED_AGE_DAYS_KEY,
     RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
     RECORD_REJECT_REASON_KEY,
-    REJECT_REASON_ALREADY_APPLIED_REPOST,
-    REJECT_REASON_MANUALLY_HIDDEN_REPOST,
     RECORD_REQUIREMENT_COVERAGE_KEY,
     RECORD_REQUIREMENT_COVERAGE_VERSION_KEY,
-    REQUIREMENT_COVERAGE_CONTRACT_VERSION,
     RECORD_SALARY_KEY,
     RECORD_TITLE_KEY,
     RECORD_TITLE_REASON_KEY,
     RECORD_URL_KEY,
     RECORD_WORK_MODE_KEY,
     RECORD_WORK_TYPE_KEY,
+    REJECT_REASON_ALREADY_APPLIED_REPOST,
+    REJECT_REASON_MANUALLY_HIDDEN_REPOST,
+    REQUIREMENT_COVERAGE_CONTRACT_VERSION,
     SOURCE_METADATA_SCHEMA_VERSION,
     SOURCE_METADATA_VERSION_KEY,
 )
@@ -630,6 +631,59 @@ def test_review_outcome_is_source_neutral_for_equivalent_normalized_jobs(monkeyp
     assert fit_score_breakdown(seek_record, _review_profile()) == fit_score_breakdown(
         linkedin_record, _review_profile()
     )
+
+
+def test_market_map_review_uses_current_jd_and_does_not_reuse_legacy_analysis(monkeypatch):
+    payload = _keep_review_payload(
+        requirement="Current JMM requirement",
+        capability_name="Current JMM capability",
+        matched_job_text="the current canonical JD",
+    )
+    _patch_llm_review_path(monkeypatch, payload)
+    monkeypatch.setattr(
+        job_review_pipeline,
+        "preferred_salary_display",
+        lambda *values: next((value for value in values if value and value != "N/A"), "N/A"),
+    )
+    monkeypatch.setattr(source_learning, "register_signals", lambda items, category="": None)
+
+    context = _review_context("Job Market Map")
+    context.market_map_mode = True
+    context.job_history = {
+        "seek:301": {
+            "last_kept_snapshot": {
+                RECORD_JOB_KEY: "seek:301",
+                "full_description": "Legacy JH description",
+                RECORD_REQUIREMENT_COVERAGE_KEY: [
+                    {"requirement": "Legacy requirement", "status": "supported"}
+                ],
+            }
+        }
+    }
+    record = _render_ready_record("seek")
+    record.update(
+        {
+            RECORD_JOB_KEY: "seek:301",
+            RECORD_MARKET_MAP_IDENTITY_KEY: "seek:id:301",
+            "market_map_job_id": 301,
+            RECORD_DETAILS_TEXT_KEY: "Current canonical JD from Job Market Map",
+            "full_description": "Current canonical JD from Job Market Map",
+        }
+    )
+
+    outcome, updated, _ = review_post_detail_normalized_job(record, context)
+
+    assert outcome[RECORD_DECISION_KEY] == "KEEP"
+    assert updated[RECORD_REQUIREMENT_COVERAGE_KEY][0]["requirement"] == (
+        "Current JMM requirement"
+    )
+    snapshot = context.job_history["seek:301"]["last_kept_snapshot"]
+    assert snapshot[RECORD_MARKET_MAP_IDENTITY_KEY] == "seek:id:301"
+    assert snapshot[RECORD_REQUIREMENT_COVERAGE_KEY][0]["requirement"] == (
+        "Current JMM requirement"
+    )
+    assert "full_description" not in snapshot
+    assert "details_text" not in context.audit_rows[0]
 
 
 def test_review_pre_detail_rejects_closed_jobs_before_title_review(monkeypatch):
