@@ -94,6 +94,9 @@ does not depend on localhost or Google browser cookies.
   session. The plaintext token is returned once; only its hash is stored.
 - `GET /api/agent-tokens` lists token metadata, and
   `DELETE /api/agent-tokens/{token_id}` revokes one token.
+- Settings -> Notifications -> External plan access provides the dashboard UI
+  for creating, copying once, listing, and revoking these tokens without
+  exposing token hashes or persisted plaintext.
 - External agents send `Authorization: Bearer <token>` to
   `POST /api/activity/events` and `GET /api/activity/jobs/{job_key}`.
   `GET /api/activity/jobs/{job_key}?agent_id=chatgpt` returns same-agent

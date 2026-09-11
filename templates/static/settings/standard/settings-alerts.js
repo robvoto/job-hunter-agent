@@ -28,6 +28,124 @@ export const JobHunterAlertsSettings = (function () {
   let telegramConnectLink = '';
   let scheduleStatusRequestId = 0;
 
+  function setAgentTokenStatus(message = '') {
+    const panel = document.getElementById('agent_tokens_status');
+    if (panel) panel.textContent = message;
+  }
+
+  function formatAgentTokenCreatedAt(value) {
+    const parsed = new Date(String(value || '').trim());
+    if (Number.isNaN(parsed.getTime())) return '';
+    return parsed.toLocaleString([], {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  }
+
+  function renderAgentTokens(tokens) {
+    const labels = loadAlertsLabels();
+    const panel = document.getElementById('agent_tokens_list');
+    if (!labels || !panel) return;
+    const active = Array.isArray(tokens) ? tokens.filter(token => !token?.revoked_at) : [];
+    if (!active.length) {
+      panel.innerHTML = `<p class="panel-copy">${escapeHtml(labels.agent_tokens_empty)}</p>`;
+      return;
+    }
+    panel.innerHTML = `<ul>${active.map((token) => {
+      const label = String(token?.label || '').trim();
+      const agentId = String(token?.agent_id || '').trim();
+      const createdAt = formatAgentTokenCreatedAt(token?.created_at);
+      const created = createdAt
+        ? labels.agent_tokens_created_template.replace('{date}', createdAt)
+        : '';
+      return `
+        <li>
+          <strong>${escapeHtml(label)}</strong>
+          ${agentId ? `<span>${escapeHtml(agentId)}</span>` : ''}
+          ${created ? `<span>${escapeHtml(created)}</span>` : ''}
+          <button
+            class="jh-button jh-button--danger jh-button--compact"
+            type="button"
+            data-revoke-agent-token="${escapeHtml(String(token?.token_id || ''))}"
+          >${escapeHtml(labels.agent_tokens_revoke_label)}</button>
+        </li>`;
+    }).join('')}</ul>`;
+  }
+
+  async function loadAgentTokens() {
+    const labels = loadAlertsLabels();
+    if (!labels || !document.getElementById('agent_tokens_panel')) return;
+    const response = await jobHunterFetch('/api/agent-tokens', { method: 'GET' });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || labels.agent_tokens_load_error);
+    renderAgentTokens(payload.tokens || []);
+  }
+
+  async function generateAgentToken() {
+    const labels = loadAlertsLabels();
+    if (!labels) return;
+    const response = await jobHunterFetch('/api/agent-tokens', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent_id: 'chatgpt', label: labels.agent_tokens_plan_label }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || labels.agent_tokens_create_error);
+    const secretShell = document.getElementById('agent_token_secret_shell');
+    const secret = document.getElementById('agent_token_secret');
+    if (secretShell && secret) {
+      secret.value = String(payload.token || '');
+      secretShell.hidden = false;
+    }
+    setAgentTokenStatus('');
+    await loadAgentTokens();
+  }
+
+  async function revokeAgentToken(tokenId) {
+    const labels = loadAlertsLabels();
+    if (!labels) return;
+    const response = await jobHunterFetch(`/api/agent-tokens/${encodeURIComponent(tokenId)}`, {
+      method: 'DELETE',
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || labels.agent_tokens_revoke_error);
+    await loadAgentTokens();
+  }
+
+  async function copyAgentToken() {
+    const labels = loadAlertsLabels();
+    const secret = document.getElementById('agent_token_secret');
+    if (!labels || !secret?.value) return;
+    try {
+      await navigator.clipboard.writeText(secret.value);
+      setAgentTokenStatus(labels.agent_tokens_copied);
+    } catch {
+      secret.focus();
+      secret.select();
+      setAgentTokenStatus(labels.agent_tokens_copy_error);
+    }
+  }
+
+  function applyAgentTokenLabels() {
+    const labels = loadAlertsLabels();
+    if (!labels) return;
+    const values = {
+      agent_tokens_heading: labels.agent_tokens_heading,
+      agent_tokens_copy: labels.agent_tokens_copy,
+      agent_token_secret_label: labels.agent_tokens_secret_label,
+      agent_token_secret_help: labels.agent_tokens_secret_help,
+      generate_agent_token: labels.agent_tokens_generate_label,
+      copy_agent_token: labels.agent_tokens_copy_label,
+    };
+    Object.entries(values).forEach(([id, value]) => {
+      const element = document.getElementById(id);
+      if (element) element.textContent = value;
+    });
+  }
+
   function formatScheduleDateTime(value) {
     const parsed = new Date(String(value || '').trim());
     if (Number.isNaN(parsed.getTime())) return '';
@@ -181,8 +299,47 @@ export const JobHunterAlertsSettings = (function () {
   }
 
   function initEventHandlers() {
+    const labels = loadAlertsLabels();
     document.getElementById('schedule_enabled')?.addEventListener('change', () => {
       syncSourcePanelDisabledState('schedule_enabled');
+    });
+    applyAgentTokenLabels();
+    void loadAgentTokens().catch(() => {
+      if (labels) setAgentTokenStatus(labels.agent_tokens_load_error);
+    });
+    document.getElementById('generate_agent_token')?.addEventListener('click', async (event) => {
+      const button = event.currentTarget;
+      if (!labels) return;
+      const originalLabel = button.textContent;
+      button.disabled = true;
+      button.textContent = labels.agent_tokens_generating_label;
+      try {
+        await generateAgentToken();
+      } catch (error) {
+        setAgentTokenStatus(error?.message || labels.agent_tokens_create_error);
+      } finally {
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+    });
+    document.getElementById('copy_agent_token')?.addEventListener('click', () => {
+      void copyAgentToken();
+    });
+    document.getElementById('agent_tokens_list')?.addEventListener('click', async (event) => {
+      const button = event.target.closest('[data-revoke-agent-token]');
+      if (!button || !labels) return;
+      const tokenId = String(button.dataset.revokeAgentToken || '').trim();
+      if (!tokenId) return;
+      const originalLabel = button.textContent;
+      button.disabled = true;
+      button.textContent = labels.agent_tokens_revoking_label;
+      try {
+        await revokeAgentToken(tokenId);
+      } catch (error) {
+        setAgentTokenStatus(error?.message || labels.agent_tokens_revoke_error);
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
     });
   }
 

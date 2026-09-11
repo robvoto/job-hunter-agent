@@ -1331,6 +1331,12 @@
   min-width: 0;
 }
 
+.settings-form-field[hidden],
+.onb-field[hidden],
+.field-block[hidden] {
+  display: none;
+}
+
 .settings-form-field > .field-label-row,
 .onb-field > .field-label-row,
 .field-block > .field-label-row {

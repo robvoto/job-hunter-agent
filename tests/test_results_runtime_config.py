@@ -85,6 +85,17 @@ def test_results_page_related_card_action_focuses_existing_workspace_card():
     assert "target.classList.add('is-related-target')" in results_js
 
 
+def test_presented_activity_write_survives_navigation():
+    root = Path(__file__).resolve().parent.parent
+    results_js = (root / "templates" / "static" / "results" / "results-page.js").read_text(
+        encoding="utf-8"
+    )
+
+    activity_call = results_js.split("/api/activity/events`, {", 1)[1].split("});", 1)[0]
+    assert "method: 'POST'" in activity_call
+    assert "keepalive: true" in activity_call
+
+
 def test_workspace_page_size_select_is_a_shared_workspace_control():
     html = workspace_renderer.render_page_size_select_html()
 

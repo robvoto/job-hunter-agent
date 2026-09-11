@@ -723,6 +723,7 @@
         presentedActivityKeys.add(idempotencyKey);
         window.jobHunterFetch(`${API_BASE_URL}/api/activity/events`, {
           method: 'POST',
+          keepalive: true,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             job_key: jobKey,

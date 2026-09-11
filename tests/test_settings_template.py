@@ -647,6 +647,14 @@ def test_settings_alerts_section_uses_shared_settings_shell(monkeypatch):
 
     assert 'id="refresh_telegram_connection"' in html
 
+    assert 'id="agent_tokens_panel"' in html
+
+    assert 'id="generate_agent_token"' in html
+
+    assert 'id="agent_token_secret"' in html
+
+    assert 'id="copy_agent_token"' in html
+
     assert "Notifications" in html
 
     assert "__JOB_HUNTER_SETTINGS_ALERTS_SECTION_TITLE__" not in html

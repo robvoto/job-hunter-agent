@@ -36,18 +36,25 @@ def _seed_contract_preferences(email: str) -> None:
 
 def _seed_candidate_capabilities(email: str, capabilities: list[dict[str, object]]) -> None:
     from job_hunter_agent.auth import get_or_create_user
-    from job_hunter_agent.profile_store import KEY_ONBOARDING_COMPLETE, patch_profile
+    from job_hunter_agent.profile_store import KEY_ONBOARDING_COMPLETE, load_profile, save_profile
     from job_hunter_agent.user_context import set_user_id
 
     admin_email = os.environ["JOB_HUNTER_ADMIN_EMAIL"]
     user = get_or_create_user(email, admin_email)
     set_user_id(user["user_id"])
     try:
-        patch_profile(
-            {
-                KEY_ONBOARDING_COMPLETE: True,
-                "candidate_capabilities": capabilities,
-            }
+        profile = load_profile()
+        profile[KEY_ONBOARDING_COMPLETE] = True
+        profile["candidate_capabilities"] = capabilities
+        save_profile(
+            profile,
+            # These rows are deterministic fixture data for testing the
+            # Settings renderer, not inputs to the capability-atomicity LLM.
+            prevalidated_capability_names={
+                str(item.get("name") or "").strip()
+                for item in capabilities
+                if str(item.get("name") or "").strip()
+            },
         )
     finally:
         set_user_id(None)
@@ -61,6 +68,27 @@ def _seed_schedule_enabled(email: str) -> None:
     admin_email = os.environ["JOB_HUNTER_ADMIN_EMAIL"]
     user = get_or_create_user(email, admin_email)
     save_user_settings(user["user_id"], {"schedule": {"enabled": True}})
+
+
+def test_external_plan_token_can_be_created_and_revoked(candidate_page):
+    page = candidate_page
+    page.goto("/settings")
+    page.locator('[data-section="section-alerts"]').click()
+
+    panel = page.locator("#agent_tokens_panel")
+    expect(panel).to_be_visible()
+    panel.locator("#generate_agent_token").click()
+
+    secret = panel.locator("#agent_token_secret")
+    expect(secret).to_be_visible()
+    assert secret.input_value().startswith("jh_at_")
+    expect(panel).to_contain_text("Career Search Plans")
+    expect(panel.locator("#copy_agent_token")).to_be_visible()
+
+    revoke = panel.locator("[data-revoke-agent-token]").first
+    expect(revoke).to_be_visible()
+    revoke.click()
+    expect(panel).to_contain_text("No active plan tokens.")
 
 
 def test_contract_length_uses_light_dismiss_popover(candidate_page):

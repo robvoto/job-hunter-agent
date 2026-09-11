@@ -97,13 +97,17 @@ def live_server():
     """Boot the real FastAPI app with uvicorn in a background thread."""
     import uvicorn
 
-    from job_hunter_agent.fastapi_app import create_app
+    import job_hunter_agent.fastapi_app as fastapi_app
 
     port = _free_port()
     base_url = f"http://127.0.0.1:{port}"
     os.environ["JOB_HUNTER_BASE_URL"] = base_url
+    # The module can be imported while the E2E DB is bootstrapped, before this
+    # dynamic port exists. Keep the module-level CORS owner aligned with the
+    # real click-test server rather than leaking a developer/runtime base URL.
+    fastapi_app.JOB_HUNTER_BASE_URL = base_url
 
-    app = create_app()
+    app = fastapi_app.create_app()
     config = uvicorn.Config(
         app,
         host="127.0.0.1",
@@ -239,7 +243,7 @@ def _cheapest_llm_model() -> str:
 def _seed_workspace_records(email: str, records: list[dict], *, reason: str) -> None:
     """Seed a known workspace snapshot for a dedicated e2e user."""
     from job_hunter_agent.auth import get_or_create_user
-    from job_hunter_agent.io_utils import write_debug_json
+    from job_hunter_agent.scrape_finalize import _save_workspace_pool
     from job_hunter_agent.server_helpers import clear_current_user_search_state
     from job_hunter_agent.user_context import set_user_id
     from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
@@ -249,7 +253,9 @@ def _seed_workspace_records(email: str, records: list[dict], *, reason: str) -> 
     set_user_id(user["user_id"])
     try:
         clear_current_user_search_state()
-        write_debug_json(records)
+        # JH-306 retired the legacy audit snapshot as a workspace rebuild
+        # source. Seed the canonical JH-owned workspace pool used at runtime.
+        _save_workspace_pool(records)
         rebuild_workspace_results(reason=reason)
     finally:
         set_user_id(None)
