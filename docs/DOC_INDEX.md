@@ -42,6 +42,7 @@ Runbooks are for live incident-style procedures. They should contain exact comma
 | File | Owner |
 |---|---|
 | `docs/CONFIG_AND_RULES_GOVERNANCE.md` | Config, rule, knowledge, and governance ownership. |
+| `docs/INTEGRATIONS.md` | External integration contracts, including JH activity API reads/writes and standalone plan-agent access. |
 | `docs/SOURCE_REGISTER.md` | External/internal source inventory and source-specific notes. |
 | `docs/SCORING_RATIONALE.md` | Fit score rationale, scoring model explanation, and scoring decision history. |
 | `docs/UI_COMPONENT_MAP.md` | UI component ownership and reusable UI map. |
@@ -49,7 +50,7 @@ Runbooks are for live incident-style procedures. They should contain exact comma
 | `docs/CAPABILITY_AGING_RATIONALE.md` | Capability aging/strength rationale. Candidate to merge into a future decision log. |
 | `docs/OCCUPATION_TAXONOMY_RATIONALE.md` | Occupation taxonomy rationale. Candidate to merge into a future decision log. |
 | `docs/REQUIREMENT_DECOMPOSITION_RATIONALE.md` | Fit-review `decomposition` block: AND/OR requirement semantics and bounded `capability_judgement`. Candidate to merge into a future decision log. |
-| `docs/candidate_application_history_sync.md` | Candidate application history sync notes. Candidate to merge into operations/config governance. |
+| `docs/candidate_application_history_sync.md` | Retired rejection-sheet sync and JH-308 migration/cutover note; not a live runtime sync procedure. |
 
 ## Backlog
 

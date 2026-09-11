@@ -30,7 +30,7 @@ Use this as the canonical documentation routing index for the repo. It should st
 
 - [SCORING_RATIONALE.md](SCORING_RATIONALE.md#process-flow-overview) — primary scoring flow explanation plus links to the Mermaid and HTML render files under `docs/diagrams/`.
 - [CONFIG_AND_RULES_GOVERNANCE.md](CONFIG_AND_RULES_GOVERNANCE.md) — governance for managed config, rules, and knowledge.
-- [candidate_application_history_sync.md](candidate_application_history_sync.md) — local sync notes for candidate application history until merged into broader docs.
+- [candidate_application_history_sync.md](candidate_application_history_sync.md) — retired rejection-sheet sync and JH-308 migration/cutover note; not a live sync procedure.
 - [ALIAS_LOGIC_RATIONALE.md](ALIAS_LOGIC_RATIONALE.md) — alias/title matching rationale and historical decisions.
 - [CAPABILITY_AGING_RATIONALE.md](CAPABILITY_AGING_RATIONALE.md) — capability recency/aging rationale.
 - [OCCUPATION_TAXONOMY_RATIONALE.md](OCCUPATION_TAXONOMY_RATIONALE.md) — occupation taxonomy ownership, matching rationale, and refresh process.
