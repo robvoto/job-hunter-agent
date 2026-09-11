@@ -50,6 +50,23 @@ def test_schedule_status_copy_is_managed_and_does_not_claim_unverified_next_run(
     assert "labels.schedule_status_unavailable" in js
 
 
+def test_agent_token_settings_use_managed_copy_and_existing_api_contract():
+    data = json.loads((_KNOWLEDGE_DIR / "ui_labels.json").read_text(encoding="utf-8"))
+    labels = data["settings_alerts_labels"]
+    js = (
+        Path(__file__).resolve().parent.parent
+        / "templates/static/settings/standard/settings-alerts.js"
+    ).read_text(encoding="utf-8")
+
+    assert labels["agent_tokens_heading"] == "External plan access"
+    assert labels["agent_tokens_plan_label"] == "Career Search Plans"
+    assert "'/api/agent-tokens'" in js
+    assert "method: 'POST'" in js
+    assert "method: 'DELETE'" in js
+    assert "agent_id: 'chatgpt'" in js
+    assert "navigator.clipboard.writeText(secret.value)" in js
+
+
 def test_ui_labels_json_contains_all_settings_clearances_keys():
 
     data = json.loads((_KNOWLEDGE_DIR / "ui_labels.json").read_text(encoding="utf-8"))

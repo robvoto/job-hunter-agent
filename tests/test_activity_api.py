@@ -16,6 +16,45 @@ from job_hunter_agent.database import ensure_user_row
 from job_hunter_agent.fastapi_app import create_app
 
 
+def test_dashboard_can_create_list_and_revoke_agent_token(isolated_db, monkeypatch):
+    import job_hunter_agent.fastapi_app as fastapi_app
+    import job_hunter_agent.routes.activity as activity_routes
+
+    user = {
+        "user_id": "user-a",
+        "email": "user@example.com",
+        "role": "candidate",
+        "access_status": USER_ACCESS_APPROVED,
+    }
+    ensure_user_row("user-a", access_status=USER_ACCESS_APPROVED)
+    monkeypatch.setattr(fastapi_app, "read_session_user", lambda request: user)
+    monkeypatch.setattr(activity_routes, "read_session_user", lambda request: user)
+    monkeypatch.setattr(fastapi_app, "verify_csrf_token", lambda request, token: True)
+
+    with TestClient(create_app()) as client:
+        created = client.post(
+            "/api/agent-tokens",
+            headers={"X-CSRF-Token": "test"},
+            json={"agent_id": "chatgpt", "label": "Career Search Plans"},
+        )
+        assert created.status_code == 200
+        secret = created.json()["token"]
+        token_id = created.json()["token_id"]
+        assert secret.startswith("jh_at_")
+
+        listed = client.get("/api/agent-tokens")
+        assert listed.status_code == 200
+        assert listed.json()["tokens"][0]["token_id"] == token_id
+        assert "token" not in listed.json()["tokens"][0]
+
+        revoked = client.delete(
+            f"/api/agent-tokens/{token_id}",
+            headers={"X-CSRF-Token": "test"},
+        )
+        assert revoked.status_code == 200
+        assert revoked.json()["revoked"] is True
+
+
 def test_activity_api_requires_authentication():
     with TestClient(create_app()) as client:
         response = client.post(
