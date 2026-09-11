@@ -239,6 +239,14 @@ Local operational UI.
 uv run python -m job_hunter_agent.fastapi_app
 ```
 
+For local JMM-backed discovery, the repo `.env` should contain:
+
+```text
+JOB_HUNTER_MARKET_MAP_BASE_URL=http://127.0.0.1:8770/v3
+```
+
+JMM is a separate service and must be running on port `8770`; this setting only tells Job Hunter where to call it. A safe template is provided in `.env.example`. Non-local deployments must set their own reachable JMM `/v3` URL and must not assume `127.0.0.1`.
+
 Repo-root launcher:
 
 ```bash
