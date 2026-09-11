@@ -381,6 +381,7 @@ def build_workspace_record_sets(
         build_archive_records_fn=build_archive_records,
         build_applied_records_fn=build_applied_records,
         build_hidden_records_fn=build_hidden_records,
+        deduplicate_records_fn=deduplicate_content_reposts,
     )
     def _not_manual_state_repost(record: dict) -> bool:
         return (

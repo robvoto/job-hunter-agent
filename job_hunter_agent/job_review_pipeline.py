@@ -125,7 +125,7 @@ from job_hunter_agent.history import apply_kept_job_reuse, can_reuse_kept_job, f
 from job_hunter_agent.job_identity import (
     find_confirmed_duplicate,
     find_confirmed_identity_history_entry,
-    find_content_repost_history_entry,
+    find_manual_state_history_entry,
     merge_confirmed_duplicate_evidence,
     RUN_IDENTITY_CLAIM_KEY,
     RunIdentityRegistry,
@@ -633,22 +633,6 @@ class ReviewPipelineContext:
     # JMM supplies the current JD for this run. Disable reuse of old JH analysis
     # so candidate decisions are always grounded in the JMM evidence returned now.
     market_map_mode: bool = False
-
-
-def _find_applied_identity_match(record: dict, context: ReviewPipelineContext) -> dict | None:
-    """Match a new source record to applied history using only central identity facts."""
-
-    candidates: list[dict] = []
-    for job_key in context.applied_job_keys:
-        entry = context.job_history.get(job_key)
-        if not isinstance(entry, dict):
-            continue
-        snapshot = entry.get("last_kept_snapshot")
-        if isinstance(snapshot, dict):
-            candidates.append(snapshot)
-        else:
-            candidates.append(entry)
-    return find_confirmed_duplicate(record, candidates)
 
 
 _DETAILS_STATUS_REJECT_REASON = {
@@ -1275,9 +1259,19 @@ def review_pre_detail_normalized_job(
     # JMM is the authoritative market/identity owner. Do not compare a fresh
     # JMM job against legacy JH snapshots to infer that it is an applied repost;
     # the exact current job key/activity state is handled by JH-305 projections.
-    if not context.market_map_mode and _find_applied_identity_match(record, context) is not None:
+    if not context.market_map_mode and find_manual_state_history_entry(
+        record, context.job_history, context.applied_job_keys
+    ) is not None:
         record[RECORD_DECISION_KEY] = "SKIP"
         record[RECORD_REJECT_REASON_KEY] = "ALREADY_APPLIED"
+        _finalize(record, context)
+        return _build_outcome(record), record, skill_observations, False
+
+    if find_manual_state_history_entry(
+        record, context.job_history, context.hidden_job_keys
+    ) is not None:
+        record[RECORD_DECISION_KEY] = "SKIP"
+        record[RECORD_REJECT_REASON_KEY] = "MANUALLY_HIDDEN"
         _finalize(record, context)
         return _build_outcome(record), record, skill_observations, False
 
@@ -1563,23 +1557,17 @@ def review_post_detail_normalized_job(
         )
         return _build_outcome(record), record, skill_observations
 
-    if (
-        find_content_repost_history_entry(
-            record, context.job_history, context.applied_job_keys
-        )
-        is not None
-    ):
+    if find_manual_state_history_entry(
+        record, context.job_history, context.applied_job_keys
+    ) is not None:
         record[RECORD_DECISION_KEY] = "SKIP"
         record[RECORD_REJECT_REASON_KEY] = REJECT_REASON_ALREADY_APPLIED_REPOST
         _finalize(record, context)
         return _build_outcome(record), record, skill_observations
 
-    if (
-        find_content_repost_history_entry(
-            record, context.job_history, context.hidden_job_keys
-        )
-        is not None
-    ):
+    if find_manual_state_history_entry(
+        record, context.job_history, context.hidden_job_keys
+    ) is not None:
         record[RECORD_DECISION_KEY] = "SKIP"
         record[RECORD_REJECT_REASON_KEY] = REJECT_REASON_MANUALLY_HIDDEN_REPOST
         _finalize(record, context)

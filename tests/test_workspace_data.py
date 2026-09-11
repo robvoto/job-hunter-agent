@@ -18,6 +18,8 @@ from job_hunter_agent.workspace_data import (
 )
 
 _SNAPSHOT = {
+    "job_key": "linkedin:li-1",
+    "source": "linkedin",
     "title": "Business Analyst",
     "company": "Acme Co",
     "url": "https://example.test/job-1",
@@ -138,6 +140,7 @@ def test_build_workspace_record_sets_excludes_applied_and_hidden_current_records
         build_hidden_records_fn=lambda keys, history, reference_time: [
             {"job_key": key, "hidden": True} for key in sorted(keys)
         ],
+        deduplicate_records_fn=lambda records: records,
     )
 
     assert [record["job_key"] for record in result["current_records"]] == ["seek:current"]
@@ -165,6 +168,7 @@ def test_build_workspace_record_sets_excludes_stale_archive_from_potential_short
         build_archive_records_fn=lambda *args: archive,
         build_applied_records_fn=lambda *args: [],
         build_hidden_records_fn=lambda *args: [],
+        deduplicate_records_fn=lambda records: records,
     )
 
     assert [record["job_key"] for record in result["shortlist_records"]] == ["seek:recent"]

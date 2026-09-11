@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 
 import job_hunter_agent.job_review_pipeline as job_review_pipeline
 import job_hunter_agent.workspace_export as workspace_export
@@ -8,6 +9,8 @@ from job_hunter_agent.record_schema import (
     POSTING_CHANNEL_CLASSIFIER_VERSION,
     POSTING_CHANNEL_VERSION_KEY,
 )
+
+_NEW_TO_YOU_CUTOFF = datetime.fromisoformat("2026-09-08T09:00:00+10:00")
 
 
 def test_export_workspace_jobs_merges_existing_export(tmp_path, monkeypatch):
@@ -102,6 +105,7 @@ def test_workspace_export_uses_agency_recruiter_badge():
             },
         },
         "current",
+        _NEW_TO_YOU_CUTOFF,
     )
 
     assert "Agency recruiter" in badges
@@ -155,8 +159,12 @@ def test_workspace_export_badges_use_preserved_posting_channel_classification():
     )
     job_review_pipeline._apply_source_metadata_to_record(recruiter_record, None)
 
-    direct_badges = workspace_export._build_badges(direct_record, "current")
-    recruiter_badges = workspace_export._build_badges(recruiter_record, "current")
+    direct_badges = workspace_export._build_badges(
+        direct_record, "current", _NEW_TO_YOU_CUTOFF
+    )
+    recruiter_badges = workspace_export._build_badges(
+        recruiter_record, "current", _NEW_TO_YOU_CUTOFF
+    )
 
     assert "Direct employer" in direct_badges
     assert "Source unclear" not in direct_badges
@@ -176,7 +184,7 @@ def test_export_badges_show_source_unclear_for_unknown_channel():
         }
     }
 
-    badges = workspace_export._build_badges(record, "current")
+    badges = workspace_export._build_badges(record, "current", _NEW_TO_YOU_CUTOFF)
 
     assert "Source unclear" in badges
 
@@ -190,7 +198,7 @@ def test_export_badges_suppress_stale_posting_channel_classification():
         }
     }
 
-    badges = workspace_export._build_badges(record, "current")
+    badges = workspace_export._build_badges(record, "current", _NEW_TO_YOU_CUTOFF)
 
     assert "Direct employer" not in badges
     assert "Source unclear" not in badges
@@ -202,6 +210,7 @@ def test_export_badges_use_managed_posted_age_thresholds():
             "posted_age_days": 7,
         },
         "current",
+        _NEW_TO_YOU_CUTOFF,
     )
 
     assert "7+ Days Old" in badges

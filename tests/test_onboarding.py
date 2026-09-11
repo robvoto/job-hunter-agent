@@ -1410,21 +1410,8 @@ def test_user_settings_schedule_payload_rejects_bad_time_format():
 
 
 def test_remove_review_key_supports_unapply(monkeypatch):
-    saved_profile = {
-        "review_controls": {
-            "applied_job_keys": ["job-1", "job-2"],
-            "hidden_job_keys": ["job-3"],
-        }
-    }
     events = []
 
-    monkeypatch.setattr(review_history_service, "load_profile", lambda: saved_profile)
-    monkeypatch.setattr(review_history_service, "save_profile", lambda profile: profile)
-    monkeypatch.setattr(
-        review_history_service,
-        "persist_review_event",
-        lambda *args, **kwargs: events.append((args, kwargs)),
-    )
     monkeypatch.setattr(
         review_history_service,
         "rebuild_workspace_after_rule_change",
@@ -1434,12 +1421,8 @@ def test_remove_review_key_supports_unapply(monkeypatch):
     result = review_history_service.remove_review_key("unapply", "job-1")
 
     assert result["ok"] is True
-    assert result["reload_workspace"] is True
-    assert saved_profile["review_controls"]["applied_job_keys"] == ["job-2"]
-    assert saved_profile["review_controls"]["hidden_job_keys"] == ["job-3"]
-    assert events[0][0][0] == "unapply"
-    assert str(events[1][0][0]).startswith("rebuild:review action saved: unapply")
-    assert events[1][1] == {}
+    assert result["state_changed"] is False
+    assert events == []
 
 
 def test_matching_rules_changed_detects_capability_matrix_change():

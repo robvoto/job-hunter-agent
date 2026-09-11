@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from job_hunter_agent import candidate_application_history as cah
 
 
@@ -73,7 +75,7 @@ def test_import_command_returns_error_when_sheet_fetch_fails(monkeypatch, tmp_pa
     assert "[candidate_application_history] records_total: 0" in output
 
 
-def test_import_recovers_from_corrupt_cache_and_partial_row_failure(monkeypatch, tmp_path):
+def test_import_rejects_invalid_cached_row_without_writing_it(monkeypatch, tmp_path):
     store_path, cache_path = _set_history_paths(monkeypatch, tmp_path)
     cache_path.write_text("{not json}", encoding="utf-8")
 
@@ -98,14 +100,14 @@ def test_import_recovers_from_corrupt_cache_and_partial_row_failure(monkeypatch,
     assert summary["rows_fetched"] == 2
     assert summary["rows_loaded_from_cache"] == 0
     assert summary["rows_sent_to_llm"] == 1
-    assert summary["rows_marked_rejection"] == 2
-    assert summary["rows_needing_review"] == 1
-    assert summary["records_added"] == 2
+    assert summary["rows_marked_rejection"] == 1
+    assert summary["rows_needing_review"] == 0
+    assert summary["failures"] == 1
+    assert summary["records_added"] == 1
     assert summary["records_updated"] == 0
-    assert summary["records_total"] == 2
-    assert len(stored) == 2
-    assert stored[1]["needs_review"] is True
-    assert stored[1]["review_reason"] == "Row processing failed: bad row"
+    assert summary["records_total"] == 1
+    assert len(stored) == 1
+    assert stored[0]["message_id"] == "m-1"
     assert len(cache) == 2
 
 
@@ -155,7 +157,7 @@ def test_status_command_reads_only_local_store(monkeypatch, tmp_path, capsys):
     assert "[candidate_application_history] records_total: 1" in output
 
 
-def test_load_candidate_history_skips_invalid_store_rows(monkeypatch, tmp_path, caplog):
+def test_load_candidate_history_rejects_invalid_store_rows(monkeypatch, tmp_path):
     store_path, _ = _set_history_paths(monkeypatch, tmp_path)
     store_path.write_text(
         json.dumps(
@@ -201,9 +203,5 @@ def test_load_candidate_history_skips_invalid_store_rows(monkeypatch, tmp_path, 
         encoding="utf-8",
     )
 
-    with caplog.at_level("WARNING"):
-        rows = cah.load_candidate_job_rejection_history()
-
-    assert len(rows) == 1
-    assert rows[0]["llm_company"] == "Acme"
-    assert "invalid store rows skipped: 1" in caplog.text
+    with pytest.raises(ValueError, match="missing required fields"):
+        cah.load_candidate_job_rejection_history()

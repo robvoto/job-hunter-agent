@@ -500,6 +500,14 @@ body {
   gap: var(--control-space-sm);
 }
 
+.workspace-reposts-hidden {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-height-lg);
+  color: var(--text-muted);
+  font-size: var(--help-copy-font-size);
+}
+
 .workspace-more-filters-trigger {
   display: none;
 }

@@ -52,6 +52,7 @@ from job_hunter_agent.record_schema import (
     RECORD_URL_KEY,
     RECORD_WORK_MODE_KEY,
     RECORD_WORK_TYPE_KEY,
+    validate_review_snapshot,
 )
 
 logger = logging.getLogger(__name__)
@@ -237,10 +238,7 @@ def build_hidden_workspace_record(
     days_since_fn: Callable[[Optional[str], datetime], Optional[int]],
 ) -> dict:
 
-    snapshot = entry.get("last_kept_snapshot")
-
-    if not isinstance(snapshot, dict):
-        snapshot = {}
+    snapshot = validate_review_snapshot(entry.get("last_kept_snapshot"), job_key)
 
     hidden_at = entry.get("last_hidden_at") or entry.get("first_hidden_at")
 
@@ -249,9 +247,7 @@ def build_hidden_workspace_record(
     return {
         RECORD_JOB_KEY: job_key,
         RECORD_SOURCE_KEY: _record_source(snapshot or entry, job_key),
-        RECORD_TITLE_KEY: snapshot.get(RECORD_TITLE_KEY)
-        or entry.get(RECORD_TITLE_KEY)
-        or f"Hidden job {job_key}",
+        RECORD_TITLE_KEY: snapshot[RECORD_TITLE_KEY],
         RECORD_COMPANY_KEY: snapshot.get(RECORD_COMPANY_KEY)
         or entry.get(RECORD_COMPANY_KEY)
         or "N/A",
@@ -357,10 +353,7 @@ def build_applied_workspace_record(
     days_since_fn: Callable[[Optional[str], datetime], Optional[int]],
 ) -> dict:
 
-    snapshot = entry.get("last_kept_snapshot")
-
-    if not isinstance(snapshot, dict):
-        snapshot = {}
+    snapshot = validate_review_snapshot(entry.get("last_kept_snapshot"), job_key)
 
     applied_at = entry.get("last_applied_at") or entry.get("first_applied_at")
 
@@ -369,7 +362,7 @@ def build_applied_workspace_record(
     return {
         "job_key": job_key,
         "source": _record_source(snapshot or entry, job_key),
-        "title": snapshot.get("title") or entry.get("title") or f"Applied job {job_key}",
+        "title": snapshot["title"],
         "company": snapshot.get("company") or entry.get("company") or "N/A",
         "url": snapshot.get("url") or entry.get("url") or "#",
         "posted": snapshot.get("posted") or "N/A",
@@ -471,6 +464,7 @@ def build_workspace_record_sets(
     ],
     build_applied_records_fn: Callable[[set[str], dict[str, dict], datetime], list[dict]],
     build_hidden_records_fn: Callable[[set[str], dict[str, dict], datetime], list[dict]],
+    deduplicate_records_fn: Callable[[list[dict]], list[dict]],
 ) -> dict[str, list[dict]]:
 
     _score_cache: dict[str, int] = {}
@@ -499,7 +493,11 @@ def build_workspace_record_sets(
 
         return is_workspace_eligible_fn(record, profile)
 
-    curated_kept_records = [record for record in kept_records if _is_eligible(record)]
+    # Collapse canonical identity/content duplicates before eligibility and
+    # workspace collection construction. A duplicate must not be scored or
+    # admitted through a separate current/archive path.
+    canonical_kept_records = deduplicate_records_fn(kept_records)
+    curated_kept_records = [record for record in canonical_kept_records if _is_eligible(record)]
 
     def _rank_by_fit(record: dict) -> tuple:
 
@@ -522,6 +520,28 @@ def build_workspace_record_sets(
             -(timestamp or datetime.min).timestamp() if timestamp else float("-inf"),
         )
 
+    archive_records = build_archive_records_fn(
+        job_history,
+        {
+            normalize_job_key_fn(str(record.get("job_key") or ""))
+            for record in curated_kept_records
+            if normalize_job_key_fn(str(record.get("job_key") or ""))
+        },
+        applied_job_keys,
+        hidden_job_keys,
+        reference_time,
+    )
+
+    # Canonicalize the complete Potential input before constructing current,
+    # archive, or shortlist collections. This prevents one vacancy from
+    # entering through a current record and a different history/archive path.
+    canonical_records = deduplicate_records_fn([*curated_kept_records, *archive_records])
+    current_candidate_keys = {
+        normalize_job_key_fn(str(record.get("job_key") or ""))
+        for record in curated_kept_records
+        if normalize_job_key_fn(str(record.get("job_key") or ""))
+    }
+
     state_blocked_keys = {
         normalize_job_key_fn(str(job_key or ""))
         for job_key in (*applied_job_keys, *hidden_job_keys)
@@ -531,26 +551,21 @@ def build_workspace_record_sets(
     current_records = sorted(
         [
             record
-            for record in curated_kept_records
+            for record in canonical_records
+            if not record.get("archived")
+            and normalize_job_key_fn(str(record.get("job_key") or "")) in current_candidate_keys
             if normalize_job_key_fn(str(record.get("job_key") or ""))
             not in state_blocked_keys
         ],
         key=_rank_by_fit,
     )
 
-    current_run_keys = {
-        normalize_job_key_fn(str(record.get("job_key") or ""))
-        for record in curated_kept_records
-        if normalize_job_key_fn(str(record.get("job_key") or ""))
-    }
-
-    archive_records = build_archive_records_fn(
-        job_history,
-        current_run_keys,
-        applied_job_keys,
-        hidden_job_keys,
-        reference_time,
-    )
+    archive_records = [
+        record
+        for record in canonical_records
+        if record.get("archived")
+        or normalize_job_key_fn(str(record.get("job_key") or "")) not in current_candidate_keys
+    ]
 
     applied_records = build_applied_records_fn(applied_job_keys, job_history, reference_time)
 
