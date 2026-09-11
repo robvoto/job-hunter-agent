@@ -5,7 +5,7 @@ Pick the smallest skill that matches the task. Do not load every skill. Detailed
 - `ad-learning/SKILL.md` — pending job-ad learning candidates.
 - `aws-test-instance/SKILL.md` — AWS test-instance facts, SSM diagnosis, logs, and host/browser-session issues.
 - `backlog-management/SKILL.md` — canonical backlog rows, priorities, duplicates, implementation state, and review flags.
-- `code-change/SKILL.md` — code, tests, runtime, and integration implementation; detailed diagnosis patterns live in `code-change/DETAILS.md`.
+- `code-change/SKILL.md` — code, tests, runtime, and integration implementation, including implementation/review hygiene (no duplicate/dead/superseded code); detailed diagnosis patterns live in `code-change/DETAILS.md`.
 - `css-design-system/SKILL.md` — reusable CSS, spacing, layout, components, and design tokens.
 - `dashboard-ui/SKILL.md` — workspace/settings UI and related dashboard behaviour.
 - `git-lifecycle/SKILL.md` — branch/worktree, commit, push, PR, merge, and verified `main` integration.

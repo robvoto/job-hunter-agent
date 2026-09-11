@@ -48,9 +48,10 @@ A code change is done only when:
 1. Implementation is tested according to the testing rule.
 2. Tests are added or updated when behaviour changes.
 3. The solution is not an unapproved fallback, hardcoding, heuristic, compatibility shim, or dead path.
-4. Current project patterns are followed.
-5. Relevant docs, skills, or operations notes are updated when affected.
-6. **If the task came from a backlog item (human-supplied JH ID or agent-picked row), the backlog row is always updated before reporting done** — `Implementation State`, `Implementation Date`, `Implemented By`, `Evidence` — via `.agents/skills/backlog-management/SKILL.md`. This is not conditional on whether it seems "affected"; it is a required last step whenever a backlog row exists for the task.
+4. The touched area has been checked for near-duplicate logic, superseded functions/branches left active alongside the new path, stale feature flags/routes/adapters, tests that only cover behaviour no longer supported, and docs/comments describing an old implementation — remove confirmed stale material as part of the change rather than leaving cleanup debt. Do not delete code whose ownership/use is unclear without investigating first.
+5. Current project patterns are followed.
+6. Relevant docs, skills, or operations notes are updated when affected.
+7. **If the task came from a backlog item (human-supplied JH ID or agent-picked row), the backlog row is always updated before reporting done** — `Implementation State`, `Implementation Date`, `Implemented By`, `Evidence` — via `.agents/skills/backlog-management/SKILL.md`. This is not conditional on whether it seems "affected"; it is a required last step whenever a backlog row exists for the task.
 
 ## Finish format
 Report:
