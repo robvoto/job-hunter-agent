@@ -136,6 +136,12 @@ def test_cutover_migrates_exact_rows_and_preserves_other_evidence(monkeypatch, t
         ).fetchone()[0] == "source explicitly marked the row not job-related"
 
 
+def test_cutover_accepts_canonical_jh_manual_action_source():
+    from job_hunter_agent.jh308_cutover import _activity_source
+
+    assert _activity_source({"source": "jh_manual_action"}) == "manual"
+
+
 def test_cutover_is_idempotent_and_does_not_use_employer_matching(monkeypatch, tmp_path):
     db = tmp_path / "cutover.db"
     init_db(db)

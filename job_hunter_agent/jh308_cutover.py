@@ -45,6 +45,7 @@ _MIGRATION_SOURCE_BY_LEGACY_SOURCE = {
     "gmail_ack": activity.SOURCE_GMAIL_ACK,
     "seek_applied": activity.SOURCE_SEEK_APPLIED,
     "manual": activity.SOURCE_MANUAL,
+    "jh_manual_action": activity.SOURCE_MANUAL,
 }
 _MIGRATION_AGENT_ID = activity.AGENT_MANUAL
 _OUTCOME_TYPES = frozenset(activity.OUTCOME_ACTIVITY_TYPES)
