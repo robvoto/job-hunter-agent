@@ -267,6 +267,14 @@ def get_job_history_max_age_days() -> int:
     return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_JOB_HISTORY_MAX_AGE_DAYS])
 
 
+def get_historical_application_evidence_max_entries() -> int:
+    return int(
+        load_global_settings()[KEY_HISTORY_SETTINGS][
+            KEY_HISTORICAL_APPLICATION_EVIDENCE_MAX_ENTRIES
+        ]
+    )
+
+
 def get_repeated_listing_min_times_seen() -> int:
     return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_REPEATED_LISTING_MIN_TIMES_SEEN])
 
@@ -503,14 +511,6 @@ def get_candidate_application_history_tab_name() -> str:
 
 def get_candidate_application_history_required_headers() -> list[str]:
     return list(get_candidate_application_history_settings()["required_headers"])
-
-
-def get_candidate_application_history_sync_before_run() -> bool:
-    return bool(
-        get_candidate_application_history_settings().get(
-            KEY_CANDIDATE_APPLICATION_HISTORY_SYNC_BEFORE_RUN, False
-        )
-    )
 
 
 @lru_cache(maxsize=1)

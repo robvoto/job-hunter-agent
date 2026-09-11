@@ -266,6 +266,7 @@
     "applied_retention_days": 0,
     "job_history_max_entries": 2000,
     "job_history_max_age_days": 365,
+    "historical_application_evidence_max_entries": 2000,
     "repeated_listing_min_times_seen": 4,
     "repeated_listing_min_span_days": 21,
     "multi_listing_red_flag_min_listings": 3,
@@ -563,7 +564,6 @@
   "candidate_application_history": {
     "enabled": true,
     "source_type": "local_runtime_json",
-    "sync_before_run": false,
     "spreadsheet_id": "",
     "tab_name": "",
     "required_headers": [

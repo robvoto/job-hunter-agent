@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from job_hunter_agent import employer_identity, employer_outcome_store as store
+from job_hunter_agent import employer_identity
+from job_hunter_agent import employer_outcome_store as store
 
 
 @pytest.fixture
@@ -59,44 +60,6 @@ def test_empty_employer_name_is_rejected(aliases):
     aliases([])
     with pytest.raises(ValueError):
         employer_identity.resolve_employer("   ")
-
-
-def test_unknown_event_type_is_rejected():
-    with pytest.raises(ValueError):
-        store.record_application_event(
-            user_id="u1",
-            job_key="seek:unknown",
-            employer_raw="Northwind Systems",
-            role_title="Analyst",
-            event_type="ghosted",
-            event_date="2026-08-01",
-            source=store.SOURCE_GMAIL_ACK,
-            evidence_ref="msg-1",
-            confidence="high",
-        )
-
-
-def test_event_without_evidence_reference_is_rejected():
-    with pytest.raises(ValueError):
-        store.record_application_event(
-            user_id="u1",
-            job_key="seek:no-evidence",
-            employer_raw="Northwind Systems",
-            role_title="Analyst",
-            event_type=store.EVENT_APPLIED,
-            event_date="2026-08-01",
-            source=store.SOURCE_GMAIL_ACK,
-            evidence_ref="  ",
-            confidence="high",
-        )
-
-
-def test_event_id_is_stable_so_replaying_a_backfill_cannot_double_count():
-    first = store.make_event_id("u1", "msg-1")
-    second = store.make_event_id("u1", "msg-1")
-    other = store.make_event_id("u1", "msg-2")
-    assert first == second
-    assert first != other
 
 
 def _event(event_type, event_date, role="Analyst", employer="northwind systems"):
@@ -246,128 +209,3 @@ def test_card_says_so_explicitly_when_the_lookup_failed():
 
 def test_card_adds_no_line_when_there_is_genuinely_no_history():
     assert _checks(display.resolve_employer_outcome_state(None)) == []
-
-
-# --- backfill ---------------------------------------------------------------
-
-from job_hunter_agent import employer_outcome_backfill as backfill  # noqa: E402
-
-
-@pytest.fixture
-def ledger_db(tmp_path, monkeypatch, aliases):
-    from job_hunter_agent import database as db
-
-    path = tmp_path / "ledger.db"
-    monkeypatch.setenv("JOB_HUNTER_DB_PATH", str(path))
-    db.init_db(path)
-    with db.db_conn(path) as conn:
-        conn.execute("INSERT INTO users (user_id) VALUES (?)", ("u1",))
-    aliases([{"canonical": "Northwind Systems", "aliases": ["NWS"]}])
-    return path
-
-
-def _history_row(idx, company, role, date):
-    return {
-        "id": f"row-{idx}",
-        "message_id": f"msg-{idx}",
-        "company": company,
-        "role": role,
-        "date": date,
-        "status": "rejection",
-        "confidence": "high",
-        "evidence": "",
-        "job_key": f"seek:row-{idx}",
-    }
-
-
-def test_backfill_imports_rejections_and_collapses_aliases(ledger_db, monkeypatch):
-    rows = [
-        _history_row(1, "Northwind Systems", "Analyst", "2026-02-02"),
-        _history_row(2, "NWS", "Senior Analyst", "2026-06-18"),
-    ]
-    summary = backfill.backfill_from_rejection_history(
-        "u1", db_path=ledger_db, load_history=lambda: rows
-    )
-    assert summary["events_imported"] == 2
-    # Both spellings are one employer, so one rollup, not two.
-    assert summary["employers_in_rollup"] == 1
-
-    rollup = store.get_employer_outcome("u1", "NWS", db_path=ledger_db)
-    assert rollup["counts"][store.EVENT_REJECTED] == 2
-    assert rollup["last_event_date"] == "2026-06-18"
-
-
-def test_backfill_is_idempotent(ledger_db):
-    rows = [_history_row(1, "Northwind Systems", "Analyst", "2026-02-02")]
-    loader = lambda: rows
-    backfill.backfill_from_rejection_history("u1", db_path=ledger_db, load_history=loader)
-    backfill.backfill_from_rejection_history("u1", db_path=ledger_db, load_history=loader)
-
-    rollup = store.get_employer_outcome("u1", "Northwind Systems", db_path=ledger_db)
-    assert rollup["counts"][store.EVENT_REJECTED] == 1
-
-
-def test_backfill_reports_unattributable_rows_instead_of_dropping_them(ledger_db):
-    rows = [
-        _history_row(1, "Northwind Systems", "Analyst", "2026-02-02"),
-        _history_row(2, "", "Analyst", "2026-03-02"),
-        _history_row(3, "Northwind Systems", "Analyst", ""),
-    ]
-    summary = backfill.backfill_from_rejection_history(
-        "u1", db_path=ledger_db, load_history=lambda: rows
-    )
-    assert summary["rows_read"] == 3
-    assert summary["events_imported"] == 1
-    assert summary["skipped_no_employer"] == 1
-    assert summary["skipped_no_date"] == 1
-
-
-def test_backfill_keeps_rows_without_trustworthy_job_identity_as_evidence(ledger_db):
-    row = _history_row(1, "Northwind Systems", "Analyst", "2026-02-02")
-    row["job_key"] = None
-    summary = backfill.backfill_from_rejection_history(
-        "u1", db_path=ledger_db, load_history=lambda: [row]
-    )
-    assert summary["events_imported"] == 0
-    assert summary["skipped_no_job_key"] == 1
-    assert store.get_employer_outcome("u1", "Northwind Systems", db_path=ledger_db) is None
-
-
-# --- date normalisation -----------------------------------------------------
-
-
-def test_iso_dates_pass_through_unchanged():
-    assert backfill.normalise_event_date("2026-04-02") == "2026-04-02"
-
-
-def test_slash_dates_are_read_month_first_and_zero_padded():
-    assert backfill.normalise_event_date("8/19/2026") == "2026-08-19"
-    assert backfill.normalise_event_date("4/4/2024") == "2024-04-04"
-
-
-def test_trailing_time_is_discarded_not_treated_as_a_parse_failure():
-    assert backfill.normalise_event_date("8/7/2026 11:03:22") == "2026-08-07"
-    assert backfill.normalise_event_date("2026-04-02T09:00:00+10:00") == "2026-04-02"
-
-
-def test_an_unrecognised_shape_returns_empty_rather_than_a_plausible_guess():
-    for value in ("", "   ", "not a date", "19/8/26", "Aug 19 2026", None):
-        assert backfill.normalise_event_date(value) == ""
-
-
-def test_an_impossible_month_is_rejected_rather_than_silently_swapped():
-    assert backfill.normalise_event_date("19/8/2026") == ""
-
-
-def test_backfill_normalises_mixed_date_shapes_onto_one_scale(ledger_db):
-    rows = [
-        _history_row(1, "Northwind Systems", "Analyst", "8/19/2026"),
-        _history_row(2, "Northwind Systems", "Analyst", "2026-04-02"),
-    ]
-    backfill.backfill_from_rejection_history(
-        "u1", db_path=ledger_db, load_history=lambda: rows
-    )
-    rollup = store.get_employer_outcome("u1", "Northwind Systems", db_path=ledger_db)
-    # Ordering only works once both shapes are on the same scale.
-    assert rollup["first_event_date"] == "2026-04-02"
-    assert rollup["last_event_date"] == "2026-08-19"

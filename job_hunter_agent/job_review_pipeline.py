@@ -802,6 +802,7 @@ def _finalize(record: dict, context: ReviewPipelineContext) -> None:
         record,
         context.run_iso,
         persist_full_description=not context.market_map_mode,
+        update_history=not context.market_map_mode,
     )
 
 
@@ -1271,7 +1272,10 @@ def review_pre_detail_normalized_job(
         )
         return _build_outcome(record), record, skill_observations, False
 
-    if _find_applied_identity_match(record, context) is not None:
+    # JMM is the authoritative market/identity owner. Do not compare a fresh
+    # JMM job against legacy JH snapshots to infer that it is an applied repost;
+    # the exact current job key/activity state is handled by JH-305 projections.
+    if not context.market_map_mode and _find_applied_identity_match(record, context) is not None:
         record[RECORD_DECISION_KEY] = "SKIP"
         record[RECORD_REJECT_REASON_KEY] = "ALREADY_APPLIED"
         _finalize(record, context)

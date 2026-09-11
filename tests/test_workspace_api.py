@@ -194,7 +194,7 @@ def test_api_clean_search_clears_search_state_and_review_buckets(monkeypatch, is
         assert conn.execute(
             "SELECT COUNT(*) FROM candidate_application_history WHERE user_id = ?",
             ("test_user",),
-        ).fetchone()[0] == 0
+        ).fetchone()[0] == 1
 
 
 def test_api_clean_search_is_debug_only(monkeypatch, isolated_db):

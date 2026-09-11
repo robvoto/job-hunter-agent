@@ -705,89 +705,6 @@ export const JobHunterAdminSettings = (function () {
 
   }
 
-  function initRejectionHistorySyncControls(showStatus) {
-    const button = document.getElementById('rejection_history_sync_button');
-    const status = document.getElementById('rejection_history_sync_status');
-    if (!button || !status || typeof window.jobHunterFetch !== 'function') {
-      return;
-    }
-    if (button.dataset.syncBound === 'true') {
-      return;
-    }
-    button.dataset.syncBound = 'true';
-
-    const setStatus = (message, kind) => {
-      status.textContent = String(message || '');
-      status.className = kind ? `field-help sync-status sync-status--${kind}` : 'field-help';
-      if (typeof showStatus === 'function') {
-        showStatus(message, kind);
-      }
-    };
-
-    button.addEventListener('click', async () => {
-      const originalLabel = button.textContent;
-      button.disabled = true;
-      button.textContent = 'Syncing...';
-      setStatus('Fetching rejection history from sheet...', 'loading');
-
-      try {
-        const response = await window.jobHunterFetch('/api/admin/rejection-history-sync', {
-          method: 'POST',
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(payload.error || 'Could not sync rejection history.');
-        }
-        setStatus(payload.message || 'Rejection history synced.', 'success');
-      } catch (error) {
-        setStatus(error.message || 'Could not sync rejection history.', 'error');
-      } finally {
-        button.disabled = false;
-        button.textContent = originalLabel;
-      }
-    });
-
-    const clearButton = document.getElementById('clear_candidate_application_history_button');
-    const clearStatus = document.getElementById('clear_candidate_application_history_status');
-    if (!clearButton || !clearStatus || clearButton.dataset.bound === 'true') {
-      return;
-    }
-    clearButton.dataset.bound = 'true';
-
-    clearButton.addEventListener('click', async () => {
-      const confirmed = window.confirm(clearButton.dataset.confirmMessage || '');
-      if (!confirmed) return;
-
-      const originalLabel = clearButton.textContent;
-      clearButton.disabled = true;
-      clearButton.textContent = clearButton.dataset.loadingMessage || originalLabel;
-      clearStatus.textContent = clearButton.dataset.loadingMessage || '';
-      clearStatus.className = 'field-help sync-status sync-status--loading';
-      try {
-        const response = await window.jobHunterFetch(
-          '/api/admin/clear-candidate-application-history',
-          { method: 'POST' },
-        );
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(payload.error || clearButton.dataset.errorMessage || '');
-        }
-        const message = payload.message || clearButton.dataset.successMessage || '';
-        clearStatus.textContent = message;
-        clearStatus.className = 'field-help sync-status sync-status--success';
-        if (typeof showStatus === 'function') showStatus(message, 'success');
-      } catch (error) {
-        const message = error.message || clearButton.dataset.errorMessage || '';
-        clearStatus.textContent = message;
-        clearStatus.className = 'field-help sync-status sync-status--error';
-        if (typeof showStatus === 'function') showStatus(message, 'error');
-      } finally {
-        clearButton.disabled = false;
-        clearButton.textContent = originalLabel;
-      }
-    });
-  }
-
   function systemWarningSeverityClass(severity) {
     const level = String(severity || '').trim().toLowerCase();
     if (level === 'critical') return 'system-warning-pill--critical';
@@ -1355,7 +1272,6 @@ export const JobHunterAdminSettings = (function () {
     applyGlobalSettingsHelp,
     initRuntimeMaintenanceControls,
     initKnowledgeSyncControls,
-    initRejectionHistorySyncControls,
     initScraperValidationControls,
     initSystemWarningsControls,
     initUserAccessControls,

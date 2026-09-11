@@ -176,7 +176,6 @@ def test_candidate_application_history_defaults_do_not_ship_personal_sheet_confi
 
     assert history_settings["enabled"] is True
     assert history_settings["source_type"] == "local_runtime_json"
-    assert history_settings["sync_before_run"] is False
     assert history_settings["spreadsheet_id"] == ""
     assert history_settings["tab_name"] == ""
 

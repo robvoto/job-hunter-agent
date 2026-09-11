@@ -21,76 +21,8 @@ EVENT_NO_RESPONSE = activity.ACTIVITY_NO_RESPONSE
 EVENT_UN_NO_RESPONSE = activity.ACTIVITY_UN_NO_RESPONSE
 VALID_EVENT_TYPES = frozenset(activity.OUTCOME_ACTIVITY_TYPES)
 
-SOURCE_SEEK_APPLIED = "seek_applied"
-SOURCE_GMAIL_ACK = "gmail_ack"
-SOURCE_REJECTION_SHEET = activity.SOURCE_REJECTION_SHEET
-SOURCE_DERIVED_SILENCE = "derived_silence"
-SOURCE_JH_MANUAL_ACTION = activity.SOURCE_JOB_HUNTER
-VALID_SOURCES = frozenset(
-    {
-        SOURCE_SEEK_APPLIED,
-        SOURCE_GMAIL_ACK,
-        SOURCE_REJECTION_SHEET,
-        SOURCE_DERIVED_SILENCE,
-        SOURCE_JH_MANUAL_ACTION,
-        activity.SOURCE_CHATGPT,
-        activity.SOURCE_CLAUDE,
-        activity.SOURCE_MANUAL,
-    }
-)
-
-
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="microseconds")
-
-
-def make_event_id(user_id: str, idempotency_key: str) -> str:
-    return activity.make_activity_event_id(user_id, idempotency_key)
-
-
-def record_application_event(
-    *,
-    user_id: str,
-    job_key: str,
-    employer_raw: str,
-    role_title: str,
-    event_type: str,
-    event_date: str,
-    source: str,
-    evidence_ref: str,
-    confidence: str = "",
-    data: dict[str, Any] | None = None,
-    agent_id: str = activity.AGENT_MANUAL,
-    idempotency_key: str | None = None,
-    db_path: Path | None = None,
-) -> str:
-    """Append one keyed outcome event; retained as the importer adapter."""
-    if event_type not in VALID_EVENT_TYPES:
-        raise ValueError(f"unknown event_type: {event_type!r}")
-    if source not in VALID_SOURCES:
-        raise ValueError(f"unknown source: {source!r}")
-    if not str(evidence_ref or "").strip():
-        raise ValueError("evidence_ref is required so every event stays auditable")
-    normalized_date = str(event_date or "").strip()[:10]
-    if len(normalized_date) != 10:
-        raise ValueError("event_date must start with yyyy-mm-dd")
-    resolve_employer(employer_raw)
-    stable_key = idempotency_key or f"{source}:{evidence_ref}:{event_type}:{job_key}"
-    event = activity.record_activity_event(
-        user_id=user_id,
-        job_key=job_key,
-        activity_type=event_type,
-        agent_id=agent_id,
-        source=source,
-        occurred_at=f"{normalized_date}T00:00:00+00:00",
-        evidence_ref=evidence_ref,
-        idempotency_key=stable_key,
-        metadata={**(data or {}), "confidence": str(confidence or "")},
-        employer_raw=employer_raw,
-        role_title=role_title,
-        db_path=db_path,
-    )
-    return str(event["event_id"])
 
 
 def load_application_events(

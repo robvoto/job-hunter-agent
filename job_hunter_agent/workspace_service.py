@@ -219,12 +219,13 @@ def _enrich_records_with_candidate_application_history(records: list[dict]) -> l
     # that looked identical to "no history with this employer", which is the
     # opposite of what this panel is for: the candidate would read a silent
     # failure as evidence of a clean record. Let it raise.
-    from job_hunter_agent.candidate_application_history import (
-        enrich_records_with_application_history,
-        load_candidate_job_rejection_history,
+    from job_hunter_agent.candidate_application_history import enrich_records_with_application_history
+    from job_hunter_agent.historical_application_evidence import (
+        load_historical_application_evidence,
     )
+    from job_hunter_agent.paths import get_active_user_id
 
-    candidate_history = load_candidate_job_rejection_history()
+    candidate_history = load_historical_application_evidence(get_active_user_id())
 
     if candidate_history:
         enriched_records = enrich_records_with_application_history(records, candidate_history)
@@ -236,7 +237,7 @@ def _enrich_records_with_candidate_application_history(records: list[dict]) -> l
             and "candidate_application_history" in after
         )
 
-    logger.info("[candidate_application_history] records enriched: %s", enriched_count)
+    logger.info("[historical_application_evidence] records enriched: %s", enriched_count)
 
     return enriched_records
 

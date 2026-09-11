@@ -650,7 +650,8 @@ def finalize_scrape_run(
 
         save_llm_cache(context.llm_cache)
 
-        save_job_history(context.job_history)
+        if not context.use_market_map:
+            save_job_history(context.job_history)
 
         workspace_service.render_html(
             get_workspace_results_path(),
@@ -811,7 +812,8 @@ def finalize_scrape_run(
 
     save_llm_cache(context.llm_cache)
 
-    save_job_history(context.job_history)
+    if not context.use_market_map:
+        save_job_history(context.job_history)
 
     workspace_service.render_html(
         workspace_path,

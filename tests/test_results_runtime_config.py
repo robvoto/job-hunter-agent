@@ -332,7 +332,7 @@ def test_candidate_application_history_loader_failure_is_not_silently_masked():
     records = [{"job_key": "seek:1"}, {"job_key": "seek:2"}]
 
     with patch(
-        "job_hunter_agent.candidate_application_history.load_candidate_job_rejection_history",
+        "job_hunter_agent.historical_application_evidence.load_historical_application_evidence",
         side_effect=RuntimeError("boom"),
     ):
         with pytest.raises(RuntimeError, match="boom"):
@@ -347,7 +347,7 @@ def test_candidate_application_history_enrichment_never_syncs_from_sheet():
             "job_hunter_agent.candidate_application_history.import_candidate_rejections_from_sheet"
         ) as mock_sync,
         patch(
-            "job_hunter_agent.candidate_application_history.load_candidate_job_rejection_history",
+            "job_hunter_agent.historical_application_evidence.load_historical_application_evidence",
             return_value=[],
         ),
     ):
@@ -685,12 +685,6 @@ def test_workspace_rebuild_refreshes_llm_totals_from_current_audit_rows(monkeypa
     )
     monkeypatch.setattr(
         workspace_rebuild_service,
-        "run_retention_housekeeping",
-        lambda profile, history, reference_time: (set(), set()),
-    )
-    monkeypatch.setattr(workspace_rebuild_service, "load_job_history", lambda: {})
-    monkeypatch.setattr(
-        workspace_rebuild_service,
         "load_audit_rows",
         lambda: [
             {
@@ -778,12 +772,6 @@ def test_workspace_rebuild_renders_saved_workspace_pool_when_present(monkeypatch
             "seek_max_pages": 1,
         },
     )
-    monkeypatch.setattr(
-        workspace_rebuild_service,
-        "run_retention_housekeeping",
-        lambda profile, history, reference_time: (set(), set()),
-    )
-    monkeypatch.setattr(workspace_rebuild_service, "load_job_history", lambda: {})
     monkeypatch.setattr(
         workspace_rebuild_service,
         "load_audit_rows",

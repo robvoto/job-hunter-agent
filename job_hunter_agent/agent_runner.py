@@ -27,7 +27,7 @@ load_repo_dotenv()
 
 from job_hunter_agent.fit_scoring import fit_score_displayed
 from job_hunter_agent.history import viewed_by_user
-from job_hunter_agent.io_utils import configure_console_output, load_job_history, load_run_stats
+from job_hunter_agent.io_utils import configure_console_output, load_run_stats
 from job_hunter_agent.job_identity import find_confirmed_duplicate, normalize_job_key
 from job_hunter_agent.match_labels import score_to_match_label
 from job_hunter_agent.notifiers.email_notifier import send_email_notification
@@ -114,53 +114,6 @@ LABEL_TOP_MATCHES = "Top current matches"
 MSG_NO_NEW_MATCHES = (
     "No new strong matches found this run. Your workspace was refreshed and kept current."
 )
-
-
-def sync_candidate_rejection_history_before_run() -> dict[str, Any]:
-    """Refresh Apps-Script rejection history when that explicit setting is enabled.
-
-    This runs before a collection so the workspace built for that run uses the
-    latest rejection evidence. A sheet outage must not cancel the job search:
-    the last known local history remains intact and the returned warning is
-    surfaced in the scheduler status.
-    """
-    from job_hunter_agent.global_settings import (
-        get_candidate_application_history_sync_before_run,
-    )
-
-    if not get_candidate_application_history_sync_before_run():
-        return {"attempted": False, "ok": True, "message": ""}
-
-    try:
-        from job_hunter_agent.candidate_application_history import (
-            import_candidate_rejections_from_sheet,
-        )
-        from job_hunter_agent.employer_outcome_backfill import (
-            backfill_from_rejection_history,
-        )
-        from job_hunter_agent.user_context import get_user_id_for_runtime
-
-        history_summary = import_candidate_rejections_from_sheet()
-        outcome_summary = backfill_from_rejection_history(get_user_id_for_runtime())
-    except Exception as exc:
-        message = f"Rejection history sync failed: {exc}. Job collection continued."
-        print(f"[AGENT_RUNNER][WARN] {message}")
-        return {"attempted": True, "ok": False, "message": message}
-
-    message = (
-        "Rejection history synced: "
-        f"{history_summary.get('records_added', 0)} new, "
-        f"{history_summary.get('records_total', 0)} total; "
-        f"employer counts refreshed across {outcome_summary.get('employers_in_rollup', 0)} employers."
-    )
-    print(f"[AGENT_RUNNER][INFO] {message}")
-    return {
-        "attempted": True,
-        "ok": True,
-        "message": message,
-        "history": history_summary,
-        "outcomes": outcome_summary,
-    }
 
 
 def _job_key(record: dict) -> str:
@@ -492,8 +445,6 @@ def run_agent_once(
     settings = load_user_settings(None, create_if_missing=True)
     state = load_agent_state()
     previous_records = load_last_kept_records()
-    rejection_history_sync = sync_candidate_rejection_history_before_run()
-
     if no_scrape:
         print("Rebuilding workspace from current local state...")
         rebuild_workspace_results(reason="agent runner --send-notification-no-scrape")
@@ -508,7 +459,7 @@ def run_agent_once(
     applied_job_keys, hidden_job_keys = get_manual_skip_sets(profile)
     workspace_records = build_workspace_record_sets(
         current_records,
-        load_job_history(),
+        {},
         applied_job_keys,
         hidden_job_keys,
         parse_timestamp(
@@ -563,7 +514,6 @@ def run_agent_once(
         "summary_text": summary_text,
         "notifications": notification_results,
         "summary_path": str(AGENT_SUMMARY_PATH),
-        "rejection_history_sync": rejection_history_sync,
     }
 
 
@@ -642,11 +592,6 @@ def run_agent_loop(stop_event: threading.Event | None = None) -> None:
             else:
                 state = load_agent_state()
                 scheduler_message = "Scheduled run completed successfully."
-                rejection_sync_message = str(
-                    result.get("rejection_history_sync", {}).get("message") or ""
-                ).strip()
-                if rejection_sync_message:
-                    scheduler_message = f"{scheduler_message} {rejection_sync_message}"
                 state.update(
                     _scheduled_state_updates(
                         SCHEDULE_STATUS_SUCCEEDED,

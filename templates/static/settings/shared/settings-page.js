@@ -90,7 +90,6 @@ if (isAdminPage && bootstrapGlobalSettings) {
   adminSettings.loadGlobalSettingsHelp?.();
   adminSettings.initRuntimeMaintenanceControls?.(showStatus);
   adminSettings.initKnowledgeSyncControls?.(showStatus);
-  adminSettings.initRejectionHistorySyncControls?.(showStatus);
   adminSettings.initSystemWarningsControls?.(showStatus);
   adminSettings.initUserAccessControls?.(showStatus);
   renderLlmModelOptions();
@@ -1161,7 +1160,6 @@ async function saveActivePage() {
       adminSettings.fillGlobalForm(globalPayload);
       adminSettings.applyGlobalSettingsHelp?.();
       adminSettings.initKnowledgeSyncControls?.(showStatus);
-      adminSettings.initRejectionHistorySyncControls?.(showStatus);
       adminSettings.initSystemWarningsControls?.(showStatus);
       renderLlmModelOptions();
       showInlineStatus(globalStatus, 'Global settings saved.', 'success');

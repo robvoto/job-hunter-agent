@@ -52,20 +52,8 @@
           <section class="panel" id="rejection_history_panel">
             <div class="panel-header">
               <h2>Rejection History</h2>
-              <p class="panel-copy">Imports your personal job rejection history from the configured Google Sheet. Cards for companies that previously rejected you will show a "Rejected before" badge. Requires the sheet to be shared as <em>Anyone with the link can view</em>.</p>
+              <p class="panel-copy">Historical application outcomes are reconciled by the JH-308 cutover and shown only as employer or role context when job identity cannot be proven. The legacy rejection sheet is retained as audit provenance, not as an active runtime source.</p>
             </div>
-            <button id="rejection_history_sync_button" type="button" class="jh-button jh-button--secondary">Sync rejection history</button>
-            <div id="rejection_history_sync_status" class="field-help">Click once. Fetches the latest rows from your Job_Rejections sheet and updates the local store.</div>
-            <button
-              id="clear_candidate_application_history_button"
-              type="button"
-              class="jh-button jh-button--danger"
-              data-loading-message="__JOB_HUNTER_GLOBAL_SETTINGS_REJECTION_HISTORY_CLEAR_LOADING__"
-              data-success-message="__JOB_HUNTER_GLOBAL_SETTINGS_REJECTION_HISTORY_CLEAR_SUCCESS__"
-              data-error-message="__JOB_HUNTER_GLOBAL_SETTINGS_REJECTION_HISTORY_CLEAR_ERROR__"
-              data-confirm-message="__JOB_HUNTER_GLOBAL_SETTINGS_REJECTION_HISTORY_CLEAR_CONFIRM__"
-            >__JOB_HUNTER_GLOBAL_SETTINGS_REJECTION_HISTORY_CLEAR_LABEL__</button>
-            <div id="clear_candidate_application_history_status" class="field-help">__JOB_HUNTER_GLOBAL_SETTINGS_REJECTION_HISTORY_CLEAR_HELP__</div>
           </section>
 
           <section class="panel" id="runtime_maintenance_panel">

@@ -48,7 +48,6 @@ from job_hunter_agent.paths import (
     DEBUG_SOURCE_PAYLOADS_DIR,
     LLM_CACHE_PATH,
     RUNTIME_DIR,
-    get_candidate_application_history_path,
 )
 from job_hunter_agent.system_warnings import make_system_warning_fingerprint, record_system_warning
 
@@ -1037,32 +1036,6 @@ def clear_runtime_caches(db_path: Path | None = None) -> dict[str, Any]:
         "ok": True,
         "cleared_files": cleared_files,
         "message": "Runtime caches cleared.",
-    }
-
-
-def clear_candidate_application_history_runtime() -> dict[str, Any]:
-    """Delete rejection history and its extraction cache as one explicit action."""
-
-    cleared_files: list[str] = []
-    for path in (
-        CANDIDATE_APPLICATION_HISTORY_CACHE_PATH,
-        get_candidate_application_history_path(),
-    ):
-        try:
-            path.unlink(missing_ok=True)
-        except Exception as exc:
-            logger.warning(
-                "[IO_UTILS][WARN] Failed to remove candidate application history file %s: %s",
-                path,
-                exc,
-            )
-        else:
-            cleared_files.append(path.name)
-
-    return {
-        "ok": True,
-        "cleared_files": cleared_files,
-        "message": "Candidate application rejection history and extraction cache cleared.",
     }
 
 

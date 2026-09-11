@@ -45,7 +45,6 @@ from job_hunter_agent.global_settings import (
 from job_hunter_agent.io_utils import (
     clear_agent_state,
     clear_audit_rows,
-    clear_candidate_application_history_runtime,  # noqa: F401 - public module surface
     clear_job_history,
     clear_review_data,
     clear_run_stats,
@@ -706,12 +705,6 @@ _GLOBAL_SETTINGS_LABEL_KEYS = (
     "capability_presets_heading",
     "capability_presets_copy",
     "capability_presets_empty_help",
-    "rejection_history_clear_label",
-    "rejection_history_clear_help",
-    "rejection_history_clear_confirm",
-    "rejection_history_clear_loading",
-    "rejection_history_clear_success",
-    "rejection_history_clear_error",
     "runtime_maintenance_copy",
     "clear_runtime_caches_help",
     "clear_current_user_search_state_help",
@@ -971,8 +964,6 @@ def load_search_source_labels() -> dict[str, str]:
 
 def clear_current_user_search_state(*, preserve_profile: bool = True) -> dict[str, Any]:
     """Clear only the current user's search/result state."""
-    from job_hunter_agent.database import db_conn
-    from job_hunter_agent.paths import get_active_user_id
 
     clear_job_history()
     clear_workspace_pool()
@@ -989,13 +980,6 @@ def clear_current_user_search_state(*, preserve_profile: bool = True) -> dict[st
         review_controls["hidden_job_keys"] = []
         review_controls["liked_job_keys"] = []
         save_profile(profile)
-
-    user_id = get_active_user_id()
-    with db_conn() as conn:
-        conn.execute(
-            "DELETE FROM candidate_application_history WHERE user_id = ?",
-            (user_id,),
-        )
 
     output_path = get_workspace_results_path()
     try:
