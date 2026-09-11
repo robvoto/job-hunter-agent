@@ -28,6 +28,7 @@ from job_hunter_agent.io_utils import (
     load_run_stats,
     write_run_attempt,
 )
+from job_hunter_agent.posting_utils import get_manual_skip_sets
 from job_hunter_agent.profile_store import get_search_settings, load_profile
 from job_hunter_agent.retention_housekeeping import run_retention_housekeeping
 from job_hunter_agent.runtime_helpers import (
@@ -158,12 +159,20 @@ def build_scrape_run_context(argv: list[str] | None = None) -> ScrapeRunContext:
     )
 
     run_started_at = datetime.now().astimezone()
-    job_history = load_job_history()
-    applied_job_keys, hidden_job_keys = run_retention_housekeeping(
-        profile,
-        job_history,
-        run_started_at,
-    )
+    use_market_map = True
+    if use_market_map:
+        # JMM owns neutral market truth. The normal JMM path must not read or
+        # mutate the retired JH market/history projection; manual state comes
+        # from the existing JH-305-backed profile projection.
+        job_history = {}
+        applied_job_keys, hidden_job_keys = get_manual_skip_sets(profile)
+    else:
+        job_history = load_job_history()
+        applied_job_keys, hidden_job_keys = run_retention_housekeeping(
+            profile,
+            job_history,
+            run_started_at,
+        )
 
     run_iso = run_started_at.isoformat(timespec="seconds")
 
@@ -174,7 +183,6 @@ def build_scrape_run_context(argv: list[str] | None = None) -> ScrapeRunContext:
     enabled_sources = [
         source for source in profile_enabled_sources if source and source in globally_enabled_sources
     ]
-    use_market_map = True
     if use_market_map:
         from job_hunter_agent.source_registry import SOURCE_JOB_MARKET_MAP
 

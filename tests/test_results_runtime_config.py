@@ -685,12 +685,6 @@ def test_workspace_rebuild_refreshes_llm_totals_from_current_audit_rows(monkeypa
     )
     monkeypatch.setattr(
         workspace_rebuild_service,
-        "run_retention_housekeeping",
-        lambda profile, history, reference_time: (set(), set()),
-    )
-    monkeypatch.setattr(workspace_rebuild_service, "load_job_history", lambda: {})
-    monkeypatch.setattr(
-        workspace_rebuild_service,
         "load_audit_rows",
         lambda: [
             {
@@ -778,12 +772,6 @@ def test_workspace_rebuild_renders_saved_workspace_pool_when_present(monkeypatch
             "seek_max_pages": 1,
         },
     )
-    monkeypatch.setattr(
-        workspace_rebuild_service,
-        "run_retention_housekeeping",
-        lambda profile, history, reference_time: (set(), set()),
-    )
-    monkeypatch.setattr(workspace_rebuild_service, "load_job_history", lambda: {})
     monkeypatch.setattr(
         workspace_rebuild_service,
         "load_audit_rows",

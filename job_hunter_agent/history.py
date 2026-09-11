@@ -637,7 +637,15 @@ def finalize_record(
     run_iso: str,
     *,
     persist_full_description: bool = True,
+    update_history: bool = True,
 ) -> None:
+    """Finalize an audit row, optionally updating the legacy history projection.
+
+    JMM-backed runs keep current market truth in JMM and current personal state
+    in JH-305, so they append analysis to the run audit without creating a
+    second market snapshot in ``job_history``. The legacy update remains
+    available only to the explicit non-JMM path while that path is retired.
+    """
     claim = record.pop(RUN_IDENTITY_CLAIM_KEY, None)
     persisted_record = record
     if not persist_full_description:
@@ -650,7 +658,8 @@ def finalize_record(
         ):
             persisted_record.pop(field, None)
     try:
-        update_job_history(history, persisted_record, run_iso)
+        if update_history:
+            update_job_history(history, persisted_record, run_iso)
         audit_rows.append(persisted_record)
     except Exception:
         if isinstance(claim, tuple) and len(claim) == 2:

@@ -277,9 +277,13 @@ def test_normal_runtime_builds_a_jmm_only_context(monkeypatch):
     monkeypatch.setattr(
         run_context,
         "run_retention_housekeeping",
-        lambda *_args: (set(), set()),
+        lambda *_args: pytest.fail("JMM runtime must not run legacy retention housekeeping"),
     )
-    monkeypatch.setattr(run_context, "load_job_history", lambda: {})
+    monkeypatch.setattr(
+        run_context,
+        "load_job_history",
+        lambda: pytest.fail("JMM runtime must not load legacy job history"),
+    )
     monkeypatch.setattr(run_context, "load_audit_rows", lambda: [])
     monkeypatch.setattr(run_context, "load_run_stats", lambda: {})
     monkeypatch.setattr(run_context, "load_llm_cache", lambda: {})
@@ -290,6 +294,32 @@ def test_normal_runtime_builds_a_jmm_only_context(monkeypatch):
 
     assert context.use_market_map is True
     assert context.enabled_sources == ["job_market_map"]
+    assert context.job_history == {}
+
+
+def test_market_map_finalization_does_not_write_legacy_history():
+    from job_hunter_agent import job_review_pipeline
+
+    context = job_review_pipeline.ReviewPipelineContext(
+        profile={},
+        job_history={},
+        audit_rows=[],
+        llm_cache={},
+        applied_job_keys=set(),
+        hidden_job_keys=set(),
+        run_iso="2026-09-11T12:00:00+00:00",
+        market_map_mode=True,
+    )
+    record = {
+        "job_key": "seek:99",
+        "decision": "KEEP",
+        "full_description": "Current JMM JD",
+    }
+
+    job_review_pipeline._finalize(record, context)
+
+    assert context.job_history == {}
+    assert context.audit_rows == [{"job_key": "seek:99", "decision": "KEEP"}]
 
 
 def test_market_map_persistence_keeps_identity_without_jd_copy():

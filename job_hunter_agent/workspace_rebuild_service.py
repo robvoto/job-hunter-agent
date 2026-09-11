@@ -14,14 +14,12 @@ from job_hunter_agent.global_settings import (
 from job_hunter_agent.io_utils import (
     configure_console_output,
     load_audit_rows,
-    load_job_history,
     load_run_stats,
     write_run_stats,
 )
 from job_hunter_agent.paths import get_workspace_results_path
-from job_hunter_agent.posting_utils import parse_timestamp
+from job_hunter_agent.posting_utils import get_manual_skip_sets, parse_timestamp
 from job_hunter_agent.profile_store import get_search_settings, load_profile
-from job_hunter_agent.retention_housekeeping import run_retention_housekeeping
 from job_hunter_agent.user_context import get_user_id_for_runtime
 
 logger = logging.getLogger(__name__)
@@ -55,12 +53,10 @@ def rebuild_workspace_results(
 
     reference_time = datetime.now().astimezone()
 
-    job_history = load_job_history()
-    applied_job_keys, hidden_job_keys = run_retention_housekeeping(
-        profile,
-        job_history,
-        reference_time,
-    )
+    # Rebuild from the saved JMM-backed workspace pool and JH-305's projected
+    # manual state. Legacy JH market snapshots are not a rebuild source.
+    job_history: dict[str, dict] = {}
+    applied_job_keys, hidden_job_keys = get_manual_skip_sets(profile)
 
     saved_workspace_records = workspace_service.load_saved_workspace_pool()
     # JH-306 workspace rows are JH-owned analysis over current JMM evidence.
