@@ -105,6 +105,33 @@ does not depend on localhost or Google browser cookies.
   `JOB_HUNTER_ACTIVITY_RATE_LIMIT_PER_MINUTE`; a rejected write returns HTTP
   429 and a retry interval.
 
+### External plan-agent read contract (JH-310)
+
+Plan Z, Edge, Remote, and future standalone plan agents read jobs directly
+from JMM and keep their own plan analysis/presentation history outside Job
+Hunter. Before deciding whether to show a job, a plan can check whether Rob
+has already viewed, hidden, applied to, rejected, interviewed for, or
+otherwise acted on that exact job by calling the existing
+`GET /api/activity/jobs/{job_key}` contract described above.
+
+- `job_key` accepts either JH's own canonical `source:id` key (e.g.
+  `seek:94548768`) or JMM's `identity_key` exactly as JMM publishes it (e.g.
+  `seek:id:94548768`); both resolve to the same stored activity. No fuzzy
+  matching and no plan-specific job key are introduced.
+- The response's `activity` object is the same canonical state JH itself
+  uses: `viewed`, `hidden`, `applied`, `rejected`, `interview`, `progressed`,
+  `no_response`, and `latest_outcome`, plus the underlying `events`.
+- Reads are strictly read-only: a plan analysing or presenting a job does not
+  create a `presented` or `viewed` event in Job Hunter and does not change
+  Job Hunter runtime behaviour. Only Job Hunter's own runtime, or an explicit
+  `POST /api/activity/events` call, writes activity.
+- Job Hunter stays plan-agnostic: it has no concept of Plan Z, Edge, Remote,
+  or any other plan ID, plan policy, plan analysis result, or plan
+  decision/reason, and it does not store `found_at`, `analysed_at`, or
+  `presented_at`. Standalone plan analysis, decisions, and presentation
+  history live only in the separate Career_Search_Agents shared plan-history
+  store, never in Job Hunter.
+
 Managed agent IDs are `job_hunter`, `chatgpt`, `claude`, and `manual`. Gmail
 and rejection-sheet imports are evidence sources, never agents. The canonical
 activity types include append-only reversals: `liked`/`unliked`,
