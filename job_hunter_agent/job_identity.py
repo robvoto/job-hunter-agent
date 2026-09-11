@@ -85,6 +85,15 @@ def normalize_job_key(value: str, source: Optional[str] = None) -> str:
         if re.match(r"^[a-z]+:[a-z0-9_-]+$", raw):
             return raw
 
+    # 1a. Job Market Map's own identity_key shape is 'source:id:source_job_id'
+    # (e.g. 'seek:id:94548768'). JH already normalizes the same job to
+    # 'source:source_job_id' when it processes the JMM feed, so an external
+    # caller quoting JMM's identity_key verbatim must resolve to that same
+    # canonical key rather than being rejected or treated as a new identity.
+    jmm_identity_match = re.match(r"^([a-z]+):id:([a-z0-9_-]+)$", raw)
+    if jmm_identity_match:
+        return f"{jmm_identity_match.group(1)}:{jmm_identity_match.group(2)}"
+
     # 1b. Some review flows store already-canonical slug keys without a source.
 
     if source is None and re.fullmatch(r"[a-z0-9][a-z0-9_-]*", raw):
