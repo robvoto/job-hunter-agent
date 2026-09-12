@@ -255,6 +255,25 @@ def list_user_setting_user_ids() -> list[str]:
     return [str(row["user_id"]).strip() for row in rows if str(row["user_id"]).strip()]
 
 
+def list_approved_user_setting_user_ids() -> list[str]:
+    """Return settings owners who are currently allowed to use the workspace."""
+    from job_hunter_agent.config import USER_ACCESS_APPROVED
+    from job_hunter_agent.database import db_conn
+
+    with db_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT s.user_id
+              FROM user_settings AS s
+              JOIN users AS u ON u.user_id = s.user_id
+             WHERE u.access_status = ?
+             ORDER BY s.updated_at DESC, s.user_id ASC
+            """,
+            (USER_ACCESS_APPROVED,),
+        ).fetchall()
+    return [str(row["user_id"]).strip() for row in rows if str(row["user_id"]).strip()]
+
+
 def get_workspace_minimum_score(settings: Any | None = None, *, user_id: str | None = None) -> int:
     if isinstance(settings, dict):
         active_settings = normalize_user_settings(settings)

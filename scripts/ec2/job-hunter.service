@@ -21,6 +21,7 @@ Environment="JOB_HUNTER_AWS_BROWSER_VNC_PORT=5901"
 Environment="JOB_HUNTER_AWS_NOVNC_PORT=7900"
 Environment="PLAYWRIGHT_USER_DATA_DIR=/var/lib/job-hunter/data/playwright_user_data"
 ExecStart=/home/ubuntu/job-hunter-agent/scripts/ec2/start-aws-browser-session.sh
+SuccessExitStatus=143
 Restart=always
 RestartSec=5
 

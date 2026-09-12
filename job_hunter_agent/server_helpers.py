@@ -129,6 +129,7 @@ from job_hunter_agent.user_settings import (
     KEY_SCHEDULE,
     KEY_TELEGRAM,
     KEY_WORKSPACE,
+    list_approved_user_setting_user_ids,
     list_user_setting_user_ids,
     load_agent_state,
     load_user_settings,
@@ -1912,7 +1913,7 @@ def _run_scrape_job(*, force_refresh: bool = False, progress_scope: object | Non
 def _rebuild_workspace_on_startup() -> None:
     from job_hunter_agent.user_context import set_user_id
 
-    user_ids = list_user_setting_user_ids()
+    user_ids = list_approved_user_setting_user_ids()
     if not user_ids:
         return
     for user_id in user_ids:

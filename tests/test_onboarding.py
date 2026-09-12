@@ -1497,11 +1497,27 @@ def test_rebuild_workspace_on_startup_runs_when_data_exists(monkeypatch, tmp_pat
         lambda reason="": rebuilds.append(reason),
     )
 
-    monkeypatch.setattr(server_helpers, "list_user_setting_user_ids", lambda: ["test-user"])
+    monkeypatch.setattr(
+        server_helpers, "list_approved_user_setting_user_ids", lambda: ["test-user"]
+    )
 
     server_helpers._rebuild_workspace_on_startup()
 
     assert rebuilds == ["server startup rebuild"]
+
+
+def test_rebuild_workspace_on_startup_skips_when_no_approved_users(monkeypatch):
+    rebuilds = []
+    monkeypatch.setattr(server_helpers, "list_approved_user_setting_user_ids", lambda: [])
+    monkeypatch.setattr(
+        server_helpers,
+        "rebuild_workspace_results",
+        lambda reason="": rebuilds.append(reason),
+    )
+
+    server_helpers._rebuild_workspace_on_startup()
+
+    assert rebuilds == []
 
 
 def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch, tmp_path):

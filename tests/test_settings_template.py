@@ -165,8 +165,10 @@ def test_aws_browser_session_scripts_are_committed():
     assert "Startup rebuild refreshes saved workspace output" in deploy_script
     assert "curl -fsSI" in deploy_script
     assert not LEGACY_AWS_BROWSER_SESSION_WRAPPER.exists()
-    assert "start-aws-browser-session.sh" in JOB_HUNTER_SERVICE_SCRIPT.read_text(encoding="utf-8")
-    assert "/home/ubuntu/.local/bin" in JOB_HUNTER_SERVICE_SCRIPT.read_text(encoding="utf-8")
+    service_text = JOB_HUNTER_SERVICE_SCRIPT.read_text(encoding="utf-8")
+    assert "start-aws-browser-session.sh" in service_text
+    assert "SuccessExitStatus=143" in service_text
+    assert "/home/ubuntu/.local/bin" in service_text
     assert "run-jobhunter-browser-session.sh" not in JOB_HUNTER_SERVICE_SCRIPT.read_text(encoding="utf-8")
     assert "start-aws-browser-session.sh" in JOB_HUNTER_SERVICE_INSTALL_SCRIPT.read_text(encoding="utf-8")
 
