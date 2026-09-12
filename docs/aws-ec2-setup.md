@@ -89,6 +89,16 @@ noVNC/VNC wired into service: YES (localhost only)
 Playwright headless setting: OFF (headed in the AWS browser session)
 ```
 
+### Job Market Map production dependency
+
+Target topology is to run JMM as a **separate long-running Python service on this same EC2 host**, bound only to `127.0.0.1:8770`. Job Hunter then uses:
+
+```text
+JOB_HUNTER_MARKET_MAP_BASE_URL=http://127.0.0.1:8770/v3
+```
+
+Do not expose JMM publicly. JMM keeps its own SQLite data, scheduler and persistent SEEK Chromium profile on persistent storage; it is not a Lambda workload. As verified on 2026-09-12, AWS Job Hunter is active but JMM is **not yet deployed on this host** and the production JMM base-URL setting is therefore still absent.
+
 `/var/lib/job-hunter` is mounted on a separate data disk.
 
 ### Persistent storage contract
