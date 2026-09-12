@@ -12,9 +12,9 @@ from job_hunter_agent.record_schema import (
 from job_hunter_agent.workspace_data import (
     build_applied_workspace_record,
     build_hidden_records,
-    build_workspace_record_sets,
     build_hidden_workspace_record,
     build_history_workspace_record,
+    build_workspace_record_sets,
 )
 
 _SNAPSHOT = {
@@ -113,6 +113,52 @@ def test_build_applied_workspace_record_carries_requirement_coverage():
     assert record["job_quality_signals"] == _SNAPSHOT["job_quality_signals"]
     assert has_complete_llm_keep_data(record)
 
+
+
+def test_activity_only_hidden_workspace_record_does_not_require_keep_snapshot():
+    entry = {
+        "job_key": "seek:123",
+        "title": "Business Analyst",
+        "company": "Acme",
+        "last_hidden_at": "2026-09-12T10:00:00+10:00",
+    }
+
+    record = build_hidden_workspace_record(
+        "seek:123",
+        entry,
+        datetime(2026, 9, 12, 11, 0).astimezone(),
+        days_since_fn=lambda *_args, **_kwargs: 0,
+    )
+
+    assert record["source"] == "seek"
+    assert record["title"] == "Business Analyst"
+    assert record["company"] == "Acme"
+    assert record["hidden"] is True
+    assert record["full_description"] == ""
+    assert record["requirement_coverage"] == []
+
+
+def test_activity_only_applied_workspace_record_does_not_require_keep_snapshot():
+    entry = {
+        "job_key": "linkedin:456",
+        "title": "Technical Business Analyst",
+        "company": "Example Co",
+        "last_applied_at": "2026-09-12T10:00:00+10:00",
+    }
+
+    record = build_applied_workspace_record(
+        "linkedin:456",
+        entry,
+        datetime(2026, 9, 12, 11, 0).astimezone(),
+        days_since_fn=lambda *_args, **_kwargs: 0,
+    )
+
+    assert record["source"] == "linkedin"
+    assert record["title"] == "Technical Business Analyst"
+    assert record["company"] == "Example Co"
+    assert record["applied"] is True
+    assert record["full_description"] == ""
+    assert record["requirement_coverage"] == []
 
 def test_build_workspace_record_sets_excludes_applied_and_hidden_current_records():
     records = [

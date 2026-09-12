@@ -101,6 +101,20 @@ def _source_metadata(entry: dict, snapshot: dict) -> dict:
     return {}
 
 
+def _optional_review_snapshot(entry: dict, job_key: str) -> dict:
+    """Return a validated rich snapshot when one exists.
+
+    JH-305 activity rows can legitimately exist without the retired KEEP snapshot.
+    Do not invent analysis for those rows; workspace cards fall back to the factual
+    activity projection instead.  If a snapshot *is* present, keep validating it
+    so malformed legacy review evidence still fails loudly.
+    """
+    snapshot = entry.get("last_kept_snapshot")
+    if not isinstance(snapshot, dict):
+        return {}
+    return validate_review_snapshot(snapshot, job_key)
+
+
 def build_history_workspace_record(
     job_key: str,
     entry: dict,
@@ -238,7 +252,7 @@ def build_hidden_workspace_record(
     days_since_fn: Callable[[Optional[str], datetime], Optional[int]],
 ) -> dict:
 
-    snapshot = validate_review_snapshot(entry.get("last_kept_snapshot"), job_key)
+    snapshot = _optional_review_snapshot(entry, job_key)
 
     hidden_at = entry.get("last_hidden_at") or entry.get("first_hidden_at")
 
@@ -247,7 +261,9 @@ def build_hidden_workspace_record(
     return {
         RECORD_JOB_KEY: job_key,
         RECORD_SOURCE_KEY: _record_source(snapshot or entry, job_key),
-        RECORD_TITLE_KEY: snapshot[RECORD_TITLE_KEY],
+        RECORD_TITLE_KEY: snapshot.get(RECORD_TITLE_KEY)
+        or entry.get(RECORD_TITLE_KEY)
+        or "Untitled",
         RECORD_COMPANY_KEY: snapshot.get(RECORD_COMPANY_KEY)
         or entry.get(RECORD_COMPANY_KEY)
         or "N/A",
@@ -353,7 +369,7 @@ def build_applied_workspace_record(
     days_since_fn: Callable[[Optional[str], datetime], Optional[int]],
 ) -> dict:
 
-    snapshot = validate_review_snapshot(entry.get("last_kept_snapshot"), job_key)
+    snapshot = _optional_review_snapshot(entry, job_key)
 
     applied_at = entry.get("last_applied_at") or entry.get("first_applied_at")
 
@@ -362,7 +378,7 @@ def build_applied_workspace_record(
     return {
         "job_key": job_key,
         "source": _record_source(snapshot or entry, job_key),
-        "title": snapshot["title"],
+        "title": snapshot.get("title") or entry.get("title") or "Untitled",
         "company": snapshot.get("company") or entry.get("company") or "N/A",
         "url": snapshot.get("url") or entry.get("url") or "#",
         "posted": snapshot.get("posted") or "N/A",

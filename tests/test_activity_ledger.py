@@ -39,6 +39,20 @@ def test_activity_is_per_user_and_presented_is_not_viewed(isolated_db):
     assert b["activity"]["applied"] is False
 
 
+
+def test_presented_event_does_not_create_legacy_history_projection(isolated_db):
+    key = "seek:presentation-only"
+    _record("user-a", key, ledger.ACTIVITY_PRESENTED, "presented-only")
+
+    current = ledger.load_job_activity("user-a", key)
+    assert current["activity"]["presented_by_any_agent"] is True
+    with db_conn() as conn:
+        assert conn.execute(
+            "SELECT COUNT(*) FROM job_history WHERE user_id = ? AND job_key = ?",
+            ("user-a", key),
+        ).fetchone()[0] == 0
+
+
 def test_reversals_are_append_only_and_occurred_at_is_authoritative(isolated_db):
     key = "seek:ordered-1"
     _record("user-a", key, ledger.ACTIVITY_REJECTED, "reject", when="2026-01-02T00:00:00Z")

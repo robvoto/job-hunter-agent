@@ -721,22 +721,35 @@
           continue;
         }
         presentedActivityKeys.add(idempotencyKey);
-        window.jobHunterFetch(`${API_BASE_URL}/api/activity/events`, {
+        const activityPayload = {
+          job_key: jobKey,
+          activity_type: 'presented',
+          agent_id: 'job_hunter',
+          source: 'job_hunter',
+          idempotency_key: idempotencyKey,
+          occurred_at: new Date().toISOString(),
+          evidence_ref: `workspace:${WORKSPACE_RUN_ID}`,
+          metadata: { workspace: getActiveWorkspace() },
+          employer_raw: card.dataset.company || '',
+          role_title: link.dataset.jobTitle || '',
+          csrf_token: String(window.__JOB_HUNTER_CSRF_TOKEN__ || ''),
+        };
+        const activityJson = JSON.stringify(activityPayload);
+        const activityUrl = `${API_BASE_URL}/api/activity/events`;
+        if (typeof navigator.sendBeacon === 'function') {
+          const queued = navigator.sendBeacon(
+            activityUrl,
+            new Blob([activityJson], { type: 'application/json' })
+          );
+          if (queued) {
+            continue;
+          }
+        }
+        window.jobHunterFetch(activityUrl, {
           method: 'POST',
           keepalive: true,
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            job_key: jobKey,
-            activity_type: 'presented',
-            agent_id: 'job_hunter',
-            source: 'job_hunter',
-            idempotency_key: idempotencyKey,
-            occurred_at: new Date().toISOString(),
-            evidence_ref: `workspace:${WORKSPACE_RUN_ID}`,
-            metadata: { workspace: getActiveWorkspace() },
-            employer_raw: card.dataset.company || '',
-            role_title: link.dataset.jobTitle || '',
-          }),
+          body: activityJson,
         }).then(response => {
           if (!response.ok) {
             presentedActivityKeys.delete(idempotencyKey);

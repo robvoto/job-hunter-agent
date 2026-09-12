@@ -55,6 +55,53 @@ def test_dashboard_can_create_list_and_revoke_agent_token(isolated_db, monkeypat
         assert revoked.json()["revoked"] is True
 
 
+
+def test_dashboard_presentation_beacon_accepts_valid_csrf_token_in_json_body(
+    isolated_db, monkeypatch
+):
+    import job_hunter_agent.fastapi_app as fastapi_app
+    import job_hunter_agent.routes.activity as activity_routes
+
+    user = {
+        "user_id": "user-a",
+        "email": "user@example.com",
+        "role": "candidate",
+        "access_status": USER_ACCESS_APPROVED,
+        "agent_id": "job_hunter",
+        "auth_method": "session",
+    }
+    ensure_user_row("user-a", access_status=USER_ACCESS_APPROVED)
+    monkeypatch.setattr(fastapi_app.app_config, "DEBUG_MODE", False)
+    monkeypatch.setattr(fastapi_app, "read_session_user", lambda request: user)
+    monkeypatch.setattr(fastapi_app, "read_activity_user", lambda request: user)
+    monkeypatch.setattr(activity_routes, "read_activity_user", lambda request: user)
+    monkeypatch.setattr(
+        fastapi_app,
+        "verify_csrf_token",
+        lambda request, token: token == "valid-beacon-token",
+    )
+
+    payload = {
+        "job_key": "seek:beacon-1",
+        "activity_type": "presented",
+        "agent_id": "job_hunter",
+        "source": "job_hunter",
+        "idempotency_key": "presentation:beacon-1",
+        "csrf_token": "valid-beacon-token",
+    }
+    with TestClient(create_app()) as client:
+        accepted = client.post("/api/activity/events", json=payload)
+        rejected = client.post(
+            "/api/activity/events",
+            json={**payload, "idempotency_key": "presentation:beacon-2", "csrf_token": "wrong"},
+        )
+
+    assert accepted.status_code == 200
+    assert accepted.json()["event"]["activity_type"] == "presented"
+    assert rejected.status_code == 403
+    assert rejected.json()["error"] == "CSRF token missing or invalid"
+
+
 def test_activity_api_requires_authentication():
     with TestClient(create_app()) as client:
         response = client.post(

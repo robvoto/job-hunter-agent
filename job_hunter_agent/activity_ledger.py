@@ -529,7 +529,12 @@ def record_activity_event(
         if row is None:
             raise RuntimeError("Activity event was not persisted")
         stored = _decode_row(row)
-        _project_user_state(conn, stored)
+        # A presentation is telemetry only. It belongs in the canonical ledger,
+        # but it does not change any workspace/profile state and must not create
+        # a legacy job_history projection row. Avoiding that redundant projection
+        # also keeps the lightweight card-presentation write fast during page load.
+        if stored["activity_type"] != ACTIVITY_PRESENTED:
+            _project_user_state(conn, stored)
     if event["activity_type"] in OUTCOME_ACTIVITY_TYPES:
         from job_hunter_agent.employer_outcome_store import rebuild_employer_outcomes
 
