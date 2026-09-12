@@ -97,7 +97,7 @@ Target topology is to run JMM as a **separate long-running Python service on thi
 JOB_HUNTER_MARKET_MAP_BASE_URL=http://127.0.0.1:8770/v3
 ```
 
-Do not expose JMM publicly. JMM keeps its own SQLite data, scheduler and persistent SEEK Chromium profile on persistent storage; it is not a Lambda workload. As verified on 2026-09-12, AWS Job Hunter is active but JMM is **not yet deployed on this host** and the production JMM base-URL setting is therefore still absent.
+Do not expose JMM publicly. JMM keeps its own SQLite data, scheduler and persistent SEEK Chromium profile on persistent storage; it is not a Lambda workload. As of 2026-09-12, JMM code/data are **staged on this host but intentionally not live**: its API/browser services and scheduler are disabled, and Job Hunter intentionally has no `JOB_HUNTER_MARKET_MAP_BASE_URL`. JMM-012 owns the later verified local-DB promotion and explicit go-live step.
 
 `/var/lib/job-hunter` is mounted on a separate data disk.
 
@@ -521,7 +521,6 @@ Environment="TZ=Australia/Sydney"
 Environment="JOB_HUNTER_DATA_DIR=/var/lib/job-hunter/data"
 Environment="JOB_HUNTER_OUTPUT_DIR=/var/lib/job-hunter/output"
 Environment="JOB_HUNTER_DB_PATH=/var/lib/job-hunter/data/job_hunter.db"
-Environment="JOB_HUNTER_MARKET_MAP_BASE_URL=<deployed-jmm-api-base>/v3"
 ExecStart=/home/ubuntu/job-hunter-agent/scripts/ec2/start-aws-browser-session.sh
 SuccessExitStatus=143
 Restart=always
@@ -530,6 +529,8 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 ```
+
+Before JMM go-live, `/etc/job-hunter/job-hunter.env` must **omit** `JOB_HUNTER_MARKET_MAP_BASE_URL`. JMM-012 adds `JOB_HUNTER_MARKET_MAP_BASE_URL=http://127.0.0.1:8770/v3` only after the staged JMM database/API has passed its cutover verification.
 
 Manage:
 
