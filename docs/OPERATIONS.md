@@ -482,8 +482,12 @@ Exact identities are written to JH-305 through the supported activity owner.
 When a historical application is confirmed by Gmail but no trustworthy vacancy or
 requisition ID can be recovered, use `gmail:<application-confirmation-message-id>`
 as the deterministic historical job key and attach later outcomes to that same key.
-Never synthesize an identity from employer/title/date text. Unresolved outcomes go
-to `historical_application_evidence`, which has no job identity and is bounded by
+Never synthesize an identity from employer/title/date text. A job's current
+application disposition is mutually exclusive: it is either applied, rejected, or
+neither. The ledger may retain both applied and rejected events as chronology, but a
+later rejection supersedes applied state and a later re-application supersedes
+rejected state. Unresolved outcomes go to `historical_application_evidence`, which
+has no job identity and is bounded by
 `history_settings.historical_application_evidence_max_entries`. Junk and duplicates
 go to the body-free quarantine table. A failed JMM exact lookup leaves the evidence
 unresolved rather than using legacy or fuzzy matching.

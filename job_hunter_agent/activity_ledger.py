@@ -276,6 +276,30 @@ def build_activity_state(
             )
     outcomes = [event for event in ordered if event.get("activity_type") in OUTCOME_ACTIVITY_TYPES]
     latest_outcome = outcomes[-1] if outcomes else None
+
+    # A job has one current application disposition.  The ledger keeps the
+    # chronological applied/rejected events as evidence, but the projected
+    # current state must never be both applied and rejected.  If both positive
+    # pairs are active, the later event wins (for example applied -> rejected
+    # becomes rejected; rejected -> applied becomes applied).
+    applied_active = pair_active("applied")
+    rejected_active = pair_active("rejected")
+    if applied_active and rejected_active:
+        applied_event = latest_pairs["applied"]
+        rejected_event = latest_pairs["rejected"]
+        applied_key = (
+            str((applied_event or {}).get("occurred_at") or ""),
+            str((applied_event or {}).get("event_id") or ""),
+        )
+        rejected_key = (
+            str((rejected_event or {}).get("occurred_at") or ""),
+            str((rejected_event or {}).get("event_id") or ""),
+        )
+        if rejected_key >= applied_key:
+            applied_active = False
+        else:
+            rejected_active = False
+
     selected_agent = validate_agent_id(agent_id) if agent_id else None
     return {
         "presented": bool(presented_events),
@@ -289,8 +313,8 @@ def build_activity_state(
         "viewed_count": len(viewed_events),
         "liked": pair_active("liked"),
         "hidden": pair_active("hidden"),
-        "applied": pair_active("applied"),
-        "rejected": pair_active("rejected"),
+        "applied": applied_active,
+        "rejected": rejected_active,
         "no_response": pair_active("no_response"),
         "interview": any(event.get("activity_type") == ACTIVITY_INTERVIEW for event in ordered),
         "progressed": any(event.get("activity_type") == ACTIVITY_PROGRESSED for event in ordered),

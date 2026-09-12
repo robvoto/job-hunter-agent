@@ -92,3 +92,27 @@ def test_old_unkeyed_event_table_is_not_written(isolated_db):
     with db_conn() as conn:
         assert conn.execute("SELECT COUNT(*) FROM candidate_application_events").fetchone()[0] == 0
         assert conn.execute("SELECT COUNT(*) FROM job_activity_events").fetchone()[0] == 1
+
+
+def test_applied_and_rejected_are_mutually_exclusive_and_latest_wins(isolated_db):
+    key = "seek:exclusive-status"
+    _record(
+        "user-a", key, ledger.ACTIVITY_APPLIED, "exclusive-applied",
+        when="2026-01-01T00:00:00Z",
+    )
+    _record(
+        "user-a", key, ledger.ACTIVITY_REJECTED, "exclusive-rejected",
+        when="2026-01-02T00:00:00Z",
+    )
+
+    rejected = ledger.load_job_activity("user-a", key)["activity"]
+    assert rejected["applied"] is False
+    assert rejected["rejected"] is True
+
+    _record(
+        "user-a", key, ledger.ACTIVITY_APPLIED, "exclusive-reapplied",
+        when="2026-01-03T00:00:00Z",
+    )
+    reapplied = ledger.load_job_activity("user-a", key)["activity"]
+    assert reapplied["applied"] is True
+    assert reapplied["rejected"] is False
