@@ -329,6 +329,26 @@ def _role_match_score(job_title: str, rejection_role: str) -> float:
     return overlap / max(len(words_a), len(words_b))
 
 
+CONFIRMED_HISTORICAL_REJECTION_MATCH_SCORE = 0.9
+
+
+def candidate_history_is_confirmed_rejection(match: dict | None) -> bool:
+    """Return True when stored rejection evidence and the role match are strong enough."""
+    if not isinstance(match, dict):
+        return False
+    status = str(match.get("llm_application_status") or "").strip().lower()
+    if status not in {"rejection", "rejected"}:
+        return False
+    confidence = str(match.get("llm_confidence") or "").strip().lower()
+    if confidence and confidence != "low":
+        return True
+    try:
+        score = float(match.get("_match_score") or 0.0)
+    except (TypeError, ValueError):
+        score = 0.0
+    return score >= CONFIRMED_HISTORICAL_REJECTION_MATCH_SCORE
+
+
 def match_job_application_history(job_record: dict, rejection_rows: list[dict]) -> dict | None:
     """
     Find the best-matching rejection row for a job record.

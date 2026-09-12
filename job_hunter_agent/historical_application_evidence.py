@@ -8,6 +8,15 @@ from typing import Any
 from job_hunter_agent.database import db_conn
 
 
+def _runtime_application_status(outcome: object) -> str:
+    value = str(outcome or "").strip().lower()
+    if value == "rejected":
+        return "rejection"
+    if value == "applied":
+        return "not_rejection"
+    return value or "unknown"
+
+
 def load_historical_application_evidence(
     user_id: str, *, db_path: Path | None = None
 ) -> list[dict[str, Any]]:
@@ -49,8 +58,8 @@ def load_historical_application_evidence(
             "content": str(row["evidence_ref"] or ""),
             "llm_company": str(row["employer_raw"] or ""),
             "llm_role": str(row["role_title"] or ""),
-            "llm_is_rejection": str(row["outcome"] or "") == "rejected",
-            "llm_application_status": str(row["outcome"] or ""),
+            "llm_is_rejection": str(row["outcome"] or "").strip().lower() == "rejected",
+            "llm_application_status": _runtime_application_status(row["outcome"]),
             "llm_confidence": "low",
             "llm_evidence": str(row["evidence_ref"] or ""),
             "llm_needs_review": True,

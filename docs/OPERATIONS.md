@@ -479,11 +479,14 @@ uv run python -m job_hunter_agent.jh308_cutover \
 ```
 
 Exact identities are written to JH-305 through the supported activity owner.
-Unresolved outcomes go to `historical_application_evidence`, which has no job
-identity and is bounded by
-`history_settings.historical_application_evidence_max_entries`. Junk and
-duplicates go to the body-free quarantine table. A failed JMM exact lookup
-leaves the evidence unresolved rather than using legacy or fuzzy matching.
+When a historical application is confirmed by Gmail but no trustworthy vacancy or
+requisition ID can be recovered, use `gmail:<application-confirmation-message-id>`
+as the deterministic historical job key and attach later outcomes to that same key.
+Never synthesize an identity from employer/title/date text. Unresolved outcomes go
+to `historical_application_evidence`, which has no job identity and is bounded by
+`history_settings.historical_application_evidence_max_entries`. Junk and duplicates
+go to the body-free quarantine table. A failed JMM exact lookup leaves the evidence
+unresolved rather than using legacy or fuzzy matching.
 
 ## JH-307 legacy cutover audit
 

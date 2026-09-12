@@ -12,6 +12,9 @@ from html import escape, unescape
 from string import Template
 from typing import Any, Dict, List, Optional
 
+from job_hunter_agent.candidate_application_history import (
+    candidate_history_is_confirmed_rejection,
+)
 from job_hunter_agent.capability_matching import build_display_competitive_risks
 from job_hunter_agent.company_normalization import normalize_company_name
 from job_hunter_agent.config import DEBUG_MODE
@@ -86,13 +89,13 @@ from job_hunter_agent.record_schema import (
     RECORD_EMPLOYER_OUTCOME_KEY,
     RECORD_IS_LIKED_KEY,
     RECORD_IS_REPOSTED_KEY,
+    RECORD_LAST_LIKED_AT_KEY,
     RECORD_LLM_COST_USD_KEY,
     RECORD_LLM_DECISION_KEY,
     RECORD_LLM_ELAPSED_MS_KEY,
     RECORD_LLM_FIT_GRADE_KEY,
     RECORD_LLM_INPUT_TOKENS_KEY,
     RECORD_LLM_OUTPUT_TOKENS_KEY,
-    RECORD_LAST_LIKED_AT_KEY,
     RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY,
     RECORD_POTENTIAL_DUPLICATE_LINKS_KEY,
     RECORD_REJECT_REASON_KEY,
@@ -864,14 +867,10 @@ def _build_checks_before_applying_items(
     if isinstance(candidate_history, dict) and candidate_history:
         cand_company = compact_whitespace(str(candidate_history.get("llm_company") or ""))
         cand_role = compact_whitespace(str(candidate_history.get("llm_role") or ""))
-        cand_status = compact_whitespace(
-            str(candidate_history.get("llm_application_status") or "")
-        ).lower()
-        cand_confidence = compact_whitespace(str(candidate_history.get("llm_confidence") or "")).lower()
         if cand_company or cand_role:
             history_label = (
                 _workspace_label("check_item_labels", "rejected_before_label")
-                if cand_status == "rejection" and cand_confidence != "low"
+                if candidate_history_is_confirmed_rejection(candidate_history)
                 else _workspace_label("check_item_labels", "possible_previous_application_label")
             )
             history_bits = [bit for bit in [cand_company, cand_role] if bit]
@@ -1646,13 +1645,12 @@ def render_job_card(
     _cand_hist_review_reason = ""
     _cand_hist_details: dict = {}
     if isinstance(_cand_hist, dict):
-        _ch_status = str(_cand_hist.get("llm_application_status") or "").strip()
         _ch_confidence = str(_cand_hist.get("llm_confidence") or "").strip().lower()
         _cand_hist_needs_review = bool(_cand_hist.get("llm_needs_review"))
         _cand_hist_review_reason = str(_cand_hist.get("llm_review_reason") or "").strip()
         _cand_hist_badge_label = (
             _workspace_label("check_item_labels", "rejected_before_label")
-            if _ch_status == "rejection" and _ch_confidence != "low"
+            if candidate_history_is_confirmed_rejection(_cand_hist)
             else _workspace_label("check_item_labels", "possible_previous_application_label")
         )
         _cand_hist_details = {

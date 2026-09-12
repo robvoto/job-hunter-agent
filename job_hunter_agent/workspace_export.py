@@ -10,6 +10,9 @@ from pathlib import Path
 from typing import Any
 
 from job_hunter_agent import workspace_service
+from job_hunter_agent.candidate_application_history import (
+    candidate_history_is_confirmed_rejection,
+)
 from job_hunter_agent.fit_scoring import fit_score_displayed
 from job_hunter_agent.history import is_new_to_you
 from job_hunter_agent.io_utils import load_job_history, load_run_stats
@@ -154,11 +157,9 @@ def _build_badges(
 
     cand_hist = record.get("candidate_application_history")
     if isinstance(cand_hist, dict):
-        status = str(cand_hist.get("llm_application_status") or "").strip().lower()
-        confidence = str(cand_hist.get("llm_confidence") or "").strip().lower()
         badges.append(
             "Rejected before"
-            if status == "rejection" and confidence != "low"
+            if candidate_history_is_confirmed_rejection(cand_hist)
             else "Possible previous application"
         )
         if cand_hist.get("llm_needs_review"):
