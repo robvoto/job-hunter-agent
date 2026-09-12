@@ -91,9 +91,14 @@ def test_presented_activity_write_survives_navigation():
         encoding="utf-8"
     )
 
-    activity_call = results_js.split("/api/activity/events`, {", 1)[1].split("});", 1)[0]
-    assert "method: 'POST'" in activity_call
-    assert "keepalive: true" in activity_call
+    assert "const activityUrl = `${API_BASE_URL}/api/activity/events`;" in results_js
+    assert "csrf_token: String(window.__JOB_HUNTER_CSRF_TOKEN__ || '')" in results_js
+    assert "typeof navigator.sendBeacon === 'function'" in results_js
+    assert "navigator.sendBeacon(" in results_js
+    assert "new Blob([activityJson], { type: 'application/json' })" in results_js
+    # Keep fetch+keepalive as the compatibility fallback when sendBeacon cannot queue.
+    assert "window.jobHunterFetch(activityUrl, {" in results_js
+    assert "keepalive: true" in results_js
 
 
 def test_workspace_page_size_select_is_a_shared_workspace_control():
