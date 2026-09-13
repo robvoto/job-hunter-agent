@@ -479,10 +479,13 @@ uv run python -m job_hunter_agent.jh308_cutover \
 ```
 
 Exact identities are written to JH-305 through the supported activity owner.
-When a historical application is confirmed by Gmail but no trustworthy vacancy or
-requisition ID can be recovered, use `gmail:<application-confirmation-message-id>`
-as the deterministic historical job key and attach later outcomes to that same key.
-Never synthesize an identity from employer/title/date text. A job's current
+When deliberate historical reconstruction confirms an application but no trustworthy
+vacancy or requisition ID can be recovered, a unique explicit Gmail candidate-process
+message for that employer + role may be used as `gmail:<message-id>` for the
+deterministic historical job key. Suitable evidence includes an application
+confirmation, recruiter submission/authority, interview invitation, or rejection;
+generic correspondence is not sufficient. Attach later evidence for the same role to
+that same key. Never synthesize an identity from employer/title/date text. A job's current
 application disposition is mutually exclusive: it is either applied, rejected, or
 neither. The ledger may retain both applied and rejected events as chronology, but a
 later rejection supersedes applied state and a later re-application supersedes
