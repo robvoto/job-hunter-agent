@@ -152,6 +152,7 @@ def register_hard_blocker_learning_from_rejection(
     details_text: str = "",
     hard_block_matches: Optional[list[dict]] = None,
     profile: Optional[dict] = None,
+    deferred_signals: Optional[list[dict[str, Any]]] = None,
 ) -> None:
 
     reason = compact_whitespace(reject_reason)
@@ -216,7 +217,10 @@ def register_hard_blocker_learning_from_rejection(
                 add_signal(pattern, token.replace("_", " "))
 
     if signals:
-        register_signals(signals)
+        if deferred_signals is not None:
+            deferred_signals.extend(signals)
+        else:
+            register_signals(signals)
 
 
 def build_ad_learning_signals(

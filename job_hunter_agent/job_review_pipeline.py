@@ -6,7 +6,7 @@ import logging
 import re
 import time
 import textwrap
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Callable
 
@@ -616,6 +616,26 @@ class ReviewPipelineHooks:
     before_llm_review: HookFn | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class TitleJudgmentResult:
+    """A title-LMM result that can cross a worker boundary without shared state."""
+
+    cache_key: str
+    judgment: dict[str, Any] | None
+    cache_value: dict[str, Any] | None
+    cache_hit: bool
+
+
+@dataclass(frozen=True, slots=True)
+class TitleGateAssessment:
+    """Coordinator-owned deterministic title/O*NET facts plus optional LLM result."""
+
+    title_analysis: dict[str, Any]
+    onet: OccupationClassification | None
+    title_judgment_cache_key: str | None = None
+    title_judgment: TitleJudgmentResult | None = None
+
+
 @dataclass(slots=True)
 class ReviewPipelineContext:
     profile: dict
@@ -633,6 +653,14 @@ class ReviewPipelineContext:
     # JMM supplies the current JD for this run. Disable reuse of old JH analysis
     # so candidate decisions are always grounded in the JMM evidence returned now.
     market_map_mode: bool = False
+    # JMM's coordinator queues these by job key before invoking the existing
+    # stateful pre-review function. The list preserves duplicate input cards.
+    title_assessments: dict[str, list[TitleGateAssessment]] = field(default_factory=dict)
+    # Worker contexts defer all finalisation and learning-registry writes until
+    # the coordinator merges the page in stable input order.
+    defer_finalization: bool = False
+    defer_learning_signals: bool = False
+    deferred_learning_signals: list[dict[str, Any]] = field(default_factory=list)
 
 
 _DETAILS_STATUS_REJECT_REASON = {
@@ -780,6 +808,8 @@ def _call_hook(
 
 
 def _finalize(record: dict, context: ReviewPipelineContext) -> None:
+    if context.defer_finalization:
+        return
     finalize_record(
         context.job_history,
         context.audit_rows,
@@ -788,6 +818,15 @@ def _finalize(record: dict, context: ReviewPipelineContext) -> None:
         persist_full_description=not context.market_map_mode,
         update_history=not context.market_map_mode,
     )
+
+
+def _register_or_defer_learning_signals(
+    context: ReviewPipelineContext, signals: list[dict[str, Any]]
+) -> None:
+    if context.defer_learning_signals:
+        context.deferred_learning_signals.extend(signals)
+        return
+    register_pending_learning_signals(signals)
 
 
 def _build_outcome(record: dict) -> dict[str, Any]:
@@ -921,7 +960,11 @@ def _apply_work_type_inference(record: dict, details_text: str) -> None:
 
 
 def _apply_content_filter_result(
-    record: dict, details_text: str, profile: dict, title_reason: str
+    record: dict,
+    details_text: str,
+    profile: dict,
+    title_reason: str,
+    context: ReviewPipelineContext | None = None,
 ) -> tuple[bool, str]:
     ok_desc, desc_reason = passes_content_filters(
         details_text, record[RECORD_LOCATION_KEY], title_reason, profile=profile
@@ -938,7 +981,15 @@ def _apply_content_filter_result(
                 ]
             )[:3]
         register_hard_blocker_learning_from_rejection(
-            record, desc_reason, details_text, profile=profile
+            record,
+            desc_reason,
+            details_text,
+            profile=profile,
+            deferred_signals=(
+                context.deferred_learning_signals
+                if context is not None and context.defer_learning_signals
+                else None
+            ),
         )
         return False, desc_reason
     return True, "OK"
@@ -952,7 +1003,12 @@ def _apply_competitive_signal_enrichment(record: dict, details_text: str, profil
     record[RECORD_REVIEWED_SIGNAL_MATCHES_KEY] = reviewed_signal_matches_for_text(details_text)
 
 
-def _apply_hard_block_result(record: dict, details_text: str, profile: dict) -> tuple[bool, str]:
+def _apply_hard_block_result(
+    record: dict,
+    details_text: str,
+    profile: dict,
+    context: ReviewPipelineContext | None = None,
+) -> tuple[bool, str]:
     hard_block_matches = hard_block_entries(record, profile)
     record[RECORD_HARD_BLOCK_REASONS_KEY] = [entry["text"] for entry in hard_block_matches]
     if record[RECORD_HARD_BLOCK_REASONS_KEY]:
@@ -961,7 +1017,16 @@ def _apply_hard_block_result(record: dict, details_text: str, profile: dict) -> 
             f"DESC_HARD_BLOCK_RULE:{re.sub(r'[^a-z0-9]+', '_', term).strip('_') or 'hard_block'}"
         )
         register_hard_blocker_learning_from_rejection(
-            record, reason_code, details_text, hard_block_matches, profile=profile
+            record,
+            reason_code,
+            details_text,
+            hard_block_matches,
+            profile=profile,
+            deferred_signals=(
+                context.deferred_learning_signals
+                if context is not None and context.defer_learning_signals
+                else None
+            ),
         )
         return False, reason_code
     return True, "OK"
@@ -1213,6 +1278,96 @@ def _evaluate_job_fit(record: dict, profile: dict, llm_cache: dict) -> dict:
     return fit_eval
 
 
+def prepare_title_gate_assessment(
+    title: str, profile: dict[str, Any]
+) -> TitleGateAssessment:
+    """Run title gates without touching the shared LLM cache.
+
+    O*NET owns a process/database cache, so this deterministic coordinator step
+    deliberately remains outside JMM worker threads. The potentially slow title
+    judgement is returned separately by :func:`review_title_judgment`.
+    """
+    title_analysis = analyze_title_filters(title, profile)
+    title_reason = str(title_analysis.get("reason") or "")
+    onet = None
+    if not bool(title_analysis.get("ok")) and title_reason == "TITLE_NOT_TARGET":
+        onet = _onet_classify_title(title, profile)
+    cache_key = None
+    if onet is not None:
+        cache_key = _title_judgment_cache_key(title, profile)
+    return TitleGateAssessment(
+        title_analysis=title_analysis,
+        onet=onet,
+        title_judgment_cache_key=cache_key,
+    )
+
+
+def _title_judgment_cache_key(title: str, profile: dict[str, Any]) -> str:
+    title_capability_names = [
+        str(rule.get("name") or "").strip()
+        for rule in (profile.get(KEY_CANDIDATE_CAPABILITIES) or [])
+        if isinstance(rule, dict) and str(rule.get("name") or "").strip()
+    ]
+    return build_title_judgment_cache_key(
+        title,
+        profile.get("target_roles"),
+        profile.get("also_consider_roles"),
+        title_capability_names,
+        explore_adjacent_roles=bool(profile.get(KEY_EXPLORE_ADJACENT_ROLES, False)),
+    )
+
+
+def review_title_judgment(
+    title: str,
+    profile: dict[str, Any],
+    llm_cache: dict[str, Any],
+) -> TitleJudgmentResult:
+    """Assess one title using only the supplied, worker-local cache snapshot."""
+    cache_key = _title_judgment_cache_key(title, profile)
+    target_roles = profile.get("target_roles")
+    secondary_roles = profile.get("also_consider_roles")
+    title_capability_names = [
+        str(rule.get("name") or "").strip()
+        for rule in (profile.get(KEY_CANDIDATE_CAPABILITIES) or [])
+        if isinstance(rule, dict) and str(rule.get("name") or "").strip()
+    ]
+    explore_adjacent_roles = bool(profile.get(KEY_EXPLORE_ADJACENT_ROLES, False))
+    judgment = normalize_llm_title_judgment(llm_cache.get(cache_key))
+    if judgment is not None:
+        return TitleJudgmentResult(
+            cache_key=cache_key,
+            judgment=judgment,
+            cache_value=None,
+            cache_hit=True,
+        )
+    judgment = llm_judge_title(
+        title,
+        target_roles,
+        secondary_roles,
+        title_capability_names,
+        explore_adjacent_roles=explore_adjacent_roles,
+    )
+    return TitleJudgmentResult(
+        cache_key=cache_key,
+        judgment=judgment,
+        cache_value=judgment,
+        cache_hit=False,
+    )
+
+
+def _take_title_gate_assessment(
+    record: dict[str, Any], context: ReviewPipelineContext
+) -> TitleGateAssessment:
+    job_key = str(record.get(RECORD_JOB_KEY) or "")
+    queued = context.title_assessments.get(job_key) or []
+    if queued:
+        assessment = queued.pop(0)
+        if not queued:
+            context.title_assessments.pop(job_key, None)
+        return assessment
+    return prepare_title_gate_assessment(str(record.get(RECORD_TITLE_KEY) or ""), context.profile)
+
+
 def review_pre_detail_normalized_job(
     record: dict,
     context: ReviewPipelineContext,
@@ -1275,7 +1430,8 @@ def review_pre_detail_normalized_job(
         _finalize(record, context)
         return _build_outcome(record), record, skill_observations, False
 
-    title_analysis = analyze_title_filters(title, profile)
+    title_assessment = _take_title_gate_assessment(record, context)
+    title_analysis = title_assessment.title_analysis
     ok_title = bool(title_analysis.get("ok"))
     title_reason = str(title_analysis.get("reason") or "")
     record[RECORD_TITLE_REASON_KEY] = title_reason
@@ -1293,9 +1449,13 @@ def review_pre_detail_normalized_job(
             # Downgraded gate: TITLE_NOT_TARGET alone is not a hard reject.
             # Consult O*NET to decide between a cheap skip (far occupation family)
             # and fetching the description (near or uncertain).
-            _onet_t0 = time.monotonic()
-            onet = _onet_classify_title(title, profile)
-            _onet_elapsed_ms = int((time.monotonic() - _onet_t0) * 1000)
+            onet = title_assessment.onet
+            if onet is None:
+                _onet_t0 = time.monotonic()
+                onet = _onet_classify_title(title, profile)
+                _onet_elapsed_ms = int((time.monotonic() - _onet_t0) * 1000)
+            else:
+                _onet_elapsed_ms = 0
             record[RECORD_ONET_CLASSIFICATION_KEY] = {
                 "result": onet.result,
                 "matched_occupation_code": onet.matched_occupation_code,
@@ -1355,32 +1515,17 @@ def review_pre_detail_normalized_job(
             # use candidate capability names only to decide whether an unfamiliar title
             # is plausible enough to inspect, never to score or accept the job here.
             _title_judgment_t0 = time.monotonic()
-            title_capability_names = [
-                str(rule.get("name") or "").strip()
-                for rule in (profile.get(KEY_CANDIDATE_CAPABILITIES) or [])
-                if isinstance(rule, dict) and str(rule.get("name") or "").strip()
-            ]
-            target_roles = profile.get("target_roles")
-            secondary_roles = profile.get("also_consider_roles")
-            title_cache_key = build_title_judgment_cache_key(
-                title,
-                target_roles,
-                secondary_roles,
-                title_capability_names,
-                explore_adjacent_roles=explore_adjacent_roles,
-            )
-            title_judgment = normalize_llm_title_judgment(context.llm_cache.get(title_cache_key))
-            title_cache_hit = title_judgment is not None
-            if not title_cache_hit:
-                title_judgment = llm_judge_title(
-                    title,
-                    target_roles,
-                    secondary_roles,
-                    title_capability_names,
-                    explore_adjacent_roles=explore_adjacent_roles,
+            title_judgment_result = title_assessment.title_judgment
+            if title_judgment_result is None:
+                title_judgment_result = review_title_judgment(
+                    title, profile, context.llm_cache
                 )
-                if title_judgment is not None:
-                    context.llm_cache[title_cache_key] = title_judgment
+                if title_judgment_result.cache_value is not None:
+                    context.llm_cache[title_judgment_result.cache_key] = (
+                        title_judgment_result.cache_value
+                    )
+            title_judgment = title_judgment_result.judgment
+            title_cache_hit = title_judgment_result.cache_hit
             _title_judgment_elapsed_ms = int((time.monotonic() - _title_judgment_t0) * 1000)
             if title_judgment is not None:
                 record[RECORD_LLM_TITLE_JUDGMENT_KEY] = title_judgment
@@ -1577,7 +1722,9 @@ def review_post_detail_normalized_job(
     _call_hook(hooks, "before_common_review", record, context)
     _call_hook(hooks, "after_description_loaded", record, context)
 
-    ok, reason = _apply_content_filter_result(record, details_text, profile, title_reason)
+    ok, reason = _apply_content_filter_result(
+        record, details_text, profile, title_reason, context=context
+    )
     if not ok:
         record[RECORD_DECISION_KEY] = "REJECT"
         record[RECORD_REJECT_REASON_KEY] = reason
@@ -1586,7 +1733,7 @@ def review_post_detail_normalized_job(
 
     _apply_competitive_signal_enrichment(record, details_text, profile)
 
-    ok, reason = _apply_hard_block_result(record, details_text, profile)
+    ok, reason = _apply_hard_block_result(record, details_text, profile, context=context)
     if not ok:
         record[RECORD_DECISION_KEY] = "REJECT"
         record[RECORD_REJECT_REASON_KEY] = reason
@@ -1714,7 +1861,8 @@ def review_post_detail_normalized_job(
         )
         if eligibility_reject_reason and eligibility_reason:
             record[RECORD_DECISION_EXPLANATION_KEY] = eligibility_reason
-        register_pending_learning_signals(
+        _register_or_defer_learning_signals(
+            context,
             merge_pending_learning_signals(
                 record.get("ad_learning_signals") or [],
                 record.get("llm_learning_candidates") or [],
@@ -1735,7 +1883,7 @@ def review_post_detail_normalized_job(
         record.get("llm_learning_candidates") or [],
         _build_requirement_classification_review_signals(record),
     )
-    register_pending_learning_signals(pending_signals)
+    _register_or_defer_learning_signals(context, pending_signals)
     record.pop("skill_observations", None)
     record.pop("ad_learning_signals", None)
     record.pop("llm_learning_candidates", None)

@@ -37,6 +37,7 @@ export const JobHunterAdminSettings = (function () {
     search_default_linkedin_jobspy_stall_timeout_seconds: ['search_settings', 'linkedin_jobspy_stall_timeout_seconds'],
     search_default_linkedin_parallel_search_workers: ['search_settings', 'linkedin_parallel_search_workers'],
     search_default_linkedin_parallel_review_workers: ['search_settings', 'linkedin_parallel_review_workers'],
+    search_default_job_market_map_parallel_workers: ['search_settings', 'job_market_map_parallel_workers'],
     search_default_sort_newest_first: ['search_settings', 'sort_newest_first'],
     search_default_linkedin_easy_apply_only: ['search_settings', 'linkedin_easy_apply_only'],
     default_country_suffix: ['default_country_suffix', null],
@@ -62,6 +63,8 @@ export const JobHunterAdminSettings = (function () {
     search_limit_linkedin_parallel_search_workers_max: ['limits.search', 'linkedin_parallel_search_workers'],
     search_limit_linkedin_parallel_review_workers_min: ['limits.search', 'linkedin_parallel_review_workers'],
     search_limit_linkedin_parallel_review_workers_max: ['limits.search', 'linkedin_parallel_review_workers'],
+    search_limit_job_market_map_parallel_workers_min: ['limits.search', 'job_market_map_parallel_workers'],
+    search_limit_job_market_map_parallel_workers_max: ['limits.search', 'job_market_map_parallel_workers'],
     salary_limit_minimum_salary_yearly_max: ['limits.salary', 'minimum_salary_yearly'],
     salary_limit_minimum_daily_rate_max: ['limits.salary', 'minimum_daily_rate'],
     evidence_primary_weight: ['candidate_profile_tier_weights', 'primary_candidate_profile_context'],
@@ -254,6 +257,7 @@ export const JobHunterAdminSettings = (function () {
     setFieldValue('search_default_linkedin_jobspy_stall_timeout_seconds', searchDefaults.linkedin_jobspy_stall_timeout_seconds);
     setFieldValue('search_default_linkedin_parallel_search_workers', searchDefaults.linkedin_parallel_search_workers);
     setFieldValue('search_default_linkedin_parallel_review_workers', searchDefaults.linkedin_parallel_review_workers);
+    setFieldValue('search_default_job_market_map_parallel_workers', searchDefaults.job_market_map_parallel_workers);
     setToggleChecked('search_default_sort_newest_first', searchDefaults.sort_newest_first !== false);
     const liEasyApply = searchDefaults[LINKEDIN_EASY_APPLY_ONLY];
     setFieldValue('search_default_' + LINKEDIN_EASY_APPLY_ONLY, (liEasyApply === null || liEasyApply === undefined) ? '' : liEasyApply);
@@ -263,6 +267,7 @@ export const JobHunterAdminSettings = (function () {
     setBounds('search_default_linkedin_jobspy_stall_timeout_seconds', searchLimits.linkedin_jobspy_stall_timeout_seconds);
     setBounds('search_default_linkedin_parallel_search_workers', searchLimits.linkedin_parallel_search_workers);
     setBounds('search_default_linkedin_parallel_review_workers', searchLimits.linkedin_parallel_review_workers);
+    setBounds('search_default_job_market_map_parallel_workers', searchLimits.job_market_map_parallel_workers);
     setFieldValue('default_country_suffix', defaultCountrySuffix);
     setFieldValue('session_max_age_days', playwrightSettings.session_max_age_days);
     requireElement('playwright_headless').checked = playwrightSettings.headless !== false;
@@ -294,6 +299,7 @@ export const JobHunterAdminSettings = (function () {
     setOptionalFieldText('search_default_linkedin_jobspy_stall_timeout_seconds_bounds', rangeText(searchLimits.linkedin_jobspy_stall_timeout_seconds));
     setOptionalFieldText('search_default_linkedin_parallel_search_workers_bounds', rangeText(searchLimits.linkedin_parallel_search_workers));
     setOptionalFieldText('search_default_linkedin_parallel_review_workers_bounds', rangeText(searchLimits.linkedin_parallel_review_workers));
+    setOptionalFieldText('search_default_job_market_map_parallel_workers_bounds', rangeText(searchLimits.job_market_map_parallel_workers));
 
     setFieldValue('evidence_primary_weight', evidenceWeights.primary_candidate_profile_context);
     setFieldValue('evidence_secondary_weight', evidenceWeights.secondary_candidate_profile_context);
@@ -461,6 +467,7 @@ export const JobHunterAdminSettings = (function () {
         linkedin_jobspy_stall_timeout_seconds: readNumber('search_default_linkedin_jobspy_stall_timeout_seconds', currentSearch.linkedin_jobspy_stall_timeout_seconds),
         linkedin_parallel_search_workers: readNumber('search_default_linkedin_parallel_search_workers', currentSearch.linkedin_parallel_search_workers),
         linkedin_parallel_review_workers: readNumber('search_default_linkedin_parallel_review_workers', currentSearch.linkedin_parallel_review_workers),
+        job_market_map_parallel_workers: readNumber('search_default_job_market_map_parallel_workers', currentSearch.job_market_map_parallel_workers),
         sort_newest_first: Boolean(document.getElementById('search_default_sort_newest_first')?.checked),
         [LINKEDIN_EASY_APPLY_ONLY]: (() => {
           const raw = document.getElementById('search_default_' + LINKEDIN_EASY_APPLY_ONLY).value;
@@ -500,6 +507,10 @@ export const JobHunterAdminSettings = (function () {
           linkedin_parallel_review_workers: {
             min: readNumber('search_limit_linkedin_parallel_review_workers_min', currentSearchLimits.linkedin_parallel_review_workers?.min),
             max: readNumber('search_limit_linkedin_parallel_review_workers_max', currentSearchLimits.linkedin_parallel_review_workers?.max),
+          },
+          job_market_map_parallel_workers: {
+            min: readNumber('search_limit_job_market_map_parallel_workers_min', currentSearchLimits.job_market_map_parallel_workers?.min),
+            max: readNumber('search_limit_job_market_map_parallel_workers_max', currentSearchLimits.job_market_map_parallel_workers?.max),
           },
         },
         salary: {

@@ -1080,7 +1080,7 @@ def _run_market_map_source(context: ScrapeRunContext) -> SourceRunResult:
             audit_rows=audit,
             skill_observations=skills,
             source_cache_status="JMM",
-            source_collection_complete=True,
+            source_collection_complete=not run_stop_requested(),
         )
     except Exception as exc:
         logger.exception("[Job Market Map] consumer run failed")

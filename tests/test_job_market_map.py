@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import threading
+import time
 from types import SimpleNamespace
 from urllib.error import URLError
 
@@ -13,6 +15,14 @@ from job_hunter_agent.job_market_map_client import (
     JobMarketMapClient,
     JobMarketMapContractError,
     JobMarketMapUnavailable,
+)
+from job_hunter_agent.job_review_pipeline import (
+    TitleGateAssessment,
+    TitleJudgmentResult,
+)
+from job_hunter_agent.occupation_taxonomy import (
+    RESULT_NEAR,
+    OccupationClassification,
 )
 from job_hunter_agent.source_runner import SourceRunResult
 
@@ -239,7 +249,7 @@ def test_market_source_requests_current_jd_and_checkpoints_per_user(monkeypatch)
 
     assert jd_calls == [1, 2]
     assert checkpoints == [("job-hunter:rob", 1), ("job-hunter:rob", 2)]
-    assert audit == []
+    assert [row["job_key"] for row in audit] == ["seek:1", "seek:2"]
     assert len(kept) == 2
     assert all("full_description" not in record for record in kept)
     assert all("details_text" not in record for record in kept)
@@ -249,13 +259,19 @@ def test_market_source_requests_current_jd_and_checkpoints_per_user(monkeypatch)
         "Starting JMM",
         "Reading JMM jobs",
         "Reviewing job 1 of page 1",
+        "Obtaining job descriptions",
         "Obtaining job description",
         "Fit review",
+        "Finalising JMM results",
+        "Finalising JMM results",
         "Checkpointing JMM progress",
         "Reading JMM jobs",
         "Reviewing job 1 of page 2",
+        "Obtaining job descriptions",
         "Obtaining job description",
         "Fit review",
+        "Finalising JMM results",
+        "Finalising JMM results",
         "Checkpointing JMM progress",
         "JMM source complete",
     ]
@@ -301,6 +317,192 @@ def test_market_source_does_not_checkpoint_a_page_after_analysis_failure(monkeyp
         market_map_source.run_market_map_source(context, user_id="rob")
 
     assert checkpoints == []
+
+
+def _market_context(profile=None):
+    return SimpleNamespace(
+        profile=profile or {},
+        job_history={},
+        llm_cache={},
+        applied_job_keys=set(),
+        hidden_job_keys=set(),
+        run_iso="2026-09-11T12:00:00+00:00",
+        configured_date_range=3,
+        identity_registry=None,
+    )
+
+
+def test_market_source_parallel_stages_overlap_and_merge_in_input_order(monkeypatch):
+    items = [_item(job_id) for job_id in range(1, 5)]
+    checkpoints: list[int] = []
+    active = {stage: 0 for stage in ("title", "jd", "fit")}
+    maximum = {stage: 0 for stage in active}
+    lock = threading.Lock()
+
+    def delayed(stage, callback):
+        with lock:
+            active[stage] += 1
+            maximum[stage] = max(maximum[stage], active[stage])
+        try:
+            time.sleep(0.05)
+            return callback()
+        finally:
+            with lock:
+                active[stage] -= 1
+
+    class FakeClient:
+        @classmethod
+        def from_environment(cls):
+            return cls()
+
+        def consumer_feed_page(self, *, consumer_key, **_kwargs):
+            return _feed_page(items=items, next_cursor=4, has_more=False)
+
+        def get_or_enrich_jd(self, *, jmm_job_id):
+            return delayed(
+                "jd",
+                lambda: {
+                    "full_description": f"JD {jmm_job_id}",
+                    "jd_source": "jmm",
+                    "jd_fetched_at": "2026-09-11T12:01:00+00:00",
+                },
+            )
+
+        def checkpoint(self, *, consumer_key, last_job_id, **_kwargs):
+            checkpoints.append(last_job_id)
+            return {"consumer_key": consumer_key, "last_job_id": last_job_id}
+
+    def title_gate(_title, _profile):
+        return TitleGateAssessment(
+            title_analysis={"ok": False, "reason": "TITLE_NOT_TARGET"},
+            onet=OccupationClassification(
+                result=RESULT_NEAR,
+                matched_occupation_code="13-1111.00",
+                confidence=0.9,
+                reason=RESULT_NEAR,
+            ),
+            title_judgment_cache_key=f"title:{_title}",
+        )
+
+    def title_review(title, profile, llm_cache):
+        return delayed(
+            "title",
+            lambda: TitleJudgmentResult(
+                cache_key=f"title:{title}",
+                judgment={"verdict": "match", "reason": "test"},
+                cache_value={"verdict": "match", "reason": "test"},
+                cache_hit=False,
+            ),
+        )
+
+    def pre(record, _context):
+        return ({"decision": "KEEP"}, record, [], True)
+
+    def post(record, _context):
+        return delayed("fit", lambda: ({"decision": "KEEP"}, record, []))
+
+    monkeypatch.setattr(market_map_source, "JobMarketMapClient", FakeClient)
+    monkeypatch.setattr(market_map_source, "get_job_market_map_parallel_workers", lambda: 2)
+    monkeypatch.setattr(market_map_source, "prepare_title_gate_assessment", title_gate)
+    monkeypatch.setattr(market_map_source, "review_title_judgment", title_review)
+    monkeypatch.setattr(market_map_source, "review_pre_detail_normalized_job", pre)
+    monkeypatch.setattr(market_map_source, "review_post_detail_normalized_job", post)
+
+    kept, audit, _skills = market_map_source.run_market_map_source(
+        _market_context(), user_id="rob"
+    )
+
+    assert maximum == {"title": 2, "jd": 2, "fit": 2}
+    assert [record["job_key"] for record in kept] == [f"seek:{i}" for i in range(1, 5)]
+    assert [row["job_key"] for row in audit] == [f"seek:{i}" for i in range(1, 5)]
+    assert checkpoints == [4]
+
+
+def test_market_source_stop_cancels_queued_jmm_work(monkeypatch):
+    stop = threading.Event()
+    jd_calls: list[int] = []
+    checkpoints: list[int] = []
+
+    class FakeClient:
+        @classmethod
+        def from_environment(cls):
+            return cls()
+
+        def consumer_feed_page(self, *, consumer_key, **_kwargs):
+            return _feed_page(items=[_item(i) for i in range(1, 5)], next_cursor=4, has_more=False)
+
+        def get_or_enrich_jd(self, *, jmm_job_id):
+            jd_calls.append(jmm_job_id)
+            stop.set()
+            time.sleep(0.08)
+            return {
+                "full_description": "JD",
+                "jd_source": "jmm",
+                "jd_fetched_at": "2026-09-11T12:01:00+00:00",
+            }
+
+        def checkpoint(self, *, consumer_key, last_job_id, **_kwargs):
+            checkpoints.append(last_job_id)
+            return {"consumer_key": consumer_key, "last_job_id": last_job_id}
+
+    monkeypatch.setattr(market_map_source, "JobMarketMapClient", FakeClient)
+    monkeypatch.setattr(market_map_source, "get_job_market_map_parallel_workers", lambda: 1)
+    monkeypatch.setattr(market_map_source, "run_stop_requested", stop.is_set)
+    monkeypatch.setattr(
+        market_map_source,
+        "review_pre_detail_normalized_job",
+        lambda record, _context: ({"decision": "KEEP"}, record, [], True),
+    )
+
+    market_map_source.run_market_map_source(_market_context(), user_id="rob")
+
+    assert jd_calls == [1]
+    assert checkpoints == []
+
+
+def test_market_source_worker_failure_does_not_mutate_shared_state_or_checkpoint(monkeypatch):
+    completed: list[int] = []
+    checkpoints: list[int] = []
+
+    class FakeClient:
+        @classmethod
+        def from_environment(cls):
+            return cls()
+
+        def consumer_feed_page(self, *, consumer_key, **_kwargs):
+            return _feed_page(items=[_item(i) for i in range(1, 4)], next_cursor=3, has_more=False)
+
+        def get_or_enrich_jd(self, *, jmm_job_id):
+            return {"full_description": "JD", "jd_source": "jmm", "jd_fetched_at": "now"}
+
+        def checkpoint(self, *, consumer_key, last_job_id, **_kwargs):
+            checkpoints.append(last_job_id)
+            return {"consumer_key": consumer_key, "last_job_id": last_job_id}
+
+    def post(record, _context):
+        job_id = int(record["market_map_job_id"])
+        completed.append(job_id)
+        if job_id == 2:
+            raise RuntimeError("fit worker failed")
+        return ({"decision": "KEEP"}, record, [])
+
+    context = _market_context()
+    monkeypatch.setattr(market_map_source, "JobMarketMapClient", FakeClient)
+    monkeypatch.setattr(market_map_source, "get_job_market_map_parallel_workers", lambda: 2)
+    monkeypatch.setattr(
+        market_map_source,
+        "review_pre_detail_normalized_job",
+        lambda record, _context: ({"decision": "KEEP"}, record, [], True),
+    )
+    monkeypatch.setattr(market_map_source, "review_post_detail_normalized_job", post)
+
+    with pytest.raises(RuntimeError, match="fit worker failed"):
+        market_map_source.run_market_map_source(context, user_id="rob")
+
+    assert sorted(completed) == [1, 2, 3]
+    assert checkpoints == []
+    assert context.job_history == {}
+    assert context.llm_cache == {}
 
 
 def test_normal_runtime_builds_a_jmm_only_context(monkeypatch):

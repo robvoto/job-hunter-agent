@@ -427,6 +427,10 @@ def get_linkedin_parallel_review_workers() -> int:
     return int(load_global_settings()[KEY_SEARCH_SETTINGS][KEY_LINKEDIN_PARALLEL_REVIEW_WORKERS])
 
 
+def get_job_market_map_parallel_workers() -> int:
+    return int(load_global_settings()[KEY_SEARCH_SETTINGS][KEY_JOB_MARKET_MAP_PARALLEL_WORKERS])
+
+
 def get_playwright_headless() -> bool:
     """SEEK's Playwright headless mode. APS launches its own persistent Playwright
     context independently of this setting (always headless); LinkedIn uses JobSpy
