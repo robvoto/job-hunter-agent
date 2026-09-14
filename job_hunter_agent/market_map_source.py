@@ -14,8 +14,8 @@ from job_hunter_agent.history import finalize_record
 from job_hunter_agent.job_identity import RUN_IDENTITY_CLAIM_KEY, normalize_job_key
 from job_hunter_agent.job_market_map_client import (
     MARKET_MAP_CONSUMER_KEY_PREFIX,
-    JobMarketMapContractError,
     JobMarketMapClient,
+    JobMarketMapContractError,
 )
 from job_hunter_agent.job_review_pipeline import (
     ReviewPipelineContext,
