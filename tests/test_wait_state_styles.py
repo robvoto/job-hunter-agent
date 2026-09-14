@@ -25,6 +25,7 @@ def test_wait_state_uses_quiet_disclosure_and_shared_structured_progress():
     assert ".source-status-badge--linkedin" in widget_css
     assert ".source-status-badge--seek" in widget_css
     assert ".source-status-badge--apsjobs" in widget_css
+    assert ".source-status-badge--job-market-map" in widget_css
     assert ".jh-progress--indeterminate::after" in widget_css
     assert ".jh-button.is-working::before" in widget_css
     assert "animation: workingSpin 0.9s linear infinite;" in widget_css
@@ -34,6 +35,7 @@ def test_wait_state_uses_quiet_disclosure_and_shared_structured_progress():
     assert 'role="progressbar"' in wait_state_js
     assert "aria-valuenow" in wait_state_js
     assert "progressDetail" in wait_state_js
+    assert "job_market_map" in wait_state_js
     assert "legacyProgressCopy" not in wait_state_js
     assert "legacy =" not in wait_state_js
     assert "Current step:" not in wait_state_js

@@ -205,7 +205,7 @@ def test_clear_run_progress_resets_text_and_detail():
 
 def test_set_run_progress_state_accepts_all_valid_sources():
     run_control.clear_run_progress()
-    for source in ("seek", "linkedin", "apsjobs", "generic"):
+    for source in ("seek", "linkedin", "apsjobs", "job_market_map", "generic"):
         run_control.set_run_progress_state(
             f"Testing {source}",
             stage="starting",

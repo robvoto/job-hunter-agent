@@ -129,6 +129,28 @@ def test_workspace_structured_wait_state_renders_all_sources(candidate_page):
 
     state["payload"] = {
         **state["payload"],
+        "progress": "Reviewing job 2 of page 3",
+        "progress_detail": {
+            "stage": "relevance_analysis",
+            "source": "job_market_map",
+            "headline": "Reviewing job 2 of page 3",
+            "detail": "Business Analyst 42",
+            "current": 2,
+            "total": 4,
+            "item_current": None,
+            "item_total": None,
+            "determinate": True,
+        },
+    }
+    page.reload()
+    assert page.locator(".source-status-badge--job-market-map").inner_text().strip() == "JMM"
+    assert page.locator(".search-progress-source__title").inner_text() == "Reviewing job 2 of page 3"
+    assert page.locator(".search-progress-source__detail").inner_text() == "Business Analyst 42"
+    assert page.locator(".jh-progress").get_attribute("aria-valuemax") == "4"
+    assert page.locator(".jh-progress").get_attribute("aria-valuenow") == "2"
+
+    state["payload"] = {
+        **state["payload"],
         "progress": "Finalising results\nPreparing workspace data",
         "progress_detail": {
             "stage": "finalising",

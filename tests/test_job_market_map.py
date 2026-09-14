@@ -8,7 +8,7 @@ from urllib.error import URLError
 
 import pytest
 
-from job_hunter_agent import market_map_source, run_context, source_runner
+from job_hunter_agent import market_map_source, run_context, run_control, source_runner
 from job_hunter_agent.job_market_map_client import (
     JobMarketMapClient,
     JobMarketMapContractError,
@@ -209,6 +209,17 @@ def test_market_source_requests_current_jd_and_checkpoints_per_user(monkeypatch)
     monkeypatch.setattr(market_map_source, "JobMarketMapClient", FakeClient)
     monkeypatch.setattr(market_map_source, "review_pre_detail_normalized_job", pre)
     monkeypatch.setattr(market_map_source, "review_post_detail_normalized_job", post)
+    progress_states: list[dict] = []
+    real_set_run_progress_state = run_control.set_run_progress_state
+
+    def capture_progress(text, **kwargs):
+        real_set_run_progress_state(text, **kwargs)
+        detail = run_control.get_run_progress_detail()
+        assert detail is not None
+        progress_states.append(detail)
+
+    monkeypatch.setattr(market_map_source, "set_run_progress_state", capture_progress)
+    run_control.clear_run_progress()
     context = SimpleNamespace(
         profile={},
         job_history={},
@@ -220,7 +231,11 @@ def test_market_source_requests_current_jd_and_checkpoints_per_user(monkeypatch)
         identity_registry=None,
     )
 
-    kept, audit, _skills = market_map_source.run_market_map_source(context, user_id="rob")
+    try:
+        kept, audit, _skills = market_map_source.run_market_map_source(context, user_id="rob")
+        final_progress_detail = run_control.get_run_progress_detail()
+    finally:
+        run_control.clear_run_progress()
 
     assert jd_calls == [1, 2]
     assert checkpoints == [("job-hunter:rob", 1), ("job-hunter:rob", 2)]
@@ -228,6 +243,26 @@ def test_market_source_requests_current_jd_and_checkpoints_per_user(monkeypatch)
     assert len(kept) == 2
     assert all("full_description" not in record for record in kept)
     assert all("details_text" not in record for record in kept)
+    assert final_progress_detail == progress_states[-1]
+    assert final_progress_detail["source"] == "job_market_map"
+    assert [detail["headline"] for detail in progress_states] == [
+        "Starting JMM",
+        "Reading JMM jobs",
+        "Reviewing job 1 of page 1",
+        "Obtaining job description",
+        "Fit review",
+        "Checkpointing JMM progress",
+        "Reading JMM jobs",
+        "Reviewing job 1 of page 2",
+        "Obtaining job description",
+        "Fit review",
+        "Checkpointing JMM progress",
+        "JMM source complete",
+    ]
+    review_progress = progress_states[2]
+    assert review_progress["current"] == 1
+    assert review_progress["total"] == 1
+    assert review_progress["determinate"] is True
 
 
 def test_market_source_does_not_checkpoint_a_page_after_analysis_failure(monkeypatch):

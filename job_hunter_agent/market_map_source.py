@@ -35,7 +35,9 @@ from job_hunter_agent.record_schema import (
     RECORD_WORK_MODE_NEEDS_REVIEW_KEY,
     RECORD_WORK_MODE_SOURCE_KEY,
 )
+from job_hunter_agent.run_control import set_run_progress_state
 from job_hunter_agent.scrapers.base import blank_source_metadata, build_initial_flat_record
+from job_hunter_agent.source_registry import SOURCE_JOB_MARKET_MAP
 from job_hunter_agent.work_mode_extraction import WORK_MODE_UNKNOWN, extract_from_linkedin
 
 
@@ -175,8 +177,39 @@ def _hydrate_jd(record: dict[str, Any], client: JobMarketMapClient) -> None:
     record[RECORD_MARKET_MAP_JD_FETCHED_AT_KEY] = str(jd_payload.get("jd_fetched_at") or "").strip()
 
 
+def _set_market_map_progress(
+    text: str,
+    *,
+    stage: str,
+    headline: str,
+    detail: str = "",
+    current: int | None = None,
+    total: int | None = None,
+) -> None:
+    """Publish JMM-owned work through the shared wait-state progress contract.
+
+    Page item totals are authoritative only after JMM returns a page. The
+    consumer therefore leaves page reads indeterminate and reports a
+    determinate bar only for the current page's known item count.
+    """
+    set_run_progress_state(
+        text,
+        stage=stage,
+        source=SOURCE_JOB_MARKET_MAP,
+        headline=headline,
+        detail=detail,
+        current=current,
+        total=total,
+    )
+
+
 def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[dict], list[dict]]:
     """Process JMM pages, checkpointing only after every page is safely analysed."""
+    _set_market_map_progress(
+        "Starting JMM",
+        stage="starting",
+        headline="Starting JMM",
+    )
     client = JobMarketMapClient.from_environment()
     review_context = ReviewPipelineContext(
         profile=context.profile,
@@ -197,16 +230,51 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
     skill_observations: list[dict] = []
     consumer_key = consumer_key_for_user(user_id)
     cursor = 0
+    page_number = 0
     while True:
+        page_number += 1
+        _set_market_map_progress(
+            "Reading JMM jobs",
+            stage="source_collection",
+            headline="Reading JMM jobs",
+            detail=f"Page {page_number}",
+        )
         page = client.consumer_feed_page(consumer_key=consumer_key)
-        for item in page["items"]:
+        page_items = page["items"]
+        page_item_total = len(page_items)
+        for item_index, item in enumerate(page_items, start=1):
+            title = str(item.get("title") or "").strip()
+            _set_market_map_progress(
+                f"Reviewing job {item_index} of page {page_number}",
+                stage="relevance_analysis",
+                headline=f"Reviewing job {item_index} of page {page_number}",
+                detail=title,
+                current=item_index,
+                total=page_item_total,
+            )
             record = normalize_market_job(item, run_iso=context.run_iso)
             pre_outcome, record, _, should_fetch_details = review_pre_detail_normalized_job(
                 record, review_context
             )
             if pre_outcome["decision"] != "KEEP" or not should_fetch_details:
                 continue
+            _set_market_map_progress(
+                f"Obtaining JD for job {item_index} of page {page_number}",
+                stage="job_detail",
+                headline="Obtaining job description",
+                detail=title,
+                current=item_index,
+                total=page_item_total,
+            )
             _hydrate_jd(record, client)
+            _set_market_map_progress(
+                f"Fit review for job {item_index} of page {page_number}",
+                stage="scoring",
+                headline="Fit review",
+                detail=title,
+                current=item_index,
+                total=page_item_total,
+            )
             outcome, record, observations = review_post_detail_normalized_job(
                 record, review_context
             )
@@ -215,6 +283,12 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
                 skill_observations.extend(observations)
         next_cursor = int(page["next_cursor"])
         if next_cursor > cursor:
+            _set_market_map_progress(
+                f"Checkpointing JMM through job {next_cursor}",
+                stage="saving",
+                headline="Checkpointing JMM progress",
+                detail=f"Through job {next_cursor}",
+            )
             client.checkpoint(
                 consumer_key=consumer_key,
                 last_job_id=next_cursor,
@@ -225,4 +299,10 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
         if next_cursor == cursor:
             raise ValueError("Job Market Map feed cursor did not advance")
         cursor = next_cursor
+    _set_market_map_progress(
+        "JMM source complete",
+        stage="source_collection",
+        headline="JMM source complete",
+        detail="Source collection complete",
+    )
     return kept_records, review_context.audit_rows, skill_observations

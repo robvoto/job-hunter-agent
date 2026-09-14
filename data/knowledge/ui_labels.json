@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 141,
+  "version": 142,
   "updated_at": "2026-09-11T00:00:00+00:00",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -1030,6 +1030,8 @@
     "linkedin_badge_label": "in",
     "apsjobs_display_label": "APS Jobs",
     "apsjobs_badge_label": "AU",
+    "job_market_map_display_label": "Job Market Map",
+    "job_market_map_badge_label": "JMM",
     "generic_display_label": "Job Hunter"
   },
   "check_item_labels_description": "Full-sentence risk and warning copy shown in the 'Checks before applying' panel on job cards.",

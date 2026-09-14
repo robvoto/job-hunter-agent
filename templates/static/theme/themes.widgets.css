@@ -2670,6 +2670,12 @@
   color: var(--state-info-text);
 }
 
+.source-status-badge--job-market-map {
+  border-color: var(--state-info-border);
+  background: var(--state-info-bg);
+  color: var(--state-info-text);
+}
+
 .search-progress-source {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
