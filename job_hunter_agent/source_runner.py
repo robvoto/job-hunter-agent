@@ -1588,7 +1588,6 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
             in {"HIT", "BACKOFF", "STALE_FALLBACK"},
             "health": _source_health(result),
             "collection_complete": bool(result.source_collection_complete),
-            "error": _exception_message(result.error) if result.error is not None else "",
         }
         for result in results
     }
