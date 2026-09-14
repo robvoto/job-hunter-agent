@@ -332,6 +332,8 @@ _SEARCH_SOURCE_LABEL_KEYS = (
     "linkedin_badge_label",
     "apsjobs_display_label",
     "apsjobs_badge_label",
+    "job_market_map_display_label",
+    "job_market_map_badge_label",
     "generic_display_label",
 )
 

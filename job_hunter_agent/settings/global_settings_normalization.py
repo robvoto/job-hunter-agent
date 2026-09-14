@@ -56,6 +56,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_LINKEDIN_ENABLED,
     KEY_LINKEDIN_PARALLEL_REVIEW_WORKERS,
     KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS,
+    KEY_JOB_MARKET_MAP_PARALLEL_WORKERS,
     KEY_SEEK_QUICK_APPLY_ONLY,
     KEY_LINKEDIN_HOURS_OLD,
     KEY_LINKEDIN_JOBSPY_STALL_TIMEOUT_SECONDS,
@@ -1268,6 +1269,13 @@ def normalize_global_settings(
                 _search_setting_default_int(KEY_LINKEDIN_PARALLEL_REVIEW_WORKERS, 3),
                 normalized_search_limits[KEY_LINKEDIN_PARALLEL_REVIEW_WORKERS]["min"],
                 normalized_search_limits[KEY_LINKEDIN_PARALLEL_REVIEW_WORKERS]["max"],
+            ),
+            KEY_JOB_MARKET_MAP_PARALLEL_WORKERS: _require_int(
+                search_source,
+                KEY_JOB_MARKET_MAP_PARALLEL_WORKERS,
+                _search_setting_default_int(KEY_JOB_MARKET_MAP_PARALLEL_WORKERS, 3),
+                normalized_search_limits[KEY_JOB_MARKET_MAP_PARALLEL_WORKERS]["min"],
+                normalized_search_limits[KEY_JOB_MARKET_MAP_PARALLEL_WORKERS]["max"],
             ),
             KEY_SEEK_QUICK_APPLY_ONLY: (
                 None

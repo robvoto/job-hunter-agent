@@ -58,6 +58,11 @@ const SOURCE_BADGES = Object.freeze({
     shortLabel: requireLabel(SEARCH_SOURCE_LABELS, 'apsjobs_badge_label', 'search_source_labels'),
     modifier: 'apsjobs',
   }),
+  job_market_map: Object.freeze({
+    label: requireLabel(SEARCH_SOURCE_LABELS, 'job_market_map_display_label', 'search_source_labels'),
+    shortLabel: requireLabel(SEARCH_SOURCE_LABELS, 'job_market_map_badge_label', 'search_source_labels'),
+    modifier: 'job-market-map',
+  }),
   generic: Object.freeze({
     label: requireLabel(SEARCH_SOURCE_LABELS, 'generic_display_label', 'search_source_labels'),
     shortLabel: '',

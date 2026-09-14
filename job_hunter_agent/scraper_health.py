@@ -44,6 +44,7 @@ from job_hunter_agent.scrapers.seek import (
 )
 from job_hunter_agent.source_registry import (
     SOURCE_APSJOBS,
+    SOURCE_JOB_MARKET_MAP,
     SOURCE_LINKEDIN,
     SOURCE_SEEK,
     load_source_registry,
@@ -129,13 +130,13 @@ def _validate_source_registry() -> dict[str, Any]:
         )
     checks.append("Expected source registry domains map to SEEK, LinkedIn, and APSJobs.")
 
-    for source in (SOURCE_SEEK, SOURCE_LINKEDIN, SOURCE_APSJOBS):
+    for source in (SOURCE_SEEK, SOURCE_LINKEDIN, SOURCE_APSJOBS, SOURCE_JOB_MARKET_MAP):
         _check(
             str(labels.get(source) or "").strip() != "",
             issues,
             f"source_registry: missing display label for {source!r}.",
         )
-    checks.append("Expected source registry display labels are present.")
+    checks.append("Expected source registry display labels are present for all supported sources.")
     return _build_result("source_registry", checks, issues)
 
 

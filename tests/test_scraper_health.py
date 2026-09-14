@@ -24,6 +24,22 @@ def test_run_scraper_configuration_validation_passes_without_warnings(monkeypatc
     }
 
 
+def test_source_registry_validation_requires_jmm_display_label(monkeypatch):
+    registry = scraper_health.load_source_registry()
+    labels_without_jmm = dict(registry["source_display_labels"])
+    labels_without_jmm.pop("job_market_map")
+    monkeypatch.setattr(
+        scraper_health,
+        "load_source_registry",
+        lambda: {**registry, "source_display_labels": labels_without_jmm},
+    )
+
+    result = scraper_health._validate_source_registry()
+
+    assert result["status"] == "warning"
+    assert any("job_market_map" in issue for issue in result["issues"])
+
+
 def test_run_scraper_configuration_validation_records_warning_for_failed_group(monkeypatch):
     monkeypatch.setattr(
         scraper_health,
