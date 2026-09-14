@@ -1082,6 +1082,17 @@ def _run_market_map_source(context: ScrapeRunContext) -> SourceRunResult:
             source_cache_status="JMM",
             source_collection_complete=not run_stop_requested(),
         )
+    except PartialSourceResultsError as exc:
+        logger.exception("[Job Market Map] consumer run failed after partial results")
+        return SourceRunResult(
+            source=SOURCE_JOB_MARKET_MAP,
+            kept_records=exc.kept_records,
+            audit_rows=exc.audit_rows,
+            skill_observations=exc.skill_observations,
+            error=exc.original_error,
+            source_cache_status="JMM",
+            source_collection_complete=False,
+        )
     except Exception as exc:
         logger.exception("[Job Market Map] consumer run failed")
         return SourceRunResult(

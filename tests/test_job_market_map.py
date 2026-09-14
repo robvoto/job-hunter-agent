@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 import threading
 import time
+from io import BytesIO
 from types import SimpleNamespace
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 
 import pytest
 
@@ -164,6 +165,23 @@ def test_client_fails_closed_for_transport_and_unsupported_jd_responses():
     with pytest.raises(JobMarketMapContractError, match="empty canonical JD"):
         invalid_jd_client.get_or_enrich_jd(jmm_job_id=9)
 
+    jd_error = HTTPError(
+        "https://jmm.example/v3/jobs/1084/jd",
+        502,
+        "Bad Gateway",
+        {},
+        BytesIO(
+            b'{"detail":"all linked JD sources failed: seek: SEEK JD fetch failed: '
+            b'SEEK job 94519870 is unavailable (not_found)"}'
+        ),
+    )
+    jd_error_client = JobMarketMapClient(
+        "https://jmm.example/v3",
+        opener=lambda *_args, **_kwargs: (_ for _ in ()).throw(jd_error),
+    )
+    with pytest.raises(JobMarketMapUnavailable, match=r"94519870 is unavailable \(not_found\)"):
+        jd_error_client.get_or_enrich_jd(jmm_job_id=1084)
+
 
 def test_market_record_keeps_jmm_identity_without_copying_jd():
     record = market_map_source.normalize_market_job(
@@ -316,6 +334,63 @@ def test_market_source_does_not_checkpoint_a_page_after_analysis_failure(monkeyp
     with pytest.raises(RuntimeError, match="analysis failed"):
         market_map_source.run_market_map_source(context, user_id="rob")
 
+    assert checkpoints == []
+
+
+def test_jmm_jd_502_preserves_completed_results_and_marks_job_retryable(monkeypatch):
+    checkpoints: list[int] = []
+
+    class FailedJdClient:
+        @classmethod
+        def from_environment(cls):
+            return cls()
+
+        def consumer_feed_page(self, *, consumer_key, **_kwargs):
+            return _feed_page(items=[_item(i) for i in range(1083, 1086)], next_cursor=1085, has_more=False)
+
+        def get_or_enrich_jd(self, *, jmm_job_id):
+            if jmm_job_id == 1084:
+                raise JobMarketMapUnavailable(
+                    "Job Market Map request failed: HTTP Error 502: Bad Gateway"
+                )
+            return {
+                "full_description": f"JD {jmm_job_id}",
+                "jd_source": "jmm",
+                "jd_fetched_at": "2026-09-14T00:00:00+00:00",
+            }
+
+        def checkpoint(self, *, consumer_key, last_job_id, **_kwargs):
+            checkpoints.append(last_job_id)
+            return {"consumer_key": consumer_key, "last_job_id": last_job_id}
+
+    monkeypatch.setattr(market_map_source, "JobMarketMapClient", FailedJdClient)
+    monkeypatch.setattr(
+        market_map_source,
+        "review_pre_detail_normalized_job",
+        lambda record, _context: ({"decision": "KEEP"}, record, [], True),
+    )
+    monkeypatch.setattr(
+        market_map_source,
+        "review_post_detail_normalized_job",
+        lambda record, _context: ({"decision": "KEEP"}, record, []),
+    )
+    monkeypatch.setattr("job_hunter_agent.paths.get_active_user_id", lambda: "rob")
+
+    result = source_runner._run_market_map_source(_market_context())
+
+    assert [record["market_map_job_id"] for record in result.kept_records] == [1083, 1085]
+    assert [row["market_map_job_id"] for row in result.audit_rows] == [1083, 1084, 1085]
+    failed_row = result.audit_rows[1]
+    assert failed_row["decision"] == "REJECT"
+    assert failed_row["reject_reason"] == "JMM_JD_ENRICHMENT_FAILED"
+    assert failed_row["retryable"] is True
+    assert failed_row["retry_reason"] == "JMM_JD_ENRICHMENT_FAILED"
+    assert failed_row["decision_explanation"] == (
+        "Job Market Map request failed: HTTP Error 502: Bad Gateway"
+    )
+    assert isinstance(result.error, JobMarketMapUnavailable)
+    assert str(result.error) == "Job Market Map request failed: HTTP Error 502: Bad Gateway"
+    assert result.source_collection_complete is False
     assert checkpoints == []
 
 

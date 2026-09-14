@@ -31,6 +31,8 @@ from job_hunter_agent.profile_store import KEY_EXPLORE_ADJACENT_ROLES
 from job_hunter_agent.record_schema import (
     APPLY_METHOD_UNKNOWN,
     RECORD_APPLY_METHOD_KEY,
+    RECORD_DECISION_EXPLANATION_KEY,
+    RECORD_DECISION_KEY,
     RECORD_DESCRIPTION_SOURCE_KEY,
     RECORD_DETAILS_STATUS_KEY,
     RECORD_DETAILS_TEXT_KEY,
@@ -39,6 +41,9 @@ from job_hunter_agent.record_schema import (
     RECORD_MARKET_MAP_JD_FETCHED_AT_KEY,
     RECORD_MARKET_MAP_JD_SOURCE_KEY,
     RECORD_MARKET_MAP_JOB_ID_KEY,
+    RECORD_REJECT_REASON_KEY,
+    RECORD_RETRY_REASON_KEY,
+    RECORD_RETRYABLE_KEY,
     RECORD_SOURCE_CANONICAL_URL_KEY,
     RECORD_SOURCE_METADATA_KEY,
     RECORD_SOURCE_NAME_KEY,
@@ -51,6 +56,7 @@ from job_hunter_agent.record_schema import (
 )
 from job_hunter_agent.run_control import run_stop_requested, set_run_progress_state
 from job_hunter_agent.scrapers.base import blank_source_metadata, build_initial_flat_record
+from job_hunter_agent.source_errors import PartialSourceResultsError
 from job_hunter_agent.source_learning import register_pending_learning_signals
 from job_hunter_agent.source_registry import SOURCE_JOB_MARKET_MAP
 from job_hunter_agent.work_mode_extraction import WORK_MODE_UNKNOWN, extract_from_linkedin
@@ -226,16 +232,19 @@ def _run_parallel_stage(
     worker_limit: int,
     worker: Any,
     on_failure: Any | None = None,
-) -> tuple[dict[int, Any], bool]:
+    collect_failures: bool = False,
+) -> tuple[dict[int, Any], bool] | tuple[dict[int, Any], bool, dict[int, Exception]]:
     """Run one bounded stage and cancel work that has not started on stop."""
     if not jobs or run_stop_requested():
+        if collect_failures:
+            return {}, run_stop_requested(), {}
         return {}, run_stop_requested()
 
     executor = ThreadPoolExecutor(max_workers=min(worker_limit, len(jobs)))
     futures = {executor.submit(worker, job): job.index for job in jobs}
     pending = set(futures)
     results: dict[int, Any] = {}
-    errors: list[Exception] = []
+    errors: dict[int, Exception] = {}
     stopped = False
     try:
         while pending:
@@ -254,14 +263,18 @@ def _run_parallel_stage(
                 try:
                     results[futures[future]] = future.result()
                 except Exception as exc:
-                    errors.append(exc)
+                    errors[futures[future]] = exc
             if stopped:
                 for future in pending:
                     future.cancel()
+        if errors and not stopped and collect_failures:
+            return results, stopped, errors
         if errors and not stopped:
             if on_failure is not None:
                 on_failure()
-            raise errors[0]
+            raise next(iter(errors.values()))
+        if collect_failures:
+            return results, stopped, errors
         return results, stopped
     finally:
         executor.shutdown(wait=True, cancel_futures=True)
@@ -322,6 +335,34 @@ def _release_unfinalized_identity_claims(jobs: list[_IndexedJob]) -> None:
     """Release coordinator claims when a page is stopped or fails mid-stage."""
     for job in jobs:
         claim = job.record.pop(RUN_IDENTITY_CLAIM_KEY, None)
+        if isinstance(claim, tuple) and len(claim) == 2:
+            registry, token = claim
+            registry.release(token)
+
+
+def _append_retryable_jd_failure(
+    review_context: ReviewPipelineContext,
+    job: _IndexedJob,
+    error: Exception,
+) -> None:
+    """Record a failed JMM JD request without completing its identity claim."""
+    record = job.record
+    claim = record.pop(RUN_IDENTITY_CLAIM_KEY, None)
+    record[RECORD_DECISION_KEY] = "REJECT"
+    record[RECORD_REJECT_REASON_KEY] = "JMM_JD_ENRICHMENT_FAILED"
+    record[RECORD_DECISION_EXPLANATION_KEY] = str(error)
+    record[RECORD_RETRYABLE_KEY] = True
+    record[RECORD_RETRY_REASON_KEY] = "JMM_JD_ENRICHMENT_FAILED"
+    try:
+        finalize_record(
+            review_context.job_history,
+            review_context.audit_rows,
+            record,
+            review_context.run_iso,
+            persist_full_description=False,
+            update_history=False,
+        )
+    finally:
         if isinstance(claim, tuple) and len(claim) == 2:
             registry, token = claim
             registry.release(token)
@@ -555,11 +596,12 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
                 detail=f"Page {page_number}",
                 total=page_item_total,
             )
-        jd_results, stopped = _run_parallel_stage(
+        jd_results, stopped, jd_failures = _run_parallel_stage(
             eligible_jobs,
             worker_limit=get_job_market_map_parallel_workers(),
             worker=lambda job: _run_jd_worker(job, client=client),
             on_failure=lambda: _release_unfinalized_identity_claims(page_jobs),
+            collect_failures=True,
         )
         if stopped:
             _release_unfinalized_identity_claims(page_jobs)
@@ -588,8 +630,9 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
             total=page_item_total,
         )
         fit_base_cache = copy.deepcopy(review_context.llm_cache)
+        fit_jobs = [job for job in eligible_jobs if job.index in jd_results]
         fit_results, stopped = _run_parallel_stage(
-            eligible_jobs,
+            fit_jobs,
             worker_limit=get_job_market_map_parallel_workers(),
             worker=lambda job: _run_fit_worker(
                 job,
@@ -612,11 +655,27 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
             detail=f"Page {page_number}",
             total=page_item_total,
         )
-        for index in sorted(fit_results):
+        result_indexes = sorted(set(fit_results) | set(jd_failures))
+        for index in result_indexes:
             if run_stop_requested():
                 _release_unfinalized_identity_claims(page_jobs)
                 return kept_records, review_context.audit_rows, skill_observations
             job = jobs_by_index[index]
+            if index in jd_failures:
+                _set_market_map_progress(
+                    f"JD failed for job {index + 1} of page {page_number}",
+                    stage="job_detail",
+                    headline="Obtaining job description",
+                    detail=str(jd_failures[index]),
+                    current=index + 1,
+                    total=page_item_total,
+                )
+                _append_retryable_jd_failure(
+                    review_context,
+                    job,
+                    jd_failures[index],
+                )
+                continue
             result = fit_results[index]
             _set_market_map_progress(
                 f"Finalising job {index + 1} of page {page_number}",
@@ -651,6 +710,14 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
 
         if run_stop_requested():
             return kept_records, review_context.audit_rows, skill_observations
+        if jd_failures:
+            raise PartialSourceResultsError(
+                SOURCE_JOB_MARKET_MAP,
+                kept_records=kept_records,
+                audit_rows=review_context.audit_rows,
+                skill_observations=skill_observations,
+                original_error=jd_failures[min(jd_failures)],
+            )
         next_cursor = int(page["next_cursor"])
         if next_cursor > cursor:
             _set_market_map_progress(

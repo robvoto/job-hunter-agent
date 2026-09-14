@@ -99,7 +99,19 @@ class JobMarketMapClient:
         try:
             with self.opener(request, timeout=self.timeout_seconds) as response:
                 raw = response.read()
-        except (HTTPError, URLError, TimeoutError, OSError) as exc:
+        except HTTPError as exc:
+            detail = ""
+            try:
+                error_payload = json.loads(exc.read().decode("utf-8"))
+                if isinstance(error_payload, dict):
+                    detail = str(error_payload.get("detail") or error_payload.get("error") or "").strip()
+            except (UnicodeDecodeError, json.JSONDecodeError, OSError):
+                pass
+            message = f"Job Market Map request failed: {exc}"
+            if detail:
+                message = f"{message}: {detail}"
+            raise JobMarketMapUnavailable(message) from exc
+        except (URLError, TimeoutError, OSError) as exc:
             raise JobMarketMapUnavailable(f"Job Market Map request failed: {exc}") from exc
         try:
             payload = json.loads(raw.decode("utf-8"))
