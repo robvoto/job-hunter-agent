@@ -11,6 +11,7 @@ Pick the smallest skill that matches the task. Do not load every skill. Detailed
 - `git-lifecycle/SKILL.md` — branch/worktree, commit, push, PR, merge, and verified `main` integration.
 - `history-dedup/SKILL.md` — job history state, duplicate identity, applied/viewed/hidden handling.
 - `instruction-maintenance/SKILL.md` — AGENTS.md, adapter files, skills, and instruction docs.
+- `job-market-map-integration/SKILL.md` — Job Hunter/JMM HTTP contract, consumer paging/checkpoints, run-scoped snapshot boundaries, JD/identity integration, and JMM integration tests.
 - `job-filtering/SKILL.md` — deterministic pass/fail filters, blockers, and reject reasons.
 - `knowledge-management/SKILL.md` — managed knowledge/configuration and source-of-truth ownership.
 - `mcp-tooling/SKILL.md` — repository/filesystem/connected-service access and tooling failure recovery; browser/Gmail and external-contract detail lives in `mcp-tooling/DETAILS.md`.

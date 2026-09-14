@@ -31,10 +31,17 @@ class _Response:
         return self._raw
 
 
-def _feed_page(*, items, next_cursor: int, has_more: bool) -> dict:
+def _feed_page(
+    *,
+    items,
+    next_cursor: int,
+    has_more: bool,
+    snapshot_max_id: int | None = None,
+) -> dict:
     return {
         "api_version": "v3",
         "schema_version": 6,
+        "snapshot_max_id": next_cursor if snapshot_max_id is None else snapshot_max_id,
         "items": items,
         "next_cursor": next_cursor,
         "has_more": has_more,
@@ -84,6 +91,32 @@ def test_client_reads_paginated_neutral_feed_and_rejects_activity_fields():
     )
     with pytest.raises(JobMarketMapContractError, match="personal activity"):
         activity_client.feed_page()
+
+
+def test_consumer_client_forwards_run_scoped_high_water():
+    requested_urls: list[str] = []
+
+    def opener(request, **_kwargs):
+        requested_urls.append(request.full_url)
+        return _Response(
+            _feed_page(
+                items=[_item(55)],
+                next_cursor=55,
+                has_more=False,
+                snapshot_max_id=55,
+            )
+        )
+
+    client = JobMarketMapClient("https://jmm.example/v3", opener=opener)
+    page = client.consumer_feed_page(
+        consumer_key="job-hunter:rob",
+        through_id=55,
+    )
+
+    assert page["snapshot_max_id"] == 55
+    assert requested_urls == [
+        "https://jmm.example/v3/consumers/job-hunter%3Arob/feed?through_id=55&include_raw=False"
+    ]
 
 
 def test_client_requires_explicit_aws_ready_api_base(monkeypatch):
@@ -169,23 +202,31 @@ def test_market_record_keeps_jmm_identity_without_copying_jd():
 def test_market_source_requests_current_jd_and_checkpoints_per_user(monkeypatch):
     pages = iter(
         [
-            _feed_page(items=[_item(1)], next_cursor=1, has_more=True),
+            _feed_page(
+                items=[_item(1)],
+                next_cursor=1,
+                has_more=True,
+                snapshot_max_id=2,
+            ),
             _feed_page(
                 items=[_item(2, full_description="Current canonical JD")],
                 next_cursor=2,
                 has_more=False,
+                snapshot_max_id=2,
             ),
         ]
     )
     jd_calls: list[int] = []
     checkpoints: list[tuple[str, int]] = []
+    feed_calls: list[tuple[str, int | None]] = []
 
     class FakeClient:
         @classmethod
         def from_environment(cls):
             return cls()
 
-        def consumer_feed_page(self, *, consumer_key, **_kwargs):
+        def consumer_feed_page(self, *, consumer_key, through_id=None, **_kwargs):
+            feed_calls.append((consumer_key, through_id))
             return next(pages)
 
         def get_or_enrich_jd(self, *, jmm_job_id):
@@ -222,6 +263,7 @@ def test_market_source_requests_current_jd_and_checkpoints_per_user(monkeypatch)
 
     kept, audit, _skills = market_map_source.run_market_map_source(context, user_id="rob")
 
+    assert feed_calls == [("job-hunter:rob", None), ("job-hunter:rob", 2)]
     assert jd_calls == [1, 2]
     assert checkpoints == [("job-hunter:rob", 1), ("job-hunter:rob", 2)]
     assert audit == []

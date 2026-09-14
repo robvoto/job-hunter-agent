@@ -65,6 +65,7 @@ Backlog source of truth is the shared Google Sheet. `docs/backlog/` is intention
 | `.agents/skills/aws-test-instance/SKILL.md` | AWS Job Hunter test EC2 instance facts, SSM access workflow, instance-side logs, and host/runtime diagnosis. |
 | `.agents/skills/release-management/SKILL.md` | Release version ownership, gates, tags, and publishing workflow. |
 | `.agents/skills/mcp-tooling/SKILL.md` | Repository/filesystem and connected-service access, with runtime-scoped Human MCP browser/Gmail tooling and failure recovery. |
+| `.agents/skills/job-market-map-integration/SKILL.md` | Job Hunter/JMM HTTP contract, named-consumer paging/checkpoints, run-scoped snapshot boundary, JD/identity ownership, and cross-service validation. |
 | `.agents/skills/aws-test-instance/DETAILS.md` | Exact AWS test instance identifiers, app/log paths, SSM commands, and known host-side failure patterns. |
 | `.agents/skills/*/DETAILS.md` | Longer examples/details loaded only when the parent skill points to them. |
 | `docs/archived-skills/` | Retired skills kept for history only. Not active routing. |

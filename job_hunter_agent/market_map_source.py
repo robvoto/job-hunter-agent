@@ -197,8 +197,25 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
     skill_observations: list[dict] = []
     consumer_key = consumer_key_for_user(user_id)
     cursor = 0
+    snapshot_max_id: int | None = None
     while True:
-        page = client.consumer_feed_page(consumer_key=consumer_key)
+        page = client.consumer_feed_page(
+            consumer_key=consumer_key,
+            through_id=snapshot_max_id,
+        )
+        page_snapshot_max_id = page.get("snapshot_max_id")
+        if not isinstance(page_snapshot_max_id, int) or page_snapshot_max_id < 0:
+            raise JobMarketMapContractError(
+                "Job Market Map consumer feed snapshot_max_id is required"
+            )
+        if snapshot_max_id is None:
+            # Run-scoped only: never persist this boundary. A later JH run starts
+            # fresh from the last safely persisted JMM consumer checkpoint.
+            snapshot_max_id = page_snapshot_max_id
+        elif page_snapshot_max_id != snapshot_max_id:
+            raise JobMarketMapContractError(
+                "Job Market Map consumer feed snapshot boundary changed during the run"
+            )
         for item in page["items"]:
             record = normalize_market_job(item, run_iso=context.run_iso)
             pre_outcome, record, _, should_fetch_details = review_pre_detail_normalized_job(

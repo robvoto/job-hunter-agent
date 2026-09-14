@@ -162,20 +162,28 @@ class JobMarketMapClient:
         self,
         *,
         consumer_key: str,
+        through_id: int | None = None,
         source: str | None = None,
         geography_code: str | None = None,
     ) -> dict[str, Any]:
-        """Read one page from JMM's named cursor without exposing user activity to JMM."""
+        """Read one named-consumer page within an optional run-scoped market snapshot."""
         payload = self._request(
             "GET",
             f"/consumers/{quote(consumer_key, safe='')}/feed",
             query={
+                "through_id": through_id,
                 "source": source,
                 "geography_code": geography_code,
                 "include_raw": False,
             },
         )
-        return self._validate_feed_payload(payload, after_id=0)
+        validated = self._validate_feed_payload(payload, after_id=0)
+        snapshot_max_id = validated.get("snapshot_max_id")
+        if not isinstance(snapshot_max_id, int) or snapshot_max_id < 0:
+            raise JobMarketMapContractError(
+                "Job Market Map consumer feed snapshot_max_id is required"
+            )
+        return validated
 
     def iter_feed(self) -> Iterator[dict[str, Any]]:
         """Read the supported neutral feed without creating a JH market cache."""

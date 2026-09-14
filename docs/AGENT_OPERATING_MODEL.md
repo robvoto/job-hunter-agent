@@ -115,4 +115,5 @@ Local `docs/backlog/backlog_review.xlsx` is archive/export/reference only unless
 - Testing rules and Definition of Done live in `.agents/skills/code-change/SKILL.md`.
 - Backlog workflow lives in `.agents/skills/backlog-management/SKILL.md`.
 - Hardcoding/config/schema/default/fallback ownership lives in `.agents/skills/no-hardcoding/SKILL.md`.
+- Job Hunter/JMM integration ownership and consumer paging contracts live in `.agents/skills/job-market-map-integration/SKILL.md`.
 - Skills use discovery frontmatter (`name` and `description`) so agents can route by skill metadata instead of hardcoded trigger lists in `AGENTS.md`.
