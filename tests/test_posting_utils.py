@@ -1,4 +1,6 @@
-from job_hunter_agent.posting_utils import format_timestamp_label, parse_timestamp
+from datetime import datetime, timezone
+
+from job_hunter_agent.posting_utils import days_since, format_timestamp_label, parse_timestamp
 
 
 def test_parse_timestamp_accepts_spreadsheet_style_timestamp():
@@ -25,3 +27,11 @@ def test_format_timestamp_label_can_render_date_without_time():
 
 def test_format_timestamp_label_keeps_time_by_default():
     assert format_timestamp_label("2021-06-21 18:37:57") == "21 Jun 2021 06:37 PM"
+
+
+def test_days_since_accepts_naive_posted_date_with_aware_reference():
+    assert days_since("2026-09-14", datetime(2026, 9, 16, 1, tzinfo=timezone.utc)) == 2
+
+
+def test_days_since_accepts_aware_posted_timestamp_with_naive_reference():
+    assert days_since("2026-09-14T00:00:00+00:00", datetime(2026, 9, 16)) == 2

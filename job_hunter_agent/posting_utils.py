@@ -53,11 +53,29 @@ def parse_timestamp(value: Optional[str]) -> Optional[datetime]:
     return None
 
 
+def _align_comparison_timezones(timestamp: datetime, reference: datetime) -> tuple[datetime, datetime]:
+    """Make a mixed-awareness date comparison safe without changing source facts.
+
+    JMM may provide a date-only ``posted_at`` while a JH run reference is timezone-aware.
+    The timezone attachment exists only for this in-memory age calculation; neither input
+    is rewritten or persisted. When both values have the same awareness, their existing
+    semantics remain unchanged.
+    """
+    timestamp_is_aware = timestamp.tzinfo is not None and timestamp.utcoffset() is not None
+    reference_is_aware = reference.tzinfo is not None and reference.utcoffset() is not None
+    if timestamp_is_aware == reference_is_aware:
+        return timestamp, reference
+    if timestamp_is_aware:
+        return timestamp, reference.replace(tzinfo=timestamp.tzinfo)
+    return timestamp.replace(tzinfo=reference.tzinfo), reference
+
+
 def days_since(value: Optional[str], reference: datetime) -> Optional[int]:
     timestamp = parse_timestamp(value)
     if not timestamp:
         return None
     try:
+        timestamp, reference = _align_comparison_timezones(timestamp, reference)
         return max((reference - timestamp).days, 0)
     except Exception as exc:
         logger.warning("Failed to calculate days_since: %s", exc)
