@@ -22,7 +22,7 @@
     "linkedin_jobspy_stall_timeout_seconds": 90,
     "linkedin_parallel_search_workers": 3,
     "linkedin_parallel_review_workers": 3,
-    "job_market_map_parallel_workers": 3,
+    "job_market_map_parallel_workers": 6,
     "linkedin_easy_apply_only": null,
     "apsjobs_results_per_search": 25,
     "playwright_viewport_width": 1400,
