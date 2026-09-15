@@ -165,3 +165,49 @@ def test_agent_search_loads_repo_environment_before_database_access(monkeypatch,
             assert reloaded_agent_search.get_ad_hoc_results("fresh-user") == []
     finally:
         importlib.reload(agent_search)
+
+
+def test_agent_ad_hoc_search_preserves_copied_prevalidated_capabilities(monkeypatch):
+    from job_hunter_agent import llm_gate, profile_store, source_connector
+
+    legacy_name = "Business analysis and stakeholder management"
+    base_profile = _seed_base_profile()
+    base_profile["candidate_capabilities"] = [{"name": legacy_name, "level": "working"}]
+    profile_store.save_profile(
+        base_profile,
+        prevalidated_capability_names={legacy_name},
+    )
+    base_snapshot = json.dumps(profile_store.load_profile(), sort_keys=True)
+
+    atomicity_calls = []
+    monkeypatch.setattr(
+        llm_gate,
+        "llm_validate_profile_capability_atomicity",
+        lambda capabilities: atomicity_calls.append(capabilities)
+        or pytest.fail("copied capability must not be revalidated"),
+    )
+    save_calls = []
+    original_save_profile = profile_store.save_profile
+
+    def capture_ephemeral_save(profile, **kwargs):
+        save_calls.append(kwargs)
+        return original_save_profile(profile, **kwargs)
+
+    monkeypatch.setattr(profile_store, "save_profile", capture_ephemeral_save)
+    monkeypatch.setattr(
+        source_connector,
+        "scrape_jobs_direct",
+        lambda **_kwargs: "mocked ad-hoc result",
+    )
+
+    result = agent_search.run_agent_ad_hoc_search(
+        keywords=["business analyst"],
+        base_user_id=BASE_USER_ID,
+        sources=["seek"],
+    )
+
+    copied_name = profile_store.load_profile()["candidate_capabilities"][0]["name"]
+    assert atomicity_calls == []
+    assert save_calls == [{"prevalidated_capability_names": {copied_name}}]
+    assert result["result_message"] == "mocked ad-hoc result"
+    assert json.dumps(profile_store.load_profile(), sort_keys=True) == base_snapshot
