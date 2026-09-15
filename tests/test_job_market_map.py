@@ -11,7 +11,13 @@ from urllib.error import HTTPError, URLError
 
 import pytest
 
-from job_hunter_agent import market_map_source, run_context, run_control, source_runner
+from job_hunter_agent import (
+    market_map_source,
+    run_context,
+    run_control,
+    source_runner,
+    user_context,
+)
 from job_hunter_agent.job_market_map_client import (
     JobMarketMapClient,
     JobMarketMapContractError,
@@ -26,6 +32,7 @@ from job_hunter_agent.occupation_taxonomy import (
     RESULT_NEAR,
     OccupationClassification,
 )
+from job_hunter_agent.paths import get_active_user_id
 from job_hunter_agent.source_runner import SourceRunResult
 
 
@@ -517,6 +524,31 @@ def _market_context(profile=None):
         configured_date_range=3,
         identity_registry=None,
     )
+
+
+def test_market_parallel_stage_propagates_user_context_without_leaking_worker_state():
+    """JMM analysis workers retain the caller's user scope, independently."""
+    caller_user_id = "seeded-caller"
+    user_context.set_user_id(caller_user_id)
+    jobs = [
+        market_map_source._IndexedJob(index=index, record={}, title_assessment=None)
+        for index in range(3)
+    ]
+
+    def worker(job):
+        observed_user_id = get_active_user_id()
+        user_context.set_user_id(f"worker-{job.index}")
+        return observed_user_id
+
+    results, stopped = market_map_source._run_parallel_stage(
+        jobs,
+        worker_limit=2,
+        worker=worker,
+    )
+
+    assert stopped is False
+    assert results == {0: caller_user_id, 1: caller_user_id, 2: caller_user_id}
+    assert get_active_user_id() == caller_user_id
 
 
 def test_market_source_parallel_stages_overlap_and_merge_in_input_order(monkeypatch):
