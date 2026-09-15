@@ -124,7 +124,12 @@ def run_agent_ad_hoc_search(
     only ever read, never written, by this function.
     """
     from job_hunter_agent import user_context
-    from job_hunter_agent.profile_store import load_profile, save_profile
+    from job_hunter_agent.profile_store import (
+        KEY_CANDIDATE_CAPABILITIES,
+        KEY_NAME,
+        load_profile,
+        save_profile,
+    )
     from job_hunter_agent.source_connector import scrape_jobs_direct
 
     target_user_id = ephemeral_user_id(base_user_id)
@@ -133,6 +138,14 @@ def run_agent_ad_hoc_search(
     # context. No write happens while user_context is scoped to base_user_id.
     user_context.set_user_id(base_user_id)
     base_profile = load_profile()
+    # The ad-hoc profile is a deep copy, so base capability names are facts
+    # already trusted for this one write under the isolated user. Only these
+    # copied names bypass atomicity validation; later added or changed names do not.
+    prevalidated_capability_names = {
+        str(capability.get(KEY_NAME) or "").strip()
+        for capability in base_profile.get(KEY_CANDIDATE_CAPABILITIES, [])
+        if isinstance(capability, dict) and str(capability.get(KEY_NAME) or "").strip()
+    }
 
     override_profile = build_ad_hoc_profile(
         base_profile,
@@ -148,7 +161,10 @@ def run_agent_ad_hoc_search(
     # base_user_id -- this is the safety boundary for JH-292 AC #2/#4/#5.
     user_context.set_user_id(target_user_id)
     try:
-        save_profile(override_profile)
+        save_profile(
+            override_profile,
+            prevalidated_capability_names=prevalidated_capability_names,
+        )
         result_message = scrape_jobs_direct(
             trigger_label="agent ad-hoc search (JH-292)",
             force_refresh=True,
