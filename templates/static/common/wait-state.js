@@ -231,17 +231,22 @@ function renderProgressMarkup(state) {
   const source = progressDetail?.source || 'generic';
   const headline = progressDetail?.headline || '';
   const detail = progressDetail?.detail || '';
-  if (!headline && !detail && !state.elapsedText) {
+  // The backend still supplies a useful text progress message while a source
+  // begins or a structured update is briefly unavailable. Do not make the
+  // user stare at a generic spinner during that interval.
+  const fallbackProgress = !headline && !detail ? String(state.progress || '').trim() : '';
+  if (!headline && !detail && !fallbackProgress && !state.elapsedText) {
     return '';
   }
 
-  const sourceMarkup = headline || detail
+  const sourceMarkup = headline || detail || fallbackProgress
     ? `
       <div class="search-progress-source">
         ${renderSourceBadge(source)}
         <div class="search-progress-source__copy">
           ${headline ? `<p class="search-progress-source__title">${escapeHtml(headline)}</p>` : ''}
           ${detail ? `<p class="search-progress-source__detail">${escapeHtml(detail)}</p>` : ''}
+          ${fallbackProgress ? `<p class="search-progress-source__detail">${escapeHtml(fallbackProgress)}</p>` : ''}
         </div>
       </div>
     `

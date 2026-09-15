@@ -149,6 +149,18 @@ def test_workspace_structured_wait_state_renders_all_sources(candidate_page):
     assert page.locator(".jh-progress").get_attribute("aria-valuemax") == "4"
     assert page.locator(".jh-progress").get_attribute("aria-valuenow") == "2"
 
+    # A source can publish its first plain-language update just before the
+    # structured detail arrives. The overlay must show it rather than only a
+    # generic spinner, which is the useful feedback during that short gap.
+    state["payload"] = {
+        **state["payload"],
+        "progress": "Connecting to Job Market Map",
+        "progress_detail": None,
+    }
+    page.reload()
+    assert page.locator(".source-status-badge--generic").count() == 1
+    assert page.locator(".search-progress-source__detail").inner_text() == "Connecting to Job Market Map"
+
     state["payload"] = {
         **state["payload"],
         "progress": "Finalising results\nPreparing workspace data",
