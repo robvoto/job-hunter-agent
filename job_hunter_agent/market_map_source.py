@@ -223,6 +223,16 @@ def _thaw(value: Any) -> Any:
     return copy.deepcopy(value)
 
 
+def _thaw_title_judgment_result(result: TitleJudgmentResult) -> TitleJudgmentResult:
+    """Return ordinary coordinator-owned data after a frozen worker hand-off."""
+    return TitleJudgmentResult(
+        cache_key=result.cache_key,
+        judgment=_thaw(result.judgment),
+        cache_value=_thaw(result.cache_value),
+        cache_hit=result.cache_hit,
+    )
+
+
 def _cache_delta(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
     return {
         key: copy.deepcopy(value)
@@ -614,7 +624,7 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
             cache_key = job.title_assessment.title_judgment_cache_key
             if cache_key is None or cache_key not in title_results_by_cache_key:
                 continue
-            title_result = title_results_by_cache_key[cache_key]
+            title_result = _thaw_title_judgment_result(title_results_by_cache_key[cache_key])
             if title_result.cache_value is not None:
                 review_context.llm_cache[title_result.cache_key] = _thaw(
                     title_result.cache_value

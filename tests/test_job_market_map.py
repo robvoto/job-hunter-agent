@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import threading
 import time
@@ -635,6 +636,80 @@ def test_market_source_parallel_stages_overlap_and_merge_in_input_order(monkeypa
     assert [record["job_key"] for record in kept] == [f"seek:{i}" for i in range(1, 5)]
     assert [row["job_key"] for row in audit] == [f"seek:{i}" for i in range(1, 5)]
     assert checkpoints == [4]
+
+
+def test_market_source_thaws_title_worker_result_before_fit_record_copy(monkeypatch):
+    """Worker snapshots stay frozen until the coordinator gives fit work normal data."""
+    items = [_item(1)]
+
+    class FakeClient:
+        @classmethod
+        def from_environment(cls):
+            return cls()
+
+        def consumer_feed_page(self, *, consumer_key, **_kwargs):
+            return _feed_page(items=items, next_cursor=1, has_more=False)
+
+        def get_or_enrich_jd(self, *, jmm_job_id):
+            return {
+                "full_description": f"JD {jmm_job_id}",
+                "jd_source": "jmm",
+                "jd_fetched_at": "2026-09-11T12:01:00+00:00",
+            }
+
+        def checkpoint(self, *, consumer_key, last_job_id, **_kwargs):
+            return {"consumer_key": consumer_key, "last_job_id": last_job_id}
+
+    def title_gate(_title, _profile):
+        return TitleGateAssessment(
+            title_analysis={"ok": False, "reason": "TITLE_NOT_TARGET"},
+            onet=OccupationClassification(
+                result=RESULT_NEAR,
+                matched_occupation_code="13-1111.00",
+                confidence=0.9,
+                reason=RESULT_NEAR,
+            ),
+            title_judgment_cache_key="title:1",
+        )
+
+    monkeypatch.setattr(market_map_source, "JobMarketMapClient", FakeClient)
+    monkeypatch.setattr(market_map_source, "prepare_title_gate_assessment", title_gate)
+    monkeypatch.setattr(
+        market_map_source,
+        "review_title_judgment",
+        lambda *_args: TitleJudgmentResult(
+            cache_key="title:1",
+            judgment={"verdict": "match", "reason": "test"},
+            cache_value={"verdict": "match", "reason": "test"},
+            cache_hit=False,
+        ),
+    )
+
+    def pre(record, context):
+        assessment = context.title_assessments[str(record["job_key"])].pop(0)
+        title_judgment = assessment.title_judgment
+        assert title_judgment is not None
+        assert isinstance(title_judgment.judgment, dict)
+        record["llm_title_judgment"] = title_judgment.judgment
+        return ({"decision": "KEEP"}, record, [], True)
+
+    def post(record, _context):
+        assert isinstance(record["llm_title_judgment"], dict)
+        # This is the exact operation a fit worker performs before review.
+        assert copy.deepcopy(record)["llm_title_judgment"] == {
+            "verdict": "match",
+            "reason": "test",
+        }
+        return ({"decision": "KEEP"}, record, [])
+
+    monkeypatch.setattr(market_map_source, "review_pre_detail_normalized_job", pre)
+    monkeypatch.setattr(market_map_source, "review_post_detail_normalized_job", post)
+
+    kept, _audit, _skills = market_map_source.run_market_map_source(
+        _market_context(), user_id="rob"
+    )
+
+    assert [record["job_key"] for record in kept] == ["seek:1"]
 
 
 def test_market_source_stop_cancels_queued_jmm_work(monkeypatch):
