@@ -56,11 +56,29 @@ class _Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler contract
         parsed = urlsplit(self.path)
         query = parse_qs(parsed.query)
+        if parsed.path.startswith("/v3/consumers/") and parsed.path.endswith("/state"):
+            snapshot_max_id = max(job["id"] for job in self.state.jobs)
+            pending = sum(
+                1 for job in self.state.jobs if self.state.checkpoint < job["id"] <= snapshot_max_id
+            )
+            self._json(
+                {
+                    "consumer_key": "job-hunter:rob",
+                    "last_job_id": self.state.checkpoint,
+                    "updated_at": None,
+                    "note": None,
+                    "snapshot_max_id": snapshot_max_id,
+                    "pending_active_primary_count": pending,
+                }
+            )
+            return
         if parsed.path.startswith("/v3/consumers/") and parsed.path.endswith("/feed"):
             raw_through = query.get("through_id", [None])[0]
             through_id = int(raw_through) if raw_through is not None else None
             self.state.feed_through_ids.append(through_id)
-            snapshot_max_id = max(job["id"] for job in self.state.jobs) if through_id is None else through_id
+            snapshot_max_id = (
+                max(job["id"] for job in self.state.jobs) if through_id is None else through_id
+            )
             eligible = [
                 job
                 for job in self.state.jobs
@@ -152,13 +170,13 @@ def test_jh_run_keeps_one_snapshot_boundary_and_next_run_sees_new_job(monkeypatc
 
         first_kept, _, _ = market_map_source.run_market_map_source(_context(), user_id="rob")
         assert [record["market_map_job_id"] for record in first_kept] == [1, 2]
-        assert state.feed_through_ids == [None, 2]
+        assert state.feed_through_ids == [2, 2]
         assert [body["last_job_id"] for body in state.checkpoint_bodies] == [1, 2]
         assert all("through_id" not in body for body in state.checkpoint_bodies)
 
         second_kept, _, _ = market_map_source.run_market_map_source(_context(), user_id="rob")
         assert [record["market_map_job_id"] for record in second_kept] == [3]
-        assert state.feed_through_ids == [None, 2, None]
+        assert state.feed_through_ids == [2, 2, 3]
         assert state.checkpoint_bodies[-1]["last_job_id"] == 3
     finally:
         server.shutdown()

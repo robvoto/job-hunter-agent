@@ -109,7 +109,9 @@ class JobMarketMapClient:
             try:
                 error_payload = json.loads(exc.read().decode("utf-8"))
                 if isinstance(error_payload, dict):
-                    detail = str(error_payload.get("detail") or error_payload.get("error") or "").strip()
+                    detail = str(
+                        error_payload.get("detail") or error_payload.get("error") or ""
+                    ).strip()
             except (UnicodeDecodeError, json.JSONDecodeError, OSError):
                 pass
             message = f"Job Market Map request failed: {exc}"
@@ -175,6 +177,27 @@ class JobMarketMapClient:
             raise JobMarketMapContractError("Job Market Map feed cursor is invalid")
         if not isinstance(payload.get("has_more"), bool):
             raise JobMarketMapContractError("Job Market Map feed has_more is required")
+        return payload
+
+    def consumer_state(self, *, consumer_key: str) -> dict[str, Any]:
+        """Read the named consumer checkpoint plus JMM's fixed pending-work snapshot."""
+        payload = self._request(
+            "GET",
+            f"/consumers/{quote(consumer_key, safe='')}/state",
+        )
+        last_job_id = payload.get("last_job_id")
+        snapshot_max_id = payload.get("snapshot_max_id")
+        pending_count = payload.get("pending_active_primary_count")
+        if not isinstance(last_job_id, int) or last_job_id < 0:
+            raise JobMarketMapContractError("Job Market Map consumer state last_job_id is invalid")
+        if not isinstance(snapshot_max_id, int) or snapshot_max_id < last_job_id:
+            raise JobMarketMapContractError(
+                "Job Market Map consumer state snapshot_max_id is invalid"
+            )
+        if not isinstance(pending_count, int) or pending_count < 0:
+            raise JobMarketMapContractError(
+                "Job Market Map consumer state pending_active_primary_count is invalid"
+            )
         return payload
 
     def consumer_feed_page(

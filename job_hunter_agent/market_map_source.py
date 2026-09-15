@@ -260,8 +260,7 @@ def _run_parallel_stage(
     # Each job needs an independent snapshot so user-scoped JH helpers keep
     # the caller's identity without workers sharing one Context instance.
     futures = {
-        executor.submit(contextvars.copy_context().run, worker, job): job.index
-        for job in jobs
+        executor.submit(contextvars.copy_context().run, worker, job): job.index for job in jobs
     }
     pending = set(futures)
     results: dict[int, Any] = {}
@@ -310,9 +309,7 @@ def remove_transient_jd(record: dict[str, Any]) -> dict[str, Any]:
 
 
 def _fetch_jd_payload(record: dict[str, Any], client: JobMarketMapClient) -> dict[str, Any]:
-    jd_payload = client.get_or_enrich_jd(
-        jmm_job_id=int(record[RECORD_MARKET_MAP_JOB_ID_KEY])
-    )
+    jd_payload = client.get_or_enrich_jd(jmm_job_id=int(record[RECORD_MARKET_MAP_JOB_ID_KEY]))
     full_description = str(jd_payload.get("full_description") or "").strip()
     if not full_description:
         raise ValueError("Job Market Map returned no current full_description")
@@ -484,9 +481,8 @@ def _set_market_map_progress(
 ) -> None:
     """Publish JMM-owned work through the shared wait-state progress contract.
 
-    Page item totals are authoritative only after JMM returns a page. The
-    consumer therefore leaves page reads indeterminate and reports a
-    determinate bar only for the current page's known item count.
+    JMM's consumer-state summary supplies the fixed run total before page 1.
+    Structured progress therefore stays determinate across every feed page.
     """
     set_run_progress_state(
         text,
@@ -525,16 +521,33 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
     kept_records: list[dict] = []
     skill_observations: list[dict] = []
     consumer_key = consumer_key_for_user(user_id)
-    cursor = 0
+    worker_limit = get_job_market_map_parallel_workers()
+    state = client.consumer_state(consumer_key=consumer_key)
+    snapshot_max_id = int(state["snapshot_max_id"])
+    pending_total = int(state["pending_active_primary_count"])
+    _set_market_map_progress(
+        f"JMM has {pending_total:,} active jobs waiting",
+        stage="source_collection",
+        headline=f"JMM has {pending_total:,} active jobs waiting",
+        detail=f"Using {worker_limit} parallel workers",
+        current=0,
+        total=pending_total,
+    )
+    cursor = int(state["last_job_id"])
     page_number = 0
-    snapshot_max_id: int | None = None
+    analysed_count = 0
     while True:
         page_number += 1
         _set_market_map_progress(
             "Reading JMM jobs",
             stage="source_collection",
             headline="Reading JMM jobs",
-            detail=f"Page {page_number}",
+            detail=(
+                f"Page {page_number}; {analysed_count:,} of {pending_total:,} jobs analysed; "
+                f"{worker_limit} parallel workers"
+            ),
+            current=analysed_count,
+            total=pending_total,
         )
         page = client.consumer_feed_page(
             consumer_key=consumer_key,
@@ -545,11 +558,7 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
             raise JobMarketMapContractError(
                 "Job Market Map consumer feed snapshot_max_id is required"
             )
-        if snapshot_max_id is None:
-            # Run-scoped only: never persist this boundary. A later JH run starts
-            # fresh from the last safely persisted JMM consumer checkpoint.
-            snapshot_max_id = page_snapshot_max_id
-        elif page_snapshot_max_id != snapshot_max_id:
+        if page_snapshot_max_id != snapshot_max_id:
             raise JobMarketMapContractError(
                 "Job Market Map consumer feed snapshot boundary changed during the run"
             )
@@ -563,17 +572,15 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
                 stage="relevance_analysis",
                 headline=f"Reviewing job {item_index + 1} of page {page_number}",
                 detail=title,
-                current=item_index + 1,
-                total=page_item_total,
+                current=min(analysed_count + item_index + 1, pending_total),
+                total=pending_total,
             )
             record = normalize_market_job(item, run_iso=context.run_iso)
             page_jobs.append(
                 _IndexedJob(
                     index=item_index,
                     record=record,
-                    title_assessment=prepare_title_gate_assessment(
-                        title, review_context.profile
-                    ),
+                    title_assessment=prepare_title_gate_assessment(title, review_context.profile),
                 )
             )
 
@@ -599,7 +606,7 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
                 title_jobs.append(job)
         title_results, stopped = _run_parallel_stage(
             title_jobs,
-            worker_limit=get_job_market_map_parallel_workers(),
+            worker_limit=worker_limit,
             worker=lambda job: _run_title_worker(
                 job,
                 profile=review_context.profile,
@@ -629,9 +636,7 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
                 continue
             title_result = _thaw_title_judgment_result(title_results_by_cache_key[cache_key])
             if title_result.cache_value is not None:
-                review_context.llm_cache[title_result.cache_key] = _thaw(
-                    title_result.cache_value
-                )
+                review_context.llm_cache[title_result.cache_key] = _thaw(title_result.cache_value)
             jobs_by_index[job.index] = replace(
                 job,
                 title_assessment=replace(job.title_assessment, title_judgment=title_result),
@@ -644,9 +649,7 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
                 _release_unfinalized_identity_claims(page_jobs)
                 return kept_records, review_context.audit_rows, skill_observations
             job_key = str(job.record.get(RECORD_JOB_KEY) or "")
-            review_context.title_assessments.setdefault(job_key, []).append(
-                job.title_assessment
-            )
+            review_context.title_assessments.setdefault(job_key, []).append(job.title_assessment)
             try:
                 pre_outcome, _, _, should_fetch_details = review_pre_detail_normalized_job(
                     job.record, review_context
@@ -662,12 +665,13 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
                 "Obtaining job descriptions",
                 stage="job_detail",
                 headline="Obtaining job descriptions",
-                detail=f"Page {page_number}",
-                total=page_item_total,
+                detail=f"Page {page_number}; {analysed_count:,} of {pending_total:,} jobs analysed",
+                current=analysed_count,
+                total=pending_total,
             )
         jd_results, stopped, jd_failures = _run_parallel_stage(
             eligible_jobs,
-            worker_limit=get_job_market_map_parallel_workers(),
+            worker_limit=worker_limit,
             worker=lambda job: _run_jd_worker(job, client=client),
             on_failure=lambda: _release_unfinalized_identity_claims(page_jobs),
             collect_failures=True,
@@ -686,8 +690,8 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
                 stage="job_detail",
                 headline="Obtaining job description",
                 detail=str(job.record.get("title") or ""),
-                current=index + 1,
-                total=page_item_total,
+                current=min(analysed_count + index + 1, pending_total),
+                total=pending_total,
             )
             _apply_jd_payload(job.record, _thaw(jd_results[index].payload))
 
@@ -695,14 +699,15 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
             "Fit review",
             stage="scoring",
             headline="Fit review",
-            detail=f"Page {page_number}",
-            total=page_item_total,
+            detail=f"Page {page_number}; {analysed_count:,} of {pending_total:,} jobs analysed",
+            current=analysed_count,
+            total=pending_total,
         )
         fit_base_cache = copy.deepcopy(review_context.llm_cache)
         fit_jobs = [job for job in eligible_jobs if job.index in jd_results]
         fit_results, stopped = _run_parallel_stage(
             fit_jobs,
-            worker_limit=get_job_market_map_parallel_workers(),
+            worker_limit=worker_limit,
             worker=lambda job: _run_fit_worker(
                 job,
                 context=context,
@@ -721,8 +726,9 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
             "Finalising JMM results",
             stage="finalising",
             headline="Finalising JMM results",
-            detail=f"Page {page_number}",
-            total=page_item_total,
+            detail=f"Page {page_number}; {analysed_count:,} of {pending_total:,} jobs analysed",
+            current=analysed_count,
+            total=pending_total,
         )
         retryable_jd_failures = {
             index: error
@@ -741,8 +747,8 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
                     stage="job_detail",
                     headline="Obtaining job description",
                     detail=str(jd_failures[index]),
-                    current=index + 1,
-                    total=page_item_total,
+                    current=min(analysed_count + index + 1, pending_total),
+                    total=pending_total,
                 )
                 error = jd_failures[index]
                 if isinstance(error, JobMarketMapJDUnavailable):
@@ -756,8 +762,8 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
                 stage="finalising",
                 headline="Finalising JMM results",
                 detail=str(job.record.get("title") or ""),
-                current=index + 1,
-                total=page_item_total,
+                current=min(analysed_count + index + 1, pending_total),
+                total=pending_total,
             )
             claim = job.record.get(RUN_IDENTITY_CLAIM_KEY)
             merged_record = _thaw(result.record)
@@ -792,13 +798,18 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
                 skill_observations=skill_observations,
                 original_error=retryable_jd_failures[min(retryable_jd_failures)],
             )
+        analysed_count += page_item_total
         next_cursor = int(page["next_cursor"])
         if next_cursor > cursor:
             _set_market_map_progress(
                 f"Checkpointing JMM through job {next_cursor}",
                 stage="saving",
                 headline="Checkpointing JMM progress",
-                detail=f"Through job {next_cursor}",
+                detail=(
+                    f"Page {page_number}; {analysed_count:,} of {pending_total:,} jobs analysed"
+                ),
+                current=min(analysed_count, pending_total),
+                total=pending_total,
             )
             client.checkpoint(
                 consumer_key=consumer_key,
@@ -814,6 +825,8 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
         "JMM source complete",
         stage="source_collection",
         headline="JMM source complete",
-        detail="Source collection complete",
+        detail=f"{analysed_count:,} of {pending_total:,} jobs analysed",
+        current=min(analysed_count, pending_total),
+        total=pending_total,
     )
     return kept_records, review_context.audit_rows, skill_observations
