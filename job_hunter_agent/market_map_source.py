@@ -16,6 +16,7 @@ from job_hunter_agent.job_market_map_client import (
     MARKET_MAP_CONSUMER_KEY_PREFIX,
     JobMarketMapClient,
     JobMarketMapContractError,
+    JobMarketMapJDUnavailable,
 )
 from job_hunter_agent.job_review_pipeline import (
     ReviewPipelineContext,
@@ -54,6 +55,8 @@ from job_hunter_agent.record_schema import (
     RECORD_WORK_MODE_KEY,
     RECORD_WORK_MODE_NEEDS_REVIEW_KEY,
     RECORD_WORK_MODE_SOURCE_KEY,
+    REJECT_REASON_JMM_JD_ENRICHMENT_FAILED,
+    REJECT_REASON_JMM_JD_UNAVAILABLE,
 )
 from job_hunter_agent.run_control import run_stop_requested, set_run_progress_state
 from job_hunter_agent.scrapers.base import blank_source_metadata, build_initial_flat_record
@@ -350,10 +353,38 @@ def _append_retryable_jd_failure(
     record = job.record
     claim = record.pop(RUN_IDENTITY_CLAIM_KEY, None)
     record[RECORD_DECISION_KEY] = "REJECT"
-    record[RECORD_REJECT_REASON_KEY] = "JMM_JD_ENRICHMENT_FAILED"
+    record[RECORD_REJECT_REASON_KEY] = REJECT_REASON_JMM_JD_ENRICHMENT_FAILED
     record[RECORD_DECISION_EXPLANATION_KEY] = str(error)
     record[RECORD_RETRYABLE_KEY] = True
-    record[RECORD_RETRY_REASON_KEY] = "JMM_JD_ENRICHMENT_FAILED"
+    record[RECORD_RETRY_REASON_KEY] = REJECT_REASON_JMM_JD_ENRICHMENT_FAILED
+    try:
+        finalize_record(
+            review_context.job_history,
+            review_context.audit_rows,
+            record,
+            review_context.run_iso,
+            persist_full_description=False,
+            update_history=False,
+        )
+    finally:
+        if isinstance(claim, tuple) and len(claim) == 2:
+            registry, token = claim
+            registry.release(token)
+
+
+def _append_terminal_jd_unavailable(
+    review_context: ReviewPipelineContext,
+    job: _IndexedJob,
+    error: JobMarketMapJDUnavailable,
+) -> None:
+    """Audit a terminal JMM JD disappearance and allow the page to complete."""
+    record = job.record
+    claim = record.pop(RUN_IDENTITY_CLAIM_KEY, None)
+    record[RECORD_DECISION_KEY] = "REJECT"
+    record[RECORD_REJECT_REASON_KEY] = REJECT_REASON_JMM_JD_UNAVAILABLE
+    record[RECORD_DECISION_EXPLANATION_KEY] = str(error)
+    record[RECORD_RETRYABLE_KEY] = False
+    record.pop(RECORD_RETRY_REASON_KEY, None)
     try:
         finalize_record(
             review_context.job_history,
@@ -673,6 +704,11 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
             detail=f"Page {page_number}",
             total=page_item_total,
         )
+        retryable_jd_failures = {
+            index: error
+            for index, error in jd_failures.items()
+            if not isinstance(error, JobMarketMapJDUnavailable)
+        }
         result_indexes = sorted(set(fit_results) | set(jd_failures))
         for index in result_indexes:
             if run_stop_requested():
@@ -688,11 +724,11 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
                     current=index + 1,
                     total=page_item_total,
                 )
-                _append_retryable_jd_failure(
-                    review_context,
-                    job,
-                    jd_failures[index],
-                )
+                error = jd_failures[index]
+                if isinstance(error, JobMarketMapJDUnavailable):
+                    _append_terminal_jd_unavailable(review_context, job, error)
+                else:
+                    _append_retryable_jd_failure(review_context, job, error)
                 continue
             result = fit_results[index]
             _set_market_map_progress(
@@ -728,13 +764,13 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
 
         if run_stop_requested():
             return kept_records, review_context.audit_rows, skill_observations
-        if jd_failures:
+        if retryable_jd_failures:
             raise PartialSourceResultsError(
                 SOURCE_JOB_MARKET_MAP,
                 kept_records=kept_records,
                 audit_rows=review_context.audit_rows,
                 skill_observations=skill_observations,
-                original_error=jd_failures[min(jd_failures)],
+                original_error=retryable_jd_failures[min(retryable_jd_failures)],
             )
         next_cursor = int(page["next_cursor"])
         if next_cursor > cursor:

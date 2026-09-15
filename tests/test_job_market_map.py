@@ -15,6 +15,7 @@ from job_hunter_agent import market_map_source, run_context, run_control, source
 from job_hunter_agent.job_market_map_client import (
     JobMarketMapClient,
     JobMarketMapContractError,
+    JobMarketMapJDUnavailable,
     JobMarketMapUnavailable,
 )
 from job_hunter_agent.job_review_pipeline import (
@@ -214,6 +215,20 @@ def test_client_fails_closed_for_transport_and_unsupported_jd_responses():
     )
     with pytest.raises(JobMarketMapUnavailable, match=r"94519870 is unavailable \(not_found\)"):
         jd_error_client.get_or_enrich_jd(jmm_job_id=1084)
+
+    terminal_jd_error = HTTPError(
+        "https://jmm.example/v3/jobs/1084/jd",
+        410,
+        "Gone",
+        {},
+        BytesIO(b'{"detail":"all linked JD sources are terminal unavailable"}'),
+    )
+    terminal_jd_client = JobMarketMapClient(
+        "https://jmm.example/v3",
+        opener=lambda *_args, **_kwargs: (_ for _ in ()).throw(terminal_jd_error),
+    )
+    with pytest.raises(JobMarketMapJDUnavailable, match="terminal unavailable"):
+        terminal_jd_client.get_or_enrich_jd(jmm_job_id=1084)
 
 
 def test_market_record_keeps_jmm_identity_without_copying_jd():
@@ -434,6 +449,61 @@ def test_jmm_jd_502_preserves_completed_results_and_marks_job_retryable(monkeypa
     assert str(result.error) == "Job Market Map request failed: HTTP Error 502: Bad Gateway"
     assert result.source_collection_complete is False
     assert checkpoints == []
+
+
+def test_jmm_jd_410_skips_terminal_job_and_checkpoints_completed_page(monkeypatch):
+    checkpoints: list[int] = []
+
+    class TerminalJdClient:
+        @classmethod
+        def from_environment(cls):
+            return cls()
+
+        def consumer_feed_page(self, *, consumer_key, **_kwargs):
+            return _feed_page(items=[_item(i) for i in range(1083, 1086)], next_cursor=1085, has_more=False)
+
+        def get_or_enrich_jd(self, *, jmm_job_id):
+            if jmm_job_id == 1084:
+                raise JobMarketMapJDUnavailable(
+                    "Job Market Map request failed: HTTP Error 410: Gone: "
+                    "all linked JD sources are terminal unavailable"
+                )
+            return {
+                "full_description": f"JD {jmm_job_id}",
+                "jd_source": "jmm",
+                "jd_fetched_at": "2026-09-14T00:00:00+00:00",
+            }
+
+        def checkpoint(self, *, consumer_key, last_job_id, **_kwargs):
+            checkpoints.append(last_job_id)
+            return {"consumer_key": consumer_key, "last_job_id": last_job_id}
+
+    monkeypatch.setattr(market_map_source, "JobMarketMapClient", TerminalJdClient)
+    monkeypatch.setattr(
+        market_map_source,
+        "review_pre_detail_normalized_job",
+        lambda record, _context: ({"decision": "KEEP"}, record, [], True),
+    )
+    monkeypatch.setattr(
+        market_map_source,
+        "review_post_detail_normalized_job",
+        lambda record, _context: ({"decision": "KEEP"}, record, []),
+    )
+    monkeypatch.setattr("job_hunter_agent.paths.get_active_user_id", lambda: "rob")
+
+    result = source_runner._run_market_map_source(_market_context())
+
+    assert [record["market_map_job_id"] for record in result.kept_records] == [1083, 1085]
+    assert [row["market_map_job_id"] for row in result.audit_rows] == [1083, 1084, 1085]
+    unavailable_row = result.audit_rows[1]
+    assert unavailable_row["decision"] == "REJECT"
+    assert unavailable_row["reject_reason"] == "JMM_JD_UNAVAILABLE"
+    assert unavailable_row["retryable"] is False
+    assert unavailable_row.get("retry_reason") in {None, ""}
+    assert unavailable_row["decision_explanation"].endswith("terminal unavailable")
+    assert result.error is None
+    assert result.source_collection_complete is True
+    assert checkpoints == [1085]
 
 
 def _market_context(profile=None):

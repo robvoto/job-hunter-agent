@@ -37,6 +37,10 @@ class JobMarketMapUnavailable(JobMarketMapError):
     """JMM could not be reached or returned an HTTP failure."""
 
 
+class JobMarketMapJDUnavailable(JobMarketMapError):
+    """JMM confirmed that a job's current JD is no longer available."""
+
+
 class JobMarketMapContractError(JobMarketMapError):
     """JMM returned a response that is not the supported canonical contract."""
 
@@ -85,6 +89,7 @@ class JobMarketMapClient:
         *,
         query: dict[str, Any] | None = None,
         body: dict[str, Any] | None = None,
+        terminal_jd_unavailable: bool = False,
     ) -> dict[str, Any]:
         url = urljoin(f"{self.base_url.rstrip('/')}/", path.lstrip("/"))
         if query:
@@ -110,6 +115,8 @@ class JobMarketMapClient:
             message = f"Job Market Map request failed: {exc}"
             if detail:
                 message = f"{message}: {detail}"
+            if terminal_jd_unavailable and exc.code == 410:
+                raise JobMarketMapJDUnavailable(message) from exc
             raise JobMarketMapUnavailable(message) from exc
         except (URLError, TimeoutError, OSError) as exc:
             raise JobMarketMapUnavailable(f"Job Market Map request failed: {exc}") from exc
@@ -265,7 +272,11 @@ class JobMarketMapClient:
         return payload
 
     def get_or_enrich_jd(self, *, jmm_job_id: int) -> dict[str, Any]:
-        payload = self._request("POST", f"/jobs/{jmm_job_id}/jd")
+        payload = self._request(
+            "POST",
+            f"/jobs/{jmm_job_id}/jd",
+            terminal_jd_unavailable=True,
+        )
         self._validate_metadata(payload)
         if not str(payload.get("full_description") or "").strip():
             raise JobMarketMapContractError("Job Market Map returned an empty canonical JD")
