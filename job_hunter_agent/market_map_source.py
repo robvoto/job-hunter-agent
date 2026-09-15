@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import copy
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, replace
@@ -245,7 +246,13 @@ def _run_parallel_stage(
         return {}, run_stop_requested()
 
     executor = ThreadPoolExecutor(max_workers=min(worker_limit, len(jobs)))
-    futures = {executor.submit(worker, job): job.index for job in jobs}
+    # ContextVars do not cross ThreadPoolExecutor boundaries on their own.
+    # Each job needs an independent snapshot so user-scoped JH helpers keep
+    # the caller's identity without workers sharing one Context instance.
+    futures = {
+        executor.submit(contextvars.copy_context().run, worker, job): job.index
+        for job in jobs
+    }
     pending = set(futures)
     results: dict[int, Any] = {}
     errors: dict[int, Exception] = {}
