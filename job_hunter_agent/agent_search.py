@@ -25,11 +25,17 @@ routes here.
 
 from __future__ import annotations
 
+# Environment-backed paths must be loaded before the ad-hoc command reaches
+# the database-backed profile, source, or result helpers below.
 import argparse
 import copy
 import json
 import sys
 from typing import Any
+
+from job_hunter_agent.runtime_helpers import load_repo_dotenv
+
+load_repo_dotenv()
 
 AGENT_ADHOC_USER_SUFFIX = "::agent-adhoc"
 
