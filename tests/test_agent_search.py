@@ -2,19 +2,20 @@
 
 from __future__ import annotations
 
+import importlib
 import json
+import os
 
 import pytest
 
-from job_hunter_agent import user_context
+from job_hunter_agent import agent_search, runtime_helpers, user_context
 from job_hunter_agent.agent_search import (
     build_ad_hoc_profile,
     ephemeral_user_id,
     get_ad_hoc_results,
 )
-from job_hunter_agent.database import db_conn
+from job_hunter_agent.database import db_conn, init_db
 from job_hunter_agent.profile_store import load_profile, normalize_full_profile, save_profile
-
 
 BASE_USER_ID = "test-real-user-1"
 
@@ -143,3 +144,24 @@ def test_get_ad_hoc_results_reads_ephemeral_workspace_pool_only():
 
     results = get_ad_hoc_results(BASE_USER_ID)
     assert results == [{"title": "Test Job"}]
+
+
+def test_agent_search_loads_repo_environment_before_database_access(monkeypatch, tmp_path):
+    db_path = tmp_path / "agent-search-startup.db"
+    load_calls: list[None] = []
+
+    def load_test_environment() -> bool:
+        os.environ["JOB_HUNTER_DB_PATH"] = str(db_path)
+        init_db(db_path)
+        load_calls.append(None)
+        return True
+
+    try:
+        with monkeypatch.context() as test_env:
+            test_env.delenv("JOB_HUNTER_DB_PATH", raising=False)
+            test_env.setattr(runtime_helpers, "load_repo_dotenv", load_test_environment)
+            reloaded_agent_search = importlib.reload(agent_search)
+            assert load_calls == [None]
+            assert reloaded_agent_search.get_ad_hoc_results("fresh-user") == []
+    finally:
+        importlib.reload(agent_search)
