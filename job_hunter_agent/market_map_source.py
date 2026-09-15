@@ -450,10 +450,13 @@ def _run_fit_worker(
     llm_cache: dict[str, Any],
 ) -> _FitOutcome:
     worker_context = _build_worker_context(context, llm_cache=llm_cache)
-    worker_record = copy.deepcopy(job.record)
-    # The coordinator owns the live identity claim. It must not cross into a
-    # worker or be copied along with the mutable record.
-    worker_record.pop(RUN_IDENTITY_CLAIM_KEY, None)
+    # The coordinator owns the live identity claim. Its registry contains a
+    # thread lock, so remove it before making the worker's isolated deep copy.
+    # The original record keeps the claim for the ordered coordinator merge.
+    claim_free_record = {
+        key: value for key, value in job.record.items() if key != RUN_IDENTITY_CLAIM_KEY
+    }
+    worker_record = copy.deepcopy(claim_free_record)
     outcome, reviewed_record, observations = review_post_detail_normalized_job(
         worker_record,
         worker_context,

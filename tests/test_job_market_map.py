@@ -712,6 +712,37 @@ def test_market_source_thaws_title_worker_result_before_fit_record_copy(monkeypa
     assert [record["job_key"] for record in kept] == ["seek:1"]
 
 
+def test_market_fit_worker_excludes_noncopyable_coordinator_identity_claim(monkeypatch):
+    """The fit worker must not deep-copy the coordinator-owned lock claim."""
+    registry_lock = threading.RLock()
+    claim = (registry_lock, "claim-token")
+    live_record = {
+        "job_key": "seek:1",
+        "nested": {"value": "coordinator"},
+        market_map_source.RUN_IDENTITY_CLAIM_KEY: claim,
+    }
+    seen_worker_records: list[dict] = []
+
+    def review(record, _context):
+        seen_worker_records.append(record)
+        assert market_map_source.RUN_IDENTITY_CLAIM_KEY not in record
+        record["nested"]["value"] = "worker"
+        return ({"decision": "KEEP"}, record, [])
+
+    monkeypatch.setattr(market_map_source, "review_post_detail_normalized_job", review)
+
+    result = market_map_source._run_fit_worker(
+        market_map_source._IndexedJob(index=0, record=live_record, title_assessment=None),
+        context=_market_context(),
+        llm_cache={},
+    )
+
+    assert seen_worker_records == [{"job_key": "seek:1", "nested": {"value": "worker"}}]
+    assert live_record[market_map_source.RUN_IDENTITY_CLAIM_KEY] is claim
+    assert live_record["nested"] == {"value": "coordinator"}
+    assert result.index == 0
+
+
 def test_market_source_stop_cancels_queued_jmm_work(monkeypatch):
     stop = threading.Event()
     jd_calls: list[int] = []
