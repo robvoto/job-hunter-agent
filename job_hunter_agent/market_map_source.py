@@ -242,6 +242,30 @@ def _cache_delta(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any
     }
 
 
+def _merge_completed_title_cache(
+    review_context: ReviewPipelineContext,
+    title_results: dict[int, Any],
+) -> None:
+    """Keep cache values from title workers that finished before a stop."""
+    for result in title_results.values():
+        if not isinstance(result, tuple) or len(result) != 2:
+            continue
+        title_result = result[1]
+        if isinstance(title_result, TitleJudgmentResult) and title_result.cache_value is not None:
+            review_context.llm_cache[title_result.cache_key] = _thaw(title_result.cache_value)
+
+
+def _merge_completed_fit_cache(
+    review_context: ReviewPipelineContext,
+    fit_results: dict[int, Any],
+) -> None:
+    """Keep cache deltas from fit workers that finished before a stop."""
+    for result in fit_results.values():
+        cache_updates = getattr(result, "cache_updates", None)
+        if cache_updates:
+            review_context.llm_cache.update(_thaw(cache_updates))
+
+
 def _run_parallel_stage(
     jobs: list[_IndexedJob],
     *,
@@ -618,9 +642,13 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
             on_failure=lambda: _release_unfinalized_identity_claims(page_jobs),
         )
         if stopped:
+            _merge_completed_title_cache(review_context, title_results)
+            save_llm_cache(review_context.llm_cache)
             _release_unfinalized_identity_claims(page_jobs)
             return kept_records, review_context.audit_rows, skill_observations
         if run_stop_requested():
+            _merge_completed_title_cache(review_context, title_results)
+            save_llm_cache(review_context.llm_cache)
             _release_unfinalized_identity_claims(page_jobs)
             return kept_records, review_context.audit_rows, skill_observations
 
@@ -724,9 +752,13 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
             on_failure=lambda: _release_unfinalized_identity_claims(page_jobs),
         )
         if stopped:
+            _merge_completed_fit_cache(review_context, fit_results)
+            save_llm_cache(review_context.llm_cache)
             _release_unfinalized_identity_claims(page_jobs)
             return kept_records, review_context.audit_rows, skill_observations
         if run_stop_requested():
+            _merge_completed_fit_cache(review_context, fit_results)
+            save_llm_cache(review_context.llm_cache)
             _release_unfinalized_identity_claims(page_jobs)
             return kept_records, review_context.audit_rows, skill_observations
 
