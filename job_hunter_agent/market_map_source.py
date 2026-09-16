@@ -12,6 +12,7 @@ from typing import Any
 
 from job_hunter_agent.global_settings import get_job_market_map_parallel_workers
 from job_hunter_agent.history import finalize_record
+from job_hunter_agent.io_utils import save_llm_cache
 from job_hunter_agent.job_identity import RUN_IDENTITY_CLAIM_KEY, normalize_job_key
 from job_hunter_agent.job_market_map_client import (
     MARKET_MAP_CONSUMER_KEY_PREFIX,
@@ -567,12 +568,14 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
         page_jobs: list[_IndexedJob] = []
         for item_index, item in enumerate(page_items):
             title = str(item.get("title") or "").strip()
+            progress_current = min(analysed_count + item_index + 1, pending_total)
+            progress_headline = f"Analysing jobs — {progress_current} of {pending_total}"
             _set_market_map_progress(
-                f"Reviewing job {item_index + 1} of page {page_number}",
+                progress_headline,
                 stage="relevance_analysis",
-                headline=f"Reviewing job {item_index + 1} of page {page_number}",
+                headline=progress_headline,
                 detail=title,
-                current=min(analysed_count + item_index + 1, pending_total),
+                current=progress_current,
                 total=pending_total,
             )
             record = normalize_market_job(item, run_iso=context.run_iso)
@@ -641,6 +644,11 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
                 job,
                 title_assessment=replace(job.title_assessment, title_judgment=title_result),
             )
+        # Persist completed title judgements before detail/fit work. A server
+        # stop later in this page must not discard valid cache entries, while
+        # job results and the JMM checkpoint remain uncommitted until the page
+        # is finalized.
+        save_llm_cache(review_context.llm_cache)
         page_jobs = [jobs_by_index[index] for index in range(page_item_total)]
 
         eligible_jobs: list[_IndexedJob] = []
@@ -787,6 +795,10 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
             if outcome["decision"] == "KEEP":
                 kept_records.append(remove_transient_jd(job.record))
                 skill_observations.extend(_thaw(result.observations))
+
+        # Fit workers return immutable cache deltas; save only after the
+        # coordinator merges them in deterministic input order.
+        save_llm_cache(review_context.llm_cache)
 
         if run_stop_requested():
             return kept_records, review_context.audit_rows, skill_observations

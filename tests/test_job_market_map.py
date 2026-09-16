@@ -334,6 +334,12 @@ def test_market_source_requests_current_jd_and_checkpoints_per_user(monkeypatch)
     monkeypatch.setattr(market_map_source, "get_job_market_map_parallel_workers", lambda: 6)
     monkeypatch.setattr(market_map_source, "review_pre_detail_normalized_job", pre)
     monkeypatch.setattr(market_map_source, "review_post_detail_normalized_job", post)
+    saved_caches: list[dict] = []
+    monkeypatch.setattr(
+        market_map_source,
+        "save_llm_cache",
+        lambda cache: saved_caches.append(copy.deepcopy(cache)),
+    )
     progress_states: list[dict] = []
     real_set_run_progress_state = run_control.set_run_progress_state
 
@@ -365,6 +371,9 @@ def test_market_source_requests_current_jd_and_checkpoints_per_user(monkeypatch)
     assert feed_calls == [("job-hunter:rob", 2), ("job-hunter:rob", 2)]
     assert jd_calls == [1, 2]
     assert checkpoints == [("job-hunter:rob", 1), ("job-hunter:rob", 2)]
+    # Each completed page persists title-stage and fit-stage cache state;
+    # interrupted work never reaches the checkpoint without these saves.
+    assert len(saved_caches) == 4
     assert [row["job_key"] for row in audit] == ["seek:1", "seek:2"]
     assert len(kept) == 2
     assert all("full_description" not in record for record in kept)
@@ -375,7 +384,7 @@ def test_market_source_requests_current_jd_and_checkpoints_per_user(monkeypatch)
         "Starting JMM",
         "JMM has 35,228 active jobs waiting",
         "Reading JMM jobs",
-        "Reviewing job 1 of page 1",
+        "Analysing jobs — 1 of 35228",
         "Obtaining job descriptions",
         "Obtaining job description",
         "Fit review",
@@ -383,7 +392,7 @@ def test_market_source_requests_current_jd_and_checkpoints_per_user(monkeypatch)
         "Finalising JMM results",
         "Checkpointing JMM progress",
         "Reading JMM jobs",
-        "Reviewing job 1 of page 2",
+        "Analysing jobs — 2 of 35228",
         "Obtaining job descriptions",
         "Obtaining job description",
         "Fit review",

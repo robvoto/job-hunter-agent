@@ -311,7 +311,7 @@ body.job-hunter-wait-active {
 .wait-state__progress {
   display: grid;
   gap: var(--surface-gap-sm);
-  width: min(100%, 32rem);
+  width: 100%;
   margin-inline: auto;
   text-align: left;
 }

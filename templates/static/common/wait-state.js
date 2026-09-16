@@ -231,6 +231,7 @@ function renderProgressMarkup(state) {
   const source = progressDetail?.source || 'generic';
   const headline = progressDetail?.headline || '';
   const detail = progressDetail?.detail || '';
+  const showSourceBadge = source !== 'job_market_map';
   // The backend still supplies a useful text progress message while a source
   // begins or a structured update is briefly unavailable. Do not make the
   // user stare at a generic spinner during that interval.
@@ -241,8 +242,8 @@ function renderProgressMarkup(state) {
 
   const sourceMarkup = headline || detail || fallbackProgress
     ? `
-      <div class="search-progress-source">
-        ${renderSourceBadge(source)}
+      <div class="search-progress-source${showSourceBadge ? '' : ' search-progress-source--no-badge'}">
+        ${showSourceBadge ? renderSourceBadge(source) : ''}
         <div class="search-progress-source__copy">
           ${headline ? `<p class="search-progress-source__title">${escapeHtml(headline)}</p>` : ''}
           ${detail ? `<p class="search-progress-source__detail">${escapeHtml(detail)}</p>` : ''}

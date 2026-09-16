@@ -2690,6 +2690,30 @@
   gap: var(--control-space-2xs);
 }
 
+.search-progress-source--no-badge {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.search-progress-source--no-badge .search-progress-source__copy {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: var(--surface-gap-md);
+}
+
+.search-progress-source--no-badge .search-progress-source__detail {
+  text-align: right;
+}
+
+@media (max-width: 560px) {
+  .search-progress-source--no-badge .search-progress-source__copy {
+    grid-template-columns: 1fr;
+  }
+
+  .search-progress-source--no-badge .search-progress-source__detail {
+    text-align: left;
+  }
+}
+
 .search-progress-source__title,
 .search-progress-source__detail,
 .search-progress-elapsed {
