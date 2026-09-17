@@ -39,6 +39,7 @@ from job_hunter_agent.global_settings import (
     KEY_SIGNAL_CLUSTER_DENSE_SNIPPET_ALIAS_HITS,
     KEY_SIGNAL_CLUSTER_MIN_ALIAS_HITS,
     KEY_SIGNAL_CLUSTER_MIN_SNIPPET_HITS,
+    get_default_theme,
     get_salary_limits,
     load_global_settings,
 )
@@ -1330,6 +1331,9 @@ def build_bootstrap_script(
     parts = [
         f"<script>window.__JOB_HUNTER_DEBUG_MODE__ = {'true' if DEBUG_MODE else 'false'};</script>"
     ]
+    parts.append(
+        f"<script>window.__JOB_HUNTER_DEFAULT_THEME__ = {json.dumps(get_default_theme(), ensure_ascii=True)};</script>"
+    )
     if account_scope is not None:
         parts.append(
             f"<script>window.__JOB_HUNTER_USER_SCOPE__ = {json.dumps(_account_scope_token(account_scope), ensure_ascii=True)};</script>"

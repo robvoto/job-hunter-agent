@@ -15,7 +15,8 @@
 (function () {
   var KEY = 'jha-theme';
   var THEMES = ['soft-professional', 'bold-aggressive', 'dark-professional'];
-  var DEFAULT = 'soft-professional';
+  var configuredDefault = String(window.__JOB_HUNTER_DEFAULT_THEME__ || 'dark-professional');
+  var DEFAULT = THEMES.includes(configuredDefault) ? configuredDefault : 'dark-professional';
 
   function apply(theme) {
     if (!THEMES.includes(theme)) theme = DEFAULT;

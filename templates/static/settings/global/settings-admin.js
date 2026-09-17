@@ -219,6 +219,7 @@ export const JobHunterAdminSettings = (function () {
   // in loadedGlobalSettings and calling renderLlmModelOptions() afterwards.
   function fillGlobalForm(settings) {
     const accessSettings = settings.access_settings || {};
+    const uiSettings = settings.ui_settings || {};
     const fitHl = settings.fit_highlights || {};
     const searchDefaults = settings.search_settings || {};
     const limits = settings.limits || {};
@@ -243,6 +244,7 @@ export const JobHunterAdminSettings = (function () {
     };
 
     setToggleChecked('require_approval_for_new_users', accessSettings.require_approval_for_new_users !== false);
+    setFieldValue('default_theme', uiSettings.default_theme || 'dark-professional');
     setFieldValue('highlight_strong_capability_count', fitHl.strong_capability_count);
     setFieldValue('highlight_working_capability_count', fitHl.working_capability_count);
     setFieldValue('highlight_basic_capability_count', fitHl.basic_capability_count);
@@ -449,6 +451,10 @@ export const JobHunterAdminSettings = (function () {
         require_approval_for_new_users: Boolean(
           document.getElementById('require_approval_for_new_users')?.checked,
         ),
+      },
+      ui_settings: {
+        ...(current.ui_settings || {}),
+        default_theme: document.getElementById('default_theme')?.value || 'dark-professional',
       },
       fit_highlights: {
         strong_capability_count: readNumber('highlight_strong_capability_count', current.fit_highlights?.strong_capability_count),

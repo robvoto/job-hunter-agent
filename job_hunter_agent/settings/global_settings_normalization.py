@@ -26,6 +26,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     DEFAULT_SALARY_LIMITS,
     DEFAULT_SEARCH_SETTINGS,
     DEFAULT_SOURCE_DOCUMENT_SETTINGS,
+    DEFAULT_UI_SETTINGS,
     HISTORY_SETTING_LIMITS,
     KEY_POTENTIAL_RETENTION_DAYS,
     KEY_APSJOBS_ENABLED,
@@ -43,6 +44,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_CV_EXTRACTION_CACHE_MAX_ENTRIES,
     KEY_DATE_RANGE_DAYS,
     KEY_DEFAULT_COUNTRY_SUFFIX,
+    KEY_DEFAULT_THEME,
     KEY_DESCRIPTION_COMPACTION_SETTINGS,
     KEY_DESCRIPTION_TRUST_SETTINGS,
     KEY_EVIDENCE_TIER_WEIGHTS,
@@ -141,6 +143,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_SORT_NEWEST_FIRST,
     KEY_SOURCE_DOCUMENT_SETTINGS,
     KEY_SOURCE_DOCUMENT_SUFFIXES,
+    KEY_UI_SETTINGS,
     ONBOARDING_SETTING_LIMITS,
     SEARCH_SETTING_LIMITS,
 )
@@ -628,6 +631,7 @@ def normalize_global_settings(
 
     fit_source = source.get(KEY_FIT_HIGHLIGHTS, {})
     access_source = source.get(KEY_ACCESS_SETTINGS, {})
+    ui_source = source.get(KEY_UI_SETTINGS, {})
     search_source = source.get(KEY_SEARCH_SETTINGS, {})
 
     limits_source = source.get(KEY_LIMITS, {})
@@ -660,6 +664,10 @@ def normalize_global_settings(
     if not isinstance(access_source, dict):
         raise ValueError(
             f"global_settings.{KEY_ACCESS_SETTINGS} must be a dict, got {type(access_source).__name__!r}"
+        )
+    if not isinstance(ui_source, dict):
+        raise ValueError(
+            f"global_settings.{KEY_UI_SETTINGS} must be a dict, got {type(ui_source).__name__!r}"
         )
     if not isinstance(search_source, dict):
         raise ValueError(
@@ -1167,6 +1175,15 @@ def normalize_global_settings(
             "global_settings.playwright_browser_mode must be either 'ephemeral' or 'persistent'"
         )
 
+    default_theme = str(
+        ui_source.get(KEY_DEFAULT_THEME, DEFAULT_UI_SETTINGS[KEY_DEFAULT_THEME])
+    ).strip().lower()
+    if default_theme not in {"soft-professional", "bold-aggressive", "dark-professional"}:
+        raise ValueError(
+            "global_settings.ui_settings.default_theme must be soft-professional, "
+            "bold-aggressive, or dark-professional"
+        )
+
     return {
         KEY_ACCESS_SETTINGS: {
             KEY_REQUIRE_APPROVAL_FOR_NEW_USERS: bool(
@@ -1175,6 +1192,9 @@ def normalize_global_settings(
                     DEFAULT_ACCESS_SETTINGS[KEY_REQUIRE_APPROVAL_FOR_NEW_USERS],
                 )
             ),
+        },
+        KEY_UI_SETTINGS: {
+            KEY_DEFAULT_THEME: default_theme,
         },
         KEY_FIT_HIGHLIGHTS: {
             "strong_capability_count": _require_int(

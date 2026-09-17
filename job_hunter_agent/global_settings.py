@@ -38,6 +38,16 @@ def require_approval_for_new_users() -> bool:
     )
 
 
+def get_default_theme() -> str:
+    settings = load_global_settings()
+    return str(
+        settings.get(KEY_UI_SETTINGS, {}).get(
+            KEY_DEFAULT_THEME,
+            DEFAULT_UI_SETTINGS[KEY_DEFAULT_THEME],
+        )
+    ).strip().lower()
+
+
 def _deep_merge_settings(base: Any, overlay: Any) -> Any:
     if isinstance(base, dict) and isinstance(overlay, dict):
         merged = copy.deepcopy(base)

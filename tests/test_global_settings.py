@@ -278,6 +278,22 @@ def test_load_global_settings_requires_seeded_table(tmp_path, monkeypatch):
         global_settings.load_global_settings()
 
 
+def test_managed_default_theme_is_dark_professional():
+    payload = _load_managed_global_settings_payload()
+
+    normalized = normalize_global_settings(payload, strict_managed=True)
+
+    assert normalized["ui_settings"]["default_theme"] == "dark-professional"
+
+
+def test_global_default_theme_rejects_unknown_theme():
+    payload = _load_managed_global_settings_payload()
+    payload["ui_settings"]["default_theme"] = "unknown-theme"
+
+    with pytest.raises(ValueError, match="ui_settings.default_theme"):
+        normalize_global_settings(payload, strict_managed=True)
+
+
 def test_get_globally_enabled_sources_respects_admin_source_toggles(isolated_db):
     global_settings.load_global_settings.cache_clear()
     global_settings.save_global_settings(

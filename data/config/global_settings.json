@@ -2,6 +2,9 @@
   "access_settings": {
     "require_approval_for_new_users": true
   },
+  "ui_settings": {
+    "default_theme": "dark-professional"
+  },
   "fit_highlights": {
     "strong_capability_count": 3,
     "working_capability_count": 2,
