@@ -406,13 +406,13 @@ def test_market_source_searches_selected_scope_and_requests_current_jd(monkeypat
     assert all("details_text" not in record for record in kept)
     assert final_progress_detail == progress_states[-1]
     assert final_progress_detail["source"] == "job_market_map"
-    assert progress_states[0]["headline"] == "Starting JMM"
+    assert progress_states[0]["headline"] == "Searching JMM"
     assert any(state["headline"] == "Analysing jobs — 1 of 2" for state in progress_states)
     assert all(
         state["total"] == 2
         for state in progress_states
         if state["stage"] in {"source_collection", "relevance_analysis", "job_detail", "scoring", "finalising"}
-        and state["headline"] != "Starting JMM"
+        and state["headline"] != "Searching JMM"
     )
     assert progress_states[-1]["headline"] == "JMM source complete"
 
