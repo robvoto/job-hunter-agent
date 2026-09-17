@@ -998,6 +998,28 @@ deploy-jobhunter-latest <branch-or-sha>
 
 Use `deploy-jobhunter-latest` only for staging/test/debug work. With no argument it deploys the latest commit from `main`. Do not treat it as the normal production deploy path, and do not reuse old production tags to move newer code.
 
+### Temporary AWS rollback to an exact commit
+
+When AWS needs to be moved temporarily to an older known-good revision for diagnosis, do **not** rewrite `main`, create a rollback branch, or revert local development. Use the existing exact-ref deploy path against AWS only.
+
+Before rollback:
+
+1. Record the currently deployed AWS commit with `git rev-parse HEAD` in `/home/ubuntu/job-hunter-agent`.
+2. Take a timestamped backup of `/var/lib/job-hunter/data` (at minimum `job_hunter.db`) before running an older revision against the persistent runtime data.
+3. Confirm the target commit is the intended known-good checkpoint.
+
+Then deploy the exact commit:
+
+```bash
+deploy-jobhunter-latest <exact-commit-sha>
+```
+
+The helper checks out a detached HEAD on AWS, leaves the developer's local `main` untouched, syncs dependencies, upgrades/seeds the existing runtime database, restarts the service, and performs its health check.
+
+After deployment, verify the service, login/workspace, and one real search path before considering the rollback usable. To return AWS to current development, deploy the previously recorded commit (or the desired current commit) through the same exact-ref path.
+
+Known diagnostic checkpoint: `18be8b6767800c58f93a7f8923e3338b80793a69` is the commit immediately before the JH-306 Job Market Map runtime cutover (`d7d933c39fa6b35892b762cec37b7d4e9d6c2223`). It is useful only as a historical pre-JMM checkpoint; verify it is still the intended target before future use.
+
 For a direct metadata diagnosis:
 
 ```bash
