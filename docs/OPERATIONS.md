@@ -1020,6 +1020,13 @@ After deployment, verify the service, login/workspace, and one real search path 
 
 Known diagnostic checkpoint: `18be8b6767800c58f93a7f8923e3338b80793a69` is the commit immediately before the JH-306 Job Market Map runtime cutover (`d7d933c39fa6b35892b762cec37b7d4e9d6c2223`). It is useful only as a historical pre-JMM checkpoint; verify it is still the intended target before future use.
 
+When using that specific pre-JMM checkpoint against a newer persistent AWS data volume, two compatibility repairs may be required before search works:
+
+- Set global Playwright runtime settings to `playwright_browser_mode="ephemeral"`, `headless=true`, and `seek_assisted_verification_enabled=false`. In that older revision, persistent browser mode forces SEEK to launch headed, which fails on AWS without an X display.
+- If LinkedIn/O*NET classification fails with `sqlite3.OperationalError: no such column: database_release`, drop only the disposable `occupation_title_cache` table and run `init_db()` so the old revision recreates that cache with the schema it expects. Do not drop user/profile/history tables.
+
+These are rollback compatibility actions, not normal production settings. Preserve a runtime backup before applying them.
+
 For a direct metadata diagnosis:
 
 ```bash
