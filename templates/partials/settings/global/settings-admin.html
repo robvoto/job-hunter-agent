@@ -7,6 +7,16 @@
               <h2>__JOB_HUNTER_GLOBAL_SETTINGS_USER_ACCESS_HEADING__</h2>
               <p class="panel-copy">__JOB_HUNTER_GLOBAL_SETTINGS_USER_ACCESS_COPY__</p>
             </div>
+            <label class="toggle-switch" for="require_approval_for_new_users">
+              <span class="toggle-switch-copy">
+                <span class="toggle-switch-title">Require approval for new users</span>
+              </span>
+              <span class="toggle-switch-control">
+                <input id="require_approval_for_new_users" type="checkbox" role="switch">
+                <span class="toggle-switch-ui"></span>
+              </span>
+            </label>
+            <div class="field-help">When off, a new user with a verified Google account is approved automatically and can start immediately. Existing blocked or pending users are not changed.</div>
             <div id="user_access_status" class="field-help" aria-live="polite">__JOB_HUNTER_GLOBAL_SETTINGS_USER_ACCESS_LOADING__</div>
             <div id="user_access_list" class="user-access-list" aria-live="polite"></div>
           </section>

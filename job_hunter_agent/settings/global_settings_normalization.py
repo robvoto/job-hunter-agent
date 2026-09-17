@@ -8,6 +8,7 @@ from typing import Any
 from job_hunter_agent.settings.global_settings_defaults import (
     CACHE_SETTING_LIMITS,
     CAPABILITY_STRENGTH_PRESETS,
+    DEFAULT_ACCESS_SETTINGS,
     DEFAULT_CACHE_SETTINGS,
     DEFAULT_COUNTRY_SUFFIX,
     DEFAULT_DESCRIPTION_COMPACTION_SETTINGS,
@@ -28,6 +29,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     HISTORY_SETTING_LIMITS,
     KEY_POTENTIAL_RETENTION_DAYS,
     KEY_APSJOBS_ENABLED,
+    KEY_ACCESS_SETTINGS,
     KEY_CACHE_SETTINGS,
     KEY_CANDIDATE_APPLICATION_HISTORY,
     KEY_CANDIDATE_APPLICATION_HISTORY_CACHE_MAX_AGE_DAYS,
@@ -130,6 +132,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_REVIEW_RULE_SUGGESTION_MIN_COUNT,
     KEY_REVIEW_SETTINGS,
     KEY_REVIEW_TITLE_NOT_TARGET_MIN_COUNT,
+    KEY_REQUIRE_APPROVAL_FOR_NEW_USERS,
     KEY_SALARY_LIMITS,
     KEY_SEARCH_LIMITS,
     KEY_SEARCH_SETTINGS,
@@ -624,6 +627,7 @@ def normalize_global_settings(
     source = payload if isinstance(payload, dict) else {}
 
     fit_source = source.get(KEY_FIT_HIGHLIGHTS, {})
+    access_source = source.get(KEY_ACCESS_SETTINGS, {})
     search_source = source.get(KEY_SEARCH_SETTINGS, {})
 
     limits_source = source.get(KEY_LIMITS, {})
@@ -652,6 +656,10 @@ def normalize_global_settings(
     if not isinstance(fit_source, dict):
         raise ValueError(
             f"global_settings.{KEY_FIT_HIGHLIGHTS} must be a dict, got {type(fit_source).__name__!r}"
+        )
+    if not isinstance(access_source, dict):
+        raise ValueError(
+            f"global_settings.{KEY_ACCESS_SETTINGS} must be a dict, got {type(access_source).__name__!r}"
         )
     if not isinstance(search_source, dict):
         raise ValueError(
@@ -1160,6 +1168,14 @@ def normalize_global_settings(
         )
 
     return {
+        KEY_ACCESS_SETTINGS: {
+            KEY_REQUIRE_APPROVAL_FOR_NEW_USERS: bool(
+                access_source.get(
+                    KEY_REQUIRE_APPROVAL_FOR_NEW_USERS,
+                    DEFAULT_ACCESS_SETTINGS[KEY_REQUIRE_APPROVAL_FOR_NEW_USERS],
+                )
+            ),
+        },
         KEY_FIT_HIGHLIGHTS: {
             "strong_capability_count": _require_int(
                 fit_source,

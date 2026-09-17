@@ -112,15 +112,21 @@ def get_or_create_user(
     user_id = user_id_from_email(email)
     # Role is always re-derived from env — admin_email may change without a DB update.
     role = "admin" if admin_email and email == admin_email.strip().lower() else "candidate"
+    from job_hunter_agent.database import get_user_access_status
+
+    existing_access_status = get_user_access_status(user_id)
     access_status = USER_ACCESS_APPROVED if role == "admin" else None
+    if role != "admin" and existing_access_status is None:
+        from job_hunter_agent.global_settings import require_approval_for_new_users
+
+        if not require_approval_for_new_users():
+            access_status = USER_ACCESS_APPROVED
     ensure_user_row(
         user_id,
         email=email,
         display_name=display_name or None,
         access_status=access_status,
     )
-    from job_hunter_agent.database import get_user_access_status
-
     persisted_access_status = get_user_access_status(user_id)
     if persisted_access_status is None:
         raise RuntimeError(f"User row missing after authentication upsert: {user_id}")

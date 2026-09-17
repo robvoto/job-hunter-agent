@@ -65,6 +65,34 @@ def test_new_google_user_defaults_to_verified(isolated_db, monkeypatch):
     assert row["access_status"] == "verified"
 
 
+def test_new_google_user_auto_approved_when_approval_gate_disabled(
+    isolated_db, monkeypatch
+):
+    monkeypatch.setenv("JOB_HUNTER_ADMIN_EMAIL", ADMIN_EMAIL)
+    monkeypatch.setattr(
+        "job_hunter_agent.global_settings.require_approval_for_new_users",
+        lambda: False,
+    )
+
+    user = get_or_create_user("open-access@example.com", ADMIN_EMAIL)
+
+    assert user["access_status"] == "approved"
+
+
+def test_open_access_does_not_unblock_existing_user(isolated_db, monkeypatch):
+    monkeypatch.setenv("JOB_HUNTER_ADMIN_EMAIL", ADMIN_EMAIL)
+    user = get_or_create_user("blocked-user@example.com", ADMIN_EMAIL)
+    update_user_access_status(user["user_id"], "blocked", ADMIN_EMAIL)
+    monkeypatch.setattr(
+        "job_hunter_agent.global_settings.require_approval_for_new_users",
+        lambda: False,
+    )
+
+    returning = get_or_create_user("blocked-user@example.com", ADMIN_EMAIL)
+
+    assert returning["access_status"] == "blocked"
+
+
 def test_canonical_schema_keeps_configured_admin_approved(tmp_path, monkeypatch):
     db_path = tmp_path / "canonical.db"
     monkeypatch.setenv("JOB_HUNTER_ADMIN_EMAIL", ADMIN_EMAIL)

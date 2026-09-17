@@ -218,6 +218,7 @@ export const JobHunterAdminSettings = (function () {
   // Fills the admin/global-settings form. Caller is responsible for storing settings
   // in loadedGlobalSettings and calling renderLlmModelOptions() afterwards.
   function fillGlobalForm(settings) {
+    const accessSettings = settings.access_settings || {};
     const fitHl = settings.fit_highlights || {};
     const searchDefaults = settings.search_settings || {};
     const limits = settings.limits || {};
@@ -241,6 +242,7 @@ export const JobHunterAdminSettings = (function () {
       if (bounds.max !== undefined) input.max = String(bounds.max);
     };
 
+    setToggleChecked('require_approval_for_new_users', accessSettings.require_approval_for_new_users !== false);
     setFieldValue('highlight_strong_capability_count', fitHl.strong_capability_count);
     setFieldValue('highlight_working_capability_count', fitHl.working_capability_count);
     setFieldValue('highlight_basic_capability_count', fitHl.basic_capability_count);
@@ -442,6 +444,12 @@ export const JobHunterAdminSettings = (function () {
         : secondsValue * PLAYWRIGHT_TIMEOUT_MS_PER_SECOND;
     };
     return {
+      access_settings: {
+        ...(current.access_settings || {}),
+        require_approval_for_new_users: Boolean(
+          document.getElementById('require_approval_for_new_users')?.checked,
+        ),
+      },
       fit_highlights: {
         strong_capability_count: readNumber('highlight_strong_capability_count', current.fit_highlights?.strong_capability_count),
         working_capability_count: readNumber('highlight_working_capability_count', current.fit_highlights?.working_capability_count),

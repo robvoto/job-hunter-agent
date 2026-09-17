@@ -28,6 +28,16 @@ class GlobalSettingsLoadError(RuntimeError):
     pass
 
 
+def require_approval_for_new_users() -> bool:
+    settings = load_global_settings()
+    return bool(
+        settings.get(KEY_ACCESS_SETTINGS, {}).get(
+            KEY_REQUIRE_APPROVAL_FOR_NEW_USERS,
+            DEFAULT_ACCESS_SETTINGS[KEY_REQUIRE_APPROVAL_FOR_NEW_USERS],
+        )
+    )
+
+
 def _deep_merge_settings(base: Any, overlay: Any) -> Any:
     if isinstance(base, dict) and isinstance(overlay, dict):
         merged = copy.deepcopy(base)
