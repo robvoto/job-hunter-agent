@@ -168,7 +168,13 @@ class JobMarketMapClient:
         return self._validate_feed_payload(payload, after_id=after_id)
 
     @classmethod
-    def _validate_feed_payload(cls, payload: dict[str, Any], *, after_id: int) -> dict[str, Any]:
+    def _validate_feed_payload(
+        cls,
+        payload: dict[str, Any],
+        *,
+        after_id: int,
+        require_total: bool = False,
+    ) -> dict[str, Any]:
         cls._validate_metadata(payload)
         items = payload.get("items")
         if not isinstance(items, list):
@@ -185,6 +191,10 @@ class JobMarketMapClient:
             raise JobMarketMapContractError("Job Market Map feed cursor is invalid")
         if not isinstance(payload.get("has_more"), bool):
             raise JobMarketMapContractError("Job Market Map feed has_more is required")
+        if require_total and (
+            not isinstance(payload.get("total"), int) or payload["total"] < 0
+        ):
+            raise JobMarketMapContractError("Job Market Map search total is required")
         return payload
 
     def consumer_state(self, *, consumer_key: str) -> dict[str, Any]:
@@ -262,7 +272,7 @@ class JobMarketMapClient:
                 "limit": limit,
             },
         )
-        return self._validate_feed_payload(payload, after_id=after_id)
+        return self._validate_feed_payload(payload, after_id=after_id, require_total=True)
 
     def iter_feed(self) -> Iterator[dict[str, Any]]:
         """Read the supported neutral feed without creating a JH market cache."""

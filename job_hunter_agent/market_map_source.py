@@ -509,9 +509,9 @@ def _set_market_map_progress(
 ) -> None:
     """Publish JMM-owned work through the shared wait-state progress contract.
 
-    Filtered search pages have no fixed total before retrieval begins, so the
-    normal JMM search reports indeterminate progress while retaining the
-    existing stage/headline contract.
+    Filtered search pages provide a matching canonical-vacancy total, which JH
+    uses transiently to keep the existing stage/headline progress contract
+    determinate without persisting JMM search state.
     """
     set_run_progress_state(
         text,
@@ -577,6 +577,7 @@ def _iter_filtered_market_pages(context, client: JobMarketMapClient):
             continue
         cursor = 0
         snapshot_max_id: int | None = None
+        search_total: int | None = None
         posted_after = _posted_after_for_source(context, source)
         while True:
             page = client.search_page(
@@ -597,6 +598,15 @@ def _iter_filtered_market_pages(context, client: JobMarketMapClient):
             elif page_snapshot_max_id != snapshot_max_id:
                 raise JobMarketMapContractError(
                     "Job Market Map search snapshot boundary changed during the run"
+                )
+            page_total = page.get("total")
+            if not isinstance(page_total, int) or page_total < 0:
+                raise JobMarketMapContractError("Job Market Map search total is required")
+            if search_total is None:
+                search_total = page_total
+            elif page_total != search_total:
+                raise JobMarketMapContractError(
+                    "Job Market Map search total changed during the run"
                 )
             yield page
             if not page["has_more"]:
@@ -636,8 +646,11 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
     page_number = 0
     analysed_count = 0
     seen_market_map_ids: set[int] = set()
+    last_search_total: int | None = None
     for page in _iter_filtered_market_pages(context, client):
         page_number += 1
+        search_total = int(page["total"])
+        last_search_total = search_total
         _set_market_map_progress(
             "Reading JMM jobs",
             stage="source_collection",
@@ -647,7 +660,8 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
                 f"{worker_limit} parallel workers"
             ),
             current=analysed_count,
-            determinate=False,
+            total=search_total,
+            determinate=True,
         )
         page_items = [
             item for item in page["items"] if int(item["id"]) not in seen_market_map_ids
@@ -658,14 +672,15 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
         for item_index, item in enumerate(page_items):
             title = str(item.get("title") or "").strip()
             progress_current = analysed_count + item_index + 1
-            progress_headline = f"Analysing jobs — {progress_current}"
+            progress_headline = f"Analysing jobs — {progress_current} of {search_total}"
             _set_market_map_progress(
                 progress_headline,
                 stage="relevance_analysis",
                 headline=progress_headline,
                 detail=title,
                 current=progress_current,
-                determinate=False,
+                total=search_total,
+                determinate=True,
             )
             record = normalize_market_job(item, run_iso=context.run_iso)
             page_jobs.append(
@@ -768,7 +783,8 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
                 headline="Obtaining job descriptions",
                 detail=f"Page {page_number}; {analysed_count:,} jobs analysed",
                 current=analysed_count,
-                determinate=False,
+                total=search_total,
+                determinate=True,
             )
         jd_results, stopped, jd_failures = _run_parallel_stage(
             eligible_jobs,
@@ -792,7 +808,8 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
                 headline="Obtaining job description",
                 detail=str(job.record.get("title") or ""),
                 current=analysed_count + index + 1,
-                determinate=False,
+                total=search_total,
+                determinate=True,
             )
             _apply_jd_payload(job.record, _thaw(jd_results[index].payload))
 
@@ -802,7 +819,8 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
             headline="Fit review",
             detail=f"Page {page_number}; {analysed_count:,} jobs analysed",
             current=analysed_count,
-            determinate=False,
+            total=search_total,
+            determinate=True,
         )
         fit_base_cache = copy.deepcopy(review_context.llm_cache)
         fit_jobs = [job for job in eligible_jobs if job.index in jd_results]
@@ -833,7 +851,8 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
             headline="Finalising JMM results",
             detail=f"Page {page_number}; {analysed_count:,} jobs analysed",
             current=analysed_count,
-            determinate=False,
+            total=search_total,
+            determinate=True,
         )
         retryable_jd_failures = {
             index: error
@@ -853,7 +872,8 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
                     headline="Obtaining job description",
                     detail=str(jd_failures[index]),
                     current=analysed_count + index + 1,
-                    determinate=False,
+                    total=search_total,
+                    determinate=True,
                 )
                 error = jd_failures[index]
                 if isinstance(error, JobMarketMapJDUnavailable):
@@ -868,7 +888,8 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
                 headline="Finalising JMM results",
                 detail=str(job.record.get("title") or ""),
                 current=analysed_count + index + 1,
-                determinate=False,
+                total=search_total,
+                determinate=True,
             )
             claim = job.record.get(RUN_IDENTITY_CLAIM_KEY)
             merged_record = _thaw(result.record)
@@ -914,6 +935,7 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
         headline="JMM source complete",
         detail=f"{analysed_count:,} jobs analysed",
         current=analysed_count,
-        determinate=False,
+        total=last_search_total,
+        determinate=last_search_total is not None,
     )
     return kept_records, review_context.audit_rows, skill_observations

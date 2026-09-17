@@ -57,11 +57,13 @@ def _feed_page(
     next_cursor: int,
     has_more: bool,
     snapshot_max_id: int | None = None,
+    total: int | None = None,
 ) -> dict:
     return {
         "api_version": "v3",
         "schema_version": 6,
         "snapshot_max_id": next_cursor if snapshot_max_id is None else snapshot_max_id,
+        "total": len(items) if total is None else total,
         "items": items,
         "next_cursor": next_cursor,
         "has_more": has_more,
@@ -311,12 +313,14 @@ def test_market_source_searches_selected_scope_and_requests_current_jd(monkeypat
                 next_cursor=1,
                 has_more=True,
                 snapshot_max_id=2,
+                total=2,
             ),
             _feed_page(
                 items=[_item(2, full_description="Current canonical JD")],
                 next_cursor=2,
                 has_more=False,
                 snapshot_max_id=2,
+                total=2,
             ),
         ]
     )
@@ -403,6 +407,13 @@ def test_market_source_searches_selected_scope_and_requests_current_jd(monkeypat
     assert final_progress_detail == progress_states[-1]
     assert final_progress_detail["source"] == "job_market_map"
     assert progress_states[0]["headline"] == "Starting JMM"
+    assert any(state["headline"] == "Analysing jobs — 1 of 2" for state in progress_states)
+    assert all(
+        state["total"] == 2
+        for state in progress_states
+        if state["stage"] in {"source_collection", "relevance_analysis", "job_detail", "scoring", "finalising"}
+        and state["headline"] != "Starting JMM"
+    )
     assert progress_states[-1]["headline"] == "JMM source complete"
 
 
@@ -414,18 +425,21 @@ def test_market_source_processes_more_than_100_jobs_across_fixed_snapshot_pages(
                 next_cursor=100,
                 has_more=True,
                 snapshot_max_id=205,
+                total=205,
             ),
             _feed_page(
                 items=[_item(i) for i in range(101, 201)],
                 next_cursor=200,
                 has_more=True,
                 snapshot_max_id=205,
+                total=205,
             ),
             _feed_page(
                 items=[_item(i) for i in range(201, 206)],
                 next_cursor=205,
                 has_more=False,
                 snapshot_max_id=205,
+                total=205,
             ),
         ]
     )
@@ -459,7 +473,7 @@ def test_market_source_processes_more_than_100_jobs_across_fixed_snapshot_pages(
     progress = run_control.get_run_progress_detail()
     assert progress is not None
     assert progress["current"] == 205
-    assert progress["total"] is None
+    assert progress["total"] == 205
 
 
 def test_market_source_does_not_checkpoint_after_analysis_failure(monkeypatch):

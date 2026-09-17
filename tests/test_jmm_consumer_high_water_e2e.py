@@ -64,6 +64,7 @@ class _Handler(BaseHTTPRequestHandler):
                     "api_version": "v3",
                     "schema_version": 8,
                     "snapshot_max_id": max(job["id"] for job in self.state.jobs),
+                    "total": len(self.state.jobs),
                     "items": items,
                     "next_cursor": next_cursor,
                     "has_more": len(eligible) > 1,
