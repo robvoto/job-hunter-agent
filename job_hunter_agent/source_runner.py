@@ -1065,15 +1065,11 @@ def _run_apsjobs_source(context: ScrapeRunContext) -> SourceRunResult:
 
 
 def _run_market_map_source(context: ScrapeRunContext) -> SourceRunResult:
-    """Run JH analysis over the supported JMM API without a JH market cache."""
+    """Run JH analysis over the selected scope through the supported JMM API."""
     from job_hunter_agent.market_map_source import run_market_map_source
-    from job_hunter_agent.paths import get_active_user_id
 
     try:
-        kept, audit, skills = run_market_map_source(
-            context,
-            user_id=get_active_user_id(),
-        )
+        kept, audit, skills = run_market_map_source(context)
         return SourceRunResult(
             source=SOURCE_JOB_MARKET_MAP,
             kept_records=kept,
@@ -1502,6 +1498,10 @@ def run_enabled_sources(context: ScrapeRunContext) -> tuple[list[dict], list[dic
     execution and merged back into context after all sources complete.
     """
     if context.use_market_map:
+        if not context.enabled_sources:
+            raise RuntimeError(
+                "No search sources are enabled for this run. Enable at least one source in Settings or Global Settings."
+            )
         result = _run_source_with_scope(
             SOURCE_JOB_MARKET_MAP,
             _run_market_map_source,

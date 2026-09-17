@@ -14,7 +14,6 @@ from urllib.request import Request, urlopen
 MARKET_MAP_BASE_URL_ENV = "JOB_HUNTER_MARKET_MAP_BASE_URL"
 MARKET_MAP_TIMEOUT_ENV = "JOB_HUNTER_MARKET_MAP_TIMEOUT_SECONDS"
 MARKET_MAP_API_VERSION = "v3"
-MARKET_MAP_CONSUMER_KEY_PREFIX = "job-hunter"
 _PERSONAL_ACTIVITY_FIELDS = frozenset(
     {
         "presented_by_agent",
@@ -93,7 +92,16 @@ class JobMarketMapClient:
     ) -> dict[str, Any]:
         url = urljoin(f"{self.base_url.rstrip('/')}/", path.lstrip("/"))
         if query:
-            url = f"{url}?{urlencode({k: v for k, v in query.items() if v is not None})}"
+            query_items: list[tuple[str, Any]] = []
+            for key, value in query.items():
+                if value is None:
+                    continue
+                if isinstance(value, (list, tuple)):
+                    query_items.extend((key, item) for item in value)
+                else:
+                    query_items.append((key, value))
+            if query_items:
+                url = f"{url}?{urlencode(query_items)}"
         encoded_body = json.dumps(body).encode("utf-8") if body is not None else None
         request = Request(
             url,
@@ -226,6 +234,35 @@ class JobMarketMapClient:
                 "Job Market Map consumer feed snapshot_max_id is required"
             )
         return validated
+
+    def search_page(
+        self,
+        *,
+        role_terms: list[str],
+        sources: list[str],
+        geography_codes: list[str],
+        posted_after: str,
+        after_id: int = 0,
+        through_id: int | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        """Read one filtered canonical-vacancy page without consumer state."""
+        payload = self._request(
+            "GET",
+            "/jobs/search",
+            query={
+                "q": role_terms,
+                "source": sources,
+                "geography_code": geography_codes,
+                "posted_after": posted_after,
+                "after_id": after_id,
+                "through_id": through_id,
+                "include_archived": False,
+                "include_raw": False,
+                "limit": limit,
+            },
+        )
+        return self._validate_feed_payload(payload, after_id=after_id)
 
     def iter_feed(self) -> Iterator[dict[str, Any]]:
         """Read the supported neutral feed without creating a JH market cache."""
