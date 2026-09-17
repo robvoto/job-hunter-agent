@@ -10,7 +10,6 @@ from typing import Any
 from job_hunter_agent.global_settings import (
     DEFAULT_PLAYWRIGHT_SETTINGS,
     DEFAULT_SEARCH_SETTINGS,
-    get_globally_enabled_sources,
     KEY_DATE_RANGE_DAYS,
     KEY_PLAYWRIGHT_SELECTOR_TIMEOUT,
     KEY_PLAYWRIGHT_VIEWPORT_HEIGHT,
@@ -18,9 +17,9 @@ from job_hunter_agent.global_settings import (
     KEY_SEEK_MAX_PAGES,
     KEY_SEEK_PARALLEL_DETAIL_WORKERS,
     KEY_SORT_NEWEST_FIRST,
+    get_globally_enabled_sources,
 )
 from job_hunter_agent.history import TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING
-from job_hunter_agent.job_identity import RunIdentityRegistry
 from job_hunter_agent.io_utils import (
     load_audit_rows,
     load_job_history,
@@ -28,6 +27,7 @@ from job_hunter_agent.io_utils import (
     load_run_stats,
     write_run_attempt,
 )
+from job_hunter_agent.job_identity import RunIdentityRegistry
 from job_hunter_agent.posting_utils import get_manual_skip_sets
 from job_hunter_agent.profile_store import get_search_settings, load_profile
 from job_hunter_agent.retention_housekeeping import run_retention_housekeeping
@@ -183,11 +183,6 @@ def build_scrape_run_context(argv: list[str] | None = None) -> ScrapeRunContext:
     enabled_sources = [
         source for source in profile_enabled_sources if source and source in globally_enabled_sources
     ]
-    if use_market_map:
-        from job_hunter_agent.source_registry import SOURCE_JOB_MARKET_MAP
-
-        enabled_sources = [SOURCE_JOB_MARKET_MAP]
-
     return ScrapeRunContext(
         profile=profile,
         search_settings=search_settings,

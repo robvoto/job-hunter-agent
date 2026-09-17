@@ -57,11 +57,13 @@ def _feed_page(
     next_cursor: int,
     has_more: bool,
     snapshot_max_id: int | None = None,
+    total: int | None = None,
 ) -> dict:
     return {
         "api_version": "v3",
         "schema_version": 6,
         "snapshot_max_id": next_cursor if snapshot_max_id is None else snapshot_max_id,
+        "total": len(items) if total is None else total,
         "items": items,
         "next_cursor": next_cursor,
         "has_more": has_more,
@@ -165,6 +167,30 @@ def test_consumer_client_forwards_run_scoped_high_water():
     assert page["snapshot_max_id"] == 55
     assert requested_urls == [
         "https://jmm.example/v3/consumers/job-hunter%3Arob/feed?through_id=55&include_raw=False"
+    ]
+
+
+def test_search_client_forwards_scope_filters_as_repeated_query_values():
+    requested_urls: list[str] = []
+
+    def opener(request, **_kwargs):
+        requested_urls.append(request.full_url)
+        return _Response(_feed_page(items=[_item(55)], next_cursor=55, has_more=False))
+
+    client = JobMarketMapClient("https://jmm.example/v3", opener=opener)
+    page = client.search_page(
+        role_terms=["Business Analyst", "Product Manager"],
+        sources=["seek", "linkedin"],
+        geography_codes=["SYDNEY", "MELBOURNE"],
+        posted_after="2026-09-08T12:00:00+00:00",
+    )
+
+    assert page["items"][0]["id"] == 55
+    assert requested_urls == [
+        "https://jmm.example/v3/jobs/search?q=Business+Analyst&q=Product+Manager"
+        "&source=seek&source=linkedin&geography_code=SYDNEY&geography_code=MELBOURNE"
+        "&posted_after=2026-09-08T12%3A00%3A00%2B00%3A00&after_id=0"
+        "&include_archived=False&include_raw=False"
     ]
 
 
@@ -279,7 +305,7 @@ def test_market_record_keeps_jmm_identity_without_copying_jd():
     assert record["full_description"] == ""
 
 
-def test_market_source_requests_current_jd_and_checkpoints_per_user(monkeypatch):
+def test_market_source_searches_selected_scope_and_requests_current_jd(monkeypatch):
     pages = iter(
         [
             _feed_page(
@@ -287,29 +313,27 @@ def test_market_source_requests_current_jd_and_checkpoints_per_user(monkeypatch)
                 next_cursor=1,
                 has_more=True,
                 snapshot_max_id=2,
+                total=2,
             ),
             _feed_page(
                 items=[_item(2, full_description="Current canonical JD")],
                 next_cursor=2,
                 has_more=False,
                 snapshot_max_id=2,
+                total=2,
             ),
         ]
     )
     jd_calls: list[int] = []
-    checkpoints: list[tuple[str, int]] = []
-    feed_calls: list[tuple[str, int | None]] = []
+    search_calls: list[dict] = []
 
     class FakeClient:
         @classmethod
         def from_environment(cls):
             return cls()
 
-        def consumer_state(self, *, consumer_key):
-            return _consumer_state(snapshot_max_id=2, pending_count=35228)
-
-        def consumer_feed_page(self, *, consumer_key, through_id=None, **_kwargs):
-            feed_calls.append((consumer_key, through_id))
+        def search_page(self, **kwargs):
+            search_calls.append(kwargs)
             return next(pages)
 
         def get_or_enrich_jd(self, *, jmm_job_id):
@@ -319,10 +343,6 @@ def test_market_source_requests_current_jd_and_checkpoints_per_user(monkeypatch)
                 "jd_source": "seek_job_page",
                 "jd_fetched_at": "2026-09-11T12:01:00+00:00",
             }
-
-        def checkpoint(self, *, consumer_key, last_job_id, **_kwargs):
-            checkpoints.append((consumer_key, last_job_id))
-            return {"consumer_key": consumer_key, "last_job_id": last_job_id}
 
     def pre(record, _context):
         return ({"decision": "KEEP"}, record, [], True)
@@ -353,6 +373,8 @@ def test_market_source_requests_current_jd_and_checkpoints_per_user(monkeypatch)
     run_control.clear_run_progress()
     context = SimpleNamespace(
         profile={},
+        search_settings={"keywords": "Business Analyst", "locations": ["Sydney"]},
+        enabled_sources=["seek"],
         job_history={},
         llm_cache={},
         applied_job_keys=set(),
@@ -363,14 +385,18 @@ def test_market_source_requests_current_jd_and_checkpoints_per_user(monkeypatch)
     )
 
     try:
-        kept, audit, _skills = market_map_source.run_market_map_source(context, user_id="rob")
+        kept, audit, _skills = market_map_source.run_market_map_source(context)
         final_progress_detail = run_control.get_run_progress_detail()
     finally:
         run_control.clear_run_progress()
 
-    assert feed_calls == [("job-hunter:rob", 2), ("job-hunter:rob", 2)]
+    assert [call["after_id"] for call in search_calls] == [0, 1]
+    assert [call["through_id"] for call in search_calls] == [None, 2]
+    assert all(call["role_terms"] == ["Business Analyst"] for call in search_calls)
+    assert all(call["sources"] == ["seek"] for call in search_calls)
+    assert all(call["geography_codes"] == ["NSW"] for call in search_calls)
+    assert all(call["posted_after"] == "2026-09-08T12:00:00+00:00" for call in search_calls)
     assert jd_calls == [1, 2]
-    assert checkpoints == [("job-hunter:rob", 1), ("job-hunter:rob", 2)]
     # Each completed page persists title-stage and fit-stage cache state;
     # interrupted work never reaches the checkpoint without these saves.
     assert len(saved_caches) == 4
@@ -380,36 +406,15 @@ def test_market_source_requests_current_jd_and_checkpoints_per_user(monkeypatch)
     assert all("details_text" not in record for record in kept)
     assert final_progress_detail == progress_states[-1]
     assert final_progress_detail["source"] == "job_market_map"
-    assert [detail["headline"] for detail in progress_states] == [
-        "Starting JMM",
-        "JMM has 35,228 active jobs waiting",
-        "Reading JMM jobs",
-        "Analysing jobs — 1 of 35228",
-        "Obtaining job descriptions",
-        "Obtaining job description",
-        "Fit review",
-        "Finalising JMM results",
-        "Finalising JMM results",
-        "Checkpointing JMM progress",
-        "Reading JMM jobs",
-        "Analysing jobs — 2 of 35228",
-        "Obtaining job descriptions",
-        "Obtaining job description",
-        "Fit review",
-        "Finalising JMM results",
-        "Finalising JMM results",
-        "Checkpointing JMM progress",
-        "JMM source complete",
-    ]
-    workload_progress = progress_states[1]
-    assert workload_progress["headline"] == "JMM has 35,228 active jobs waiting"
-    assert workload_progress["detail"] == "Using 6 parallel workers"
-    assert workload_progress["current"] == 0
-    assert workload_progress["total"] == 35228
-    review_progress = progress_states[3]
-    assert review_progress["current"] == 1
-    assert review_progress["total"] == 35228
-    assert review_progress["determinate"] is True
+    assert progress_states[0]["headline"] == "Starting JMM"
+    assert any(state["headline"] == "Analysing jobs — 1 of 2" for state in progress_states)
+    assert all(
+        state["total"] == 2
+        for state in progress_states
+        if state["stage"] in {"source_collection", "relevance_analysis", "job_detail", "scoring", "finalising"}
+        and state["headline"] != "Starting JMM"
+    )
+    assert progress_states[-1]["headline"] == "JMM source complete"
 
 
 def test_market_source_processes_more_than_100_jobs_across_fixed_snapshot_pages(monkeypatch):
@@ -420,23 +425,25 @@ def test_market_source_processes_more_than_100_jobs_across_fixed_snapshot_pages(
                 next_cursor=100,
                 has_more=True,
                 snapshot_max_id=205,
+                total=205,
             ),
             _feed_page(
                 items=[_item(i) for i in range(101, 201)],
                 next_cursor=200,
                 has_more=True,
                 snapshot_max_id=205,
+                total=205,
             ),
             _feed_page(
                 items=[_item(i) for i in range(201, 206)],
                 next_cursor=205,
                 has_more=False,
                 snapshot_max_id=205,
+                total=205,
             ),
         ]
     )
-    feed_calls: list[int] = []
-    checkpoints: list[int] = []
+    search_calls: list[tuple[int, int | None]] = []
     analysed_ids: list[int] = []
 
     class FakeClient:
@@ -444,16 +451,9 @@ def test_market_source_processes_more_than_100_jobs_across_fixed_snapshot_pages(
         def from_environment(cls):
             return cls()
 
-        def consumer_state(self, *, consumer_key):
-            return _consumer_state(snapshot_max_id=205, pending_count=205)
-
-        def consumer_feed_page(self, *, consumer_key, through_id=None, **_kwargs):
-            feed_calls.append(through_id)
+        def search_page(self, **kwargs):
+            search_calls.append((kwargs["after_id"], kwargs["through_id"]))
             return next(pages)
-
-        def checkpoint(self, *, consumer_key, last_job_id, **_kwargs):
-            checkpoints.append(last_job_id)
-            return {"consumer_key": consumer_key, "last_job_id": last_job_id}
 
     monkeypatch.setattr(market_map_source, "JobMarketMapClient", FakeClient)
     monkeypatch.setattr(market_map_source, "get_job_market_map_parallel_workers", lambda: 6)
@@ -464,20 +464,19 @@ def test_market_source_processes_more_than_100_jobs_across_fixed_snapshot_pages(
 
     monkeypatch.setattr(market_map_source, "review_pre_detail_normalized_job", pre)
 
-    kept, audit, _skills = market_map_source.run_market_map_source(_market_context(), user_id="rob")
+    kept, audit, _skills = market_map_source.run_market_map_source(_market_context())
 
     assert kept == []
     assert audit == []
     assert analysed_ids == list(range(1, 206))
-    assert feed_calls == [205, 205, 205]
-    assert checkpoints == [100, 200, 205]
+    assert search_calls == [(0, None), (100, 205), (200, 205)]
     progress = run_control.get_run_progress_detail()
     assert progress is not None
     assert progress["current"] == 205
     assert progress["total"] == 205
 
 
-def test_market_source_does_not_checkpoint_a_page_after_analysis_failure(monkeypatch):
+def test_market_source_does_not_checkpoint_after_analysis_failure(monkeypatch):
     checkpoints: list[int] = []
 
     class FailedAnalysisClient:
@@ -485,10 +484,7 @@ def test_market_source_does_not_checkpoint_a_page_after_analysis_failure(monkeyp
         def from_environment(cls):
             return cls()
 
-        def consumer_state(self, *, consumer_key):
-            return _consumer_state(snapshot_max_id=10, pending_count=1)
-
-        def consumer_feed_page(self, *, consumer_key, **_kwargs):
+        def search_page(self, **_kwargs):
             return _feed_page(items=[_item(10)], next_cursor=10, has_more=False)
 
         def checkpoint(self, *, consumer_key, last_job_id, **_kwargs):
@@ -503,6 +499,8 @@ def test_market_source_does_not_checkpoint_a_page_after_analysis_failure(monkeyp
     )
     context = SimpleNamespace(
         profile={},
+        search_settings={"keywords": "Business Analyst", "locations": ["Sydney"]},
+        enabled_sources=["seek"],
         job_history={},
         llm_cache={},
         applied_job_keys=set(),
@@ -513,7 +511,7 @@ def test_market_source_does_not_checkpoint_a_page_after_analysis_failure(monkeyp
     )
 
     with pytest.raises(RuntimeError, match="analysis failed"):
-        market_map_source.run_market_map_source(context, user_id="rob")
+        market_map_source.run_market_map_source(context)
 
     assert checkpoints == []
 
@@ -526,10 +524,7 @@ def test_jmm_jd_502_preserves_completed_results_and_marks_job_retryable(monkeypa
         def from_environment(cls):
             return cls()
 
-        def consumer_state(self, *, consumer_key):
-            return _consumer_state(snapshot_max_id=1085, pending_count=3, last_job_id=1082)
-
-        def consumer_feed_page(self, *, consumer_key, **_kwargs):
+        def search_page(self, **_kwargs):
             return _feed_page(
                 items=[_item(i) for i in range(1083, 1086)], next_cursor=1085, has_more=False
             )
@@ -580,7 +575,7 @@ def test_jmm_jd_502_preserves_completed_results_and_marks_job_retryable(monkeypa
     assert checkpoints == []
 
 
-def test_jmm_jd_410_skips_terminal_job_and_checkpoints_completed_page(monkeypatch):
+def test_jmm_jd_410_skips_terminal_job_without_consumer_checkpoint(monkeypatch):
     checkpoints: list[int] = []
 
     class TerminalJdClient:
@@ -588,10 +583,7 @@ def test_jmm_jd_410_skips_terminal_job_and_checkpoints_completed_page(monkeypatc
         def from_environment(cls):
             return cls()
 
-        def consumer_state(self, *, consumer_key):
-            return _consumer_state(snapshot_max_id=1085, pending_count=3, last_job_id=1082)
-
-        def consumer_feed_page(self, *, consumer_key, **_kwargs):
+        def search_page(self, **_kwargs):
             return _feed_page(
                 items=[_item(i) for i in range(1083, 1086)], next_cursor=1085, has_more=False
             )
@@ -637,12 +629,14 @@ def test_jmm_jd_410_skips_terminal_job_and_checkpoints_completed_page(monkeypatc
     assert unavailable_row["decision_explanation"].endswith("terminal unavailable")
     assert result.error is None
     assert result.source_collection_complete is True
-    assert checkpoints == [1085]
+    assert checkpoints == []
 
 
 def _market_context(profile=None):
     return SimpleNamespace(
         profile=profile or {},
+        search_settings={"keywords": "Business Analyst", "locations": ["Sydney"]},
+        enabled_sources=["seek"],
         job_history={},
         llm_cache={},
         applied_job_keys=set(),
@@ -701,10 +695,7 @@ def test_market_source_parallel_stages_overlap_and_merge_in_input_order(monkeypa
         def from_environment(cls):
             return cls()
 
-        def consumer_state(self, *, consumer_key):
-            return _consumer_state(snapshot_max_id=4, pending_count=4)
-
-        def consumer_feed_page(self, *, consumer_key, **_kwargs):
+        def search_page(self, **_kwargs):
             return _feed_page(items=items, next_cursor=4, has_more=False)
 
         def get_or_enrich_jd(self, *, jmm_job_id):
@@ -757,12 +748,12 @@ def test_market_source_parallel_stages_overlap_and_merge_in_input_order(monkeypa
     monkeypatch.setattr(market_map_source, "review_pre_detail_normalized_job", pre)
     monkeypatch.setattr(market_map_source, "review_post_detail_normalized_job", post)
 
-    kept, audit, _skills = market_map_source.run_market_map_source(_market_context(), user_id="rob")
+    kept, audit, _skills = market_map_source.run_market_map_source(_market_context())
 
     assert maximum == {"title": 2, "jd": 2, "fit": 2}
     assert [record["job_key"] for record in kept] == [f"seek:{i}" for i in range(1, 5)]
     assert [row["job_key"] for row in audit] == [f"seek:{i}" for i in range(1, 5)]
-    assert checkpoints == [4]
+    assert checkpoints == []
 
 
 def test_market_source_thaws_title_worker_result_before_fit_record_copy(monkeypatch):
@@ -774,10 +765,7 @@ def test_market_source_thaws_title_worker_result_before_fit_record_copy(monkeypa
         def from_environment(cls):
             return cls()
 
-        def consumer_state(self, *, consumer_key):
-            return _consumer_state(snapshot_max_id=1, pending_count=1)
-
-        def consumer_feed_page(self, *, consumer_key, **_kwargs):
+        def search_page(self, **_kwargs):
             return _feed_page(items=items, next_cursor=1, has_more=False)
 
         def get_or_enrich_jd(self, *, jmm_job_id):
@@ -836,7 +824,7 @@ def test_market_source_thaws_title_worker_result_before_fit_record_copy(monkeypa
     monkeypatch.setattr(market_map_source, "review_post_detail_normalized_job", post)
 
     kept, _audit, _skills = market_map_source.run_market_map_source(
-        _market_context(), user_id="rob"
+        _market_context()
     )
 
     assert [record["job_key"] for record in kept] == ["seek:1"]
@@ -883,10 +871,7 @@ def test_market_source_stop_cancels_queued_jmm_work(monkeypatch):
         def from_environment(cls):
             return cls()
 
-        def consumer_state(self, *, consumer_key):
-            return _consumer_state(snapshot_max_id=4, pending_count=4)
-
-        def consumer_feed_page(self, *, consumer_key, **_kwargs):
+        def search_page(self, **_kwargs):
             return _feed_page(items=[_item(i) for i in range(1, 5)], next_cursor=4, has_more=False)
 
         def get_or_enrich_jd(self, *, jmm_job_id):
@@ -912,7 +897,7 @@ def test_market_source_stop_cancels_queued_jmm_work(monkeypatch):
         lambda record, _context: ({"decision": "KEEP"}, record, [], True),
     )
 
-    market_map_source.run_market_map_source(_market_context(), user_id="rob")
+    market_map_source.run_market_map_source(_market_context())
 
     assert jd_calls == [1]
     assert checkpoints == []
@@ -927,10 +912,7 @@ def test_market_source_worker_failure_does_not_mutate_shared_state_or_checkpoint
         def from_environment(cls):
             return cls()
 
-        def consumer_state(self, *, consumer_key):
-            return _consumer_state(snapshot_max_id=3, pending_count=3)
-
-        def consumer_feed_page(self, *, consumer_key, **_kwargs):
+        def search_page(self, **_kwargs):
             return _feed_page(items=[_item(i) for i in range(1, 4)], next_cursor=3, has_more=False)
 
         def get_or_enrich_jd(self, *, jmm_job_id):
@@ -958,7 +940,7 @@ def test_market_source_worker_failure_does_not_mutate_shared_state_or_checkpoint
     monkeypatch.setattr(market_map_source, "review_post_detail_normalized_job", post)
 
     with pytest.raises(RuntimeError, match="fit worker failed"):
-        market_map_source.run_market_map_source(context, user_id="rob")
+        market_map_source.run_market_map_source(context)
 
     assert sorted(completed) == [1, 2, 3]
     assert checkpoints == []
@@ -991,7 +973,7 @@ def test_normal_runtime_builds_a_jmm_only_context(monkeypatch):
     context = run_context.build_scrape_run_context([])
 
     assert context.use_market_map is True
-    assert context.enabled_sources == ["job_market_map"]
+    assert context.enabled_sources == ["seek"]
     assert context.job_history == {}
 
 
@@ -1055,6 +1037,7 @@ def test_market_map_persistence_keeps_identity_without_jd_copy():
 def test_normal_runtime_dispatches_only_to_jmm_and_surfaces_unavailable_failure(monkeypatch):
     context = SimpleNamespace(
         use_market_map=True,
+        enabled_sources=["seek"],
         source_cache_stats=None,
         source_failure_message="",
     )

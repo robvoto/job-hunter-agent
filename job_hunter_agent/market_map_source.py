@@ -6,16 +6,19 @@ import contextvars
 import copy
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import MappingProxyType
 from typing import Any
 
-from job_hunter_agent.global_settings import get_job_market_map_parallel_workers
+from job_hunter_agent.global_settings import (
+    DEFAULT_SEARCH_SETTINGS,
+    KEY_LINKEDIN_HOURS_OLD,
+    get_job_market_map_parallel_workers,
+)
 from job_hunter_agent.history import finalize_record
 from job_hunter_agent.io_utils import save_llm_cache
 from job_hunter_agent.job_identity import RUN_IDENTITY_CLAIM_KEY, normalize_job_key
 from job_hunter_agent.job_market_map_client import (
-    MARKET_MAP_CONSUMER_KEY_PREFIX,
     JobMarketMapClient,
     JobMarketMapContractError,
     JobMarketMapJDUnavailable,
@@ -29,6 +32,7 @@ from job_hunter_agent.job_review_pipeline import (
     review_pre_detail_normalized_job,
     review_title_judgment,
 )
+from job_hunter_agent.locations import resolve_location
 from job_hunter_agent.occupation_taxonomy import RESULT_FAR
 from job_hunter_agent.posting_utils import days_since, parse_timestamp
 from job_hunter_agent.profile_store import KEY_EXPLORE_ADJACENT_ROLES
@@ -62,18 +66,16 @@ from job_hunter_agent.record_schema import (
 )
 from job_hunter_agent.run_control import run_stop_requested, set_run_progress_state
 from job_hunter_agent.scrapers.base import blank_source_metadata, build_initial_flat_record
+from job_hunter_agent.search_terms import ordered_profile_search_terms
 from job_hunter_agent.source_errors import PartialSourceResultsError
 from job_hunter_agent.source_learning import register_pending_learning_signals
-from job_hunter_agent.source_registry import SOURCE_JOB_MARKET_MAP
+from job_hunter_agent.source_registry import (
+    SOURCE_APSJOBS,
+    SOURCE_JOB_MARKET_MAP,
+    SOURCE_LINKEDIN,
+    SOURCE_SEEK,
+)
 from job_hunter_agent.work_mode_extraction import WORK_MODE_UNKNOWN, extract_from_linkedin
-
-
-def consumer_key_for_user(user_id: str) -> str:
-    """Namespace JMM's processing cursor per JH user, not as personal activity."""
-    cleaned = str(user_id or "").strip()
-    if not cleaned:
-        raise ValueError("user_id is required for the Job Market Map consumer cursor")
-    return f"{MARKET_MAP_CONSUMER_KEY_PREFIX}:{cleaned}"
 
 
 def _source_metadata(item: dict[str, Any], source: str, source_job_id: str) -> dict[str, Any]:
@@ -503,11 +505,13 @@ def _set_market_map_progress(
     detail: str = "",
     current: int | None = None,
     total: int | None = None,
+    determinate: bool | None = None,
 ) -> None:
     """Publish JMM-owned work through the shared wait-state progress contract.
 
-    JMM's consumer-state summary supplies the fixed run total before page 1.
-    Structured progress therefore stays determinate across every feed page.
+    Filtered search pages provide a matching canonical-vacancy total, which JH
+    uses transiently to keep the existing stage/headline progress contract
+    determinate without persisting JMM search state.
     """
     set_run_progress_state(
         text,
@@ -517,11 +521,104 @@ def _set_market_map_progress(
         detail=detail,
         current=current,
         total=total,
+        determinate=determinate,
     )
 
 
-def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[dict], list[dict]]:
-    """Process JMM pages with bounded stages and an ordered coordinator merge."""
+def _posted_after_for_source(context, source: str) -> str:
+    run_at = parse_timestamp(context.run_iso)
+    if run_at is None:
+        raise ValueError("JMM search requires a valid JH run timestamp")
+    if source == SOURCE_LINKEDIN:
+        hours_old = int(
+            context.search_settings.get(
+                KEY_LINKEDIN_HOURS_OLD,
+                DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD],
+            )
+            or DEFAULT_SEARCH_SETTINGS[KEY_LINKEDIN_HOURS_OLD]
+        )
+        return (run_at - timedelta(hours=max(1, hours_old))).isoformat()
+    return (run_at - timedelta(days=max(1, context.configured_date_range))).isoformat()
+
+
+def _iter_filtered_market_pages(context, client: JobMarketMapClient):
+    """Yield JMM pages for the same board-scoped search inputs used pre-JMM."""
+    search_settings = context.search_settings
+    role_terms = ordered_profile_search_terms(search_settings, context.profile)
+    if not role_terms:
+        raise ValueError(
+            "No preferred role is configured. Please complete onboarding and add a preferred role before running."
+        )
+    raw_locations = [
+        str(value).strip()
+        for value in search_settings.get("locations", [])
+        if str(value).strip()
+    ]
+    geography_codes = []
+    for value in raw_locations:
+        location = resolve_location(value)
+        geography_codes.append(
+            str(location.get("market_map_geography_code") or location["code"])
+            .strip()
+            .upper()
+        )
+    selected_sources = [
+        str(source).strip().lower()
+        for source in context.enabled_sources
+        if str(source).strip().lower() in {SOURCE_SEEK, SOURCE_LINKEDIN, SOURCE_APSJOBS}
+    ]
+    if not selected_sources:
+        raise ValueError("No SEEK, LinkedIn, or APSJobs source is selected for the JMM search")
+
+    for source in selected_sources:
+        # LinkedIn's pre-JMM target builder produces no targets without a location;
+        # SEEK and APSJobs retain their existing all-location behaviour.
+        if source == SOURCE_LINKEDIN and not geography_codes:
+            continue
+        cursor = 0
+        snapshot_max_id: int | None = None
+        search_total: int | None = None
+        posted_after = _posted_after_for_source(context, source)
+        while True:
+            page = client.search_page(
+                role_terms=role_terms,
+                sources=[source],
+                geography_codes=geography_codes,
+                posted_after=posted_after,
+                after_id=cursor,
+                through_id=snapshot_max_id,
+            )
+            page_snapshot_max_id = page.get("snapshot_max_id")
+            if not isinstance(page_snapshot_max_id, int) or page_snapshot_max_id < 0:
+                raise JobMarketMapContractError(
+                    "Job Market Map search snapshot_max_id is required"
+                )
+            if snapshot_max_id is None:
+                snapshot_max_id = page_snapshot_max_id
+            elif page_snapshot_max_id != snapshot_max_id:
+                raise JobMarketMapContractError(
+                    "Job Market Map search snapshot boundary changed during the run"
+                )
+            page_total = page.get("total")
+            if not isinstance(page_total, int) or page_total < 0:
+                raise JobMarketMapContractError("Job Market Map search total is required")
+            if search_total is None:
+                search_total = page_total
+            elif page_total != search_total:
+                raise JobMarketMapContractError(
+                    "Job Market Map search total changed during the run"
+                )
+            yield page
+            if not page["has_more"]:
+                break
+            next_cursor = int(page["next_cursor"])
+            if next_cursor == cursor:
+                raise ValueError("Job Market Map search cursor did not advance")
+            cursor = next_cursor
+
+
+def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
+    """Search JMM within JH's selected scope, then run the existing JH pipeline."""
     _set_market_map_progress(
         "Starting JMM",
         stage="starting",
@@ -545,62 +642,45 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
     )
     kept_records: list[dict] = []
     skill_observations: list[dict] = []
-    consumer_key = consumer_key_for_user(user_id)
     worker_limit = get_job_market_map_parallel_workers()
-    state = client.consumer_state(consumer_key=consumer_key)
-    snapshot_max_id = int(state["snapshot_max_id"])
-    pending_total = int(state["pending_active_primary_count"])
-    _set_market_map_progress(
-        f"JMM has {pending_total:,} active jobs waiting",
-        stage="source_collection",
-        headline=f"JMM has {pending_total:,} active jobs waiting",
-        detail=f"Using {worker_limit} parallel workers",
-        current=0,
-        total=pending_total,
-    )
-    cursor = int(state["last_job_id"])
     page_number = 0
     analysed_count = 0
-    while True:
+    seen_market_map_ids: set[int] = set()
+    last_search_total: int | None = None
+    for page in _iter_filtered_market_pages(context, client):
         page_number += 1
+        search_total = int(page["total"])
+        last_search_total = search_total
         _set_market_map_progress(
             "Reading JMM jobs",
             stage="source_collection",
             headline="Reading JMM jobs",
             detail=(
-                f"Page {page_number}; {analysed_count:,} of {pending_total:,} jobs analysed; "
+                f"Page {page_number}; {analysed_count:,} jobs analysed; "
                 f"{worker_limit} parallel workers"
             ),
             current=analysed_count,
-            total=pending_total,
+            total=search_total,
+            determinate=True,
         )
-        page = client.consumer_feed_page(
-            consumer_key=consumer_key,
-            through_id=snapshot_max_id,
-        )
-        page_snapshot_max_id = page.get("snapshot_max_id")
-        if not isinstance(page_snapshot_max_id, int) or page_snapshot_max_id < 0:
-            raise JobMarketMapContractError(
-                "Job Market Map consumer feed snapshot_max_id is required"
-            )
-        if page_snapshot_max_id != snapshot_max_id:
-            raise JobMarketMapContractError(
-                "Job Market Map consumer feed snapshot boundary changed during the run"
-            )
-        page_items = page["items"]
+        page_items = [
+            item for item in page["items"] if int(item["id"]) not in seen_market_map_ids
+        ]
+        seen_market_map_ids.update(int(item["id"]) for item in page_items)
         page_item_total = len(page_items)
         page_jobs: list[_IndexedJob] = []
         for item_index, item in enumerate(page_items):
             title = str(item.get("title") or "").strip()
-            progress_current = min(analysed_count + item_index + 1, pending_total)
-            progress_headline = f"Analysing jobs — {progress_current} of {pending_total}"
+            progress_current = analysed_count + item_index + 1
+            progress_headline = f"Analysing jobs — {progress_current} of {search_total}"
             _set_market_map_progress(
                 progress_headline,
                 stage="relevance_analysis",
                 headline=progress_headline,
                 detail=title,
                 current=progress_current,
-                total=pending_total,
+                total=search_total,
+                determinate=True,
             )
             record = normalize_market_job(item, run_iso=context.run_iso)
             page_jobs.append(
@@ -674,7 +754,7 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
             )
         # Persist completed title judgements before detail/fit work. A server
         # stop later in this page must not discard valid cache entries, while
-        # job results and the JMM checkpoint remain uncommitted until the page
+        # job results remain uncommitted until the page
         # is finalized.
         save_llm_cache(review_context.llm_cache)
         page_jobs = [jobs_by_index[index] for index in range(page_item_total)]
@@ -701,9 +781,10 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
                 "Obtaining job descriptions",
                 stage="job_detail",
                 headline="Obtaining job descriptions",
-                detail=f"Page {page_number}; {analysed_count:,} of {pending_total:,} jobs analysed",
+                detail=f"Page {page_number}; {analysed_count:,} jobs analysed",
                 current=analysed_count,
-                total=pending_total,
+                total=search_total,
+                determinate=True,
             )
         jd_results, stopped, jd_failures = _run_parallel_stage(
             eligible_jobs,
@@ -726,8 +807,9 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
                 stage="job_detail",
                 headline="Obtaining job description",
                 detail=str(job.record.get("title") or ""),
-                current=min(analysed_count + index + 1, pending_total),
-                total=pending_total,
+                current=analysed_count + index + 1,
+                total=search_total,
+                determinate=True,
             )
             _apply_jd_payload(job.record, _thaw(jd_results[index].payload))
 
@@ -735,9 +817,10 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
             "Fit review",
             stage="scoring",
             headline="Fit review",
-            detail=f"Page {page_number}; {analysed_count:,} of {pending_total:,} jobs analysed",
+            detail=f"Page {page_number}; {analysed_count:,} jobs analysed",
             current=analysed_count,
-            total=pending_total,
+            total=search_total,
+            determinate=True,
         )
         fit_base_cache = copy.deepcopy(review_context.llm_cache)
         fit_jobs = [job for job in eligible_jobs if job.index in jd_results]
@@ -766,9 +849,10 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
             "Finalising JMM results",
             stage="finalising",
             headline="Finalising JMM results",
-            detail=f"Page {page_number}; {analysed_count:,} of {pending_total:,} jobs analysed",
+            detail=f"Page {page_number}; {analysed_count:,} jobs analysed",
             current=analysed_count,
-            total=pending_total,
+            total=search_total,
+            determinate=True,
         )
         retryable_jd_failures = {
             index: error
@@ -787,8 +871,9 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
                     stage="job_detail",
                     headline="Obtaining job description",
                     detail=str(jd_failures[index]),
-                    current=min(analysed_count + index + 1, pending_total),
-                    total=pending_total,
+                    current=analysed_count + index + 1,
+                    total=search_total,
+                    determinate=True,
                 )
                 error = jd_failures[index]
                 if isinstance(error, JobMarketMapJDUnavailable):
@@ -802,8 +887,9 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
                 stage="finalising",
                 headline="Finalising JMM results",
                 detail=str(job.record.get("title") or ""),
-                current=min(analysed_count + index + 1, pending_total),
-                total=pending_total,
+                current=analysed_count + index + 1,
+                total=search_total,
+                determinate=True,
             )
             claim = job.record.get(RUN_IDENTITY_CLAIM_KEY)
             merged_record = _thaw(result.record)
@@ -843,34 +929,13 @@ def run_market_map_source(context, *, user_id: str) -> tuple[list[dict], list[di
                 original_error=retryable_jd_failures[min(retryable_jd_failures)],
             )
         analysed_count += page_item_total
-        next_cursor = int(page["next_cursor"])
-        if next_cursor > cursor:
-            _set_market_map_progress(
-                f"Checkpointing JMM through job {next_cursor}",
-                stage="saving",
-                headline="Checkpointing JMM progress",
-                detail=(
-                    f"Page {page_number}; {analysed_count:,} of {pending_total:,} jobs analysed"
-                ),
-                current=min(analysed_count, pending_total),
-                total=pending_total,
-            )
-            client.checkpoint(
-                consumer_key=consumer_key,
-                last_job_id=next_cursor,
-                note="Job Hunter completed JH-306 market analysis page",
-            )
-        if not page["has_more"]:
-            break
-        if next_cursor == cursor:
-            raise ValueError("Job Market Map feed cursor did not advance")
-        cursor = next_cursor
     _set_market_map_progress(
         "JMM source complete",
         stage="source_collection",
         headline="JMM source complete",
-        detail=f"{analysed_count:,} of {pending_total:,} jobs analysed",
-        current=min(analysed_count, pending_total),
-        total=pending_total,
+        detail=f"{analysed_count:,} jobs analysed",
+        current=analysed_count,
+        total=last_search_total,
+        determinate=last_search_total is not None,
     )
     return kept_records, review_context.audit_rows, skill_observations

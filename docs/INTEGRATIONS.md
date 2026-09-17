@@ -16,10 +16,11 @@ This guide describes which integrations exist, which ones are packaged product b
   records retain JMM identity and JD provenance without copying the JD.
 - JMM processing cursors are namespaced per authenticated JH user. They are
   workflow checkpoints, not personal activity; JH-305 remains the activity owner.
-- Each JH market run also uses a transient JMM snapshot boundary: page 1 returns
-  `snapshot_max_id`, and JH forwards that same value as `through_id` on every later
-  consumer page in that run. It is not persisted. If the run fails, the next run
-  starts from the last safely saved checkpoint and captures a new snapshot boundary.
+- JH sends its existing role terms, locations, date window, and selected boards to
+  JMM's stateless `/v3/jobs/search` endpoint. JMM evaluates those filters against
+  any active linked source row and returns each canonical vacancy once.
+- Each JH market search uses a transient JMM snapshot boundary for its stateless
+  search pages. It is not persisted and does not advance a consumer checkpoint.
 - Existing JH scraper/history data is retained only for the bounded JH-308
   retirement path and is not a fallback source for the JMM-backed run.
 

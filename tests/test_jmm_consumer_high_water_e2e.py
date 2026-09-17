@@ -1,4 +1,4 @@
-"""End-to-end JH/JMM consumer paging contract for one run-scoped high-water."""
+"""End-to-end JH/JMM filtered-search contract."""
 
 from __future__ import annotations
 
@@ -33,10 +33,7 @@ def _job(job_id: int) -> dict:
 class _JmmState:
     def __init__(self) -> None:
         self.jobs = [_job(1), _job(2)]
-        self.checkpoint = 0
-        self.feed_through_ids: list[int | None] = []
-        self.checkpoint_bodies: list[dict] = []
-        self.inserted_mid_run = False
+        self.search_calls: list[dict[str, list[str]]] = []
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -56,42 +53,18 @@ class _Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler contract
         parsed = urlsplit(self.path)
         query = parse_qs(parsed.query)
-        if parsed.path.startswith("/v3/consumers/") and parsed.path.endswith("/state"):
-            snapshot_max_id = max(job["id"] for job in self.state.jobs)
-            pending = sum(
-                1 for job in self.state.jobs if self.state.checkpoint < job["id"] <= snapshot_max_id
-            )
-            self._json(
-                {
-                    "consumer_key": "job-hunter:rob",
-                    "last_job_id": self.state.checkpoint,
-                    "updated_at": None,
-                    "note": None,
-                    "snapshot_max_id": snapshot_max_id,
-                    "pending_active_primary_count": pending,
-                }
-            )
-            return
-        if parsed.path.startswith("/v3/consumers/") and parsed.path.endswith("/feed"):
-            raw_through = query.get("through_id", [None])[0]
-            through_id = int(raw_through) if raw_through is not None else None
-            self.state.feed_through_ids.append(through_id)
-            snapshot_max_id = (
-                max(job["id"] for job in self.state.jobs) if through_id is None else through_id
-            )
-            eligible = [
-                job
-                for job in self.state.jobs
-                if self.state.checkpoint < job["id"] <= snapshot_max_id
-            ]
-            # One item per page makes the test exercise checkpoint + second-page paging.
+        if parsed.path == "/v3/jobs/search":
+            self.state.search_calls.append(query)
+            after_id = int(query.get("after_id", ["0"])[0])
+            eligible = [job for job in self.state.jobs if job["id"] > after_id]
             items = eligible[:1]
-            next_cursor = items[-1]["id"] if items else self.state.checkpoint
+            next_cursor = items[-1]["id"] if items else after_id
             self._json(
                 {
                     "api_version": "v3",
                     "schema_version": 8,
-                    "snapshot_max_id": snapshot_max_id,
+                    "snapshot_max_id": max(job["id"] for job in self.state.jobs),
+                    "total": len(self.state.jobs),
                     "items": items,
                     "next_cursor": next_cursor,
                     "has_more": len(eligible) > 1,
@@ -103,20 +76,7 @@ class _Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler contract
         parsed = urlsplit(self.path)
         content_length = int(self.headers.get("Content-Length") or 0)
-        body = json.loads(self.rfile.read(content_length) or b"{}")
-        if parsed.path.startswith("/v3/consumers/") and parsed.path.endswith("/checkpoint"):
-            self.state.checkpoint_bodies.append(body)
-            self.state.checkpoint = int(body["last_job_id"])
-            if self.state.checkpoint == 1 and not self.state.inserted_mid_run:
-                self.state.jobs.append(_job(3))
-                self.state.inserted_mid_run = True
-            self._json(
-                {
-                    "consumer_key": "job-hunter:rob",
-                    "last_job_id": self.state.checkpoint,
-                }
-            )
-            return
+        json.loads(self.rfile.read(content_length) or b"{}")
         if parsed.path.startswith("/v3/jobs/") and parsed.path.endswith("/jd"):
             job_id = int(parsed.path.split("/")[3])
             self._json(
@@ -136,6 +96,8 @@ class _Handler(BaseHTTPRequestHandler):
 def _context() -> SimpleNamespace:
     return SimpleNamespace(
         profile={},
+        search_settings={"keywords": "Business Analyst", "locations": ["Sydney"]},
+        enabled_sources=["seek"],
         job_history={},
         llm_cache={},
         applied_job_keys=set(),
@@ -146,7 +108,7 @@ def _context() -> SimpleNamespace:
     )
 
 
-def test_jh_run_keeps_one_snapshot_boundary_and_next_run_sees_new_job(monkeypatch):
+def test_jh_run_uses_filtered_search_without_consumer_state(monkeypatch):
     state = _JmmState()
     handler = type("StatefulJmmHandler", (_Handler,), {"state": state})
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
@@ -168,16 +130,11 @@ def test_jh_run_keeps_one_snapshot_boundary_and_next_run_sees_new_job(monkeypatc
             lambda record, _context: ({"decision": "KEEP"}, record, []),
         )
 
-        first_kept, _, _ = market_map_source.run_market_map_source(_context(), user_id="rob")
+        first_kept, _, _ = market_map_source.run_market_map_source(_context())
         assert [record["market_map_job_id"] for record in first_kept] == [1, 2]
-        assert state.feed_through_ids == [2, 2]
-        assert [body["last_job_id"] for body in state.checkpoint_bodies] == [1, 2]
-        assert all("through_id" not in body for body in state.checkpoint_bodies)
-
-        second_kept, _, _ = market_map_source.run_market_map_source(_context(), user_id="rob")
-        assert [record["market_map_job_id"] for record in second_kept] == [3]
-        assert state.feed_through_ids == [2, 2, 3]
-        assert state.checkpoint_bodies[-1]["last_job_id"] == 3
+        assert [call["after_id"] for call in state.search_calls] == [["0"], ["1"]]
+        assert all(call["source"] == ["seek"] for call in state.search_calls)
+        assert all(call["q"] == ["Business Analyst"] for call in state.search_calls)
     finally:
         server.shutdown()
         server.server_close()
