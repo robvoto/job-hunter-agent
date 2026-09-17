@@ -63,7 +63,9 @@ Do not skip a failed gate, move an existing release tag, or force-push a release
 
 ## AWS boundary
 
-AWS deploys code only after a release tag is published. Production must deploy an explicit release tag, for example `deploy-jobhunter-release vX.Y.Z`; it must not deploy "whatever main currently is". Do not edit the displayed version on AWS.
+AWS deploys code only after a release tag is published. Production must use `deploy-jobhunter-production vX.Y.Z`. The command snapshots runtime data, deploys the explicit release tag, runs production smoke checks, and automatically restores the previous known-good release on failure. Runtime data is restored only if code rollback alone does not recover production.
+
+`deploy-jobhunter-release vX.Y.Z` is the low-level exact-tag primitive used by the production wrapper, not the normal production entry point.
 
 For AWS smoke tests or debug sessions that should not create a release, use the separate non-production helper:
 

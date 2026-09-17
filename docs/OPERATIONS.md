@@ -981,13 +981,17 @@ To run every gate without changing files, Git history, tags, or GitHub:
 ./scripts/release-jobhunter.sh patch --dry-run
 ```
 
-The release command validates version consistency, runs the full unit suite and non-LLM Playwright suite, commits the version update, creates an annotated tag, and atomically pushes `main` with the tag. After the release succeeds, connect to AWS and run `deploy-jobhunter-release vX.Y.Z`.
+The release command validates version consistency, runs the full unit suite and non-LLM Playwright suite, commits the version update, creates an annotated tag, and atomically pushes `main` with the tag. After the release succeeds, connect to AWS and run `deploy-jobhunter-production vX.Y.Z`.
 
-Production AWS deploys must use an explicit release tag:
+Production AWS deploys use an explicit release tag through the guarded production deploy command:
 
 ```bash
-deploy-jobhunter-release vX.Y.Z
+deploy-jobhunter-production vX.Y.Z
 ```
+
+The production deploy command records the current known-good release, creates a timestamped runtime-data snapshot, deploys the requested release, runs production smoke checks, and automatically rolls back to the previous release if validation fails. Runtime data is restored from the snapshot only if code rollback alone does not recover production. Successful deploy state is recorded under `/var/lib/job-hunter/deployments`; deployment snapshots are stored under `/var/lib/job-hunter/backups`, retaining the newest five by default.
+
+`deploy-jobhunter-release vX.Y.Z` remains the low-level exact-tag deploy primitive used by the production command.
 
 For AWS smoke tests or debugging without cutting a release, use the separate non-production helper:
 
@@ -997,35 +1001,6 @@ deploy-jobhunter-latest <branch-or-sha>
 ```
 
 Use `deploy-jobhunter-latest` only for staging/test/debug work. With no argument it deploys the latest commit from `main`. Do not treat it as the normal production deploy path, and do not reuse old production tags to move newer code.
-
-### Temporary AWS rollback to an exact commit
-
-When AWS needs to be moved temporarily to an older known-good revision for diagnosis, do **not** rewrite `main`, create a rollback branch, or revert local development. Use the existing exact-ref deploy path against AWS only.
-
-Before rollback:
-
-1. Record the currently deployed AWS commit with `git rev-parse HEAD` in `/home/ubuntu/job-hunter-agent`.
-2. Take a timestamped backup of `/var/lib/job-hunter/data` (at minimum `job_hunter.db`) before running an older revision against the persistent runtime data.
-3. Confirm the target commit is the intended known-good checkpoint.
-
-Then deploy the exact commit:
-
-```bash
-deploy-jobhunter-latest <exact-commit-sha>
-```
-
-The helper checks out a detached HEAD on AWS, leaves the developer's local `main` untouched, syncs dependencies, upgrades/seeds the existing runtime database, restarts the service, and performs its health check.
-
-After deployment, verify the service, login/workspace, and one real search path before considering the rollback usable. To return AWS to current development, deploy the previously recorded commit (or the desired current commit) through the same exact-ref path.
-
-Known diagnostic checkpoint: `18be8b6767800c58f93a7f8923e3338b80793a69` is the commit immediately before the JH-306 Job Market Map runtime cutover (`d7d933c39fa6b35892b762cec37b7d4e9d6c2223`). It is useful only as a historical pre-JMM checkpoint; verify it is still the intended target before future use.
-
-When using that specific pre-JMM checkpoint against a newer persistent AWS data volume, two compatibility repairs may be required before search works:
-
-- Set global Playwright runtime settings to `playwright_browser_mode="ephemeral"`, `headless=true`, and `seek_assisted_verification_enabled=false`. In that older revision, persistent browser mode forces SEEK to launch headed, which fails on AWS without an X display.
-- If LinkedIn/O*NET classification fails with `sqlite3.OperationalError: no such column: database_release`, drop only the disposable `occupation_title_cache` table and run `init_db()` so the old revision recreates that cache with the schema it expects. Do not drop user/profile/history tables.
-
-These are rollback compatibility actions, not normal production settings. Preserve a runtime backup before applying them.
 
 For a direct metadata diagnosis:
 

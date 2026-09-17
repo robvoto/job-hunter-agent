@@ -11,12 +11,14 @@ APP_DIR="${JOB_HUNTER_APP_DIR:-/home/ubuntu/job-hunter-agent}"
 sudo rm -f /usr/local/bin/deploy-jobhunter /usr/local/bin/deploy-jobhunter-ref /usr/local/bin/deploy-jobhunter-latest-code /usr/local/bin/jobhunter-deploy
 sudo install -m 0755 "$APP_DIR/scripts/ec2/deploy-jobhunter-release.sh" /usr/local/bin/deploy-jobhunter-release
 sudo install -m 0755 "$APP_DIR/scripts/ec2/deploy-jobhunter-latest.sh" /usr/local/bin/deploy-jobhunter-latest
+sudo install -m 0755 "$APP_DIR/scripts/ec2/deploy-jobhunter-production.sh" /usr/local/bin/deploy-jobhunter-production
+sudo install -m 0755 "$APP_DIR/scripts/ec2/smoke-jobhunter-production.sh" /usr/local/bin/smoke-jobhunter-production
 sudo install -m 0755 "$APP_DIR/scripts/ec2/jobhunter-status.sh" /usr/local/bin/jobhunter-status
 sudo install -m 0755 "$APP_DIR/scripts/ec2/jobhunter-logs.sh" /usr/local/bin/jobhunter-logs
 sudo install -m 0755 "$APP_DIR/sync-knowledge" /usr/local/bin/sync-knowledge
 
 # Strip UTF-8 BOM that Windows editors sometimes add.
-sudo sed -i '1s/^\xEF\xBB\xBF//' /usr/local/bin/deploy-jobhunter-release /usr/local/bin/deploy-jobhunter-latest /usr/local/bin/jobhunter-status /usr/local/bin/jobhunter-logs /usr/local/bin/sync-knowledge
+sudo sed -i '1s/^\xEF\xBB\xBF//' /usr/local/bin/deploy-jobhunter-release /usr/local/bin/deploy-jobhunter-latest /usr/local/bin/deploy-jobhunter-production /usr/local/bin/smoke-jobhunter-production /usr/local/bin/jobhunter-status /usr/local/bin/jobhunter-logs /usr/local/bin/sync-knowledge
 
 # Helper to drop into the ubuntu user's shell when needed.
 sudo tee /usr/local/bin/use-ubuntu >/dev/null <<'EOS'
@@ -26,4 +28,4 @@ exec sudo -iu ubuntu
 EOS
 sudo chmod 0755 /usr/local/bin/use-ubuntu
 
-echo "Helpers installed: deploy-jobhunter-release, deploy-jobhunter-latest, jobhunter-status, jobhunter-logs, sync-knowledge, use-ubuntu"
+echo "Helpers installed: deploy-jobhunter-production, deploy-jobhunter-release, deploy-jobhunter-latest, smoke-jobhunter-production, jobhunter-status, jobhunter-logs, sync-knowledge, use-ubuntu"

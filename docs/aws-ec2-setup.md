@@ -420,11 +420,11 @@ sudo bash scripts/ec2/install-helpers.sh
 deploy-jobhunter-release vX.Y.Z
 ```
 
-`install-helpers.sh` is only needed once to put `deploy-jobhunter-release` on PATH. After that, every future update is just:
+`install-helpers.sh` is only needed once to install the deployment helpers. After bootstrap, every production update is:
 
 ```bash
 use-ubuntu
-deploy-jobhunter-release vX.Y.Z
+deploy-jobhunter-production vX.Y.Z
 ```
 
 ---
@@ -675,10 +675,10 @@ AWS EC2 (deploy):
 
 ```bash
 use-ubuntu
-deploy-jobhunter-release vX.Y.Z
+deploy-jobhunter-production vX.Y.Z
 ```
 
-That's it. `deploy-jobhunter-release` fetches the requested release tag, checks out that exact tagged commit, verifies the tag matches `pyproject.toml`, syncs deps, updates service, seeds DB, restarts, rebuilds saved workspace output on startup, and health-checks.
+`deploy-jobhunter-production` snapshots runtime data, delegates the exact-tag deployment to `deploy-jobhunter-release`, runs production smoke checks, and automatically rolls back on failure.
 
 ---
 
@@ -897,14 +897,16 @@ Consider PostgreSQL/RDS only after the data model stabilizes
 
 ## Production deploy command
 
-Every deploy — first install or update — is the same single command:
+Production updates use the guarded release command:
 
 ```bash
 use-ubuntu
-deploy-jobhunter-release vX.Y.Z
+deploy-jobhunter-production vX.Y.Z
 ```
 
-`deploy-jobhunter-release` is safe to run repeatedly for the same explicit release tag. It:
+`deploy-jobhunter-production` snapshots runtime data, deploys the explicit release tag, runs production smoke checks, and automatically returns to the previous known-good release if validation fails. It restores the runtime snapshot only when code rollback alone cannot recover production.
+
+`deploy-jobhunter-release` is the low-level exact-tag deploy primitive used by the guarded production command. It:
 
 1. Removes known old server scripts
 2. Fetches the requested remote release tag and checks out the exact tagged commit
@@ -942,7 +944,7 @@ deploy-jobhunter-latest ef720a7
 
 Rules:
 
-1. Use `deploy-jobhunter-release vX.Y.Z` for production.
+1. Use `deploy-jobhunter-production vX.Y.Z` for production.
 2. Use `deploy-jobhunter-latest` or `deploy-jobhunter-latest <branch-or-sha>` only for staging, smoke tests, or debugging.
 3. Do not move or reuse an existing production tag to get newer code onto AWS.
 4. If a test ref proves good and should become production, cut a normal release tag and deploy that tag.
@@ -953,7 +955,7 @@ Before calling the environment ready for use, check these in order:
 
 1. Confirm `/var/lib/job-hunter` is mounted on the EBS data disk, not only the root volume.
 2. Confirm `/etc/job-hunter/job-hunter.env` exists, is not committed to git, and keeps the `640` permissions above.
-3. Run `deploy-jobhunter-release vX.Y.Z` or `sudo systemctl restart job-hunter` after code or env changes.
+3. Run `deploy-jobhunter-production vX.Y.Z` after a release change, or `sudo systemctl restart job-hunter` after an environment-only change.
 4. Verify service health with `sudo systemctl status job-hunter --no-pager`, `sudo journalctl -u job-hunter -n 80 --no-pager`, and `curl -I http://127.0.0.1:8765/start`.
 5. Confirm Nginx proxies the public host to `127.0.0.1:8765` and does not expose FastAPI directly.
 6. Confirm browser access uses HTTPS for `jobhunter.robvoto.com`.
@@ -1018,7 +1020,7 @@ config/global_settings.json
 defaults/user_settings.json
 ```
 
-If code imports a Python package, that package must be declared in `pyproject.toml`. Do not manually install packages on AWS as the permanent solution. Fix `pyproject.toml`, cut a release tag, then run `deploy-jobhunter-release vX.Y.Z`.
+If code imports a Python package, that package must be declared in `pyproject.toml`. Do not manually install packages on AWS as the permanent solution. Fix `pyproject.toml`, cut a release tag, then run `deploy-jobhunter-production vX.Y.Z`.
 
 ## Version-controlled EC2 helper scripts
 
@@ -1051,6 +1053,8 @@ Installed commands:
 ```text
 /usr/local/bin/deploy-jobhunter-release
 /usr/local/bin/deploy-jobhunter-latest
+/usr/local/bin/deploy-jobhunter-production
+/usr/local/bin/smoke-jobhunter-production
 /usr/local/bin/jobhunter-status
 /usr/local/bin/use-ubuntu
 ```
@@ -1059,7 +1063,7 @@ After installing helpers, normal deployment remains:
 
 ```bash
 use-ubuntu
-deploy-jobhunter-release vX.Y.Z
+deploy-jobhunter-production vX.Y.Z
 ```
 
 `deploy-jobhunter-release` intentionally waits briefly after restart before checking health because `systemctl` can report `active` before Python has finished importing and binding to port `8765`.
@@ -1267,5 +1271,5 @@ Do not manually copy `locations_au.json` as the permanent fix. Fix repo seed/dep
 ```bash
 cd /home/ubuntu/job-hunter-agent
 sudo bash scripts/ec2/install-helpers.sh
-deploy-jobhunter-release vX.Y.Z
+deploy-jobhunter-production vX.Y.Z
 ```

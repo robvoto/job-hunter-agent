@@ -18,6 +18,9 @@ RELEASE_SCRIPT = REPO_ROOT / "scripts" / "release-jobhunter.sh"
 ROOT_RELEASE_WRAPPER = REPO_ROOT / "release"
 DEPLOY_RELEASE_SCRIPT = REPO_ROOT / "scripts" / "ec2" / "deploy-jobhunter-release.sh"
 DEPLOY_LATEST_SCRIPT = REPO_ROOT / "scripts" / "ec2" / "deploy-jobhunter-latest.sh"
+DEPLOY_PRODUCTION_SCRIPT = REPO_ROOT / "scripts" / "ec2" / "deploy-jobhunter-production.sh"
+PRODUCTION_SMOKE_SCRIPT = REPO_ROOT / "scripts" / "ec2" / "smoke-jobhunter-production.sh"
+INSTALL_HELPERS_SCRIPT = REPO_ROOT / "scripts" / "ec2" / "install-helpers.sh"
 RELEASE_SKILL = REPO_ROOT / ".agents/skills" / "release-management" / "SKILL.md"
 
 
@@ -683,6 +686,38 @@ def test_release_command_owns_bump_tests_tag_and_atomic_push():
     assert "git fetch --prune origin" in latest_script
     assert "python3 scripts/check-release-integrity.py" in latest_script
     assert "--expected-version" not in latest_script
+
+
+def test_production_deploy_is_snapshot_test_and_rollback_guarded():
+    script = DEPLOY_PRODUCTION_SCRIPT.read_text(encoding="utf-8")
+    smoke = PRODUCTION_SMOKE_SCRIPT.read_text(encoding="utf-8")
+    helpers = INSTALL_HELPERS_SCRIPT.read_text(encoding="utf-8")
+
+    assert 'RELEASE_TAG_PATTERN=' in script
+    assert 'pre-deploy-$timestamp-$current_release' in script
+    assert 'tar -C "$(dirname "$DATA_DIR")" -czf "$backup_dir/data.tar.gz"' in script
+    assert '/usr/local/bin/deploy-jobhunter-release "$TARGET_RELEASE"' in script
+    assert '/usr/local/bin/smoke-jobhunter-production' in script
+    assert 'rollback_code_only' in script
+    assert 'restore_snapshot_and_rollback' in script
+    assert 'current-release' in script
+    assert 'previous-release' in script
+    assert 'JOB_HUNTER_DEPLOY_BACKUP_KEEP:-5' in script
+
+    assert 'systemctl is-active --quiet "$SERVICE"' in smoke
+    assert 'load_global_settings()' in smoke
+    assert 'load_ui_labels()' in smoke
+    assert 'load_global_settings_labels()' in smoke
+    assert 'JOB_HUNTER_BASE_URL' in smoke
+
+    assert 'deploy-jobhunter-production.sh' in helpers
+    assert 'smoke-jobhunter-production.sh' in helpers
+
+
+def test_production_deploy_scripts_have_valid_shell_syntax():
+    for script in (DEPLOY_PRODUCTION_SCRIPT, PRODUCTION_SMOKE_SCRIPT):
+        result = _run(["bash", "-n", str(script)], cwd=REPO_ROOT, check=False)
+        assert result.returncode == 0, result.stderr
 
 def test_pytest_unit_discovery_is_scoped_to_repo_tests():
     pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
