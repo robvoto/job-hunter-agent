@@ -397,9 +397,9 @@ def test_market_source_searches_selected_scope_and_requests_current_jd(monkeypat
     assert all(call["geography_codes"] == ["NSW"] for call in search_calls)
     assert all(call["posted_after"] == "2026-09-08T12:00:00+00:00" for call in search_calls)
     assert jd_calls == [1, 2]
-    # Each completed page persists title-stage and fit-stage cache state;
-    # interrupted work never reaches the checkpoint without these saves.
-    assert len(saved_caches) == 4
+    # JMM pages are prefetched into one bounded result set before analysis, so
+    # title-stage and fit-stage cache state are each persisted once for the batch.
+    assert len(saved_caches) == 2
     assert [row["job_key"] for row in audit] == ["seek:1", "seek:2"]
     assert len(kept) == 2
     assert all("full_description" not in record for record in kept)
@@ -408,15 +408,53 @@ def test_market_source_searches_selected_scope_and_requests_current_jd(monkeypat
     assert final_progress_detail["source"] == "job_market_map"
     assert progress_states[0]["headline"] == "Finding matching jobs"
     assert any(state["headline"] == "Checking job titles — 1 of 2" for state in progress_states)
-    assert any(state["headline"] == "Getting job descriptions — 1 of 1" for state in progress_states)
-    assert any(state["headline"] == "Reviewing job fit — 1 of 1" for state in progress_states)
+    assert any(state["headline"] == "Getting job descriptions — 1 of 2" for state in progress_states)
+    assert any(state["headline"] == "Reviewing job fit — 1 of 2" for state in progress_states)
     assert any(
-        state["headline"] == "Finalising results — 1 of 1"
+        state["headline"] == "Finalising results — 1 of 2"
         and state["detail"] == "Business Analyst 1"
         for state in progress_states
     )
     assert all("JMM" not in state["headline"] for state in progress_states)
     assert progress_states[-1]["headline"] == "Search review complete"
+
+
+def test_market_source_tolerates_live_total_changes_after_snapshot_boundary_is_fixed(monkeypatch):
+    pages = iter(
+        [
+            _feed_page(
+                items=[_item(1)],
+                next_cursor=1,
+                has_more=True,
+                snapshot_max_id=2,
+                total=2,
+            ),
+            _feed_page(
+                items=[_item(2)],
+                next_cursor=2,
+                has_more=False,
+                snapshot_max_id=2,
+                total=1,
+            ),
+        ]
+    )
+    calls = []
+
+    class FakeClient:
+        @classmethod
+        def from_environment(cls):
+            return cls()
+
+        def search_page(self, **kwargs):
+            calls.append((kwargs["after_id"], kwargs["through_id"]))
+            return next(pages)
+
+    monkeypatch.setattr(market_map_source, "JobMarketMapClient", FakeClient)
+    client = FakeClient()
+    items = market_map_source._load_filtered_market_items(_market_context(), client)
+
+    assert [int(item["id"]) for item in items] == [1, 2]
+    assert calls == [(0, None), (1, 2)]
 
 
 def test_market_source_processes_more_than_100_jobs_across_fixed_snapshot_pages(monkeypatch):

@@ -583,7 +583,6 @@ def _iter_filtered_market_pages(context, client: JobMarketMapClient):
             continue
         cursor = 0
         snapshot_max_id: int | None = None
-        search_total: int | None = None
         posted_after = _posted_after_for_source(context, source)
         while True:
             page = client.search_page(
@@ -608,12 +607,9 @@ def _iter_filtered_market_pages(context, client: JobMarketMapClient):
             page_total = page.get("total")
             if not isinstance(page_total, int) or page_total < 0:
                 raise JobMarketMapContractError("Job Market Map search total is required")
-            if search_total is None:
-                search_total = page_total
-            elif page_total != search_total:
-                raise JobMarketMapContractError(
-                    "Job Market Map search total changed during the run"
-                )
+            # JMM is a live market service: terminal removals/dedupe can legitimately
+            # change the reported count while we page inside a fixed high-water mark.
+            # snapshot_max_id is the paging boundary; total is informational only.
             yield page
             if not page["has_more"]:
                 break
@@ -621,6 +617,20 @@ def _iter_filtered_market_pages(context, client: JobMarketMapClient):
             if next_cursor == cursor:
                 raise ValueError("Job Market Map search cursor did not advance")
             cursor = next_cursor
+
+
+def _load_filtered_market_items(context, client: JobMarketMapClient) -> list[dict]:
+    """Load the complete bounded JMM result set before expensive JH analysis."""
+    items: list[dict] = []
+    seen_ids: set[int] = set()
+    for page in _iter_filtered_market_pages(context, client):
+        for item in page["items"]:
+            item_id = int(item["id"])
+            if item_id in seen_ids:
+                continue
+            seen_ids.add(item_id)
+            items.append(item)
+    return items
 
 
 def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
@@ -649,307 +659,307 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
     kept_records: list[dict] = []
     skill_observations: list[dict] = []
     worker_limit = get_job_market_map_parallel_workers()
-    page_number = 0
     analysed_count = 0
-    seen_market_map_ids: set[int] = set()
-    last_search_total: int | None = None
-    for page in _iter_filtered_market_pages(context, client):
-        page_number += 1
-        search_total = int(page["total"])
-        last_search_total = search_total
+    _set_market_map_progress(
+        "Loading matching jobs",
+        stage="source_collection",
+        headline="Loading matching jobs",
+        detail="Loading the bounded Job Market Map result set",
+        current=0,
+        total=None,
+        determinate=False,
+    )
+    page_items = _load_filtered_market_items(context, client)
+    search_total = len(page_items)
+    _set_market_map_progress(
+        "Loading matching jobs",
+        stage="source_collection",
+        headline="Loading matching jobs",
+        detail=f"{search_total} matching jobs loaded",
+        current=0,
+        total=search_total,
+        determinate=True,
+    )
+    page_item_total = len(page_items)
+    page_jobs: list[_IndexedJob] = []
+    for item_index, item in enumerate(page_items):
+        title = str(item.get("title") or "").strip()
+        progress_current = analysed_count + item_index + 1
+        progress_headline = f"Checking job titles — {progress_current} of {search_total}"
         _set_market_map_progress(
-            "Loading matching jobs",
-            stage="source_collection",
-            headline="Loading matching jobs",
-            detail=f"Page {page_number}; preparing results",
-            current=analysed_count,
+            progress_headline,
+            stage="relevance_analysis",
+            headline=progress_headline,
+            detail=title,
+            current=progress_current,
             total=search_total,
             determinate=True,
         )
-        page_items = [
-            item for item in page["items"] if int(item["id"]) not in seen_market_map_ids
-        ]
-        seen_market_map_ids.update(int(item["id"]) for item in page_items)
-        page_item_total = len(page_items)
-        page_jobs: list[_IndexedJob] = []
-        for item_index, item in enumerate(page_items):
-            title = str(item.get("title") or "").strip()
-            progress_current = analysed_count + item_index + 1
-            progress_headline = f"Checking job titles — {progress_current} of {search_total}"
-            _set_market_map_progress(
-                progress_headline,
-                stage="relevance_analysis",
-                headline=progress_headline,
-                detail=title,
-                current=progress_current,
-                total=search_total,
-                determinate=True,
+        record = normalize_market_job(item, run_iso=context.run_iso)
+        page_jobs.append(
+            _IndexedJob(
+                index=item_index,
+                record=record,
+                title_assessment=prepare_title_gate_assessment(title, review_context.profile),
             )
-            record = normalize_market_job(item, run_iso=context.run_iso)
-            page_jobs.append(
-                _IndexedJob(
-                    index=item_index,
-                    record=record,
-                    title_assessment=prepare_title_gate_assessment(title, review_context.profile),
-                )
-            )
-
-        jobs_by_index = {job.index: job for job in page_jobs}
-        title_jobs: list[_IndexedJob] = []
-        title_jobs_by_cache_key: dict[str, _IndexedJob] = {}
-        for job in page_jobs:
-            assessment = job.title_assessment
-            if (
-                bool(assessment.title_analysis.get("ok"))
-                or str(assessment.title_analysis.get("reason") or "") != "TITLE_NOT_TARGET"
-                or assessment.onet is None
-                or (
-                    assessment.onet.result == RESULT_FAR
-                    and not bool(review_context.profile.get(KEY_EXPLORE_ADJACENT_ROLES, False))
-                )
-            ):
-                continue
-            cache_key = assessment.title_judgment_cache_key
-            if cache_key is None:
-                raise ValueError("JMM title assessment did not provide its cache key")
-            if cache_key not in title_jobs_by_cache_key:
-                title_jobs_by_cache_key[cache_key] = job
-                title_jobs.append(job)
-        if title_jobs:
-            _set_market_map_progress(
-                f"Resolving title matches — 0 of {len(title_jobs)}",
-                stage="relevance_analysis",
-                headline=f"Resolving title matches — 0 of {len(title_jobs)}",
-                detail="Checking uncertain job titles against your target roles",
-                current=0,
-                total=len(title_jobs),
-                determinate=True,
-            )
-        title_results, stopped = _run_parallel_stage(
-            title_jobs,
-            worker_limit=worker_limit,
-            worker=lambda job: _run_title_worker(
-                job,
-                profile=review_context.profile,
-                llm_cache=review_context.llm_cache,
-            ),
-            on_failure=lambda: _release_unfinalized_identity_claims(page_jobs),
-            on_progress=lambda index, completed, total, error: _set_market_map_progress(
-                f"Resolving title matches — {completed} of {total}",
-                stage="relevance_analysis",
-                headline=f"Resolving title matches — {completed} of {total}",
-                detail=str(jobs_by_index[index].record.get("title") or ""),
-                current=completed,
-                total=total,
-                determinate=True,
-            ),
         )
-        if stopped:
-            _merge_completed_title_cache(review_context, title_results)
-            save_llm_cache(review_context.llm_cache)
-            _release_unfinalized_identity_claims(page_jobs)
-            return kept_records, review_context.audit_rows, skill_observations
-        if run_stop_requested():
-            _merge_completed_title_cache(review_context, title_results)
-            save_llm_cache(review_context.llm_cache)
-            _release_unfinalized_identity_claims(page_jobs)
-            return kept_records, review_context.audit_rows, skill_observations
 
-        title_results_by_cache_key: dict[str, TitleJudgmentResult] = {}
-        for job in title_jobs:
-            if job.index not in title_results:
-                continue
-            cache_key = job.title_assessment.title_judgment_cache_key
-            if cache_key is None:
-                raise ValueError("JMM title result did not have a cache key")
-            title_results_by_cache_key[cache_key] = title_results[job.index][1]
-        for job in page_jobs:
-            cache_key = job.title_assessment.title_judgment_cache_key
-            if cache_key is None or cache_key not in title_results_by_cache_key:
-                continue
-            title_result = _thaw_title_judgment_result(title_results_by_cache_key[cache_key])
-            if title_result.cache_value is not None:
-                review_context.llm_cache[title_result.cache_key] = _thaw(title_result.cache_value)
-            jobs_by_index[job.index] = replace(
-                job,
-                title_assessment=replace(job.title_assessment, title_judgment=title_result),
+    jobs_by_index = {job.index: job for job in page_jobs}
+    title_jobs: list[_IndexedJob] = []
+    title_jobs_by_cache_key: dict[str, _IndexedJob] = {}
+    for job in page_jobs:
+        assessment = job.title_assessment
+        if (
+            bool(assessment.title_analysis.get("ok"))
+            or str(assessment.title_analysis.get("reason") or "") != "TITLE_NOT_TARGET"
+            or assessment.onet is None
+            or (
+                assessment.onet.result == RESULT_FAR
+                and not bool(review_context.profile.get(KEY_EXPLORE_ADJACENT_ROLES, False))
             )
-        # Persist completed title judgements before detail/fit work. A server
-        # stop later in this page must not discard valid cache entries, while
-        # job results remain uncommitted until the page
-        # is finalized.
+        ):
+            continue
+        cache_key = assessment.title_judgment_cache_key
+        if cache_key is None:
+            raise ValueError("JMM title assessment did not provide its cache key")
+        if cache_key not in title_jobs_by_cache_key:
+            title_jobs_by_cache_key[cache_key] = job
+            title_jobs.append(job)
+    if title_jobs:
+        _set_market_map_progress(
+            f"Resolving title matches — 0 of {len(title_jobs)}",
+            stage="relevance_analysis",
+            headline=f"Resolving title matches — 0 of {len(title_jobs)}",
+            detail="Checking uncertain job titles against your target roles",
+            current=0,
+            total=len(title_jobs),
+            determinate=True,
+        )
+    title_results, stopped = _run_parallel_stage(
+        title_jobs,
+        worker_limit=worker_limit,
+        worker=lambda job: _run_title_worker(
+            job,
+            profile=review_context.profile,
+            llm_cache=review_context.llm_cache,
+        ),
+        on_failure=lambda: _release_unfinalized_identity_claims(page_jobs),
+        on_progress=lambda index, completed, total, error: _set_market_map_progress(
+            f"Resolving title matches — {completed} of {total}",
+            stage="relevance_analysis",
+            headline=f"Resolving title matches — {completed} of {total}",
+            detail=str(jobs_by_index[index].record.get("title") or ""),
+            current=completed,
+            total=total,
+            determinate=True,
+        ),
+    )
+    if stopped:
+        _merge_completed_title_cache(review_context, title_results)
         save_llm_cache(review_context.llm_cache)
-        page_jobs = [jobs_by_index[index] for index in range(page_item_total)]
-
-        eligible_jobs: list[_IndexedJob] = []
-        for job in page_jobs:
-            if run_stop_requested():
-                _release_unfinalized_identity_claims(page_jobs)
-                return kept_records, review_context.audit_rows, skill_observations
-            job_key = str(job.record.get(RECORD_JOB_KEY) or "")
-            review_context.title_assessments.setdefault(job_key, []).append(job.title_assessment)
-            try:
-                pre_outcome, _, _, should_fetch_details = review_pre_detail_normalized_job(
-                    job.record, review_context
-                )
-            except Exception:
-                _release_unfinalized_identity_claims(page_jobs)
-                raise
-            if pre_outcome["decision"] == "KEEP" and should_fetch_details:
-                eligible_jobs.append(job)
-
-        if eligible_jobs:
-            _set_market_map_progress(
-                f"Getting job descriptions — 0 of {len(eligible_jobs)}",
-                stage="job_detail",
-                headline=f"Getting job descriptions — 0 of {len(eligible_jobs)}",
-                detail="Reading full descriptions for jobs that passed the title checks",
-                current=0,
-                total=len(eligible_jobs),
-                determinate=True,
-            )
-        jd_results, stopped, jd_failures = _run_parallel_stage(
-            eligible_jobs,
-            worker_limit=worker_limit,
-            worker=lambda job: _run_jd_worker(job, client=client),
-            on_failure=lambda: _release_unfinalized_identity_claims(page_jobs),
-            on_progress=lambda index, completed, total, error: _set_market_map_progress(
-                f"Getting job descriptions — {completed} of {total}",
-                stage="job_detail",
-                headline=f"Getting job descriptions — {completed} of {total}",
-                detail=str(jobs_by_index[index].record.get("title") or ""),
-                current=completed,
-                total=total,
-                determinate=True,
-            ),
-            collect_failures=True,
-        )
-        if stopped:
-            _release_unfinalized_identity_claims(page_jobs)
-            return kept_records, review_context.audit_rows, skill_observations
-        if run_stop_requested():
-            _release_unfinalized_identity_claims(page_jobs)
-            return kept_records, review_context.audit_rows, skill_observations
-
-        for index in sorted(jd_results):
-            job = jobs_by_index[index]
-            _apply_jd_payload(job.record, _thaw(jd_results[index].payload))
-
-        fit_base_cache = copy.deepcopy(review_context.llm_cache)
-        fit_jobs = [job for job in eligible_jobs if job.index in jd_results]
-        if fit_jobs:
-            _set_market_map_progress(
-                f"Reviewing job fit — 0 of {len(fit_jobs)}",
-                stage="scoring",
-                headline=f"Reviewing job fit — 0 of {len(fit_jobs)}",
-                detail="Comparing job requirements with your profile",
-                current=0,
-                total=len(fit_jobs),
-                determinate=True,
-            )
-        fit_results, stopped = _run_parallel_stage(
-            fit_jobs,
-            worker_limit=worker_limit,
-            worker=lambda job: _run_fit_worker(
-                job,
-                context=context,
-                llm_cache=fit_base_cache,
-            ),
-            on_failure=lambda: _release_unfinalized_identity_claims(page_jobs),
-            on_progress=lambda index, completed, total, error: _set_market_map_progress(
-                f"Reviewing job fit — {completed} of {total}",
-                stage="scoring",
-                headline=f"Reviewing job fit — {completed} of {total}",
-                detail=str(jobs_by_index[index].record.get("title") or ""),
-                current=completed,
-                total=total,
-                determinate=True,
-            ),
-        )
-        if stopped:
-            _merge_completed_fit_cache(review_context, fit_results)
-            save_llm_cache(review_context.llm_cache)
-            _release_unfinalized_identity_claims(page_jobs)
-            return kept_records, review_context.audit_rows, skill_observations
-        if run_stop_requested():
-            _merge_completed_fit_cache(review_context, fit_results)
-            save_llm_cache(review_context.llm_cache)
-            _release_unfinalized_identity_claims(page_jobs)
-            return kept_records, review_context.audit_rows, skill_observations
-
-        retryable_jd_failures = {
-            index: error
-            for index, error in jd_failures.items()
-            if not isinstance(error, JobMarketMapJDUnavailable)
-        }
-        result_indexes = sorted(set(fit_results) | set(jd_failures))
-        for completed_results, index in enumerate(result_indexes, start=1):
-            if run_stop_requested():
-                _release_unfinalized_identity_claims(page_jobs)
-                return kept_records, review_context.audit_rows, skill_observations
-            job = jobs_by_index[index]
-            if index in jd_failures:
-                error = jd_failures[index]
-                if isinstance(error, JobMarketMapJDUnavailable):
-                    _append_terminal_jd_unavailable(review_context, job, error)
-                else:
-                    _append_retryable_jd_failure(review_context, job, error)
-                continue
-            result = fit_results[index]
-            _set_market_map_progress(
-                f"Finalising results — {completed_results} of {len(result_indexes)}",
-                stage="finalising",
-                headline=f"Finalising results — {completed_results} of {len(result_indexes)}",
-                detail=str(job.record.get("title") or ""),
-                current=completed_results,
-                total=len(result_indexes),
-                determinate=True,
-            )
-            claim = job.record.get(RUN_IDENTITY_CLAIM_KEY)
-            merged_record = _thaw(result.record)
-            job.record.clear()
-            job.record.update(merged_record)
-            if claim is not None:
-                job.record[RUN_IDENTITY_CLAIM_KEY] = claim
-            review_context.llm_cache.update(_thaw(result.cache_updates))
-            pending_signals = _thaw(result.pending_learning_signals)
-            if pending_signals:
-                register_pending_learning_signals(pending_signals)
-            finalize_record(
-                review_context.job_history,
-                review_context.audit_rows,
-                job.record,
-                review_context.run_iso,
-                persist_full_description=False,
-                update_history=False,
-            )
-            outcome = _thaw(result.outcome)
-            if outcome["decision"] == "KEEP":
-                kept_records.append(remove_transient_jd(job.record))
-                skill_observations.extend(_thaw(result.observations))
-
-        # Fit workers return immutable cache deltas; save only after the
-        # coordinator merges them in deterministic input order.
+        _release_unfinalized_identity_claims(page_jobs)
+        return kept_records, review_context.audit_rows, skill_observations
+    if run_stop_requested():
+        _merge_completed_title_cache(review_context, title_results)
         save_llm_cache(review_context.llm_cache)
+        _release_unfinalized_identity_claims(page_jobs)
+        return kept_records, review_context.audit_rows, skill_observations
 
+    title_results_by_cache_key: dict[str, TitleJudgmentResult] = {}
+    for job in title_jobs:
+        if job.index not in title_results:
+            continue
+        cache_key = job.title_assessment.title_judgment_cache_key
+        if cache_key is None:
+            raise ValueError("JMM title result did not have a cache key")
+        title_results_by_cache_key[cache_key] = title_results[job.index][1]
+    for job in page_jobs:
+        cache_key = job.title_assessment.title_judgment_cache_key
+        if cache_key is None or cache_key not in title_results_by_cache_key:
+            continue
+        title_result = _thaw_title_judgment_result(title_results_by_cache_key[cache_key])
+        if title_result.cache_value is not None:
+            review_context.llm_cache[title_result.cache_key] = _thaw(title_result.cache_value)
+        jobs_by_index[job.index] = replace(
+            job,
+            title_assessment=replace(job.title_assessment, title_judgment=title_result),
+        )
+    # Persist completed title judgements before detail/fit work. A server
+    # stop later in this page must not discard valid cache entries, while
+    # job results remain uncommitted until the page
+    # is finalized.
+    save_llm_cache(review_context.llm_cache)
+    page_jobs = [jobs_by_index[index] for index in range(page_item_total)]
+
+    eligible_jobs: list[_IndexedJob] = []
+    for job in page_jobs:
         if run_stop_requested():
+            _release_unfinalized_identity_claims(page_jobs)
             return kept_records, review_context.audit_rows, skill_observations
-        if retryable_jd_failures:
-            raise PartialSourceResultsError(
-                SOURCE_JOB_MARKET_MAP,
-                kept_records=kept_records,
-                audit_rows=review_context.audit_rows,
-                skill_observations=skill_observations,
-                original_error=retryable_jd_failures[min(retryable_jd_failures)],
+        job_key = str(job.record.get(RECORD_JOB_KEY) or "")
+        review_context.title_assessments.setdefault(job_key, []).append(job.title_assessment)
+        try:
+            pre_outcome, _, _, should_fetch_details = review_pre_detail_normalized_job(
+                job.record, review_context
             )
-        analysed_count += page_item_total
+        except Exception:
+            _release_unfinalized_identity_claims(page_jobs)
+            raise
+        if pre_outcome["decision"] == "KEEP" and should_fetch_details:
+            eligible_jobs.append(job)
+
+    if eligible_jobs:
+        _set_market_map_progress(
+            f"Getting job descriptions — 0 of {len(eligible_jobs)}",
+            stage="job_detail",
+            headline=f"Getting job descriptions — 0 of {len(eligible_jobs)}",
+            detail="Reading full descriptions for jobs that passed the title checks",
+            current=0,
+            total=len(eligible_jobs),
+            determinate=True,
+        )
+    jd_results, stopped, jd_failures = _run_parallel_stage(
+        eligible_jobs,
+        worker_limit=worker_limit,
+        worker=lambda job: _run_jd_worker(job, client=client),
+        on_failure=lambda: _release_unfinalized_identity_claims(page_jobs),
+        on_progress=lambda index, completed, total, error: _set_market_map_progress(
+            f"Getting job descriptions — {completed} of {total}",
+            stage="job_detail",
+            headline=f"Getting job descriptions — {completed} of {total}",
+            detail=str(jobs_by_index[index].record.get("title") or ""),
+            current=completed,
+            total=total,
+            determinate=True,
+        ),
+        collect_failures=True,
+    )
+    if stopped:
+        _release_unfinalized_identity_claims(page_jobs)
+        return kept_records, review_context.audit_rows, skill_observations
+    if run_stop_requested():
+        _release_unfinalized_identity_claims(page_jobs)
+        return kept_records, review_context.audit_rows, skill_observations
+
+    for index in sorted(jd_results):
+        job = jobs_by_index[index]
+        _apply_jd_payload(job.record, _thaw(jd_results[index].payload))
+
+    fit_base_cache = copy.deepcopy(review_context.llm_cache)
+    fit_jobs = [job for job in eligible_jobs if job.index in jd_results]
+    if fit_jobs:
+        _set_market_map_progress(
+            f"Reviewing job fit — 0 of {len(fit_jobs)}",
+            stage="scoring",
+            headline=f"Reviewing job fit — 0 of {len(fit_jobs)}",
+            detail="Comparing job requirements with your profile",
+            current=0,
+            total=len(fit_jobs),
+            determinate=True,
+        )
+    fit_results, stopped = _run_parallel_stage(
+        fit_jobs,
+        worker_limit=worker_limit,
+        worker=lambda job: _run_fit_worker(
+            job,
+            context=context,
+            llm_cache=fit_base_cache,
+        ),
+        on_failure=lambda: _release_unfinalized_identity_claims(page_jobs),
+        on_progress=lambda index, completed, total, error: _set_market_map_progress(
+            f"Reviewing job fit — {completed} of {total}",
+            stage="scoring",
+            headline=f"Reviewing job fit — {completed} of {total}",
+            detail=str(jobs_by_index[index].record.get("title") or ""),
+            current=completed,
+            total=total,
+            determinate=True,
+        ),
+    )
+    if stopped:
+        _merge_completed_fit_cache(review_context, fit_results)
+        save_llm_cache(review_context.llm_cache)
+        _release_unfinalized_identity_claims(page_jobs)
+        return kept_records, review_context.audit_rows, skill_observations
+    if run_stop_requested():
+        _merge_completed_fit_cache(review_context, fit_results)
+        save_llm_cache(review_context.llm_cache)
+        _release_unfinalized_identity_claims(page_jobs)
+        return kept_records, review_context.audit_rows, skill_observations
+
+    retryable_jd_failures = {
+        index: error
+        for index, error in jd_failures.items()
+        if not isinstance(error, JobMarketMapJDUnavailable)
+    }
+    result_indexes = sorted(set(fit_results) | set(jd_failures))
+    for completed_results, index in enumerate(result_indexes, start=1):
+        if run_stop_requested():
+            _release_unfinalized_identity_claims(page_jobs)
+            return kept_records, review_context.audit_rows, skill_observations
+        job = jobs_by_index[index]
+        if index in jd_failures:
+            error = jd_failures[index]
+            if isinstance(error, JobMarketMapJDUnavailable):
+                _append_terminal_jd_unavailable(review_context, job, error)
+            else:
+                _append_retryable_jd_failure(review_context, job, error)
+            continue
+        result = fit_results[index]
+        _set_market_map_progress(
+            f"Finalising results — {completed_results} of {len(result_indexes)}",
+            stage="finalising",
+            headline=f"Finalising results — {completed_results} of {len(result_indexes)}",
+            detail=str(job.record.get("title") or ""),
+            current=completed_results,
+            total=len(result_indexes),
+            determinate=True,
+        )
+        claim = job.record.get(RUN_IDENTITY_CLAIM_KEY)
+        merged_record = _thaw(result.record)
+        job.record.clear()
+        job.record.update(merged_record)
+        if claim is not None:
+            job.record[RUN_IDENTITY_CLAIM_KEY] = claim
+        review_context.llm_cache.update(_thaw(result.cache_updates))
+        pending_signals = _thaw(result.pending_learning_signals)
+        if pending_signals:
+            register_pending_learning_signals(pending_signals)
+        finalize_record(
+            review_context.job_history,
+            review_context.audit_rows,
+            job.record,
+            review_context.run_iso,
+            persist_full_description=False,
+            update_history=False,
+        )
+        outcome = _thaw(result.outcome)
+        if outcome["decision"] == "KEEP":
+            kept_records.append(remove_transient_jd(job.record))
+            skill_observations.extend(_thaw(result.observations))
+
+    # Fit workers return immutable cache deltas; save only after the
+    # coordinator merges them in deterministic input order.
+    save_llm_cache(review_context.llm_cache)
+
+    if run_stop_requested():
+        return kept_records, review_context.audit_rows, skill_observations
+    if retryable_jd_failures:
+        raise PartialSourceResultsError(
+            SOURCE_JOB_MARKET_MAP,
+            kept_records=kept_records,
+            audit_rows=review_context.audit_rows,
+            skill_observations=skill_observations,
+            original_error=retryable_jd_failures[min(retryable_jd_failures)],
+        )
+    analysed_count += page_item_total
     _set_market_map_progress(
         "Search review complete",
         stage="source_collection",
         headline="Search review complete",
         detail=f"{analysed_count:,} jobs analysed",
         current=analysed_count,
-        total=last_search_total,
-        determinate=last_search_total is not None,
+        total=search_total,
+        determinate=True,
     )
     return kept_records, review_context.audit_rows, skill_observations
