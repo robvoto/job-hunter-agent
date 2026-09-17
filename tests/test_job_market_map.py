@@ -407,14 +407,16 @@ def test_market_source_searches_selected_scope_and_requests_current_jd(monkeypat
     assert final_progress_detail == progress_states[-1]
     assert final_progress_detail["source"] == "job_market_map"
     assert progress_states[0]["headline"] == "Finding matching jobs"
-    assert any(state["headline"] == "Analysing jobs — 1 of 2" for state in progress_states)
-    assert all(
-        state["total"] == 2
+    assert any(state["headline"] == "Checking job titles — 1 of 2" for state in progress_states)
+    assert any(state["headline"] == "Getting job descriptions — 1 of 1" for state in progress_states)
+    assert any(state["headline"] == "Reviewing job fit — 1 of 1" for state in progress_states)
+    assert any(
+        state["headline"] == "Finalising results — 1 of 1"
+        and state["detail"] == "Business Analyst 1"
         for state in progress_states
-        if state["stage"] in {"source_collection", "relevance_analysis", "job_detail", "scoring", "finalising"}
-        and state["headline"] != "Finding matching jobs"
     )
-    assert progress_states[-1]["headline"] == "JMM source complete"
+    assert all("JMM" not in state["headline"] for state in progress_states)
+    assert progress_states[-1]["headline"] == "Search review complete"
 
 
 def test_market_source_processes_more_than_100_jobs_across_fixed_snapshot_pages(monkeypatch):

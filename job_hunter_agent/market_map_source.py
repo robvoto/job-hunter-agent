@@ -274,6 +274,7 @@ def _run_parallel_stage(
     worker_limit: int,
     worker: Any,
     on_failure: Any | None = None,
+    on_progress: Any | None = None,
     collect_failures: bool = False,
 ) -> tuple[dict[int, Any], bool] | tuple[dict[int, Any], bool, dict[int, Exception]]:
     """Run one bounded stage and cancel work that has not started on stop."""
@@ -307,10 +308,15 @@ def _run_parallel_stage(
             for future in done:
                 if future.cancelled():
                     continue
+                job_index = futures[future]
+                error: Exception | None = None
                 try:
-                    results[futures[future]] = future.result()
+                    results[job_index] = future.result()
                 except Exception as exc:
-                    errors[futures[future]] = exc
+                    errors[job_index] = exc
+                    error = exc
+                if on_progress is not None:
+                    on_progress(job_index, len(results) + len(errors), len(jobs), error)
             if stopped:
                 for future in pending:
                     future.cancel()
@@ -652,13 +658,10 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
         search_total = int(page["total"])
         last_search_total = search_total
         _set_market_map_progress(
-            "Reading JMM jobs",
+            "Loading matching jobs",
             stage="source_collection",
-            headline="Reading JMM jobs",
-            detail=(
-                f"Page {page_number}; {analysed_count:,} jobs analysed; "
-                f"{worker_limit} parallel workers"
-            ),
+            headline="Loading matching jobs",
+            detail=f"Page {page_number}; preparing results",
             current=analysed_count,
             total=search_total,
             determinate=True,
@@ -672,7 +675,7 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
         for item_index, item in enumerate(page_items):
             title = str(item.get("title") or "").strip()
             progress_current = analysed_count + item_index + 1
-            progress_headline = f"Analysing jobs — {progress_current} of {search_total}"
+            progress_headline = f"Checking job titles — {progress_current} of {search_total}"
             _set_market_map_progress(
                 progress_headline,
                 stage="relevance_analysis",
@@ -691,6 +694,7 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
                 )
             )
 
+        jobs_by_index = {job.index: job for job in page_jobs}
         title_jobs: list[_IndexedJob] = []
         title_jobs_by_cache_key: dict[str, _IndexedJob] = {}
         for job in page_jobs:
@@ -711,6 +715,16 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
             if cache_key not in title_jobs_by_cache_key:
                 title_jobs_by_cache_key[cache_key] = job
                 title_jobs.append(job)
+        if title_jobs:
+            _set_market_map_progress(
+                f"Resolving title matches — 0 of {len(title_jobs)}",
+                stage="relevance_analysis",
+                headline=f"Resolving title matches — 0 of {len(title_jobs)}",
+                detail="Checking uncertain job titles against your target roles",
+                current=0,
+                total=len(title_jobs),
+                determinate=True,
+            )
         title_results, stopped = _run_parallel_stage(
             title_jobs,
             worker_limit=worker_limit,
@@ -720,6 +734,15 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
                 llm_cache=review_context.llm_cache,
             ),
             on_failure=lambda: _release_unfinalized_identity_claims(page_jobs),
+            on_progress=lambda index, completed, total, error: _set_market_map_progress(
+                f"Resolving title matches — {completed} of {total}",
+                stage="relevance_analysis",
+                headline=f"Resolving title matches — {completed} of {total}",
+                detail=str(jobs_by_index[index].record.get("title") or ""),
+                current=completed,
+                total=total,
+                determinate=True,
+            ),
         )
         if stopped:
             _merge_completed_title_cache(review_context, title_results)
@@ -732,7 +755,6 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
             _release_unfinalized_identity_claims(page_jobs)
             return kept_records, review_context.audit_rows, skill_observations
 
-        jobs_by_index = {job.index: job for job in page_jobs}
         title_results_by_cache_key: dict[str, TitleJudgmentResult] = {}
         for job in title_jobs:
             if job.index not in title_results:
@@ -778,12 +800,12 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
 
         if eligible_jobs:
             _set_market_map_progress(
-                "Obtaining job descriptions",
+                f"Getting job descriptions — 0 of {len(eligible_jobs)}",
                 stage="job_detail",
-                headline="Obtaining job descriptions",
-                detail=f"Page {page_number}; {analysed_count:,} jobs analysed",
-                current=analysed_count,
-                total=search_total,
+                headline=f"Getting job descriptions — 0 of {len(eligible_jobs)}",
+                detail="Reading full descriptions for jobs that passed the title checks",
+                current=0,
+                total=len(eligible_jobs),
                 determinate=True,
             )
         jd_results, stopped, jd_failures = _run_parallel_stage(
@@ -791,6 +813,15 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
             worker_limit=worker_limit,
             worker=lambda job: _run_jd_worker(job, client=client),
             on_failure=lambda: _release_unfinalized_identity_claims(page_jobs),
+            on_progress=lambda index, completed, total, error: _set_market_map_progress(
+                f"Getting job descriptions — {completed} of {total}",
+                stage="job_detail",
+                headline=f"Getting job descriptions — {completed} of {total}",
+                detail=str(jobs_by_index[index].record.get("title") or ""),
+                current=completed,
+                total=total,
+                determinate=True,
+            ),
             collect_failures=True,
         )
         if stopped:
@@ -802,28 +833,20 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
 
         for index in sorted(jd_results):
             job = jobs_by_index[index]
-            _set_market_map_progress(
-                f"Obtaining JD for job {index + 1} of page {page_number}",
-                stage="job_detail",
-                headline="Obtaining job description",
-                detail=str(job.record.get("title") or ""),
-                current=analysed_count + index + 1,
-                total=search_total,
-                determinate=True,
-            )
             _apply_jd_payload(job.record, _thaw(jd_results[index].payload))
 
-        _set_market_map_progress(
-            "Fit review",
-            stage="scoring",
-            headline="Fit review",
-            detail=f"Page {page_number}; {analysed_count:,} jobs analysed",
-            current=analysed_count,
-            total=search_total,
-            determinate=True,
-        )
         fit_base_cache = copy.deepcopy(review_context.llm_cache)
         fit_jobs = [job for job in eligible_jobs if job.index in jd_results]
+        if fit_jobs:
+            _set_market_map_progress(
+                f"Reviewing job fit — 0 of {len(fit_jobs)}",
+                stage="scoring",
+                headline=f"Reviewing job fit — 0 of {len(fit_jobs)}",
+                detail="Comparing job requirements with your profile",
+                current=0,
+                total=len(fit_jobs),
+                determinate=True,
+            )
         fit_results, stopped = _run_parallel_stage(
             fit_jobs,
             worker_limit=worker_limit,
@@ -833,6 +856,15 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
                 llm_cache=fit_base_cache,
             ),
             on_failure=lambda: _release_unfinalized_identity_claims(page_jobs),
+            on_progress=lambda index, completed, total, error: _set_market_map_progress(
+                f"Reviewing job fit — {completed} of {total}",
+                stage="scoring",
+                headline=f"Reviewing job fit — {completed} of {total}",
+                detail=str(jobs_by_index[index].record.get("title") or ""),
+                current=completed,
+                total=total,
+                determinate=True,
+            ),
         )
         if stopped:
             _merge_completed_fit_cache(review_context, fit_results)
@@ -845,36 +877,18 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
             _release_unfinalized_identity_claims(page_jobs)
             return kept_records, review_context.audit_rows, skill_observations
 
-        _set_market_map_progress(
-            "Finalising JMM results",
-            stage="finalising",
-            headline="Finalising JMM results",
-            detail=f"Page {page_number}; {analysed_count:,} jobs analysed",
-            current=analysed_count,
-            total=search_total,
-            determinate=True,
-        )
         retryable_jd_failures = {
             index: error
             for index, error in jd_failures.items()
             if not isinstance(error, JobMarketMapJDUnavailable)
         }
         result_indexes = sorted(set(fit_results) | set(jd_failures))
-        for index in result_indexes:
+        for completed_results, index in enumerate(result_indexes, start=1):
             if run_stop_requested():
                 _release_unfinalized_identity_claims(page_jobs)
                 return kept_records, review_context.audit_rows, skill_observations
             job = jobs_by_index[index]
             if index in jd_failures:
-                _set_market_map_progress(
-                    f"JD failed for job {index + 1} of page {page_number}",
-                    stage="job_detail",
-                    headline="Obtaining job description",
-                    detail=str(jd_failures[index]),
-                    current=analysed_count + index + 1,
-                    total=search_total,
-                    determinate=True,
-                )
                 error = jd_failures[index]
                 if isinstance(error, JobMarketMapJDUnavailable):
                     _append_terminal_jd_unavailable(review_context, job, error)
@@ -883,12 +897,12 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
                 continue
             result = fit_results[index]
             _set_market_map_progress(
-                f"Finalising job {index + 1} of page {page_number}",
+                f"Finalising results — {completed_results} of {len(result_indexes)}",
                 stage="finalising",
-                headline="Finalising JMM results",
+                headline=f"Finalising results — {completed_results} of {len(result_indexes)}",
                 detail=str(job.record.get("title") or ""),
-                current=analysed_count + index + 1,
-                total=search_total,
+                current=completed_results,
+                total=len(result_indexes),
                 determinate=True,
             )
             claim = job.record.get(RUN_IDENTITY_CLAIM_KEY)
@@ -930,9 +944,9 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
             )
         analysed_count += page_item_total
     _set_market_map_progress(
-        "JMM source complete",
+        "Search review complete",
         stage="source_collection",
-        headline="JMM source complete",
+        headline="Search review complete",
         detail=f"{analysed_count:,} jobs analysed",
         current=analysed_count,
         total=last_search_total,
