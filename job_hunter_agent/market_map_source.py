@@ -620,9 +620,9 @@ def _iter_filtered_market_pages(context, client: JobMarketMapClient):
 def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
     """Search JMM within JH's selected scope, then run the existing JH pipeline."""
     _set_market_map_progress(
-        "Searching JMM",
+        "Finding matching jobs",
         stage="starting",
-        headline="Searching JMM",
+        headline="Finding matching jobs",
     )
     client = JobMarketMapClient.from_environment()
     review_context = ReviewPipelineContext(
