@@ -897,6 +897,8 @@ Consider PostgreSQL/RDS only after the data model stabilizes
 
 ## Production deploy command
 
+Production deployment is an explicit operator action and is separate from normal development, commit, merge, push, and release work. Repository work continues against latest `main` regardless of which release AWS is currently running.
+
 Production updates use the guarded release command:
 
 ```bash

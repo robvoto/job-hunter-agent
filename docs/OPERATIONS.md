@@ -981,7 +981,9 @@ To run every gate without changing files, Git history, tags, or GitHub:
 ./scripts/release-jobhunter.sh patch --dry-run
 ```
 
-The release command validates version consistency, runs the full unit suite and non-LLM Playwright suite, commits the version update, creates an annotated tag, and atomically pushes `main` with the tag. After the release succeeds, connect to AWS and run `deploy-jobhunter-production vX.Y.Z`.
+The release command validates version consistency, runs the full unit suite and non-LLM Playwright suite, commits the version update, creates an annotated tag, and atomically pushes `main` with the tag.
+
+AWS deployment is separate from Git/release work and must be explicitly initiated by the operator. The version currently running on AWS does not constrain development or commits to latest `main`.
 
 Production AWS deploys use an explicit release tag through the guarded production deploy command:
 

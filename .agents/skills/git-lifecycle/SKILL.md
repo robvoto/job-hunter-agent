@@ -17,6 +17,8 @@ The human should not need to remember Git mechanics.
 - `approved`, `merge it`, `put it in main`, `ship it`, or equivalent approval referring to the current completed task authorizes integration to `main`.
 - If integration intent is unclear, ask one concise question before merging: `Work is ready on <branch> but is NOT in main. Merge to main now?`
 - A pull request is optional unless the repository explicitly requires one or the human explicitly asks for one. Do not create a PR merely because a branch was pushed.
+- Git work targets the latest repository state, not the version currently running on AWS. Commit, integrate, and push approved work to `main` normally even when production is intentionally on an older release.
+- Never treat commit, merge, push, or release approval as permission to deploy AWS. Production deployment requires an explicit AWS instruction from the human.
 
 ## Before editing
 
