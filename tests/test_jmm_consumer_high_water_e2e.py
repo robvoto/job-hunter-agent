@@ -53,6 +53,19 @@ class _Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler contract
         parsed = urlsplit(self.path)
         query = parse_qs(parsed.query)
+        if parsed.path.startswith("/v3/jobs/") and parsed.path.endswith("/jd"):
+            job_id = int(parsed.path.split("/")[3])
+            self._json(
+                {
+                    "api_version": "v3",
+                    "schema_version": 8,
+                    "job_id": job_id,
+                    "full_description": f"Canonical JD {job_id}",
+                    "jd_source": "test_jmm",
+                    "jd_fetched_at": "2026-09-14T00:01:00+00:00",
+                }
+            )
+            return
         if parsed.path == "/v3/jobs/search":
             self.state.search_calls.append(query)
             after_id = int(query.get("after_id", ["0"])[0])

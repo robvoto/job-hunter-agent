@@ -341,10 +341,11 @@ class JobMarketMapClient:
             )
         return payload
 
-    def get_or_enrich_jd(self, *, jmm_job_id: int) -> dict[str, Any]:
+    def get_cached_jd(self, *, jmm_job_id: int, identity_key: str) -> dict[str, Any]:
         payload = self._request(
-            "POST",
+            "GET",
             f"/jobs/{jmm_job_id}/jd",
+            query={"identity_key": str(identity_key or "").strip()},
             terminal_jd_unavailable=True,
         )
         self._validate_metadata(payload)

@@ -233,10 +233,10 @@ def test_client_uses_exact_lookup_and_current_jd_contract():
     client = JobMarketMapClient("https://jmm.example/v3", opener=opener)
 
     assert client.lookup_job(identity_key="seek:id:9")["job"]["id"] == 9
-    assert client.get_or_enrich_jd(jmm_job_id=9)["jd_source"] == "seek_job_page"
+    assert client.get_cached_jd(jmm_job_id=9, identity_key="seek:id:9")["jd_source"] == "seek_job_page"
     assert requests == [
         ("GET", "https://jmm.example/v3/jobs/lookup?identity_key=seek%3Aid%3A9"),
-        ("POST", "https://jmm.example/v3/jobs/9/jd"),
+        ("GET", "https://jmm.example/v3/jobs/9/jd?identity_key=seek%3Aid%3A9"),
     ]
 
 
@@ -260,7 +260,7 @@ def test_client_fails_closed_for_transport_and_unsupported_jd_responses():
         ),
     )
     with pytest.raises(JobMarketMapContractError, match="empty canonical JD"):
-        invalid_jd_client.get_or_enrich_jd(jmm_job_id=9)
+        invalid_jd_client.get_cached_jd(jmm_job_id=9, identity_key="seek:id:9")
 
     jd_error = HTTPError(
         "https://jmm.example/v3/jobs/1084/jd",
@@ -277,7 +277,7 @@ def test_client_fails_closed_for_transport_and_unsupported_jd_responses():
         opener=lambda *_args, **_kwargs: (_ for _ in ()).throw(jd_error),
     )
     with pytest.raises(JobMarketMapUnavailable, match=r"94519870 is unavailable \(not_found\)"):
-        jd_error_client.get_or_enrich_jd(jmm_job_id=1084)
+        jd_error_client.get_cached_jd(jmm_job_id=1084, identity_key="seek:id:1084")
 
     terminal_jd_error = HTTPError(
         "https://jmm.example/v3/jobs/1084/jd",
@@ -291,7 +291,7 @@ def test_client_fails_closed_for_transport_and_unsupported_jd_responses():
         opener=lambda *_args, **_kwargs: (_ for _ in ()).throw(terminal_jd_error),
     )
     with pytest.raises(JobMarketMapJDUnavailable, match="terminal unavailable"):
-        terminal_jd_client.get_or_enrich_jd(jmm_job_id=1084)
+        terminal_jd_client.get_cached_jd(jmm_job_id=1084, identity_key="seek:id:1084")
 
 
 def test_market_record_keeps_jmm_identity_without_copying_jd():
@@ -336,7 +336,7 @@ def test_market_source_searches_selected_scope_and_requests_current_jd(monkeypat
             search_calls.append(kwargs)
             return next(pages)
 
-        def get_or_enrich_jd(self, *, jmm_job_id):
+        def get_cached_jd(self, *, jmm_job_id, identity_key):
             jd_calls.append(jmm_job_id)
             return {
                 "full_description": "Enriched canonical JD",
@@ -569,7 +569,7 @@ def test_jmm_jd_502_preserves_completed_results_and_marks_job_retryable(monkeypa
                 items=[_item(i) for i in range(1083, 1086)], next_cursor=1085, has_more=False
             )
 
-        def get_or_enrich_jd(self, *, jmm_job_id):
+        def get_cached_jd(self, *, jmm_job_id, identity_key):
             if jmm_job_id == 1084:
                 raise JobMarketMapUnavailable(
                     "Job Market Map request failed: HTTP Error 502: Bad Gateway"
@@ -628,7 +628,7 @@ def test_jmm_jd_410_skips_terminal_job_without_consumer_checkpoint(monkeypatch):
                 items=[_item(i) for i in range(1083, 1086)], next_cursor=1085, has_more=False
             )
 
-        def get_or_enrich_jd(self, *, jmm_job_id):
+        def get_cached_jd(self, *, jmm_job_id, identity_key):
             if jmm_job_id == 1084:
                 raise JobMarketMapJDUnavailable(
                     "Job Market Map request failed: HTTP Error 410: Gone: "
@@ -738,7 +738,7 @@ def test_market_source_parallel_stages_overlap_and_merge_in_input_order(monkeypa
         def search_page(self, **_kwargs):
             return _feed_page(items=items, next_cursor=4, has_more=False)
 
-        def get_or_enrich_jd(self, *, jmm_job_id):
+        def get_cached_jd(self, *, jmm_job_id, identity_key):
             return delayed(
                 "jd",
                 lambda: {
@@ -808,7 +808,7 @@ def test_market_source_thaws_title_worker_result_before_fit_record_copy(monkeypa
         def search_page(self, **_kwargs):
             return _feed_page(items=items, next_cursor=1, has_more=False)
 
-        def get_or_enrich_jd(self, *, jmm_job_id):
+        def get_cached_jd(self, *, jmm_job_id, identity_key):
             return {
                 "full_description": f"JD {jmm_job_id}",
                 "jd_source": "jmm",
@@ -914,7 +914,7 @@ def test_market_source_stop_cancels_queued_jmm_work(monkeypatch):
         def search_page(self, **_kwargs):
             return _feed_page(items=[_item(i) for i in range(1, 5)], next_cursor=4, has_more=False)
 
-        def get_or_enrich_jd(self, *, jmm_job_id):
+        def get_cached_jd(self, *, jmm_job_id, identity_key):
             jd_calls.append(jmm_job_id)
             stop.set()
             time.sleep(0.08)
@@ -955,7 +955,7 @@ def test_market_source_worker_failure_does_not_mutate_shared_state_or_checkpoint
         def search_page(self, **_kwargs):
             return _feed_page(items=[_item(i) for i in range(1, 4)], next_cursor=3, has_more=False)
 
-        def get_or_enrich_jd(self, *, jmm_job_id):
+        def get_cached_jd(self, *, jmm_job_id, identity_key):
             return {"full_description": "JD", "jd_source": "jmm", "jd_fetched_at": "now"}
 
         def checkpoint(self, *, consumer_key, last_job_id, **_kwargs):

@@ -342,7 +342,10 @@ def remove_transient_jd(record: dict[str, Any]) -> dict[str, Any]:
 
 
 def _fetch_jd_payload(record: dict[str, Any], client: JobMarketMapClient) -> dict[str, Any]:
-    jd_payload = client.get_or_enrich_jd(jmm_job_id=int(record[RECORD_MARKET_MAP_JOB_ID_KEY]))
+    jd_payload = client.get_cached_jd(
+        jmm_job_id=int(record[RECORD_MARKET_MAP_JOB_ID_KEY]),
+        identity_key=str(record[RECORD_MARKET_MAP_IDENTITY_KEY]),
+    )
     full_description = str(jd_payload.get("full_description") or "").strip()
     if not full_description:
         raise ValueError("Job Market Map returned no current full_description")
