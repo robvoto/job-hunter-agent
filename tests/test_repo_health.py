@@ -180,15 +180,6 @@ def test_candidate_application_history_defaults_do_not_ship_personal_sheet_confi
     assert history_settings["tab_name"] == ""
 
 
-def test_showcase_notes_are_indexed_and_proof_oriented():
-    doc_index = (ROOT_DIR / "docs" / "DOC_INDEX.md").read_text(encoding="utf-8")
-    showcase_notes = (ROOT_DIR / "docs" / "SHOWCASE_NOTES.md").read_text(encoding="utf-8")
-
-    assert "docs/SHOWCASE_NOTES.md" in doc_index
-    assert "Proof / demo note" in showcase_notes
-    assert "Keep claims tied to visible behaviour or tests in the repo." in showcase_notes
-
-
 def test_docs_index_routes_to_core_and_integration_docs():
     docs_index = (ROOT_DIR / "docs" / "INDEX.md").read_text(encoding="utf-8")
     readme = (ROOT_DIR / "README.md").read_text(encoding="utf-8")

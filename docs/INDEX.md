@@ -21,7 +21,6 @@ Use this as the canonical documentation routing index for the repo. It should st
 - [PROJECT_STATUS.md](PROJECT_STATUS.md) — implemented, configuration-dependent, and explicitly not-complete product capabilities.
 - [AGENT_OPERATING_MODEL.md](AGENT_OPERATING_MODEL.md) — ownership model for AGENTS, skills, adapters, and docs.
 - [STANDARDS_INDEX.md](STANDARDS_INDEX.md) — pointers to the canonical shared Google project standards.
-- [SHOWCASE_NOTES.md](SHOWCASE_NOTES.md) — proof-oriented demo and positioning notes.
 - [UI_COMPONENT_MAP.md](UI_COMPONENT_MAP.md) — UI ownership and reusable component map.
 - [runbooks/README.md](runbooks/README.md) — operational runbook index.
 - [DOC_INDEX.md](DOC_INDEX.md) — documentation ownership map for deciding where future doc changes belong.

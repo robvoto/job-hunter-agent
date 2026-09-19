@@ -2,7 +2,7 @@
 
 `tests/e2e/` drives the real FastAPI app with a real Chromium browser so click-path bugs show up the way a human would experience them.
 
-If you are looking for the repo's "Selenium-type" tests, this is the suite. The implementation uses Playwright instead of Selenium, but the purpose is the same: real browser automation against the live app, not mocked DOM snapshots.
+This suite provides real browser automation against the live app using Playwright, not mocked DOM snapshots.
 
 ## Quick start
 

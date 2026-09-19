@@ -6,9 +6,12 @@ This guide describes which integrations exist, which ones are packaged product b
 
 ### Job Market Map (JH-306)
 
-- Normal Job Hunter discovery is consumed from JMM's supported `/v3` HTTP API.
-- Configure `JOB_HUNTER_MARKET_MAP_BASE_URL` to the deployed JMM API base,
-  including `/v3`; there is no direct SQLite access or silent scraper fallback.
+- Normal local Job Hunter discovery is consumed from JMM's supported `/v3` HTTP API.
+- Configure the local Job Hunter .env with
+  `JOB_HUNTER_MARKET_MAP_BASE_URL=http://127.0.0.1:8770/v3`; there is no
+  direct SQLite access or silent scraper fallback.
+- JMM remains local-only. Job Hunter's AWS deployment intentionally omits this
+  variable and must not point to a deployed or same-host JMM service.
 - JMM owns neutral identity, card facts, current JD storage, source collection,
   and on-demand JD enrichment. JH owns candidate analysis and decisions.
 - JH requests a current JD from JMM only after the JH card gate says detail is

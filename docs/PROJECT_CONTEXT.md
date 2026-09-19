@@ -6,7 +6,7 @@ This file contains Job Hunter-specific context for otherwise reusable agent inst
 
 Job Hunter is a local-first job discovery system:
 
-`scrape -> deterministic filters -> optional LLM -> fit score -> workspace`
+`local JMM discovery -> card fetch -> on-demand JD -> deterministic filters -> optional LLM -> fit score -> workspace`
 
 It is a strict, explainable job-fit system, not a vague recommender.
 
@@ -14,6 +14,7 @@ It is a strict, explainable job-fit system, not a vague recommender.
 
 - Repo root: `/home/robvoto/projects/job-hunter-agent`.
 - Agent orchestration: LangGraph-based bounded workflow (classify -> cost/risk estimate -> approval gate -> run agent -> log). OpenClaw is retired; do not reference it as the runtime.
+- Job Market Map is the local market-data and current-JD owner. Local Job Hunter consumes it through the /v3 HTTP API; JMM is not hosted or deployed on AWS.
 - Runtime state lives in SQLite via `JOB_HUNTER_DB_PATH`.
 - Workspace output is account-scoped and resolved from the authenticated session; the on-disk path is an internal runtime detail.
 - Approved knowledge seeds live in `data/knowledge/*.json`.
@@ -37,8 +38,8 @@ Use `.agents/skills/INDEX.md` as the single skill-routing catalogue. Load the sm
 - Hard rejection is only for explicit blockers backed by approved rules.
 - Weak or uncertain signals are preserved for review, not silently deleted.
 - Learning flows through the signal registry before becoming runtime knowledge.
-- Do not infer salary or pay period from free-text ad prose with deterministic heuristics. Compensation must come from structured source data or another explicitly approved owner; otherwise keep it unknown.
-- Any new heuristic or hardcoded business/display rule is a red flag and requires explicit human approval before implementation.
+- Deterministic salary extraction is allowed only where the source structure makes the interpretation reliable and testable. If a reliable value is not present, preserve salary as unknown and let the LLM identify missing evidence where the workflow supports it; never guess.
+- New heuristics must be deterministic, source-grounded, testable, and explicitly approved. Unreliable heuristics or hidden hardcoded business/display rules are not acceptable.
 
 ## Backlog
 

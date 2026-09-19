@@ -42,7 +42,7 @@ deliberately required. The `/api/run` endpoint accepts the equivalent boolean
 reuse normalized discovery snapshots; the current profile filters and review
 pipeline still run on every invocation.
 
-This command runs from the authenticated account context already present in the app. It does not accept a manual account id or scope. If no signed-in account is available, it stops and asks you to log in first. Normal discovery is Job Market Map-backed; configure `JOB_HUNTER_MARKET_MAP_BASE_URL` to the deployed JMM `/v3` API before running it. If JMM is unavailable or misconfigured, the run fails clearly and does not fall back to Job Hunter's old collectors or market cache.
+This command runs from the authenticated account context already present in the app. It does not accept a manual account id or scope. If no signed-in account is available, it stops and asks you to log in first. The normal local discovery path is Job Market Map-backed; configure `JOB_HUNTER_MARKET_MAP_BASE_URL` to the local JMM `/v3` API before running it. If local JMM is unavailable or misconfigured, the run fails clearly and does not fall back to Job Hunter's retired collectors or market cache. AWS is not a JMM runtime.
 
 Responsibilities:
 
@@ -245,7 +245,7 @@ For local JMM-backed discovery, the repo `.env` should contain:
 JOB_HUNTER_MARKET_MAP_BASE_URL=http://127.0.0.1:8770/v3
 ```
 
-JMM is a separate service and must be running on port `8770`; this setting only tells Job Hunter where to call it. A safe template is provided in `.env.example`. Non-local deployments must set their own reachable JMM `/v3` URL and must not assume `127.0.0.1`.
+JMM is a separate local-only service and must be running on port `8770`; this setting only tells Job Hunter where to call it. A safe template is provided in `.env.example`. Do not replace it with a deployed or same-host AWS JMM URL: AWS intentionally does not host or run JMM.
 
 Repo-root launcher:
 
@@ -779,7 +779,7 @@ Run the full suite before merging into `main`.
 
 ## Click-Testing (Playwright E2E)
 
-`tests/e2e/` drives the real FastAPI app with a real Chromium browser (via Playwright), the way a human clicking through the app would notice bugs that mocked unit tests miss. If you are looking for "Selenium-style" browser coverage, this is that suite in this repo; it uses Playwright rather than Selenium, but it serves the same full click-path purpose. It boots an isolated seeded server on a free local port, mints a signed session cookie instead of doing a real Google OAuth flow, and captures screenshots plus browser console/network errors on failure (see `tests/e2e/conftest.py`).
+`tests/e2e/` drives the real FastAPI app with a real Chromium browser via Playwright, the way a human clicking through the app would notice bugs that mocked DOM snapshots miss. It boots an isolated seeded server on a free local port, mints a signed session cookie instead of doing a real Google OAuth flow, and captures screenshots plus browser console/network errors on failure (see `tests/e2e/conftest.py`).
 
 It is **not** part of the default test run (`tests/e2e` is excluded via `norecursedirs` in `pyproject.toml`) because it is much slower than the unit suite. The preferred terminal entry point is:
 

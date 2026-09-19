@@ -10,9 +10,9 @@ repository checkout.
 
 ---
 
-## Current production state - 2026-06-19
+## Documented AWS baseline
 
-This section is the current source of truth for the AWS deployment.
+This section is the documented deployment baseline. It is not a live status claim; verify the actual EC2 state before acting.
 
 ### Domain and DNS
 
@@ -89,15 +89,15 @@ noVNC/VNC wired into service: YES (localhost only)
 Playwright headless setting: OFF (headed in the AWS browser session)
 ```
 
-### Job Market Map production dependency
+### Job Market Map boundary
 
-Target topology is to run JMM as a **separate long-running Python service on this same EC2 host**, bound only to `127.0.0.1:8770`. Job Hunter then uses:
+Job Market Map remains a **local-only service**. It is not hosted, started, or deployed on AWS. Local Job Hunter uses it when the separate local service is running:
 
 ```text
 JOB_HUNTER_MARKET_MAP_BASE_URL=http://127.0.0.1:8770/v3
 ```
 
-Do not expose JMM publicly. JMM keeps its own SQLite data, scheduler and persistent SEEK Chromium profile on persistent storage; it is not a Lambda workload. As of 2026-09-12, JMM code/data are **staged on this host but intentionally not live**: its API/browser services and scheduler are disabled, and Job Hunter intentionally has no `JOB_HUNTER_MARKET_MAP_BASE_URL`. JMM-012 owns the later verified local-DB promotion and explicit go-live step.
+The AWS Job Hunter environment intentionally omits `JOB_HUNTER_MARKET_MAP_BASE_URL`. Do not add a deployed or same-host JMM URL to AWS. JMM's local API, database, scheduler, and persistent SEEK browser are maintained in the separate Job Market Map project.
 
 `/var/lib/job-hunter` is mounted on a separate data disk.
 
@@ -530,7 +530,7 @@ RestartSec=5
 WantedBy=multi-user.target
 ```
 
-Before JMM go-live, `/etc/job-hunter/job-hunter.env` must **omit** `JOB_HUNTER_MARKET_MAP_BASE_URL`. JMM-012 adds `JOB_HUNTER_MARKET_MAP_BASE_URL=http://127.0.0.1:8770/v3` only after the staged JMM database/API has passed its cutover verification.
+The AWS `/etc/job-hunter/job-hunter.env` must omit `JOB_HUNTER_MARKET_MAP_BASE_URL`. The local Job Hunter `.env` may set `JOB_HUNTER_MARKET_MAP_BASE_URL=http://127.0.0.1:8770/v3` when the separate local JMM service is running.
 
 Manage:
 
@@ -1101,7 +1101,7 @@ Do not expose FastAPI port `8765` publicly. HTTPS terminates at Nginx; FastAPI r
 
 ---
 
-## Current AWS access and OAuth truth - 2026-06-10
+## Historical AWS access and OAuth notes — verify before use
 
 ### Access method
 
@@ -1229,7 +1229,7 @@ That means the app is alive and auth is enforcing login correctly.
 
 ---
 
-## Deployment runtime path fix - 2026-06-10
+## Historical deployment path fix — incorporated into current scripts
 
 The live `job-hunter.service` defines these production runtime paths inline in systemd:
 
