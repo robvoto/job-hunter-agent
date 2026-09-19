@@ -26,6 +26,7 @@ Use for project filesystem/tool access and whenever MCP execution is unreliable.
 
 ## Failure handling
 - One failed MCP call does **not** prove the connector or resource is unavailable.
+- A rejected file patch (`old_text not found`, failed hunk, or equivalent) is a validation stop. Re-read the exact current file, construct a new context-checked patch, and verify the diff; never retry stale patch text.
 - Inspect the actual error and retry with a smaller, safer command.
 - In ChatGPT, `HUMAN_MCP_SECURE.run_command` accepts only `cwd` and `command`. Never add a tool-level `timeout` argument; if a command needs bounding, use a shell-level mechanism inside `command` or run it asynchronously and poll its output. Treat an invalid-arguments response for `timeout` as a call-shape error and retry once without that field.
 - For every Python command in the Job Hunter repository, use `uv run python ...`, `uv run pytest ...`, or another `uv run ...` command. Never invoke bare `python`, `python3`, `pytest`, or `ruff`, and never retry a known-missing bare command unchanged. A failure from system Python must never be reported as a Job Hunter dependency/environment failure unless the equivalent repository-runtime command also fails. If a bare command returns 127, classify it as a command-launch failure—not a database, application, repository-access, or dependency failure. For SQLite inspection, use `uv run python` with the standard-library `sqlite3` module or the project's DB helpers instead of requiring a system package.

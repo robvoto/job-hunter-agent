@@ -38,6 +38,9 @@ Use `.agents/skills/instruction-maintenance/SKILL.md` whenever changing agent in
 - Do not add hidden fallbacks, compatibility shims, dead paths, or broad exception swallowing unless explicitly approved.
 - Do not claim completion without validation evidence.
 - Preserve unrelated work when other agents or sessions may be active.
+- Before editing, inspect the exact current target file and apply a narrow, context-checked patch.
+- If a patch hunk or `old_text` does not match, stop and reread the file before creating a new patch; never retry stale patch text.
+- After editing, inspect the diff and run the required validation before reporting completion.
 - Route specialised behaviour through its owning skill instead of expanding this file.
 
 ## Finish report
