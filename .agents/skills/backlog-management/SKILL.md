@@ -10,6 +10,7 @@ Use when creating, updating, deduplicating, grooming, or analysing backlog items
 ## Source of truth
 - Working backlog: `https://docs.google.com/spreadsheets/d/1-D7RzYB3R39dOmUFZvvsDlWpDfIVn3eRajEae9b7OX0/edit?gid=218702820#gid=218702820`.
 - This Google Sheet is the only backlog source of truth.
+- The shared backlog access identity is `agent-backlog-access@robvoto-agent-platform-iam.gserviceaccount.com`; it should have access to all relevant project backlog spreadsheets. Do not infer that other configured service accounts are prohibited.
 - Local `docs/backlog/backlog_review.xlsx` is archive/export/reference only unless the human explicitly asks to update it.
 - Read the sheet header row first and update by column name, never by fixed position.
 - Do not add, remove, or rename columns unless explicitly agreed.
