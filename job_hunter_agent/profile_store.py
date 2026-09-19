@@ -18,7 +18,6 @@ from job_hunter_agent.capability_matrix import (
     derive_job_description_aliases,
 )
 from job_hunter_agent.eligibility_profile import normalize_eligibility_facts
-from job_hunter_agent.qualification_profile import normalize_qualifications
 from job_hunter_agent.global_settings import (
     CAPABILITY_STRENGTH_PRESETS,
     DEFAULT_EVIDENCE_TIER_WEIGHTS,
@@ -28,12 +27,12 @@ from job_hunter_agent.global_settings import (
     KEY_APSJOBS_RESULTS_PER_SEARCH,
     KEY_CAPABILITY_STRENGTH_PRESETS,
     KEY_DATE_RANGE_DAYS,
+    KEY_JOB_MARKET_MAP_PARALLEL_WORKERS,
     KEY_LIMITS,
     KEY_LINKEDIN_EASY_APPLY_ONLY,
     KEY_LINKEDIN_HOURS_OLD,
     KEY_LINKEDIN_JOBSPY_STALL_TIMEOUT_SECONDS,
     KEY_LINKEDIN_PARALLEL_REVIEW_WORKERS,
-    KEY_JOB_MARKET_MAP_PARALLEL_WORKERS,
     KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS,
     KEY_LINKEDIN_RESULTS_PER_SEARCH,
     KEY_LOCATIONS_MAX_SELECTED,
@@ -55,6 +54,7 @@ from job_hunter_agent.parsing_schema import (
     KEY_P_ROUTING_SECONDARY,
     KEY_P_ROUTING_SUPPLEMENTARY,
 )
+from job_hunter_agent.qualification_profile import normalize_qualifications
 from job_hunter_agent.runtime_helpers import is_desktop_runtime, log_settings_change
 from job_hunter_agent.title_normalization_rules import normalize_title_text
 from job_hunter_agent.utils import coerce_int, deep_merge

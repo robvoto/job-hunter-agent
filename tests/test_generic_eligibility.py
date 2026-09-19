@@ -12,7 +12,6 @@ from job_hunter_agent.profile_store import (
     KEY_CANDIDATE_ELIGIBILITY_FACTS,
     normalize_full_profile,
 )
-from job_hunter_agent.routes import profile_materials
 
 _STATIC_DIR = Path(__file__).resolve().parent.parent / "templates" / "static" / "settings" / "shared"
 

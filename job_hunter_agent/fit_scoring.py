@@ -10,19 +10,17 @@ from typing import Any, List, Optional
 from job_hunter_agent.capability_matching import (
     find_profile_capability_matches,
 )
-
-logger = logging.getLogger(__name__)
 from job_hunter_agent.experience_requirement_display import (
     experience_requirement_note as _experience_requirement_note,
 )
 from job_hunter_agent.global_settings import KEY_FIT_HIGHLIGHTS, load_global_settings
 from job_hunter_agent.io_utils import load_ui_labels
-from job_hunter_agent.paths import UNCERTAINTY_LOG_PATH
 from job_hunter_agent.llm_protocol import (
     LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES,
     LLM_ALLOWED_OCCUPATION_ALIGNMENTS,
     LLM_REQUIREMENT_KIND_PROFESSIONAL,
 )
+from job_hunter_agent.paths import UNCERTAINTY_LOG_PATH
 from job_hunter_agent.profile_store import (
     KEY_CANDIDATE_ELIGIBILITY,
     KEY_CANDIDATE_ELIGIBILITY_FACTS,
@@ -40,23 +38,29 @@ from job_hunter_agent.record_schema import (
     RECORD_FIT_SCORE_KEY,
     RECORD_OCCUPATION_ALIGNMENT_KEY,
     RECORD_OCCUPATION_ALIGNMENT_REASON_KEY,
-    RECORD_RUN_STARTED_AT_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
+    RECORD_RUN_STARTED_AT_KEY,
 )
 from job_hunter_agent.role_analysis import (
     friendly_capability_label,
     role_text_bundle,
 )
 from job_hunter_agent.runtime_helpers import append_uncertainty_log, build_uncertainty_entry
-from job_hunter_agent.system_warnings import (
-    make_system_warning_fingerprint,
-    record_system_warning,
-)
 from job_hunter_agent.signal_detection import (
     competitive_fit_highlights,
     hard_block_reasons,
 )
-from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order, list_to_phrase
+from job_hunter_agent.system_warnings import (
+    make_system_warning_fingerprint,
+    record_system_warning,
+)
+from job_hunter_agent.text_processing import (
+    compact_whitespace,
+    dedupe_preserve_order,
+    list_to_phrase,
+)
+
+logger = logging.getLogger(__name__)
 
 LLM_REVIEW_STATE_EVALUATED = "evaluated"
 LLM_REVIEW_STATE_INVALID = "invalid"

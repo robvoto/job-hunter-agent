@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Regenerate checked-in standalone diagram HTML pages from Mermaid sources."""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 

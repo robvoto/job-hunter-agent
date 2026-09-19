@@ -1,9 +1,9 @@
 """Tests for seek runner record shape."""
 
 import logging
+from types import SimpleNamespace
 
 import pytest
-from types import SimpleNamespace
 
 from job_hunter_agent.record_schema import (
     RECORD_CARD_SALARY_KEY,
@@ -54,23 +54,23 @@ from job_hunter_agent.record_schema import (
 )
 from job_hunter_agent.scrapers.base import normalize_jobspy_record
 from job_hunter_agent.scrapers.seek_runner import (
-    _classify_seek_list_page_text,
-    _classify_seek_list_page_failure,
-    _handle_seek_list_page_failure,
-    _log_seek_list_page_diagnostics,
-    _seek_json_assignment_value,
-    _seek_run_progress,
-    _set_seek_run_progress,
-    _seek_source_metadata,
-    _wait_for_seek_bot_challenge_or_manual_verification,
-    _wait_for_seek_sign_in_if_needed,
-    _wait_for_seek_user_verification,
-    build_seek_card_record,
-    BotChallengeDetected,
     SEEK_BOT_CHALLENGE,
     SEEK_HUMAN_VERIFICATION,
     SEEK_SIGN_IN_WALL,
     SEEK_TIMEOUT_NO_CARDS,
+    BotChallengeDetected,
+    _classify_seek_list_page_failure,
+    _classify_seek_list_page_text,
+    _handle_seek_list_page_failure,
+    _log_seek_list_page_diagnostics,
+    _seek_json_assignment_value,
+    _seek_run_progress,
+    _seek_source_metadata,
+    _set_seek_run_progress,
+    _wait_for_seek_bot_challenge_or_manual_verification,
+    _wait_for_seek_sign_in_if_needed,
+    _wait_for_seek_user_verification,
+    build_seek_card_record,
 )
 
 

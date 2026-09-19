@@ -11,8 +11,8 @@ and displays a system tray icon.
 from __future__ import annotations
 
 import ctypes
-import json
 import io
+import json
 import logging
 import os
 import sys

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from job_hunter_agent import scrape_finalize, source_learning, workspace_service
+from job_hunter_agent import run_control, scrape_finalize, source_learning, workspace_service
 from job_hunter_agent.database import db_conn
 from job_hunter_agent.record_schema import (
     RECORD_FIT_LABEL_KEY,
@@ -13,7 +13,6 @@ from job_hunter_agent.record_schema import (
     RECORD_FIT_TONE_CLASS_KEY,
 )
 from job_hunter_agent.run_context import ScrapeRunContext
-from job_hunter_agent import run_control
 
 
 def _build_context() -> ScrapeRunContext:

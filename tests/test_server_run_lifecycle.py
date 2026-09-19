@@ -4,8 +4,7 @@ import logging
 import signal
 from datetime import datetime, timedelta
 
-from job_hunter_agent import server_helpers
-from job_hunter_agent import run_control
+from job_hunter_agent import run_control, server_helpers
 
 
 def test_finish_run_retains_terminal_stopped_state_and_total_elapsed(monkeypatch):

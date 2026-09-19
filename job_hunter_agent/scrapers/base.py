@@ -8,8 +8,11 @@ from typing import Any, Optional, Set
 from urllib.parse import urlparse
 
 from job_hunter_agent.job_identity import normalize_job_key
+from job_hunter_agent.job_types import load_job_type_learning_guardrails
 from job_hunter_agent.record_schema import (
     APPLY_METHOD_UNKNOWN,
+    POSTING_CHANNEL_CLASSIFIER_VERSION,
+    POSTING_CHANNEL_VERSION_KEY,
     RECORD_APPLY_METHOD_KEY,
     RECORD_COMPANY_KEY,
     RECORD_COMPETITIVE_SIGNALS_KEY,
@@ -37,8 +40,6 @@ from job_hunter_agent.record_schema import (
     RECORD_POSTED_AGE_DAYS_KEY,
     RECORD_POSTED_KEY,
     RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
-    POSTING_CHANNEL_CLASSIFIER_VERSION,
-    POSTING_CHANNEL_VERSION_KEY,
     RECORD_REJECT_REASON_KEY,
     RECORD_REVIEWED_SIGNAL_MATCHES_KEY,
     RECORD_ROLE_SNAPSHOT_KEY,
@@ -54,9 +55,6 @@ from job_hunter_agent.record_schema import (
     RECORD_SOURCE_KEY,
     RECORD_SOURCE_METADATA_KEY,
     RECORD_SOURCE_PLATFORM_JOB_ID_KEY,
-    SOURCE_METADATA_SCHEMA_VERSION,
-    SOURCE_METADATA_VERSION_KEY,
-    SOURCE_POSTER_COMPANY_INDUSTRY_KEY,
     RECORD_TEASER_KEY,
     RECORD_TITLE_KEY,
     RECORD_TITLE_MATCH_METADATA_KEY,
@@ -67,6 +65,9 @@ from job_hunter_agent.record_schema import (
     RECORD_WORK_MODE_NEEDS_REVIEW_KEY,
     RECORD_WORK_MODE_SOURCE_KEY,
     RECORD_WORK_TYPE_KEY,
+    SOURCE_METADATA_SCHEMA_VERSION,
+    SOURCE_METADATA_VERSION_KEY,
+    SOURCE_POSTER_COMPANY_INDUSTRY_KEY,
 )
 from job_hunter_agent.salary import (
     KEY_CURRENCIES_WITH_DOLLAR,
@@ -83,7 +84,6 @@ from job_hunter_agent.signal_schema import (
     LEARNING_SOURCE_KEY,
     LEARNING_SUGGESTED_VALUES_KEY,
 )
-from job_hunter_agent.job_types import load_job_type_learning_guardrails
 from job_hunter_agent.work_mode_extraction import extract_from_linkedin
 
 JOBSPY_DATE_POSTED_KEY = "date_posted"

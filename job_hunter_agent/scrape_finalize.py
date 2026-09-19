@@ -8,18 +8,11 @@ from typing import TypedDict
 
 from job_hunter_agent import workspace_data, workspace_service
 from job_hunter_agent.config import DEBUG_MODE
-from job_hunter_agent.logging_utils import (
-    format_log_block,
-    render_board_final_block,
-)
-
-logger = logging.getLogger(__name__)
-
 from job_hunter_agent.io_utils import (
     load_ui_labels,
+    prune_llm_cache_for_current_profile,
     save_job_history,
     save_llm_cache,
-    prune_llm_cache_for_current_profile,
     write_debug_json,
     write_review_data,
     write_run_stats,
@@ -27,6 +20,10 @@ from job_hunter_agent.io_utils import (
 from job_hunter_agent.job_identity import deduplicate_across_sources
 from job_hunter_agent.job_review_pipeline import render_human_job_result
 from job_hunter_agent.llm_review_state import has_complete_llm_keep_data
+from job_hunter_agent.logging_utils import (
+    format_log_block,
+    render_board_final_block,
+)
 from job_hunter_agent.paths import OUTPUT_DIR, get_workspace_results_path
 from job_hunter_agent.posting_utils import parse_timestamp
 from job_hunter_agent.record_schema import (
@@ -49,6 +46,8 @@ from job_hunter_agent.system_warnings import (
     make_system_warning_fingerprint,
     record_system_warning,
 )
+
+logger = logging.getLogger(__name__)
 
 NO_FRESH_CARDS_ERROR = "No fresh cards were captured in this run."
 RUN_SUMMARY_PATH = OUTPUT_DIR / "last_run_report.log"

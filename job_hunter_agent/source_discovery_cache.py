@@ -13,8 +13,8 @@ from typing import Any
 
 from job_hunter_agent.global_settings import (
     get_linkedin_failure_backoff_minutes,
-    get_source_discovery_cache_max_entries,
     get_source_discovery_cache_max_age_minutes,
+    get_source_discovery_cache_max_entries,
 )
 
 

@@ -3,7 +3,7 @@
 import json
 import logging
 
-from job_hunter_agent import filters, fit_scoring, preferences, workspace_renderer
+from job_hunter_agent import filters, preferences, workspace_renderer
 from job_hunter_agent.preferences import (
     display_work_type_label,
     passes_preference_filters,

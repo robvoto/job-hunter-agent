@@ -7,12 +7,12 @@ from fastapi import APIRouter, Body
 
 from job_hunter_agent import server_helpers as srv
 from job_hunter_agent.global_settings import (
+    KEY_LIMITS,
+    KEY_LOCATIONS_MAX_SELECTED,
     get_allowed_source_document_suffixes,
     get_allowed_source_document_suffixes_label,
     get_salary_limits,
     load_global_settings,
-    KEY_LIMITS,
-    KEY_LOCATIONS_MAX_SELECTED,
 )
 from job_hunter_agent.llm_gate import get_session_cost_usd
 from job_hunter_agent.locations import find_nearest_location, resolve_location

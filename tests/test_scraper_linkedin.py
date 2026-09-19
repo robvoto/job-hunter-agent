@@ -1,9 +1,9 @@
 """Tests for scraper linkedin."""
 
-from datetime import date
 import logging
 import threading
 import time
+from datetime import date
 from types import SimpleNamespace
 
 import pytest
@@ -11,23 +11,23 @@ import pytest
 from job_hunter_agent import job_quality
 from job_hunter_agent.locations import resolve_location
 from job_hunter_agent.posting_utils import posted_display_label
-from job_hunter_agent.salary import load_salary
-from job_hunter_agent.scrapers.base import _build_salary_string
-from job_hunter_agent.scrapers.linkedin import (
-    LinkedInScraper,
-    _fetch_jobspy_isolated,
-    _extract_linkedin_job_header_evidence,
-    classify_linkedin_apply_method,
-)
-from job_hunter_agent.scrapers.location_adapters import (
-    LINKEDIN_CITY_RADIUS_MILES,
-    to_linkedin_search_scope,
-)
 from job_hunter_agent.record_schema import (
     APPLY_METHOD_EASY_APPLY,
     APPLY_METHOD_EXTERNAL_APPLY,
     APPLY_METHOD_UNKNOWN,
     RECORD_URL_KEY,
+)
+from job_hunter_agent.salary import load_salary
+from job_hunter_agent.scrapers.base import _build_salary_string
+from job_hunter_agent.scrapers.linkedin import (
+    LinkedInScraper,
+    _extract_linkedin_job_header_evidence,
+    _fetch_jobspy_isolated,
+    classify_linkedin_apply_method,
+)
+from job_hunter_agent.scrapers.location_adapters import (
+    LINKEDIN_CITY_RADIUS_MILES,
+    to_linkedin_search_scope,
 )
 
 

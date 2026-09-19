@@ -16,6 +16,13 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from job_hunter_agent.config import AUTH_ENCODING, DEBUG_MODE, DEFAULT_ERRORS
+from job_hunter_agent.paths import (
+    CANDIDATE_APPLICATION_HISTORY_CACHE_PATH,
+    CV_EXTRACTION_CACHE_PATH,
+    DEBUG_SOURCE_PAYLOADS_DIR,
+    LLM_CACHE_PATH,
+    RUNTIME_DIR,
+)
 from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
     RECORD_DETAILS_TEXT_KEY,
@@ -29,11 +36,11 @@ from job_hunter_agent.record_schema import (
     RECORD_JOB_KEY,
     RECORD_LAST_APPLIED_AT_KEY,
     RECORD_LAST_HIDDEN_AT_KEY,
-    RECORD_LAST_LIKED_AT_KEY,
     RECORD_LAST_KEPT_SNAPSHOT_KEY,
+    RECORD_LAST_LIKED_AT_KEY,
     RECORD_LAST_UNAPPLIED_AT_KEY,
-    RECORD_LAST_UNLIKED_AT_KEY,
     RECORD_LAST_UNHIDDEN_AT_KEY,
+    RECORD_LAST_UNLIKED_AT_KEY,
     RECORD_LOCATION_KEY,
     RECORD_REVIEW_EVENTS_KEY,
     RECORD_SOURCE_KEY,
@@ -41,13 +48,6 @@ from job_hunter_agent.record_schema import (
     RECORD_TITLE_KEY,
     RECORD_URL_KEY,
     RECORD_WORK_TYPE_KEY,
-)
-from job_hunter_agent.paths import (
-    CANDIDATE_APPLICATION_HISTORY_CACHE_PATH,
-    CV_EXTRACTION_CACHE_PATH,
-    DEBUG_SOURCE_PAYLOADS_DIR,
-    LLM_CACHE_PATH,
-    RUNTIME_DIR,
 )
 from job_hunter_agent.system_warnings import make_system_warning_fingerprint, record_system_warning
 
@@ -812,8 +812,7 @@ def load_ui_labels() -> Dict[str, Any]:
     payload object is unchanged from the last validated one.
     """
     global _last_validated_ui_labels_payload
-    from job_hunter_agent.knowledge_store import get_knowledge
-    from job_hunter_agent.knowledge_store import validate_ui_labels_payload
+    from job_hunter_agent.knowledge_store import get_knowledge, validate_ui_labels_payload
 
     payload = get_knowledge("ui_labels") or {}
     if payload is not _last_validated_ui_labels_payload:

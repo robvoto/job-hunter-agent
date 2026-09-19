@@ -52,6 +52,17 @@ line-length = 100
 select = ["E", "F", "I"]
 ignore = ["E501"]
 
+[tool.ruff.lint.per-file-ignores]
+# These modules intentionally load dotenv/configuration or defer imports to
+# preserve startup ordering and avoid import cycles.
+"desktop/launcher.py" = ["E402"]
+"job_hunter_agent/db_seed.py" = ["E402"]
+"job_hunter_agent/fastapi_app.py" = ["E402"]
+"job_hunter_agent/global_settings.py" = ["F405"]
+"job_hunter_agent/job_review_pipeline.py" = ["E402"]
+"job_hunter_agent/profile_learning.py" = ["E402"]
+"job_hunter_agent/source_connector.py" = ["E402"]
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"

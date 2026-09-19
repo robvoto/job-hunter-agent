@@ -29,13 +29,13 @@ from job_hunter_agent.database import request_user_access
 from job_hunter_agent.global_settings import KEY_SEEK_MAX_PAGES
 from job_hunter_agent.locations import default_location_value, load_location_options
 from job_hunter_agent.paths import (
-    TEMPLATES_DIR,
-    GLOBAL_SETTINGS_HTML_PATH,
     AWS_BROWSER_SESSION_HTML_PATH,
+    GLOBAL_SETTINGS_HTML_PATH,
     ONBOARDING_HTML_PATH,
     SETTINGS_GLOBAL_PARTIALS_DIR,
     SETTINGS_HTML_PATH,
     SETTINGS_STANDARD_PARTIALS_DIR,
+    TEMPLATES_DIR,
     WORKSPACE_HTML_PATH,
 )
 from job_hunter_agent.profile_store import (

@@ -20,15 +20,15 @@ CORS:
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
-from datetime import datetime
 import errno
 import logging
 import os
-import socket
 import re
+import socket
 import sys
 import threading
+from contextlib import asynccontextmanager
+from datetime import datetime
 from urllib.parse import parse_qsl, quote, urlsplit
 
 from job_hunter_agent.runtime_helpers import load_repo_dotenv
@@ -49,12 +49,12 @@ from job_hunter_agent.auth import (
     verify_csrf_token,
 )
 from job_hunter_agent.config import (
+    ACCESS_DENIED_PATH,
     JOB_HUNTER_BASE_URL,
     LOGIN_PATH,
     LOGOUT_PATH,
     ONBOARDING_DEBUG_ALIAS_PATH,
     ONBOARDING_PATH,
-    ACCESS_DENIED_PATH,
     REQUEST_ACCESS_PATH,
     USER_ACCESS_APPROVED,
     USER_ACCESS_BLOCKED,
@@ -63,8 +63,8 @@ from job_hunter_agent.config import (
     WAITLIST_PATH,
 )
 from job_hunter_agent.logging_utils import render_server_session_start_block, setup_logging
-from job_hunter_agent.user_context import set_user_id
 from job_hunter_agent.run_control import enable_step_through
+from job_hunter_agent.user_context import set_user_id
 
 _logger = logging.getLogger(__name__)
 _SERVER_SHUTDOWN_SIGNAL_RECORDED = False

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import logging
-import copy
 import contextvars
+import copy
+import logging
 import multiprocessing
 import re
+import sys
 import time
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -15,10 +16,6 @@ from typing import List
 from urllib.error import URLError
 from urllib.parse import unquote
 from urllib.request import Request, urlopen
-
-logger = logging.getLogger(__name__)
-
-import sys
 
 from job_hunter_agent.global_settings import (
     DEFAULT_SEARCH_SETTINGS,
@@ -32,8 +29,8 @@ from job_hunter_agent.global_settings import (
     get_linkedin_max_consecutive_target_failures,
     get_linkedin_parallel_review_workers,
     get_linkedin_parallel_search_workers,
-    get_search_plan_min_corroboration_samples,
     get_search_plan_max_age_minutes,
+    get_search_plan_min_corroboration_samples,
 )
 from job_hunter_agent.io_utils import (
     DEBUG_CAPTURE_SOURCE_PAYLOADS,
@@ -49,8 +46,8 @@ from job_hunter_agent.job_review_pipeline import (
 from job_hunter_agent.job_types import load_job_type
 from job_hunter_agent.locations import resolve_location
 from job_hunter_agent.logging_utils import format_debug_marker, format_log_block
+from job_hunter_agent.posting_utils import parse_visible_posted_age_days
 from job_hunter_agent.profile_store import get_search_settings
-from job_hunter_agent.search_terms import ordered_profile_search_terms
 from job_hunter_agent.record_schema import (
     APPLY_METHOD_EASY_APPLY,
     APPLY_METHOD_EXTERNAL_APPLY,
@@ -59,12 +56,10 @@ from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
     RECORD_DESCRIPTION_SOURCE_KEY,
     RECORD_DETAILS_TEXT_KEY,
+    RECORD_IS_REPOSTED_KEY,
     RECORD_JOB_KEY,
     RECORD_JOB_QUALITY_SIGNALS_KEY,
-    RECORD_IS_REPOSTED_KEY,
-    RECORD_LOCATION_KEY,
     RECORD_POSTED_AGE_DAYS_KEY,
-    RECORD_SALARY_KEY,
     RECORD_TITLE_KEY,
     RECORD_URL_KEY,
     RECORD_WORK_MODE_KEY,
@@ -72,10 +67,8 @@ from job_hunter_agent.record_schema import (
 from job_hunter_agent.run_control import run_stop_requested, set_run_progress_state
 from job_hunter_agent.runtime_helpers import CLI_FLAG_DEBUG, has_cli_flag
 from job_hunter_agent.salary import load_salary
-from job_hunter_agent.scrapers.base import BaseJobScraper, normalize_jobspy_record, _url_domain
+from job_hunter_agent.scrapers.base import BaseJobScraper, _url_domain, normalize_jobspy_record
 from job_hunter_agent.scrapers.location_adapters import to_linkedin_search_scope
-from job_hunter_agent.source_registry import SOURCE_LINKEDIN
-from job_hunter_agent.source_errors import PartialSourceResultsError
 from job_hunter_agent.search_metrics import QueryYieldMetric, record_query_yield_metric
 from job_hunter_agent.search_plan_state import (
     load_search_plan_state,
@@ -83,12 +76,16 @@ from job_hunter_agent.search_plan_state import (
     save_search_plan_observation,
     select_query_cover,
 )
-from job_hunter_agent.posting_utils import parse_visible_posted_age_days
+from job_hunter_agent.search_terms import ordered_profile_search_terms
+from job_hunter_agent.source_errors import PartialSourceResultsError
+from job_hunter_agent.source_registry import SOURCE_LINKEDIN
 from job_hunter_agent.work_mode_extraction import (
     WORK_MODE_UNKNOWN,
     extract_from_text,
     log_work_mode_result,
 )
+
+logger = logging.getLogger(__name__)
 
 WORKSPACE_DEBUG_MODE = has_cli_flag(sys.argv, CLI_FLAG_DEBUG)
 
@@ -143,8 +140,8 @@ def _scrape_linkedin_jobs_worker(search_params: dict, send_conn, progress_send_c
     original_create_session = None
     jobspy_linkedin = None
     try:
-        from jobspy import scrape_jobs  # noqa: PLC0415
         import jobspy.linkedin as jobspy_linkedin  # noqa: PLC0415
+        from jobspy import scrape_jobs  # noqa: PLC0415
 
         original_create_session = jobspy_linkedin.create_session
 

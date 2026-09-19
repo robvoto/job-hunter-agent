@@ -21,7 +21,6 @@ from pathlib import Path, PurePosixPath
 from tempfile import TemporaryDirectory
 from typing import Any
 
-
 from job_hunter_agent.paths import REPO_ROOT
 
 TAXONOMY_VERSION = "O*NET-SOC 2019"

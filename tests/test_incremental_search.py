@@ -14,7 +14,6 @@ from job_hunter_agent.scrapers.apsjobs import _new_candidate_links
 from job_hunter_agent.scrapers.linkedin import build_linkedin_search_targets
 from job_hunter_agent.scrapers.seek import build_seek_search_targets
 
-
 UTC = timezone.utc
 TARGETS = [{"keywords": "policy", "location": "Sydney", "url": "https://seek.test"}]
 

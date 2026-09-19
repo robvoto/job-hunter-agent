@@ -9,11 +9,12 @@ import time
 from datetime import datetime, timezone
 from unittest.mock import patch
 
-from job_hunter_agent import source_runner
-from job_hunter_agent import job_review_pipeline
-from job_hunter_agent import run_control
+from job_hunter_agent import job_review_pipeline, run_control, source_runner
+from job_hunter_agent.job_review_pipeline import (
+    ReviewPipelineContext,
+    review_pre_detail_normalized_job,
+)
 from job_hunter_agent.logging_utils import get_log_source_scope
-from job_hunter_agent.job_review_pipeline import ReviewPipelineContext, review_pre_detail_normalized_job
 from job_hunter_agent.run_context import ScrapeRunContext
 from job_hunter_agent.source_errors import PartialSourceResultsError
 from job_hunter_agent.source_registry import SOURCE_APSJOBS, SOURCE_LINKEDIN, SOURCE_SEEK

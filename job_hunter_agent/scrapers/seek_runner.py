@@ -6,8 +6,8 @@ Purpose: orchestrate the SEEK Playwright flow, detail review, and record finaliz
 from __future__ import annotations
 
 import asyncio
-import copy
 import contextvars
+import copy
 import json
 import logging
 import re
@@ -15,12 +15,11 @@ import sys
 import threading
 import time
 import traceback
-from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, TimeoutError as FutureTimeoutError, wait
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Set, cast
 from urllib.parse import urlsplit, urlunsplit
-
-logger = logging.getLogger(__name__)
 
 from playwright._impl._errors import TargetClosedError
 from playwright.async_api import async_playwright as async_playwright_ctx
@@ -30,8 +29,8 @@ import job_hunter_agent.record_schema as rs
 from job_hunter_agent.global_settings import (
     KEY_SEEK_QUICK_APPLY_ONLY,
     get_playwright_browser_mode,
-    get_search_plan_min_corroboration_samples,
     get_search_plan_max_age_minutes,
+    get_search_plan_min_corroboration_samples,
 )
 from job_hunter_agent.history import (
     apply_detail_evidence_reuse,
@@ -39,12 +38,12 @@ from job_hunter_agent.history import (
     can_reuse_detail_evidence,
     finalize_record,
 )
-from job_hunter_agent.job_identity import find_confirmed_identity_history_entry
 from job_hunter_agent.io_utils import (
     DEBUG_CAPTURE_SOURCE_PAYLOADS,
     load_ui_labels,
     write_source_payload_debug,
 )
+from job_hunter_agent.job_identity import find_confirmed_identity_history_entry
 from job_hunter_agent.job_quality import detect_broad_engagement_signal
 from job_hunter_agent.job_review_pipeline import (
     ReviewPipelineContext,
@@ -58,14 +57,6 @@ from job_hunter_agent.run_control import (
     set_run_progress_state,
     step_through_enabled,
 )
-from job_hunter_agent.search_metrics import QueryYieldMetric, record_query_yield_metric
-from job_hunter_agent.search_plan_state import (
-    load_search_plan_state,
-    planned_search_terms,
-    save_search_plan_observation,
-    select_query_cover,
-)
-from job_hunter_agent.search_terms import direct_profile_title_match_job_keys
 from job_hunter_agent.runtime_helpers import CLI_FLAG_DEBUG, has_cli_flag
 from job_hunter_agent.scrapers.base import _build_initial_source_metadata, build_initial_flat_record
 from job_hunter_agent.scrapers.seek import (
@@ -79,6 +70,14 @@ from job_hunter_agent.scrapers.seek import (
     fetch_job_details_payload_async,
     stable_job_key,
 )
+from job_hunter_agent.search_metrics import QueryYieldMetric, record_query_yield_metric
+from job_hunter_agent.search_plan_state import (
+    load_search_plan_state,
+    planned_search_terms,
+    save_search_plan_observation,
+    select_query_cover,
+)
+from job_hunter_agent.search_terms import direct_profile_title_match_job_keys
 from job_hunter_agent.source_errors import PartialSourceResultsError
 from job_hunter_agent.text_processing import compact_whitespace
 from job_hunter_agent.utils import parse_seek_posted_age_days, set_page_param
@@ -88,6 +87,8 @@ from job_hunter_agent.work_mode_extraction import (
     extract_seek_filter_panel_state,
     log_work_mode_result,
 )
+
+logger = logging.getLogger(__name__)
 
 WORKSPACE_DEBUG_MODE = has_cli_flag(sys.argv, CLI_FLAG_DEBUG)
 RUN_PROGRESS_ITEM_SEPARATOR = " | "

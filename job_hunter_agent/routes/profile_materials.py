@@ -15,6 +15,7 @@ from job_hunter_agent.eligibility_profile import (
 )
 from job_hunter_agent.global_settings import save_global_settings
 from job_hunter_agent.knowledge_sync_roundtrip import sync_knowledge_roundtrip
+from job_hunter_agent.profile_learning import resolve_role_family
 from job_hunter_agent.profile_store import (
     KEY_CANDIDATE_ELIGIBILITY_FACTS,
     KEY_CANDIDATE_QUALIFICATIONS,
@@ -27,7 +28,6 @@ from job_hunter_agent.source_documents import (
     refresh_role_history_from_saved_cv,
     save_source_materials,
 )
-from job_hunter_agent.profile_learning import resolve_role_family
 from job_hunter_agent.system_warnings import (
     aggregate_system_warning_diagnostics,
     classify_system_warning,

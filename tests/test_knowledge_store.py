@@ -407,7 +407,7 @@ def test_upgrade_fixes_stale_ui_labels_missing_settings_alerts(isolated_db):
 def test_upgrade_fixes_stale_ui_labels_missing_shared_labels(isolated_db):
     from pathlib import Path
 
-    from job_hunter_agent.server_helpers import build_bootstrap_script, load_shared_ui_labels
+    from job_hunter_agent.server_helpers import build_bootstrap_script
 
     repo_root = Path(__file__).resolve().parent.parent
     knowledge_dir = repo_root / "data" / "knowledge"

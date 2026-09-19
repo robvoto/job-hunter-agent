@@ -5,9 +5,6 @@ from __future__ import annotations
 import logging
 from typing import Any, Optional
 
-logger = logging.getLogger(__name__)
-
-
 from job_hunter_agent.global_settings import get_llm_max_chars
 from job_hunter_agent.hard_blocker_rules import (
     find_hard_block_matches,
@@ -40,6 +37,8 @@ from job_hunter_agent.record_schema import (
     RECORD_TITLE_REASON_KEY,
     SOURCE_POSTER_COMPANY_INDUSTRY_KEY,
 )
+from job_hunter_agent.role_analysis import infer_posting_channel
+from job_hunter_agent.runtime_helpers import is_desktop_runtime
 from job_hunter_agent.scoring_utils import (
     get_deterministic_review_thresholds,
 )
@@ -56,9 +55,8 @@ from job_hunter_agent.signal_schema import (
     LEARNING_SUGGESTED_CATEGORY_KEY,
 )
 from job_hunter_agent.text_processing import compact_whitespace
-from job_hunter_agent.runtime_helpers import is_desktop_runtime
-from job_hunter_agent.role_analysis import infer_posting_channel
 
+logger = logging.getLogger(__name__)
 
 _llm_truncation_count = 0
 

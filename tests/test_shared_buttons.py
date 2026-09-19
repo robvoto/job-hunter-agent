@@ -112,7 +112,6 @@ def test_choice_badge_and_action_families_are_reused_across_screens():
         ROOT_DIR / "templates" / "static" / "theme" / "themes.widgets.css"
     ).read_text(encoding="utf-8-sig")
     helpers = (ROOT_DIR / "job_hunter_agent" / "server_helpers.py").read_text(encoding="utf-8")
-    results = (ROOT_DIR / "templates" / "results.html").read_text(encoding="utf-8")
     review_panel = (
         ROOT_DIR / "templates" / "static" / "settings" / "shared" / "settings-review-panel.js"
     ).read_text(encoding="utf-8")

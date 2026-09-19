@@ -11,16 +11,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-logger = logging.getLogger(__name__)
-
-
-from job_hunter_agent import workspace_data
 from job_hunter_agent import filters as _filters
+from job_hunter_agent import workspace_data
 from job_hunter_agent.config import DEBUG_MODE, JOB_HUNTER_BASE_URL
 from job_hunter_agent.fit_scoring import fit_score_displayed
 from job_hunter_agent.global_settings import (
-    get_potential_retention_days,
     get_hidden_retention_days,
+    get_potential_retention_days,
 )
 from job_hunter_agent.history import (
     TREAT_ALL_JOBS_AS_NEW_TO_YOU_FOR_TESTING,
@@ -28,13 +25,13 @@ from job_hunter_agent.history import (
     viewed_by_user,
 )
 from job_hunter_agent.io_utils import load_audit_rows, load_ui_labels
-from job_hunter_agent.llm_gate import get_cost_summary
 from job_hunter_agent.job_identity import (
     deduplicate_across_sources,
     deduplicate_content_reposts,
     find_content_repost_history_entry,
     normalize_job_key,
 )
+from job_hunter_agent.llm_gate import get_cost_summary
 from job_hunter_agent.llm_review_state import has_complete_llm_keep_data
 from job_hunter_agent.match_labels import score_to_match_label
 from job_hunter_agent.paths import REPO_ROOT
@@ -62,15 +59,17 @@ from job_hunter_agent.workspace_renderer import (
     ARCHIVE_LABEL,
     humanize_reject_reason,
     load_workspace_page_labels,
+    render_job_board_filter_choices,
     render_page_size_select_html,
     render_posted_filter_options,
     render_results_fragment,
     render_score_filter_options,
     render_section,
-    render_workspace_tabs_html,
     render_work_type_filter_options,
-    render_job_board_filter_choices,
+    render_workspace_tabs_html,
 )
+
+logger = logging.getLogger(__name__)
 
 WORKSPACE_DEBUG_MODE = DEBUG_MODE
 passes_title_filters = _filters.passes_title_filters
@@ -219,7 +218,9 @@ def _enrich_records_with_candidate_application_history(records: list[dict]) -> l
     # that looked identical to "no history with this employer", which is the
     # opposite of what this panel is for: the candidate would read a silent
     # failure as evidence of a clean record. Let it raise.
-    from job_hunter_agent.candidate_application_history import enrich_records_with_application_history
+    from job_hunter_agent.candidate_application_history import (
+        enrich_records_with_application_history,
+    )
     from job_hunter_agent.historical_application_evidence import (
         load_historical_application_evidence,
     )
