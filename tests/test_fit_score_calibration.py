@@ -3,7 +3,11 @@
 import pytest
 
 from job_hunter_agent import fit_scoring
-from job_hunter_agent.record_schema import APPLY_METHOD_EASY_APPLY, APPLY_METHOD_QUICK_APPLY, RECORD_APPLY_METHOD_KEY
+from job_hunter_agent.record_schema import (
+    APPLY_METHOD_EASY_APPLY,
+    APPLY_METHOD_QUICK_APPLY,
+    RECORD_APPLY_METHOD_KEY,
+)
 
 
 def _profile(extra=None):

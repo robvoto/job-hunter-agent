@@ -21,16 +21,16 @@ from job_hunter_agent.profile_store import (
     normalize_work_mode_preferences,
 )
 from job_hunter_agent.runtime_helpers import append_uncertainty_log, build_uncertainty_entry
-from job_hunter_agent.system_warnings import (
-    make_system_warning_fingerprint,
-    record_system_warning,
-)
 from job_hunter_agent.salary_utils import (
     salary_is_total_package,
     salary_max_value,
     salary_period_classification,
 )
 from job_hunter_agent.scoring_utils import build_scoring_source_text, extract_contract_months
+from job_hunter_agent.system_warnings import (
+    make_system_warning_fingerprint,
+    record_system_warning,
+)
 from job_hunter_agent.text_processing import compact_whitespace
 
 logger = logging.getLogger(__name__)

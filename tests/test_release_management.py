@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import importlib.util
 import os
-from pathlib import Path
 import subprocess
 import textwrap
 import tomllib
+from pathlib import Path
 
 import pytest
 from starlette.requests import Request

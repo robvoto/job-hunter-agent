@@ -5,7 +5,6 @@ from html import escape as html_escape
 from pathlib import Path
 from string import Template
 
-
 MERMAID_RENDER_CONFIG = {
     "startOnLoad": False,
     "securityLevel": "loose",

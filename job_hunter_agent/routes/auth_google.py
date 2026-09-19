@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import secrets
 import logging
+import secrets
 from html import escape as _html_escape
 
 from fastapi import APIRouter, HTTPException, Request

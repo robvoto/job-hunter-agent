@@ -161,17 +161,17 @@ def _reset_fresh_onboarding_user(user_id: str) -> None:
     onboarding complete is not enough if a previous run already persisted
     onboarding-owned profile fields or uploaded source documents.
     """
+    from job_hunter_agent.profile_store import (
+        KEY_PRIMARY_PATTERNS,
+        KEY_SECONDARY_PATTERNS,
+        patch_profile,
+    )
     from job_hunter_agent.source_documents import (
         DEFAULT_SOURCE_MATERIALS,
         build_onboarding_reset_patch,
         save_source_materials,
     )
     from job_hunter_agent.user_context import set_user_id
-    from job_hunter_agent.profile_store import (
-        KEY_PRIMARY_PATTERNS,
-        KEY_SECONDARY_PATTERNS,
-        patch_profile,
-    )
 
     set_user_id(user_id)
     try:

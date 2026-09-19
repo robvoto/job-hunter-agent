@@ -2,8 +2,8 @@
 
 import pytest
 
-from job_hunter_agent.io_utils import load_ui_labels
 from job_hunter_agent import workspace_renderer
+from job_hunter_agent.io_utils import load_ui_labels
 
 
 def test_workspace_job_requirements_summary_label_comes_from_ui_labels():

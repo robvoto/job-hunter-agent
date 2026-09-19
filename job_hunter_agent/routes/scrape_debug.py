@@ -1,9 +1,9 @@
 """Route handlers for scrape debug."""
 
 import contextvars
-from functools import partial
 import logging
 import threading
+from functools import partial
 
 from fastapi import APIRouter, Body
 

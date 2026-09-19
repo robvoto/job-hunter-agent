@@ -14,7 +14,6 @@ from job_hunter_agent.job_types import load_job_type
 from job_hunter_agent.knowledge_store import get_knowledge
 from job_hunter_agent.locations import resolve_location
 from job_hunter_agent.profile_store import get_search_settings
-from job_hunter_agent.search_terms import ordered_profile_search_terms
 from job_hunter_agent.record_schema import (
     APPLY_METHOD_EXTERNAL_APPLY,
     APPLY_METHOD_QUICK_APPLY,
@@ -30,6 +29,7 @@ from job_hunter_agent.record_schema import (
 )
 from job_hunter_agent.scrapers.base import map_job_type
 from job_hunter_agent.scrapers.location_adapters import to_seek
+from job_hunter_agent.search_terms import ordered_profile_search_terms
 from job_hunter_agent.source_registry import SOURCE_SEEK
 from job_hunter_agent.utils import set_query_param
 from job_hunter_agent.work_mode_extraction import extract_from_seek_card

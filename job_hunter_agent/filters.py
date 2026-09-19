@@ -11,12 +11,13 @@ from job_hunter_agent.capability_matrix import canonical_capability_term
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
 from job_hunter_agent.io_utils import load_parsing_rules
 from job_hunter_agent.profile_store import KEY_CANDIDATE_CAPABILITIES, load_profile
+from job_hunter_agent.signal_schema import TITLE_REASON_POTENTIAL_MATCH
 from job_hunter_agent.system_warnings import (
     make_system_warning_fingerprint,
     record_system_warning,
 )
-from job_hunter_agent.signal_schema import TITLE_REASON_POTENTIAL_MATCH
 from job_hunter_agent.title_normalization_rules import normalize_title_text
+
 
 def _normalize_title_pattern_text(value: str) -> str:
     raw = str(value or "").strip().lower()

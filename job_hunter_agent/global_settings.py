@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
-import copy
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 from job_hunter_agent.paths import GLOBAL_SETTINGS_PATH, RUNTIME_DIR
-from job_hunter_agent.settings.global_settings_defaults import *  # noqa: F401,F403
-from job_hunter_agent.settings.global_settings_normalization import normalize_global_settings
 from job_hunter_agent.runtime_helpers import log_settings_change
+from job_hunter_agent.settings.global_settings_defaults import *  # noqa: F401,F403,F405
+from job_hunter_agent.settings.global_settings_normalization import normalize_global_settings
 
 logger = logging.getLogger(__name__)
 

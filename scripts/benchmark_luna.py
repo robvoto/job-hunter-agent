@@ -29,12 +29,12 @@ from __future__ import annotations
 
 import argparse
 import ast
-from contextlib import contextmanager
-from dataclasses import dataclass
 import os
-from pathlib import Path
 import sys
 import time
+from contextlib import contextmanager
+from dataclasses import dataclass
+from pathlib import Path
 from unittest.mock import patch
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]

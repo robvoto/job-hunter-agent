@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-from job_hunter_agent import llm_gate
 import job_hunter_agent.routes.review as review_routes
+from job_hunter_agent import llm_gate
 
 
 class _FakeResponse:

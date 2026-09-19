@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import logging
 import re
-import time
 import textwrap
+import time
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Callable
@@ -123,20 +123,19 @@ from job_hunter_agent.fit_scoring import (
 from job_hunter_agent.hard_blocker_rules import find_hard_block_matches
 from job_hunter_agent.history import apply_kept_job_reuse, can_reuse_kept_job, finalize_record
 from job_hunter_agent.job_identity import (
-    find_confirmed_duplicate,
+    RUN_IDENTITY_CLAIM_KEY,
+    RunIdentityRegistry,
     find_confirmed_identity_history_entry,
     find_manual_state_history_entry,
     merge_confirmed_duplicate_evidence,
-    RUN_IDENTITY_CLAIM_KEY,
-    RunIdentityRegistry,
 )
-from job_hunter_agent.job_types import infer_work_type_from_description
 from job_hunter_agent.job_quality import (
     detect_external_date_signals,
     extract_external_original_posting_date,
     fetch_external_html,
     load_dodgy_job_rules,
 )
+from job_hunter_agent.job_types import infer_work_type_from_description
 from job_hunter_agent.llm_gate import (
     LLMCallError,
     LLMReviewValidationError,
@@ -145,13 +144,14 @@ from job_hunter_agent.llm_gate import (
     llm_judge_title,
     normalize_llm_title_judgment,
 )
+from job_hunter_agent.llm_protocol import LLM_UNCERTAIN_COVERAGE_REQUIREMENT_TYPE
 from job_hunter_agent.llm_review_state import has_complete_llm_keep_data
 from job_hunter_agent.logging_utils import format_debug_marker, format_log_block
 from job_hunter_agent.match_labels import score_to_match_label
 from job_hunter_agent.occupation_taxonomy import (
-    OccupationClassification,
     RESULT_FAR,
     RESULT_UNCERTAIN,
+    OccupationClassification,
     format_onet_response,
 )
 from job_hunter_agent.occupation_taxonomy import (
@@ -172,13 +172,14 @@ from job_hunter_agent.record_schema import (
     DETAILS_STATUS_OK,
     ORIGINAL_POSTED_DATE_STATUS_UNVERIFIED,
     ORIGINAL_POSTED_DATE_STATUS_VERIFIED,
+    POSTING_CHANNEL_VERSION_KEY,
     RECORD_APPLY_METHOD_KEY,
     RECORD_CARD_SALARY_KEY,
     RECORD_COMPANY_KEY,
     RECORD_COMPETITIVE_SIGNALS_KEY,
     RECORD_CONTENT_REASON_KEY,
-    RECORD_DECISION_KEY,
     RECORD_DECISION_EXPLANATION_KEY,
+    RECORD_DECISION_KEY,
     RECORD_DESCRIPTION_COMPACTION_KEY,
     RECORD_DESCRIPTION_SOURCE_KEY,
     RECORD_DETAILS_LENGTH_KEY,
@@ -215,15 +216,13 @@ from job_hunter_agent.record_schema import (
     RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY,
     RECORD_POSTED_AGE_DAYS_KEY,
     RECORD_POSTING_CHANNEL_EVIDENCE_KEY,
-    POSTING_CHANNEL_VERSION_KEY,
     RECORD_REJECT_REASON_KEY,
-    RECORD_REVIEW_SOURCE_KEY,
-    RECORD_REQUIREMENT_COVERAGE_KEY,
-    RECORD_REQUIREMENT_COVERAGE_HIDDEN_KEY,
     RECORD_REQUIREMENT_COVERAGE_BEHAVIOURAL_KEY,
+    RECORD_REQUIREMENT_COVERAGE_HIDDEN_KEY,
+    RECORD_REQUIREMENT_COVERAGE_KEY,
     RECORD_REQUIREMENT_COVERAGE_UNCLASSIFIED_KEY,
     RECORD_REQUIREMENT_COVERAGE_VERSION_KEY,
-    REQUIREMENT_COVERAGE_CONTRACT_VERSION,
+    RECORD_REVIEW_SOURCE_KEY,
     RECORD_REVIEWED_SIGNAL_MATCHES_KEY,
     RECORD_ROLE_SNAPSHOT_KEY,
     RECORD_SALARY_KEY,
@@ -236,10 +235,11 @@ from job_hunter_agent.record_schema import (
     RECORD_URL_KEY,
     RECORD_WORK_MODE_KEY,
     RECORD_WORK_TYPE_KEY,
+    REQUIREMENT_COVERAGE_CONTRACT_VERSION,
 )
-from job_hunter_agent.llm_protocol import LLM_UNCERTAIN_COVERAGE_REQUIREMENT_TYPE
 from job_hunter_agent.role_analysis import infer_posting_channel
 from job_hunter_agent.run_control import pause_for_step_through, run_stop_requested
+from job_hunter_agent.runtime_helpers import append_uncertainty_log, build_uncertainty_entry
 from job_hunter_agent.salary_utils import preferred_salary_display
 from job_hunter_agent.score_labels import score_to_tone_class
 from job_hunter_agent.signal_detection import (
@@ -265,13 +265,12 @@ from job_hunter_agent.source_learning import (
     register_pending_learning_signals,
     resolve_llm_review_payload,
 )
+from job_hunter_agent.source_registry import get_source_display_label
 from job_hunter_agent.text_processing import (
     build_role_summary,
     compact_whitespace,
     dedupe_preserve_order,
 )
-from job_hunter_agent.runtime_helpers import append_uncertainty_log, build_uncertainty_entry
-from job_hunter_agent.source_registry import get_source_display_label
 
 HookFn = Callable[[dict, "ReviewPipelineContext"], None]
 

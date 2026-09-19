@@ -10,7 +10,6 @@ from job_hunter_agent import (
     capability_knowledge,
     hard_blocker_rules,
     signal_registry,
-    title_normalization_rules,
 )
 
 

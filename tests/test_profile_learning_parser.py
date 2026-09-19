@@ -1,7 +1,7 @@
 """Tests for profile learning."""
 
-import logging
 import hashlib as _hashlib
+import logging
 from types import SimpleNamespace
 from unittest.mock import patch
 

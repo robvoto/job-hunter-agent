@@ -8,9 +8,9 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-import job_hunter_agent.routes.workspace_api as workspace_api
-import job_hunter_agent.routes.scrape_debug as scrape_debug
 import job_hunter_agent.paths as paths
+import job_hunter_agent.routes.scrape_debug as scrape_debug
+import job_hunter_agent.routes.workspace_api as workspace_api
 from job_hunter_agent import source_connector, workspace_service
 from job_hunter_agent.database import db_conn
 from job_hunter_agent.fastapi_app import create_app

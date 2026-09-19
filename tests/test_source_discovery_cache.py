@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import importlib
 import asyncio
+import importlib
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -185,8 +185,8 @@ def test_expired_search_plan_bypasses_fresh_source_snapshot(monkeypatch):
 
 
 def test_all_linkedin_timeouts_enter_bounded_backoff(monkeypatch):
-    from job_hunter_agent.scrapers import linkedin
     from job_hunter_agent import source_runner
+    from job_hunter_agent.scrapers import linkedin
 
     _clear_cache()
     calls = []
@@ -650,8 +650,8 @@ def test_linkedin_stale_snapshot_is_served_during_active_backoff(monkeypatch):
     """A bounded, known-good LinkedIn snapshot should be served -- instead of
     an empty BACKOFF result -- when a live search is unavailable because of
     active failure backoff, with its posting ages conservatively aged forward."""
-    from job_hunter_agent.scrapers import linkedin
     from job_hunter_agent import source_runner
+    from job_hunter_agent.scrapers import linkedin
 
     _clear_cache()
     calls = []
@@ -718,8 +718,8 @@ def test_linkedin_stale_snapshot_is_served_after_same_run_full_failure(monkeypat
     """When a live LinkedIn attempt fails completely this run, a bounded
     known-good snapshot should replace the empty result -- but the live
     failure must still be recorded truthfully for future backoff decisions."""
-    from job_hunter_agent.scrapers import linkedin
     from job_hunter_agent import source_runner
+    from job_hunter_agent.scrapers import linkedin
 
     _clear_cache()
     calls = []
@@ -806,9 +806,9 @@ def test_linkedin_stale_fallback_does_not_exceed_configured_max_age(monkeypatch)
     """A snapshot older than linkedin_stale_fallback_max_age_minutes must not
     be served as a fallback -- active backoff must still return empty results,
     exactly as before the stale-fallback feature existed."""
-    from job_hunter_agent.scrapers import linkedin
     from job_hunter_agent import source_runner
     from job_hunter_agent.global_settings import get_linkedin_stale_fallback_max_age_minutes
+    from job_hunter_agent.scrapers import linkedin
 
     _clear_cache()
     calls = []

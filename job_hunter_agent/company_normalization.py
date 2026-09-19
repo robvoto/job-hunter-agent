@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from difflib import SequenceMatcher
 import re
+from difflib import SequenceMatcher
 from functools import lru_cache
 from typing import Any
 

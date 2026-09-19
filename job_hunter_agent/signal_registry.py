@@ -565,7 +565,7 @@ def upsert_profile_section_label(word: str, bucket: str) -> None:
     labels = routing.get(list_key)
     if not isinstance(labels, list):
         return
-    existing = [str(l).strip().lower() for l in labels]
+    existing = [str(label).strip().lower() for label in labels]
     if word in existing:
         return
     labels.append(word)

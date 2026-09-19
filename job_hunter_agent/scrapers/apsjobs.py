@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import logging
 import copy
+import logging
 import re
 from datetime import datetime
 from time import monotonic
@@ -18,14 +18,15 @@ from job_hunter_agent.global_settings import (
     DEFAULT_SEARCH_SETTINGS,
     KEY_APSJOBS_RESULTS_PER_SEARCH,
     KEY_DATE_RANGE_DAYS,
-    get_search_plan_min_corroboration_samples,
     get_search_plan_max_age_minutes,
+    get_search_plan_min_corroboration_samples,
 )
 from job_hunter_agent.io_utils import (
     DEBUG_CAPTURE_SOURCE_PAYLOADS,
     load_parsing_rules,
     write_source_payload_debug,
 )
+from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.job_review_pipeline import (
     ReviewPipelineContext,
     ReviewPipelineHooks,
@@ -33,17 +34,10 @@ from job_hunter_agent.job_review_pipeline import (
     review_pre_detail_normalized_job,
 )
 from job_hunter_agent.job_types import load_job_type
+from job_hunter_agent.logging_utils import format_debug_marker
 from job_hunter_agent.paths import APSJOBS_PLAYWRIGHT_USER_DATA_DIR
 from job_hunter_agent.posting_utils import parse_visible_posted_age_days
 from job_hunter_agent.profile_store import get_search_settings
-from job_hunter_agent.search_metrics import QueryYieldMetric, record_query_yield_metric
-from job_hunter_agent.search_plan_state import (
-    load_search_plan_state,
-    planned_search_terms,
-    save_search_plan_observation,
-    select_query_cover,
-)
-from job_hunter_agent.search_terms import ordered_profile_search_terms
 from job_hunter_agent.record_schema import (
     RECORD_COMPANY_KEY,
     RECORD_DESCRIPTION_SOURCE_KEY,
@@ -62,17 +56,27 @@ from job_hunter_agent.scrapers.base import (
     build_initial_flat_record,
     map_job_type,
 )
+from job_hunter_agent.search_metrics import QueryYieldMetric, record_query_yield_metric
+from job_hunter_agent.search_plan_state import (
+    load_search_plan_state,
+    planned_search_terms,
+    save_search_plan_observation,
+    select_query_cover,
+)
+from job_hunter_agent.search_terms import ordered_profile_search_terms
 from job_hunter_agent.settings.global_settings_defaults import (
     DEFAULT_PLAYWRIGHT_SETTINGS,
     KEY_PLAYWRIGHT_SELECTOR_TIMEOUT,
 )
-from job_hunter_agent.job_identity import normalize_job_key
-from job_hunter_agent.logging_utils import format_debug_marker
-from job_hunter_agent.source_registry import SOURCE_APSJOBS
 from job_hunter_agent.source_errors import PartialSourceResultsError
+from job_hunter_agent.source_registry import SOURCE_APSJOBS
 from job_hunter_agent.text_processing import compact_whitespace, dedupe_preserve_order
 from job_hunter_agent.utils import set_query_param
-from job_hunter_agent.work_mode_extraction import WORK_MODE_UNKNOWN, extract_from_text, log_work_mode_result
+from job_hunter_agent.work_mode_extraction import (
+    WORK_MODE_UNKNOWN,
+    extract_from_text,
+    log_work_mode_result,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -693,7 +697,6 @@ class APSJobsScraper(BaseJobScraper):
                 },
             )
         )
-        started_at = monotonic()
         try:
             with sync_playwright() as playwright:
                 # Always headless, independent of the admin "Run SEEK browser

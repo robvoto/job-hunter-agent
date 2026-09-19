@@ -14,7 +14,6 @@ from typing import Optional
 from job_hunter_agent.paths import get_workspace_results_path
 from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
 
-
 _refresh_state_lock = threading.Lock()
 _refresh_states: dict[str, str] = {}
 _workspace_rebuild_lock = threading.Lock()

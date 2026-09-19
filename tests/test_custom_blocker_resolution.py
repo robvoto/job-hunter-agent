@@ -9,8 +9,8 @@ matching rules this enforces.
 from job_hunter_agent.profile_gaps import (
     CUSTOM_BLOCKER_REASON_AMBIGUOUS,
     CUSTOM_BLOCKER_REASON_INVALID_INPUT,
-    CUSTOM_BLOCKER_REASON_NOT_REQUIRED,
     CUSTOM_BLOCKER_REASON_NO_MATCH,
+    CUSTOM_BLOCKER_REASON_NOT_REQUIRED,
     CUSTOM_BLOCKER_REASON_RESOLVED,
     list_custom_blocker_candidates,
     resolve_custom_blocker,

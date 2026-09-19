@@ -9,8 +9,8 @@ ownership rules in `.agents/skills/scraping/SKILL.md`.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
 
 from job_hunter_agent.logging_utils import format_log_block
 

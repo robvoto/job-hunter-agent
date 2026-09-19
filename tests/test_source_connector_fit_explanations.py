@@ -14,8 +14,6 @@ from job_hunter_agent import (
     fit_scoring,
     llm_gate,
     role_analysis,
-    signal_detection,
-    source_connector,
     source_learning,
     workspace_renderer,
     workspace_service,
@@ -29,12 +27,16 @@ from job_hunter_agent.profile_store import (
     KEY_SUPPLEMENTARY_CANDIDATE_PROFILE_CONTEXT,
 )
 from job_hunter_agent.record_schema import (
-    APPLY_METHOD_EXTERNAL_APPLY,
     APPLY_METHOD_EASY_APPLY,
+    APPLY_METHOD_EXTERNAL_APPLY,
     APPLY_METHOD_QUICK_APPLY,
     CONFIDENCE_HIGH,
     CONFIDENCE_LOW,
     DETAILS_STATUS_OK,
+    ORIGINAL_POSTED_DATE_STATUS_UNVERIFIED,
+    ORIGINAL_POSTED_DATE_STATUS_VERIFIED,
+    POSTING_CHANNEL_CLASSIFIER_VERSION,
+    POSTING_CHANNEL_VERSION_KEY,
     RECORD_APPLY_METHOD_KEY,
     RECORD_DETAILS_STATUS_KEY,
     RECORD_FIT_CONFIDENCE_KEY,
@@ -51,10 +53,6 @@ from job_hunter_agent.record_schema import (
     RECORD_LLM_INPUT_TOKENS_KEY,
     RECORD_LLM_OUTPUT_TOKENS_KEY,
     RECORD_ORIGINAL_POSTED_DATE_KEY,
-    ORIGINAL_POSTED_DATE_STATUS_UNVERIFIED,
-    ORIGINAL_POSTED_DATE_STATUS_VERIFIED,
-    POSTING_CHANNEL_CLASSIFIER_VERSION,
-    POSTING_CHANNEL_VERSION_KEY,
     RECORD_ORIGINAL_POSTED_DATE_STATUS_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
 )
@@ -1111,7 +1109,8 @@ def test_build_fit_highlights_recomputes_instead_of_reusing_stale_highlights(mon
 
 
 def test_reviewed_signal_matches_respect_registry_decisions(monkeypatch):
-    _registry = lambda: {
+    def _registry():
+        return {
         "stakeholder management": {
             "signal": "stakeholder management",
             "decision": "use",
@@ -1120,12 +1119,12 @@ def test_reviewed_signal_matches_respect_registry_decisions(monkeypatch):
         "jira": {"signal": "jira", "decision": "use", "original_texts": ["jira"]},
         "banking": {"signal": "banking", "decision": "review", "original_texts": ["banking"]},
         "project": {"signal": "project", "decision": "ignore", "original_texts": ["project"]},
-        "delivery": {
-            "signal": "delivery",
-            "decision": "evidence_only",
-            "original_texts": ["delivery"],
-        },
-    }
+            "delivery": {
+                "signal": "delivery",
+                "decision": "evidence_only",
+                "original_texts": ["delivery"],
+            },
+        }
     monkeypatch.setattr(capability_matching, "load_registry", _registry)
     monkeypatch.setattr(capability_matching, "load_registry", _registry)
     monkeypatch.setattr(capability_matching, "load_approved_signal_catalog", lambda: [])
@@ -1540,7 +1539,8 @@ def test_job_card_shows_unknown_posted_date_when_missing():
 
 
 def test_job_card_shows_reviewed_signal_transparency_groups(monkeypatch):
-    _registry = lambda: {
+    def _registry():
+        return {
         "stakeholder management": {
             "signal": "stakeholder management",
             "decision": "use",
@@ -1548,8 +1548,8 @@ def test_job_card_shows_reviewed_signal_transparency_groups(monkeypatch):
         },
         "jira": {"signal": "jira", "decision": "use", "original_texts": ["jira"]},
         "banking": {"signal": "banking", "decision": "review", "original_texts": ["banking"]},
-        "project": {"signal": "project", "decision": "ignore", "original_texts": ["project"]},
-    }
+            "project": {"signal": "project", "decision": "ignore", "original_texts": ["project"]},
+        }
     monkeypatch.setattr(capability_matching, "load_registry", _registry)
     monkeypatch.setattr(capability_matching, "load_registry", _registry)
 

@@ -24,8 +24,9 @@ from job_hunter_agent.paths import (
     REPO_ROOT,
 )
 from job_hunter_agent.profile_learning import (
-    build_role_history_patch,
+    ROLE_SUGGESTIONS_KEY,
     build_learning_patch,
+    build_role_history_patch,
     repair_text,
 )
 from job_hunter_agent.profile_store import (
@@ -46,7 +47,6 @@ from job_hunter_agent.profile_store import (
     normalize_engagement_type_preferences,
     patch_profile,
 )
-from job_hunter_agent.profile_learning import ROLE_SUGGESTIONS_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -471,7 +471,11 @@ def run_onboarding(
         search_settings["keywords"] = manual_keywords
 
     # 2. Locations
-    manual_locations = [str(l).strip() for l in prefs.get("locations", []) if str(l).strip()][:1]
+    manual_locations = [
+        str(location).strip()
+        for location in prefs.get("locations", [])
+        if str(location).strip()
+    ][:1]
     if manual_locations:
         search_settings["locations"] = manual_locations
     else:

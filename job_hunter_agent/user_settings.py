@@ -32,7 +32,9 @@ def _possible_fit_threshold() -> int:
     for level in MATCH_LEVELS:
         if str(level.get("label", "")).strip().lower() == "possible fit":
             return int(level["minimum_score"])
-    sorted_levels = sorted(MATCH_LEVELS, key=lambda l: int(l.get("minimum_score", 0)))
+    sorted_levels = sorted(
+        MATCH_LEVELS, key=lambda level: int(level.get("minimum_score", 0))
+    )
     if len(sorted_levels) >= 2:
         return int(sorted_levels[1]["minimum_score"])
     return int(sorted_levels[0]["minimum_score"]) if sorted_levels else 0

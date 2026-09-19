@@ -13,9 +13,9 @@ from job_hunter_agent.record_schema import (
     RECORD_TITLE_KEY,
     RECORD_URL_KEY,
 )
+from job_hunter_agent.scrapers import seek_runner
 from job_hunter_agent.scrapers.seek import classify_seek_apply_method
 from job_hunter_agent.scrapers.seek_runner import seek_quick_apply_filter_matches
-from job_hunter_agent.scrapers import seek_runner
 
 
 def test_classify_seek_apply_method_detects_quick_apply():
