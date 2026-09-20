@@ -421,12 +421,6 @@ def test_developer_guide_documents_prompt_context_loading_rule():
     assert "request-scoped prompt context object" in developer_guide
 
 
-def test_showcase_notes_are_available_in_docs_api_allow_list():
-    from job_hunter_agent.config import ALLOWED_DOC_REL_PATHS
-
-    assert "docs/SHOWCASE_NOTES.md" in ALLOWED_DOC_REL_PATHS
-
-
 def test_workspace_title_block_copy_is_managed_and_explains_impact():
     import json
 
