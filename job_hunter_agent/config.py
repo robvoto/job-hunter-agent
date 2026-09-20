@@ -95,6 +95,5 @@ ALLOWED_DOC_REL_PATHS = (
     "docs/DEVELOPER_GUIDE.md",
     "docs/OPERATIONS.md",
     "docs/USER_GUIDE.md",
-    "docs/SHOWCASE_NOTES.md",
     "docs/SCORING_RATIONALE.md",
 )
