@@ -32,6 +32,7 @@ Use this skill when the user mentions any of:
   - zero cards + scraper timeouts + service restart signals suggest host/runtime failure
   - captured cards + rejects/LLM activity suggest app-level pipeline behaviour
 - Keep AWS facts current by verifying with CLI when possible; do not rely on stale memory for instance state.
+- All Job Hunter service start/stop/restart/kill actions, including on AWS, are protected by the runtime lifecycle approval rule in `docs/PROJECT_CONTEXT.md`. Host diagnosis is read-only by default; an unexpected service state must be reported, not corrected without fresh explicit approval.
 
 ## Ownership
 - AWS host facts and standard diagnosis workflow: this skill + `DETAILS.md`

@@ -37,7 +37,7 @@ Runtime-specific: use only when Human MCP browser tools are exposed.
 - OAuth client JSON must be stored outside the repo at `C:\Users\thewr\.config\human-mcp\gmail\credentials.json` unless overridden by `HUMAN_MCP_GMAIL_CREDENTIALS_PATH`.
 - The bootstrap script writes the refresh/access token to `C:\Users\thewr\.config\human-mcp\gmail\token.json` unless overridden by `HUMAN_MCP_GMAIL_TOKEN_PATH`.
 - Current Gmail scope is read-only: `https://www.googleapis.com/auth/gmail.readonly`.
-- After first-time OAuth setup, restart Human MCP so ChatGPT can discover/use the Gmail tools. In an already-open ChatGPT session the connector tool catalogue may remain stale until a new chat/session.
+- After first-time OAuth setup, Human MCP may need a restart before ChatGPT can discover/use the Gmail tools. Report that requirement and request explicit lifecycle approval under `docs/PROJECT_CONTEXT.md`; do not restart MCP automatically. In an already-open ChatGPT session the connector tool catalogue may remain stale until a new chat/session.
 - Do not add Gmail send/draft scopes or sending tools without explicit user request. If added later, preserve the same explicit-per-send approval rule used for LinkedIn/browser actions.
 
 ### Browser action safety

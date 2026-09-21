@@ -65,7 +65,7 @@ Do not skip a failed gate, move an existing release tag, or force-push a release
 
 Git and release work always targets the latest `main`. The version currently running on AWS does not constrain normal development, commits, merges, or release preparation.
 
-AWS deployment is a separate operator action. Do not deploy, restart, roll back, or otherwise change production unless the human explicitly asks for an AWS action in the current task. A commit, merge, push, or release does not imply deployment.
+AWS deployment is a separate operator action. Do not deploy or roll back production unless the human explicitly asks for that AWS action in the current task. Any start/stop/restart performed by or around deployment is separately governed by the runtime lifecycle approval rule in `docs/PROJECT_CONTEXT.md`; do not infer lifecycle permission from a deploy request, commit, merge, push, release, smoke-test request, or version check.
 
 AWS deploys code only after a release tag is published. Production must use `deploy-jobhunter-production vX.Y.Z`. The command snapshots runtime data, deploys the explicit release tag, runs production smoke checks, and automatically restores the previous known-good release on failure. Runtime data is restored only if code rollback alone does not recover production.
 

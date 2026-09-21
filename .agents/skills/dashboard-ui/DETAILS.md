@@ -182,7 +182,7 @@ This is always a version mismatch, not a code bug. Two causes:
 
 **Diagnosis steps (in order):**
 1. Hard-refresh the browser (Ctrl+Shift+R).
-2. Restart the server if any Python file changed since last start.
+2. If any Python file changed since the last start, a server restart may be required to validate the new Python. Report that requirement and get explicit Job Hunter lifecycle approval under `docs/PROJECT_CONTEXT.md`; do not restart it automatically.
 3. Check that every `window.__JOB_HUNTER_*` the JS reads is actually injected by `build_bootstrap_script()`.
 4. Only after confirming fresh Python + fresh browser: read the actual JS source.
 

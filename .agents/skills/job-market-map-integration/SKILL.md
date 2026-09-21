@@ -12,6 +12,7 @@ Use this for any Job Hunter work that reads from or coordinates with JMM.
 - Job Hunter owns candidate analysis, ranking, workspace state, and personal activity/outcomes.
 - Job Hunter consumes JMM through the supported `/v3` HTTP API only. Do not read/write JMM SQLite from JH and do not silently fall back to JH's retired collectors.
 - JMM's authoritative contract lives in `/home/robvoto/projects/job-market-map/docs/API.md` and `docs/CONSUMER_CONTRACT.md`. If JMM code itself must change, also read that repo's `AGENTS.md` and `.agents/skills/job-market-map/SKILL.md` before editing.
+- JMM lifecycle is protected by the JH/JMM/Human-MCP lifecycle approval rule in `docs/PROJECT_CONTEXT.md`. Integration diagnosis is read-only by default; never start, stop, restart, kill, or relaunch JMM merely to test or verify JH without fresh explicit approval for that exact action.
 
 ## Named consumer paging
 Normal JH discovery uses its named JMM consumer feed and checkpoint.

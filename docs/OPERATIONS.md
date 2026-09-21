@@ -14,6 +14,8 @@ This document defines:
 
 This is an operational runtime reference, not a development diary.
 
+**Agent lifecycle note:** start/stop/restart/kill commands in this document are operator references, not automatic permission for an agent to execute them. Agents must follow the JH/JMM/Human-MCP runtime lifecycle approval rule in `docs/PROJECT_CONTEXT.md`; read-only status/health inspection is allowed, but lifecycle state must not be changed without fresh explicit approval for that exact target and action.
+
 ## Command rule
 
 For all WSL/Linux and EC2 commands in this document, run Python through the

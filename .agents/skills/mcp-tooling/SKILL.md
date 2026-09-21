@@ -10,7 +10,7 @@ Use for project filesystem/tool access and whenever MCP execution is unreliable.
 ## Multi-agent Human MCP rule
 - Many ChatGPT chats, Claude agents and MCP processes are expected and supported. Do not diagnose their mere presence as a conflict.
 - There is one shared Rob-Chrome browser broker: the canonical Human MCP server owns `127.0.0.1:8001` and `127.0.0.1:8766`; secondary MCP processes proxy browser calls and must not bind `8766`.
-- Do **not** routinely run `python E:\Programming\MCP-server\mcp_fileserver.py` manually. Use `E:\Programming\MCP-server\scripts\ensure-human-mcp.ps1`. It is idempotent and will reuse the already-running canonical server.
+- Human MCP lifecycle is protected by the runtime lifecycle rule in `docs/PROJECT_CONTEXT.md`. Do **not** run `mcp_fileserver.py`, `ensure-human-mcp.ps1`, stop/kill commands, or any other MCP/broker lifecycle action unless Rob explicitly approves that exact action. For diagnosis, use read-only health/status checks; if MCP is absent or unhealthy, report it and request lifecycle approval rather than starting/restarting it.
 - WinError 10048 on `127.0.0.1:8766` after a manual start means a duplicate canonical launch was attempted or port ownership is inconsistent; it does not mean MCP is missing. Do not kill arbitrary agents or create another browser profile.
 - For browser trouble, run `E:\Programming\MCP-server\scripts\check-browser-broker-health.ps1` and follow `E:\Programming\MCP-server\.agents\skills\browser-session-recovery\SKILL.md`.
 - Signed-in browser workflows reuse Rob's existing Chrome and each workflow owns its own tab. Server-side MCP session isolation protects cached/older schemas; explicit `page_id` targeting is preferred when the tool schema exposes it.
