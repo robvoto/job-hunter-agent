@@ -1140,8 +1140,6 @@
     }
     .tuning-group-copy { margin: 0; color: var(--text-muted); font-size: var(--text-role-status-font-size); line-height: 1.55; }
     .tuning-group-count { color: var(--text-muted); font-weight: var(--text-role-status-font-weight); }
-    .review-strength-question { width: fit-content; }
-    .review-strength-question-label { font-weight: var(--text-role-button-font-weight); color: var(--text-primary); }
     .review-strength-meter { width: fit-content; }
     .tuning-empty-state { margin-top: 2px; }
     .optimise-shell .tuning-actions {
@@ -1379,7 +1377,10 @@
       z-index: 20;
       left: 0;
       bottom: calc(100% + 9px);
-      display: none;
+      display: block;
+      visibility: hidden;
+      opacity: 0;
+      pointer-events: none;
       width: max-content;
       max-width: 260px;
       padding: 9px 11px;
@@ -1390,6 +1391,7 @@
       color: var(--text-primary);
       line-height: 1.35;
       white-space: normal;
+      transition: opacity 120ms ease, visibility 0s linear 120ms;
     }
     .capability-strength-tooltip::after {
       content: '';
@@ -1408,9 +1410,21 @@
       color: var(--text-muted);
       font-weight: 400;
     }
-    .capability-strength-meter:hover .capability-strength-tooltip,
-    .capability-strength-meter:focus-within .capability-strength-tooltip {
-      display: block;
+    /* Strength help is deliberately quiet: only show after a 3s hover, which
+       signals that the user is lingering over the control for clarification.
+       Keyboard focus remains immediate via :focus-visible. Mouse clicks do not
+       latch the tooltip open simply because a radio retains focus. */
+    .capability-strength-meter:hover .capability-strength-tooltip {
+      visibility: visible;
+      opacity: 1;
+      pointer-events: auto;
+      transition-delay: 3s, 3s;
+    }
+    .capability-strength-meter:has(.capability-strength-dot input:focus-visible) .capability-strength-tooltip {
+      visibility: visible;
+      opacity: 1;
+      pointer-events: auto;
+      transition-delay: 0s, 0s;
     }
     .capability-preset-grid {
       display: grid;

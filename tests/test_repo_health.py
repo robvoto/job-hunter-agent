@@ -468,6 +468,9 @@ def test_requirement_importance_badge_stays_visually_attached_to_requirement_tex
 
 
 def test_capability_strength_controls_use_shared_semantic_tone_classes():
+    capability_ui_js = (
+        ROOT_DIR / "templates" / "static" / "common" / "capability-ui.js"
+    ).read_text(encoding="utf-8")
     capability_editor_js = (
         ROOT_DIR / "templates" / "static" / "settings" / "shared" / "settings-capability-editor.js"
     ).read_text(encoding="utf-8")
@@ -477,19 +480,28 @@ def test_capability_strength_controls_use_shared_semantic_tone_classes():
     settings_css = (
         ROOT_DIR / "templates" / "static" / "settings" / "shared" / "settings-page.css"
     ).read_text(encoding="utf-8")
-    theme_widgets = (
-        ROOT_DIR / "templates" / "static" / "theme" / "themes.widgets.css"
-    ).read_text(encoding="utf-8")
 
-    assert "capability-strength-meter ${escapeHtml(selectedStrengthMeta.tone || '')}" in capability_editor_js
-    assert "selectedStrengthMeta.summary" in capability_editor_js
+    assert "export function capabilityStrengthMeterMarkup" in capability_ui_js
+    assert "tone: 'strength-strong'" in capability_ui_js
+    assert "tone: 'strength-working'" in capability_ui_js
+    assert "tone: 'strength-basic'" in capability_ui_js
+    assert "capabilityUi.capabilityStrengthMeterMarkup({" in capability_editor_js
+    assert "capabilityUi.capabilityStrengthMeterMarkup({" in review_panel_js
     assert ".capability-strength-meter.strength-strong" in settings_css
     assert ".capability-strength-meter.strength-working" in settings_css
     assert ".capability-strength-meter.strength-basic" in settings_css
-    assert "choice-card jh-choice choice-card--strength ${escapeHtml(meta.tone || '')}" in review_panel_js
-    assert ".choice-strip > .choice-card--strength.strength-strong" in theme_widgets
-    assert ".choice-strip > .choice-card--strength.strength-working" in theme_widgets
-    assert ".choice-strip > .choice-card--strength.strength-basic" in theme_widgets
+
+
+def test_capability_strength_help_uses_delayed_hover_and_keyboard_focus():
+    settings_css = (
+        ROOT_DIR / "templates" / "static" / "settings" / "shared" / "settings-page.css"
+    ).read_text(encoding="utf-8")
+
+    assert ".capability-strength-meter:hover .capability-strength-tooltip" in settings_css
+    assert "transition-delay: 3s, 3s;" in settings_css
+    assert ":has(.capability-strength-dot input:focus-visible)" in settings_css
+    assert "transition-delay: 0s, 0s;" in settings_css
+    assert ".capability-strength-meter:focus-within .capability-strength-tooltip" not in settings_css
 
 
 def test_capability_matrix_uses_quiet_two_column_default_layout():

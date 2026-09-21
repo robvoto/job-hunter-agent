@@ -43,15 +43,8 @@ function getReviewChoiceMeta(choice) {
   return capabilityUi.capabilityLevelMeta?.[choice] || { label: 'Choose a strength' };
 }
 
-function strengthQuestionMarkup(groupName) {
+function strengthMeterMarkup(groupName) {
   return `
-    <div class="field-label-row review-strength-question">
-      <span class="review-strength-question-label">${escapeHtml(capabilityUi.reviewStrengthPromptLabel)}</span>
-      <details class="field-info-drawer">
-        <summary class="field-info" aria-label="About capability strength">i</summary>
-        <div class="field-info-panel">Strength controls how much this capability influences matching. Basic = light influence. Working = normal influence. Strong = high influence.</div>
-      </details>
-    </div>
     <div class="review-strength-meter">
       ${capabilityUi.capabilityStrengthMeterMarkup({
         selectedValue: '',
@@ -159,7 +152,7 @@ function renderCapabilitySuggestionCard(item, index) {
         <h3>${escapeHtml(item.skill || 'Capability')}</h3>
         <span class="review-card-count">${escapeHtml(keptRoleCountLabel(item.count))}</span>
       </div>
-      ${strengthQuestionMarkup(groupName)}
+      ${strengthMeterMarkup(groupName)}
       <details class="review-examples review-evidence">
         <summary>Why Job Hunter suggested this</summary>
         <div class="review-examples-body">${capabilityEvidenceMarkup(item)}</div>
