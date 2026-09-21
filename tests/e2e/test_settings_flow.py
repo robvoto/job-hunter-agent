@@ -270,7 +270,7 @@ def test_capability_alias_preview_uses_related_skills_copy(candidate_page):
     drawer = card.locator("details.capability-alias-drawer")
     card.locator(".cap-alias-summary").click()
     expect(drawer).to_have_attribute("open", "")
-    expect(card.locator(".capability-summary-label--open")).to_have_text("Show less")
+    expect(card.locator(".capability-summary-label--open")).to_have_text("Hide 4")
     expanded_aliases = drawer.locator(".cap-alias-chips")
     expect(expanded_aliases.locator(".cap-alias-chip-label")).to_have_text(
         [

@@ -123,7 +123,7 @@
     "add_button_aria_label": "Add capability",
     "related_skills_label": "Related skills",
     "related_skills_show_more": "+{count} more",
-    "related_skills_show_less": "Show less",
+    "related_skills_show_less": "Hide {count}",
     "settings_edit_multiple_label": "Edit multiple",
     "settings_done_editing_label": "Done",
     "settings_select_label": "Select",
