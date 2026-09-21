@@ -802,11 +802,12 @@ def test_search_basics_shared_layout_stays_balanced_at_settings_width(candidate_
     preference_items = preference_groups.locator(":scope > .settings-form-field")
     expect(preference_items).to_have_count(3)
 
-    # In the narrower Settings shell, compensation drops below so the three
-    # search preference controls keep one coherent row.
+    # Compensation is a compact subgroup below the three search preference
+    # controls rather than a detached right-hand column.
     pref_box = box(preference_groups)
     compensation_box = box(compensation)
     assert compensation_box["y"] > pref_box["y"] + pref_box["height"] - 8
+    assert abs(compensation_box["x"] - pref_box["x"]) < 8
     item_boxes = [box(preference_items.nth(i)) for i in range(3)]
     assert max(abs(item_boxes[i]["y"] - item_boxes[0]["y"]) for i in range(1, 3)) < 8
 
