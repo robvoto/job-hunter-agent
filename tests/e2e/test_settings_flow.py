@@ -629,3 +629,47 @@ def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
     with page.expect_request("**/api/tuning-decisions") as dismiss_request:
         card.locator(".decline-skill-btn").click()
     assert dismiss_request.value.post_data_json["decisions"][0]["choice"] == "dismiss"
+
+
+def test_search_basics_shared_layout_stays_balanced_at_settings_width(candidate_page):
+    """Protect the shared Search Basics geometry inside the narrower Settings shell."""
+    page = candidate_page
+    page.set_viewport_size({"width": 1400, "height": 1000})
+    page.goto("/settings#section-search")
+
+    locations = page.locator("#locations")
+    groups = locations.locator(".location-checkbox-group")
+    expect(groups).to_have_count(3)
+
+    def box(locator):
+        result = locator.bounding_box()
+        assert result is not None
+        return result
+
+    # Settings has enough room for all three location groups. Never orphan
+    # Territories on a centred second row.
+    group_boxes = [box(groups.nth(i)) for i in range(3)]
+    assert max(abs(group_boxes[i]["y"] - group_boxes[0]["y"]) for i in range(1, 3)) < 8
+
+    basics = page.locator(".search-basics-fields")
+    preference_groups = basics.locator(".search-preference-groups")
+    compensation = basics.locator(".search-compensation-group")
+    preference_items = preference_groups.locator(":scope > .settings-form-field")
+    expect(preference_items).to_have_count(3)
+
+    # In the narrower Settings shell, compensation drops below so the three
+    # search preference controls keep one coherent row.
+    pref_box = box(preference_groups)
+    compensation_box = box(compensation)
+    assert compensation_box["y"] > pref_box["y"] + pref_box["height"] - 8
+    item_boxes = [box(preference_items.nth(i)) for i in range(3)]
+    assert max(abs(item_boxes[i]["y"] - item_boxes[0]["y"]) for i in range(1, 3)) < 8
+
+    salary_fields = compensation.locator(".salary-preference-fields > .settings-form-field")
+    expect(salary_fields).to_have_count(2)
+    annual_box = box(salary_fields.nth(0))
+    daily_box = box(salary_fields.nth(1))
+    assert abs(annual_box["y"] - daily_box["y"]) < 8
+
+    overflow = page.evaluate("document.documentElement.scrollWidth - window.innerWidth")
+    assert overflow <= 1, f"settings search horizontal overflow is {overflow}px"

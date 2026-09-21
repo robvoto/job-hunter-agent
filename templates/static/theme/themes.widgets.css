@@ -1353,15 +1353,15 @@
 }
 
 /* Shared Search Basics composition used by onboarding and Settings.
-   Wide containers use a purposeful 2:1 form grid; the component itself
-   collapses when its own available width narrows. */
+   Wide containers keep preferences and compensation side-by-side; medium
+   containers stack the groups before individual controls start wrapping badly. */
 .search-basics-container {
   container-type: inline-size;
 }
 
 .search-basics-fields {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(18rem, 1fr);
+  grid-template-columns: minmax(0, 2fr) minmax(22rem, 1fr);
   align-items: start;
   gap: calc(var(--surface-gap-lg) * 2);
 }
@@ -1392,6 +1392,7 @@
 
 .salary-preference-fields {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--surface-gap-md);
 }
 
@@ -1401,10 +1402,11 @@
 }
 
 .currency-input-wrap--compact {
-  width: min(100%, 13rem);
+  width: 100%;
+  max-width: 11rem;
 }
 
-@container (max-width: 54rem) {
+@container (max-width: 72rem) {
   .search-basics-fields {
     grid-template-columns: 1fr;
   }
@@ -1416,10 +1418,6 @@
     border-top: 1px solid var(--border-subtle);
   }
 
-  .salary-preference-fields {
-    grid-template-columns: repeat(2, max-content);
-    gap: var(--surface-gap-lg);
-  }
 }
 
 @container (max-width: 30rem) {
@@ -2704,26 +2702,13 @@
 }
 .checkbox-list-option input:disabled + span { opacity: 0.55; }
 
-@container (max-width: 64rem) {
-  .location-checkbox-groups {
-    grid-template-columns: repeat(2, max-content);
-  }
-  .location-checkbox-group:nth-child(3) {
-    grid-column: 1 / -1;
-    justify-self: center;
-    border-left: 0;
-    border-top: 1px solid var(--border-subtle);
-    margin-top: var(--surface-gap-md);
-    padding-top: var(--surface-gap-md);
-  }
-}
-
-@container (max-width: 44rem) {
+@container (max-width: 48rem) {
   .location-checkbox-groups {
     grid-template-columns: minmax(0, 1fr);
     width: 100%;
   }
   .location-checkbox-group {
+    grid-column: auto;
     justify-self: stretch;
     padding: var(--surface-gap-md) 0;
   }
@@ -2732,7 +2717,6 @@
     border-top: 1px solid var(--border-subtle);
   }
   .location-checkbox-group:nth-child(3) {
-    grid-column: auto;
     margin-top: 0;
   }
 }

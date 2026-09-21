@@ -102,11 +102,11 @@ def test_search_basics_uses_shared_preferences_and_compensation_columns():
     assert '.search-compensation-group {' in theme_widgets
     assert 'class="search-preference-groups"' in onboarding_html
     assert 'class="search-preference-groups"' in settings_html
-    assert 'grid-template-columns: minmax(0, 2fr) minmax(18rem, 1fr);' in theme_widgets
+    assert 'grid-template-columns: minmax(0, 2fr) minmax(22rem, 1fr);' in theme_widgets
     assert 'border-left: 1px solid var(--border-subtle);' in theme_widgets
-    assert '@container (max-width: 54rem)' in theme_widgets
+    assert '@container (max-width: 72rem)' in theme_widgets
     assert 'border-top: 1px solid var(--border-subtle);' in theme_widgets
-    assert 'width: min(100%, 13rem);' in theme_widgets
+    assert 'max-width: 11rem;' in theme_widgets
     assert 'salary-preference-card' not in onboarding_html
     assert 'class="compensation-card' not in onboarding_html
     assert 'class="salary-pair"' not in onboarding_html
@@ -142,7 +142,7 @@ def test_search_preferences_order_and_responsive_layout():
     assert 'class="search-preference-groups"' in step_3
     assert 'search-preference-groups' in settings_html
     assert 'container-type: inline-size;' in theme_widgets
-    assert '@container (max-width: 54rem)' in theme_widgets
+    assert '@container (max-width: 72rem)' in theme_widgets
     assert 'search-preference-fields' not in onboarding_css
     assert 'onboarding-search-preferences-grid' not in onboarding_css
 
@@ -162,8 +162,8 @@ def test_location_dense_groups_fill_columns_in_reading_order():
     assert "groupsWrap.className = 'location-checkbox-groups';" in location_js
     assert '--checkbox-list-row-count' in location_js
     assert 'container-type: inline-size;' in theme_widgets
-    assert '@container (max-width: 64rem)' in theme_widgets
-    assert '@container (max-width: 44rem)' in theme_widgets
+    assert '@container (max-width: 48rem)' in theme_widgets
+    assert '@container (max-width: 64rem)' not in theme_widgets
     assert '@container (max-width: 30rem)' in theme_widgets
     assert 'grid-template-rows: repeat(var(--checkbox-list-row-count), auto);' in theme_widgets
     assert 'grid-auto-flow: column;' in theme_widgets

@@ -284,21 +284,63 @@ def test_search_basics_location_layout_stays_compact_and_responsive(
     assert 8 <= perth["x"] - (sydney["x"] + sydney["width"]) <= 64
     assert 8 <= sa["x"] - (nsw["x"] + nsw["width"]) <= 64
 
-    # Medium: third group moves to a second row before labels are forced to wrap.
+    # Medium desktop: compact content still fits as three groups; do not create
+    # the awkward two-groups-plus-centred-Territories orphan row.
     page.set_viewport_size({"width": 1000, "height": 1100})
     group_boxes = [box(groups.nth(i)) for i in range(3)]
-    assert abs(group_boxes[1]["y"] - group_boxes[0]["y"]) < 8
-    assert group_boxes[2]["y"] > group_boxes[0]["y"] + 24
+    assert max(abs(group_boxes[i]["y"] - group_boxes[0]["y"]) for i in range(1, 3)) < 8
     nsw_box = box(groups.nth(1).locator('.checkbox-list-option:has-text("New South Wales")'))
     assert nsw_box["height"] < 32
 
-    # Phone: groups stack and the page must not overflow horizontally.
+    # Narrow: switch directly to one stacked column rather than 2 + 1.
+    page.set_viewport_size({"width": 760, "height": 1100})
+    group_boxes = [box(groups.nth(i)) for i in range(3)]
+    assert group_boxes[1]["y"] > group_boxes[0]["y"]
+    assert group_boxes[2]["y"] > group_boxes[1]["y"]
+
+    # Phone: groups stay stacked and the page must not overflow horizontally.
     page.set_viewport_size({"width": 390, "height": 1000})
     group_boxes = [box(groups.nth(i)) for i in range(3)]
     assert group_boxes[1]["y"] > group_boxes[0]["y"]
     assert group_boxes[2]["y"] > group_boxes[1]["y"]
     overflow = page.evaluate("document.documentElement.scrollWidth - window.innerWidth")
     assert overflow <= 1, f"mobile horizontal overflow is {overflow}px"
+
+    # Search Basics composition: wide desktop keeps compensation beside the
+    # preference groups, but salary fields sit side-by-side so the right column
+    # does not become a tall isolated tower.
+    page.set_viewport_size({"width": 1600, "height": 1000})
+    basics = page.locator(".search-basics-fields")
+    preference_groups = page.locator(".search-preference-groups")
+    compensation = page.locator(".search-compensation-group")
+    salary_fields = compensation.locator(".salary-preference-fields > .onb-field")
+    pref_box = box(preference_groups)
+    compensation_box = box(compensation)
+    assert compensation_box["x"] > pref_box["x"] + pref_box["width"] - 8
+    annual_box = box(salary_fields.nth(0))
+    daily_box = box(salary_fields.nth(1))
+    assert abs(annual_box["y"] - daily_box["y"]) < 8
+
+    # At medium width compensation drops below, giving Work type / Sector /
+    # Work mode the full row instead of orphaning Work mode underneath.
+    page.set_viewport_size({"width": 1100, "height": 1100})
+    pref_box = box(preference_groups)
+    compensation_box = box(compensation)
+    assert compensation_box["y"] > pref_box["y"] + pref_box["height"] - 8
+    preference_items = preference_groups.locator(":scope > .onb-field")
+    pref_item_boxes = [box(preference_items.nth(i)) for i in range(3)]
+    assert max(abs(pref_item_boxes[i]["y"] - pref_item_boxes[0]["y"]) for i in range(1, 3)) < 8
+    annual_box = box(salary_fields.nth(0))
+    daily_box = box(salary_fields.nth(1))
+    assert abs(annual_box["y"] - daily_box["y"]) < 8
+
+    # Phone stacks the salary fields as well.
+    page.set_viewport_size({"width": 390, "height": 1000})
+    annual_box = box(salary_fields.nth(0))
+    daily_box = box(salary_fields.nth(1))
+    assert daily_box["y"] > annual_box["y"]
+    overflow = page.evaluate("document.documentElement.scrollWidth - window.innerWidth")
+    assert overflow <= 1, f"mobile search-basics horizontal overflow is {overflow}px"
 
 def test_onboarding_capability_review_reuses_shared_strength_and_persists_choice(
     fresh_candidate_page, monkeypatch
