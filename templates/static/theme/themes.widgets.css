@@ -1888,6 +1888,10 @@
   padding: var(--surface-pad-block-md) var(--surface-pad-inline-md);
 }
 
+.review-block--full {
+  grid-column: 1 / -1;
+}
+
 .tuning-summary-card {
   border-radius: var(--radius-md);
 }
@@ -2493,11 +2497,7 @@
   line-height: var(--field-label-line-height);
 }
 
-.search-basics-card--details .salary-pair {
-  width: auto;
-}
-
-.search-basics-card--details .salary-pair .currency-input-wrap {
+.salary-pair .currency-input-wrap {
   max-width: 190px;
 }
 
@@ -2508,8 +2508,7 @@
 }
 
 /* Shared spacing for a full-width field that follows choice/summary fields in a two-column form. */
-.settings-form-grid--search-basics > .settings-form-field--full,
-.search-basics-card--details .onb-field--full {
+.settings-form-grid--search-basics > .settings-form-field--full {
   margin-top: var(--surface-gap-md);
 }
 

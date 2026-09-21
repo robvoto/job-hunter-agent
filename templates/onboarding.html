@@ -218,101 +218,97 @@
         </section>
 
         <section class="wizard-step" data-step="3" hidden>
-          <div class="search-basics-grid">
-            <section class="check-card search-basics-card search-basics-card--details">
-              <div class="search-basics-card-body">
-                <div class="onb-field">
-                  <div class="field-label-row">
-                    <label for="location_search">__JOB_HUNTER_ONBOARDING_PAGE_LOCATION_LABEL__</label>
-                    <details class="field-info-drawer">
-                      <summary class="field-info" aria-label="Help for location">i</summary>
-                      <div class="field-info-panel">__JOB_HUNTER_SHARED_UI_LOCATION_HELP__</div>
-                    </details>
-                  </div>
-                  <div class="field-control-shell location-picker-shell">
-                    <select id="location_search" class="jh-select" multiple size="8" aria-label="Location search"></select>
+          <div class="review-grid">
+            <section class="review-block onb-field">
+              <div class="field-label-row">
+                <label for="location_search">__JOB_HUNTER_ONBOARDING_PAGE_LOCATION_LABEL__</label>
+                <details class="field-info-drawer">
+                  <summary class="field-info" aria-label="Help for location">i</summary>
+                  <div class="field-info-panel">__JOB_HUNTER_SHARED_UI_LOCATION_HELP__</div>
+                </details>
+              </div>
+              <div class="field-control-shell location-picker-shell">
+                <select id="location_search" class="jh-select" multiple size="8" aria-label="Location search"></select>
+              </div>
+            </section>
+
+            <section class="review-block onb-field">
+              <div class="field-label-row">
+                <label id="prefer_sector_label">__JOB_HUNTER_ONBOARDING_PAGE_SECTOR_PREFERENCE_LABEL__</label>
+                <details class="field-info-drawer">
+                  <summary class="field-info" aria-label="Help for sector preference">i</summary>
+                  <div class="field-info-panel">__JOB_HUNTER_ONBOARDING_PAGE_SECTOR_PREFERENCE_HELP__</div>
+                </details>
+              </div>
+              <div class="field-control-shell">
+                __JOB_HUNTER_SECTOR_PREFERENCE_CHOICES__
+              </div>
+              <p id="sector_preference_summary" class="summary-line" aria-live="polite"></p>
+            </section>
+
+            <section class="review-block onb-field">
+              <div class="field-label-row">
+                <label id="engagement_type_label">__JOB_HUNTER_ONBOARDING_PAGE_WORK_TYPE_LABEL__</label>
+                <details class="field-info-drawer">
+                  <summary class="field-info" aria-label="Help for work type">i</summary>
+                  <div class="field-info-panel">__JOB_HUNTER_ONBOARDING_PAGE_WORK_TYPE_HELP__</div>
+                </details>
+              </div>
+              <div class="field-control-shell">
+                __JOB_HUNTER_ENGAGEMENT_TYPE_CHOICES__
+              </div>
+              <div id="contract_duration_row" class="choice-detail-popover" popover="auto" role="group" aria-labelledby="min_contract_months_label">
+                <label id="min_contract_months_label" class="choice-detail-popover__label" for="min_contract_months">__JOB_HUNTER_MIN_CONTRACT_MONTH_LABEL__</label>
+                <select id="min_contract_months" class="jh-select" aria-label="__JOB_HUNTER_MIN_CONTRACT_MONTH_LABEL__">
+                  <option value="">__JOB_HUNTER_MIN_CONTRACT_MONTH_NONE_LABEL__</option>
+                  __JOB_HUNTER_MIN_CONTRACT_MONTH_OPTIONS__
+                </select>
+              </div>
+              <p id="engagement_type_summary" class="summary-line" aria-live="polite"></p>
+            </section>
+
+            <section class="review-block onb-field">
+              <div class="field-label-row">
+                <label id="work_mode_preference_label">__JOB_HUNTER_ONBOARDING_PAGE_WORK_MODE_LABEL__</label>
+                <details class="field-info-drawer">
+                  <summary class="field-info" aria-label="Help for work mode">i</summary>
+                  <div class="field-info-panel">__JOB_HUNTER_ONBOARDING_PAGE_WORK_MODE_HELP__</div>
+                </details>
+              </div>
+              <div class="field-control-shell">
+                __JOB_HUNTER_WORK_MODE_PREFERENCE_CHOICES__
+              </div>
+              <p id="work_mode_preference_summary" class="summary-line" aria-live="polite"></p>
+            </section>
+
+            <section class="review-block review-block--full onb-field">
+              <div class="field-label-row">
+                <label>__JOB_HUNTER_ONBOARDING_PAGE_MINIMUM_COMPENSATION_LABEL__</label>
+                <details class="field-info-drawer">
+                  <summary class="field-info" aria-label="Help for minimum compensation">i</summary>
+                  <div class="field-info-panel">__JOB_HUNTER_ONBOARDING_PAGE_MINIMUM_COMPENSATION_HELP__</div>
+                </details>
+              </div>
+              <div class="salary-pair">
+                <div id="salary_yearly_block">
+                  <label for="review_minimum_salary_yearly">__JOB_HUNTER_SALARY_MIN_ANNUAL_LABEL__</label>
+                  <div class="currency-input-wrap">
+                    <span class="currency-prefix">$</span>
+                    <input id="review_minimum_salary_yearly" type="text" inputmode="numeric" autocomplete="off" placeholder="140,000">
                   </div>
                 </div>
-
-                <div class="onb-field">
-                  <div class="field-label-row">
-                    <label id="prefer_sector_label">__JOB_HUNTER_ONBOARDING_PAGE_SECTOR_PREFERENCE_LABEL__</label>
-                    <details class="field-info-drawer">
-                      <summary class="field-info" aria-label="Help for sector preference">i</summary>
-                      <div class="field-info-panel">__JOB_HUNTER_ONBOARDING_PAGE_SECTOR_PREFERENCE_HELP__</div>
-                    </details>
-                  </div>
-                  <div class="field-control-shell">
-                    __JOB_HUNTER_SECTOR_PREFERENCE_CHOICES__
-                  </div>
-                  <p id="sector_preference_summary" class="summary-line" aria-live="polite"></p>
-                </div>
-
-                <div class="onb-field">
-                  <div class="field-label-row">
-                    <label id="engagement_type_label">__JOB_HUNTER_ONBOARDING_PAGE_WORK_TYPE_LABEL__</label>
-                    <details class="field-info-drawer">
-                      <summary class="field-info" aria-label="Help for work type">i</summary>
-                      <div class="field-info-panel">__JOB_HUNTER_ONBOARDING_PAGE_WORK_TYPE_HELP__</div>
-                    </details>
-                  </div>
-                  <div class="field-control-shell">
-                    __JOB_HUNTER_ENGAGEMENT_TYPE_CHOICES__
-                  </div>
-                  <div id="contract_duration_row" class="choice-detail-popover" popover="auto" role="group" aria-labelledby="min_contract_months_label">
-                    <label id="min_contract_months_label" class="choice-detail-popover__label" for="min_contract_months">__JOB_HUNTER_MIN_CONTRACT_MONTH_LABEL__</label>
-                    <select id="min_contract_months" class="jh-select" aria-label="__JOB_HUNTER_MIN_CONTRACT_MONTH_LABEL__">
-                      <option value="">__JOB_HUNTER_MIN_CONTRACT_MONTH_NONE_LABEL__</option>
-                      __JOB_HUNTER_MIN_CONTRACT_MONTH_OPTIONS__
-                    </select>
-                  </div>
-                  <p id="engagement_type_summary" class="summary-line" aria-live="polite"></p>
-                </div>
-
-                <div class="onb-field">
-                  <div class="field-label-row">
-                    <label id="work_mode_preference_label">__JOB_HUNTER_ONBOARDING_PAGE_WORK_MODE_LABEL__</label>
-                    <details class="field-info-drawer">
-                      <summary class="field-info" aria-label="Help for work mode">i</summary>
-                      <div class="field-info-panel">__JOB_HUNTER_ONBOARDING_PAGE_WORK_MODE_HELP__</div>
-                    </details>
-                  </div>
-                  <div class="field-control-shell">
-                    __JOB_HUNTER_WORK_MODE_PREFERENCE_CHOICES__
-                  </div>
-                  <p id="work_mode_preference_summary" class="summary-line" aria-live="polite"></p>
-                </div>
-
-                <div class="onb-field onb-field--full">
-                  <div class="field-label-row">
-                    <label>__JOB_HUNTER_ONBOARDING_PAGE_MINIMUM_COMPENSATION_LABEL__</label>
-                    <details class="field-info-drawer">
-                      <summary class="field-info" aria-label="Help for minimum compensation">i</summary>
-                      <div class="field-info-panel">__JOB_HUNTER_ONBOARDING_PAGE_MINIMUM_COMPENSATION_HELP__</div>
-                    </details>
-                  </div>
-                  <div class="salary-pair">
-                    <div id="salary_yearly_block">
-                      <label for="review_minimum_salary_yearly">__JOB_HUNTER_SALARY_MIN_ANNUAL_LABEL__</label>
-                      <div class="currency-input-wrap">
-                        <span class="currency-prefix">$</span>
-                        <input id="review_minimum_salary_yearly" type="text" inputmode="numeric" autocomplete="off" placeholder="140,000">
-                      </div>
-                    </div>
-                    <div id="salary_daily_block">
-                      <label for="review_minimum_daily_rate">__JOB_HUNTER_SALARY_MIN_DAILY_LABEL__</label>
-                      <div class="currency-input-wrap">
-                        <span class="currency-prefix">$</span>
-                        <input id="review_minimum_daily_rate" type="text" inputmode="numeric" autocomplete="off" placeholder="900">
-                      </div>
-                    </div>
+                <div id="salary_daily_block">
+                  <label for="review_minimum_daily_rate">__JOB_HUNTER_SALARY_MIN_DAILY_LABEL__</label>
+                  <div class="currency-input-wrap">
+                    <span class="currency-prefix">$</span>
+                    <input id="review_minimum_daily_rate" type="text" inputmode="numeric" autocomplete="off" placeholder="900">
                   </div>
                 </div>
               </div>
             </section>
           </div>
 
-          <div class="actions onboarding-step-actions search-basics-actions">
+          <div class="actions onboarding-step-actions">
             <button class="btn btn-secondary" id="back_to_review_footer" type="button">__JOB_HUNTER_ONBOARDING_PAGE_BACK_LABEL__</button>
             <button class="btn btn-primary" id="continue_to_check" type="button">__JOB_HUNTER_ONBOARDING_PAGE_SAVE_AND_CONTINUE_LABEL__</button>
           </div>

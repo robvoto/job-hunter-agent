@@ -762,8 +762,11 @@ body {
 
   .review-grid,
   .check-grid,
-  .guidance-grid,
-.setting-row,
+  .guidance-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .setting-row,
   .location-input-row,
   .chip-editor-row {
     flex-direction: column;
