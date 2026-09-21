@@ -264,8 +264,8 @@ def test_capability_alias_preview_uses_related_skills_copy(candidate_page):
     assert preview.locator(".cap-alias-chip--preview").count() == 2
 
     summary = card.locator(".capability-summary-label--closed")
-    expect(summary).to_have_text("Show 4 more")
-    assert "+4 more" not in (card.text_content() or "")
+    expect(summary).to_have_text("+4 more")
+    assert "Show 4 more" not in (card.text_content() or "")
 
     drawer = card.locator("details.capability-alias-drawer")
     card.locator(".cap-alias-summary").click()
@@ -282,7 +282,7 @@ def test_capability_alias_preview_uses_related_skills_copy(candidate_page):
     )
     card.locator(".cap-alias-summary").click()
     expect(drawer).not_to_have_attribute("open", "")
-    expect(summary).to_have_text("Show 4 more")
+    expect(summary).to_have_text("+4 more")
 
 
 def test_capability_related_skills_disclosure_hides_only_actual_remaining_skills(candidate_page):
@@ -319,7 +319,12 @@ def test_capability_related_skills_disclosure_hides_only_actual_remaining_skills
         'input.capability-card-name[value="One Hidden Skill"]'
     ).locator("xpath=ancestor::article[contains(@class, 'capability-card')]")
     expect(one_hidden_card.locator(".capability-alias-preview .cap-alias-chip")).to_have_count(2)
-    expect(one_hidden_card.locator(".capability-summary-label--closed")).to_have_text("Show 1 more")
+    expect(one_hidden_card.locator(".capability-summary-label--closed")).to_have_text("+1 more")
+    preview_box = one_hidden_card.locator(".capability-alias-preview").bounding_box()
+    more_box = one_hidden_card.locator(".cap-alias-summary").bounding_box()
+    assert preview_box and more_box
+    assert abs((preview_box["y"] + preview_box["height"] / 2) - (more_box["y"] + more_box["height"] / 2)) <= 4
+    assert more_box["x"] > preview_box["x"]
 
 
 def test_settings_label_info_rows_share_alignment_and_single_spacing(candidate_page):
@@ -409,7 +414,7 @@ def test_capability_related_skills_beyond_alias_limit_survive_settings_save(cand
     reloaded_card.wait_for(state="visible")
 
     summary = reloaded_card.locator(".capability-summary-label--closed")
-    expect(summary).to_have_text(f"Show {len(related_skills) - 2} more")
+    expect(summary).to_have_text(f"+{len(related_skills) - 2} more")
 
     drawer = reloaded_card.locator("details.capability-alias-drawer")
     reloaded_card.locator(".cap-alias-summary").click()

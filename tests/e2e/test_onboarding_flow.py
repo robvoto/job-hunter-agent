@@ -120,14 +120,14 @@ def test_onboarding_review_related_skills_drawer_only_shows_remaining_aliases(
     expect(preview.locator(".cap-alias-chip-label")).to_have_text(["python", "fastapi"])
 
     drawer = card.locator("details.capability-alias-drawer")
-    expect(card.locator(".capability-summary-label--closed")).to_have_text("Show 2 more")
+    expect(card.locator(".capability-summary-label--closed")).to_have_text("+2 more")
     card.locator(".cap-alias-summary").click()
     expect(drawer).to_have_attribute("open", "")
     expect(card.locator(".capability-summary-label--open")).to_have_text("Show less")
     expect(drawer.locator(".cap-alias-chip-label")).to_have_text(["postgresql", "docker"])
     card.locator(".cap-alias-summary").click()
     expect(drawer).not_to_have_attribute("open", "")
-    expect(card.locator(".capability-summary-label--closed")).to_have_text("Show 2 more")
+    expect(card.locator(".capability-summary-label--closed")).to_have_text("+2 more")
 
 
 def test_onboarding_progress_header_reopens_previously_visited_search_basics(

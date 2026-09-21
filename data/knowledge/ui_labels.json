@@ -122,7 +122,7 @@
     "help_text": "Job Hunter extracted these capabilities from your CV and uses them when matching jobs. Review or remove anything that looks wrong. Related skills are alternative names Job Hunter treats as the same capability. Adjust a capability strength if Job Hunter judged it incorrectly.",
     "add_button_aria_label": "Add capability",
     "related_skills_label": "Related skills",
-    "related_skills_show_more": "Show {count} more",
+    "related_skills_show_more": "+{count} more",
     "related_skills_show_less": "Show less",
     "settings_edit_multiple_label": "Edit multiple",
     "settings_done_editing_label": "Done",
