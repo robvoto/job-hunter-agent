@@ -42,7 +42,7 @@ def test_search_basics_reuses_review_layout_primitives():
     assert step_3.count('class="onb-field"') >= 3
     assert step_3.count('class="review-block settings-form-field--full"') == 1
     assert 'class="search-compensation-group"' in step_3
-    assert '__JOB_HUNTER_MINIMUM_COMPENSATION_LABEL__' in step_3
+    assert '__JOB_HUNTER_ONBOARDING_PAGE_MINIMUM_COMPENSATION_LABEL__' in step_3
     assert 'id="salary_yearly_block" class="onb-field"' in step_3
     assert 'id="salary_daily_block" class="onb-field"' in step_3
     assert "search-basics-grid" not in step_3
@@ -93,6 +93,8 @@ def test_compensation_is_fourth_shared_search_basics_group():
     assert settings_html.count('currency-input-wrap currency-input-wrap--compact') >= 2
     assert '.search-basics-fields {' in theme_widgets
     assert '.search-compensation-group {' in theme_widgets
+    assert 'flex: 1 0 100%;' in theme_widgets
+    assert 'border-top: 1px solid var(--border-subtle);' in theme_widgets
     assert 'width: min(100%, 13rem);' in theme_widgets
     assert 'salary-preference-card' not in onboarding_html
     assert 'class="compensation-card' not in onboarding_html

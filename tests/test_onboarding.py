@@ -84,6 +84,9 @@ def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
     assert "Review Draft" in html
     assert "Search Basics" in html
     assert "Check Setup" in html
+    assert "Minimum compensation" in html
+    assert "__JOB_HUNTER_ONBOARDING_PAGE_MINIMUM_COMPENSATION_LABEL__" not in html
+    assert "__JOB_HUNTER_MINIMUM_COMPENSATION_LABEL__" not in html
     assert "This draft was built from your CV." in html
     assert "Sydney means a city search on SEEK" in html
     assert "50-mile radius on LinkedIn" in html

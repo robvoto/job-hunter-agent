@@ -1352,8 +1352,9 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-/* Shared Search Basics row used by onboarding and Settings. Each logical group
-   keeps its natural width and wraps as a complete unit when the container narrows. */
+/* Shared Search Basics composition used by onboarding and Settings.
+   The three choice groups stay compact; compensation is a related subgroup
+   beneath them instead of competing for a fourth top-row column. */
 .search-basics-fields {
   display: flex;
   flex-wrap: wrap;
@@ -1363,8 +1364,7 @@
 }
 
 .search-basics-fields > .settings-form-field,
-.search-basics-fields > .onb-field,
-.search-basics-fields > .search-compensation-group {
+.search-basics-fields > .onb-field {
   flex: 0 0 auto;
   width: max-content;
   max-width: 100%;
@@ -1373,17 +1373,24 @@
 
 .search-compensation-group {
   display: grid;
-  align-content: start;
+  flex: 1 0 100%;
+  width: 100%;
+  min-width: 0;
+  padding-top: var(--surface-gap-md);
+  border-top: 1px solid var(--border-subtle);
   row-gap: var(--field-label-control-gap);
 }
 
 .salary-preference-fields {
-  display: grid;
-  gap: var(--surface-gap-sm);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--surface-gap-lg);
 }
 
 .salary-preference-fields > .onb-field,
 .salary-preference-fields > .settings-form-field {
+  flex: 0 1 18rem;
   min-width: 0;
 }
 
