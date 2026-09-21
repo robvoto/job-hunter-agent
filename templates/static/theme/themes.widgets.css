@@ -1181,7 +1181,8 @@
 
 .settings-heading-count {
   color: var(--text-muted);
-  font-size: inherit;
+  font-size: var(--text-role-caption-font-size);
+  line-height: var(--text-role-caption-line-height);
   font-weight: var(--text-role-status-font-weight);
 }
 

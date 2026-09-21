@@ -1,5 +1,5 @@
 import { escapeHtml } from './settings-utils.js';
-import { showStatus } from './settings-page.js';
+import { refreshSettingsForm, showStatus } from './settings-page.js';
 import * as capabilityUi from '../../common/capability-ui.js';
 import {
   createController,
@@ -334,7 +334,7 @@ async function patchProfile(payload, successMessage) {
     throw new Error(errorPayload.error || 'Could not save profile');
   }
   const updated = await response.json();
-  fillForm(updated);
+  refreshSettingsForm(updated);
   showStatus(successMessage, 'success');
   return updated;
 }
@@ -451,7 +451,7 @@ tuningPanel?.addEventListener('click', async (e) => {
     btn.textContent = 'Saving…';
     try {
       const result = await applyOneSkipDecision(skill, choice, aliases);
-      if (result && result.profile) fillForm(result.profile);
+      if (result && result.profile) refreshSettingsForm(result.profile);
       card?.remove();
       showStatus(`Added ${skill} — ${getReviewChoiceMeta(choice).label}.`, 'success', { autoHideMs: 3500 });
     } catch (error) {
@@ -471,7 +471,7 @@ tuningPanel?.addEventListener('click', async (e) => {
     doNotHaveBtn.textContent = 'Saving…';
     try {
       const result = await applyOneSkipDecision(skill, 'do_not_have');
-      if (result && result.profile) fillForm(result.profile);
+      if (result && result.profile) refreshSettingsForm(result.profile);
       card?.remove();
       showStatus(`Saved: you do not have ${skill}.`, 'success', { autoHideMs: 3500 });
     } catch (error) {
@@ -491,7 +491,7 @@ tuningPanel?.addEventListener('click', async (e) => {
     declineBtn.textContent = 'Saving…';
     try {
       const result = await applyOneSkipDecision(skill, 'dismiss');
-      if (result && result.profile) fillForm(result.profile);
+      if (result && result.profile) refreshSettingsForm(result.profile);
       card?.remove();
       showStatus(`Ignored suggestion: ${skill}.`, 'success', { autoHideMs: 3000 });
     } catch (error) {

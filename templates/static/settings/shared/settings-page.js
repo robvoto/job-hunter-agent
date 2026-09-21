@@ -661,6 +661,10 @@ function fillForm(profile) {
   chipEditor.renderGlobalChipEditors();
 }
 
+export function refreshSettingsForm(profile) {
+  fillForm(profile);
+}
+
 async function loadProfile() {
   const response = await jobHunterFetch('/api/profile');
   if (!response.ok) throw new Error('Could not load profile');

@@ -516,6 +516,8 @@ def test_settings_review_panel_empty_state_copy_is_defined():
     assert "Search & filter improvements" in js
     assert "Why Job Hunter suggested this" in js
     assert "review_suggestions_count" in js
+    assert "refreshSettingsForm" in js
+    assert "fillForm(" not in js
     assert "What this choice means" not in js
 
     assert "const DECLINE_CAPABILITY_LABEL = capabilityLabels.decline_capability_label;" in js

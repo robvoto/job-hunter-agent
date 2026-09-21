@@ -440,6 +440,7 @@ def test_role_entry_adds_directly_without_role_family_popup(candidate_page):
 def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
     page = candidate_page
     decisions = []
+    returned_profile = None
     review_payload = {
         "suggested_tuning": {
             "capability_suggestions": [
@@ -481,16 +482,25 @@ def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
         route.fulfill(
             status=200,
             content_type="application/json",
-            json={"ok": True, "profile": None},
+            json={"ok": True, "profile": returned_profile},
         )
 
     page.route("**/api/review-data", handle_review_data)
     page.route("**/api/tuning-decisions", handle_tuning_decision)
     page.goto("/settings")
+    returned_profile = page.evaluate("async () => await (await fetch('/api/profile')).json()")
+    returned_profile["candidate_capabilities"] = [
+        *(returned_profile.get("candidate_capabilities") or []),
+        {"name": "Power BI", "level": "working", "aliases": ["Power BI required"], "icon_key": "generic"},
+    ]
     page.locator('[data-section="section-optimise"]').click()
 
     review_head = page.locator("#section-optimise .search-settings-subcard > .settings-card-title-row")
     expect(review_head.locator("h3")).to_have_text("Review Suggestions (1)")
+    count = review_head.locator(".settings-heading-count")
+    heading_size = float(review_head.locator("h3").evaluate("el => parseFloat(getComputedStyle(el).fontSize)"))
+    count_size = float(count.evaluate("el => parseFloat(getComputedStyle(el).fontSize)"))
+    assert count_size < heading_size
     info = review_head.locator(".field-info-drawer")
     expect(info).to_have_count(1)
     expect(info.locator("summary")).to_have_attribute("aria-label", "About review suggestions")
@@ -536,6 +546,21 @@ def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
     expect(card.locator(".review-evidence")).to_contain_text("Job ads explicitly asked for:")
     expect(card.locator(".review-evidence")).to_contain_text("Power BI required")
     expect(page.locator("#tuning_suggestions_panel .review-card").filter(has_text="Power BI")).to_have_count(1)
+
+    with page.expect_request("**/api/tuning-decisions") as confirm_request:
+        confirm_button.click()
+    assert confirm_request.value.post_data_json["decisions"][0]["choice"] == "working"
+    expect(page.locator("#status")).to_contain_text("Added Power BI — Working.")
+    expect(page.locator("#status")).not_to_contain_text("fillForm is not defined")
+    expect(card).to_have_count(0)
+
+    # Exercise factual absence from a fresh render.
+    page.reload()
+    page.locator('[data-section="section-optimise"]').click()
+    card = page.locator("#tuning_suggestions_panel .review-card").filter(has_text="Power BI")
+    expect(card).to_be_visible()
+    no_button = card.locator(".do-not-have-skill-btn")
+    dismiss_button = card.locator(".decline-skill-btn")
 
     no_box = no_button.bounding_box()
     dismiss_box = dismiss_button.bounding_box()
