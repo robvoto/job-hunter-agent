@@ -1,11 +1,11 @@
 ---
 name: mcp-tooling
-description: Use for repository/filesystem access, connected Google/browser/Gmail tooling, or tool/transport failure recovery; apply runtime-specific MCP connector names only when that runtime exposes them.
+description: Use for connector/MCP-mediated repository or filesystem access, connected Google/browser/Gmail tooling, or connector/tool transport failure recovery. Do not load merely because an agent has native local shell/filesystem access.
 ---
 
 # Skill: MCP Tooling
 
-Use for project filesystem/tool access and whenever MCP execution is unreliable.
+Use when access is connector/MCP-mediated, when the task uses connected services, or when connector/tool execution is unreliable. Native local coding agents should keep using their own filesystem/shell unless the task actually crosses into MCP or connected-service tooling.
 
 ## Multi-agent Human MCP rule
 - Many ChatGPT chats, Claude agents and MCP processes are expected and supported. Do not diagnose their mere presence as a conflict.

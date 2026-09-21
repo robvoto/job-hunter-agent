@@ -211,7 +211,8 @@ def test_agents_routes_durable_rules_through_skills():
     assert ".agents/skills/INDEX.md" in agents
     assert ".agents/skills/instruction-maintenance/SKILL.md" in agents
     assert ".agents/skills/mcp-tooling/SKILL.md" in agents
-    assert "before the first repository/tool command" in agents
+    assert "connector/MCP-mediated" in agents
+    assert "Native local shell/filesystem work does not require MCP tooling" in agents
     assert "create a focused skill" in agents
     assert "Detailed rules belong inside each skill" in skills_index
 

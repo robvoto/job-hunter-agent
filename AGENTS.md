@@ -6,7 +6,7 @@ Minimal always-loaded routing instructions. This file is not the project manual 
 
 1. Use `docs/INDEX.md` to find the smallest relevant project document.
 2. Use `.agents/skills/INDEX.md` to choose the smallest relevant task skill or skill combination.
-3. In any connector-based runtime, read `.agents/skills/mcp-tooling/SKILL.md` **before the first repository/tool command**; tool/runtime rules must be loaded before execution, not only after a failure.
+3. When repository or connected-service access is connector/MCP-mediated, read `.agents/skills/mcp-tooling/SKILL.md` before the first such command. Native local shell/filesystem work does not require MCP tooling.
 4. Read the selected task skill before changing code, configuration, instructions, Git state, runtime behaviour, or UI.
 5. Inspect the current files/state before editing. Do not load the whole repository unless the task genuinely requires a broad audit.
 6. For any branch/worktree, commit, push, PR, merge, or `main` integration action, use `.agents/skills/git-lifecycle/SKILL.md`.
