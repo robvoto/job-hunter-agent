@@ -4,6 +4,7 @@ a human toggling a checkbox and clicking Save would experience it."""
 from __future__ import annotations
 
 import os
+import re
 
 from playwright.sync_api import expect
 
@@ -304,6 +305,40 @@ def test_capability_related_skills_disclosure_hides_only_actual_remaining_skills
     expect(one_hidden_card.locator(".capability-summary-label--closed")).to_have_text("Show 1 more")
 
 
+def test_settings_label_info_rows_share_alignment_and_single_spacing(candidate_page):
+    page = candidate_page
+    page.goto("/settings#section-matrix")
+
+    preferred_row = page.locator('label[for="target_roles_add"]').locator("xpath=parent::*")
+    expect(preferred_row).to_have_class(re.compile(r"\bfield-label-row\b"))
+    label_box = preferred_row.locator('label[for="target_roles_add"]').bounding_box()
+    info_box = preferred_row.locator('.field-info').bounding_box()
+    assert label_box and info_box
+    assert abs((label_box["y"] + label_box["height"] / 2) - (info_box["y"] + info_box["height"] / 2)) <= 2
+
+    preferred_field = preferred_row.locator("xpath=parent::*")
+    row_box = preferred_row.bounding_box()
+    badge_box = preferred_field.locator('.badge-editor').bounding_box()
+    assert row_box and badge_box
+    # One shared field gap: no second hard-coded 12px margin may stack on top.
+    assert 8 <= badge_box["y"] - (row_box["y"] + row_box["height"]) <= 16
+
+    role_copy = page.locator('#section-matrix .search-settings-subcard').first.locator(':scope > .panel-copy')
+    role_copy_box = role_copy.bounding_box()
+    preferred_box = preferred_row.bounding_box()
+    assert role_copy_box and preferred_box
+    assert preferred_box["y"] - (role_copy_box["y"] + role_copy_box["height"]) >= 12
+
+    page.locator('[data-section="section-rules"]').click()
+    for control_id in ("must_not_require_skills_add", "reject_description_phrase_rules_add"):
+        row = page.locator(f'label[for="{control_id}"]').locator("xpath=parent::*")
+        expect(row).to_have_class(re.compile(r"\bfield-label-row\b"))
+        label = row.locator(f'label[for="{control_id}"]').bounding_box()
+        info = row.locator('.field-info').bounding_box()
+        assert label and info
+        assert abs((label["y"] + label["height"] / 2) - (info["y"] + info["height"] / 2)) <= 3
+
+
 def test_capability_related_skills_beyond_alias_limit_survive_settings_save(candidate_page):
     # capability_alias_limit only bounds automatic CV-extraction; a save/reload
     # round trip through the real Settings UI must never truncate a capability's
@@ -454,8 +489,8 @@ def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
     page.goto("/settings")
     page.locator('[data-section="section-optimise"]').click()
 
-    review_head = page.locator("#section-optimise .search-settings-subcard > .settings-subpanel-head")
-    expect(review_head.locator("h3")).to_have_text("Review Suggestions")
+    review_head = page.locator("#section-optimise .search-settings-subcard > .settings-card-title-row")
+    expect(review_head.locator("h3")).to_have_text("Review Suggestions (1)")
     info = review_head.locator(".field-info-drawer")
     expect(info).to_have_count(1)
     expect(info.locator("summary")).to_have_attribute("aria-label", "About review suggestions")
@@ -465,8 +500,13 @@ def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
     expect(page.locator("#section-optimise")).not_to_contain_text("These are suggestions only")
     expect(page.locator("#tuning_suggestions_panel")).not_to_contain_text("Capabilities are the proven work strengths")
     expect(page.locator("#tuning_suggestions_panel")).not_to_contain_text("Capabilities to review")
-    expect(page.locator("#tuning_suggestions_panel .tuning-group").first.locator(":scope > .tuning-group-heading > h3")).to_have_text("Capabilities to verify (1)")
-    expect(page.locator("#tuning_suggestions_panel")).to_contain_text("Things Job Hunter found repeatedly that may belong in your Capability Matrix.")
+    expect(page.locator("#tuning_suggestions_panel")).not_to_contain_text("Capabilities to verify")
+    expect(page.locator("#tuning_suggestions_panel")).not_to_contain_text("Things Job Hunter found repeatedly that may belong in your Capability Matrix.")
+
+    title_box = review_head.locator("h3").bounding_box()
+    info_box = review_head.locator(".field-info").bounding_box()
+    assert title_box and info_box
+    assert abs((title_box["y"] + title_box["height"] / 2) - (info_box["y"] + info_box["height"] / 2)) <= 2
 
     card = page.locator("#tuning_suggestions_panel .review-card").filter(has_text="Power BI")
     expect(card).to_be_visible()

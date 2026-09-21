@@ -235,13 +235,11 @@ function renderSuggestedTuning(reviewData) {
   const actionableRules = ruleSuggestions.filter((item) => (item.reason || '') !== RULE_REASON_TITLE_BAD_KEYWORD);
   const matchingSuggestions = [...optimizationSuggestions, ...actionableRules];
 
-  const profileHtml = renderSuggestionSection(
-    'Capabilities to verify',
-    'Things Job Hunter found repeatedly that may belong in your Capability Matrix.',
-    profileSuggestions,
-    (item, index) => renderCapabilitySuggestionCard(item, index),
-    'No new capabilities to verify.',
-  );
+  const reviewCount = document.getElementById('review_suggestions_count');
+  if (reviewCount) reviewCount.textContent = `(${profileSuggestions.length})`;
+  const profileHtml = profileSuggestions.length
+    ? `<div class="review-list">${profileSuggestions.map((item, index) => renderCapabilitySuggestionCard(item, index)).join('')}</div>`
+    : '<p class="tuning-empty-state-copy">No new capabilities to verify.</p>';
   const matchingHtml = renderSuggestionSection(
     'Search & filter improvements',
     'Patterns suggesting your matching or filtering could be improved.',
