@@ -72,13 +72,6 @@ function renderReviewChoiceGuide(choice) {
   `;
 }
 
-function normalizeRecommendedReviewChoice(item) {
-  const explicit = String(item?.recommended_choice || '').trim().toLowerCase();
-  if (explicit) return explicit;
-  const label = String(item?.recommended_label || '').trim().toLowerCase();
-  return ['strong', 'working', 'basic'].includes(label) ? label : '';
-}
-
 function reviewStrengthChoicesMarkup(selectedValue, groupName) {
   const levels = Array.isArray(capabilityUi.capabilityLevels) && capabilityUi.capabilityLevels.length
     ? capabilityUi.capabilityLevels
@@ -204,23 +197,23 @@ function renderTuningSection(title, copy, items, emptyText, renderItem, extraCla
 function renderRequirementCard(item) {
   const aliases = Array.isArray(item.aliases) ? item.aliases : [];
   const choiceGroupName = `requirement-choice-${slugifyReviewKey(item.skill || '')}`;
-  const recommendedChoice = normalizeRecommendedReviewChoice(item);
+  // JH-317: requirement suggestions use the same occurrence-based strength recommendation.
+  // Do not surface or preselect it until candidate-evidence-backed strength exists.
   return `
     <div class="review-card">
       <div class="review-card-heading">
         <h3>${escapeHtml(item.skill || 'Requirement')}</h3>
-        <span class="suggestion-chip">Suggested: ${escapeHtml(item.recommended_label || 'Review')}</span>
         <span class="review-card-count">Seen in ${escapeHtml(String(item.count || 0))} kept role(s)</span>
       </div>
       <p>${escapeHtml(item.detail || '')}</p>
       <p><strong>Prompt:</strong> ${escapeHtml(item.prompt || 'Do you have this capability?')}</p>
       <label>${escapeHtml(capabilityUi.reviewStrengthPromptLabel)}</label>
       <div class="choice-strip jh-choice-group capability-strength-strip review-strength-strip" role="radiogroup" aria-label="${escapeHtml(capabilityUi.reviewStrengthPromptLabel)}" data-skill="${escapeHtml(item.skill || '')}" data-aliases="${escapeHtml(JSON.stringify(aliases))}">
-        ${reviewStrengthChoicesMarkup(recommendedChoice, choiceGroupName)}
+        ${reviewStrengthChoicesMarkup('', choiceGroupName)}
       </div>
       <details class="review-choice-guide">
         <summary>What this choice means</summary>
-        <div class="review-choice-guide-body">${renderReviewChoiceGuide(item.recommended_choice || '')}</div>
+        <div class="review-choice-guide-body">${renderReviewChoiceGuide('')}</div>
       </details>
       <details class="review-examples">
         <summary>Requirement wording</summary>
@@ -231,7 +224,7 @@ function renderRequirementCard(item) {
         <div class="review-examples-body">${suggestionExamplesMarkup(item.examples || [], 'No example roles saved for this requirement yet.')}</div>
       </details>
       <div class="card-actions" style="margin-top:10px;">
-        <button class="jh-button jh-button--primary jh-button--compact confirm-skill-btn" data-skill="${escapeHtml(item.skill || '')}" data-aliases="${escapeHtml(JSON.stringify(aliases))}"${recommendedChoice ? '' : ' disabled'}>Confirm</button>
+        <button class="jh-button jh-button--primary jh-button--compact confirm-skill-btn" data-skill="${escapeHtml(item.skill || '')}" data-aliases="${escapeHtml(JSON.stringify(aliases))}" disabled>Confirm</button>
         <button class="jh-button jh-button--danger jh-button--compact do-not-have-skill-btn" data-skill="${escapeHtml(item.skill || '')}">${escapeHtml(DECLINE_CAPABILITY_LABEL)}</button>
         <button class="jh-button jh-button--secondary jh-button--compact decline-skill-btn" data-skill="${escapeHtml(item.skill || '')}">${escapeHtml(DISMISS_CAPABILITY_SUGGESTION_LABEL)}</button>
       </div>
@@ -257,28 +250,30 @@ function renderSuggestedTuning(reviewData) {
     capabilitySuggestions,
     capabilityEmptyCopy,
     (item, index) => {
-      const recommendedChoice = normalizeRecommendedReviewChoice(item);
+      // JH-317: do not surface or preselect item.recommended_choice here.
+      // It is currently derived from kept-role occurrence frequency, which measures
+      // market relevance rather than candidate proficiency. Keep the count visible
+      // and require an explicit strength choice until evidence-backed recommendations exist.
       return `
       <div class="review-card">
         <div class="review-card-heading">
           <h3>${escapeHtml(item.skill || 'Capability')}</h3>
-          <span class="suggestion-chip">Suggested: ${escapeHtml(item.recommended_label || 'Review')}</span>
           <span class="review-card-count">Seen in ${escapeHtml(String(item.count || 0))} kept role(s)</span>
         </div>
         <label>${escapeHtml(capabilityUi.reviewStrengthPromptLabel)}</label>
         <div class="choice-strip jh-choice-group capability-strength-strip review-strength-strip" role="radiogroup" aria-label="${escapeHtml(capabilityUi.reviewStrengthPromptLabel)}" data-skill="${escapeHtml(item.skill || '')}">
-          ${reviewStrengthChoicesMarkup(recommendedChoice, `skill-choice-${index}`)}
+          ${reviewStrengthChoicesMarkup('', `skill-choice-${index}`)}
         </div>
         <details class="review-choice-guide">
           <summary>What this choice means</summary>
-          <div class="review-choice-guide-body">${renderReviewChoiceGuide(item.recommended_choice || '')}</div>
+          <div class="review-choice-guide-body">${renderReviewChoiceGuide('')}</div>
         </details>
         <details class="review-examples">
           <summary>Examples from kept roles</summary>
           <div class="review-examples-body">${suggestionExamplesMarkup(item.examples || [], 'No example roles saved for this capability yet.')}</div>
         </details>
         <div class="card-actions" style="margin-top:10px;">
-          <button class="jh-button jh-button--primary jh-button--compact confirm-skill-btn" data-skill="${escapeHtml(item.skill || '')}"${recommendedChoice ? '' : ' disabled'}>Confirm</button>
+          <button class="jh-button jh-button--primary jh-button--compact confirm-skill-btn" data-skill="${escapeHtml(item.skill || '')}" disabled>Confirm</button>
           <button class="jh-button jh-button--danger jh-button--compact do-not-have-skill-btn" data-skill="${escapeHtml(item.skill || '')}">${escapeHtml(DECLINE_CAPABILITY_LABEL)}</button>
           <button class="jh-button jh-button--secondary jh-button--compact decline-skill-btn" data-skill="${escapeHtml(item.skill || '')}" title="Hide this suggestion without saying you do not have the capability.">${escapeHtml(DISMISS_CAPABILITY_SUGGESTION_LABEL)}</button>
         </div>
