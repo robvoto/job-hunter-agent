@@ -2597,9 +2597,10 @@
   gap: var(--surface-gap-sm) var(--surface-gap-lg);
 }
 .checkbox-list-group--dense .checkbox-list-options {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, max-content);
   grid-template-rows: repeat(var(--checkbox-list-row-count), auto);
   grid-auto-flow: column;
+  column-gap: calc(var(--surface-gap-lg) * 2);
 }
 .checkbox-list-option {
   display: grid;

@@ -73,6 +73,9 @@ def test_onboarding_and_settings_share_location_checkbox_component():
     assert shared_classes in settings_html
     assert "export function renderLocationCheckboxOptions" in common_location_js
     assert "onboardingLocationUi.renderLocationCheckboxOptions" in onboarding_js
+    theme_widgets = (repo_root / "templates" / "static" / "theme" / "themes.widgets.css").read_text(encoding="utf-8")
+    assert "grid-template-columns: repeat(2, max-content);" in theme_widgets
+    assert "column-gap: calc(var(--surface-gap-lg) * 2);" in theme_widgets
     assert "locationUi.renderLocationCheckboxOptions" in settings_js
     assert '<select id="location_search"' not in onboarding_html
 
@@ -99,6 +102,12 @@ def test_compensation_is_fourth_shared_search_basics_group():
     assert 'salary-preference-card' not in onboarding_html
     assert 'class="compensation-card' not in onboarding_html
     assert 'class="salary-pair"' not in onboarding_html
+    assert '__JOB_HUNTER_ONBOARDING_PAGE_MINIMUM_COMPENSATION_LABEL__ (excludes super)' in onboarding_html
+    assert '<label for="review_minimum_salary_yearly">Annual base</label>' in onboarding_html
+    assert '<label for="review_minimum_daily_rate">Daily rate</label>' in onboarding_html
+    assert '<strong>Minimum compensation (excludes super)</strong>' in settings_html
+    assert '<label for="minimum_salary_yearly">Annual base</label>' in settings_html
+    assert '<label for="minimum_daily_rate">Daily rate</label>' in settings_html
 
 
 
