@@ -472,7 +472,14 @@ def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
                     "recommended_choice": "working",
                     "recommended_label": "Working",
                     "examples": [],
-                }
+                },
+                {
+                    "skill": "Mentoring",
+                    "count": 2,
+                    "recommended_choice": "working",
+                    "recommended_label": "Working",
+                    "examples": [],
+                },
             ],
             "requirement_suggestions": [
                 {
@@ -518,7 +525,7 @@ def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
     page.locator('[data-section="section-optimise"]').click()
 
     review_head = page.locator("#section-optimise .search-settings-subcard > .settings-card-title-row")
-    expect(review_head.locator("h3")).to_have_text("Review Suggestions (1)")
+    expect(review_head.locator("h3")).to_have_text("Review Suggestions (2)")
     count = review_head.locator(".settings-heading-count")
     heading_size = float(review_head.locator("h3").evaluate("el => parseFloat(getComputedStyle(el).fontSize)"))
     count_size = float(count.evaluate("el => parseFloat(getComputedStyle(el).fontSize)"))
@@ -539,6 +546,14 @@ def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
     info_box = review_head.locator(".field-info").bounding_box()
     assert title_box and info_box
     assert abs((title_box["y"] + title_box["height"] / 2) - (info_box["y"] + info_box["height"] / 2)) <= 2
+
+    capability_cards = page.locator('#tuning_suggestions_panel .review-list > .review-card[data-review-kind="capability"]')
+    expect(capability_cards).to_have_count(2)
+    first_card_box = capability_cards.nth(0).bounding_box()
+    second_card_box = capability_cards.nth(1).bounding_box()
+    assert first_card_box and second_card_box
+    assert abs(first_card_box["y"] - second_card_box["y"]) <= 3
+    assert second_card_box["x"] > first_card_box["x"]
 
     card = page.locator("#tuning_suggestions_panel .review-card").filter(has_text="Power BI")
     expect(card).to_be_visible()

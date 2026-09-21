@@ -1121,7 +1121,17 @@
       display: grid;
       gap: var(--surface-gap-lg);
     }
-    .review-list { display: grid; gap: var(--surface-gap-md); }
+    .review-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--surface-gap-md);
+      align-items: stretch;
+    }
+    @media (max-width: 900px) {
+      .review-list {
+        grid-template-columns: 1fr;
+      }
+    }
     .tuning-group + .tuning-group { margin-top: var(--surface-gap-lg); }
     .tuning-group {
       display: grid;
