@@ -675,6 +675,45 @@ def build_title_optimization_suggestions(audit_rows: list[dict]) -> list[dict]:
     )
 
 
+
+def filter_resolved_suggested_tuning(
+    review_data: dict[str, Any], profile: dict[str, Any]
+) -> dict[str, Any]:
+    """Hide stale capability suggestions already resolved in the current profile."""
+    if not isinstance(review_data, dict):
+        return {}
+
+    suggested = review_data.get("suggested_tuning")
+    if not isinstance(suggested, dict):
+        return dict(review_data)
+
+    resolved_terms = _collect_known_terms(profile) | _ignored_capability_suggestion_terms(profile)
+    if not resolved_terms:
+        return dict(review_data)
+
+    filtered = dict(review_data)
+    filtered_suggested = dict(suggested)
+    for key in ("capability_suggestions", "requirement_suggestions"):
+        items = suggested.get(key)
+        if not isinstance(items, list):
+            continue
+        filtered_suggested[key] = [
+            item
+            for item in items
+            if not isinstance(item, dict)
+            or _normalize_term(str(item.get("skill") or "")) not in resolved_terms
+        ]
+
+    summary = dict(suggested.get("summary") or {})
+    if isinstance(filtered_suggested.get("capability_suggestions"), list):
+        summary["capability_count"] = len(filtered_suggested["capability_suggestions"])
+    if isinstance(filtered_suggested.get("requirement_suggestions"), list):
+        summary["requirement_count"] = len(filtered_suggested["requirement_suggestions"])
+    filtered_suggested["summary"] = summary
+    filtered["suggested_tuning"] = filtered_suggested
+    return filtered
+
+
 def build_suggested_tuning(
     audit_rows: list[dict],
     skill_observations: list[dict],

@@ -15,7 +15,11 @@ from job_hunter_agent.profile_store import (
     KEY_MUST_NOT_REQUIRED_SKILLS,
     KEY_NAME,
 )
-from job_hunter_agent.review_insights import apply_capability_tuning_decisions, build_review_data
+from job_hunter_agent.review_insights import (
+    apply_capability_tuning_decisions,
+    build_review_data,
+    filter_resolved_suggested_tuning,
+)
 
 
 def test_build_review_data_uses_kept_audit_rows_for_capability_suggestions(monkeypatch):
@@ -369,6 +373,41 @@ def test_build_review_data_turns_repeated_requirement_coverage_into_capability_t
         chinese["prompt"]
         == "Chinese language proficiency is required in several kept roles. Do you have this capability?"
     )
+
+
+
+def test_filter_resolved_suggested_tuning_hides_current_profile_decisions():
+    review_data = {
+        "suggested_tuning": {
+            "summary": {"capability_count": 3, "requirement_count": 1, "rule_count": 2},
+            "capability_suggestions": [
+                {"skill": "Power BI"},
+                {"skill": "Quality assurance"},
+                {"skill": "Process improvement"},
+            ],
+            "requirement_suggestions": [{"skill": "Agile methodologies"}],
+            "rule_suggestions": [{"headline": "keep rule suggestion"}],
+        }
+    }
+    profile = {
+        "candidate_capabilities": [
+            {"name": "Power BI", "level": "working", "aliases": []}
+        ],
+        "must_not_require_skills": ["Quality assurance"],
+        "review_controls": {
+            "ignored_capability_suggestions": ["Agile methodologies"]
+        },
+    }
+
+    filtered = filter_resolved_suggested_tuning(review_data, profile)
+
+    suggestions = filtered["suggested_tuning"]
+    assert suggestions["capability_suggestions"] == [{"skill": "Process improvement"}]
+    assert suggestions["requirement_suggestions"] == []
+    assert suggestions["rule_suggestions"] == [{"headline": "keep rule suggestion"}]
+    assert suggestions["summary"]["capability_count"] == 1
+    assert suggestions["summary"]["requirement_count"] == 0
+    assert suggestions["summary"]["rule_count"] == 2
 
 
 def test_apply_capability_tuning_decisions_adds_confirmed_capability():

@@ -22,7 +22,7 @@ It must not silently change the candidate profile without user confirmation.
 
 1. `scrape_finalize.py` calls `review_insights.build_review_data()` when finalising a run.
 2. `build_review_data()` creates the `suggested_tuning` payload through `build_suggested_tuning()` and persists it with `write_review_data()`.
-3. `GET /api/review-data` returns the saved payload through `workspace_api.api_review_data()`; it does not rebuild suggestions.
+3. `GET /api/review-data` returns the saved payload through `workspace_api.api_review_data()` after filtering out capability/requirement suggestions already confirmed, explicitly absent, or ignored in the current profile; it does not rebuild suggestions.
 4. The frontend renders into `#tuning_suggestions_panel` from `templates/static/settings/shared/settings-review-panel.js`.
 5. The HTML shell lives in `templates/partials/settings/standard/settings-optimise.html`.
 
