@@ -74,7 +74,9 @@ def test_onboarding_and_settings_share_location_checkbox_component():
     assert "export function renderLocationCheckboxOptions" in common_location_js
     assert "onboardingLocationUi.renderLocationCheckboxOptions" in onboarding_js
     theme_widgets = (repo_root / "templates" / "static" / "theme" / "themes.widgets.css").read_text(encoding="utf-8")
+    assert "grid-template-columns: repeat(3, max-content);" in theme_widgets
     assert "grid-template-columns: repeat(2, max-content);" in theme_widgets
+    assert "justify-content: start;" in theme_widgets
     assert "column-gap: calc(var(--surface-gap-lg) * 2);" in theme_widgets
     assert "locationUi.renderLocationCheckboxOptions" in settings_js
     assert '<select id="location_search"' not in onboarding_html
