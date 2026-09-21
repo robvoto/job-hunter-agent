@@ -328,6 +328,57 @@ def test_prune_occupation_title_cache_applies_age_and_entry_limits(isolated_db, 
     assert [row["normalized_title"] for row in rows] == ["fresh-one", "fresh-two"]
 
 
+def test_clear_current_user_runtime_caches_preserves_other_users_and_shared_cache(isolated_db):
+    from job_hunter_agent.database import db_conn
+    from job_hunter_agent.user_context import set_user_id
+
+    with db_conn(isolated_db) as conn:
+        for user_id in ("test_user", "other_user"):
+            conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (user_id,))
+            conn.execute(
+                "INSERT INTO source_discovery_cache (user_id, source, signature, status, data) VALUES (?, 'seek', 'sig', 'success', '{}')",
+                (user_id,),
+            )
+            conn.execute(
+                "INSERT INTO search_plan_state (user_id, source, signature, location, data) VALUES (?, 'seek', 'sig', 'Sydney', '{}')",
+                (user_id,),
+            )
+            conn.execute(
+                "INSERT INTO incremental_search_state (user_id, source, signature, location, role_target, data) VALUES (?, 'seek', 'sig', 'Sydney', 'Business Analyst', '{}')",
+                (user_id,),
+            )
+        conn.execute(
+            """
+            INSERT INTO occupation_title_cache
+                (normalized_title, candidate_profile_hash, taxonomy_version, result, matched_occupation_code, confidence)
+            VALUES ('business analyst', 'shared-profile', 'v1', 'near', NULL, 0.9)
+            """
+        )
+
+    set_user_id("test_user")
+    result = io_utils.clear_current_user_runtime_caches(isolated_db)
+
+    assert result == {
+        "ok": True,
+        "cleared_files": [],
+        "message": "Current user runtime caches cleared.",
+    }
+
+    with db_conn(isolated_db) as conn:
+        for table in (
+            "source_discovery_cache",
+            "search_plan_state",
+            "incremental_search_state",
+        ):
+            assert conn.execute(
+                f"SELECT COUNT(*) FROM {table} WHERE user_id = ?", ("test_user",)
+            ).fetchone()[0] == 0
+            assert conn.execute(
+                f"SELECT COUNT(*) FROM {table} WHERE user_id = ?", ("other_user",)
+            ).fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM occupation_title_cache").fetchone()[0] == 1
+
+
 def test_clear_runtime_caches_removes_transient_files_and_occupation_cache(isolated_db, tmp_path, monkeypatch):
     from job_hunter_agent.database import db_conn
 

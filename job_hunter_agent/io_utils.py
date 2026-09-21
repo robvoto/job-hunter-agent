@@ -1009,6 +1009,29 @@ def prune_occupation_title_cache(db_path: Path | None = None) -> int:
     return removed
 
 
+def clear_current_user_runtime_caches(db_path: Path | None = None) -> dict[str, Any]:
+    """Clear only transient cache rows owned by the signed-in user.
+
+    Shared file-backed caches and the occupation-title cache are deliberately
+    preserved here because they are not owned by one account. Reset/search-clear
+    flows must never invalidate another user's runtime state.
+    """
+    from job_hunter_agent.database import db_conn
+    from job_hunter_agent.paths import get_active_user_id
+
+    user_id = get_active_user_id()
+    with db_conn(db_path) as conn:
+        conn.execute("DELETE FROM source_discovery_cache WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM search_plan_state WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM incremental_search_state WHERE user_id = ?", (user_id,))
+
+    return {
+        "ok": True,
+        "cleared_files": [],
+        "message": "Current user runtime caches cleared.",
+    }
+
+
 def clear_runtime_caches(db_path: Path | None = None) -> dict[str, Any]:
     from job_hunter_agent.database import db_conn
 

@@ -681,7 +681,7 @@ Behavior:
 - Source health is explicit: `healthy`, `partial_failure`, `full_failure`, or `stopped`. `SOURCE_COMPLETE` means only that the source worker finished; `SOURCE_FAILED` / `SOURCE_PARTIAL` and the structured source result describe collection health.
 - The file-backed caches are pruned by both age and count.
 - Admin > Global settings also exposes maintenance actions to clear shared runtime caches or clear the current user search state immediately.
-- Clear current user search state also clears transient runtime caches, per-user agent state, the current workspace HTML, and recruiter/history review state so the next run regenerates from clean runtime state.
+- Clear current user search state clears only that account's transient search caches, per-user agent state, current workspace HTML, and recruiter/history review state. Shared cache files, occupation-title cache rows, global settings, shared learned signals, and other users' state are preserved.
 - Managed historical application evidence is retained separately from current job history and is bounded by `history_settings.historical_application_evidence_max_entries`. The retired rejection-sheet sync and its destructive clear action are not part of normal runtime.
 
 ### Hard reset (wipes user-approved additions)

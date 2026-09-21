@@ -1527,7 +1527,10 @@ def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch,
 
     fake_users_dir = tmp_path / "users"
     fake_local_dir = fake_users_dir / "test_user"
+    fake_other_dir = fake_users_dir / "other_user"
     fake_local_dir.mkdir(parents=True, exist_ok=True)
+    fake_other_dir.mkdir(parents=True, exist_ok=True)
+    (fake_other_dir / "keep.txt").write_text("keep", encoding="utf-8")
 
     workspace_path = tmp_path / "workspace.html"
 
@@ -1553,7 +1556,7 @@ def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch,
     monkeypatch.setattr(server_helpers, "clear_audit_rows", lambda: cleared.append("audit_rows"))
     monkeypatch.setattr(
         server_helpers,
-        "clear_runtime_caches",
+        "clear_current_user_runtime_caches",
         lambda: cleared_runtime_caches.append(True) or {"ok": True, "cleared_files": []},
     )
     monkeypatch.setattr(server_helpers, "get_workspace_results_path", lambda: workspace_path)
@@ -1565,6 +1568,7 @@ def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch,
     assert result["ok"] is True
     assert result["redirect_to"] == "/start?fresh=1"
     assert not fake_local_dir.exists()
+    assert (fake_other_dir / "keep.txt").read_text(encoding="utf-8") == "keep"
     assert saved_profiles == [server_helpers.DEFAULT_PROFILE]
     assert saved_materials == [server_helpers.DEFAULT_SOURCE_MATERIALS]
     assert not workspace_path.exists()
@@ -1576,6 +1580,149 @@ def test_reset_current_user_state_clears_local_profile_and_feedback(monkeypatch,
     assert "run_stats" in cleared
     assert "audit_rows" in cleared
     assert cleared_runtime_caches == [True]
+
+
+def test_reset_current_user_isolated_from_other_users_and_shared_state(
+    isolated_db, monkeypatch, tmp_path
+):
+    from job_hunter_agent import paths
+    from job_hunter_agent.database import db_conn
+    from job_hunter_agent.user_context import set_user_id
+
+    user_tables = (
+        "user_profile",
+        "user_settings",
+        "job_history",
+        "review_data",
+        "run_stats",
+        "audit_records",
+        "workspace_pool",
+        "profile_documents",
+        "agent_state",
+        "source_discovery_cache",
+        "search_plan_state",
+        "incremental_search_state",
+    )
+
+    with db_conn(isolated_db) as conn:
+        for user_id in ("test_user", "other_user"):
+            conn.execute(
+                "INSERT OR IGNORE INTO users (user_id, email) VALUES (?, ?)",
+                (user_id, f"{user_id}@example.com"),
+            )
+            conn.execute(
+                "INSERT INTO user_profile (user_id, data) VALUES (?, ?)",
+                (user_id, json.dumps({"marker": user_id})),
+            )
+            conn.execute(
+                "INSERT INTO user_settings (user_id, data) VALUES (?, ?)",
+                (user_id, json.dumps({"marker": user_id})),
+            )
+            conn.execute(
+                "INSERT INTO job_history (user_id, job_key, source, platform_id, data) VALUES (?, ?, 'seek', '1', ?)",
+                (user_id, f"seek:{user_id}", json.dumps({"marker": user_id})),
+            )
+            conn.execute(
+                "INSERT INTO review_data (user_id, data) VALUES (?, ?)",
+                (user_id, json.dumps({"marker": user_id})),
+            )
+            conn.execute(
+                "INSERT INTO run_stats (user_id, run_id, data) VALUES (?, 'latest', ?)",
+                (user_id, json.dumps({"marker": user_id})),
+            )
+            conn.execute(
+                "INSERT INTO audit_records (user_id, event, data) VALUES (?, 'latest_scrape_run', ?)",
+                (user_id, json.dumps({"marker": user_id})),
+            )
+            conn.execute(
+                "INSERT INTO workspace_pool (user_id, data) VALUES (?, ?)",
+                (user_id, json.dumps({"marker": user_id})),
+            )
+            conn.execute(
+                "INSERT INTO profile_documents (user_id, data) VALUES (?, ?)",
+                (user_id, json.dumps({"profile_sources": [], "cv_variants": [], "marker": user_id})),
+            )
+            conn.execute(
+                "INSERT INTO agent_state (user_id, data) VALUES (?, ?)",
+                (user_id, json.dumps({"marker": user_id})),
+            )
+            conn.execute(
+                "INSERT INTO source_discovery_cache (user_id, source, signature, status, data) VALUES (?, 'seek', 'sig', 'success', ?)",
+                (user_id, json.dumps({"marker": user_id})),
+            )
+            conn.execute(
+                "INSERT INTO search_plan_state (user_id, source, signature, location, data) VALUES (?, 'seek', 'sig', 'Sydney', ?)",
+                (user_id, json.dumps({"marker": user_id})),
+            )
+            conn.execute(
+                "INSERT INTO incremental_search_state (user_id, source, signature, location, role_target, data) VALUES (?, 'seek', 'sig', 'Sydney', 'Business Analyst', ?)",
+                (user_id, json.dumps({"marker": user_id})),
+            )
+
+        other_before = {
+            table: [tuple(row) for row in conn.execute(
+                f"SELECT * FROM {table} WHERE user_id = ?", ("other_user",)
+            ).fetchall()]
+            for table in user_tables
+        }
+        global_before = [tuple(row) for row in conn.execute(
+            "SELECT * FROM global_settings ORDER BY key"
+        ).fetchall()]
+        knowledge_before = [tuple(row) for row in conn.execute(
+            "SELECT * FROM knowledge ORDER BY key"
+        ).fetchall()]
+
+    users_dir = tmp_path / "users"
+    current_dir = users_dir / "test_user"
+    other_dir = users_dir / "other_user"
+    current_dir.mkdir(parents=True)
+    other_dir.mkdir(parents=True)
+    (current_dir / "workspace_results.html").write_text("current", encoding="utf-8")
+    (other_dir / "workspace_results.html").write_text("other", encoding="utf-8")
+    monkeypatch.setattr(server_helpers, "USERS_DIR", users_dir)
+    monkeypatch.setattr(paths, "USERS_DIR", users_dir)
+
+    set_user_id("test_user")
+    result = server_helpers.SettingsHandler._reset_current_user_state()
+
+    assert result["ok"] is True
+    assert not current_dir.exists()
+    assert (other_dir / "workspace_results.html").read_text(encoding="utf-8") == "other"
+
+    with db_conn(isolated_db) as conn:
+        for table in user_tables:
+            other_after = [tuple(row) for row in conn.execute(
+                f"SELECT * FROM {table} WHERE user_id = ?", ("other_user",)
+            ).fetchall()]
+            assert other_after == other_before[table], table
+        assert [tuple(row) for row in conn.execute(
+            "SELECT * FROM global_settings ORDER BY key"
+        ).fetchall()] == global_before
+        assert [tuple(row) for row in conn.execute(
+            "SELECT * FROM knowledge ORDER BY key"
+        ).fetchall()] == knowledge_before
+
+        for table in (
+            "job_history",
+            "review_data",
+            "run_stats",
+            "audit_records",
+            "workspace_pool",
+            "agent_state",
+            "source_discovery_cache",
+            "search_plan_state",
+            "incremental_search_state",
+            "user_settings",
+        ):
+            assert conn.execute(
+                f"SELECT COUNT(*) FROM {table} WHERE user_id = ?", ("test_user",)
+            ).fetchone()[0] == 0, table
+        assert conn.execute(
+            "SELECT COUNT(*) FROM user_profile WHERE user_id = ?", ("test_user",)
+        ).fetchone()[0] == 1
+        assert conn.execute(
+            "SELECT COUNT(*) FROM profile_documents WHERE user_id = ?", ("test_user",)
+        ).fetchone()[0] == 1
 
 
 def test_reset_global_learning_clears_shared_signal_registry(monkeypatch):

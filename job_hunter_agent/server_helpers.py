@@ -46,10 +46,11 @@ from job_hunter_agent.global_settings import (
 from job_hunter_agent.io_utils import (
     clear_agent_state,
     clear_audit_rows,
+    clear_current_user_runtime_caches,
     clear_job_history,
     clear_review_data,
     clear_run_stats,
-    clear_runtime_caches,
+    clear_runtime_caches,  # noqa: F401 - public server helper surface
     clear_user_settings,
     clear_workspace_pool,
     load_run_stats,
@@ -63,6 +64,7 @@ from job_hunter_agent.paths import (
 )
 from job_hunter_agent.paths import (
     USERS_DIR,
+    get_active_user_id,
     get_workspace_results_path,
 )
 from job_hunter_agent.posting_utils import parse_timestamp
@@ -992,7 +994,7 @@ def clear_current_user_search_state(*, preserve_profile: bool = True) -> dict[st
     clear_run_stats()
     clear_audit_rows()
     clear_agent_state()
-    cache_result = clear_runtime_caches()
+    cache_result = clear_current_user_runtime_caches()
 
     if preserve_profile:
         profile = load_profile()
@@ -1990,22 +1992,19 @@ class SettingsHandler:
             raise ValueError(
                 "A scrape is currently running. Wait for it to finish before resetting."
             )
-        # Wipe every per-user data directory under data/users/
-        if USERS_DIR.exists():
+        # Reset only the authenticated account's file-backed workspace state.
+        # Sibling directories belong to other signed-in users and must never be touched.
+        user_dir = USERS_DIR / get_active_user_id()
+        if user_dir.exists():
             try:
-                user_entries = list(USERS_DIR.iterdir())
-            except OSError as _enum_err:
-                logger.warning("Could not enumerate %s: %s", USERS_DIR, _enum_err)
-                user_entries = []
-            for user_dir in user_entries:
-                try:
-                    if user_dir.is_dir():
-                        shutil.rmtree(user_dir, ignore_errors=True)
-                    else:
-                        user_dir.unlink(missing_ok=True)
-                except Exception as exc:
-                    logger.warning("Failed to remove user directory %s: %s", user_dir, exc)
-                    continue
+                if user_dir.is_dir():
+                    shutil.rmtree(user_dir)
+                else:
+                    user_dir.unlink()
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Could not clear current user runtime directory {user_dir}: {exc}"
+                ) from exc
 
         save_profile(DEFAULT_PROFILE)
         save_source_materials(DEFAULT_SOURCE_MATERIALS)

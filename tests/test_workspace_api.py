@@ -89,8 +89,8 @@ def test_api_clean_search_clears_search_state_and_review_buckets(monkeypatch, is
     monkeypatch.setattr(scrape_debug.srv, "DEBUG_MODE", True)
     monkeypatch.setattr(
         scrape_debug.srv,
-        "clear_runtime_caches",
-        lambda: {"ok": True, "cleared_files": ["llm_cache.json"]},
+        "clear_current_user_runtime_caches",
+        lambda: {"ok": True, "cleared_files": []},
     )
 
     fake_users_dir = tmp_path / "users"
@@ -146,7 +146,7 @@ def test_api_clean_search_clears_search_state_and_review_buckets(monkeypatch, is
     assert response.json() == {
         "ok": True,
         "message": "Search results, applied jobs, hidden jobs, and transient caches were cleared. Profile and settings were preserved.",
-        "cleared_runtime_files": ["llm_cache.json"],
+        "cleared_runtime_files": [],
         "redirect_to": "/workspace",
     }
     assert not workspace_path.exists()
