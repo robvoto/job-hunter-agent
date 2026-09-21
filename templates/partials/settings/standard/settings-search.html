@@ -22,7 +22,7 @@
                       <div id="locations" class="checkbox-list-grid location-checkbox-grid" role="group" aria-label="Locations"></div>
                     </div>
 
-                    <div class="settings-form-field--full search-preference-fields">
+                    <div class="settings-form-field--full search-basics-fields">
                       <div class="settings-form-field settings-form-field--summary">
                         <div class="field-label-row">
                           <label id="engagement_type_label">Work type</label>
@@ -71,6 +71,45 @@
                         </div>
                         <p id="work_mode_preference_summary" class="summary-line" aria-live="polite"></p>
                       </div>
+
+                      <div class="search-compensation-group">
+                        <div class="field-label-row">
+                          <strong>__JOB_HUNTER_MINIMUM_COMPENSATION_LABEL__</strong>
+                        </div>
+                        <div class="salary-preference-fields">
+                          <div class="settings-form-field">
+                            <div class="field-label-row">
+                              <label for="minimum_salary_yearly">__JOB_HUNTER_SALARY_MIN_ANNUAL_LABEL__</label>
+                              <details class="field-info-drawer">
+                                <summary class="field-info" aria-label="Help">i</summary>
+                                <div class="field-info-panel">__JOB_HUNTER_SETTINGS_SALARY_ANNUAL_HELP__</div>
+                              </details>
+                            </div>
+                            <div class="field-control-shell">
+                              <div class="currency-input-wrap currency-input-wrap--compact">
+                                <span class="currency-prefix">$</span>
+                                <input id="minimum_salary_yearly" type="text" inputmode="numeric" autocomplete="off" value="0">
+                              </div>
+                            </div>
+                          </div>
+
+                          <div class="settings-form-field">
+                            <div class="field-label-row">
+                              <label for="minimum_daily_rate">__JOB_HUNTER_SALARY_MIN_DAILY_LABEL__</label>
+                              <details class="field-info-drawer">
+                                <summary class="field-info" aria-label="Help">i</summary>
+                                <div class="field-info-panel">__JOB_HUNTER_SETTINGS_SALARY_DAILY_HELP__</div>
+                              </details>
+                            </div>
+                            <div class="field-control-shell">
+                              <div class="currency-input-wrap currency-input-wrap--compact">
+                                <span class="currency-prefix">$</span>
+                                <input id="minimum_daily_rate" type="text" inputmode="numeric" autocomplete="off" value="0">
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
                     <div class="settings-form-field">
@@ -93,37 +132,6 @@
                       </div>
                     </div>
 
-                    <div class="settings-form-field">
-                      <div class="field-label-row">
-                        <label for="minimum_salary_yearly">__JOB_HUNTER_SALARY_MIN_ANNUAL_LABEL__</label>
-                        <details class="field-info-drawer">
-                          <summary class="field-info" aria-label="Help">i</summary>
-                          <div class="field-info-panel">__JOB_HUNTER_SETTINGS_SALARY_ANNUAL_HELP__</div>
-                        </details>
-                      </div>
-                      <div class="field-control-shell">
-                        <div class="currency-input-wrap currency-input-wrap--compact">
-                          <span class="currency-prefix">$</span>
-                          <input id="minimum_salary_yearly" type="text" inputmode="numeric" autocomplete="off" value="0">
-                        </div>
-                      </div>
-                    </div>
-
-                    <div class="settings-form-field">
-                      <div class="field-label-row">
-                        <label for="minimum_daily_rate">__JOB_HUNTER_SALARY_MIN_DAILY_LABEL__</label>
-                        <details class="field-info-drawer">
-                          <summary class="field-info" aria-label="Help">i</summary>
-                          <div class="field-info-panel">__JOB_HUNTER_SETTINGS_SALARY_DAILY_HELP__</div>
-                        </details>
-                      </div>
-                      <div class="field-control-shell">
-                        <div class="currency-input-wrap currency-input-wrap--compact">
-                          <span class="currency-prefix">$</span>
-                          <input id="minimum_daily_rate" type="text" inputmode="numeric" autocomplete="off" value="0">
-                        </div>
-                      </div>
-                    </div>
                   </div>
 
                 </section>

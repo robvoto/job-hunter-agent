@@ -231,7 +231,7 @@
             </section>
 
             <section class="review-block settings-form-field--full">
-              <div class="search-preference-fields">
+              <div class="search-basics-fields">
                 <div class="onb-field">
                   <div class="field-label-row">
                     <label id="engagement_type_label">__JOB_HUNTER_ONBOARDING_PAGE_WORK_TYPE_LABEL__</label>
@@ -280,39 +280,38 @@
                   </div>
                   <p id="work_mode_preference_summary" class="summary-line" aria-live="polite"></p>
                 </div>
-              </div>
-            </section>
 
-            <section class="review-block salary-preference-card">
-              <div class="salary-preference-fields">
-                <div id="salary_yearly_block" class="onb-field">
+                <div class="search-compensation-group">
                   <div class="field-label-row">
-                    <label for="review_minimum_salary_yearly">__JOB_HUNTER_SALARY_MIN_ANNUAL_LABEL__</label>
+                    <strong>__JOB_HUNTER_MINIMUM_COMPENSATION_LABEL__</strong>
                     <details class="field-info-drawer">
-                      <summary class="field-info" aria-label="Help for minimum annual base">i</summary>
-                      <div class="field-info-panel">__JOB_HUNTER_SALARY_ANNUAL_HELP__</div>
+                      <summary class="field-info" aria-label="Help for minimum compensation">i</summary>
+                      <div class="field-info-panel">__JOB_HUNTER_ONBOARDING_PAGE_MINIMUM_COMPENSATION_HELP__</div>
                     </details>
                   </div>
-                  <div class="field-control-shell">
-                    <div class="currency-input-wrap currency-input-wrap--compact">
-                      <span class="currency-prefix">$</span>
-                      <input id="review_minimum_salary_yearly" type="text" inputmode="numeric" autocomplete="off" placeholder="140,000">
+                  <div class="salary-preference-fields">
+                    <div id="salary_yearly_block" class="onb-field">
+                      <div class="field-label-row">
+                        <label for="review_minimum_salary_yearly">__JOB_HUNTER_SALARY_MIN_ANNUAL_LABEL__</label>
+                      </div>
+                      <div class="field-control-shell">
+                        <div class="currency-input-wrap currency-input-wrap--compact">
+                          <span class="currency-prefix">$</span>
+                          <input id="review_minimum_salary_yearly" type="text" inputmode="numeric" autocomplete="off" placeholder="140,000">
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
 
-                <div id="salary_daily_block" class="onb-field">
-                  <div class="field-label-row">
-                    <label for="review_minimum_daily_rate">__JOB_HUNTER_SALARY_MIN_DAILY_LABEL__</label>
-                    <details class="field-info-drawer">
-                      <summary class="field-info" aria-label="Help for minimum daily rate">i</summary>
-                      <div class="field-info-panel">__JOB_HUNTER_SALARY_DAILY_HELP__</div>
-                    </details>
-                  </div>
-                  <div class="field-control-shell">
-                    <div class="currency-input-wrap currency-input-wrap--compact">
-                      <span class="currency-prefix">$</span>
-                      <input id="review_minimum_daily_rate" type="text" inputmode="numeric" autocomplete="off" placeholder="900">
+                    <div id="salary_daily_block" class="onb-field">
+                      <div class="field-label-row">
+                        <label for="review_minimum_daily_rate">__JOB_HUNTER_SALARY_MIN_DAILY_LABEL__</label>
+                      </div>
+                      <div class="field-control-shell">
+                        <div class="currency-input-wrap currency-input-wrap--compact">
+                          <span class="currency-prefix">$</span>
+                          <input id="review_minimum_daily_rate" type="text" inputmode="numeric" autocomplete="off" placeholder="900">
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>

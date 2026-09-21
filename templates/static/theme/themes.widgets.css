@@ -1352,40 +1352,43 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-/* Shared compact search-preference row used by onboarding and Settings. */
-.search-preference-fields {
+/* Shared Search Basics row used by onboarding and Settings. Each logical group
+   keeps its natural width and wraps as a complete unit when the container narrows. */
+.search-basics-fields {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
   justify-content: flex-start;
-  gap: var(--surface-gap-lg);
+  gap: var(--surface-gap-lg) calc(var(--surface-gap-lg) * 2);
 }
 
-.search-preference-fields > .settings-form-field,
-.search-preference-fields > .onb-field {
+.search-basics-fields > .settings-form-field,
+.search-basics-fields > .onb-field,
+.search-basics-fields > .search-compensation-group {
   flex: 0 0 auto;
   width: max-content;
   max-width: 100%;
   min-width: 0;
 }
 
-/* Related compensation inputs stay compact and wrap as complete fields. */
+.search-compensation-group {
+  display: grid;
+  align-content: start;
+  row-gap: var(--field-label-control-gap);
+}
+
 .salary-preference-fields {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: var(--surface-gap-lg);
+  display: grid;
+  gap: var(--surface-gap-sm);
 }
 
 .salary-preference-fields > .onb-field,
 .salary-preference-fields > .settings-form-field {
-  flex: 0 1 20rem;
-  width: min(100%, 20rem);
   min-width: 0;
 }
 
 .currency-input-wrap--compact {
-  width: min(100%, 14rem);
+  width: min(100%, 13rem);
 }
 
 .settings-form-field,

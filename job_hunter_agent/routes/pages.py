@@ -753,6 +753,10 @@ def _render_template_with_locations(
                 label_id="search_default_seek_max_pages_label",
             ),
         )
+        .replace(
+            "__JOB_HUNTER_MINIMUM_COMPENSATION_LABEL__",
+            srv.load_onboarding_page_labels()["minimum_compensation_label"],
+        )
         .replace("__JOB_HUNTER_SALARY_MIN_ANNUAL_LABEL__", SALARY_MIN_ANNUAL_LABEL)
         .replace("__JOB_HUNTER_SALARY_MIN_DAILY_LABEL__", SALARY_MIN_DAILY_LABEL)
         .replace("__JOB_HUNTER_SALARY_MIN_COMPENSATION_HELP__", SALARY_MIN_COMPENSATION_HELP_TEXT)
