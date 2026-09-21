@@ -1392,8 +1392,9 @@
 
 .salary-preference-fields {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--surface-gap-md);
+  grid-template-columns: repeat(2, max-content);
+  gap: var(--surface-gap-md) var(--surface-gap-lg);
+  justify-content: start;
 }
 
 .salary-preference-fields > .onb-field,

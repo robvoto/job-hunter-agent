@@ -670,6 +670,8 @@ def test_search_basics_shared_layout_stays_balanced_at_settings_width(candidate_
     annual_box = box(salary_fields.nth(0))
     daily_box = box(salary_fields.nth(1))
     assert abs(annual_box["y"] - daily_box["y"]) < 8
+    salary_gap = daily_box["x"] - (annual_box["x"] + annual_box["width"])
+    assert 16 <= salary_gap <= 64, f"salary field gap is {salary_gap}px"
 
     overflow = page.evaluate("document.documentElement.scrollWidth - window.innerWidth")
     assert overflow <= 1, f"settings search horizontal overflow is {overflow}px"
