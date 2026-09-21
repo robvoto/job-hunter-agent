@@ -22,53 +22,55 @@
                       <div id="locations" class="checkbox-list-grid location-checkbox-grid" role="group" aria-label="Locations"></div>
                     </div>
 
-                    <div class="settings-form-field settings-form-field--summary">
-                      <div class="field-label-row">
-                        <label id="engagement_type_label">Work type</label>
-                        <details class="field-info-drawer">
-                          <summary class="field-info" aria-label="Help">i</summary>
-                          <div class="field-info-panel">__JOB_HUNTER_ENGAGEMENT_TYPE_HELP__</div>
-                        </details>
+                    <div class="settings-form-field--full search-preference-fields">
+                      <div class="settings-form-field settings-form-field--summary">
+                        <div class="field-label-row">
+                          <label id="engagement_type_label">Work type</label>
+                          <details class="field-info-drawer">
+                            <summary class="field-info" aria-label="Help">i</summary>
+                            <div class="field-info-panel">__JOB_HUNTER_ENGAGEMENT_TYPE_HELP__</div>
+                          </details>
+                        </div>
+                        <div class="field-control-shell">
+                          __JOB_HUNTER_ENGAGEMENT_TYPE_CHOICES__
+                        </div>
+                        <div id="contract_duration_row" class="choice-detail-popover" popover="auto" role="group" aria-labelledby="min_contract_months_label">
+                          <label id="min_contract_months_label" class="choice-detail-popover__label" for="min_contract_months">__JOB_HUNTER_MIN_CONTRACT_MONTH_LABEL__</label>
+                          <select id="min_contract_months" class="jh-select" aria-label="__JOB_HUNTER_MIN_CONTRACT_MONTH_LABEL__">
+                            <option value="">__JOB_HUNTER_MIN_CONTRACT_MONTH_NONE_LABEL__</option>
+                            __JOB_HUNTER_MIN_CONTRACT_MONTH_OPTIONS__
+                          </select>
+                        </div>
+                        <p id="engagement_type_summary" class="summary-line" aria-live="polite"></p>
                       </div>
-                      <div class="field-control-shell">
-                        __JOB_HUNTER_ENGAGEMENT_TYPE_CHOICES__
-                      </div>
-                      <div id="contract_duration_row" class="choice-detail-popover" popover="auto" role="group" aria-labelledby="min_contract_months_label">
-                        <label id="min_contract_months_label" class="choice-detail-popover__label" for="min_contract_months">__JOB_HUNTER_MIN_CONTRACT_MONTH_LABEL__</label>
-                        <select id="min_contract_months" class="jh-select" aria-label="__JOB_HUNTER_MIN_CONTRACT_MONTH_LABEL__">
-                          <option value="">__JOB_HUNTER_MIN_CONTRACT_MONTH_NONE_LABEL__</option>
-                          __JOB_HUNTER_MIN_CONTRACT_MONTH_OPTIONS__
-                        </select>
-                      </div>
-                      <p id="engagement_type_summary" class="summary-line" aria-live="polite"></p>
-                    </div>
 
-                    <div class="settings-form-field settings-form-field--summary">
-                      <div class="field-label-row">
-                        <label id="work_mode_preference_label">Work mode</label>
-                        <details class="field-info-drawer">
-                          <summary class="field-info" aria-label="Help">i</summary>
-                          <div class="field-info-panel">__JOB_HUNTER_WORK_MODE_PREFERENCE_HELP__</div>
-                        </details>
+                      <div class="settings-form-field settings-form-field--summary">
+                        <div class="field-label-row">
+                          <label id="prefer_sector_label">Sector preference</label>
+                          <details class="field-info-drawer">
+                            <summary class="field-info" aria-label="Help">i</summary>
+                            <div class="field-info-panel">__JOB_HUNTER_SECTOR_PREFERENCE_HELP__</div>
+                          </details>
+                        </div>
+                        <div class="field-control-shell">
+                          __JOB_HUNTER_SECTOR_PREFERENCE_CHOICES__
+                        </div>
+                        <p id="sector_preference_summary" class="summary-line" aria-live="polite"></p>
                       </div>
-                      <div class="field-control-shell">
-                        __JOB_HUNTER_WORK_MODE_PREFERENCE_CHOICES__
-                      </div>
-                      <p id="work_mode_preference_summary" class="summary-line" aria-live="polite"></p>
-                    </div>
 
-                    <div class="settings-form-field settings-form-field--summary">
-                      <div class="field-label-row">
-                        <label id="prefer_sector_label">Sector preference</label>
-                        <details class="field-info-drawer">
-                          <summary class="field-info" aria-label="Help">i</summary>
-                          <div class="field-info-panel">__JOB_HUNTER_SECTOR_PREFERENCE_HELP__</div>
-                        </details>
+                      <div class="settings-form-field settings-form-field--summary">
+                        <div class="field-label-row">
+                          <label id="work_mode_preference_label">Work mode</label>
+                          <details class="field-info-drawer">
+                            <summary class="field-info" aria-label="Help">i</summary>
+                            <div class="field-info-panel">__JOB_HUNTER_WORK_MODE_PREFERENCE_HELP__</div>
+                          </details>
+                        </div>
+                        <div class="field-control-shell">
+                          __JOB_HUNTER_WORK_MODE_PREFERENCE_CHOICES__
+                        </div>
+                        <p id="work_mode_preference_summary" class="summary-line" aria-live="polite"></p>
                       </div>
-                      <div class="field-control-shell">
-                        __JOB_HUNTER_SECTOR_PREFERENCE_CHOICES__
-                      </div>
-                      <p id="sector_preference_summary" class="summary-line" aria-live="polite"></p>
                     </div>
 
                     <div class="settings-form-field">
@@ -100,7 +102,7 @@
                         </details>
                       </div>
                       <div class="field-control-shell">
-                        <div class="currency-input-wrap">
+                        <div class="currency-input-wrap currency-input-wrap--compact">
                           <span class="currency-prefix">$</span>
                           <input id="minimum_salary_yearly" type="text" inputmode="numeric" autocomplete="off" value="0">
                         </div>
@@ -116,7 +118,7 @@
                         </details>
                       </div>
                       <div class="field-control-shell">
-                        <div class="currency-input-wrap">
+                        <div class="currency-input-wrap currency-input-wrap--compact">
                           <span class="currency-prefix">$</span>
                           <input id="minimum_daily_rate" type="text" inputmode="numeric" autocomplete="off" value="0">
                         </div>

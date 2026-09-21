@@ -37,11 +37,12 @@ def test_search_basics_reuses_review_layout_primitives():
     assert '<div class="review-grid">' in step_3
     assert 'class="review-block onb-field settings-form-field--full"' in step_3
     assert 'class="review-block settings-form-field--full"' in step_3
-    assert '<h3 class="summary-card-title">Search preferences</h3>' in step_3
-    assert 'class="onboarding-search-preferences-grid"' in step_3
+    assert 'Search preferences' not in step_3
+    assert 'search-preference-fields' in step_3
     assert step_3.count('class="onb-field"') >= 3
-    assert 'id="salary_yearly_block" class="review-block onb-field"' in step_3
-    assert 'id="salary_daily_block" class="review-block onb-field"' in step_3
+    assert 'class="review-block salary-preference-card"' in step_3
+    assert 'id="salary_yearly_block" class="onb-field"' in step_3
+    assert 'id="salary_daily_block" class="onb-field"' in step_3
     assert "search-basics-grid" not in step_3
     assert "search-basics-card" not in step_3
     assert ".search-basics-grid" not in onboarding_review_css
@@ -74,15 +75,22 @@ def test_onboarding_and_settings_share_location_checkbox_component():
     assert '<select id="location_search"' not in onboarding_html
 
 
-def test_salary_preferences_are_normal_review_cards_using_shared_controls():
+def test_salary_preferences_share_one_compact_card_and_shared_input_width():
     repo_root = Path(__file__).resolve().parents[1]
     onboarding_html = (repo_root / "templates" / "onboarding.html").read_text(encoding="utf-8")
+    settings_html = (repo_root / "templates" / "partials" / "settings" / "standard" / "settings-search.html").read_text(encoding="utf-8")
+    theme_widgets = (repo_root / "templates" / "static" / "theme" / "themes.widgets.css").read_text(encoding="utf-8")
 
-    assert 'id="salary_yearly_block" class="review-block onb-field"' in onboarding_html
-    assert 'id="salary_daily_block" class="review-block onb-field"' in onboarding_html
+    assert 'class="review-block salary-preference-card"' in onboarding_html
+    assert 'class="salary-preference-fields"' in onboarding_html
+    assert 'id="salary_yearly_block" class="onb-field"' in onboarding_html
+    assert 'id="salary_daily_block" class="onb-field"' in onboarding_html
     assert '__JOB_HUNTER_SALARY_ANNUAL_HELP__' in onboarding_html
     assert '__JOB_HUNTER_SALARY_DAILY_HELP__' in onboarding_html
-    assert 'class="currency-input-wrap"' in onboarding_html
+    assert onboarding_html.count('currency-input-wrap currency-input-wrap--compact') >= 2
+    assert settings_html.count('currency-input-wrap currency-input-wrap--compact') >= 2
+    assert '.currency-input-wrap--compact {' in theme_widgets
+    assert 'width: min(100%, 14rem);' in theme_widgets
     assert 'class="compensation-card' not in onboarding_html
     assert 'class="salary-pair"' not in onboarding_html
 
@@ -99,11 +107,17 @@ def test_search_preferences_order_and_responsive_layout():
     work_pos = step_3.index('id="engagement_type_label"')
     sector_pos = step_3.index('id="prefer_sector_label"')
     mode_pos = step_3.index('id="work_mode_preference_label"')
+    settings_html = (repo_root / "templates" / "partials" / "settings" / "standard" / "settings-search.html").read_text(encoding="utf-8")
+    theme_widgets = (repo_root / "templates" / "static" / "theme" / "themes.widgets.css").read_text(encoding="utf-8")
+
     assert work_pos < sector_pos < mode_pos
-    assert 'display: flex;' in onboarding_css
-    assert 'flex-wrap: wrap;' in onboarding_css
-    assert 'justify-content: flex-start;' in onboarding_css
-    assert 'grid-template-columns: minmax(280px, 1.25fr)' not in onboarding_css
+    assert 'Search preferences' not in step_3
+    assert 'class="search-preference-fields"' in step_3
+    assert 'search-preference-fields' in settings_html
+    assert settings_html.index('id="engagement_type_label"') < settings_html.index('id="prefer_sector_label"') < settings_html.index('id="work_mode_preference_label"')
+    assert '.search-preference-fields {' in theme_widgets
+    assert 'flex-wrap: wrap;' in theme_widgets
+    assert 'onboarding-search-preferences-grid' not in onboarding_css
 
 
 def test_onboarding_uses_shared_wide_content_shell():

@@ -985,6 +985,16 @@
   line-height: var(--field-label-line-height);
 }
 
+/* Subpanel heading rules must never reintroduce margins inside a shared
+   label/info row; otherwise the info icon is visually pushed off-centre. */
+.subpanel .field-label-row > h1,
+.subpanel .field-label-row > h2,
+.subpanel .field-label-row > h3,
+.subpanel .field-label-row > h4,
+.subpanel .field-label-row > strong {
+  margin: 0;
+}
+
 .field-control-shell {
   display: block;
   width: 100%;
@@ -1161,6 +1171,25 @@
   margin: var(--settings-subheader-gap) 0 0;
 }
 
+/* Standard card-title + info row. It deliberately reuses field-label-row so
+   headings and field labels share one alignment contract for the info control. */
+.settings-card-title-row > h3 {
+  font-size: var(--settings-card-title-font-size);
+  line-height: var(--settings-card-title-line-height);
+  font-weight: var(--text-role-panel-title-font-weight);
+}
+
+.settings-heading-count {
+  color: var(--text-muted);
+  font-size: inherit;
+  font-weight: var(--text-role-status-font-weight);
+}
+
+/* A card's explanatory copy must have a real gap before its first form field. */
+.search-settings-subcard > .panel-copy + .settings-form-field {
+  margin-top: var(--field-stack-gap);
+}
+
 .search-source-panel-group {
   display: grid;
 }
@@ -1320,6 +1349,42 @@
 
 .settings-form-grid--search-basics {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* Shared compact search-preference row used by onboarding and Settings. */
+.search-preference-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: var(--surface-gap-lg);
+}
+
+.search-preference-fields > .settings-form-field,
+.search-preference-fields > .onb-field {
+  flex: 0 0 auto;
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* Related compensation inputs stay compact and wrap as complete fields. */
+.salary-preference-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--surface-gap-lg);
+}
+
+.salary-preference-fields > .onb-field,
+.salary-preference-fields > .settings-form-field {
+  flex: 0 1 20rem;
+  width: min(100%, 20rem);
+  min-width: 0;
+}
+
+.currency-input-wrap--compact {
+  width: min(100%, 14rem);
 }
 
 .settings-form-field,
@@ -2226,9 +2291,13 @@
 
 /* Shared chip editor layout for onboarding role review and settings rule editors.
    Keep the add row outside the chip display box; do not create an extra parent card. */
-.review-block > .field-label-row + .chip-list,
-.settings-form-field > .field-label-row + .badge-editor {
+.review-block > .field-label-row + .chip-list {
   margin-top: 12px;
+}
+
+/* settings-form-field already owns --field-label-control-gap via grid row-gap. */
+.settings-form-field > .field-label-row + .badge-editor {
+  margin-top: 0;
 }
 
 .chip-list,

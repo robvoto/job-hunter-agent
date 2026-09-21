@@ -459,21 +459,10 @@ body {
   flex: 1;
 }
 
-/* Search Basics preference groups keep their natural width and wrap as complete units. */
-.onboarding-search-preferences-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--surface-gap-lg);
-  align-items: flex-start;
-  justify-content: flex-start;
-  margin-top: var(--surface-gap-md);
-}
-
-.onboarding-search-preferences-grid > .onb-field {
-  flex: 0 0 auto;
-  width: max-content;
+.salary-preference-card {
+  grid-column: 1 / -1;
+  width: fit-content;
   max-width: 100%;
-  min-width: 0;
 }
 
 /* Chip editor layout is centralised in themes.widgets.css. */
