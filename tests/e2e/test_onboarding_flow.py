@@ -310,7 +310,6 @@ def test_search_basics_location_layout_stays_compact_and_responsive(
     # preference groups, but salary fields sit side-by-side so the right column
     # does not become a tall isolated tower.
     page.set_viewport_size({"width": 1600, "height": 1000})
-    basics = page.locator(".search-basics-fields")
     preference_groups = page.locator(".search-preference-groups")
     compensation = page.locator(".search-compensation-group")
     salary_fields = compensation.locator(".salary-preference-fields > .onb-field")
