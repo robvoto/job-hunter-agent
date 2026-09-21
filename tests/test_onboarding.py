@@ -533,7 +533,7 @@ def test_api_onboarding_import_accepts_supported_text_suffix(monkeypatch):
         },
     )
     monkeypatch.setattr(onboarding_api, "get_session_cost_usd", lambda: 0.00112)
-    monkeypatch.setattr(onboarding_api.srv, "patch_profile", lambda patch: patch)
+    monkeypatch.setattr(onboarding_api.srv, "patch_profile", lambda patch, **kwargs: patch)
 
     response = onboarding_api.api_onboarding_import(
         {
@@ -583,7 +583,7 @@ def test_api_onboarding_import_logs_selected_capability_strength_preset(monkeypa
     monkeypatch.setattr(
         onboarding_api.srv, "_validate_onboarding_settings_inputs", lambda payload: None
     )
-    monkeypatch.setattr(onboarding_api.srv, "patch_profile", lambda patch: patch)
+    monkeypatch.setattr(onboarding_api.srv, "patch_profile", lambda patch, **kwargs: patch)
 
     with caplog.at_level(logging.INFO):
         response = onboarding_api.api_onboarding_import(
@@ -731,7 +731,7 @@ def test_run_onboarding_logs_read_summary(monkeypatch, capsys, caplog, tmp_path)
     monkeypatch.setattr(
         profile_learning, "_llm_extract_from_cv", lambda text, lookback_years, alias_limit: fixture
     )
-    monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
+    monkeypatch.setattr(source_documents, "patch_profile", lambda patch, **kwargs: patch)
     monkeypatch.setattr(
         source_documents,
         "load_profile",
@@ -1137,7 +1137,7 @@ def test_run_onboarding_uses_saved_onboarding_settings_when_argument_missing(mon
             },
         },
     )
-    monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
+    monkeypatch.setattr(source_documents, "patch_profile", lambda patch, **kwargs: patch)
     monkeypatch.setattr(
         profile_learning,
         "signal_in_approved_knowledge",

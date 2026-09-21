@@ -501,7 +501,20 @@ def run_onboarding(
         len(role_suggestions.get(KEY_SECONDARY_PATTERNS) or []),
     )
 
-    profile = patch_profile(patch)
+    # Capability rows admitted by build_learning_patch already passed the CV
+    # extraction contract's explicit atomic_concept gate. Persist those exact
+    # names as prevalidated so save_profile does not ask a second LLM to make a
+    # potentially contradictory atomicity judgement for the same onboarding run.
+    # Manual Settings/API edits still use save_profile's independent validator.
+    prevalidated_capability_names = {
+        str(item.get("name") or "").strip()
+        for item in patch.get(KEY_CANDIDATE_CAPABILITIES, [])
+        if isinstance(item, dict) and str(item.get("name") or "").strip()
+    }
+    profile = patch_profile(
+        patch,
+        prevalidated_capability_names=prevalidated_capability_names,
+    )
 
     extraction_counts = {
         "target_titles": len(role_suggestions.get(KEY_PRIMARY_PATTERNS) or []),

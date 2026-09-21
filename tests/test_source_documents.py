@@ -30,7 +30,7 @@ def test_run_onboarding_uses_llm_titles_without_parser(monkeypatch):
         "load_profile",
         lambda: {"search_settings": {}, "match_preferences": {}, "onboarding_settings": {}},
     )
-    monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
+    monkeypatch.setattr(source_documents, "patch_profile", lambda patch, **kwargs: patch)
     monkeypatch.setattr(source_documents, "clear_onboarding_runtime_outputs", lambda: None)
 
     def fake_extract_from_cv(text, lookback_years, alias_limit):
@@ -119,13 +119,73 @@ def test_run_onboarding_uses_llm_titles_without_parser(monkeypatch):
     assert result["profile"]["candidate_capabilities"][0]["name"] == "agile delivery"
 
 
+def test_run_onboarding_persists_extracted_atomic_capabilities_as_prevalidated(monkeypatch):
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        source_documents,
+        "load_profile",
+        lambda: {"search_settings": {}, "match_preferences": {}, "onboarding_settings": {}},
+    )
+    monkeypatch.setattr(source_documents, "clear_onboarding_runtime_outputs", lambda: None)
+    monkeypatch.setattr(
+        profile_learning,
+        "signal_in_approved_knowledge",
+        lambda category, name, aliases=None: (False, ""),
+    )
+    monkeypatch.setattr(
+        profile_learning,
+        "_llm_extract_from_cv",
+        lambda text, lookback_years, alias_limit: {
+            "capabilities": [
+                {
+                    "name": "risk and issue management",
+                    "level": "strong",
+                    "aliases": [],
+                    "icon_key": "delivery_project",
+                    "atomic_concept": True,
+                    "needs_review": False,
+                }
+            ],
+            "role_titles": ["Business Analyst"],
+            "preferred_role_titles": ["Business Analyst"],
+            "alternative_role_titles": [],
+            "match_preferences": {},
+        },
+    )
+
+    def fake_patch_profile(patch, **kwargs):
+        captured["patch"] = patch
+        captured["kwargs"] = kwargs
+        return patch
+
+    monkeypatch.setattr(source_documents, "patch_profile", fake_patch_profile)
+
+    result = source_documents.run_onboarding(
+        {
+            "profile_sources": [
+                {
+                    "label": "Primary CV",
+                    "filename": "cv.txt",
+                    "content": "Business Analyst with risk and issue management experience.",
+                }
+            ]
+        }
+    )
+
+    assert result["ok"] is True
+    assert captured["kwargs"] == {
+        "prevalidated_capability_names": {"risk and issue management"}
+    }
+
+
 def test_cv_role_suggestions_do_not_become_targets_before_user_selection(monkeypatch):
     monkeypatch.setattr(
         source_documents,
         "load_profile",
         lambda: {"search_settings": {}, "match_preferences": {}, "onboarding_settings": {}},
     )
-    monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
+    monkeypatch.setattr(source_documents, "patch_profile", lambda patch, **kwargs: patch)
     monkeypatch.setattr(source_documents, "clear_onboarding_runtime_outputs", lambda: None)
     monkeypatch.setattr(
         profile_learning,
@@ -166,7 +226,7 @@ def test_onboarding_rebuild_preserves_confirmed_roles_until_review_confirm(monke
         "onboarding_settings": {},
     }
 
-    def fake_patch_profile(patch):
+    def fake_patch_profile(patch, **kwargs):
         nonlocal current_profile
         current_profile = deep_merge(current_profile, patch)
         return current_profile
@@ -217,7 +277,7 @@ def test_onboarding_extraction_failure_does_not_erase_confirmed_roles(monkeypatc
     }
     applied_patches = []
 
-    def fake_patch_profile(patch):
+    def fake_patch_profile(patch, **kwargs):
         nonlocal current_profile
         applied_patches.append(patch)
         current_profile = deep_merge(current_profile, patch)
@@ -283,7 +343,7 @@ def test_run_onboarding_fails_when_llm_omits_required_fields(monkeypatch, fixtur
         "load_profile",
         lambda: {"search_settings": {}, "match_preferences": {}, "onboarding_settings": {}},
     )
-    monkeypatch.setattr(source_documents, "patch_profile", lambda patch: patch)
+    monkeypatch.setattr(source_documents, "patch_profile", lambda patch, **kwargs: patch)
     monkeypatch.setattr(source_documents, "clear_onboarding_runtime_outputs", lambda: None)
     monkeypatch.setattr(
         profile_learning,
@@ -322,7 +382,7 @@ def test_refresh_role_history_from_saved_cv_only_touches_role_experience(monkeyp
     }
     applied_patches: list[dict] = []
 
-    def fake_patch_profile(patch):
+    def fake_patch_profile(patch, **kwargs):
         applied_patches.append(patch)
         return deep_merge(starting_profile, patch)
 

@@ -1126,10 +1126,17 @@ def save_profile(
     return normalized
 
 
-def patch_profile(patch: dict[str, Any]) -> dict[str, Any]:
+def patch_profile(
+    patch: dict[str, Any],
+    *,
+    prevalidated_capability_names: set[str] | frozenset[str] | None = None,
+) -> dict[str, Any]:
     current = load_profile()
     merged = deep_merge(current, patch)
-    return save_profile(merged)
+    return save_profile(
+        merged,
+        prevalidated_capability_names=prevalidated_capability_names,
+    )
 
 
 def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
