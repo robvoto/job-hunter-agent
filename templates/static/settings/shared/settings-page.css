@@ -189,9 +189,7 @@
       background: var(--bg-surface);
     }
     .settings-main { flex: 1; min-width: 0; background: var(--bg-page); padding-bottom: 120px; }
-    .settings-content-area { max-width: 1100px; margin: 0 auto; padding: 32px var(--surface-pad-inline-lg); }
-    /* Local layout exception: Signals uses the same wide content ceiling as Workspace when the monitor allows it. */
-    .settings-content-area:has(#section-learning.is-active) { max-width: var(--content-shell-max-width); }
+    .settings-content-area { max-width: var(--settings-shell-max-width); margin: 0 auto; padding: 32px var(--surface-pad-inline-lg); }
     .settings-group { display: none; }
     .settings-group.is-active { display: block; animation: slideIn 0.25s cubic-bezier(0.2, 0.8, 0.2, 1); }
     .settings-group.is-search-result { display: block; animation: slideIn 0.25s cubic-bezier(0.2, 0.8, 0.2, 1); }
@@ -762,8 +760,9 @@
     #must_not_require_skills { min-height: 120px; }
     .technical-rule-source { display: none; }
     .advanced-shell {
+      width: 100%;
+      max-width: none;
       padding: var(--surface-pad-block-lg) var(--surface-pad-inline-lg);
-      max-width: 1240px;
       margin: 0 auto;
     }
     .advanced-shell > .settings-section-head {
@@ -1412,6 +1411,9 @@
       }
     }
     @media (max-width: 760px) {
+      .settings-header__inner .job-hunter-account-bar {
+        justify-content: flex-start;
+      }
       .profile-fields-grid, .field-grid { grid-template-columns: 1fr; display: grid; }
       .cap-strength-row {
         grid-template-columns: 1fr;
@@ -1434,13 +1436,25 @@
         padding: var(--surface-pad-block-sm) 0;
       }
       .sidebar-nav {
-        display: flex;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
         gap: var(--surface-gap-sm);
-        overflow-x: auto;
+        overflow: visible;
         padding: 0 var(--surface-pad-inline-xs);
       }
+      .sidebar-group-label,
+      .settings-sidebar-search {
+        grid-column: 1 / -1;
+      }
+      .sidebar-group-label {
+        margin: var(--surface-gap-sm) 0 0;
+      }
+      .sidebar-group-label-global {
+        margin-top: var(--surface-gap-sm);
+        padding-top: var(--surface-gap-sm);
+      }
       .nav-item {
-        flex: 0 0 auto;
+        min-width: 0;
         margin-bottom: 0;
       }
       .nav-item-workspace {
@@ -1448,6 +1462,9 @@
       }
       .settings-content-area {
         padding: var(--surface-pad-block-lg) var(--surface-pad-inline-sm) 96px;
+      }
+      .settings-header__inner {
+        padding-inline: var(--surface-pad-inline-sm);
       }
       .save-footer {
         left: 14px;

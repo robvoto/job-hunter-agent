@@ -225,9 +225,10 @@ def test_signals_requirement_review_uses_consistent_labels_subtype_and_wide_layo
         encoding="utf-8"
     )
 
-    assert "--content-shell-max-width: 1360px;" in tokens
-    assert ".settings-content-area:has(#section-learning.is-active)" in css
-    assert "max-width: var(--content-shell-max-width);" in css
+    assert "--wide-shell-max-width: 1560px;" in tokens
+    assert "--settings-shell-max-width: var(--wide-shell-max-width);" in tokens
+    assert "max-width: var(--settings-shell-max-width);" in css
+    assert ".settings-content-area:has(#section-learning.is-active)" not in css
     assert "signal-requirement-subtype-field" in css
     assert "srRequirementReviewComplete(article, category)" in js
     assert "suggested_requirement_type" in js

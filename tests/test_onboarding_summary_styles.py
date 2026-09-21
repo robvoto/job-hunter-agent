@@ -147,10 +147,11 @@ def test_search_preferences_order_and_responsive_layout():
     assert 'onboarding-search-preferences-grid' not in onboarding_css
 
 
-def test_onboarding_uses_shared_wide_content_shell():
+def test_onboarding_uses_shared_wide_shell_contract():
     repo_root = Path(__file__).resolve().parents[1]
     tokens = (repo_root / "templates" / "static" / "theme" / "themes.tokens.css").read_text(encoding="utf-8")
-    assert '--onboarding-shell-max-width: var(--content-shell-max-width);' in tokens
+    assert '--wide-shell-max-width: 1560px;' in tokens
+    assert '--onboarding-shell-max-width: var(--wide-shell-max-width);' in tokens
 
 
 def test_location_dense_groups_fill_columns_in_reading_order():
