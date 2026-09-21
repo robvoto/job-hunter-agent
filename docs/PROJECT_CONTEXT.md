@@ -21,6 +21,7 @@ It is a strict, explainable job-fit system, not a vague recommender.
 - Global admin settings seed lives in `data/config/global_settings.json`.
 - Runtime signal files live in `data/signals/*.json` and are gitignored.
 - Treat `instruction_file` and `instruction_skills` as project metadata references, not automatically injected runtime instructions.
+- **Runtime lifecycle approval:** never start or restart Job Hunter (local, desktop-launcher, service, AWS, or equivalent runtime) unless Rob explicitly approves that specific start/restart in the current conversation or task. Code changes, tests, commits, merges, pushes, release/version checks, or a request to verify that code is ready to test do not imply permission to run it. Stopping Job Hunter also requires an explicit stop request, except for the stop/start pair inherent in a restart that Rob has already approved. Process/service inspection that does not change runtime state does not require approval.
 
 ## Project reference docs
 

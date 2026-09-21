@@ -13,6 +13,7 @@ The human should not need to remember Git mechanics.
 
 - Completed intended work is committed and pushed automatically after validation unless the human explicitly says not to push.
 - Stop and ask only for a genuine safety gate: unrelated changes, destructive actions, force-pushes, deployment/restart, credentials/external messages, or unresolved conflicting work.
+- Runtime lifecycle changes are one of those safety gates. For Job Hunter, follow the runtime lifecycle approval rule in `docs/PROJECT_CONTEXT.md`; Git/release/test/version approval never grants permission to start or restart the app.
 - A pushed task branch is **not** the same as integration to `main`.
 - `commit` or `push` alone never means "merge to main".
 - `approved`, `merge it`, `put it in main`, `ship it`, or equivalent approval referring to the current completed task authorizes integration to `main`.
