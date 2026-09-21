@@ -170,7 +170,25 @@ def api_tuning_decisions(body: dict = Body(...)):  # type: ignore[no-untyped-def
                 else "",
             )
     except Exception as exc:
-        return json_response({"error": str(exc)}, 400)
+        message = str(exc)
+        error_payload = {"error": message}
+        lowered_message = message.casefold()
+        if (
+            "atomic concept" in lowered_message
+            or "one clear professional capability" in lowered_message
+        ):
+            # Keep ambiguous umbrella suggestions reviewable, but do not let a
+            # failed save look like a successful profile decision. The browser
+            # can use this stable action hint to direct the user to Ignore
+            # suggestion rather than retrying the same invalid save.
+            error_payload.update(
+                {
+                    "error": f"{message} The suggestion was not saved; ignore it instead.",
+                    "error_code": "CAPABILITY_NOT_ATOMIC",
+                    "suggested_action": "ignore_suggestion",
+                }
+            )
+        return json_response(error_payload, 400)
     return json_response(
         {
             "ok": True,

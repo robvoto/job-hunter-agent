@@ -1657,3 +1657,54 @@ def test_tuning_decisions_do_not_have_rejects_non_atomic_capability(client, monk
     assert resp.status_code == 400
     assert "Only one clear professional capability" in resp.json()["error"]
     assert saved_profiles == []
+
+
+def test_tuning_decisions_erp_systems_non_atomic_failure_is_actionable(client, monkeypatch):
+    saved_profiles = []
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile",
+        lambda: {"candidate_capabilities": [], "must_not_require_skills": []},
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.save_profile",
+        lambda p, **kwargs: saved_profiles.append(p) or p,
+    )
+    monkeypatch.setattr(
+        "job_hunter_agent.llm_gate.llm_validate_profile_capability_atomicity",
+        lambda items: [False for _ in items],
+    )
+
+    resp = client.post(
+        "/api/tuning-decisions",
+        json={"decisions": [{"skill": "ERP systems", "choice": "do_not_have"}]},
+    )
+
+    assert resp.status_code == 400
+    assert resp.json()["error_code"] == "CAPABILITY_NOT_ATOMIC"
+    assert resp.json()["suggested_action"] == "ignore_suggestion"
+    assert saved_profiles == []
+
+
+def test_tuning_decisions_ai_confirmation_failure_is_actionable(client, monkeypatch):
+    saved_profiles = []
+    monkeypatch.setattr(
+        "job_hunter_agent.server_helpers.load_profile",
+        lambda: {"candidate_capabilities": [], "must_not_require_skills": []},
+    )
+
+    def reject_ai(_profile, **_kwargs):
+        raise ValueError("Each candidate capability must be one atomic concept. Review: ai")
+
+    monkeypatch.setattr("job_hunter_agent.server_helpers.save_profile", reject_ai)
+
+    resp = client.post(
+        "/api/tuning-decisions",
+        json={"decisions": [{"skill": "Ai", "choice": "strong"}]},
+    )
+
+    assert resp.status_code == 400
+    assert "one atomic concept" in resp.json()["error"]
+    assert "suggestion was not saved" in resp.json()["error"]
+    assert resp.json()["error_code"] == "CAPABILITY_NOT_ATOMIC"
+    assert resp.json()["suggested_action"] == "ignore_suggestion"
+    assert saved_profiles == []
