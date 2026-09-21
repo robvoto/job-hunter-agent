@@ -511,23 +511,11 @@ def test_settings_review_panel_empty_state_copy_is_defined():
     js = js_path.read_text(encoding="utf-8")
     ui_labels = json.loads(labels_path.read_text(encoding="utf-8"))
 
-    assert (
-        "No capability suggestions yet. We found no saved review data from the latest search. Run a search again so kept jobs can be analysed for new capability signals."
-        in js
-    )
-
-    assert (
-        "No capability suggestions yet. We found kept jobs, but no new capability observations were extracted from them."
-        in js
-    )
-
-    assert "Requirements to review" in js
-
-    assert "Do you have this capability?" in js
-
-    assert "Search/title tuning" in js
-
-    assert "Filters already working correctly" in js
+    assert "No new capabilities to verify." in js
+    assert "Capabilities to verify" in js
+    assert "Search & filter improvements" in js
+    assert "Why Job Hunter suggested this" in js
+    assert "What this choice means" not in js
 
     assert "const DECLINE_CAPABILITY_LABEL = capabilityLabels.decline_capability_label;" in js
     assert ui_labels["workspace_card_labels"]["gap_confirm_not_have_label"]

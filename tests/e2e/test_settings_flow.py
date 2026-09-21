@@ -235,6 +235,11 @@ def test_capability_alias_preview_uses_related_skills_copy(candidate_page):
     card = page.locator("#capability_matrix_editor .capability-card").first
     card.wait_for(state="visible")
 
+    meter = card.locator(".capability-strength-meter")
+    expect(meter.locator(".capability-strength-dot")).to_have_count(3)
+    expect(meter.locator(".capability-strength-dot.is-filled")).to_have_count(3)
+    expect(meter.locator(".capability-strength-label")).to_have_text("Strong")
+
     preview = card.locator(".capability-alias-preview")
     expect(preview).to_contain_text("scrum")
     expect(preview).to_contain_text("lean delivery")
@@ -411,7 +416,22 @@ def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
                     "examples": [],
                 }
             ],
-            "requirement_suggestions": [],
+            "requirement_suggestions": [
+                {
+                    "kind": "requirement",
+                    "skill": "Power BI",
+                    "count": 3,
+                    "aliases": ["Power BI required"],
+                    "examples": [
+                        {
+                            "title": "Senior Business Analyst",
+                            "company": "Example Co",
+                            "url": "https://example.test/power-bi",
+                            "search_location": "Sydney",
+                        }
+                    ],
+                }
+            ],
             "optimization_suggestions": [],
             "rule_suggestions": [],
             "summary": {"capability_count": 1},
@@ -443,10 +463,10 @@ def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
     expect(info.locator(".field-info-panel")).to_contain_text("will not be suggested again")
     expect(page.locator("#section-optimise .optimise-review-info")).to_have_count(0)
     expect(page.locator("#section-optimise")).not_to_contain_text("These are suggestions only")
-    expect(page.locator("#tuning_suggestions_panel .tuning-summary-card")).to_have_count(0)
-    expect(page.locator("#tuning_suggestions_panel .tuning-summary-item")).to_have_count(1)
-    expect(page.locator("#tuning_suggestions_panel .tuning-summary-item")).to_have_text("1 capability suggestion")
     expect(page.locator("#tuning_suggestions_panel")).not_to_contain_text("Capabilities are the proven work strengths")
+    expect(page.locator("#tuning_suggestions_panel")).not_to_contain_text("Capabilities to review")
+    expect(page.locator("#tuning_suggestions_panel .tuning-group").first.locator(":scope > .tuning-group-heading > h3")).to_have_text("Capabilities to verify (1)")
+    expect(page.locator("#tuning_suggestions_panel")).to_contain_text("Things Job Hunter found repeatedly that may belong in your Capability Matrix.")
 
     card = page.locator("#tuning_suggestions_panel .review-card").filter(has_text="Power BI")
     expect(card).to_be_visible()
@@ -455,22 +475,27 @@ def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
     expect(no_button).to_have_text("No, I don't have this")
     expect(dismiss_button).to_have_text("Ignore suggestion")
     expect(card).not_to_contain_text("Suggested: Working")
-    expect(card.locator(".review-card-count")).to_have_text("Seen in 2 kept roles")
-    heading = card.locator(".review-card-heading")
-    assert float(heading.evaluate("el => parseFloat(getComputedStyle(el).columnGap) || 0")) > 0
-    title_box = heading.locator("h3").bounding_box()
-    count_box = heading.locator(".review-card-count").bounding_box()
-    assert title_box and count_box
-    assert (
-        count_box["x"] >= title_box["x"] + title_box["width"] + 1
-        or count_box["y"] >= title_box["y"] + title_box["height"]
-    )
+    expect(card).not_to_contain_text("What this choice means")
+    expect(card.locator(".review-card-count")).to_have_text("Seen in 3 kept roles")
+    expect(card.locator(".review-strength-question-label")).to_have_text("How strong is this capability for you?")
+    expect(card.locator(".review-strength-question .field-info-drawer")).to_have_count(1)
+    meter = card.locator(".capability-strength-meter")
+    expect(meter.locator(".capability-strength-dot")).to_have_count(3)
+    expect(meter.locator(".capability-strength-label")).to_have_text("Select strength")
     expect(card.locator('input[type="radio"]:checked')).to_have_count(0)
     confirm_button = card.locator(".confirm-skill-btn")
     expect(confirm_button).to_be_disabled()
     card.locator('label[for="skill-choice-0_working"]').click()
     expect(card.locator('input[value="working"]')).to_be_checked()
+    expect(meter.locator(".capability-strength-label")).to_have_text("Working")
+    expect(meter.locator(".capability-strength-dot.is-filled")).to_have_count(2)
     expect(confirm_button).to_be_enabled()
+    expect(card.locator(".review-evidence summary")).to_have_text("Why Job Hunter suggested this")
+    card.locator(".review-evidence summary").click()
+    expect(card.locator(".review-evidence")).to_contain_text("Found repeatedly across 3 jobs you kept.")
+    expect(card.locator(".review-evidence")).to_contain_text("Job ads explicitly asked for:")
+    expect(card.locator(".review-evidence")).to_contain_text("Power BI required")
+    expect(page.locator("#tuning_suggestions_panel .review-card").filter(has_text="Power BI")).to_have_count(1)
 
     no_box = no_button.bounding_box()
     dismiss_box = dismiss_button.bounding_box()

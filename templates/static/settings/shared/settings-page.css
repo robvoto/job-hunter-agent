@@ -1128,18 +1128,6 @@
       gap: var(--surface-gap-lg);
     }
     .review-list { display: grid; gap: var(--surface-gap-md); }
-    .tuning-summary {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: var(--surface-gap-sm);
-    }
-    .tuning-summary-item { gap: 4px; }
-    .tuning-summary-item strong {
-      color: var(--text-primary);
-      font-size: inherit;
-      line-height: inherit;
-    }
     .tuning-group + .tuning-group { margin-top: var(--surface-gap-lg); }
     .tuning-group {
       display: grid;
@@ -1151,6 +1139,10 @@
       font-weight: var(--text-role-panel-title-font-weight);
     }
     .tuning-group-copy { margin: 0; color: var(--text-muted); font-size: var(--text-role-status-font-size); line-height: 1.55; }
+    .tuning-group-count { color: var(--text-muted); font-weight: var(--text-role-status-font-weight); }
+    .review-strength-question { width: fit-content; }
+    .review-strength-question-label { font-weight: var(--text-role-button-font-weight); color: var(--text-primary); }
+    .review-strength-meter { width: fit-content; }
     .tuning-empty-state { margin-top: 2px; }
     .optimise-shell .tuning-actions {
       margin-top: var(--surface-gap-lg);
@@ -1169,26 +1161,6 @@
       color: var(--text-muted);
       font-size: var(--text-role-chip-font-size);
       font-weight: var(--text-role-chip-font-weight);
-    }
-    .strength-chip.strength-strong {
-      background: var(--state-success-bg);
-      border-color: var(--state-success-border);
-      color: var(--state-success-text);
-    }
-    .strength-chip.strength-working {
-      background: var(--state-info-bg);
-      border-color: var(--state-info-border);
-      color: var(--state-info-text);
-    }
-    .strength-chip.strength-basic {
-      background: var(--state-warning-bg);
-      border-color: var(--state-warning-border);
-      color: var(--state-warning-text);
-    }
-    .strength-chip.strength-low {
-      background: var(--state-error-bg);
-      border-color: var(--state-error-border);
-      color: var(--state-error-text);
     }
     .review-card {
       padding: var(--surface-pad-block-md) var(--surface-pad-inline-md);
@@ -1210,27 +1182,24 @@
     .review-card p { margin: 0; color: var(--text-muted); line-height: 1.5; }
     .review-card ul { margin: var(--surface-gap-sm) 0 0 18px; padding: 0; }
     .review-card li { margin: 4px 0; }
-    .review-choice-guide, .review-examples {
+    .review-examples {
       margin-top: var(--surface-gap-sm);
       border-radius: var(--radius-md);
       border: 1px solid var(--border-subtle);
       background: var(--bg-surface);
       overflow: hidden;
     }
-    .review-choice-guide summary, .review-examples summary {
+    .review-examples summary {
       cursor: pointer;
       padding: var(--surface-pad-block-xs) var(--surface-pad-inline-sm);
       font-weight: var(--text-role-button-font-weight);
       color: var(--accent-secondary);
       list-style: none;
     }
-    .review-choice-guide summary::-webkit-details-marker,
     .review-examples summary::-webkit-details-marker { display: none; }
-    .review-choice-guide-body, .review-examples-body { padding: 0 var(--surface-pad-inline-sm) var(--surface-pad-block-xs); }
-    .review-choice-guide strong { display: block; margin-bottom: 6px; font-size: var(--text-role-status-font-size); }
-    .review-choice-guide p, .review-examples p { margin: 0 0 6px; color: var(--text-primary); font-size: var(--text-role-body-compact-font-size); line-height: var(--text-role-body-compact-line-height); }
-    .review-choice-guide p:last-child, .review-examples p:last-child { margin-bottom: 0; }
-    .review-choice-guide code { font-size: var(--text-role-chip-font-size); }
+    .review-examples-body { padding: 0 var(--surface-pad-inline-sm) var(--surface-pad-block-xs); }
+    .review-examples p { margin: 0 0 6px; color: var(--text-primary); font-size: var(--text-role-body-compact-font-size); line-height: var(--text-role-body-compact-line-height); }
+    .review-examples p:last-child { margin-bottom: 0; }
     .review-examples ul { margin: 0 0 0 18px; padding: 0; }
 
     /* â”€â”€ Capability Table (3-column rigid layout) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */

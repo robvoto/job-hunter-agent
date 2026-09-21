@@ -23,34 +23,9 @@ let runStatusPollHandle = null;
 let runStatusWasRunning = false;
 
 const capabilityLabels = capabilityUi.labels || {};
-const titleTierLabels = window.__JOB_HUNTER_TITLE_TIER_LABELS__ || {};
 if (!capabilityLabels.onboarding_title || !capabilityLabels.help_text) {
   throw new Error('Missing capability UI labels.');
 }
-if (!titleTierLabels.target_roles_label || !titleTierLabels.target_roles_help || !titleTierLabels.target_roles_empty_text) {
-  throw new Error('Missing onboarding title tier labels.');
-}
-const preferredRolesLabel = titleTierLabels.target_roles_label;
-
-const TUNING_TEXT = {
-  capabilityHeading: 'Capabilities to review',
-  capabilityCopy: '',
-  capabilityEmpty: capabilityLabels.onboarding_empty_text,
-  optimizationHeading: preferredRolesLabel,
-  optimizationCopy: titleTierLabels.target_roles_help,
-  optimizationEmpty: titleTierLabels.target_roles_empty_text,
-  requirementHeading: 'Requirements to review',
-  requirementCopy: 'Explicit capability requirements repeated in jobs you kept. Confirm one only if it is genuinely part of your profile.',
-  titleTuningHeading: 'Search/title tuning',
-  titleTuningCopy: 'These title-based signals are strong enough to consider a hard blocker later, once you are sure they are consistently wrong.',
-  workingFiltersHeading: 'Filters already working correctly',
-  workingFiltersCopy: 'These title keyword filters are already blocking off-target roles before deeper review.',
-  otherRulesHeading: 'Repeated exclusion patterns',
-  otherRulesCopy: 'Patterns from rejects that are worth keeping, strengthening, or watching before you change role targeting.',
-};
-
-const NO_CAPABILITY_SUGGESTIONS_COPY = 'No capability suggestions yet. We found no saved review data from the latest search. Run a search again so kept jobs can be analysed for new capability signals.';
-const NO_CAPABILITY_OBSERVATIONS_COPY = 'No capability suggestions yet. We found kept jobs, but no new capability observations were extracted from them.';
 
 const RULE_REASON_TITLE_NOT_TARGET = 'TITLE_NOT_TARGET';
 const RULE_REASON_TITLE_BAD_KEYWORD = 'TITLE_BAD_KEYWORD';
@@ -68,37 +43,30 @@ function getReviewChoiceMeta(choice) {
   return capabilityUi.capabilityLevelMeta?.[choice] || { label: 'Choose a strength' };
 }
 
-function renderReviewChoiceGuide(choice) {
-  const meta = getReviewChoiceMeta(choice);
+function strengthQuestionMarkup(groupName) {
   return `
-    <strong>${escapeHtml(meta.label)}</strong>
-    <p>This sets the capability strength used during matching.</p>
+    <div class="field-label-row review-strength-question">
+      <span class="review-strength-question-label">${escapeHtml(capabilityUi.reviewStrengthPromptLabel)}</span>
+      <details class="field-info-drawer">
+        <summary class="field-info" aria-label="About capability strength">i</summary>
+        <div class="field-info-panel">Strength controls how much this capability influences matching. Basic = light influence. Working = normal influence. Strong = high influence.</div>
+      </details>
+    </div>
+    <div class="review-strength-meter">
+      ${capabilityUi.capabilityStrengthMeterMarkup({
+        selectedValue: '',
+        groupName,
+        inputIdPrefix: groupName,
+        ariaLabel: capabilityUi.reviewStrengthPromptLabel,
+        emptyLabel: 'Select strength',
+      })}
+    </div>
   `;
 }
 
 function keptRoleCountLabel(count) {
   const value = Math.max(0, Number(count) || 0);
   return `Seen in ${value} kept ${value === 1 ? 'role' : 'roles'}`;
-}
-
-function reviewStrengthChoicesMarkup(selectedValue, groupName) {
-  const levels = Array.isArray(capabilityUi.capabilityLevels) && capabilityUi.capabilityLevels.length
-    ? capabilityUi.capabilityLevels
-    : Object.keys(capabilityUi.capabilityLevelMeta || {});
-  return levels.map((level) => {
-    const meta = capabilityUi.capabilityLevelMeta?.[level];
-    if (!meta || !meta.label) {
-      throw new Error(`Missing capability strength label for ${level}.`);
-    }
-    const inputId = `${groupName}_${level}`;
-    const checked = level === selectedValue ? ' checked' : '';
-    return `
-      <label class="choice-card jh-choice choice-card--strength ${escapeHtml(meta.tone || '')}" for="${inputId}">
-        <input id="${inputId}" type="radio" name="${groupName}" value="${escapeHtml(level)}"${checked} aria-label="${escapeHtml(meta.label)}">
-        <span>${escapeHtml(meta.label)}</span>
-      </label>
-    `;
-  }).join('');
 }
 
 function getSelectedReviewChoice(card) {
@@ -123,12 +91,86 @@ function requirementPhrasesMarkup(items, emptyLabel) {
   `).join('')}</ul>`;
 }
 
-function slugifyReviewKey(value) {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'choice';
+
+function normalizeSuggestionSkill(value) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function mergeSuggestionExamples(left = [], right = []) {
+  const seen = new Set();
+  const merged = [];
+  [...left, ...right].forEach((item) => {
+    if (!item || typeof item !== 'object') return;
+    const key = String(item.url || '').trim() || `${item.title || ''}|${item.company || ''}`;
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    merged.push(item);
+  });
+  return merged;
+}
+
+function mergeCapabilitySuggestions(capabilitySuggestions, requirementSuggestions) {
+  const merged = new Map();
+  [...capabilitySuggestions, ...requirementSuggestions].forEach((item) => {
+    const key = normalizeSuggestionSkill(item?.skill);
+    if (!key) return;
+    const existing = merged.get(key);
+    if (!existing) {
+      merged.set(key, {
+        ...item,
+        aliases: Array.isArray(item.aliases) ? [...item.aliases] : [],
+        examples: Array.isArray(item.examples) ? [...item.examples] : [],
+        evidenceKinds: new Set([item.kind || 'capability']),
+      });
+      return;
+    }
+    existing.count = Math.max(Number(existing.count) || 0, Number(item.count) || 0);
+    existing.aliases = [...new Set([...(existing.aliases || []), ...((item.aliases || []))])];
+    existing.examples = mergeSuggestionExamples(existing.examples, item.examples || []);
+    existing.evidenceKinds.add(item.kind || 'capability');
+  });
+  return [...merged.values()]
+    .map(item => ({ ...item, evidenceKinds: [...item.evidenceKinds] }))
+    .sort((left, right) => (Number(right.count) || 0) - (Number(left.count) || 0) || String(left.skill).localeCompare(String(right.skill)));
+}
+
+function capabilityEvidenceMarkup(item) {
+  const count = Math.max(0, Number(item.count) || 0);
+  const aliases = Array.isArray(item.aliases) ? item.aliases : [];
+  const sourceKinds = new Set(item.evidenceKinds || [item.kind || 'capability']);
+  const countCopy = `Found repeatedly across ${count} ${count === 1 ? 'job' : 'jobs'} you kept.`;
+  const requirementCopy = sourceKinds.has('requirement') && aliases.length
+    ? `<p><strong>Job ads explicitly asked for:</strong></p>${requirementPhrasesMarkup(aliases, '')}`
+    : '';
+  return `
+    <p><strong>${escapeHtml(countCopy)}</strong></p>
+    ${requirementCopy}
+    <p><strong>Examples where it appeared:</strong></p>
+    ${suggestionExamplesMarkup(item.examples || [], 'No example jobs saved for this capability yet.')}
+  `;
+}
+
+function renderCapabilitySuggestionCard(item, index) {
+  const aliases = Array.isArray(item.aliases) ? item.aliases : [];
+  const groupName = `skill-choice-${index}`;
+  return `
+    <div class="review-card" data-review-kind="capability">
+      <div class="settings-subpanel-head review-card-heading">
+        <h3>${escapeHtml(item.skill || 'Capability')}</h3>
+        <span class="review-card-count">${escapeHtml(keptRoleCountLabel(item.count))}</span>
+      </div>
+      ${strengthQuestionMarkup(groupName)}
+      <details class="review-examples review-evidence">
+        <summary>Why Job Hunter suggested this</summary>
+        <div class="review-examples-body">${capabilityEvidenceMarkup(item)}</div>
+      </details>
+      <div class="card-actions" style="margin-top:10px;">
+        <button class="jh-button jh-button--primary jh-button--compact confirm-skill-btn" data-skill="${escapeHtml(item.skill || '')}" data-aliases="${escapeHtml(JSON.stringify(aliases))}" disabled>Confirm</button>
+        <button class="jh-button jh-button--danger jh-button--compact do-not-have-skill-btn" data-skill="${escapeHtml(item.skill || '')}">${escapeHtml(DECLINE_CAPABILITY_LABEL)}</button>
+        <button class="jh-button jh-button--secondary jh-button--compact decline-skill-btn" data-skill="${escapeHtml(item.skill || '')}" title="Hide this suggestion without saying you do not have the capability.">${escapeHtml(DISMISS_CAPABILITY_SUGGESTION_LABEL)}</button>
+      </div>
+    </div>
+  `;
 }
 
 function renderRuleCard(item) {
@@ -162,186 +204,55 @@ function renderRuleCard(item) {
     </div>`;
 }
 
-function renderTuningGroup(title, copy, items, extraClass = '') {
-  if (!items.length) return '';
-  const className = extraClass ? ` tuning-group--${extraClass}` : '';
-  return `
-    <div class="tuning-group${className}">
-      <h3>${escapeHtml(title)}</h3>
-      <p class="tuning-group-copy">${escapeHtml(copy)}</p>
-      <div class="review-list">
-        ${items.map(item => renderRuleCard(item)).join('')}
-      </div>
-    </div>
-  `;
-}
 
-function renderRequirementGroup(items) {
-  if (!items.length) return '';
-  return `
-    <div class="tuning-group tuning-group--requirements">
-      <h3>${escapeHtml(TUNING_TEXT.requirementHeading)}</h3>
-      <p class="tuning-group-copy">${escapeHtml(TUNING_TEXT.requirementCopy)}</p>
-      <div class="review-list">
-        ${items.map(item => renderRequirementCard(item)).join('')}
-      </div>
-    </div>
-  `;
-}
-
-function renderTuningSection(title, copy, items, emptyText, renderItem, extraClass = '') {
-  const className = extraClass ? ` tuning-group--${extraClass}` : '';
-  const body = items.length
+function renderSuggestionSection(title, copy, items, renderItem, emptyText = '') {
+  const count = items.length;
+  const body = count
     ? `<div class="review-list">${items.map(renderItem).join('')}</div>`
-    : `<p class="tuning-empty-state-copy">${escapeHtml(emptyText)}</p>`;
-  const copyHtml = String(copy || '').trim()
-    ? `<p class="tuning-group-copy">${escapeHtml(copy)}</p>`
-    : '';
+    : (emptyText ? `<p class="tuning-empty-state-copy">${escapeHtml(emptyText)}</p>` : '');
+  if (!count && !body) return '';
   return `
-    <div class="tuning-group${className}">
-      <h3>${escapeHtml(title)}</h3>
-      ${copyHtml}
+    <div class="tuning-group">
+      <div class="tuning-group-heading">
+        <h3>${escapeHtml(title)} <span class="tuning-group-count">(${count})</span></h3>
+      </div>
+      ${copy ? `<p class="tuning-group-copy">${escapeHtml(copy)}</p>` : ''}
       ${body}
     </div>
   `;
 }
 
-function renderRequirementCard(item) {
-  const aliases = Array.isArray(item.aliases) ? item.aliases : [];
-  const choiceGroupName = `requirement-choice-${slugifyReviewKey(item.skill || '')}`;
-  // JH-317: requirement suggestions use the same occurrence-based strength recommendation.
-  // Do not surface or preselect it until candidate-evidence-backed strength exists.
-  return `
-    <div class="review-card">
-      <div class="settings-subpanel-head review-card-heading">
-        <h3>${escapeHtml(item.skill || 'Requirement')}</h3>
-        <span class="review-card-count">${escapeHtml(keptRoleCountLabel(item.count))}</span>
-      </div>
-      <p>${escapeHtml(item.detail || '')}</p>
-      <p><strong>Prompt:</strong> ${escapeHtml(item.prompt || 'Do you have this capability?')}</p>
-      <label>${escapeHtml(capabilityUi.reviewStrengthPromptLabel)}</label>
-      <div class="choice-strip jh-choice-group capability-strength-strip review-strength-strip" role="radiogroup" aria-label="${escapeHtml(capabilityUi.reviewStrengthPromptLabel)}" data-skill="${escapeHtml(item.skill || '')}" data-aliases="${escapeHtml(JSON.stringify(aliases))}">
-        ${reviewStrengthChoicesMarkup('', choiceGroupName)}
-      </div>
-      <details class="review-choice-guide">
-        <summary>What this choice means</summary>
-        <div class="review-choice-guide-body">${renderReviewChoiceGuide('')}</div>
-      </details>
-      <details class="review-examples">
-        <summary>Requirement wording</summary>
-        <div class="review-examples-body">${requirementPhrasesMarkup(aliases, 'No literal requirement text saved yet.')}</div>
-      </details>
-      <details class="review-examples">
-        <summary>Examples from kept roles</summary>
-        <div class="review-examples-body">${suggestionExamplesMarkup(item.examples || [], 'No example roles saved for this requirement yet.')}</div>
-      </details>
-      <div class="card-actions" style="margin-top:10px;">
-        <button class="jh-button jh-button--primary jh-button--compact confirm-skill-btn" data-skill="${escapeHtml(item.skill || '')}" data-aliases="${escapeHtml(JSON.stringify(aliases))}" disabled>Confirm</button>
-        <button class="jh-button jh-button--danger jh-button--compact do-not-have-skill-btn" data-skill="${escapeHtml(item.skill || '')}">${escapeHtml(DECLINE_CAPABILITY_LABEL)}</button>
-        <button class="jh-button jh-button--secondary jh-button--compact decline-skill-btn" data-skill="${escapeHtml(item.skill || '')}">${escapeHtml(DISMISS_CAPABILITY_SUGGESTION_LABEL)}</button>
-      </div>
-    </div>
-  `;
-}
-
-function reviewSummaryChip(count, singularLabel, pluralLabel = `${singularLabel}s`) {
-  const value = Math.max(0, Number(count) || 0);
-  if (!value) return '';
-  return `<span class="suggestion-chip tuning-summary-item"><strong>${value}</strong> ${escapeHtml(value === 1 ? singularLabel : pluralLabel)}</span>`;
-}
-
-function renderReviewSummary(summary, capabilitySuggestions, requirementSuggestions, optimizationSuggestions, renderedRuleCount) {
-  const items = [
-    reviewSummaryChip(summary.capability_count || capabilitySuggestions.length || 0, 'capability suggestion'),
-    reviewSummaryChip(summary.requirement_count || requirementSuggestions.length || 0, 'requirement suggestion'),
-    reviewSummaryChip(summary.optimization_count || optimizationSuggestions.length || 0, 'role suggestion'),
-    reviewSummaryChip(renderedRuleCount, 'rule suggestion'),
-  ].filter(Boolean);
-  return items.length
-    ? `<div class="tuning-summary" aria-label="Suggestions to review">${items.join('')}</div>`
-    : '<p class="tuning-empty-state-copy">No suggestions to review.</p>';
-}
-
 function renderSuggestedTuning(reviewData) {
   const panel = document.getElementById('tuning_suggestions_panel');
   if (!panel) return;
-  const suggestions = reviewData.suggested_tuning || {};
+  const suggestions = reviewData?.suggested_tuning || {};
   const capabilitySuggestions = suggestions.capability_suggestions || [];
   const requirementSuggestions = suggestions.requirement_suggestions || [];
   const optimizationSuggestions = suggestions.optimization_suggestions || [];
   const ruleSuggestions = suggestions.rule_suggestions || [];
-  const summary = suggestions.summary || {};
-  const capabilityEmptyCopy = Number(summary.capability_count || 0) > 0
-    ? NO_CAPABILITY_OBSERVATIONS_COPY
-    : NO_CAPABILITY_SUGGESTIONS_COPY;
-  const capabilityHtml = renderTuningSection(
-    TUNING_TEXT.capabilityHeading,
-    TUNING_TEXT.capabilityCopy,
-    capabilitySuggestions,
-    capabilityEmptyCopy,
-    (item, index) => {
-      // JH-317: do not surface or preselect item.recommended_choice here.
-      // It is currently derived from kept-role occurrence frequency, which measures
-      // market relevance rather than candidate proficiency. Keep the count visible
-      // and require an explicit strength choice until evidence-backed recommendations exist.
-      return `
-      <div class="review-card">
-        <div class="settings-subpanel-head review-card-heading">
-          <h3>${escapeHtml(item.skill || 'Capability')}</h3>
-          <span class="review-card-count">${escapeHtml(keptRoleCountLabel(item.count))}</span>
-        </div>
-        <label>${escapeHtml(capabilityUi.reviewStrengthPromptLabel)}</label>
-        <div class="choice-strip jh-choice-group capability-strength-strip review-strength-strip" role="radiogroup" aria-label="${escapeHtml(capabilityUi.reviewStrengthPromptLabel)}" data-skill="${escapeHtml(item.skill || '')}">
-          ${reviewStrengthChoicesMarkup('', `skill-choice-${index}`)}
-        </div>
-        <details class="review-choice-guide">
-          <summary>What this choice means</summary>
-          <div class="review-choice-guide-body">${renderReviewChoiceGuide('')}</div>
-        </details>
-        <details class="review-examples">
-          <summary>Examples from kept roles</summary>
-          <div class="review-examples-body">${suggestionExamplesMarkup(item.examples || [], 'No example roles saved for this capability yet.')}</div>
-        </details>
-        <div class="card-actions" style="margin-top:10px;">
-          <button class="jh-button jh-button--primary jh-button--compact confirm-skill-btn" data-skill="${escapeHtml(item.skill || '')}" disabled>Confirm</button>
-          <button class="jh-button jh-button--danger jh-button--compact do-not-have-skill-btn" data-skill="${escapeHtml(item.skill || '')}">${escapeHtml(DECLINE_CAPABILITY_LABEL)}</button>
-          <button class="jh-button jh-button--secondary jh-button--compact decline-skill-btn" data-skill="${escapeHtml(item.skill || '')}" title="Hide this suggestion without saying you do not have the capability.">${escapeHtml(DISMISS_CAPABILITY_SUGGESTION_LABEL)}</button>
-        </div>
-      </div>
-    `;
-    },
-    'capabilities'
-  );
-  const optimizationHtml = renderTuningSection(
-    TUNING_TEXT.optimizationHeading,
-    TUNING_TEXT.optimizationCopy,
-    optimizationSuggestions,
-    TUNING_TEXT.optimizationEmpty,
-    (item) => renderRuleCard(item),
-    'optimization'
-  );
-  const titleTuningRules = ruleSuggestions.filter((item) => (item.reason || '') === RULE_REASON_TITLE_NOT_TARGET);
-  const workingFilterRules = ruleSuggestions.filter((item) => (item.reason || '') === RULE_REASON_TITLE_BAD_KEYWORD);
-  const otherRuleSuggestions = ruleSuggestions.filter((item) => {
-    const reason = item.reason || '';
-    return reason !== RULE_REASON_TITLE_NOT_TARGET && reason !== RULE_REASON_TITLE_BAD_KEYWORD && reason !== RULE_REASON_ONET_UNCERTAIN_TITLE;
-  });
-  const renderedRuleCount = titleTuningRules.length + workingFilterRules.length + otherRuleSuggestions.length;
-  const requirementHtml = requirementSuggestions.length ? renderRequirementGroup(requirementSuggestions) : '';
 
-  const ruleHtml = renderedRuleCount ? `
-    ${renderTuningGroup(TUNING_TEXT.titleTuningHeading, TUNING_TEXT.titleTuningCopy, titleTuningRules, 'title-tuning')}
-    ${renderTuningGroup(TUNING_TEXT.workingFiltersHeading, TUNING_TEXT.workingFiltersCopy, workingFilterRules, 'working-filters')}
-    ${renderTuningGroup(TUNING_TEXT.otherRulesHeading, TUNING_TEXT.otherRulesCopy, otherRuleSuggestions, 'other-rules')}
-  ` : '';
+  const profileSuggestions = mergeCapabilitySuggestions(capabilitySuggestions, requirementSuggestions);
+  const actionableRules = ruleSuggestions.filter((item) => (item.reason || '') !== RULE_REASON_TITLE_BAD_KEYWORD);
+  const matchingSuggestions = [...optimizationSuggestions, ...actionableRules];
+
+  const profileHtml = renderSuggestionSection(
+    'Capabilities to verify',
+    'Things Job Hunter found repeatedly that may belong in your Capability Matrix.',
+    profileSuggestions,
+    (item, index) => renderCapabilitySuggestionCard(item, index),
+    'No new capabilities to verify.',
+  );
+  const matchingHtml = renderSuggestionSection(
+    'Search & filter improvements',
+    'Patterns suggesting your matching or filtering could be improved.',
+    matchingSuggestions,
+    (item) => renderRuleCard(item),
+  );
 
   panel.innerHTML = `
     <div class="tuning-suggestions-content">
-      ${renderReviewSummary(summary, capabilitySuggestions, requirementSuggestions, optimizationSuggestions, renderedRuleCount)}
-      ${capabilityHtml}
-      ${optimizationHtml}
-      ${requirementHtml}
-      ${ruleHtml}
+      ${profileHtml}
+      ${matchingHtml}
     </div>
   `;
 }
@@ -518,11 +429,9 @@ tuningPanel?.addEventListener('change', (e) => {
   const input = e.target.closest('input[type="radio"]');
   if (!input || (!input.name?.startsWith('skill-choice-') && !input.name?.startsWith('requirement-choice-'))) return;
   const card = input.closest('.review-card');
-  const guideBody = card?.querySelector('.review-choice-guide-body');
   const confirmBtn = card?.querySelector('.confirm-skill-btn');
   if (confirmBtn) confirmBtn.disabled = false;
-  if (!guideBody) return;
-  guideBody.innerHTML = renderReviewChoiceGuide(input.value || '');
+  capabilityUi.updateCapabilityStrengthMeter(card?.querySelector('.capability-strength-meter'), input.value || '', 'Select strength');
 });
 
 tuningPanel?.addEventListener('click', async (e) => {
