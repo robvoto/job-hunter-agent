@@ -459,6 +459,40 @@ def test_role_entry_adds_directly_without_role_family_popup(candidate_page):
     expect(page.locator("#also_consider_roles_chips")).to_contain_text("SAP S/4HANA Consultant")
 
 
+def test_capability_matrix_grid_adapts_to_available_width(candidate_page):
+    _seed_candidate_capabilities(
+        "candidate@e2e.test",
+        [
+            {"name": "capability one", "level": "strong", "aliases": ["one"], "icon_key": "generic"},
+            {"name": "capability two", "level": "working", "aliases": ["two"], "icon_key": "generic"},
+            {"name": "capability three", "level": "basic", "aliases": ["three"], "icon_key": "generic"},
+            {"name": "capability four", "level": "strong", "aliases": ["four"], "icon_key": "generic"},
+        ],
+    )
+
+    page = candidate_page
+    page.set_viewport_size({"width": 1920, "height": 1080})
+    page.goto("/settings#section-matrix")
+    cards = page.locator("#capability_matrix_editor .capability-card")
+    expect(cards).to_have_count(4)
+
+    wide_boxes = [cards.nth(i).bounding_box() for i in range(3)]
+    assert all(wide_boxes)
+    assert max(abs(box["y"] - wide_boxes[0]["y"]) for box in wide_boxes[1:]) <= 3
+
+    page.set_viewport_size({"width": 1400, "height": 1000})
+    desktop_boxes = [cards.nth(i).bounding_box() for i in range(3)]
+    assert all(desktop_boxes)
+    assert abs(desktop_boxes[0]["y"] - desktop_boxes[1]["y"]) <= 3
+    assert desktop_boxes[2]["y"] > desktop_boxes[0]["y"] + 20
+
+    page.set_viewport_size({"width": 820, "height": 1000})
+    narrow_boxes = [cards.nth(i).bounding_box() for i in range(3)]
+    assert all(narrow_boxes)
+    assert narrow_boxes[1]["y"] > narrow_boxes[0]["y"] + 20
+    assert narrow_boxes[2]["y"] > narrow_boxes[1]["y"] + 20
+
+
 def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
     page = candidate_page
     decisions = []
@@ -475,6 +509,13 @@ def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
                 },
                 {
                     "skill": "Mentoring",
+                    "count": 2,
+                    "recommended_choice": "working",
+                    "recommended_label": "Working",
+                    "examples": [],
+                },
+                {
+                    "skill": "Technical documentation",
                     "count": 2,
                     "recommended_choice": "working",
                     "recommended_label": "Working",
@@ -525,7 +566,7 @@ def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
     page.locator('[data-section="section-optimise"]').click()
 
     review_head = page.locator("#section-optimise .search-settings-subcard > .settings-card-title-row")
-    expect(review_head.locator("h3")).to_have_text("Review Suggestions (2)")
+    expect(review_head.locator("h3")).to_have_text("Review Suggestions (3)")
     count = review_head.locator(".settings-heading-count")
     heading_size = float(review_head.locator("h3").evaluate("el => parseFloat(getComputedStyle(el).fontSize)"))
     count_size = float(count.evaluate("el => parseFloat(getComputedStyle(el).fontSize)"))
@@ -548,12 +589,26 @@ def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
     assert abs((title_box["y"] + title_box["height"] / 2) - (info_box["y"] + info_box["height"] / 2)) <= 2
 
     capability_cards = page.locator('#tuning_suggestions_panel .review-list > .review-card[data-review-kind="capability"]')
-    expect(capability_cards).to_have_count(2)
-    first_card_box = capability_cards.nth(0).bounding_box()
-    second_card_box = capability_cards.nth(1).bounding_box()
-    assert first_card_box and second_card_box
-    assert abs(first_card_box["y"] - second_card_box["y"]) <= 3
-    assert second_card_box["x"] > first_card_box["x"]
+    expect(capability_cards).to_have_count(3)
+
+    # Optimise adapts to available width instead of hard-coding two cards per row.
+    page.set_viewport_size({"width": 1920, "height": 1080})
+    wide_boxes = [capability_cards.nth(i).bounding_box() for i in range(3)]
+    assert all(wide_boxes)
+    assert max(abs(box["y"] - wide_boxes[0]["y"]) for box in wide_boxes[1:]) <= 3
+
+    page.set_viewport_size({"width": 1400, "height": 1000})
+    desktop_boxes = [capability_cards.nth(i).bounding_box() for i in range(3)]
+    assert all(desktop_boxes)
+    assert abs(desktop_boxes[0]["y"] - desktop_boxes[1]["y"]) <= 3
+    assert desktop_boxes[2]["y"] > desktop_boxes[0]["y"] + 20
+
+    page.set_viewport_size({"width": 820, "height": 1000})
+    narrow_boxes = [capability_cards.nth(i).bounding_box() for i in range(3)]
+    assert all(narrow_boxes)
+    assert narrow_boxes[1]["y"] > narrow_boxes[0]["y"] + 20
+    assert narrow_boxes[2]["y"] > narrow_boxes[1]["y"] + 20
+    page.set_viewport_size({"width": 1400, "height": 1000})
 
     card = page.locator("#tuning_suggestions_panel .review-card").filter(has_text="Power BI")
     expect(card).to_be_visible()
