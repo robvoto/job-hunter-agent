@@ -219,3 +219,49 @@ def test_onboarding_revisiting_check_setup_uses_search_save_transition(
     expect(page.locator("#check_locations")).to_contain_text("Melbourne")
     expect(page.locator("#check_locations")).not_to_contain_text("Sydney")
     expect(page.locator("#check_salary_yearly")).to_contain_text("120,000")
+
+
+def test_onboarding_capability_review_reuses_shared_strength_and_persists_choice(
+    fresh_candidate_page, monkeypatch
+):
+    from job_hunter_agent.routes import onboarding_api
+
+    monkeypatch.setattr(onboarding_api, "run_onboarding", _stub_run_onboarding)
+
+    page = fresh_candidate_page
+    page.goto("/start")
+    page.locator("#primary_cv").set_input_files(
+        files=[{
+            "name": "tiny_cv.txt",
+            "mimeType": "text/plain",
+            "buffer": b"Jane Doe\nSenior Backend Engineer\n",
+        }]
+    )
+    with page.expect_response("**/api/onboarding/import") as response_info:
+        page.locator("#create_profile").click()
+    assert response_info.value.ok
+
+    card = page.locator("#review_capability_cards .capability-card").first
+    card.wait_for(state="visible")
+    meter = card.locator(".capability-strength-meter")
+
+    # CV extraction supplied Strong, and onboarding exposes that same shared
+    # strength control rather than hiding the value from the user.
+    expect(meter.locator(".capability-strength-label")).to_have_text("Strong")
+    expect(meter.locator(".capability-strength-dot.is-filled")).to_have_count(3)
+    expect(card.locator(".capability-alias-label")).to_have_text("Related skills")
+    expect(card.locator(".capability-card-icon")).to_have_count(0)
+    expect(page.locator("#review_capability_helper")).to_have_count(0)
+    expect(page.locator("#continue_to_search_basics")).to_have_text("Continue")
+
+    # User correction is draft state and must survive a reload before Finish Setup.
+    meter.locator('label[for$="_working"]').click()
+    expect(meter.locator(".capability-strength-label")).to_have_text("Working")
+    expect(meter.locator(".capability-strength-dot.is-filled")).to_have_count(2)
+
+    page.reload()
+    page.locator('[data-step="2"]').wait_for(state="visible")
+    restored_card = page.locator("#review_capability_cards .capability-card").first
+    restored_meter = restored_card.locator(".capability-strength-meter")
+    expect(restored_meter.locator(".capability-strength-label")).to_have_text("Working")
+    expect(restored_meter.locator(".capability-strength-dot.is-filled")).to_have_count(2)

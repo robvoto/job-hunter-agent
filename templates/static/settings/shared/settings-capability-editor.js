@@ -258,6 +258,7 @@ export const JobHunterCapabilityEditor = (function () {
           `).join('');
           const aliasRowHtml = aliasCount ? `
             <div class="capability-alias-row">
+              <span class="capability-alias-label">${escapeHtml(capabilityLabels.related_skills_label)}</span>
               ${aliasPreviewHtml}
               ${remainingAliases.length ? `
                 <details class="capability-alias-drawer"${expandedCapabilityRows.has(index) ? ' open' : ''}>

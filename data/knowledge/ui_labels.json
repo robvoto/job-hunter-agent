@@ -1,8 +1,8 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 143,
-  "updated_at": "2026-09-11T00:00:00+00:00",
+  "version": 144,
+  "updated_at": "2026-09-21T00:00:00+00:00",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
     "remote_label": "Remote",
@@ -119,7 +119,7 @@
     "settings_title": "Capability Matrix",
     "matching_nav_label": "Matching",
     "onboarding_title": "Capabilities",
-    "help_text": "Capabilities are the proven work strengths the agent found in your CV that help it match you to the right jobs. The strength you choose changes how much each capability influences matching, so use Strong for your best evidence and Basic for thinner or older evidence. Related Skills are synonyms, abbreviations, or tightly related sub-skills that belong under the same capability, helping the agent recognize them across different job ads. You can delete any incorrect matches.",
+    "help_text": "Job Hunter extracted these capabilities from your CV and uses them when matching jobs. Review or remove anything that looks wrong. Related skills are alternative names Job Hunter treats as the same capability. Adjust a capability strength if Job Hunter judged it incorrectly.",
     "add_button_aria_label": "Add capability",
     "related_skills_label": "Related skills",
     "related_skills_show_more": "Show {count} more",

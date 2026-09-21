@@ -872,28 +872,6 @@
       flex: 1 1 auto;
       min-width: 0;
     }
-    .capability-alias-row {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 6px 10px;
-      min-width: 0;
-    }
-    .capability-alias-preview {
-      display: inline-flex;
-      flex-wrap: wrap;
-      gap: 4px;
-      margin: 0;
-    }
-    .capability-alias-row .capability-alias-drawer {
-      flex: 0 0 auto;
-    }
-    .capability-alias-row .capability-alias-drawer[open] {
-      flex-basis: 100%;
-    }
-    .capability-alias-row .cap-alias-summary {
-      color: var(--state-info-text);
-    }
     .capability-card-actions {
       display: flex;
       flex-direction: column;
@@ -1010,33 +988,6 @@
     }
     .role-history-editor {
       margin-top: var(--surface-gap-md);
-    }
-    .capability-alias-drawer[open] .cap-alias-chips {
-      margin-top: 10px;
-    }
-    .capability-alias-drawer {
-      margin: 0;
-      padding: 0;
-      border: 0;
-      background: transparent;
-    }
-    .cap-alias-summary {
-      display: inline-flex;
-      align-items: center;
-      width: fit-content;
-      cursor: pointer;
-      color: var(--text-muted);
-      font-size: var(--text-role-caption-font-size);
-      font-weight: var(--text-role-status-font-weight);
-      list-style: none;
-      user-select: none;
-      padding: 0;
-    }
-    .capability-alias-drawer > .cap-alias-summary {
-      margin: 0;
-    }
-    .capability-summary-label {
-      color: inherit;
     }
     .cap-strength-row {
       display: grid;
@@ -1292,140 +1243,7 @@
       border-color: var(--selection-accent);
       box-shadow: 0 0 0 2px color-mix(in srgb, var(--selection-accent) 15%, transparent);
     }
-    .cap-strength {
-      display: flex;
-      align-items: center;
-      margin-top: 2px;
-    }
-    .capability-strength-meter {
-      position: relative;
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      width: fit-content;
-      min-height: 28px;
-      padding: 3px 8px;
-      border: 1px solid var(--border-subtle);
-      border-radius: 8px;
-      background: color-mix(in srgb, var(--bg-surface) 92%, transparent);
-      color: var(--text-muted);
-      font-size: var(--text-role-caption-font-size);
-      line-height: 1;
-    }
-    .capability-strength-dots {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-    }
-    .capability-strength-dot {
-      position: relative;
-      display: inline-flex;
-      width: 14px;
-      height: 18px;
-      align-items: center;
-      justify-content: center;
-      margin: 0;
-      cursor: pointer;
-    }
-    .capability-strength-dot input {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      margin: 0;
-      padding: 0;
-      border: 0;
-      opacity: 0;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      clip-path: inset(50%);
-    }
-    .capability-strength-dot > span {
-      width: 9px;
-      height: 9px;
-      border: 1px solid color-mix(in srgb, var(--text-muted) 70%, transparent);
-      border-radius: 50%;
-      background: transparent;
-      transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
-    }
-    .capability-strength-dot:hover > span {
-      transform: scale(1.18);
-      border-color: var(--text-primary);
-    }
-    .capability-strength-dot:focus-within > span {
-      outline: 2px solid color-mix(in srgb, var(--accent) 60%, white);
-      outline-offset: 2px;
-    }
-    .capability-strength-meter.strength-strong .capability-strength-dot.is-filled > span {
-      border-color: color-mix(in srgb, var(--state-success-border) 72%, var(--border-subtle));
-      background: color-mix(in srgb, var(--state-success-text) 72%, var(--bg-surface));
-    }
-    .capability-strength-meter.strength-working .capability-strength-dot.is-filled > span {
-      border-color: color-mix(in srgb, var(--state-info-border) 72%, var(--border-subtle));
-      background: color-mix(in srgb, var(--state-info-text) 72%, var(--bg-surface));
-    }
-    .capability-strength-meter.strength-basic .capability-strength-dot.is-filled > span {
-      border-color: color-mix(in srgb, var(--text-muted) 78%, var(--border-subtle));
-      background: color-mix(in srgb, var(--text-muted) 72%, var(--bg-surface));
-    }
-    .capability-strength-label {
-      color: var(--text-primary);
-      font-weight: var(--text-role-status-font-weight);
-      white-space: nowrap;
-    }
-    .capability-strength-tooltip {
-      position: absolute;
-      z-index: 20;
-      left: 0;
-      bottom: calc(100% + 9px);
-      display: block;
-      visibility: hidden;
-      opacity: 0;
-      pointer-events: none;
-      width: max-content;
-      max-width: 260px;
-      padding: 9px 11px;
-      border: 1px solid var(--border-subtle);
-      border-radius: 8px;
-      background: var(--bg-elevated, var(--bg-surface));
-      box-shadow: var(--shadow-soft);
-      color: var(--text-primary);
-      line-height: 1.35;
-      white-space: normal;
-      transition: opacity 120ms ease, visibility 0s linear 120ms;
-    }
-    .capability-strength-tooltip::after {
-      content: '';
-      position: absolute;
-      left: 18px;
-      top: 100%;
-      border: 6px solid transparent;
-      border-top-color: var(--border-subtle);
-    }
-    .capability-strength-tooltip strong,
-    .capability-strength-tooltip span {
-      display: block;
-    }
-    .capability-strength-tooltip span {
-      margin-top: 3px;
-      color: var(--text-muted);
-      font-weight: 400;
-    }
-    /* Strength help is deliberately quiet: only show after a 3s hover, which
-       signals that the user is lingering over the control for clarification.
-       Keyboard focus remains immediate via :focus-visible. Mouse clicks do not
-       latch the tooltip open simply because a radio retains focus. */
-    .capability-strength-meter:hover .capability-strength-tooltip {
-      visibility: visible;
-      opacity: 1;
-      pointer-events: auto;
-      transition-delay: 3s, 3s;
-    }
-    .capability-strength-meter:has(.capability-strength-dot input:focus-visible) .capability-strength-tooltip {
-      visibility: visible;
-      opacity: 1;
-      pointer-events: auto;
-      transition-delay: 0s, 0s;
-    }
+
     .capability-preset-grid {
       display: grid;
       gap: 12px;

@@ -251,6 +251,7 @@ def test_capability_alias_preview_uses_related_skills_copy(candidate_page):
     page.mouse.move(0, 0)
     expect(tooltip).to_have_css("visibility", "hidden")
 
+    expect(card.locator(".capability-alias-label")).to_have_text("Related skills")
     preview = card.locator(".capability-alias-preview")
     expect(preview).to_contain_text("scrum")
     expect(preview).to_contain_text("lean delivery")

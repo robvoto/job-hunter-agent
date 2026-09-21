@@ -37,7 +37,6 @@ export const refs = Object.freeze({
   reviewCapabilityCards: document.getElementById('review_capability_cards'),
   reviewCapabilityTitle: document.getElementById('review_capability_title'),
   reviewCapabilityHelp: document.getElementById('review_capability_help'),
-  reviewCapabilityHelper: document.getElementById('review_capability_helper'),
 });
 const {
   status: statusEl,
@@ -66,7 +65,6 @@ const {
   reviewCapabilityCards: reviewCapabilityCardsEl,
   reviewCapabilityTitle: reviewCapabilityTitleEl,
   reviewCapabilityHelp: reviewCapabilityHelpEl,
-  reviewCapabilityHelper: reviewCapabilityHelperEl,
 } = refs;
 const statusUi = createMessageBannerController(statusEl);
 export const STEP_COUNT = 4;
@@ -105,7 +103,7 @@ if (!onboardingGlobalSettings?.limits?.search?.locations_max_selected) {
 if (!capabilityLabels || !capabilityLabels.onboarding_title || !capabilityLabels.help_text || !capabilityLabels.filter_placeholder) {
   throw new Error('Missing capability UI labels.');
 }
-if (!onboardingFlowLabels || !onboardingFlowLabels.review_capability_helper_copy) {
+if (!onboardingFlowLabels) {
   throw new Error('Missing onboarding flow labels.');
 }
 if (typeof escapeHtml !== 'function') {
@@ -151,9 +149,6 @@ if (checkCapabilitiesLabelEl) {
 }
 if (reviewCapabilityHelpEl) {
   reviewCapabilityHelpEl.textContent = capabilityLabels.help_text;
-}
-if (reviewCapabilityHelperEl) {
-  reviewCapabilityHelperEl.textContent = onboardingFlowLabels.review_capability_helper_copy;
 }
 if (reviewCapabilityFilterEl) {
   reviewCapabilityFilterEl.placeholder = capabilityLabels.filter_placeholder;

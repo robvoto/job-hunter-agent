@@ -494,13 +494,14 @@ def test_settings_search_section_uses_shared_choice_strip_widget(monkeypatch):
     assert 'select id="sector_preference"' not in html
 
 
-def test_capability_help_text_explains_matching_weight():
+def test_capability_help_text_explains_related_skills_without_repeating_strength_levels():
     labels_path = ROOT_DIR / "data" / "knowledge" / "ui_labels.json"
     ui_labels = json.loads(labels_path.read_text(encoding="utf-8"))
     help_text = ui_labels["capability_ui_labels"]["help_text"]
 
-    assert "the strength you choose changes how much each capability influences matching" in help_text.lower()
-    assert "strong for your best evidence" in help_text.lower()
+    assert "related skills are alternative names" in help_text.lower()
+    assert "adjust a capability strength" in help_text.lower()
+    assert "strong for your best evidence" not in help_text.lower()
 
 
 def test_settings_review_panel_empty_state_copy_is_defined():

@@ -72,7 +72,6 @@ const onboardingFlowTitleTierLabels = window.__JOB_HUNTER_TITLE_TIER_LABELS__;
 const onboardingImportSummaryLabels = window.__JOB_HUNTER_ONBOARDING_IMPORT_SUMMARY_LABELS__;
 const onboardingFlowLabels = window.__JOB_HUNTER_ONBOARDING_FLOW_LABELS__;
 const capabilityLabels = onboardingCapabilityUi.labels;
-const capabilityIconHtml = onboardingCapabilityUi.capabilityIconHtml;
 const splitCapabilityAliasesForDisplay = onboardingCapabilityUi.splitCapabilityAliasesForDisplay;
 if (!onboardingFlowTitleTierLabels) {
   throw new Error('Missing title tier labels.');
@@ -500,18 +499,32 @@ function renderReviewCapabilities() {
         </details>
       `;
     })();
+    const aliasRowHtml = rule.aliases.length ? `
+      <div class="capability-alias-row">
+        <span class="capability-alias-label">${escapeHtml(capabilityLabels.related_skills_label)}</span>
+        ${aliasPreviewHtml}
+        ${aliasHtml}
+      </div>
+    ` : '';
+    const strengthMeterHtml = onboardingCapabilityUi.capabilityStrengthMeterMarkup({
+      selectedValue: rule.level,
+      groupName: `review_capability_level_${index}`,
+      inputIdPrefix: `review_capability_level_${index}`,
+      inputDataAttributes: { 'data-review-capability-level': index },
+      ariaLabel: `Capability strength for ${displayName}`,
+      helpId: `review_capability_strength_help_${index}`,
+    });
     const selectedClass = onboardingPage.selectedReviewCapabilityIndexes.has(index) ? ' is-selected' : '';
     return `
       <article class="capability-card${selectedClass}" data-review-capability-index="${index}">
         <div class="review-capability-main">
           <span class="review-capability-head">
             <span class="review-capability-title-row">
-              ${capabilityIconHtml(rule.icon_key, displayName)}
               <strong class="review-capability-title">${escapeHtml(displayName)}</strong>
             </span>
           </span>
-          ${aliasPreviewHtml}
-          ${aliasHtml}
+          ${aliasRowHtml}
+          <div class="cap-strength">${strengthMeterHtml}</div>
         </div>
         <div class="review-capability-actions" role="group" aria-label="${escapeHtml(formatLabel(onboardingFlowLabels.capability_actions_for_label, { name: displayName }))}">
           ${renderTrashActionButton({
@@ -1032,12 +1045,13 @@ flowRefs.reviewStepRoot.addEventListener('click', (event) => {
     onboardingStorage.saveWizardState();
     return;
   }
-    const capabilityRow = event.target.closest('[data-review-capability-index]');
-    if (
-      capabilityRow
-      && !event.target.closest('.capability-alias-drawer')
-      && !event.target.closest('button')
-    ) {
+  const capabilityRow = event.target.closest('[data-review-capability-index]');
+  if (
+    capabilityRow
+    && !event.target.closest('.capability-alias-drawer')
+    && !event.target.closest('.capability-strength-meter')
+    && !event.target.closest('button')
+  ) {
     const index = Number(capabilityRow.dataset.reviewCapabilityIndex);
     const nextChecked = !onboardingPage.selectedReviewCapabilityIndexes.has(index);
     toggleSelectedReviewCapability(index, nextChecked);
@@ -1074,6 +1088,24 @@ document.querySelectorAll('input[name="engagement_type"]').forEach((input) => {
     hideStatus();
     updateCompensationVisibility();
   });
+});
+
+flowRefs.reviewStepRoot.addEventListener('change', (event) => {
+  const strengthInput = event.target.closest('input[type="radio"][data-review-capability-level]');
+  if (!strengthInput) return;
+  const index = Number(strengthInput.dataset.reviewCapabilityLevel);
+  const rule = onboardingPage.reviewCapabilityRules[index];
+  if (!rule) return;
+  onboardingPage.reviewCapabilityRules[index] = {
+    ...rule,
+    level: strengthInput.value,
+  };
+  onboardingCapabilityUi.updateCapabilityStrengthMeter(
+    strengthInput.closest('.capability-strength-meter'),
+    strengthInput.value,
+  );
+  onboardingStorage.saveWizardState();
+  hideStatus();
 });
 
 flowRefs.reviewStepRoot.addEventListener('keydown', (event) => {
