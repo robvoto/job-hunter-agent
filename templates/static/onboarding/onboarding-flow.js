@@ -492,9 +492,6 @@ function renderReviewCapabilities() {
       `;
     })();
     const selectedClass = onboardingPage.selectedReviewCapabilityIndexes.has(index) ? ' is-selected' : '';
-    const selectedBadgeHtml = selectedClass ? `
-      <span class="review-capability-selected-badge">${escapeHtml(capabilityLabels.settings_selected_label)}</span>
-    ` : '';
     return `
       <article class="capability-card${selectedClass}" data-review-capability-index="${index}">
         <div class="review-capability-main">
@@ -503,7 +500,6 @@ function renderReviewCapabilities() {
               ${capabilityIconHtml(rule.icon_key, displayName)}
               <strong class="review-capability-title">${escapeHtml(displayName)}</strong>
             </span>
-            ${selectedBadgeHtml}
           </span>
           ${aliasPreviewHtml}
           ${aliasHtml}

@@ -85,3 +85,49 @@ def test_salary_preferences_are_normal_review_cards_using_shared_controls():
     assert 'class="currency-input-wrap"' in onboarding_html
     assert 'class="compensation-card' not in onboarding_html
     assert 'class="salary-pair"' not in onboarding_html
+
+
+
+def test_search_preferences_order_and_responsive_layout():
+    repo_root = Path(__file__).resolve().parents[1]
+    onboarding_html = (repo_root / "templates" / "onboarding.html").read_text(encoding="utf-8")
+    onboarding_css = (
+        repo_root / "templates" / "static" / "onboarding" / "onboarding-page.css"
+    ).read_text(encoding="utf-8")
+
+    step_3 = onboarding_html.split('data-step="3" hidden>', 1)[1].split('data-step="4" hidden>', 1)[0]
+    work_pos = step_3.index('id="engagement_type_label"')
+    sector_pos = step_3.index('id="prefer_sector_label"')
+    mode_pos = step_3.index('id="work_mode_preference_label"')
+    assert work_pos < sector_pos < mode_pos
+    assert 'grid-template-columns: minmax(280px, 1.25fr) minmax(210px, 0.8fr) minmax(260px, 1fr);' in onboarding_css
+    assert '@media (max-width: 920px)' in onboarding_css
+    assert '@media (max-width: 720px)' in onboarding_css
+
+
+def test_onboarding_uses_shared_wide_content_shell():
+    repo_root = Path(__file__).resolve().parents[1]
+    tokens = (repo_root / "templates" / "static" / "theme" / "themes.tokens.css").read_text(encoding="utf-8")
+    assert '--onboarding-shell-max-width: var(--content-shell-max-width);' in tokens
+
+
+def test_location_dense_groups_fill_columns_in_reading_order():
+    repo_root = Path(__file__).resolve().parents[1]
+    location_js = (repo_root / "templates" / "static" / "common" / "location-options.js").read_text(encoding="utf-8")
+    theme_widgets = (repo_root / "templates" / "static" / "theme" / "themes.widgets.css").read_text(encoding="utf-8")
+
+    assert 'const useTwoColumns = groupOptions.length >= 6;' in location_js
+    assert '--checkbox-list-row-count' in location_js
+    assert 'grid-template-rows: repeat(var(--checkbox-list-row-count), auto);' in theme_widgets
+    assert 'grid-auto-flow: column;' in theme_widgets
+
+
+def test_selected_capability_uses_card_state_without_selected_badge():
+    repo_root = Path(__file__).resolve().parents[1]
+    onboarding_js = (repo_root / "templates" / "static" / "onboarding" / "onboarding-flow.js").read_text(encoding="utf-8")
+    onboarding_css = (repo_root / "templates" / "static" / "onboarding" / "onboarding-page.css").read_text(encoding="utf-8")
+
+    assert 'capability-card${selectedClass}' in onboarding_js
+    assert 'review-capability-selected-badge' not in onboarding_js
+    assert '.capability-card.is-selected {' in onboarding_css
+    assert '.review-capability-selected-badge' not in onboarding_css

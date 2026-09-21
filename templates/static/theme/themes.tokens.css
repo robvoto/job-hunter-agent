@@ -38,7 +38,7 @@
   --reading-column-max-width: 50rem;
 
   /* Shared onboarding layout sizing */
-  --onboarding-shell-max-width: 980px;
+  --onboarding-shell-max-width: var(--content-shell-max-width);
   --onboarding-shell-padding-top: 24px;
   --onboarding-shell-padding-inline: var(--surface-pad-inline-sm);
   --onboarding-shell-padding-bottom: 44px;

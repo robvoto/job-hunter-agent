@@ -2519,6 +2519,8 @@
 }
 .checkbox-list-group--dense .checkbox-list-options {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(var(--checkbox-list-row-count), auto);
+  grid-auto-flow: column;
 }
 .checkbox-list-option {
   display: grid;
@@ -2587,7 +2589,11 @@
   }
 }
 @media (max-width: 640px) {
-  .checkbox-list-group--dense .checkbox-list-options { grid-template-columns: 1fr; }
+  .checkbox-list-group--dense .checkbox-list-options {
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+    grid-auto-flow: row;
+  }
 }
 
 /* Shared structured search progress. The source identity comes from API data;

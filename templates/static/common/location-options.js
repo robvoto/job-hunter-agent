@@ -153,7 +153,8 @@ export function renderLocationCheckboxOptions(container, options = {}) {
   container.innerHTML = '';
   grouped.forEach((groupOptions, group) => {
     const section = document.createElement('fieldset');
-    section.className = ['checkbox-list-group', 'location-checkbox-group', groupOptions.length > 6 ? 'checkbox-list-group--dense' : '']
+    const useTwoColumns = groupOptions.length >= 6;
+    section.className = ['checkbox-list-group', 'location-checkbox-group', useTwoColumns ? 'checkbox-list-group--dense' : '']
       .filter(Boolean)
       .join(' ');
     const legend = document.createElement('legend');
@@ -162,6 +163,9 @@ export function renderLocationCheckboxOptions(container, options = {}) {
 
     const optionsWrap = document.createElement('div');
     optionsWrap.className = 'checkbox-list-options location-checkbox-options';
+    if (useTwoColumns) {
+      optionsWrap.style.setProperty('--checkbox-list-row-count', String(Math.ceil(groupOptions.length / 2)));
+    }
     groupOptions.forEach(({ value, label }) => {
       const item = document.createElement('label');
       item.className = 'checkbox-list-option location-checkbox-option';
