@@ -467,6 +467,18 @@ def test_requirement_importance_badge_stays_visually_attached_to_requirement_tex
     assert ".job-requirement-status" not in results_css
 
 
+def test_capability_editor_scrollbar_uses_theme_tokens_and_thin_track():
+    settings_css = (
+        ROOT_DIR / "templates" / "static" / "settings" / "shared" / "settings-page.css"
+    ).read_text(encoding="utf-8")
+
+    assert ".capability-editor::-webkit-scrollbar" in settings_css
+    assert "scrollbar-width: thin;" in settings_css
+    assert "var(--text-muted)" in settings_css
+    assert ".capability-editor::-webkit-scrollbar-track" in settings_css
+    assert "background: transparent;" in settings_css
+
+
 def test_settings_and_onboarding_load_shared_capability_ui_styles():
     settings_html = (ROOT_DIR / "templates" / "settings.html").read_text(encoding="utf-8")
     onboarding_html = (ROOT_DIR / "templates" / "onboarding.html").read_text(encoding="utf-8")
