@@ -939,16 +939,9 @@
       gap: 0;
       margin-top: 12px;
     }
-    /* Local layout exception: fixed clearance rows reuse capability-card surfaces with compact status/toggle actions.
-       Clearance cards have no alias chips/expandable content, so they stay short — use the same 2-column grid as
-       .capability-grid (rather than a single full-width column) to avoid large empty space per row. */
-    .clearance-grid {
-      gap: var(--surface-gap-sm);
-    }
-    .clearance-card {
-      align-items: center;
-    }
-    /* Local layout exception: managed clearances and free-form facts are subgroups of one Eligibility card. */
+    /* Eligibility, clearances and qualifications are profile facts, not capabilities.
+       Keep their cards compact and bounded so wide Settings shells add columns instead of
+       stretching a single row across the whole page. */
     .eligibility-settings-sections {
       display: grid;
       gap: var(--surface-gap-lg);
@@ -962,62 +955,96 @@
       padding-top: var(--surface-pad-block-lg);
       border-top: 1px solid var(--border-subtle);
     }
-
-    .clearance-card-main {
-      gap: 4px;
+    .eligibility-settings-section > .settings-subpanel-head .field-label-row > h4 {
+      font-size: var(--text-role-label-font-size);
+      font-weight: var(--text-role-button-font-weight);
+      color: var(--text-primary);
     }
-    .clearance-card-copy {
+    .profile-fact-entry {
+      width: min(100%, 52rem);
+    }
+    .profile-fact-editor {
+      width: 100%;
+      min-width: 0;
+    }
+    .profile-fact-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 340px));
+      gap: var(--surface-gap-sm);
+      justify-content: start;
+      align-items: stretch;
+      width: 100%;
+      min-width: 0;
+    }
+    .profile-fact-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: var(--surface-gap-md);
+      align-items: center;
+      min-width: 0;
+      min-height: 72px;
+      padding: 12px 14px;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      background: var(--bg-surface);
+    }
+    .profile-fact-copy {
       display: grid;
       gap: 4px;
       min-width: 0;
     }
-    .clearance-card-title {
+    .profile-fact-title {
       margin: 0;
+      color: var(--text-primary);
       font-size: var(--text-role-button-font-size);
       font-weight: var(--text-role-button-font-weight);
       line-height: 1.2;
-      color: var(--text-primary);
+      overflow-wrap: anywhere;
     }
-    .clearance-card-state {
+    .profile-fact-state {
       margin: 0;
       color: var(--text-muted);
       font-size: var(--text-role-status-font-size);
-      line-height: 1.4;
+      line-height: 1.35;
     }
-    .clearance-card-actions {
-      flex-direction: row;
+    .profile-fact-actions {
+      display: flex;
       align-items: center;
-      gap: 0;
-      padding-top: 0;
-    }
-    /* Local layout exception: generic eligibility facts edit a canonical name, an aliases
-       list, and an optional review message inline, so they need more horizontal room per
-       row than the compact clearance rows above — use a single full-width column instead
-       of .capability-grid/.clearance-grid's 2-column layout. */
-    .eligibility-grid {
-      grid-template-columns: 1fr;
+      justify-content: flex-end;
       gap: var(--surface-gap-sm);
+      flex: 0 0 auto;
     }
-    .eligibility-card {
-      align-items: center;
-    }
-    .eligibility-card-copy {
-      display: grid;
-      gap: 4px;
+    .profile-fact-name-input {
+      width: 100%;
       min-width: 0;
-    }
-    .eligibility-card-title {
-      margin: 0;
-      font-size: var(--text-role-status-font-size);
+      min-height: 34px;
+      padding: 5px 7px;
+      border: 1px solid transparent;
+      border-radius: var(--control-radius-sm);
+      background: transparent;
+      color: var(--text-primary);
+      font: inherit;
+      font-size: var(--text-role-body-compact-font-size);
       font-weight: var(--text-role-button-font-weight);
-      line-height: 1.2;
-      color: var(--text-muted);
+      outline: none;
     }
-    .eligibility-card-actions {
-      flex-direction: row;
-      align-items: center;
-      gap: var(--surface-gap-sm);
-      padding-top: 0;
+    .profile-fact-name-input:hover {
+      border-color: var(--border-subtle);
+      background: var(--bg-muted);
+    }
+    .profile-fact-name-input:focus-visible {
+      border-color: var(--focus-ring-color);
+      box-shadow: 0 0 0 var(--focus-ring-width) color-mix(in srgb, var(--focus-ring-color) 30%, transparent);
+      background: var(--bg-surface);
+    }
+    .settings-main .field-info-panel {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: min(420px, calc(100vw - 32px));
+      max-width: none;
+      transform: none;
+      z-index: 320;
     }
     .role-history-editor {
       margin-top: var(--surface-gap-md);

@@ -61,6 +61,35 @@ def _seed_candidate_capabilities(email: str, capabilities: list[dict[str, object
         set_user_id(None)
 
 
+def _seed_profile_facts(email: str) -> None:
+    from job_hunter_agent.auth import get_or_create_user
+    from job_hunter_agent.profile_store import (
+        KEY_CANDIDATE_ELIGIBILITY_FACTS,
+        KEY_CANDIDATE_QUALIFICATIONS,
+        patch_profile,
+    )
+    from job_hunter_agent.user_context import set_user_id
+
+    admin_email = os.environ["JOB_HUNTER_ADMIN_EMAIL"]
+    user = get_or_create_user(email, admin_email)
+    set_user_id(user["user_id"])
+    try:
+        patch_profile(
+            {
+                KEY_CANDIDATE_ELIGIBILITY_FACTS: [
+                    {"name": "Australian Citizenship", "value": True, "evidence": []},
+                    {"name": "Unrestricted work rights", "value": True, "evidence": []},
+                ],
+                KEY_CANDIDATE_QUALIFICATIONS: [
+                    {"name": "Bachelor of Information Technology", "value": True, "aliases": [], "evidence": []},
+                    {"name": "CBAP", "value": True, "aliases": [], "evidence": []},
+                ],
+            }
+        )
+    finally:
+        set_user_id(None)
+
+
 def _seed_schedule_enabled(email: str) -> None:
     """Enable Schedule Run so the test exercises scheduler availability, not the off state."""
     from job_hunter_agent.auth import get_or_create_user
@@ -457,6 +486,67 @@ def test_role_entry_adds_directly_without_role_family_popup(candidate_page):
     page.reload()
     expect(page.locator("#target_roles_chips")).to_contain_text("Implementation Consultant")
     expect(page.locator("#also_consider_roles_chips")).to_contain_text("SAP S/4HANA Consultant")
+
+
+def test_profile_facts_stay_compact_and_help_stays_inside_settings_content(candidate_page):
+    _seed_profile_facts("candidate@e2e.test")
+
+    page = candidate_page
+    page.set_viewport_size({"width": 1920, "height": 1080})
+    page.goto("/settings#section-matrix")
+
+    expect(page.locator("#eligibility_group_title")).to_have_text("Eligibility")
+    expect(page.locator("#clearance_editor_title")).to_have_text("Security clearances")
+
+    parent_size = float(page.locator("#eligibility_group_title").evaluate("el => parseFloat(getComputedStyle(el).fontSize)"))
+    child_size = float(page.locator("#clearance_editor_title").evaluate("el => parseFloat(getComputedStyle(el).fontSize)"))
+    assert parent_size > child_size
+
+    clearance_cards = page.locator("#clearance_editor .profile-fact-card")
+    expect(clearance_cards).to_have_count(4)
+    clearance_boxes = [clearance_cards.nth(i).bounding_box() for i in range(4)]
+    assert all(clearance_boxes)
+    assert max(box["width"] for box in clearance_boxes) <= 342
+    assert max(abs(box["y"] - clearance_boxes[0]["y"]) for box in clearance_boxes[1:]) <= 3
+
+    eligibility_cards = page.locator("#eligibility_editor .profile-fact-card")
+    qualification_cards = page.locator("#qualification_editor .profile-fact-card")
+    expect(eligibility_cards).to_have_count(2)
+    expect(qualification_cards).to_have_count(2)
+    assert eligibility_cards.first.bounding_box()["width"] <= 342
+    assert qualification_cards.first.bounding_box()["width"] <= 342
+    expect(page.locator("#eligibility_editor .capability-card")).to_have_count(0)
+    expect(page.locator("#qualification_editor .capability-card")).to_have_count(0)
+    expect(page.locator("#clearance_editor .capability-card")).to_have_count(0)
+
+    add_box = page.locator("#eligibility_name_add").bounding_box()
+    assert add_box and add_box["width"] < 850
+
+    help_summary = page.locator("#eligibility_group_title + details > summary")
+    help_summary.click()
+    help_panel = page.locator("#eligibility_group_help")
+    expect(help_panel).to_be_visible()
+    panel_box = help_panel.bounding_box()
+    main_box = page.locator(".settings-main").bounding_box()
+    assert panel_box and main_box
+    assert panel_box["x"] >= main_box["x"] + 15
+    assert panel_box["x"] + panel_box["width"] <= main_box["x"] + main_box["width"] - 15
+    assert panel_box["x"] >= 16
+    assert panel_box["x"] + panel_box["width"] <= 1904
+
+    # At the responsive Settings breakpoint the help panel must still stay inside
+    # the content/viewport rather than drifting behind the former left sidebar.
+    page.set_viewport_size({"width": 820, "height": 1000})
+    page.locator("#eligibility_group_title").scroll_into_view_if_needed()
+    page.wait_for_function(
+        "() => { const p = document.getElementById('eligibility_group_help'); return p && p.getBoundingClientRect().right <= innerWidth - 15; }"
+    )
+    narrow_panel_box = help_panel.bounding_box()
+    narrow_main_box = page.locator(".settings-main").bounding_box()
+    assert narrow_panel_box and narrow_main_box
+    assert narrow_panel_box["x"] >= narrow_main_box["x"] + 15
+    assert narrow_panel_box["x"] + narrow_panel_box["width"] <= 805
+    assert page.evaluate("document.documentElement.scrollWidth - window.innerWidth") <= 1
 
 
 def test_capability_matrix_grid_adapts_to_available_width(candidate_page):

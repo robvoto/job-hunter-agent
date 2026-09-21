@@ -516,6 +516,35 @@ function upgradeSettingsHelpBlocks() {
 function initFieldInfoDrawers() {
   const drawers = Array.from(document.querySelectorAll('details.field-info-drawer'));
   if (!drawers.length) return;
+
+  const viewportPadding = 16;
+  const panelOffset = 8;
+
+  const positionDrawer = (drawer) => {
+    if (!drawer?.open || !drawer.closest('.settings-main')) return;
+    const anchor = drawer.querySelector(':scope > summary.field-info');
+    const panel = drawer.querySelector(':scope > .field-info-panel');
+    if (!anchor || !panel) return;
+
+    const anchorRect = anchor.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+    const mainRect = drawer.closest('.settings-main')?.getBoundingClientRect();
+    const minLeft = Math.max(viewportPadding, (mainRect?.left || 0) + viewportPadding);
+    const viewportMaxLeft = window.innerWidth - panelRect.width - viewportPadding;
+    const mainMaxLeft = (mainRect?.right || window.innerWidth) - panelRect.width - viewportPadding;
+    const maxLeft = Math.max(minLeft, Math.min(viewportMaxLeft, mainMaxLeft));
+    const centeredLeft = anchorRect.left + (anchorRect.width / 2) - (panelRect.width / 2);
+    const left = Math.min(Math.max(centeredLeft, minLeft), maxLeft);
+
+    const belowTop = anchorRect.bottom + panelOffset;
+    const aboveTop = anchorRect.top - panelRect.height - panelOffset;
+    const fitsBelow = belowTop + panelRect.height <= window.innerHeight - viewportPadding;
+    const top = fitsBelow || aboveTop < viewportPadding ? belowTop : aboveTop;
+
+    panel.style.left = `${Math.round(left)}px`;
+    panel.style.top = `${Math.round(Math.max(viewportPadding, top))}px`;
+  };
+
   const closeAll = (exceptDrawer = null) => {
     drawers.forEach((drawer) => {
       if (drawer !== exceptDrawer) {
@@ -523,11 +552,22 @@ function initFieldInfoDrawers() {
       }
     });
   };
+
+  const repositionOpenDrawers = () => {
+    drawers.forEach((drawer) => {
+      if (drawer.open) positionDrawer(drawer);
+    });
+  };
+
   drawers.forEach((drawer) => {
     drawer.addEventListener('toggle', () => {
-      if (drawer.open) closeAll(drawer);
+      if (!drawer.open) return;
+      closeAll(drawer);
+      window.requestAnimationFrame(() => positionDrawer(drawer));
     });
   });
+  window.addEventListener('resize', repositionOpenDrawers);
+  window.addEventListener('scroll', repositionOpenDrawers, true);
   document.addEventListener('click', (event) => {
     if (event.target.closest('details.field-info-drawer')) return;
     closeAll();

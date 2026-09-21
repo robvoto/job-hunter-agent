@@ -140,7 +140,7 @@
   },
   "settings_clearances_labels_description": "Display labels and help text for the Clearances rules editor.",
   "settings_clearances_labels": {
-    "settings_title": "Clearances",
+    "settings_title": "Security clearances",
     "help_text": "Tell Job Hunter which Australian government clearance levels you hold. These are eligibility facts, not skills, and they are checked separately from your capability matrix. Leave a row as Not set if you do not want to record that clearance yet.",
     "add_button_aria_label": "Add clearance",
     "settings_empty_text": "No clearance options configured.",
