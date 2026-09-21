@@ -281,28 +281,26 @@
               <p id="work_mode_preference_summary" class="summary-line" aria-live="polite"></p>
             </section>
 
-            <section class="review-block review-block--full onb-field">
-              <div class="field-label-row">
+            <section class="review-block review-block--full compensation-card">
+              <div class="field-label-row compensation-card__heading">
                 <label>__JOB_HUNTER_ONBOARDING_PAGE_MINIMUM_COMPENSATION_LABEL__</label>
                 <details class="field-info-drawer">
                   <summary class="field-info" aria-label="Help for minimum compensation">i</summary>
                   <div class="field-info-panel">__JOB_HUNTER_ONBOARDING_PAGE_MINIMUM_COMPENSATION_HELP__</div>
                 </details>
               </div>
-              <div class="salary-pair">
-                <div id="salary_yearly_block">
-                  <label for="review_minimum_salary_yearly">__JOB_HUNTER_SALARY_MIN_ANNUAL_LABEL__</label>
-                  <div class="currency-input-wrap">
-                    <span class="currency-prefix">$</span>
-                    <input id="review_minimum_salary_yearly" type="text" inputmode="numeric" autocomplete="off" placeholder="140,000">
-                  </div>
+              <div id="salary_yearly_block" class="compensation-card__field">
+                <label for="review_minimum_salary_yearly">__JOB_HUNTER_SALARY_MIN_ANNUAL_LABEL__</label>
+                <div class="currency-input-wrap">
+                  <span class="currency-prefix">$</span>
+                  <input id="review_minimum_salary_yearly" type="text" inputmode="numeric" autocomplete="off" placeholder="140,000">
                 </div>
-                <div id="salary_daily_block">
-                  <label for="review_minimum_daily_rate">__JOB_HUNTER_SALARY_MIN_DAILY_LABEL__</label>
-                  <div class="currency-input-wrap">
-                    <span class="currency-prefix">$</span>
-                    <input id="review_minimum_daily_rate" type="text" inputmode="numeric" autocomplete="off" placeholder="900">
-                  </div>
+              </div>
+              <div id="salary_daily_block" class="compensation-card__field">
+                <label for="review_minimum_daily_rate">__JOB_HUNTER_SALARY_MIN_DAILY_LABEL__</label>
+                <div class="currency-input-wrap">
+                  <span class="currency-prefix">$</span>
+                  <input id="review_minimum_daily_rate" type="text" inputmode="numeric" autocomplete="off" placeholder="900">
                 </div>
               </div>
             </section>

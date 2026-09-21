@@ -36,10 +36,24 @@ def test_search_basics_reuses_review_layout_primitives():
 
     assert '<div class="review-grid">' in step_3
     assert step_3.count('<section class="review-block') == 5
-    assert 'class="review-block review-block--full onb-field"' in step_3
+    assert 'class="review-block review-block--full compensation-card"' in step_3
     assert "search-basics-grid" not in step_3
     assert "search-basics-card" not in step_3
     assert "search-basics-card-body" not in step_3
     assert ".search-basics-grid" not in onboarding_review_css
     assert ".search-basics-card" not in onboarding_review_css
     assert ".review-block--full {" in theme_widgets
+
+
+def test_compensation_card_uses_shared_review_surface_without_legacy_pair_wrapper():
+    repo_root = Path(__file__).resolve().parents[1]
+    onboarding_html = (repo_root / "templates" / "onboarding.html").read_text(encoding="utf-8")
+    theme_widgets = (
+        repo_root / "templates" / "static" / "theme" / "themes.widgets.css"
+    ).read_text(encoding="utf-8")
+
+    assert 'class="review-block review-block--full compensation-card"' in onboarding_html
+    assert 'class="compensation-card__field"' in onboarding_html
+    assert 'class="salary-pair"' not in onboarding_html
+    assert ".compensation-card {" in theme_widgets
+    assert ".salary-pair {" not in theme_widgets

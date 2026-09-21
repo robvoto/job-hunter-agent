@@ -2471,25 +2471,25 @@
   font-size: var(--text-role-status-font-size);
 }
 
-/* Shared salary/compensation pair layout used by onboarding and settings forms. */
-.salary-pair {
+/* Compact compensation card: standard review surface with two numeric fields. */
+.compensation-card {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 28px;
-  row-gap: 14px;
-  margin-top: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
+  grid-template-columns: minmax(200px, 1fr) minmax(190px, 220px) minmax(190px, 220px);
+  gap: var(--surface-gap-md) var(--surface-gap-lg);
+  align-items: start;
 }
 
-.salary-pair > div {
+.compensation-card__heading {
+  align-self: start;
+}
+
+.compensation-card__field {
   display: grid;
   gap: var(--field-label-control-gap);
   min-width: 0;
 }
 
-.salary-pair label {
+.compensation-card__field > label {
   margin: 0;
   color: var(--text-muted);
   font-size: var(--font-size-sm);
@@ -2497,12 +2497,12 @@
   line-height: var(--field-label-line-height);
 }
 
-.salary-pair .currency-input-wrap {
-  max-width: 190px;
+.compensation-card__field .currency-input-wrap {
+  width: 100%;
 }
 
 @media (max-width: 760px) {
-  .salary-pair {
+  .compensation-card {
     grid-template-columns: 1fr;
   }
 }
