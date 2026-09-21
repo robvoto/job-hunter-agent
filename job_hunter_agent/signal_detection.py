@@ -365,7 +365,7 @@ def extract_skill_observations(record: dict, profile: Optional[dict] = None) -> 
     """Return repeated capability-like signals from a kept role for review insights.
 
     These observations are intentionally conservative: we only emit positively aligned
-    competitive signals from roles we already kept, so Suggested Tuning learns from
+    competitive signals from roles we already kept, so review suggestions learn from
     viable roles rather than from noisy broad matches.
     """
     active_profile = profile or load_profile()

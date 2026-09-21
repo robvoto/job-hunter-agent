@@ -1,4 +1,4 @@
-﻿import { formatRemoveItemLabel, renderTrashActionButton } from '../common/action-buttons.js';
+import { formatRemoveItemLabel, renderTrashActionButton } from '../common/action-buttons.js';
 import * as onboardingPage from './onboarding-page.js';
 import { setSelectedLocations, hydrateSearchBasics } from './onboarding-search.js';
 import * as onboardingStorage from './onboarding-storage.js';
@@ -72,7 +72,6 @@ const onboardingFlowTitleTierLabels = window.__JOB_HUNTER_TITLE_TIER_LABELS__;
 const onboardingImportSummaryLabels = window.__JOB_HUNTER_ONBOARDING_IMPORT_SUMMARY_LABELS__;
 const onboardingFlowLabels = window.__JOB_HUNTER_ONBOARDING_FLOW_LABELS__;
 const capabilityLabels = onboardingCapabilityUi.labels;
-const capabilityIconHtml = onboardingCapabilityUi.capabilityIconHtml;
 const splitCapabilityAliasesForDisplay = onboardingCapabilityUi.splitCapabilityAliasesForDisplay;
 if (!onboardingFlowTitleTierLabels) {
   throw new Error('Missing title tier labels.');
@@ -346,7 +345,16 @@ function updateCheckStep() {
   flowRefs.checkSalaryYearly.textContent = formatCurrencySummaryValue(searchPrefs.minimum_salary_yearly);
   flowRefs.checkSalaryDaily.textContent = formatCurrencySummaryValue(searchPrefs.minimum_daily_rate);
   if (flowRefs.confirmReview) {
-    const canFinish = onboardingPage.reviewTargetTitles.length > 0 && onboardingPage.reviewCapabilityRules.length > 0;
+    let searchBasicsValid = true;
+    try {
+      validateSearchPreferences(searchPrefs);
+    } catch {
+      searchBasicsValid = false;
+    }
+    const canFinish = searchBasicsValid
+      && onboardingPage.reviewTargetTitles.length > 0
+      && onboardingPage.reviewCapabilityRules.length > 0;
+    flowRefs.confirmReview.disabled = !canFinish;
     flowRefs.confirmReview.setAttribute('aria-disabled', canFinish ? 'false' : 'true');
   }
 }
@@ -485,28 +493,38 @@ function renderReviewCapabilities() {
         <details class="capability-alias-drawer">
           <summary class="cap-alias-summary">
             <span class="capability-summary-label capability-summary-label--closed">${escapeHtml(formatLabel(capabilityLabels.related_skills_show_more, { count: remainingAliases.length }))}</span>
-            <span class="capability-summary-label capability-summary-label--open">${escapeHtml(capabilityLabels.related_skills_show_less)}</span>
+            <span class="capability-summary-label capability-summary-label--open">${escapeHtml(formatLabel(capabilityLabels.related_skills_show_less, { count: remainingAliases.length }))}</span>
           </summary>
           <div class="cap-alias-chips" aria-label="${escapeHtml(capabilityLabels.related_skills_label)}">${aliasChips}</div>
         </details>
       `;
     })();
-    const selectedClass = onboardingPage.selectedReviewCapabilityIndexes.has(index) ? ' is-selected' : '';
-    const selectedBadgeHtml = selectedClass ? `
-      <span class="review-capability-selected-badge">${escapeHtml(capabilityLabels.settings_selected_label)}</span>
+    const aliasRowHtml = rule.aliases.length ? `
+      <div class="capability-alias-row">
+        <span class="capability-alias-label">${escapeHtml(capabilityLabels.related_skills_label)}</span>
+        ${aliasPreviewHtml}
+        ${aliasHtml}
+      </div>
     ` : '';
+    const strengthMeterHtml = onboardingCapabilityUi.capabilityStrengthMeterMarkup({
+      selectedValue: rule.level,
+      groupName: `review_capability_level_${index}`,
+      inputIdPrefix: `review_capability_level_${index}`,
+      inputDataAttributes: { 'data-review-capability-level': index },
+      ariaLabel: `Capability strength for ${displayName}`,
+      helpId: `review_capability_strength_help_${index}`,
+    });
+    const selectedClass = onboardingPage.selectedReviewCapabilityIndexes.has(index) ? ' is-selected' : '';
     return `
       <article class="capability-card${selectedClass}" data-review-capability-index="${index}">
         <div class="review-capability-main">
           <span class="review-capability-head">
             <span class="review-capability-title-row">
-              ${capabilityIconHtml(rule.icon_key, displayName)}
               <strong class="review-capability-title">${escapeHtml(displayName)}</strong>
             </span>
-            ${selectedBadgeHtml}
           </span>
-          ${aliasPreviewHtml}
-          ${aliasHtml}
+          ${aliasRowHtml}
+          <div class="cap-strength">${strengthMeterHtml}</div>
         </div>
         <div class="review-capability-actions" role="group" aria-label="${escapeHtml(formatLabel(onboardingFlowLabels.capability_actions_for_label, { name: displayName }))}">
           ${renderTrashActionButton({
@@ -914,20 +932,33 @@ flowRefs.backToReviewFooter.addEventListener('click', () => setStep(REVIEW_STEP)
 flowRefs.backToSearchBasicsFooter.addEventListener('click', () => setStep(SEARCH_STEP));
 flowRefs.editDraftProfile.addEventListener('click', () => setStep(REVIEW_STEP));
 flowRefs.editSearchBasics.addEventListener('click', () => setStep(SEARCH_STEP));
+async function navigateFromProgress(targetStep) {
+  const currentStep = onboardingPage.currentStep;
+  if (!targetStep || targetStep === currentStep) return;
+  if (targetStep < currentStep) {
+    setStep(targetStep);
+    return;
+  }
+  if (targetStep !== currentStep + 1) return;
+  if (currentStep === REVIEW_STEP && targetStep === SEARCH_STEP) {
+    continueFromReview();
+    return;
+  }
+  if (currentStep === SEARCH_STEP && targetStep === CHECK_STEP) {
+    await continueFromSearchBasics();
+    return;
+  }
+  setStep(targetStep);
+}
+
 stepNavButtons.forEach((button) => {
   button.addEventListener('click', () => {
     if (button.disabled) return;
     const targetStep = Number(button.dataset.stepNav || 0);
-    if (!targetStep || targetStep === onboardingPage.currentStep) return;
-    setStep(targetStep);
+    navigateFromProgress(targetStep).catch((error) => {
+      showStatus(error.message, 'error');
+    });
   });
-});
-flowRefs.wizardProgressSteps?.addEventListener('click', (event) => {
-  const trigger = event.target.closest('[data-step-nav]');
-  if (!trigger || trigger.disabled) return;
-  const targetStep = Number(trigger.dataset.stepNav || 0);
-  if (!targetStep || targetStep === onboardingPage.currentStep) return;
-  setStep(targetStep);
 });
 
 flowRefs.reviewAddTargetTitle.addEventListener('click', () => {
@@ -1014,12 +1045,13 @@ flowRefs.reviewStepRoot.addEventListener('click', (event) => {
     onboardingStorage.saveWizardState();
     return;
   }
-    const capabilityRow = event.target.closest('[data-review-capability-index]');
-    if (
-      capabilityRow
-      && !event.target.closest('.capability-alias-drawer')
-      && !event.target.closest('button')
-    ) {
+  const capabilityRow = event.target.closest('[data-review-capability-index]');
+  if (
+    capabilityRow
+    && !event.target.closest('.capability-alias-drawer')
+    && !event.target.closest('.capability-strength-meter')
+    && !event.target.closest('button')
+  ) {
     const index = Number(capabilityRow.dataset.reviewCapabilityIndex);
     const nextChecked = !onboardingPage.selectedReviewCapabilityIndexes.has(index);
     toggleSelectedReviewCapability(index, nextChecked);
@@ -1058,6 +1090,24 @@ document.querySelectorAll('input[name="engagement_type"]').forEach((input) => {
   });
 });
 
+flowRefs.reviewStepRoot.addEventListener('change', (event) => {
+  const strengthInput = event.target.closest('input[type="radio"][data-review-capability-level]');
+  if (!strengthInput) return;
+  const index = Number(strengthInput.dataset.reviewCapabilityLevel);
+  const rule = onboardingPage.reviewCapabilityRules[index];
+  if (!rule) return;
+  onboardingPage.reviewCapabilityRules[index] = {
+    ...rule,
+    level: strengthInput.value,
+  };
+  onboardingCapabilityUi.updateCapabilityStrengthMeter(
+    strengthInput.closest('.capability-strength-meter'),
+    strengthInput.value,
+  );
+  onboardingStorage.saveWizardState();
+  hideStatus();
+});
+
 flowRefs.reviewStepRoot.addEventListener('keydown', (event) => {
   if (event.key === 'Enter' && event.target.id === 'review_target_titles_input') {
     event.preventDefault();
@@ -1075,6 +1125,16 @@ flowRefs.reviewStepRoot.addEventListener('keydown', (event) => {
 ].filter(Boolean).forEach((input) => {
   onboardingCurrencyUi.bindCurrencyInput?.(input);
 });
+flowRefs.locationSearch?.addEventListener('change', (event) => {
+  if (!event.target.matches('input[type="checkbox"][data-location-value]')) return;
+  hideStatus();
+  onboardingPage.syncSelectedLocationsFromSelect();
+  onboardingStorage.saveWizardState();
+  if (typeof scheduleSearchBasicsPersistence === 'function') {
+    onboardingStorage.scheduleSearchBasicsPersistence();
+  }
+});
+
 document.querySelectorAll('input[name="prefer_sector"]').forEach((input) => {
   input.addEventListener('change', () => {
     hideStatus();

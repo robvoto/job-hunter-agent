@@ -35,10 +35,12 @@
 
   /* Shared page layout sizing */
   --content-shell-max-width: 1360px;
+  --wide-shell-max-width: 1560px;
   --reading-column-max-width: 50rem;
 
-  /* Shared onboarding layout sizing */
-  --onboarding-shell-max-width: 980px;
+  /* Settings and onboarding can use more horizontal space for dense review/editing grids. */
+  --settings-shell-max-width: var(--wide-shell-max-width);
+  --onboarding-shell-max-width: var(--wide-shell-max-width);
   --onboarding-shell-padding-top: 24px;
   --onboarding-shell-padding-inline: var(--surface-pad-inline-sm);
   --onboarding-shell-padding-bottom: 44px;

@@ -124,7 +124,7 @@ def test_choice_badge_and_action_families_are_reused_across_screens():
     assert 'choice-card jh-choice {escape(card_class)}' in helpers
     assert 'choice-strip jh-choice-group' in helpers
     assert '.workspace-controls .workspace-quick-filter {' not in widgets
-    assert 'choice-card jh-choice choice-card--strength' in review_panel
+    assert 'capabilityUi.capabilityStrengthMeterMarkup({' in review_panel
     assert 'badge jh-badge {safe_html(class_name)}' in score_labels
     assert 'job-requirement-status jh-badge' not in renderer
     assert 'title-block-btn workspace-text-action workspace-text-action--muted' in renderer

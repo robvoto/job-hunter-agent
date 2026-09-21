@@ -4,6 +4,7 @@ a human toggling a checkbox and clicking Save would experience it."""
 from __future__ import annotations
 
 import os
+import re
 
 from playwright.sync_api import expect
 
@@ -55,6 +56,35 @@ def _seed_candidate_capabilities(email: str, capabilities: list[dict[str, object
                 for item in capabilities
                 if str(item.get("name") or "").strip()
             },
+        )
+    finally:
+        set_user_id(None)
+
+
+def _seed_profile_facts(email: str) -> None:
+    from job_hunter_agent.auth import get_or_create_user
+    from job_hunter_agent.profile_store import (
+        KEY_CANDIDATE_ELIGIBILITY_FACTS,
+        KEY_CANDIDATE_QUALIFICATIONS,
+        patch_profile,
+    )
+    from job_hunter_agent.user_context import set_user_id
+
+    admin_email = os.environ["JOB_HUNTER_ADMIN_EMAIL"]
+    user = get_or_create_user(email, admin_email)
+    set_user_id(user["user_id"])
+    try:
+        patch_profile(
+            {
+                KEY_CANDIDATE_ELIGIBILITY_FACTS: [
+                    {"name": "Australian Citizenship", "value": True, "evidence": []},
+                    {"name": "Unrestricted work rights", "value": True, "evidence": []},
+                ],
+                KEY_CANDIDATE_QUALIFICATIONS: [
+                    {"name": "Bachelor of Information Technology", "value": True, "aliases": [], "evidence": []},
+                    {"name": "CBAP", "value": True, "aliases": [], "evidence": []},
+                ],
+            }
         )
     finally:
         set_user_id(None)
@@ -235,19 +265,41 @@ def test_capability_alias_preview_uses_related_skills_copy(candidate_page):
     card = page.locator("#capability_matrix_editor .capability-card").first
     card.wait_for(state="visible")
 
+    meter = card.locator(".capability-strength-meter")
+    expect(meter.locator(".capability-strength-dot")).to_have_count(3)
+    expect(meter.locator(".capability-strength-dot.is-filled")).to_have_count(3)
+    expect(meter.locator(".capability-strength-label")).to_have_text("Strong")
+
+    # Capability Matrix keeps the capability name and saved strength on one compact row.
+    name_box = card.locator(".capability-card-head").bounding_box()
+    meter_box = meter.bounding_box()
+    assert name_box and meter_box
+    assert abs((name_box["y"] + name_box["height"] / 2) - (meter_box["y"] + meter_box["height"] / 2)) <= 3
+
+    tooltip = meter.locator(".capability-strength-tooltip")
+    expect(tooltip).to_have_css("visibility", "hidden")
+    meter.hover()
+    page.wait_for_timeout(400)
+    expect(tooltip).to_have_css("visibility", "hidden")
+    page.wait_for_timeout(2800)
+    expect(tooltip).to_have_css("visibility", "visible")
+    page.mouse.move(0, 0)
+    expect(tooltip).to_have_css("visibility", "hidden")
+
+    expect(card.locator(".capability-alias-label")).to_have_text("Related skills")
     preview = card.locator(".capability-alias-preview")
     expect(preview).to_contain_text("scrum")
     expect(preview).to_contain_text("lean delivery")
     assert preview.locator(".cap-alias-chip--preview").count() == 2
 
     summary = card.locator(".capability-summary-label--closed")
-    expect(summary).to_have_text("Show 4 more")
-    assert "+4 more" not in (card.text_content() or "")
+    expect(summary).to_have_text("+4 more")
+    assert "Show 4 more" not in (card.text_content() or "")
 
     drawer = card.locator("details.capability-alias-drawer")
     card.locator(".cap-alias-summary").click()
     expect(drawer).to_have_attribute("open", "")
-    expect(card.locator(".capability-summary-label--open")).to_have_text("Show less")
+    expect(card.locator(".capability-summary-label--open")).to_have_text("Hide 4")
     expanded_aliases = drawer.locator(".cap-alias-chips")
     expect(expanded_aliases.locator(".cap-alias-chip-label")).to_have_text(
         [
@@ -259,7 +311,7 @@ def test_capability_alias_preview_uses_related_skills_copy(candidate_page):
     )
     card.locator(".cap-alias-summary").click()
     expect(drawer).not_to_have_attribute("open", "")
-    expect(summary).to_have_text("Show 4 more")
+    expect(summary).to_have_text("+4 more")
 
 
 def test_capability_related_skills_disclosure_hides_only_actual_remaining_skills(candidate_page):
@@ -296,7 +348,46 @@ def test_capability_related_skills_disclosure_hides_only_actual_remaining_skills
         'input.capability-card-name[value="One Hidden Skill"]'
     ).locator("xpath=ancestor::article[contains(@class, 'capability-card')]")
     expect(one_hidden_card.locator(".capability-alias-preview .cap-alias-chip")).to_have_count(2)
-    expect(one_hidden_card.locator(".capability-summary-label--closed")).to_have_text("Show 1 more")
+    expect(one_hidden_card.locator(".capability-summary-label--closed")).to_have_text("+1 more")
+    preview_box = one_hidden_card.locator(".capability-alias-preview").bounding_box()
+    more_box = one_hidden_card.locator(".cap-alias-summary").bounding_box()
+    assert preview_box and more_box
+    assert abs((preview_box["y"] + preview_box["height"] / 2) - (more_box["y"] + more_box["height"] / 2)) <= 4
+    assert more_box["x"] > preview_box["x"]
+
+
+def test_settings_label_info_rows_share_alignment_and_single_spacing(candidate_page):
+    page = candidate_page
+    page.goto("/settings#section-matrix")
+
+    preferred_row = page.locator('label[for="target_roles_add"]').locator("xpath=parent::*")
+    expect(preferred_row).to_have_class(re.compile(r"\bfield-label-row\b"))
+    label_box = preferred_row.locator('label[for="target_roles_add"]').bounding_box()
+    info_box = preferred_row.locator('.field-info').bounding_box()
+    assert label_box and info_box
+    assert abs((label_box["y"] + label_box["height"] / 2) - (info_box["y"] + info_box["height"] / 2)) <= 2
+
+    preferred_field = preferred_row.locator("xpath=parent::*")
+    row_box = preferred_row.bounding_box()
+    badge_box = preferred_field.locator('.badge-editor').bounding_box()
+    assert row_box and badge_box
+    # One shared field gap: no second hard-coded 12px margin may stack on top.
+    assert 8 <= badge_box["y"] - (row_box["y"] + row_box["height"]) <= 16
+
+    role_copy = page.locator('#section-matrix .search-settings-subcard').first.locator(':scope > .panel-copy')
+    role_copy_box = role_copy.bounding_box()
+    preferred_box = preferred_row.bounding_box()
+    assert role_copy_box and preferred_box
+    assert preferred_box["y"] - (role_copy_box["y"] + role_copy_box["height"]) >= 12
+
+    page.locator('[data-section="section-rules"]').click()
+    for control_id in ("must_not_require_skills_add", "reject_description_phrase_rules_add"):
+        row = page.locator(f'label[for="{control_id}"]').locator("xpath=parent::*")
+        expect(row).to_have_class(re.compile(r"\bfield-label-row\b"))
+        label = row.locator(f'label[for="{control_id}"]').bounding_box()
+        info = row.locator('.field-info').bounding_box()
+        assert label and info
+        assert abs((label["y"] + label["height"] / 2) - (info["y"] + info["height"] / 2)) <= 3
 
 
 def test_capability_related_skills_beyond_alias_limit_survive_settings_save(candidate_page):
@@ -352,7 +443,7 @@ def test_capability_related_skills_beyond_alias_limit_survive_settings_save(cand
     reloaded_card.wait_for(state="visible")
 
     summary = reloaded_card.locator(".capability-summary-label--closed")
-    expect(summary).to_have_text(f"Show {len(related_skills) - 2} more")
+    expect(summary).to_have_text(f"+{len(related_skills) - 2} more")
 
     drawer = reloaded_card.locator("details.capability-alias-drawer")
     reloaded_card.locator(".cap-alias-summary").click()
@@ -397,9 +488,105 @@ def test_role_entry_adds_directly_without_role_family_popup(candidate_page):
     expect(page.locator("#also_consider_roles_chips")).to_contain_text("SAP S/4HANA Consultant")
 
 
+def test_profile_facts_stay_compact_and_help_stays_inside_settings_content(candidate_page):
+    _seed_profile_facts("candidate@e2e.test")
+
+    page = candidate_page
+    page.set_viewport_size({"width": 1920, "height": 1080})
+    page.goto("/settings#section-matrix")
+
+    expect(page.locator("#eligibility_group_title")).to_have_text("Eligibility")
+    expect(page.locator("#clearance_editor_title")).to_have_text("Security clearances")
+
+    parent_size = float(page.locator("#eligibility_group_title").evaluate("el => parseFloat(getComputedStyle(el).fontSize)"))
+    child_size = float(page.locator("#clearance_editor_title").evaluate("el => parseFloat(getComputedStyle(el).fontSize)"))
+    assert parent_size > child_size
+
+    clearance_cards = page.locator("#clearance_editor .profile-fact-card")
+    expect(clearance_cards).to_have_count(4)
+    clearance_boxes = [clearance_cards.nth(i).bounding_box() for i in range(4)]
+    assert all(clearance_boxes)
+    assert max(box["width"] for box in clearance_boxes) <= 342
+    assert max(abs(box["y"] - clearance_boxes[0]["y"]) for box in clearance_boxes[1:]) <= 3
+
+    eligibility_cards = page.locator("#eligibility_editor .profile-fact-card")
+    qualification_cards = page.locator("#qualification_editor .profile-fact-card")
+    expect(eligibility_cards).to_have_count(2)
+    expect(qualification_cards).to_have_count(2)
+    assert eligibility_cards.first.bounding_box()["width"] <= 342
+    assert qualification_cards.first.bounding_box()["width"] <= 342
+    expect(page.locator("#eligibility_editor .capability-card")).to_have_count(0)
+    expect(page.locator("#qualification_editor .capability-card")).to_have_count(0)
+    expect(page.locator("#clearance_editor .capability-card")).to_have_count(0)
+
+    add_box = page.locator("#eligibility_name_add").bounding_box()
+    assert add_box and add_box["width"] < 850
+
+    help_summary = page.locator("#eligibility_group_title + details > summary")
+    help_summary.click()
+    help_panel = page.locator("#eligibility_group_help")
+    expect(help_panel).to_be_visible()
+    panel_box = help_panel.bounding_box()
+    main_box = page.locator(".settings-main").bounding_box()
+    assert panel_box and main_box
+    assert panel_box["x"] >= main_box["x"] + 15
+    assert panel_box["x"] + panel_box["width"] <= main_box["x"] + main_box["width"] - 15
+    assert panel_box["x"] >= 16
+    assert panel_box["x"] + panel_box["width"] <= 1904
+
+    # At the responsive Settings breakpoint the help panel must still stay inside
+    # the content/viewport rather than drifting behind the former left sidebar.
+    page.set_viewport_size({"width": 820, "height": 1000})
+    page.locator("#eligibility_group_title").scroll_into_view_if_needed()
+    page.wait_for_function(
+        "() => { const p = document.getElementById('eligibility_group_help'); return p && p.getBoundingClientRect().right <= innerWidth - 15; }"
+    )
+    narrow_panel_box = help_panel.bounding_box()
+    narrow_main_box = page.locator(".settings-main").bounding_box()
+    assert narrow_panel_box and narrow_main_box
+    assert narrow_panel_box["x"] >= narrow_main_box["x"] + 15
+    assert narrow_panel_box["x"] + narrow_panel_box["width"] <= 805
+    assert page.evaluate("document.documentElement.scrollWidth - window.innerWidth") <= 1
+
+
+def test_capability_matrix_grid_adapts_to_available_width(candidate_page):
+    _seed_candidate_capabilities(
+        "candidate@e2e.test",
+        [
+            {"name": "capability one", "level": "strong", "aliases": ["one"], "icon_key": "generic"},
+            {"name": "capability two", "level": "working", "aliases": ["two"], "icon_key": "generic"},
+            {"name": "capability three", "level": "basic", "aliases": ["three"], "icon_key": "generic"},
+            {"name": "capability four", "level": "strong", "aliases": ["four"], "icon_key": "generic"},
+        ],
+    )
+
+    page = candidate_page
+    page.set_viewport_size({"width": 1920, "height": 1080})
+    page.goto("/settings#section-matrix")
+    cards = page.locator("#capability_matrix_editor .capability-card")
+    expect(cards).to_have_count(4)
+
+    wide_boxes = [cards.nth(i).bounding_box() for i in range(3)]
+    assert all(wide_boxes)
+    assert max(abs(box["y"] - wide_boxes[0]["y"]) for box in wide_boxes[1:]) <= 3
+
+    page.set_viewport_size({"width": 1400, "height": 1000})
+    desktop_boxes = [cards.nth(i).bounding_box() for i in range(3)]
+    assert all(desktop_boxes)
+    assert abs(desktop_boxes[0]["y"] - desktop_boxes[1]["y"]) <= 3
+    assert desktop_boxes[2]["y"] > desktop_boxes[0]["y"] + 20
+
+    page.set_viewport_size({"width": 820, "height": 1000})
+    narrow_boxes = [cards.nth(i).bounding_box() for i in range(3)]
+    assert all(narrow_boxes)
+    assert narrow_boxes[1]["y"] > narrow_boxes[0]["y"] + 20
+    assert narrow_boxes[2]["y"] > narrow_boxes[1]["y"] + 20
+
+
 def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
     page = candidate_page
     decisions = []
+    returned_profile = None
     review_payload = {
         "suggested_tuning": {
             "capability_suggestions": [
@@ -409,9 +596,38 @@ def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
                     "recommended_choice": "working",
                     "recommended_label": "Working",
                     "examples": [],
+                },
+                {
+                    "skill": "Mentoring",
+                    "count": 2,
+                    "recommended_choice": "working",
+                    "recommended_label": "Working",
+                    "examples": [],
+                },
+                {
+                    "skill": "Technical documentation",
+                    "count": 2,
+                    "recommended_choice": "working",
+                    "recommended_label": "Working",
+                    "examples": [],
+                },
+            ],
+            "requirement_suggestions": [
+                {
+                    "kind": "requirement",
+                    "skill": "Power BI",
+                    "count": 3,
+                    "aliases": ["Power BI required"],
+                    "examples": [
+                        {
+                            "title": "Senior Business Analyst",
+                            "company": "Example Co",
+                            "url": "https://example.test/power-bi",
+                            "search_location": "Sydney",
+                        }
+                    ],
                 }
             ],
-            "requirement_suggestions": [],
             "optimization_suggestions": [],
             "rule_suggestions": [],
             "summary": {"capability_count": 1},
@@ -426,13 +642,63 @@ def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
         route.fulfill(
             status=200,
             content_type="application/json",
-            json={"ok": True, "profile": None},
+            json={"ok": True, "profile": returned_profile},
         )
 
     page.route("**/api/review-data", handle_review_data)
     page.route("**/api/tuning-decisions", handle_tuning_decision)
     page.goto("/settings")
+    returned_profile = page.evaluate("async () => await (await fetch('/api/profile')).json()")
+    returned_profile["candidate_capabilities"] = [
+        *(returned_profile.get("candidate_capabilities") or []),
+        {"name": "Power BI", "level": "working", "aliases": ["Power BI required"], "icon_key": "generic"},
+    ]
     page.locator('[data-section="section-optimise"]').click()
+
+    review_head = page.locator("#section-optimise .search-settings-subcard > .settings-card-title-row")
+    expect(review_head.locator("h3")).to_have_text("Review Suggestions (3)")
+    count = review_head.locator(".settings-heading-count")
+    heading_size = float(review_head.locator("h3").evaluate("el => parseFloat(getComputedStyle(el).fontSize)"))
+    count_size = float(count.evaluate("el => parseFloat(getComputedStyle(el).fontSize)"))
+    assert count_size < heading_size
+    info = review_head.locator(".field-info-drawer")
+    expect(info).to_have_count(1)
+    expect(info.locator("summary")).to_have_attribute("aria-label", "About review suggestions")
+    expect(info.locator(".field-info-panel")).to_contain_text("Matching → Capability Matrix")
+    expect(info.locator(".field-info-panel")).to_contain_text("will not be suggested again")
+    expect(page.locator("#section-optimise .optimise-review-info")).to_have_count(0)
+    expect(page.locator("#section-optimise")).not_to_contain_text("These are suggestions only")
+    expect(page.locator("#tuning_suggestions_panel")).not_to_contain_text("Capabilities are the proven work strengths")
+    expect(page.locator("#tuning_suggestions_panel")).not_to_contain_text("Capabilities to review")
+    expect(page.locator("#tuning_suggestions_panel")).not_to_contain_text("Capabilities to verify")
+    expect(page.locator("#tuning_suggestions_panel")).not_to_contain_text("Things Job Hunter found repeatedly that may belong in your Capability Matrix.")
+
+    title_box = review_head.locator("h3").bounding_box()
+    info_box = review_head.locator(".field-info").bounding_box()
+    assert title_box and info_box
+    assert abs((title_box["y"] + title_box["height"] / 2) - (info_box["y"] + info_box["height"] / 2)) <= 2
+
+    capability_cards = page.locator('#tuning_suggestions_panel .review-list > .review-card[data-review-kind="capability"]')
+    expect(capability_cards).to_have_count(3)
+
+    # Optimise adapts to available width instead of hard-coding two cards per row.
+    page.set_viewport_size({"width": 1920, "height": 1080})
+    wide_boxes = [capability_cards.nth(i).bounding_box() for i in range(3)]
+    assert all(wide_boxes)
+    assert max(abs(box["y"] - wide_boxes[0]["y"]) for box in wide_boxes[1:]) <= 3
+
+    page.set_viewport_size({"width": 1400, "height": 1000})
+    desktop_boxes = [capability_cards.nth(i).bounding_box() for i in range(3)]
+    assert all(desktop_boxes)
+    assert abs(desktop_boxes[0]["y"] - desktop_boxes[1]["y"]) <= 3
+    assert desktop_boxes[2]["y"] > desktop_boxes[0]["y"] + 20
+
+    page.set_viewport_size({"width": 820, "height": 1000})
+    narrow_boxes = [capability_cards.nth(i).bounding_box() for i in range(3)]
+    assert all(narrow_boxes)
+    assert narrow_boxes[1]["y"] > narrow_boxes[0]["y"] + 20
+    assert narrow_boxes[2]["y"] > narrow_boxes[1]["y"] + 20
+    page.set_viewport_size({"width": 1400, "height": 1000})
 
     card = page.locator("#tuning_suggestions_panel .review-card").filter(has_text="Power BI")
     expect(card).to_be_visible()
@@ -440,8 +706,55 @@ def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
     dismiss_button = card.locator(".decline-skill-btn")
     expect(no_button).to_have_text("No, I don't have this")
     expect(dismiss_button).to_have_text("Ignore suggestion")
+    expect(card).not_to_contain_text("Suggested: Working")
+    expect(card).not_to_contain_text("What this choice means")
+    expect(card.locator(".review-card-count")).to_have_text("Seen in 3 kept roles")
+    expect(card).not_to_contain_text("How strong is this capability for you?")
+    expect(card.locator(".review-strength-question")).to_have_count(0)
+    meter = card.locator(".capability-strength-meter")
+    expect(meter.locator(".capability-strength-dot")).to_have_count(3)
+    expect(meter.locator(".capability-strength-label")).to_have_text("Select strength")
+    expect(card.locator('input[type="radio"]:checked')).to_have_count(0)
+
+    # Optimise uses the same compact decision-row pattern: title + strength, count at right.
+    capability_title_box = card.locator(".review-card-heading h3").bounding_box()
+    suggestion_meter_box = meter.bounding_box()
+    count_box = card.locator(".review-card-count").bounding_box()
+    assert capability_title_box and suggestion_meter_box and count_box
+    title_center_y = capability_title_box["y"] + capability_title_box["height"] / 2
+    meter_center_y = suggestion_meter_box["y"] + suggestion_meter_box["height"] / 2
+    count_center_y = count_box["y"] + count_box["height"] / 2
+    assert abs(title_center_y - meter_center_y) <= 3
+    assert abs(title_center_y - count_center_y) <= 3
+    assert count_box["x"] > suggestion_meter_box["x"]
+    confirm_button = card.locator(".confirm-skill-btn")
+    expect(confirm_button).to_be_disabled()
+    card.locator('label[for="skill-choice-0_working"]').click()
     expect(card.locator('input[value="working"]')).to_be_checked()
-    expect(card.locator(".confirm-skill-btn")).to_be_enabled()
+    expect(meter.locator(".capability-strength-label")).to_have_text("Working")
+    expect(meter.locator(".capability-strength-dot.is-filled")).to_have_count(2)
+    expect(confirm_button).to_be_enabled()
+    expect(card.locator(".review-evidence summary")).to_have_text("Why Job Hunter suggested this")
+    card.locator(".review-evidence summary").click()
+    expect(card.locator(".review-evidence")).to_contain_text("Found repeatedly across 3 jobs you kept.")
+    expect(card.locator(".review-evidence")).to_contain_text("Job ads explicitly asked for:")
+    expect(card.locator(".review-evidence")).to_contain_text("Power BI required")
+    expect(page.locator("#tuning_suggestions_panel .review-card").filter(has_text="Power BI")).to_have_count(1)
+
+    with page.expect_request("**/api/tuning-decisions") as confirm_request:
+        confirm_button.click()
+    assert confirm_request.value.post_data_json["decisions"][0]["choice"] == "working"
+    expect(page.locator("#status")).to_contain_text("Added Power BI — Working.")
+    expect(page.locator("#status")).not_to_contain_text("fillForm is not defined")
+    expect(card).to_have_count(0)
+
+    # Exercise factual absence from a fresh render.
+    page.reload()
+    page.locator('[data-section="section-optimise"]').click()
+    card = page.locator("#tuning_suggestions_panel .review-card").filter(has_text="Power BI")
+    expect(card).to_be_visible()
+    no_button = card.locator(".do-not-have-skill-btn")
+    dismiss_button = card.locator(".decline-skill-btn")
 
     no_box = no_button.bounding_box()
     dismiss_box = dismiss_button.bounding_box()
@@ -461,3 +774,49 @@ def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
     with page.expect_request("**/api/tuning-decisions") as dismiss_request:
         card.locator(".decline-skill-btn").click()
     assert dismiss_request.value.post_data_json["decisions"][0]["choice"] == "dismiss"
+
+
+def test_search_basics_shared_layout_stays_balanced_at_settings_width(candidate_page):
+    """Protect the shared Search Basics geometry inside the narrower Settings shell."""
+    page = candidate_page
+    page.set_viewport_size({"width": 1400, "height": 1000})
+    page.goto("/settings#section-search")
+
+    locations = page.locator("#locations")
+    groups = locations.locator(".location-checkbox-group")
+    expect(groups).to_have_count(3)
+
+    def box(locator):
+        result = locator.bounding_box()
+        assert result is not None
+        return result
+
+    # Settings has enough room for all three location groups. Never orphan
+    # Territories on a centred second row.
+    group_boxes = [box(groups.nth(i)) for i in range(3)]
+    assert max(abs(group_boxes[i]["y"] - group_boxes[0]["y"]) for i in range(1, 3)) < 8
+
+    basics = page.locator(".search-basics-fields")
+    preference_groups = basics.locator(".search-preference-groups")
+    compensation = basics.locator(".search-compensation-group")
+    preference_items = preference_groups.locator(":scope > .settings-form-field")
+    expect(preference_items).to_have_count(3)
+
+    # In the narrower Settings shell, compensation drops below so the three
+    # search preference controls keep one coherent row.
+    pref_box = box(preference_groups)
+    compensation_box = box(compensation)
+    assert compensation_box["y"] > pref_box["y"] + pref_box["height"] - 8
+    item_boxes = [box(preference_items.nth(i)) for i in range(3)]
+    assert max(abs(item_boxes[i]["y"] - item_boxes[0]["y"]) for i in range(1, 3)) < 8
+
+    salary_fields = compensation.locator(".salary-preference-fields > .settings-form-field")
+    expect(salary_fields).to_have_count(2)
+    annual_box = box(salary_fields.nth(0))
+    daily_box = box(salary_fields.nth(1))
+    assert abs(annual_box["y"] - daily_box["y"]) < 8
+    salary_gap = daily_box["x"] - (annual_box["x"] + annual_box["width"])
+    assert 16 <= salary_gap <= 64, f"salary field gap is {salary_gap}px"
+
+    overflow = page.evaluate("document.documentElement.scrollWidth - window.innerWidth")
+    assert overflow <= 1, f"settings search horizontal overflow is {overflow}px"

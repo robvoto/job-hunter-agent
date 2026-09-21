@@ -482,29 +482,6 @@ body {
   width: 100%;
 }
 
-.capability-shell .capability-alias-drawer {
-  width: 100%;
-}
-
-.capability-shell .cap-alias-summary {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 6px;
-  width: 100%;
-  align-items: start;
-  margin-top: 10px;
-  padding-left: var(--surface-gap-sm);
-}
-
-.capability-shell .cap-alias-chips {
-  margin-top: 8px;
-  padding-left: var(--surface-gap-sm);
-}
-
-.capability-shell .capability-alias-preview {
-  margin-top: 8px;
-  padding-left: var(--surface-gap-sm);
-}
 
 .review-capability-topbar {
   display: block;
@@ -584,9 +561,11 @@ body {
 
 .review-capability-row-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 14px;
   width: 100%;
+  min-width: 0;
+  align-items: stretch;
 }
 
 .capability-card {
@@ -594,8 +573,9 @@ body {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   width: 100%;
-  gap: var(--onboarding-page-grid-gap);
-  padding: 10px 12px;
+  min-width: 0;
+  gap: 12px;
+  padding: 14px;
   border-radius: var(--radius-md);
   transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
   cursor: pointer;
@@ -615,7 +595,7 @@ body {
 
 .review-capability-main {
   display: grid;
-  gap: 4px;
+  gap: 10px;
   min-width: 0;
   margin: 0;
 }
@@ -626,25 +606,6 @@ body {
   justify-content: space-between;
   gap: 8px;
   min-width: 0;
-}
-
-.review-capability-selected-badge {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--selection-accent);
-  color: var(--button-text);
-  font-size: var(--font-size-3xs);
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.capability-card.is-selected .review-capability-selected-badge {
-  display: inline-flex;
 }
 
 .review-capability-state {
@@ -762,12 +723,19 @@ body {
 
   .review-grid,
   .check-grid,
-  .guidance-grid,
-.setting-row,
+  .guidance-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .setting-row,
   .location-input-row,
   .chip-editor-row {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .review-capability-row-list {
+    grid-template-columns: 1fr;
   }
 
   .capability-card {

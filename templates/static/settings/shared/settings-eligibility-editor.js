@@ -82,14 +82,11 @@ export const JobHunterEligibilityEditor = (function () {
     const cards = factState.map((fact, index) => {
       const toggleId = `eligibility_toggle_${index}`;
       return `
-        <article class="capability-card eligibility-card" data-eligibility-index="${index}">
-          <div class="capability-card-main eligibility-card-main">
-            <div class="eligibility-card-copy">
-              <label class="eligibility-card-title" for="eligibility_name_${index}">${escapeHtml(labels.eligibility_name_label)}</label>
-              <input id="eligibility_name_${index}" class="token-input-field" data-eligibility-field="name" data-eligibility-index="${index}" value="${escapeHtml(fact.name)}">
-            </div>
+        <article class="profile-fact-card" data-eligibility-index="${index}">
+          <div class="profile-fact-copy">
+            <input id="eligibility_name_${index}" class="profile-fact-name-input" aria-label="${escapeHtml(labels.eligibility_name_label)}" data-eligibility-field="name" data-eligibility-index="${index}" value="${escapeHtml(fact.name)}">
           </div>
-          <div class="capability-card-actions eligibility-card-actions">
+          <div class="profile-fact-actions">
             <label class="toggle-switch toggle-switch--compact" for="${toggleId}">
               <span class="toggle-switch-control">
                 <input id="${toggleId}" type="checkbox" role="switch" data-eligibility-field="value" data-eligibility-index="${index}"${fact.value ? ' checked' : ''}>
@@ -106,7 +103,7 @@ export const JobHunterEligibilityEditor = (function () {
           </div>
         </article>`;
     }).join('');
-    container.innerHTML = cards ? `<div class="capability-grid eligibility-grid">${cards}</div>` : `<p class="panel-copy">${escapeHtml(labels.eligibility_empty_text)}</p>`;
+    container.innerHTML = cards ? `<div class="profile-fact-grid">${cards}</div>` : `<p class="panel-copy">${escapeHtml(labels.eligibility_empty_text)}</p>`;
   }
 
   function setEligibilityFactState(facts) {

@@ -1,4 +1,4 @@
-    /* Variables supplied by themes.css */
+﻿    /* Variables supplied by themes.css */
     * { box-sizing: border-box; }
     body {
       margin: 0;
@@ -189,9 +189,7 @@
       background: var(--bg-surface);
     }
     .settings-main { flex: 1; min-width: 0; background: var(--bg-page); padding-bottom: 120px; }
-    .settings-content-area { max-width: 1100px; margin: 0 auto; padding: 32px var(--surface-pad-inline-lg); }
-    /* Local layout exception: Signals uses the same wide content ceiling as Workspace when the monitor allows it. */
-    .settings-content-area:has(#section-learning.is-active) { max-width: var(--content-shell-max-width); }
+    .settings-content-area { max-width: var(--settings-shell-max-width); margin: 0 auto; padding: 32px var(--surface-pad-inline-lg); }
     .settings-group { display: none; }
     .settings-group.is-active { display: block; animation: slideIn 0.25s cubic-bezier(0.2, 0.8, 0.2, 1); }
     .settings-group.is-search-result { display: block; animation: slideIn 0.25s cubic-bezier(0.2, 0.8, 0.2, 1); }
@@ -762,8 +760,9 @@
     #must_not_require_skills { min-height: 120px; }
     .technical-rule-source { display: none; }
     .advanced-shell {
+      width: 100%;
+      max-width: none;
       padding: var(--surface-pad-block-lg) var(--surface-pad-inline-lg);
-      max-width: 1240px;
       margin: 0 auto;
     }
     .advanced-shell > .settings-section-head {
@@ -816,6 +815,25 @@
       max-height: 72vh;
       overflow-y: auto;
       padding-right: 4px;
+      scrollbar-width: thin;
+      scrollbar-color: color-mix(in srgb, var(--text-muted) 46%, transparent) transparent;
+      scrollbar-gutter: stable;
+    }
+    .capability-editor::-webkit-scrollbar {
+      width: 8px;
+    }
+    .capability-editor::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .capability-editor::-webkit-scrollbar-thumb {
+      border: 2px solid transparent;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--text-muted) 46%, transparent);
+      background-clip: padding-box;
+    }
+    .capability-editor::-webkit-scrollbar-thumb:hover {
+      background: color-mix(in srgb, var(--text-muted) 68%, transparent);
+      background-clip: padding-box;
     }
     .capability-group-head {
       display: flex;
@@ -858,8 +876,23 @@
     }
     .capability-card-main {
       display: grid;
+      grid-template-columns: minmax(0, 1fr) max-content;
       gap: 10px;
       min-width: 0;
+      align-items: center;
+    }
+    .capability-card-main > .capability-card-head {
+      grid-column: 1;
+      grid-row: 1;
+    }
+    .capability-card-main > .cap-strength {
+      grid-column: 2;
+      grid-row: 1;
+      margin: 0;
+    }
+    .capability-card-main > .capability-alias-row {
+      grid-column: 1 / -1;
+      grid-row: 2;
     }
     .capability-card-head {
       display: flex;
@@ -871,28 +904,6 @@
     .capability-card-name {
       flex: 1 1 auto;
       min-width: 0;
-    }
-    .capability-alias-row {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 6px 10px;
-      min-width: 0;
-    }
-    .capability-alias-preview {
-      display: inline-flex;
-      flex-wrap: wrap;
-      gap: 4px;
-      margin: 0;
-    }
-    .capability-alias-row .capability-alias-drawer {
-      flex: 0 0 auto;
-    }
-    .capability-alias-row .capability-alias-drawer[open] {
-      flex-basis: 100%;
-    }
-    .capability-alias-row .cap-alias-summary {
-      color: var(--state-info-text);
     }
     .capability-card-actions {
       display: flex;
@@ -928,16 +939,9 @@
       gap: 0;
       margin-top: 12px;
     }
-    /* Local layout exception: fixed clearance rows reuse capability-card surfaces with compact status/toggle actions.
-       Clearance cards have no alias chips/expandable content, so they stay short — use the same 2-column grid as
-       .capability-grid (rather than a single full-width column) to avoid large empty space per row. */
-    .clearance-grid {
-      gap: var(--surface-gap-sm);
-    }
-    .clearance-card {
-      align-items: center;
-    }
-    /* Local layout exception: managed clearances and free-form facts are subgroups of one Eligibility card. */
+    /* Eligibility, clearances and qualifications are profile facts, not capabilities.
+       Keep their cards compact and bounded so wide Settings shells add columns instead of
+       stretching a single row across the whole page. */
     .eligibility-settings-sections {
       display: grid;
       gap: var(--surface-gap-lg);
@@ -951,92 +955,99 @@
       padding-top: var(--surface-pad-block-lg);
       border-top: 1px solid var(--border-subtle);
     }
-
-    .clearance-card-main {
-      gap: 4px;
+    .eligibility-settings-section > .settings-subpanel-head .field-label-row > h4 {
+      font-size: var(--text-role-label-font-size);
+      font-weight: var(--text-role-button-font-weight);
+      color: var(--text-primary);
     }
-    .clearance-card-copy {
+    .profile-fact-entry {
+      width: min(100%, 52rem);
+    }
+    .profile-fact-editor {
+      width: 100%;
+      min-width: 0;
+    }
+    .profile-fact-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 340px));
+      gap: var(--surface-gap-sm);
+      justify-content: start;
+      align-items: stretch;
+      width: 100%;
+      min-width: 0;
+    }
+    .profile-fact-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: var(--surface-gap-md);
+      align-items: center;
+      min-width: 0;
+      min-height: 72px;
+      padding: 12px 14px;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      background: var(--bg-surface);
+    }
+    .profile-fact-copy {
       display: grid;
       gap: 4px;
       min-width: 0;
     }
-    .clearance-card-title {
+    .profile-fact-title {
       margin: 0;
+      color: var(--text-primary);
       font-size: var(--text-role-button-font-size);
       font-weight: var(--text-role-button-font-weight);
       line-height: 1.2;
-      color: var(--text-primary);
+      overflow-wrap: anywhere;
     }
-    .clearance-card-state {
+    .profile-fact-state {
       margin: 0;
       color: var(--text-muted);
       font-size: var(--text-role-status-font-size);
-      line-height: 1.4;
+      line-height: 1.35;
     }
-    .clearance-card-actions {
-      flex-direction: row;
+    .profile-fact-actions {
+      display: flex;
       align-items: center;
-      gap: 0;
-      padding-top: 0;
-    }
-    /* Local layout exception: generic eligibility facts edit a canonical name, an aliases
-       list, and an optional review message inline, so they need more horizontal room per
-       row than the compact clearance rows above — use a single full-width column instead
-       of .capability-grid/.clearance-grid's 2-column layout. */
-    .eligibility-grid {
-      grid-template-columns: 1fr;
+      justify-content: flex-end;
       gap: var(--surface-gap-sm);
+      flex: 0 0 auto;
     }
-    .eligibility-card {
-      align-items: center;
-    }
-    .eligibility-card-copy {
-      display: grid;
-      gap: 4px;
+    .profile-fact-name-input {
+      width: 100%;
       min-width: 0;
-    }
-    .eligibility-card-title {
-      margin: 0;
-      font-size: var(--text-role-status-font-size);
+      min-height: 34px;
+      padding: 5px 7px;
+      border: 1px solid transparent;
+      border-radius: var(--control-radius-sm);
+      background: transparent;
+      color: var(--text-primary);
+      font: inherit;
+      font-size: var(--text-role-body-compact-font-size);
       font-weight: var(--text-role-button-font-weight);
-      line-height: 1.2;
-      color: var(--text-muted);
+      outline: none;
     }
-    .eligibility-card-actions {
-      flex-direction: row;
-      align-items: center;
-      gap: var(--surface-gap-sm);
-      padding-top: 0;
+    .profile-fact-name-input:hover {
+      border-color: var(--border-subtle);
+      background: var(--bg-muted);
+    }
+    .profile-fact-name-input:focus-visible {
+      border-color: var(--focus-ring-color);
+      box-shadow: 0 0 0 var(--focus-ring-width) color-mix(in srgb, var(--focus-ring-color) 30%, transparent);
+      background: var(--bg-surface);
+    }
+    .settings-main .field-info-panel {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: min(420px, calc(100vw - 32px));
+      max-width: none;
+      transform: none;
+      z-index: 320;
     }
     .role-history-editor {
       margin-top: var(--surface-gap-md);
-    }
-    .capability-alias-drawer[open] .cap-alias-chips {
-      margin-top: 10px;
-    }
-    .capability-alias-drawer {
-      margin: 0;
-      padding: 0;
-      border: 0;
-      background: transparent;
-    }
-    .cap-alias-summary {
-      display: inline-flex;
-      align-items: center;
-      width: fit-content;
-      cursor: pointer;
-      color: var(--text-muted);
-      font-size: var(--text-role-caption-font-size);
-      font-weight: var(--text-role-status-font-weight);
-      list-style: none;
-      user-select: none;
-      padding: 0;
-    }
-    .capability-alias-drawer > .cap-alias-summary {
-      margin: 0;
-    }
-    .capability-summary-label {
-      color: inherit;
     }
     .cap-strength-row {
       display: grid;
@@ -1106,6 +1117,15 @@
       .capability-card {
         grid-template-columns: 1fr;
       }
+      .capability-card-main {
+        grid-template-columns: 1fr;
+      }
+      .capability-card-main > .capability-card-head,
+      .capability-card-main > .cap-strength,
+      .capability-card-main > .capability-alias-row {
+        grid-column: 1;
+        grid-row: auto;
+      }
 
       .capability-card-actions {
         align-items: flex-start;
@@ -1127,22 +1147,15 @@
       display: grid;
       gap: var(--surface-gap-lg);
     }
-    .review-list { display: grid; gap: var(--surface-gap-md); }
-    .tuning-summary {
+    #capability_matrix_editor > .capability-grid,
+    .review-list {
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr));
+    }
+    .review-list {
       display: grid;
-      grid-template-columns: repeat(3, minmax(200px, 1fr));
       gap: var(--surface-gap-md);
-      margin-bottom: var(--surface-gap-md);
+      align-items: stretch;
     }
-    .tuning-summary-card {
-      display: grid;
-      gap: 4px;
-      padding: var(--surface-pad-block-md) var(--surface-pad-inline-md);
-      min-height: 96px;
-      align-content: start;
-    }
-    .tuning-summary-card strong { display: block; font-size: var(--text-role-page-title-font-size); line-height: 1; }
-    .tuning-summary-card span { color: var(--text-muted); font-size: var(--text-role-status-font-size); line-height: 1.35; }
     .tuning-group + .tuning-group { margin-top: var(--surface-gap-lg); }
     .tuning-group {
       display: grid;
@@ -1154,6 +1167,8 @@
       font-weight: var(--text-role-panel-title-font-weight);
     }
     .tuning-group-copy { margin: 0; color: var(--text-muted); font-size: var(--text-role-status-font-size); line-height: 1.55; }
+    .tuning-group-count { color: var(--text-muted); font-weight: var(--text-role-status-font-weight); }
+    .review-strength-meter { width: fit-content; }
     .tuning-empty-state { margin-top: 2px; }
     .optimise-shell .tuning-actions {
       margin-top: var(--surface-gap-lg);
@@ -1173,26 +1188,6 @@
       font-size: var(--text-role-chip-font-size);
       font-weight: var(--text-role-chip-font-weight);
     }
-    .strength-chip.strength-strong {
-      background: var(--state-success-bg);
-      border-color: var(--state-success-border);
-      color: var(--state-success-text);
-    }
-    .strength-chip.strength-working {
-      background: var(--state-info-bg);
-      border-color: var(--state-info-border);
-      color: var(--state-info-text);
-    }
-    .strength-chip.strength-basic {
-      background: var(--state-warning-bg);
-      border-color: var(--state-warning-border);
-      color: var(--state-warning-text);
-    }
-    .strength-chip.strength-low {
-      background: var(--state-error-bg);
-      border-color: var(--state-error-border);
-      color: var(--state-error-text);
-    }
     .review-card {
       padding: var(--surface-pad-block-md) var(--surface-pad-inline-md);
       display: grid;
@@ -1203,41 +1198,82 @@
       font-size: var(--text-role-panel-title-font-size);
       font-weight: var(--text-role-panel-title-font-weight);
     }
-    .review-card-heading {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: var(--surface-gap-xs) var(--surface-gap-sm);
-    }
-    .review-card-heading .suggestion-chip { padding: 3px 8px; }
+    .review-card-heading { align-items: baseline; }
     .review-card-count {
       color: var(--text-muted);
-      font-size: var(--text-role-chip-font-size);
+      font-size: var(--text-role-caption-font-size);
+      line-height: var(--text-role-caption-line-height);
+      white-space: nowrap;
+    }
+    /* Capability suggestions are a compact decision row: capability, strength, evidence count. */
+    .review-card[data-review-kind="capability"] {
+      grid-template-columns: minmax(0, max-content) max-content minmax(0, 1fr) max-content;
+      align-items: center;
+      column-gap: var(--surface-gap-sm);
+    }
+    .review-card[data-review-kind="capability"] > .review-card-heading {
+      display: contents;
+    }
+    .review-card[data-review-kind="capability"] > .review-card-heading > h3 {
+      grid-column: 1;
+      grid-row: 1;
+      min-width: 0;
+    }
+    .review-card[data-review-kind="capability"] > .capability-strength-meter {
+      grid-column: 2;
+      grid-row: 1;
+      margin: 0;
+    }
+    .review-card[data-review-kind="capability"] > .review-card-heading > .review-card-count {
+      grid-column: 4;
+      grid-row: 1;
+      justify-self: end;
+    }
+    .review-card[data-review-kind="capability"] > .review-examples,
+    .review-card[data-review-kind="capability"] > .card-actions {
+      grid-column: 1 / -1;
+    }
+    @media (max-width: 760px) {
+      .review-card[data-review-kind="capability"] {
+        grid-template-columns: minmax(0, 1fr) max-content;
+      }
+      .review-card[data-review-kind="capability"] > .review-card-heading > h3 {
+        grid-column: 1;
+      }
+      .review-card[data-review-kind="capability"] > .review-card-heading > .review-card-count {
+        grid-column: 2;
+      }
+      .review-card[data-review-kind="capability"] > .capability-strength-meter {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        justify-self: start;
+      }
+      .review-card[data-review-kind="capability"] > .review-examples,
+      .review-card[data-review-kind="capability"] > .card-actions {
+        grid-column: 1 / -1;
+      }
     }
     .review-card p { margin: 0; color: var(--text-muted); line-height: 1.5; }
     .review-card ul { margin: var(--surface-gap-sm) 0 0 18px; padding: 0; }
     .review-card li { margin: 4px 0; }
-    .review-choice-guide, .review-examples {
+    .review-examples {
       margin-top: var(--surface-gap-sm);
       border-radius: var(--radius-md);
       border: 1px solid var(--border-subtle);
       background: var(--bg-surface);
       overflow: hidden;
     }
-    .review-choice-guide summary, .review-examples summary {
+    .review-examples summary {
       cursor: pointer;
       padding: var(--surface-pad-block-xs) var(--surface-pad-inline-sm);
       font-weight: var(--text-role-button-font-weight);
       color: var(--accent-secondary);
       list-style: none;
     }
-    .review-choice-guide summary::-webkit-details-marker,
     .review-examples summary::-webkit-details-marker { display: none; }
-    .review-choice-guide-body, .review-examples-body { padding: 0 var(--surface-pad-inline-sm) var(--surface-pad-block-xs); }
-    .review-choice-guide strong { display: block; margin-bottom: 6px; font-size: var(--text-role-status-font-size); }
-    .review-choice-guide p, .review-examples p { margin: 0 0 6px; color: var(--text-primary); font-size: var(--text-role-body-compact-font-size); line-height: var(--text-role-body-compact-line-height); }
-    .review-choice-guide p:last-child, .review-examples p:last-child { margin-bottom: 0; }
-    .review-choice-guide code { font-size: var(--text-role-chip-font-size); }
+    .review-examples-body { padding: 0 var(--surface-pad-inline-sm) var(--surface-pad-block-xs); }
+    .review-examples p { margin: 0 0 6px; color: var(--text-primary); font-size: var(--text-role-body-compact-font-size); line-height: var(--text-role-body-compact-line-height); }
+    .review-examples p:last-child { margin-bottom: 0; }
     .review-examples ul { margin: 0 0 0 18px; padding: 0; }
 
     /* â”€â”€ Capability Table (3-column rigid layout) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
@@ -1332,124 +1368,7 @@
       border-color: var(--selection-accent);
       box-shadow: 0 0 0 2px color-mix(in srgb, var(--selection-accent) 15%, transparent);
     }
-    .cap-strength {
-      display: flex;
-      align-items: center;
-      margin-top: 2px;
-    }
-    .capability-strength-meter {
-      position: relative;
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      width: fit-content;
-      min-height: 28px;
-      padding: 3px 8px;
-      border: 1px solid var(--border-subtle);
-      border-radius: 8px;
-      background: color-mix(in srgb, var(--bg-surface) 92%, transparent);
-      color: var(--text-muted);
-      font-size: var(--text-role-caption-font-size);
-      line-height: 1;
-    }
-    .capability-strength-dots {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-    }
-    .capability-strength-dot {
-      position: relative;
-      display: inline-flex;
-      width: 14px;
-      height: 18px;
-      align-items: center;
-      justify-content: center;
-      margin: 0;
-      cursor: pointer;
-    }
-    .capability-strength-dot input {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      margin: 0;
-      padding: 0;
-      border: 0;
-      opacity: 0;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      clip-path: inset(50%);
-    }
-    .capability-strength-dot > span {
-      width: 9px;
-      height: 9px;
-      border: 1px solid color-mix(in srgb, var(--text-muted) 70%, transparent);
-      border-radius: 50%;
-      background: transparent;
-      transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
-    }
-    .capability-strength-dot:hover > span {
-      transform: scale(1.18);
-      border-color: var(--text-primary);
-    }
-    .capability-strength-dot:focus-within > span {
-      outline: 2px solid color-mix(in srgb, var(--accent) 60%, white);
-      outline-offset: 2px;
-    }
-    .capability-strength-meter.strength-strong .capability-strength-dot.is-filled > span {
-      border-color: color-mix(in srgb, var(--state-success-border) 72%, var(--border-subtle));
-      background: color-mix(in srgb, var(--state-success-text) 72%, var(--bg-surface));
-    }
-    .capability-strength-meter.strength-working .capability-strength-dot.is-filled > span {
-      border-color: color-mix(in srgb, var(--state-info-border) 72%, var(--border-subtle));
-      background: color-mix(in srgb, var(--state-info-text) 72%, var(--bg-surface));
-    }
-    .capability-strength-meter.strength-basic .capability-strength-dot.is-filled > span {
-      border-color: color-mix(in srgb, var(--text-muted) 78%, var(--border-subtle));
-      background: color-mix(in srgb, var(--text-muted) 72%, var(--bg-surface));
-    }
-    .capability-strength-label {
-      color: var(--text-primary);
-      font-weight: var(--text-role-status-font-weight);
-      white-space: nowrap;
-    }
-    .capability-strength-tooltip {
-      position: absolute;
-      z-index: 20;
-      left: 0;
-      bottom: calc(100% + 9px);
-      display: none;
-      width: max-content;
-      max-width: 260px;
-      padding: 9px 11px;
-      border: 1px solid var(--border-subtle);
-      border-radius: 8px;
-      background: var(--bg-elevated, var(--bg-surface));
-      box-shadow: var(--shadow-soft);
-      color: var(--text-primary);
-      line-height: 1.35;
-      white-space: normal;
-    }
-    .capability-strength-tooltip::after {
-      content: '';
-      position: absolute;
-      left: 18px;
-      top: 100%;
-      border: 6px solid transparent;
-      border-top-color: var(--border-subtle);
-    }
-    .capability-strength-tooltip strong,
-    .capability-strength-tooltip span {
-      display: block;
-    }
-    .capability-strength-tooltip span {
-      margin-top: 3px;
-      color: var(--text-muted);
-      font-weight: 400;
-    }
-    .capability-strength-meter:hover .capability-strength-tooltip,
-    .capability-strength-meter:focus-within .capability-strength-tooltip {
-      display: block;
-    }
+
     .capability-preset-grid {
       display: grid;
       gap: 12px;
@@ -1502,7 +1421,6 @@
       .alerts-grid { grid-template-columns: 1fr; }
       .search-source-panels { grid-template-columns: 1fr; }
       .advanced-grid > .subpanel:first-child { grid-row: auto; }
-      .tuning-summary { grid-template-columns: 1fr; }
       .capability-row-summary {
         flex-direction: column;
       }
@@ -1518,6 +1436,9 @@
       }
     }
     @media (max-width: 760px) {
+      .settings-header__inner .job-hunter-account-bar {
+        justify-content: flex-start;
+      }
       .profile-fields-grid, .field-grid { grid-template-columns: 1fr; display: grid; }
       .cap-strength-row {
         grid-template-columns: 1fr;
@@ -1540,13 +1461,25 @@
         padding: var(--surface-pad-block-sm) 0;
       }
       .sidebar-nav {
-        display: flex;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
         gap: var(--surface-gap-sm);
-        overflow-x: auto;
+        overflow: visible;
         padding: 0 var(--surface-pad-inline-xs);
       }
+      .sidebar-group-label,
+      .settings-sidebar-search {
+        grid-column: 1 / -1;
+      }
+      .sidebar-group-label {
+        margin: var(--surface-gap-sm) 0 0;
+      }
+      .sidebar-group-label-global {
+        margin-top: var(--surface-gap-sm);
+        padding-top: var(--surface-gap-sm);
+      }
       .nav-item {
-        flex: 0 0 auto;
+        min-width: 0;
         margin-bottom: 0;
       }
       .nav-item-workspace {
@@ -1554,6 +1487,9 @@
       }
       .settings-content-area {
         padding: var(--surface-pad-block-lg) var(--surface-pad-inline-sm) 96px;
+      }
+      .settings-header__inner {
+        padding-inline: var(--surface-pad-inline-sm);
       }
       .save-footer {
         left: 14px;
@@ -2106,13 +2042,4 @@
 .settings-sidebar .sidebar-group-label-global {
   margin-top: 16px;
   padding-top: 10px;
-}
-
-/* Local layout exception: location groups use three columns on the Search Settings page. */
-.location-checkbox-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-@media (max-width: 900px) {
-  .location-checkbox-grid { grid-template-columns: 1fr; }
 }

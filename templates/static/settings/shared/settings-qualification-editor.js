@@ -52,14 +52,11 @@ export const JobHunterQualificationEditor = (function () {
     if (!container) return;
     const cards = state.map((item, index) => {
       const toggleId = `qualification_toggle_${index}`;
-      return `<article class="capability-card eligibility-card" data-qualification-index="${index}">
-        <div class="capability-card-main eligibility-card-main">
-          <div class="eligibility-card-copy">
-            <label class="eligibility-card-title" for="qualification_name_${index}">${escapeHtml(labels.qualification_name_label)}</label>
-            <input id="qualification_name_${index}" class="token-input-field" data-qualification-field="name" data-qualification-index="${index}" value="${escapeHtml(item.name)}">
-          </div>
+      return `<article class="profile-fact-card" data-qualification-index="${index}">
+        <div class="profile-fact-copy">
+          <input id="qualification_name_${index}" class="profile-fact-name-input" aria-label="${escapeHtml(labels.qualification_name_label)}" data-qualification-field="name" data-qualification-index="${index}" value="${escapeHtml(item.name)}">
         </div>
-        <div class="capability-card-actions eligibility-card-actions">
+        <div class="profile-fact-actions">
           <label class="toggle-switch toggle-switch--compact" for="${toggleId}">
             <span class="toggle-switch-control"><input id="${toggleId}" type="checkbox" role="switch" data-qualification-field="value" data-qualification-index="${index}"${item.value ? ' checked' : ''}><span class="toggle-switch-ui"></span></span>
           </label>
@@ -73,7 +70,7 @@ export const JobHunterQualificationEditor = (function () {
         </div>
       </article>`;
     }).join('');
-    container.innerHTML = cards ? `<div class="capability-grid eligibility-grid">${cards}</div>` : `<p class="panel-copy">${escapeHtml(labels.qualification_empty_text)}</p>`;
+    container.innerHTML = cards ? `<div class="profile-fact-grid">${cards}</div>` : `<p class="panel-copy">${escapeHtml(labels.qualification_empty_text)}</p>`;
   }
 
   function setQualificationState(items) {

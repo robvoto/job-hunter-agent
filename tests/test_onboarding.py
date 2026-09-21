@@ -84,11 +84,17 @@ def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
     assert "Review Draft" in html
     assert "Search Basics" in html
     assert "Check Setup" in html
+    assert "Minimum compensation" in html
+    assert "__JOB_HUNTER_ONBOARDING_PAGE_MINIMUM_COMPENSATION_LABEL__" not in html
+    assert "__JOB_HUNTER_MINIMUM_COMPENSATION_LABEL__" not in html
     assert "This draft was built from your CV." in html
     assert "Sydney means a city search on SEEK" in html
     assert "50-mile radius on LinkedIn" in html
     assert "0 shown" in html
-    assert 'id="review_capability_helper"' in html
+    assert 'id="review_capability_helper"' not in html
+    assert '/static/common/capability-ui.css' in html
+    assert '>Continue</button>' in html
+    assert '__JOB_HUNTER_ONBOARDING_PAGE_SAVE_AND_CONTINUE_LABEL__' not in html
     assert "review-capability-filter-shell" in html
     assert "window.__JOB_HUNTER_ONBOARDING_PAGE_LABELS__" in html
     assert "window.__JOB_HUNTER_ONBOARDING_FLOW_LABELS__" in html
@@ -266,10 +272,13 @@ def test_onboarding_import_summary_labels_include_cost_copy():
     assert labels["llm_cost_label"] == "LLM cost this run:"
 
 
-def test_onboarding_capability_cards_use_one_shared_generic_icon():
+def test_onboarding_capability_cards_use_shared_strength_and_related_skills_pattern():
     repo_root = Path(__file__).resolve().parents[1]
     capability_ui_js = (
         repo_root / "templates" / "static" / "common" / "capability-ui.js"
+    ).read_text(encoding="utf-8")
+    capability_ui_css = (
+        repo_root / "templates" / "static" / "common" / "capability-ui.css"
     ).read_text(encoding="utf-8")
     onboarding_flow_js = (
         repo_root / "templates" / "static" / "onboarding" / "onboarding-flow.js"
@@ -281,18 +290,19 @@ def test_onboarding_capability_cards_use_one_shared_generic_icon():
         encoding="utf-8"
     )
 
-    assert "genericCapabilityIconHtml" in capability_ui_js
-    assert "review-capability-title-row" in onboarding_flow_js
-    assert "capability-alias-preview" in onboarding_flow_js
-    assert "settings_selected_label" in onboarding_flow_js
+    assert "capabilityStrengthMeterMarkup" in capability_ui_js
+    assert "onboardingCapabilityUi.capabilityStrengthMeterMarkup({" in onboarding_flow_js
+    assert "data-review-capability-level" in onboarding_flow_js
+    assert "onboardingCapabilityUi.updateCapabilityStrengthMeter(" in onboarding_flow_js
+    assert 'class="capability-alias-label"' in onboarding_flow_js
     assert "related_skills_show_more" in onboarding_flow_js
     assert "related_skills_show_less" in onboarding_flow_js
-    assert "const extractedSkillPreview" not in onboarding_flow_js
-    assert '<p class="help">${extractedSkillPreview}</p>' not in onboarding_flow_js
-    assert "cap-alias-chip--more" not in onboarding_flow_js
-    assert ".capability-shell .capability-alias-preview" in onboarding_css
+    assert "capabilityIconHtml(" not in onboarding_flow_js
+    assert "capability-card-icon" not in onboarding_flow_js
+    assert ".capability-alias-row" in capability_ui_css
+    assert ".capability-strength-meter" in capability_ui_css
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in onboarding_css
     assert ".capability-card.is-selected" in onboarding_css
-    assert "capability-card-icon" in theme_widgets
     assert ".capability-alias-preview" in theme_widgets
 
 
@@ -346,7 +356,7 @@ def test_shared_ui_styles_are_centralised():
         repo_root / "templates" / "partials" / "settings" / "global" / "settings-learning.html"
     ).read_text(encoding="utf-8")
 
-    assert ".page input," in theme_primitives
+    assert ".page input:not([type=\"checkbox\"]):not([type=\"radio\"])," in theme_primitives
     assert ".currency-input-wrap input," in theme_primitives
     assert ".summary-line {" in theme_widgets
     assert ".settings-form-field--summary" not in theme_widgets
@@ -1740,3 +1750,31 @@ def test_reset_global_learning_clears_shared_signal_registry(monkeypatch):
 
     assert result["ok"] is True
     assert calls == [True]
+
+
+def test_onboarding_progress_navigation_revisits_without_skipping_transitions():
+    repo_root = Path(__file__).resolve().parents[1]
+    page_js = (
+        repo_root / "templates" / "static" / "onboarding" / "onboarding-page.js"
+    ).read_text(encoding="utf-8")
+    flow_js = (
+        repo_root / "templates" / "static" / "onboarding" / "onboarding-flow.js"
+    ).read_text(encoding="utf-8")
+
+    assert "const highestNavigableStep = Math.min(maxUnlockedStep, currentStep + 1);" in page_js
+    assert "button.disabled = !step || step > highestNavigableStep;" in page_js
+    assert "async function navigateFromProgress(targetStep)" in flow_js
+    assert "continueFromReview();" in flow_js
+    assert "await continueFromSearchBasics();" in flow_js
+    assert "targetStep !== currentStep + 1" in flow_js
+
+
+def test_check_setup_finish_button_uses_real_disabled_state_and_search_validation():
+    repo_root = Path(__file__).resolve().parents[1]
+    flow_js = (
+        repo_root / "templates" / "static" / "onboarding" / "onboarding-flow.js"
+    ).read_text(encoding="utf-8")
+
+    assert "validateSearchPreferences(searchPrefs);" in flow_js
+    assert "flowRefs.confirmReview.disabled = !canFinish;" in flow_js
+    assert "searchBasicsValid" in flow_js

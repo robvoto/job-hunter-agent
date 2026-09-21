@@ -985,6 +985,16 @@
   line-height: var(--field-label-line-height);
 }
 
+/* Subpanel heading rules must never reintroduce margins inside a shared
+   label/info row; otherwise the info icon is visually pushed off-centre. */
+.subpanel .field-label-row > h1,
+.subpanel .field-label-row > h2,
+.subpanel .field-label-row > h3,
+.subpanel .field-label-row > h4,
+.subpanel .field-label-row > strong {
+  margin: 0;
+}
+
 .field-control-shell {
   display: block;
   width: 100%;
@@ -1161,6 +1171,26 @@
   margin: var(--settings-subheader-gap) 0 0;
 }
 
+/* Standard card-title + info row. It deliberately reuses field-label-row so
+   headings and field labels share one alignment contract for the info control. */
+.settings-card-title-row > h3 {
+  font-size: var(--settings-card-title-font-size);
+  line-height: var(--settings-card-title-line-height);
+  font-weight: var(--text-role-panel-title-font-weight);
+}
+
+.settings-heading-count {
+  color: var(--text-muted);
+  font-size: var(--text-role-caption-font-size);
+  line-height: var(--text-role-caption-line-height);
+  font-weight: var(--text-role-status-font-weight);
+}
+
+/* A card's explanatory copy must have a real gap before its first form field. */
+.search-settings-subcard > .panel-copy + .settings-form-field {
+  margin-top: var(--field-stack-gap);
+}
+
 .search-source-panel-group {
   display: grid;
 }
@@ -1322,6 +1352,81 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+/* Shared Search Basics composition used by onboarding and Settings.
+   Wide containers keep preferences and compensation side-by-side; medium
+   containers stack the groups before individual controls start wrapping badly. */
+.search-basics-container {
+  container-type: inline-size;
+}
+
+.search-basics-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(22rem, 1fr);
+  align-items: start;
+  gap: calc(var(--surface-gap-lg) * 2);
+}
+
+.search-preference-groups {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--surface-gap-lg) calc(var(--surface-gap-lg) * 2);
+  min-width: 0;
+}
+
+.search-preference-groups > .settings-form-field,
+.search-preference-groups > .onb-field {
+  flex: 0 0 auto;
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.search-compensation-group {
+  display: grid;
+  min-width: 0;
+  padding-left: calc(var(--surface-gap-lg) * 2);
+  border-left: 1px solid var(--border-subtle);
+  row-gap: var(--surface-gap-md);
+}
+
+.salary-preference-fields {
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  gap: var(--surface-gap-md) var(--surface-gap-lg);
+  justify-content: start;
+}
+
+.salary-preference-fields > .onb-field,
+.salary-preference-fields > .settings-form-field {
+  min-width: 0;
+}
+
+.currency-input-wrap--compact {
+  width: 100%;
+  max-width: 11rem;
+}
+
+@container (max-width: 72rem) {
+  .search-basics-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .search-compensation-group {
+    padding-left: 0;
+    padding-top: var(--surface-gap-lg);
+    border-left: 0;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+}
+
+@container (max-width: 30rem) {
+  .salary-preference-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
 .settings-form-field,
 .onb-field,
 .field-block {
@@ -1413,10 +1518,6 @@
 @media (max-width: 760px) {
   .settings-form-grid--search-basics {
     grid-template-columns: 1fr;
-  }
-
-  .settings-form-field--full {
-    grid-column: auto;
   }
 }
 
@@ -2230,9 +2331,13 @@
 
 /* Shared chip editor layout for onboarding role review and settings rule editors.
    Keep the add row outside the chip display box; do not create an extra parent card. */
-.review-block > .field-label-row + .chip-list,
-.settings-form-field > .field-label-row + .badge-editor {
+.review-block > .field-label-row + .chip-list {
   margin-top: 12px;
+}
+
+/* settings-form-field already owns --field-label-control-gap via grid row-gap. */
+.settings-form-field > .field-label-row + .badge-editor {
+  margin-top: 0;
 }
 
 .chip-list,
@@ -2467,49 +2572,8 @@
   font-size: var(--text-role-status-font-size);
 }
 
-/* Shared salary/compensation pair layout used by onboarding and settings forms. */
-.salary-pair {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 28px;
-  row-gap: 14px;
-  margin-top: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-}
-
-.salary-pair > div {
-  display: grid;
-  gap: var(--field-label-control-gap);
-  min-width: 0;
-}
-
-.salary-pair label {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: var(--font-size-sm);
-  font-weight: var(--text-role-button-font-weight);
-  line-height: var(--field-label-line-height);
-}
-
-.search-basics-card--details .salary-pair {
-  width: auto;
-}
-
-.search-basics-card--details .salary-pair .currency-input-wrap {
-  max-width: 190px;
-}
-
-@media (max-width: 760px) {
-  .salary-pair {
-    grid-template-columns: 1fr;
-  }
-}
-
 /* Shared spacing for a full-width field that follows choice/summary fields in a two-column form. */
-.settings-form-grid--search-basics > .settings-form-field--full,
-.search-basics-card--details .onb-field--full {
+.settings-form-grid--search-basics > .settings-form-field--full {
   margin-top: var(--surface-gap-md);
 }
 
@@ -2535,7 +2599,27 @@
   border-radius: var(--radius-md);
   background: var(--bg-surface);
 }
+
+.location-checkbox-grid {
+  container-type: inline-size;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.location-checkbox-groups {
+  display: grid;
+  grid-template-columns: repeat(3, max-content);
+  width: max-content;
+  max-width: 100%;
+  padding: var(--surface-gap-md);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
 .checkbox-list-group {
+  display: grid;
+  align-content: start;
+  justify-items: start;
   min-width: 0;
   margin: 0;
   padding: 0 var(--surface-gap-lg);
@@ -2554,7 +2638,10 @@
   gap: var(--surface-gap-sm) var(--surface-gap-lg);
 }
 .checkbox-list-group--dense .checkbox-list-options {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, max-content);
+  grid-template-rows: repeat(var(--checkbox-list-row-count), auto);
+  grid-auto-flow: column;
+  column-gap: calc(var(--surface-gap-lg) * 2);
 }
 .checkbox-list-option {
   display: grid;
@@ -2612,17 +2699,38 @@
   min-width: 0;
   overflow-wrap: normal;
   word-break: normal;
+  white-space: nowrap;
 }
 .checkbox-list-option input:disabled + span { opacity: 0.55; }
-@media (max-width: 900px) {
-  .checkbox-list-group { padding: var(--surface-gap-md) 0; }
-  .checkbox-list-group + .checkbox-list-group {
+
+@container (max-width: 48rem) {
+  .location-checkbox-groups {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+  .location-checkbox-group {
+    grid-column: auto;
+    justify-self: stretch;
+    padding: var(--surface-gap-md) 0;
+  }
+  .location-checkbox-group + .location-checkbox-group {
     border-left: 0;
     border-top: 1px solid var(--border-subtle);
   }
+  .location-checkbox-group:nth-child(3) {
+    margin-top: 0;
+  }
 }
-@media (max-width: 640px) {
-  .checkbox-list-group--dense .checkbox-list-options { grid-template-columns: 1fr; }
+
+@container (max-width: 30rem) {
+  .checkbox-list-group--dense .checkbox-list-options {
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+    grid-auto-flow: row;
+  }
+  .checkbox-list-option span {
+    white-space: normal;
+  }
 }
 
 /* Shared structured search progress. The source identity comes from API data;

@@ -128,19 +128,20 @@ def test_settings_add_flow_calls_the_shared_save_endpoint_not_a_local_only_push(
     assert 'aliases: []' not in source
 
 
-def test_eligibility_editor_uses_its_own_layout_not_the_compact_clearance_card():
-    # The Eligibility editor previously reused .capability-card.clearance-card,
-    # which is a compact layout designed for fixed clearance rows. It must
-    # render with its own eligibility-* classes instead.
+def test_eligibility_editor_uses_shared_profile_fact_layout_not_capability_cards():
+    # Eligibility, qualifications and managed clearances are profile facts. Their
+    # rendering must not inherit the denser Capability Matrix card contract.
     js_source = (_STATIC_DIR / "settings-eligibility-editor.js").read_text(encoding="utf-8")
 
     assert "clearance-card" not in js_source
-    assert "clearance-grid" not in js_source
-    assert "eligibility-card" in js_source
-    assert "eligibility-grid" in js_source
+    assert "eligibility-card" not in js_source
+    assert 'class="profile-fact-card"' in js_source
+    assert 'class="profile-fact-grid"' in js_source
+    assert 'class="capability-card' not in js_source
 
-    css_source = (_STATIC_DIR / "settings-page.css").read_text(encoding="utf-8")
-    assert ".eligibility-grid" in css_source
+    css_source = (_STATIC_DIR / "settings-page.css").read_text(encoding="utf-8-sig")
+    assert ".profile-fact-grid" in css_source
+    assert ".profile-fact-card" in css_source
 
 
 def test_eligibility_editor_never_renders_aliases_or_the_review_message():

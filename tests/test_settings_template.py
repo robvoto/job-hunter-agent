@@ -225,9 +225,10 @@ def test_signals_requirement_review_uses_consistent_labels_subtype_and_wide_layo
         encoding="utf-8"
     )
 
-    assert "--content-shell-max-width: 1360px;" in tokens
-    assert ".settings-content-area:has(#section-learning.is-active)" in css
-    assert "max-width: var(--content-shell-max-width);" in css
+    assert "--wide-shell-max-width: 1560px;" in tokens
+    assert "--settings-shell-max-width: var(--wide-shell-max-width);" in tokens
+    assert "max-width: var(--settings-shell-max-width);" in css
+    assert ".settings-content-area:has(#section-learning.is-active)" not in css
     assert "signal-requirement-subtype-field" in css
     assert "srRequirementReviewComplete(article, category)" in js
     assert "suggested_requirement_type" in js
@@ -494,13 +495,14 @@ def test_settings_search_section_uses_shared_choice_strip_widget(monkeypatch):
     assert 'select id="sector_preference"' not in html
 
 
-def test_capability_help_text_explains_matching_weight():
+def test_capability_help_text_explains_related_skills_without_repeating_strength_levels():
     labels_path = ROOT_DIR / "data" / "knowledge" / "ui_labels.json"
     ui_labels = json.loads(labels_path.read_text(encoding="utf-8"))
     help_text = ui_labels["capability_ui_labels"]["help_text"]
 
-    assert "the strength you choose changes how much each capability influences matching" in help_text.lower()
-    assert "strong for your best evidence" in help_text.lower()
+    assert "related skills are alternative names" in help_text.lower()
+    assert "adjust a capability strength" in help_text.lower()
+    assert "strong for your best evidence" not in help_text.lower()
 
 
 def test_settings_review_panel_empty_state_copy_is_defined():
@@ -511,23 +513,15 @@ def test_settings_review_panel_empty_state_copy_is_defined():
     js = js_path.read_text(encoding="utf-8")
     ui_labels = json.loads(labels_path.read_text(encoding="utf-8"))
 
-    assert (
-        "No capability suggestions yet. We found no saved review data from the latest search. Run a search again so kept jobs can be analysed for new capability signals."
-        in js
-    )
-
-    assert (
-        "No capability suggestions yet. We found kept jobs, but no new capability observations were extracted from them."
-        in js
-    )
-
-    assert "Requirements to address" in js
-
-    assert "Do you have this capability?" in js
-
-    assert "Search/title tuning" in js
-
-    assert "Filters already working correctly" in js
+    assert "No new capabilities to verify." in js
+    assert "Capabilities to verify" not in js
+    assert "Search & filter improvements" in js
+    assert "Why Job Hunter suggested this" in js
+    assert "review_suggestions_count" in js
+    assert "refreshSettingsForm" in js
+    assert "fillForm(" not in js
+    assert "review-strength-question" not in js
+    assert "What this choice means" not in js
 
     assert "const DECLINE_CAPABILITY_LABEL = capabilityLabels.decline_capability_label;" in js
     assert ui_labels["workspace_card_labels"]["gap_confirm_not_have_label"]
@@ -615,7 +609,11 @@ def test_search_settings_partial_has_privacy_subcards_and_shared_save_bar():
     assert 'class="checkbox-list-grid location-checkbox-grid" role="group"' in html
     assert 'id="seek_quick_apply_only"' in html
     assert "Quick Apply only" in html
-    assert "syncLocationSelectionLimit" in js
+    common_location_js = (
+        ROOT_DIR / "templates" / "static" / "common" / "location-options.js"
+    ).read_text(encoding="utf-8")
+    assert "renderLocationCheckboxOptions" in js
+    assert "syncLocationSelectionLimit" in common_location_js
 
     assert 'class="panel search-operations-panel"' not in html
     assert 'class="subpanel search-settings-subcard search-operations-panel"' in html

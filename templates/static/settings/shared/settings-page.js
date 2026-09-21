@@ -448,81 +448,20 @@ function renderLlmModelOptions() {
 }
 
 
-function getLocationInputs() {
-  const container = document.getElementById('locations');
-  if (!container) return [];
-  return Array.from(container.querySelectorAll('input[type="checkbox"][data-location-value]'));
-}
-
 function getSelectedLocationValues() {
-  return getLocationInputs()
-    .filter((input) => input.checked)
-    .map((input) => String(input.dataset.locationValue || '').trim())
-    .filter(Boolean);
-}
-
-function syncLocationSelectionLimit() {
-  const inputs = getLocationInputs();
-  const configuredMax = loadedGlobalSettings?.limits?.search?.locations_max_selected?.max;
-  const maxSelected = Number(configuredMax);
-  if (!Number.isFinite(maxSelected) || maxSelected < 1) return;
-  const selectedCount = inputs.filter((input) => input.checked).length;
-  inputs.forEach((input) => {
-    input.disabled = !input.checked && selectedCount >= maxSelected;
-  });
+  const container = document.getElementById('locations');
+  return locationUi.getSelectedLocationValues?.(container) || [];
 }
 
 function renderLocationOptions() {
   const container = document.getElementById('locations');
-  if (!container || !locationUi.renderLocationOptions) return;
-  const options = Array.isArray(locationUi.options)
-    ? locationUi.options.filter((option) => ['state', 'territory', 'city'].includes(String(option?.kind || '').trim().toLowerCase()))
-    : [];
-  const savedValues = new Set(
-    (loadedProfile?.search_settings?.locations || [])
-      .map((value) => String(value || '').trim())
-      .filter(Boolean)
-  );
-  const grouped = new Map();
-  options.forEach((option) => {
-    const group = String(option?.group || '').trim();
-    if (!group) return;
-    if (!grouped.has(group)) grouped.set(group, []);
-    grouped.get(group).push(option);
+  if (!container || !locationUi.renderLocationCheckboxOptions) return;
+  const configuredMax = Number(loadedGlobalSettings?.limits?.search?.locations_max_selected?.max);
+  locationUi.renderLocationCheckboxOptions(container, {
+    selectedValues: loadedProfile?.search_settings?.locations || [],
+    maxSelected: configuredMax,
+    onChange: () => markDirty(),
   });
-  container.innerHTML = '';
-  grouped.forEach((groupOptions, group) => {
-    const section = document.createElement('fieldset');
-    section.className = ['checkbox-list-group', 'location-checkbox-group', groupOptions.length > 6 ? 'checkbox-list-group--dense' : ''].filter(Boolean).join(' ');
-    const legend = document.createElement('legend');
-    legend.textContent = group;
-    section.appendChild(legend);
-    const optionsWrap = document.createElement('div');
-    optionsWrap.className = 'checkbox-list-options location-checkbox-options';
-    groupOptions.forEach((option) => {
-      const value = String(option?.value || '').trim();
-      const label = String(option?.label || '').trim();
-      if (!value || !label) return;
-      const item = document.createElement('label');
-      item.className = 'checkbox-list-option location-checkbox-option';
-      const input = document.createElement('input');
-      input.type = 'checkbox';
-      input.className = 'jh-checkbox';
-      input.dataset.locationValue = value;
-      input.checked = savedValues.has(value);
-      input.addEventListener('change', () => {
-        syncLocationSelectionLimit();
-        markDirty();
-      });
-      const text = document.createElement('span');
-      text.textContent = label;
-      item.append(input, text);
-      optionsWrap.appendChild(item);
-    });
-    section.appendChild(optionsWrap);
-    container.appendChild(section);
-  });
-  syncLocationSelectionLimit();
 }
 
 function buildSettingsHelpDrawer(bodyHtml, extraClass = '') {
@@ -577,6 +516,35 @@ function upgradeSettingsHelpBlocks() {
 function initFieldInfoDrawers() {
   const drawers = Array.from(document.querySelectorAll('details.field-info-drawer'));
   if (!drawers.length) return;
+
+  const viewportPadding = 16;
+  const panelOffset = 8;
+
+  const positionDrawer = (drawer) => {
+    if (!drawer?.open || !drawer.closest('.settings-main')) return;
+    const anchor = drawer.querySelector(':scope > summary.field-info');
+    const panel = drawer.querySelector(':scope > .field-info-panel');
+    if (!anchor || !panel) return;
+
+    const anchorRect = anchor.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+    const mainRect = drawer.closest('.settings-main')?.getBoundingClientRect();
+    const minLeft = Math.max(viewportPadding, (mainRect?.left || 0) + viewportPadding);
+    const viewportMaxLeft = window.innerWidth - panelRect.width - viewportPadding;
+    const mainMaxLeft = (mainRect?.right || window.innerWidth) - panelRect.width - viewportPadding;
+    const maxLeft = Math.max(minLeft, Math.min(viewportMaxLeft, mainMaxLeft));
+    const centeredLeft = anchorRect.left + (anchorRect.width / 2) - (panelRect.width / 2);
+    const left = Math.min(Math.max(centeredLeft, minLeft), maxLeft);
+
+    const belowTop = anchorRect.bottom + panelOffset;
+    const aboveTop = anchorRect.top - panelRect.height - panelOffset;
+    const fitsBelow = belowTop + panelRect.height <= window.innerHeight - viewportPadding;
+    const top = fitsBelow || aboveTop < viewportPadding ? belowTop : aboveTop;
+
+    panel.style.left = `${Math.round(left)}px`;
+    panel.style.top = `${Math.round(Math.max(viewportPadding, top))}px`;
+  };
+
   const closeAll = (exceptDrawer = null) => {
     drawers.forEach((drawer) => {
       if (drawer !== exceptDrawer) {
@@ -584,11 +552,22 @@ function initFieldInfoDrawers() {
       }
     });
   };
+
+  const repositionOpenDrawers = () => {
+    drawers.forEach((drawer) => {
+      if (drawer.open) positionDrawer(drawer);
+    });
+  };
+
   drawers.forEach((drawer) => {
     drawer.addEventListener('toggle', () => {
-      if (drawer.open) closeAll(drawer);
+      if (!drawer.open) return;
+      closeAll(drawer);
+      window.requestAnimationFrame(() => positionDrawer(drawer));
     });
   });
+  window.addEventListener('resize', repositionOpenDrawers);
+  window.addEventListener('scroll', repositionOpenDrawers, true);
   document.addEventListener('click', (event) => {
     if (event.target.closest('details.field-info-drawer')) return;
     closeAll();
@@ -720,6 +699,10 @@ function fillForm(profile) {
     settingsField(id).value = rulesToText(profile[id], key);
   }
   chipEditor.renderGlobalChipEditors();
+}
+
+export function refreshSettingsForm(profile) {
+  fillForm(profile);
 }
 
 async function loadProfile() {

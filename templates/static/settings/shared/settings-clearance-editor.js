@@ -135,14 +135,12 @@ export const JobHunterClearanceEditor = (function () {
       const stateId = `${toggleId}_state`;
       const implied = isRowImpliedByHigherClearance(index);
       return `
-        <article class="capability-card clearance-card" data-clearance-index="${index}">
-          <div class="capability-card-main clearance-card-main">
-            <div class="clearance-card-copy">
-              <h4 class="clearance-card-title">${escapeHtml(rule.displayLabel || rule.name)}</h4>
-              <p class="clearance-card-state" id="${stateId}">${escapeHtml(stateLabel(rule, implied))}</p>
-            </div>
+        <article class="profile-fact-card" data-clearance-index="${index}">
+          <div class="profile-fact-copy">
+            <h5 class="profile-fact-title">${escapeHtml(rule.displayLabel || rule.name)}</h5>
+            <p class="profile-fact-state" id="${stateId}">${escapeHtml(stateLabel(rule, implied))}</p>
           </div>
-          <div class="capability-card-actions clearance-card-actions">
+          <div class="profile-fact-actions">
             <label class="toggle-switch toggle-switch--compact" for="${toggleId}">
               <span class="toggle-switch-control">
                 <input id="${toggleId}" type="checkbox" role="switch" data-clearance-field="value"
@@ -154,7 +152,7 @@ export const JobHunterClearanceEditor = (function () {
         </article>
       `;
     }).join('');
-    container.innerHTML = `<div class="capability-grid clearance-grid">${cardsHtml}</div>`;
+    container.innerHTML = `<div class="profile-fact-grid">${cardsHtml}</div>`;
   }
 
   function setClearanceRuleState(rules) {

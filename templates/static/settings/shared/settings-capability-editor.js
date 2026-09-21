@@ -258,38 +258,27 @@ export const JobHunterCapabilityEditor = (function () {
           `).join('');
           const aliasRowHtml = aliasCount ? `
             <div class="capability-alias-row">
+              <span class="capability-alias-label">${escapeHtml(capabilityLabels.related_skills_label)}</span>
               ${aliasPreviewHtml}
               ${remainingAliases.length ? `
                 <details class="capability-alias-drawer"${expandedCapabilityRows.has(index) ? ' open' : ''}>
                   <summary class="cap-alias-summary">
                     <span class="capability-summary-label capability-summary-label--closed">${escapeHtml(formatLabel(capabilityLabels.related_skills_show_more, { count: remainingAliases.length }))}</span>
-                    <span class="capability-summary-label capability-summary-label--open">${escapeHtml(capabilityLabels.related_skills_show_less)}</span>
+                    <span class="capability-summary-label capability-summary-label--open">${escapeHtml(formatLabel(capabilityLabels.related_skills_show_less, { count: remainingAliases.length }))}</span>
                   </summary>
                   <div class="cap-alias-chips" aria-label="${escapeHtml(capabilityLabels.related_skills_label)}">${aliasChips}</div>
                 </details>
               ` : ''}
             </div>
           ` : '';
-          const meterLevels = ['basic', 'working', 'strong']
-            .filter(level => capabilityLevels.includes(level));
-          const selectedStrengthIndex = Math.max(0, meterLevels.indexOf(rule.level));
-          const selectedStrengthMeta = capabilityLevelMeta[rule.level] || {
-            label: rule.level,
-            summary: '',
-            tone: '',
-          };
-          const strengthChoices = meterLevels.map((level, levelIndex) => {
-            const meta = capabilityLevelMeta[level] || { label: level };
-            const inputId = `capability_level_${index}_${level}`;
-            const checked = rule.level === level ? ' checked' : '';
-            const filledClass = levelIndex <= selectedStrengthIndex ? ' is-filled' : '';
-            return `
-              <label class="capability-strength-dot${filledClass}" for="${inputId}" title="${escapeHtml(meta.label)}">
-                <input id="${inputId}" type="radio" name="capability_level_${index}" value="${escapeHtml(level)}" data-capability-field="level"${checked} aria-label="${escapeHtml(meta.label)}">
-                <span aria-hidden="true"></span>
-              </label>
-            `;
-          }).join('');
+          const strengthMeterHtml = capabilityUi.capabilityStrengthMeterMarkup({
+            selectedValue: rule.level,
+            groupName: `capability_level_${index}`,
+            inputIdPrefix: `capability_level_${index}`,
+            inputDataAttributes: { 'data-capability-field': 'level' },
+            ariaLabel: 'Capability strength',
+            helpId: `capability_strength_help_${index}`,
+          });
           const selected = selectedCapabilityRows.has(index);
           return `
             <article class="capability-card${selected ? ' is-selected' : ''}" data-capability-index="${index}">
@@ -301,17 +290,7 @@ export const JobHunterCapabilityEditor = (function () {
                 </div>
                 ${aliasRowHtml}
                 <div class="cap-strength">
-                  <div class="capability-strength-meter ${escapeHtml(selectedStrengthMeta.tone || '')}"
-                       role="radiogroup"
-                       aria-label="Capability strength"
-                       aria-describedby="capability_strength_help_${index}">
-                    <span class="capability-strength-dots">${strengthChoices}</span>
-                    <span class="capability-strength-label">${escapeHtml(selectedStrengthMeta.label)}</span>
-                    <span class="capability-strength-tooltip" id="capability_strength_help_${index}" role="tooltip">
-                      <strong>${escapeHtml(selectedStrengthMeta.label)}</strong>
-                      <span>${escapeHtml(selectedStrengthMeta.summary)}</span>
-                    </span>
-                  </div>
+                  ${strengthMeterHtml}
                 </div>
               </div>
               <div class="capability-card-actions" role="group" aria-label="Capability actions">

@@ -120,11 +120,270 @@ def test_onboarding_review_related_skills_drawer_only_shows_remaining_aliases(
     expect(preview.locator(".cap-alias-chip-label")).to_have_text(["python", "fastapi"])
 
     drawer = card.locator("details.capability-alias-drawer")
-    expect(card.locator(".capability-summary-label--closed")).to_have_text("Show 2 more")
+    expect(card.locator(".capability-summary-label--closed")).to_have_text("+2 more")
     card.locator(".cap-alias-summary").click()
     expect(drawer).to_have_attribute("open", "")
-    expect(card.locator(".capability-summary-label--open")).to_have_text("Show less")
+    expect(card.locator(".capability-summary-label--open")).to_have_text("Hide 2")
     expect(drawer.locator(".cap-alias-chip-label")).to_have_text(["postgresql", "docker"])
     card.locator(".cap-alias-summary").click()
     expect(drawer).not_to_have_attribute("open", "")
-    expect(card.locator(".capability-summary-label--closed")).to_have_text("Show 2 more")
+    expect(card.locator(".capability-summary-label--closed")).to_have_text("+2 more")
+
+
+def test_onboarding_progress_header_reopens_previously_visited_search_basics(
+    fresh_candidate_page, monkeypatch
+):
+    from job_hunter_agent.routes import onboarding_api
+
+    monkeypatch.setattr(onboarding_api, "run_onboarding", _stub_run_onboarding)
+
+    page = fresh_candidate_page
+    page.goto("/start")
+    page.locator("#primary_cv").set_input_files(
+        files=[
+            {
+                "name": "tiny_cv.txt",
+                "mimeType": "text/plain",
+                "buffer": b"Jane Doe\nSenior Backend Engineer\n",
+            }
+        ]
+    )
+
+    with page.expect_response("**/api/onboarding/import") as response_info:
+        page.locator("#create_profile").click()
+    assert response_info.value.ok
+
+    review_step = page.locator('[data-step="2"]')
+    search_step = page.locator('[data-step="3"]')
+    search_nav = page.locator('[data-step-nav="3"]')
+
+    expect(review_step).to_be_visible()
+    # A not-yet-reached forward step is still locked.
+    expect(search_nav).to_be_disabled()
+
+    page.locator("#continue_to_search_basics").click()
+    expect(search_step).to_be_visible()
+    expect(search_nav).to_be_enabled()
+
+    page.locator("#back_to_review_footer").click()
+    expect(review_step).to_be_visible()
+    # Once legitimately reached, Search Basics stays clickable while editing Review Draft.
+    expect(search_nav).to_be_enabled()
+
+    search_nav.click()
+    expect(search_step).to_be_visible()
+
+
+def test_onboarding_revisiting_check_setup_uses_search_save_transition(
+    fresh_candidate_page, monkeypatch
+):
+    from job_hunter_agent.routes import onboarding_api
+
+    monkeypatch.setattr(onboarding_api, "run_onboarding", _stub_run_onboarding)
+
+    page = fresh_candidate_page
+    page.goto("/start")
+    page.locator("#primary_cv").set_input_files(
+        files=[{
+            "name": "tiny_cv.txt",
+            "mimeType": "text/plain",
+            "buffer": b"Jane Doe\nSenior Backend Engineer\n",
+        }]
+    )
+    with page.expect_response("**/api/onboarding/import") as response_info:
+        page.locator("#create_profile").click()
+    assert response_info.value.ok
+
+    page.locator("#continue_to_search_basics").click()
+    page.locator('[data-step="3"]').wait_for(state="visible")
+
+    # Provide valid Search Basics values and reach Check Setup normally first.
+    page.locator('#location_search input[data-location-value="Sydney"]').check()
+    page.locator("#review_minimum_salary_yearly").fill("100000")
+    page.locator("#continue_to_check").click()
+    page.locator('[data-step="4"]').wait_for(state="visible")
+    expect(page.locator("#check_locations")).to_contain_text("Sydney")
+
+    # Edit Search Basics, then revisit step 4 through the progress header. The
+    # header must execute the same save/validation/summary transition as Continue.
+    page.locator("#edit_search_basics").click()
+    page.locator('[data-step="3"]').wait_for(state="visible")
+    page.locator('#location_search input[data-location-value="Sydney"]').uncheck()
+    page.locator('#location_search input[data-location-value="Melbourne"]').check()
+    page.locator("#review_minimum_salary_yearly").fill("120000")
+
+    with page.expect_response("**/api/profile") as save_response_info:
+        page.locator('[data-step-nav="4"]').click()
+    assert save_response_info.value.ok
+    page.locator('[data-step="4"]').wait_for(state="visible")
+    expect(page.locator("#check_locations")).to_contain_text("Melbourne")
+    expect(page.locator("#check_locations")).not_to_contain_text("Sydney")
+    expect(page.locator("#check_salary_yearly")).to_contain_text("120,000")
+
+
+
+def test_search_basics_location_layout_stays_compact_and_responsive(
+    fresh_candidate_page, monkeypatch
+):
+    """Protect the actual rendered Location geometry, not just CSS class names."""
+    from job_hunter_agent.routes import onboarding_api
+
+    monkeypatch.setattr(onboarding_api, "run_onboarding", _stub_run_onboarding)
+
+    page = fresh_candidate_page
+    page.set_viewport_size({"width": 1600, "height": 1000})
+    page.goto("/start")
+    page.locator("#primary_cv").set_input_files(
+        files=[{
+            "name": "tiny_cv.txt",
+            "mimeType": "text/plain",
+            "buffer": b"Jane Doe\nSenior Backend Engineer\n",
+        }]
+    )
+    with page.expect_response("**/api/onboarding/import") as response_info:
+        page.locator("#create_profile").click()
+    assert response_info.value.ok
+    page.locator("#continue_to_search_basics").click()
+    page.locator('[data-step="3"]').wait_for(state="visible")
+
+    location = page.locator("#location_search")
+    groups_wrap = location.locator(".location-checkbox-groups")
+    groups = location.locator(".location-checkbox-group")
+    expect(groups).to_have_count(3)
+
+    def box(locator):
+        result = locator.bounding_box()
+        assert result is not None
+        return result
+
+    # Desktop: all three groups stay on one row, with bounded deliberate gaps.
+    location_box = box(location)
+    wrap_box = box(groups_wrap)
+    group_boxes = [box(groups.nth(i)) for i in range(3)]
+    assert max(abs(group_boxes[i]["y"] - group_boxes[0]["y"]) for i in range(1, 3)) < 8
+    def content_extent(group):
+        option_boxes = [box(group.locator(".checkbox-list-option").nth(i)) for i in range(group.locator(".checkbox-list-option").count())]
+        return min(item["x"] for item in option_boxes), max(item["x"] + item["width"] for item in option_boxes)
+
+    first_left, first_right = content_extent(groups.nth(0))
+    second_left, second_right = content_extent(groups.nth(1))
+    third_left, third_right = content_extent(groups.nth(2))
+    gap_1 = second_left - first_right
+    gap_2 = third_left - second_right
+    assert 16 <= gap_1 <= 96, f"capital/states visible gap is {gap_1}px"
+    assert 16 <= gap_2 <= 96, f"states/territories visible gap is {gap_2}px"
+    # The selector content should not present as a giant mostly-empty row.
+    assert wrap_box["width"] <= 950
+    assert wrap_box["width"] < location_box["width"] * 0.85
+
+    # Internal two-column lists also remain compact.
+    sydney = box(groups.nth(0).locator('.checkbox-list-option:has-text("Sydney")'))
+    perth = box(groups.nth(0).locator('.checkbox-list-option:has-text("Perth")'))
+    nsw = box(groups.nth(1).locator('.checkbox-list-option:has-text("New South Wales")'))
+    sa = box(groups.nth(1).locator('.checkbox-list-option:has-text("South Australia")'))
+    assert 8 <= perth["x"] - (sydney["x"] + sydney["width"]) <= 64
+    assert 8 <= sa["x"] - (nsw["x"] + nsw["width"]) <= 64
+
+    # Medium desktop: compact content still fits as three groups; do not create
+    # the awkward two-groups-plus-centred-Territories orphan row.
+    page.set_viewport_size({"width": 1000, "height": 1100})
+    group_boxes = [box(groups.nth(i)) for i in range(3)]
+    assert max(abs(group_boxes[i]["y"] - group_boxes[0]["y"]) for i in range(1, 3)) < 8
+    nsw_box = box(groups.nth(1).locator('.checkbox-list-option:has-text("New South Wales")'))
+    assert nsw_box["height"] < 32
+
+    # Narrow: switch directly to one stacked column rather than 2 + 1.
+    page.set_viewport_size({"width": 760, "height": 1100})
+    group_boxes = [box(groups.nth(i)) for i in range(3)]
+    assert group_boxes[1]["y"] > group_boxes[0]["y"]
+    assert group_boxes[2]["y"] > group_boxes[1]["y"]
+
+    # Phone: groups stay stacked and the page must not overflow horizontally.
+    page.set_viewport_size({"width": 390, "height": 1000})
+    group_boxes = [box(groups.nth(i)) for i in range(3)]
+    assert group_boxes[1]["y"] > group_boxes[0]["y"]
+    assert group_boxes[2]["y"] > group_boxes[1]["y"]
+    overflow = page.evaluate("document.documentElement.scrollWidth - window.innerWidth")
+    assert overflow <= 1, f"mobile horizontal overflow is {overflow}px"
+
+    # Search Basics composition: wide desktop keeps compensation beside the
+    # preference groups, but salary fields sit side-by-side so the right column
+    # does not become a tall isolated tower.
+    page.set_viewport_size({"width": 1600, "height": 1000})
+    preference_groups = page.locator(".search-preference-groups")
+    compensation = page.locator(".search-compensation-group")
+    salary_fields = compensation.locator(".salary-preference-fields > .onb-field")
+    pref_box = box(preference_groups)
+    compensation_box = box(compensation)
+    assert compensation_box["x"] > pref_box["x"] + pref_box["width"] - 8
+    annual_box = box(salary_fields.nth(0))
+    daily_box = box(salary_fields.nth(1))
+    assert abs(annual_box["y"] - daily_box["y"]) < 8
+    salary_gap = daily_box["x"] - (annual_box["x"] + annual_box["width"])
+    assert 16 <= salary_gap <= 64, f"salary field gap is {salary_gap}px"
+
+    # At medium width compensation drops below, giving Work type / Sector /
+    # Work mode the full row instead of orphaning Work mode underneath.
+    page.set_viewport_size({"width": 1100, "height": 1100})
+    pref_box = box(preference_groups)
+    compensation_box = box(compensation)
+    assert compensation_box["y"] > pref_box["y"] + pref_box["height"] - 8
+    preference_items = preference_groups.locator(":scope > .onb-field")
+    pref_item_boxes = [box(preference_items.nth(i)) for i in range(3)]
+    assert max(abs(pref_item_boxes[i]["y"] - pref_item_boxes[0]["y"]) for i in range(1, 3)) < 8
+    annual_box = box(salary_fields.nth(0))
+    daily_box = box(salary_fields.nth(1))
+    assert abs(annual_box["y"] - daily_box["y"]) < 8
+
+    # Phone stacks the salary fields as well.
+    page.set_viewport_size({"width": 390, "height": 1000})
+    annual_box = box(salary_fields.nth(0))
+    daily_box = box(salary_fields.nth(1))
+    assert daily_box["y"] > annual_box["y"]
+    overflow = page.evaluate("document.documentElement.scrollWidth - window.innerWidth")
+    assert overflow <= 1, f"mobile search-basics horizontal overflow is {overflow}px"
+
+def test_onboarding_capability_review_reuses_shared_strength_and_persists_choice(
+    fresh_candidate_page, monkeypatch
+):
+    from job_hunter_agent.routes import onboarding_api
+
+    monkeypatch.setattr(onboarding_api, "run_onboarding", _stub_run_onboarding)
+
+    page = fresh_candidate_page
+    page.goto("/start")
+    page.locator("#primary_cv").set_input_files(
+        files=[{
+            "name": "tiny_cv.txt",
+            "mimeType": "text/plain",
+            "buffer": b"Jane Doe\nSenior Backend Engineer\n",
+        }]
+    )
+    with page.expect_response("**/api/onboarding/import") as response_info:
+        page.locator("#create_profile").click()
+    assert response_info.value.ok
+
+    card = page.locator("#review_capability_cards .capability-card").first
+    card.wait_for(state="visible")
+    meter = card.locator(".capability-strength-meter")
+
+    # CV extraction supplied Strong, and onboarding exposes that same shared
+    # strength control rather than hiding the value from the user.
+    expect(meter.locator(".capability-strength-label")).to_have_text("Strong")
+    expect(meter.locator(".capability-strength-dot.is-filled")).to_have_count(3)
+    expect(card.locator(".capability-alias-label")).to_have_text("Related skills")
+    expect(card.locator(".capability-card-icon")).to_have_count(0)
+    expect(page.locator("#review_capability_helper")).to_have_count(0)
+    expect(page.locator("#continue_to_search_basics")).to_have_text("Continue")
+
+    # User correction is draft state and must survive a reload before Finish Setup.
+    meter.locator('label[for$="_working"]').click()
+    expect(meter.locator(".capability-strength-label")).to_have_text("Working")
+    expect(meter.locator(".capability-strength-dot.is-filled")).to_have_count(2)
+
+    page.reload()
+    page.locator('[data-step="2"]').wait_for(state="visible")
+    restored_card = page.locator("#review_capability_cards .capability-card").first
+    restored_meter = restored_card.locator(".capability-strength-meter")
+    expect(restored_meter.locator(".capability-strength-label")).to_have_text("Working")
+    expect(restored_meter.locator(".capability-strength-dot.is-filled")).to_have_count(2)
