@@ -1353,18 +1353,29 @@
 }
 
 /* Shared Search Basics composition used by onboarding and Settings.
-   The three choice groups stay compact; compensation is a related subgroup
-   beneath them instead of competing for a fourth top-row column. */
+   Wide containers use a purposeful 2:1 form grid; the component itself
+   collapses when its own available width narrows. */
+.search-basics-container {
+  container-type: inline-size;
+}
+
 .search-basics-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(18rem, 1fr);
+  align-items: start;
+  gap: calc(var(--surface-gap-lg) * 2);
+}
+
+.search-preference-groups {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
-  justify-content: flex-start;
   gap: var(--surface-gap-lg) calc(var(--surface-gap-lg) * 2);
+  min-width: 0;
 }
 
-.search-basics-fields > .settings-form-field,
-.search-basics-fields > .onb-field {
+.search-preference-groups > .settings-form-field,
+.search-preference-groups > .onb-field {
   flex: 0 0 auto;
   width: max-content;
   max-width: 100%;
@@ -1373,29 +1384,48 @@
 
 .search-compensation-group {
   display: grid;
-  flex: 1 0 100%;
-  width: 100%;
   min-width: 0;
-  padding-top: var(--surface-gap-md);
-  border-top: 1px solid var(--border-subtle);
-  row-gap: var(--field-label-control-gap);
+  padding-left: calc(var(--surface-gap-lg) * 2);
+  border-left: 1px solid var(--border-subtle);
+  row-gap: var(--surface-gap-md);
 }
 
 .salary-preference-fields {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: var(--surface-gap-lg);
+  display: grid;
+  gap: var(--surface-gap-md);
 }
 
 .salary-preference-fields > .onb-field,
 .salary-preference-fields > .settings-form-field {
-  flex: 0 1 18rem;
   min-width: 0;
 }
 
 .currency-input-wrap--compact {
   width: min(100%, 13rem);
+}
+
+@container (max-width: 54rem) {
+  .search-basics-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .search-compensation-group {
+    padding-left: 0;
+    padding-top: var(--surface-gap-lg);
+    border-left: 0;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .salary-preference-fields {
+    grid-template-columns: repeat(2, max-content);
+    gap: var(--surface-gap-lg);
+  }
+}
+
+@container (max-width: 30rem) {
+  .salary-preference-fields {
+    grid-template-columns: 1fr;
+  }
 }
 
 .settings-form-field,
@@ -2577,7 +2607,7 @@
 .location-checkbox-groups {
   display: grid;
   grid-template-columns: repeat(3, max-content);
-  justify-content: start;
+  justify-content: center;
 }
 .checkbox-list-group {
   min-width: 0;
@@ -2666,7 +2696,7 @@
 @container (max-width: 64rem) {
   .location-checkbox-groups {
     grid-template-columns: repeat(2, max-content);
-    justify-content: start;
+    justify-content: center;
   }
   .location-checkbox-group:nth-child(3) {
     grid-column: 1 / -1;
@@ -2680,6 +2710,7 @@
 @container (max-width: 44rem) {
   .location-checkbox-groups {
     grid-template-columns: 1fr;
+    justify-content: stretch;
   }
   .location-checkbox-group {
     padding: var(--surface-gap-md) 0;

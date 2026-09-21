@@ -230,28 +230,29 @@
               <div id="location_search" class="checkbox-list-grid location-checkbox-grid" role="group" aria-labelledby="location_search_label"></div>
             </section>
 
-            <section class="review-block settings-form-field--full">
+            <section class="review-block settings-form-field--full search-basics-container">
               <div class="search-basics-fields">
-                <div class="onb-field">
-                  <div class="field-label-row">
-                    <label id="engagement_type_label">__JOB_HUNTER_ONBOARDING_PAGE_WORK_TYPE_LABEL__</label>
-                    <details class="field-info-drawer">
-                      <summary class="field-info" aria-label="Help for work type">i</summary>
-                      <div class="field-info-panel">__JOB_HUNTER_ONBOARDING_PAGE_WORK_TYPE_HELP__</div>
-                    </details>
+                <div class="search-preference-groups">
+                  <div class="onb-field">
+                    <div class="field-label-row">
+                      <label id="engagement_type_label">__JOB_HUNTER_ONBOARDING_PAGE_WORK_TYPE_LABEL__</label>
+                      <details class="field-info-drawer">
+                        <summary class="field-info" aria-label="Help for work type">i</summary>
+                        <div class="field-info-panel">__JOB_HUNTER_ONBOARDING_PAGE_WORK_TYPE_HELP__</div>
+                      </details>
+                    </div>
+                    <div class="field-control-shell">
+                      __JOB_HUNTER_ENGAGEMENT_TYPE_CHOICES__
+                    </div>
+                    <div id="contract_duration_row" class="choice-detail-popover" popover="auto" role="group" aria-labelledby="min_contract_months_label">
+                      <label id="min_contract_months_label" class="choice-detail-popover__label" for="min_contract_months">__JOB_HUNTER_MIN_CONTRACT_MONTH_LABEL__</label>
+                      <select id="min_contract_months" class="jh-select" aria-label="__JOB_HUNTER_MIN_CONTRACT_MONTH_LABEL__">
+                        <option value="">__JOB_HUNTER_MIN_CONTRACT_MONTH_NONE_LABEL__</option>
+                        __JOB_HUNTER_MIN_CONTRACT_MONTH_OPTIONS__
+                      </select>
+                    </div>
+                    <p id="engagement_type_summary" class="summary-line" aria-live="polite"></p>
                   </div>
-                  <div class="field-control-shell">
-                    __JOB_HUNTER_ENGAGEMENT_TYPE_CHOICES__
-                  </div>
-                  <div id="contract_duration_row" class="choice-detail-popover" popover="auto" role="group" aria-labelledby="min_contract_months_label">
-                    <label id="min_contract_months_label" class="choice-detail-popover__label" for="min_contract_months">__JOB_HUNTER_MIN_CONTRACT_MONTH_LABEL__</label>
-                    <select id="min_contract_months" class="jh-select" aria-label="__JOB_HUNTER_MIN_CONTRACT_MONTH_LABEL__">
-                      <option value="">__JOB_HUNTER_MIN_CONTRACT_MONTH_NONE_LABEL__</option>
-                      __JOB_HUNTER_MIN_CONTRACT_MONTH_OPTIONS__
-                    </select>
-                  </div>
-                  <p id="engagement_type_summary" class="summary-line" aria-live="polite"></p>
-                </div>
 
                 <div class="onb-field">
                   <div class="field-label-row">
@@ -280,6 +281,7 @@
                   </div>
                   <p id="work_mode_preference_summary" class="summary-line" aria-live="polite"></p>
                 </div>
+              </div>
 
                 <div class="search-compensation-group">
                   <div class="field-label-row">
