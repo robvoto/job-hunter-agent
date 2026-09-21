@@ -2603,22 +2603,29 @@
 
 .location-checkbox-grid {
   container-type: inline-size;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 .location-checkbox-groups {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, max-content);
+  width: max-content;
+  max-width: 100%;
+  padding: var(--surface-gap-md);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
 }
 .checkbox-list-group {
   display: grid;
   align-content: start;
+  justify-items: start;
   min-width: 0;
   margin: 0;
   padding: 0 var(--surface-gap-lg);
   border: 0;
 }
-.location-checkbox-group:nth-child(1) { justify-items: start; }
-.location-checkbox-group:nth-child(2) { justify-items: center; }
-.location-checkbox-group:nth-child(3) { justify-items: end; }
 .checkbox-list-group + .checkbox-list-group { border-left: 1px solid var(--border-subtle); }
 .checkbox-list-group legend {
   margin-bottom: var(--surface-gap-sm);
@@ -2699,13 +2706,11 @@
 
 @container (max-width: 64rem) {
   .location-checkbox-groups {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, max-content);
   }
-  .location-checkbox-group:nth-child(1) { justify-items: start; }
-  .location-checkbox-group:nth-child(2) { justify-items: end; }
   .location-checkbox-group:nth-child(3) {
     grid-column: 1 / -1;
-    justify-items: center;
+    justify-self: center;
     border-left: 0;
     border-top: 1px solid var(--border-subtle);
     margin-top: var(--surface-gap-md);
@@ -2715,14 +2720,11 @@
 
 @container (max-width: 44rem) {
   .location-checkbox-groups {
-    grid-template-columns: 1fr;
-    justify-content: stretch;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
   }
-  .location-checkbox-group,
-  .location-checkbox-group:nth-child(1),
-  .location-checkbox-group:nth-child(2),
-  .location-checkbox-group:nth-child(3) {
-    justify-items: start;
+  .location-checkbox-group {
+    justify-self: stretch;
     padding: var(--surface-gap-md) 0;
   }
   .location-checkbox-group + .location-checkbox-group {

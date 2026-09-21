@@ -221,6 +221,85 @@ def test_onboarding_revisiting_check_setup_uses_search_save_transition(
     expect(page.locator("#check_salary_yearly")).to_contain_text("120,000")
 
 
+
+def test_search_basics_location_layout_stays_compact_and_responsive(
+    fresh_candidate_page, monkeypatch
+):
+    """Protect the actual rendered Location geometry, not just CSS class names."""
+    from job_hunter_agent.routes import onboarding_api
+
+    monkeypatch.setattr(onboarding_api, "run_onboarding", _stub_run_onboarding)
+
+    page = fresh_candidate_page
+    page.set_viewport_size({"width": 1600, "height": 1000})
+    page.goto("/start")
+    page.locator("#primary_cv").set_input_files(
+        files=[{
+            "name": "tiny_cv.txt",
+            "mimeType": "text/plain",
+            "buffer": b"Jane Doe\nSenior Backend Engineer\n",
+        }]
+    )
+    with page.expect_response("**/api/onboarding/import") as response_info:
+        page.locator("#create_profile").click()
+    assert response_info.value.ok
+    page.locator("#continue_to_search_basics").click()
+    page.locator('[data-step="3"]').wait_for(state="visible")
+
+    location = page.locator("#location_search")
+    groups_wrap = location.locator(".location-checkbox-groups")
+    groups = location.locator(".location-checkbox-group")
+    expect(groups).to_have_count(3)
+
+    def box(locator):
+        result = locator.bounding_box()
+        assert result is not None
+        return result
+
+    # Desktop: all three groups stay on one row, with bounded deliberate gaps.
+    location_box = box(location)
+    wrap_box = box(groups_wrap)
+    group_boxes = [box(groups.nth(i)) for i in range(3)]
+    assert max(abs(group_boxes[i]["y"] - group_boxes[0]["y"]) for i in range(1, 3)) < 8
+    def content_extent(group):
+        option_boxes = [box(group.locator(".checkbox-list-option").nth(i)) for i in range(group.locator(".checkbox-list-option").count())]
+        return min(item["x"] for item in option_boxes), max(item["x"] + item["width"] for item in option_boxes)
+
+    first_left, first_right = content_extent(groups.nth(0))
+    second_left, second_right = content_extent(groups.nth(1))
+    third_left, third_right = content_extent(groups.nth(2))
+    gap_1 = second_left - first_right
+    gap_2 = third_left - second_right
+    assert 16 <= gap_1 <= 96, f"capital/states visible gap is {gap_1}px"
+    assert 16 <= gap_2 <= 96, f"states/territories visible gap is {gap_2}px"
+    # The selector content should not present as a giant mostly-empty row.
+    assert wrap_box["width"] <= 950
+    assert wrap_box["width"] < location_box["width"] * 0.85
+
+    # Internal two-column lists also remain compact.
+    sydney = box(groups.nth(0).locator('.checkbox-list-option:has-text("Sydney")'))
+    perth = box(groups.nth(0).locator('.checkbox-list-option:has-text("Perth")'))
+    nsw = box(groups.nth(1).locator('.checkbox-list-option:has-text("New South Wales")'))
+    sa = box(groups.nth(1).locator('.checkbox-list-option:has-text("South Australia")'))
+    assert 8 <= perth["x"] - (sydney["x"] + sydney["width"]) <= 64
+    assert 8 <= sa["x"] - (nsw["x"] + nsw["width"]) <= 64
+
+    # Medium: third group moves to a second row before labels are forced to wrap.
+    page.set_viewport_size({"width": 1000, "height": 1100})
+    group_boxes = [box(groups.nth(i)) for i in range(3)]
+    assert abs(group_boxes[1]["y"] - group_boxes[0]["y"]) < 8
+    assert group_boxes[2]["y"] > group_boxes[0]["y"] + 24
+    nsw_box = box(groups.nth(1).locator('.checkbox-list-option:has-text("New South Wales")'))
+    assert nsw_box["height"] < 32
+
+    # Phone: groups stack and the page must not overflow horizontally.
+    page.set_viewport_size({"width": 390, "height": 1000})
+    group_boxes = [box(groups.nth(i)) for i in range(3)]
+    assert group_boxes[1]["y"] > group_boxes[0]["y"]
+    assert group_boxes[2]["y"] > group_boxes[1]["y"]
+    overflow = page.evaluate("document.documentElement.scrollWidth - window.innerWidth")
+    assert overflow <= 1, f"mobile horizontal overflow is {overflow}px"
+
 def test_onboarding_capability_review_reuses_shared_strength_and_persists_choice(
     fresh_candidate_page, monkeypatch
 ):
