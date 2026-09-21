@@ -1,17 +1,17 @@
 {
   "metadata": {
     "source": "O*NET Database JSON",
-    "source_url": "https://www.onetcenter.org/dl_files/database/db_30_3_json.zip",
+    "source_url": "https://www.onetcenter.org/dl_files/database/db_31_0_json.zip",
     "taxonomy_version": "O*NET-SOC 2019",
-    "database_release": "30.3",
-    "dataset_fingerprint": "a321e0229d70f6cbff2dae24aeb7862cf52c6ccded0d453316f446cbe368e228",
+    "database_release": "31.0",
+    "dataset_fingerprint": "0073f2535eae59c1996af5c6b2f0ba40c6cc1c93f3c364a008f19e0f7ca998c0",
     "format": "fulldb_json",
     "record_counts": {
       "occupations": 1016,
-      "job_title_rows": 57543,
-      "title_variants": 61529,
-      "normalized_title_keys": 50862,
-      "target_preferred_pairs": 3576
+      "job_title_rows": 54269,
+      "title_variants": 58575,
+      "normalized_title_keys": 49242,
+      "target_preferred_pairs": 3613
     }
   },
   "occupations": [
