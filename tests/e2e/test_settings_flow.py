@@ -441,6 +441,16 @@ def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
     expect(no_button).to_have_text("No, I don't have this")
     expect(dismiss_button).to_have_text("Ignore suggestion")
     expect(card).not_to_contain_text("Suggested: Working")
+    expect(card.locator(".review-card-count")).to_have_text("Seen in 2 kept roles")
+    heading = card.locator(".review-card-heading")
+    assert float(heading.evaluate("el => parseFloat(getComputedStyle(el).columnGap) || 0")) > 0
+    title_box = heading.locator("h3").bounding_box()
+    count_box = heading.locator(".review-card-count").bounding_box()
+    assert title_box and count_box
+    assert (
+        count_box["x"] >= title_box["x"] + title_box["width"] + 1
+        or count_box["y"] >= title_box["y"] + title_box["height"]
+    )
     expect(card.locator('input[type="radio"]:checked')).to_have_count(0)
     confirm_button = card.locator(".confirm-skill-btn")
     expect(confirm_button).to_be_disabled()

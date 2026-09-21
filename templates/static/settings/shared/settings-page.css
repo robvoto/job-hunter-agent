@@ -1203,16 +1203,12 @@
       font-size: var(--text-role-panel-title-font-size);
       font-weight: var(--text-role-panel-title-font-weight);
     }
-    .review-card-heading {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: var(--surface-gap-xs) var(--surface-gap-sm);
-    }
-    .review-card-heading .suggestion-chip { padding: 3px 8px; }
+    .review-card-heading { align-items: baseline; }
     .review-card-count {
       color: var(--text-muted);
-      font-size: var(--text-role-chip-font-size);
+      font-size: var(--text-role-caption-font-size);
+      line-height: var(--text-role-caption-line-height);
+      white-space: nowrap;
     }
     .review-card p { margin: 0; color: var(--text-muted); line-height: 1.5; }
     .review-card ul { margin: var(--surface-gap-sm) 0 0 18px; padding: 0; }

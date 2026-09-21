@@ -72,6 +72,11 @@ function renderReviewChoiceGuide(choice) {
   `;
 }
 
+function keptRoleCountLabel(count) {
+  const value = Math.max(0, Number(count) || 0);
+  return `Seen in ${value} kept ${value === 1 ? 'role' : 'roles'}`;
+}
+
 function reviewStrengthChoicesMarkup(selectedValue, groupName) {
   const levels = Array.isArray(capabilityUi.capabilityLevels) && capabilityUi.capabilityLevels.length
     ? capabilityUi.capabilityLevels
@@ -201,9 +206,9 @@ function renderRequirementCard(item) {
   // Do not surface or preselect it until candidate-evidence-backed strength exists.
   return `
     <div class="review-card">
-      <div class="review-card-heading">
+      <div class="settings-subpanel-head review-card-heading">
         <h3>${escapeHtml(item.skill || 'Requirement')}</h3>
-        <span class="review-card-count">Seen in ${escapeHtml(String(item.count || 0))} kept role(s)</span>
+        <span class="review-card-count">${escapeHtml(keptRoleCountLabel(item.count))}</span>
       </div>
       <p>${escapeHtml(item.detail || '')}</p>
       <p><strong>Prompt:</strong> ${escapeHtml(item.prompt || 'Do you have this capability?')}</p>
@@ -256,9 +261,9 @@ function renderSuggestedTuning(reviewData) {
       // and require an explicit strength choice until evidence-backed recommendations exist.
       return `
       <div class="review-card">
-        <div class="review-card-heading">
+        <div class="settings-subpanel-head review-card-heading">
           <h3>${escapeHtml(item.skill || 'Capability')}</h3>
-          <span class="review-card-count">Seen in ${escapeHtml(String(item.count || 0))} kept role(s)</span>
+          <span class="review-card-count">${escapeHtml(keptRoleCountLabel(item.count))}</span>
         </div>
         <label>${escapeHtml(capabilityUi.reviewStrengthPromptLabel)}</label>
         <div class="choice-strip jh-choice-group capability-strength-strip review-strength-strip" role="radiogroup" aria-label="${escapeHtml(capabilityUi.reviewStrengthPromptLabel)}" data-skill="${escapeHtml(item.skill || '')}">
