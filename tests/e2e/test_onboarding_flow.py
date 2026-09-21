@@ -128,3 +128,47 @@ def test_onboarding_review_related_skills_drawer_only_shows_remaining_aliases(
     card.locator(".cap-alias-summary").click()
     expect(drawer).not_to_have_attribute("open", "")
     expect(card.locator(".capability-summary-label--closed")).to_have_text("Show 2 more")
+
+
+def test_onboarding_progress_header_reopens_previously_visited_search_basics(
+    fresh_candidate_page, monkeypatch
+):
+    from job_hunter_agent.routes import onboarding_api
+
+    monkeypatch.setattr(onboarding_api, "run_onboarding", _stub_run_onboarding)
+
+    page = fresh_candidate_page
+    page.goto("/start")
+    page.locator("#primary_cv").set_input_files(
+        files=[
+            {
+                "name": "tiny_cv.txt",
+                "mimeType": "text/plain",
+                "buffer": b"Jane Doe\nSenior Backend Engineer\n",
+            }
+        ]
+    )
+
+    with page.expect_response("**/api/onboarding/import") as response_info:
+        page.locator("#create_profile").click()
+    assert response_info.value.ok
+
+    review_step = page.locator('[data-step="2"]')
+    search_step = page.locator('[data-step="3"]')
+    search_nav = page.locator('[data-step-nav="3"]')
+
+    expect(review_step).to_be_visible()
+    # A not-yet-reached forward step is still locked.
+    expect(search_nav).to_be_disabled()
+
+    page.locator("#continue_to_search_basics").click()
+    expect(search_step).to_be_visible()
+    expect(search_nav).to_be_enabled()
+
+    page.locator("#back_to_review_footer").click()
+    expect(review_step).to_be_visible()
+    # Once legitimately reached, Search Basics stays clickable while editing Review Draft.
+    expect(search_nav).to_be_enabled()
+
+    search_nav.click()
+    expect(search_step).to_be_visible()

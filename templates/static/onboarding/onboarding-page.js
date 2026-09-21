@@ -326,10 +326,13 @@ export function refreshStepNavigation() {
     hasPrimaryCv && hasSearchBasicsState() ? SEARCH_STEP : 1,
   );
   maxUnlockedStep = Math.min(STEP_COUNT, unlockedStep);
-  const highestNavigableStep = Math.min(maxUnlockedStep, currentStep);
+  // maxUnlockedStep is progression history, not merely the current screen. A step
+  // becomes unlocked only after the preceding flow legitimately reaches it (or
+  // saved onboarding state restores that progress), so previously reached steps
+  // must stay navigable even after the user goes back to edit an earlier step.
   stepNavButtons.forEach((button) => {
     const step = Number(button.dataset.stepNav || 0);
-    button.disabled = !step || step > highestNavigableStep;
+    button.disabled = !step || step > maxUnlockedStep;
     button.setAttribute('aria-current', step === currentStep ? 'step' : 'false');
   });
 }
