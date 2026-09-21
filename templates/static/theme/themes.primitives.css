@@ -25,7 +25,7 @@ textarea {
 }
 
 /* Shared page-shell input chrome for pages that use the .page wrapper. */
-.page input,
+.page input:not([type="checkbox"]):not([type="radio"]),
 .page textarea {
   width: 100%;
   border: 1px solid var(--border-subtle);

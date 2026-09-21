@@ -36,11 +36,10 @@ def test_search_basics_reuses_review_layout_primitives():
 
     assert '<div class="review-grid">' in step_3
     assert 'class="review-block onb-field settings-form-field--full"' in step_3
-    assert '<select id="location_search" class="jh-select" multiple size="8"' in step_3
     assert 'class="review-block settings-form-field--full"' in step_3
     assert '<h3 class="summary-card-title">Search preferences</h3>' in step_3
-    assert 'class="settings-form-grid settings-form-grid--search-basics"' in step_3
-    assert 'class="onb-field settings-form-field--full"' in step_3
+    assert 'class="onboarding-search-preferences-grid"' in step_3
+    assert step_3.count('class="onb-field"') >= 3
     assert 'id="salary_yearly_block" class="review-block onb-field"' in step_3
     assert 'id="salary_daily_block" class="review-block onb-field"' in step_3
     assert "search-basics-grid" not in step_3
@@ -50,12 +49,29 @@ def test_search_basics_reuses_review_layout_primitives():
     assert ".compensation-card" not in theme_widgets
 
 
-def test_onboarding_keeps_compact_location_selector():
+def test_onboarding_and_settings_share_location_checkbox_component():
     repo_root = Path(__file__).resolve().parents[1]
     onboarding_html = (repo_root / "templates" / "onboarding.html").read_text(encoding="utf-8")
+    settings_html = (
+        repo_root / "templates" / "partials" / "settings" / "standard" / "settings-search.html"
+    ).read_text(encoding="utf-8")
+    common_location_js = (
+        repo_root / "templates" / "static" / "common" / "location-options.js"
+    ).read_text(encoding="utf-8")
+    onboarding_js = (
+        repo_root / "templates" / "static" / "onboarding" / "onboarding-page.js"
+    ).read_text(encoding="utf-8")
+    settings_js = (
+        repo_root / "templates" / "static" / "settings" / "shared" / "settings-page.js"
+    ).read_text(encoding="utf-8")
 
-    assert '<select id="location_search" class="jh-select" multiple size="8"' in onboarding_html
-    assert 'id="location_search" class="checkbox-list-grid location-checkbox-grid"' not in onboarding_html
+    shared_classes = 'class="checkbox-list-grid location-checkbox-grid"'
+    assert shared_classes in onboarding_html
+    assert shared_classes in settings_html
+    assert "export function renderLocationCheckboxOptions" in common_location_js
+    assert "onboardingLocationUi.renderLocationCheckboxOptions" in onboarding_js
+    assert "locationUi.renderLocationCheckboxOptions" in settings_js
+    assert '<select id="location_search"' not in onboarding_html
 
 
 def test_salary_preferences_are_normal_review_cards_using_shared_controls():

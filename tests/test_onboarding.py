@@ -346,7 +346,7 @@ def test_shared_ui_styles_are_centralised():
         repo_root / "templates" / "partials" / "settings" / "global" / "settings-learning.html"
     ).read_text(encoding="utf-8")
 
-    assert ".page input," in theme_primitives
+    assert ".page input:not([type=\"checkbox\"]):not([type=\"radio\"])," in theme_primitives
     assert ".currency-input-wrap input," in theme_primitives
     assert ".summary-line {" in theme_widgets
     assert ".settings-form-field--summary" not in theme_widgets

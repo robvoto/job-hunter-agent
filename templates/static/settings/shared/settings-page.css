@@ -1,4 +1,4 @@
-    /* Variables supplied by themes.css */
+﻿    /* Variables supplied by themes.css */
     * { box-sizing: border-box; }
     body {
       margin: 0;
@@ -2095,13 +2095,4 @@
 .settings-sidebar .sidebar-group-label-global {
   margin-top: 16px;
   padding-top: 10px;
-}
-
-/* Local layout exception: location groups use three columns on the Search Settings page. */
-.location-checkbox-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-@media (max-width: 900px) {
-  .location-checkbox-grid { grid-template-columns: 1fr; }
 }
