@@ -426,10 +426,7 @@ def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
         route.fulfill(
             status=200,
             content_type="application/json",
-            json={
-                "ok": True,
-                "profile": {"candidate_capabilities": [], "must_not_require_skills": []},
-            },
+            json={"ok": True, "profile": None},
         )
 
     page.route("**/api/review-data", handle_review_data)
@@ -442,7 +439,9 @@ def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
     no_button = card.locator(".do-not-have-skill-btn")
     dismiss_button = card.locator(".decline-skill-btn")
     expect(no_button).to_have_text("No, I don't have this")
-    expect(dismiss_button).to_have_text("Dismiss")
+    expect(dismiss_button).to_have_text("Ignore suggestion")
+    expect(card.locator('input[value="working"]')).to_be_checked()
+    expect(card.locator(".confirm-skill-btn")).to_be_enabled()
 
     no_box = no_button.bounding_box()
     dismiss_box = dismiss_button.bounding_box()
@@ -452,9 +451,9 @@ def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
     with page.expect_request("**/api/tuning-decisions") as no_request:
         no_button.click()
     assert no_request.value.post_data_json["decisions"][0]["choice"] == "do_not_have"
+    expect(card).to_have_count(0)
 
-    # Exercise Dismiss from a fresh stable render rather than racing the async
-    # review-data rerender triggered by the previous save.
+    # Exercise Ignore suggestion from a fresh render.
     page.reload()
     page.locator('[data-section="section-optimise"]').click()
     card = page.locator("#tuning_suggestions_panel .review-card").filter(has_text="Power BI")
