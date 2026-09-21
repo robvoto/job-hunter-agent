@@ -1,4 +1,4 @@
-import { formatRemoveItemLabel, renderTrashActionButton } from '../common/action-buttons.js';
+﻿import { formatRemoveItemLabel, renderTrashActionButton } from '../common/action-buttons.js';
 import * as onboardingPage from './onboarding-page.js';
 import { setSelectedLocations, hydrateSearchBasics } from './onboarding-search.js';
 import * as onboardingStorage from './onboarding-storage.js';
@@ -1075,16 +1075,6 @@ flowRefs.reviewStepRoot.addEventListener('keydown', (event) => {
 ].filter(Boolean).forEach((input) => {
   onboardingCurrencyUi.bindCurrencyInput?.(input);
 });
-flowRefs.locationSearch?.addEventListener('change', (event) => {
-  if (!event.target.matches('input[type="checkbox"][data-location-value]')) return;
-  hideStatus();
-  onboardingPage.syncSelectedLocationsFromSelect();
-  onboardingStorage.saveWizardState();
-  if (typeof scheduleSearchBasicsPersistence === 'function') {
-    onboardingStorage.scheduleSearchBasicsPersistence();
-  }
-});
-
 document.querySelectorAll('input[name="prefer_sector"]').forEach((input) => {
   input.addEventListener('change', () => {
     hideStatus();

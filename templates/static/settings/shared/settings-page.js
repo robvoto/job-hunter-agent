@@ -448,20 +448,81 @@ function renderLlmModelOptions() {
 }
 
 
-function getSelectedLocationValues() {
+function getLocationInputs() {
   const container = document.getElementById('locations');
-  return locationUi.getSelectedLocationValues?.(container) || [];
+  if (!container) return [];
+  return Array.from(container.querySelectorAll('input[type="checkbox"][data-location-value]'));
+}
+
+function getSelectedLocationValues() {
+  return getLocationInputs()
+    .filter((input) => input.checked)
+    .map((input) => String(input.dataset.locationValue || '').trim())
+    .filter(Boolean);
+}
+
+function syncLocationSelectionLimit() {
+  const inputs = getLocationInputs();
+  const configuredMax = loadedGlobalSettings?.limits?.search?.locations_max_selected?.max;
+  const maxSelected = Number(configuredMax);
+  if (!Number.isFinite(maxSelected) || maxSelected < 1) return;
+  const selectedCount = inputs.filter((input) => input.checked).length;
+  inputs.forEach((input) => {
+    input.disabled = !input.checked && selectedCount >= maxSelected;
+  });
 }
 
 function renderLocationOptions() {
   const container = document.getElementById('locations');
-  if (!container || !locationUi.renderLocationCheckboxOptions) return;
-  const configuredMax = Number(loadedGlobalSettings?.limits?.search?.locations_max_selected?.max);
-  locationUi.renderLocationCheckboxOptions(container, {
-    selectedValues: loadedProfile?.search_settings?.locations || [],
-    maxSelected: configuredMax,
-    onChange: () => markDirty(),
+  if (!container || !locationUi.renderLocationOptions) return;
+  const options = Array.isArray(locationUi.options)
+    ? locationUi.options.filter((option) => ['state', 'territory', 'city'].includes(String(option?.kind || '').trim().toLowerCase()))
+    : [];
+  const savedValues = new Set(
+    (loadedProfile?.search_settings?.locations || [])
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+  );
+  const grouped = new Map();
+  options.forEach((option) => {
+    const group = String(option?.group || '').trim();
+    if (!group) return;
+    if (!grouped.has(group)) grouped.set(group, []);
+    grouped.get(group).push(option);
   });
+  container.innerHTML = '';
+  grouped.forEach((groupOptions, group) => {
+    const section = document.createElement('fieldset');
+    section.className = ['checkbox-list-group', 'location-checkbox-group', groupOptions.length > 6 ? 'checkbox-list-group--dense' : ''].filter(Boolean).join(' ');
+    const legend = document.createElement('legend');
+    legend.textContent = group;
+    section.appendChild(legend);
+    const optionsWrap = document.createElement('div');
+    optionsWrap.className = 'checkbox-list-options location-checkbox-options';
+    groupOptions.forEach((option) => {
+      const value = String(option?.value || '').trim();
+      const label = String(option?.label || '').trim();
+      if (!value || !label) return;
+      const item = document.createElement('label');
+      item.className = 'checkbox-list-option location-checkbox-option';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.className = 'jh-checkbox';
+      input.dataset.locationValue = value;
+      input.checked = savedValues.has(value);
+      input.addEventListener('change', () => {
+        syncLocationSelectionLimit();
+        markDirty();
+      });
+      const text = document.createElement('span');
+      text.textContent = label;
+      item.append(input, text);
+      optionsWrap.appendChild(item);
+    });
+    section.appendChild(optionsWrap);
+    container.appendChild(section);
+  });
+  syncLocationSelectionLimit();
 }
 
 function buildSettingsHelpDrawer(bodyHtml, extraClass = '') {

@@ -2495,10 +2495,6 @@
   background: var(--bg-surface);
 }
 
-.location-checkbox-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
 .checkbox-list-group {
   min-width: 0;
   margin: 0;

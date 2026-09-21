@@ -221,13 +221,15 @@
           <div class="review-grid">
             <section class="review-block onb-field settings-form-field--full">
               <div class="field-label-row">
-                <label id="location_search_label">__JOB_HUNTER_ONBOARDING_PAGE_LOCATION_LABEL__</label>
+                <label for="location_search">__JOB_HUNTER_ONBOARDING_PAGE_LOCATION_LABEL__</label>
                 <details class="field-info-drawer">
                   <summary class="field-info" aria-label="Help for location">i</summary>
                   <div class="field-info-panel">__JOB_HUNTER_SHARED_UI_LOCATION_HELP__</div>
                 </details>
               </div>
-              <div id="location_search" class="checkbox-list-grid location-checkbox-grid" role="group" aria-labelledby="location_search_label"></div>
+              <div class="field-control-shell location-picker-shell">
+                <select id="location_search" class="jh-select" multiple size="8" aria-label="Location search"></select>
+              </div>
             </section>
 
             <section class="review-block settings-form-field--full">

@@ -626,10 +626,31 @@ async function tryGeolocationDefault() {
 }
 
 export function renderLocationSelect() {
-  if (!locationSelect || !onboardingLocationUi.renderLocationCheckboxOptions) return;
-  onboardingLocationUi.renderLocationCheckboxOptions(locationSelect, {
-    selectedValues: selectedLocations,
-    maxSelected: MAX_ONBOARDING_LOCATIONS,
+  if (!locationSelect) return;
+  const options = Array.isArray(onboardingLocationUi.options)
+    ? onboardingLocationUi.options.filter((option) => ['state', 'territory', 'city'].includes(String(option?.kind || '').trim().toLowerCase()))
+    : [];
+  const selectedValues = new Set(selectedLocations);
+  const grouped = new Map();
+  options.forEach((option) => {
+    const group = String(option?.group || 'Locations').trim();
+    if (!grouped.has(group)) grouped.set(group, []);
+    grouped.get(group).push(option);
+  });
+  const markup = [];
+  grouped.forEach((groupOptions, group) => {
+    markup.push(`<optgroup label="${escapeHtml(group)}">`);
+    groupOptions.forEach((option) => {
+      const value = String(option?.value || '').trim();
+      const label = String(option?.label || value).trim();
+      const selected = selectedValues.has(value) ? ' selected' : '';
+      markup.push(`<option value="${escapeHtml(value)}"${selected}>${escapeHtml(label)}</option>`);
+    });
+    markup.push('</optgroup>');
+  });
+  locationSelect.innerHTML = markup.join('');
+  Array.from(locationSelect.options).forEach((option) => {
+    option.selected = selectedValues.has(String(option.value || '').trim());
   });
 }
 
@@ -647,7 +668,7 @@ export function syncSelectedLocationsFromSelect() {
     setSelectedLocations([]);
     return;
   }
-  setSelectedLocations(onboardingLocationUi.getSelectedLocationValues?.(locationSelect) || []);
+  setSelectedLocations(Array.from(locationSelect.selectedOptions || []).map((option) => option.value));
   renderLocationSelect();
 }
 

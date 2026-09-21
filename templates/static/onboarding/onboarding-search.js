@@ -27,11 +27,18 @@ function setEngagementTypeValues(values) {
 }
 
 export function setSelectedLocations(locations) {
+  const select = onboardingPage.refs.locationSelect;
   const source = Array.isArray(locations) ? locations : [locations];
   const resolved = source
     .map((value) => onboardingLocationUi.resolveLocationValue ? onboardingLocationUi.resolveLocationValue(value) : String(value || '').trim())
     .filter(Boolean);
   onboardingPage.setSelectedLocations(resolved);
+  if (select) {
+    const selectedValues = new Set(onboardingPage.selectedLocations);
+    Array.from(select.options).forEach((option) => {
+      option.selected = selectedValues.has(String(option.value || '').trim());
+    });
+  }
   onboardingPage.renderLocationSelect();
 }
 
