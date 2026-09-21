@@ -1,5 +1,7 @@
 # Job Hunter Agent
 
+[![Release integrity](https://github.com/robvoto/job-hunter-agent/actions/workflows/release-integrity.yml/badge.svg)](https://github.com/robvoto/job-hunter-agent/actions/workflows/release-integrity.yml)
+
 Job Hunter is a local-first job discovery and fit-evaluation system. It builds a structured candidate profile, collects jobs from configured sources, applies deterministic eligibility and fit rules, explains its decisions, and preserves uncertain cases for human review.
 
 ## Why this project exists
@@ -13,6 +15,14 @@ Job Hunter is designed as a strict but fair decision system:
 - show why a job was kept, rejected, or marked for review;
 - learn only through approved user feedback;
 - keep candidate data and runtime state under the user's control.
+
+## Engineering highlights
+
+- **Deterministic + AI decisioning** — explicit blockers and evidence checks run before constrained LLM analysis.
+- **Explainable outcomes** — keep, review, and reject decisions retain the evidence that produced them.
+- **Human-in-the-loop learning** — generated suggestions cannot silently change matching behaviour.
+- **Separated market and candidate concerns** — Job Market Map owns neutral market evidence; Job Hunter owns candidate-specific analysis and decisions.
+- **Operational engineering** — typed configuration, SQLite persistence, caching, concurrency, automated tests, GitHub Actions, and an AWS deployment path.
 
 ## Current status
 
@@ -37,8 +47,6 @@ Job Hunter is custom Python software automation that combines several patterns:
 - **Custom automation** — Python services, deterministic rules, caching, concurrency, and orchestration.
 - **AI-assisted processing** — constrained LLM analysis of job requirements and candidate fit.
 - **Browser automation** — Playwright-based interaction with browser-driven sources when configured.
-
-This project is not an enterprise UiPath implementation or a UiPath bot. Any separate UiPath testing exposure should be described independently from this project.
 
 ## Decision pipeline
 
