@@ -172,3 +172,50 @@ def test_onboarding_progress_header_reopens_previously_visited_search_basics(
 
     search_nav.click()
     expect(search_step).to_be_visible()
+
+
+def test_onboarding_revisiting_check_setup_uses_search_save_transition(
+    fresh_candidate_page, monkeypatch
+):
+    from job_hunter_agent.routes import onboarding_api
+
+    monkeypatch.setattr(onboarding_api, "run_onboarding", _stub_run_onboarding)
+
+    page = fresh_candidate_page
+    page.goto("/start")
+    page.locator("#primary_cv").set_input_files(
+        files=[{
+            "name": "tiny_cv.txt",
+            "mimeType": "text/plain",
+            "buffer": b"Jane Doe\nSenior Backend Engineer\n",
+        }]
+    )
+    with page.expect_response("**/api/onboarding/import") as response_info:
+        page.locator("#create_profile").click()
+    assert response_info.value.ok
+
+    page.locator("#continue_to_search_basics").click()
+    page.locator('[data-step="3"]').wait_for(state="visible")
+
+    # Provide valid Search Basics values and reach Check Setup normally first.
+    page.locator('#location_search input[data-location-value="Sydney"]').check()
+    page.locator("#review_minimum_salary_yearly").fill("100000")
+    page.locator("#continue_to_check").click()
+    page.locator('[data-step="4"]').wait_for(state="visible")
+    expect(page.locator("#check_locations")).to_contain_text("Sydney")
+
+    # Edit Search Basics, then revisit step 4 through the progress header. The
+    # header must execute the same save/validation/summary transition as Continue.
+    page.locator("#edit_search_basics").click()
+    page.locator('[data-step="3"]').wait_for(state="visible")
+    page.locator('#location_search input[data-location-value="Sydney"]').uncheck()
+    page.locator('#location_search input[data-location-value="Melbourne"]').check()
+    page.locator("#review_minimum_salary_yearly").fill("120000")
+
+    with page.expect_response("**/api/profile") as save_response_info:
+        page.locator('[data-step-nav="4"]').click()
+    assert save_response_info.value.ok
+    page.locator('[data-step="4"]').wait_for(state="visible")
+    expect(page.locator("#check_locations")).to_contain_text("Melbourne")
+    expect(page.locator("#check_locations")).not_to_contain_text("Sydney")
+    expect(page.locator("#check_salary_yearly")).to_contain_text("120,000")

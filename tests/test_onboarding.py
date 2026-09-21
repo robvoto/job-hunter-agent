@@ -1743,15 +1743,21 @@ def test_reset_global_learning_clears_shared_signal_registry(monkeypatch):
     assert calls == [True]
 
 
-def test_onboarding_progress_navigation_uses_persisted_unlock_history():
+def test_onboarding_progress_navigation_revisits_without_skipping_transitions():
     repo_root = Path(__file__).resolve().parents[1]
     page_js = (
         repo_root / "templates" / "static" / "onboarding" / "onboarding-page.js"
     ).read_text(encoding="utf-8")
+    flow_js = (
+        repo_root / "templates" / "static" / "onboarding" / "onboarding-flow.js"
+    ).read_text(encoding="utf-8")
 
-    assert "button.disabled = !step || step > maxUnlockedStep;" in page_js
-    assert "const highestNavigableStep = Math.min(maxUnlockedStep, currentStep);" not in page_js
-    assert "button.disabled = !step || step > highestNavigableStep;" not in page_js
+    assert "const highestNavigableStep = Math.min(maxUnlockedStep, currentStep + 1);" in page_js
+    assert "button.disabled = !step || step > highestNavigableStep;" in page_js
+    assert "async function navigateFromProgress(targetStep)" in flow_js
+    assert "continueFromReview();" in flow_js
+    assert "await continueFromSearchBasics();" in flow_js
+    assert "targetStep !== currentStep + 1" in flow_js
 
 
 def test_check_setup_finish_button_uses_real_disabled_state_and_search_validation():

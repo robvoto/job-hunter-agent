@@ -919,20 +919,33 @@ flowRefs.backToReviewFooter.addEventListener('click', () => setStep(REVIEW_STEP)
 flowRefs.backToSearchBasicsFooter.addEventListener('click', () => setStep(SEARCH_STEP));
 flowRefs.editDraftProfile.addEventListener('click', () => setStep(REVIEW_STEP));
 flowRefs.editSearchBasics.addEventListener('click', () => setStep(SEARCH_STEP));
+async function navigateFromProgress(targetStep) {
+  const currentStep = onboardingPage.currentStep;
+  if (!targetStep || targetStep === currentStep) return;
+  if (targetStep < currentStep) {
+    setStep(targetStep);
+    return;
+  }
+  if (targetStep !== currentStep + 1) return;
+  if (currentStep === REVIEW_STEP && targetStep === SEARCH_STEP) {
+    continueFromReview();
+    return;
+  }
+  if (currentStep === SEARCH_STEP && targetStep === CHECK_STEP) {
+    await continueFromSearchBasics();
+    return;
+  }
+  setStep(targetStep);
+}
+
 stepNavButtons.forEach((button) => {
   button.addEventListener('click', () => {
     if (button.disabled) return;
     const targetStep = Number(button.dataset.stepNav || 0);
-    if (!targetStep || targetStep === onboardingPage.currentStep) return;
-    setStep(targetStep);
+    navigateFromProgress(targetStep).catch((error) => {
+      showStatus(error.message, 'error');
+    });
   });
-});
-flowRefs.wizardProgressSteps?.addEventListener('click', (event) => {
-  const trigger = event.target.closest('[data-step-nav]');
-  if (!trigger || trigger.disabled) return;
-  const targetStep = Number(trigger.dataset.stepNav || 0);
-  if (!targetStep || targetStep === onboardingPage.currentStep) return;
-  setStep(targetStep);
 });
 
 flowRefs.reviewAddTargetTitle.addEventListener('click', () => {
