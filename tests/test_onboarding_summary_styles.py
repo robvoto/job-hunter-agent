@@ -35,25 +35,53 @@ def test_search_basics_reuses_review_layout_primitives():
     step_3 = onboarding_html.split('data-step="3" hidden>', 1)[1].split('data-step="4" hidden>', 1)[0]
 
     assert '<div class="review-grid">' in step_3
-    assert step_3.count('<section class="review-block') == 5
-    assert 'class="review-block review-block--full compensation-card"' in step_3
+    assert 'class="review-block onb-field settings-form-field--full"' in step_3
+    assert 'class="review-block settings-form-field--full"' in step_3
+    assert '<h3 class="summary-card-title">Search preferences</h3>' in step_3
+    assert 'class="settings-form-grid settings-form-grid--search-basics"' in step_3
+    assert 'class="onb-field settings-form-field--full"' in step_3
+    assert 'id="salary_yearly_block" class="review-block onb-field"' in step_3
+    assert 'id="salary_daily_block" class="review-block onb-field"' in step_3
     assert "search-basics-grid" not in step_3
     assert "search-basics-card" not in step_3
-    assert "search-basics-card-body" not in step_3
     assert ".search-basics-grid" not in onboarding_review_css
     assert ".search-basics-card" not in onboarding_review_css
-    assert ".review-block--full {" in theme_widgets
+    assert ".compensation-card" not in theme_widgets
 
 
-def test_compensation_card_uses_shared_review_surface_without_legacy_pair_wrapper():
+def test_onboarding_and_settings_share_location_checkbox_component():
     repo_root = Path(__file__).resolve().parents[1]
     onboarding_html = (repo_root / "templates" / "onboarding.html").read_text(encoding="utf-8")
-    theme_widgets = (
-        repo_root / "templates" / "static" / "theme" / "themes.widgets.css"
+    settings_html = (
+        repo_root / "templates" / "partials" / "settings" / "standard" / "settings-search.html"
+    ).read_text(encoding="utf-8")
+    common_location_js = (
+        repo_root / "templates" / "static" / "common" / "location-options.js"
+    ).read_text(encoding="utf-8")
+    onboarding_js = (
+        repo_root / "templates" / "static" / "onboarding" / "onboarding-page.js"
+    ).read_text(encoding="utf-8")
+    settings_js = (
+        repo_root / "templates" / "static" / "settings" / "shared" / "settings-page.js"
     ).read_text(encoding="utf-8")
 
-    assert 'class="review-block review-block--full compensation-card"' in onboarding_html
-    assert 'class="compensation-card__field"' in onboarding_html
+    shared_classes = 'class="checkbox-list-grid location-checkbox-grid"'
+    assert shared_classes in onboarding_html
+    assert shared_classes in settings_html
+    assert "export function renderLocationCheckboxOptions" in common_location_js
+    assert "onboardingLocationUi.renderLocationCheckboxOptions" in onboarding_js
+    assert "locationUi.renderLocationCheckboxOptions" in settings_js
+    assert '<select id="location_search"' not in onboarding_html
+
+
+def test_salary_preferences_are_normal_review_cards_using_shared_controls():
+    repo_root = Path(__file__).resolve().parents[1]
+    onboarding_html = (repo_root / "templates" / "onboarding.html").read_text(encoding="utf-8")
+
+    assert 'id="salary_yearly_block" class="review-block onb-field"' in onboarding_html
+    assert 'id="salary_daily_block" class="review-block onb-field"' in onboarding_html
+    assert '__JOB_HUNTER_SALARY_ANNUAL_HELP__' in onboarding_html
+    assert '__JOB_HUNTER_SALARY_DAILY_HELP__' in onboarding_html
+    assert 'class="currency-input-wrap"' in onboarding_html
+    assert 'class="compensation-card' not in onboarding_html
     assert 'class="salary-pair"' not in onboarding_html
-    assert ".compensation-card {" in theme_widgets
-    assert ".salary-pair {" not in theme_widgets

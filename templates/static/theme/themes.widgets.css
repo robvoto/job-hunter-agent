@@ -1888,10 +1888,6 @@
   padding: var(--surface-pad-block-md) var(--surface-pad-inline-md);
 }
 
-.review-block--full {
-  grid-column: 1 / -1;
-}
-
 .tuning-summary-card {
   border-radius: var(--radius-md);
 }
@@ -2471,42 +2467,6 @@
   font-size: var(--text-role-status-font-size);
 }
 
-/* Compact compensation card: standard review surface with two numeric fields. */
-.compensation-card {
-  display: grid;
-  grid-template-columns: minmax(200px, 1fr) minmax(190px, 220px) minmax(190px, 220px);
-  gap: var(--surface-gap-md) var(--surface-gap-lg);
-  align-items: start;
-}
-
-.compensation-card__heading {
-  align-self: start;
-}
-
-.compensation-card__field {
-  display: grid;
-  gap: var(--field-label-control-gap);
-  min-width: 0;
-}
-
-.compensation-card__field > label {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: var(--font-size-sm);
-  font-weight: var(--text-role-button-font-weight);
-  line-height: var(--field-label-line-height);
-}
-
-.compensation-card__field .currency-input-wrap {
-  width: 100%;
-}
-
-@media (max-width: 760px) {
-  .compensation-card {
-    grid-template-columns: 1fr;
-  }
-}
-
 /* Shared spacing for a full-width field that follows choice/summary fields in a two-column form. */
 .settings-form-grid--search-basics > .settings-form-field--full {
   margin-top: var(--surface-gap-md);
@@ -2533,6 +2493,11 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--bg-surface);
+}
+
+.location-checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 .checkbox-list-group {
   min-width: 0;
@@ -2614,6 +2579,7 @@
 }
 .checkbox-list-option input:disabled + span { opacity: 0.55; }
 @media (max-width: 900px) {
+  .location-checkbox-grid { grid-template-columns: 1fr; }
   .checkbox-list-group { padding: var(--surface-gap-md) 0; }
   .checkbox-list-group + .checkbox-list-group {
     border-left: 0;
