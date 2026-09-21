@@ -346,7 +346,16 @@ function updateCheckStep() {
   flowRefs.checkSalaryYearly.textContent = formatCurrencySummaryValue(searchPrefs.minimum_salary_yearly);
   flowRefs.checkSalaryDaily.textContent = formatCurrencySummaryValue(searchPrefs.minimum_daily_rate);
   if (flowRefs.confirmReview) {
-    const canFinish = onboardingPage.reviewTargetTitles.length > 0 && onboardingPage.reviewCapabilityRules.length > 0;
+    let searchBasicsValid = true;
+    try {
+      validateSearchPreferences(searchPrefs);
+    } catch {
+      searchBasicsValid = false;
+    }
+    const canFinish = searchBasicsValid
+      && onboardingPage.reviewTargetTitles.length > 0
+      && onboardingPage.reviewCapabilityRules.length > 0;
+    flowRefs.confirmReview.disabled = !canFinish;
     flowRefs.confirmReview.setAttribute('aria-disabled', canFinish ? 'false' : 'true');
   }
 }

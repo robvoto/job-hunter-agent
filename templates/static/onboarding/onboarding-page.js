@@ -326,9 +326,10 @@ export function refreshStepNavigation() {
     hasPrimaryCv && hasSearchBasicsState() ? SEARCH_STEP : 1,
   );
   maxUnlockedStep = Math.min(STEP_COUNT, unlockedStep);
+  const highestNavigableStep = Math.min(maxUnlockedStep, currentStep);
   stepNavButtons.forEach((button) => {
     const step = Number(button.dataset.stepNav || 0);
-    button.disabled = !step || step > maxUnlockedStep;
+    button.disabled = !step || step > highestNavigableStep;
     button.setAttribute('aria-current', step === currentStep ? 'step' : 'false');
   });
 }

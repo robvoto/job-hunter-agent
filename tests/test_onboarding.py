@@ -1741,3 +1741,25 @@ def test_reset_global_learning_clears_shared_signal_registry(monkeypatch):
 
     assert result["ok"] is True
     assert calls == [True]
+
+
+def test_onboarding_progress_navigation_cannot_skip_unsaved_forward_steps():
+    repo_root = Path(__file__).resolve().parents[1]
+    page_js = (
+        repo_root / "templates" / "static" / "onboarding" / "onboarding-page.js"
+    ).read_text(encoding="utf-8")
+
+    assert "const highestNavigableStep = Math.min(maxUnlockedStep, currentStep);" in page_js
+    assert "button.disabled = !step || step > highestNavigableStep;" in page_js
+    assert "button.disabled = !step || step > maxUnlockedStep;" not in page_js
+
+
+def test_check_setup_finish_button_uses_real_disabled_state_and_search_validation():
+    repo_root = Path(__file__).resolve().parents[1]
+    flow_js = (
+        repo_root / "templates" / "static" / "onboarding" / "onboarding-flow.js"
+    ).read_text(encoding="utf-8")
+
+    assert "validateSearchPreferences(searchPrefs);" in flow_js
+    assert "flowRefs.confirmReview.disabled = !canFinish;" in flow_js
+    assert "searchBasicsValid" in flow_js
