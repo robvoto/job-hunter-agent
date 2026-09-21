@@ -727,4 +727,4 @@ def test_settings_review_panel_separates_factual_absence_from_dismiss():
     assert "applyOneSkipDecision(skill, 'do_not_have')" in js
     assert "applyOneSkipDecision(skill, 'dismiss')" in js
     assert ui_labels["workspace_card_labels"]["gap_confirm_not_have_label"] == "No, I don't have this"
-    assert ui_labels["capability_ui_labels"]["dismiss_capability_suggestion_label"] == "Dismiss"
+    assert ui_labels["capability_ui_labels"]["dismiss_capability_suggestion_label"] == "Ignore suggestion"

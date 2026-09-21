@@ -136,7 +136,7 @@
     "onboarding_empty_text": "No capabilities found yet.",
     "onboarding_no_match_text": "No matching capabilities found.",
     "review_strength_prompt_label": "How strong is this capability for you?",
-    "dismiss_capability_suggestion_label": "Dismiss"
+    "dismiss_capability_suggestion_label": "Ignore suggestion"
   },
   "settings_clearances_labels_description": "Display labels and help text for the Clearances rules editor.",
   "settings_clearances_labels": {
