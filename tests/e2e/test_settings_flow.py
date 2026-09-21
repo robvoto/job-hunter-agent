@@ -241,6 +241,12 @@ def test_capability_alias_preview_uses_related_skills_copy(candidate_page):
     expect(meter.locator(".capability-strength-dot.is-filled")).to_have_count(3)
     expect(meter.locator(".capability-strength-label")).to_have_text("Strong")
 
+    # Capability Matrix keeps the capability name and saved strength on one compact row.
+    name_box = card.locator(".capability-card-head").bounding_box()
+    meter_box = meter.bounding_box()
+    assert name_box and meter_box
+    assert abs((name_box["y"] + name_box["height"] / 2) - (meter_box["y"] + meter_box["height"] / 2)) <= 3
+
     tooltip = meter.locator(".capability-strength-tooltip")
     expect(tooltip).to_have_css("visibility", "hidden")
     meter.hover()
@@ -544,6 +550,18 @@ def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
     expect(meter.locator(".capability-strength-dot")).to_have_count(3)
     expect(meter.locator(".capability-strength-label")).to_have_text("Select strength")
     expect(card.locator('input[type="radio"]:checked')).to_have_count(0)
+
+    # Optimise uses the same compact decision-row pattern: title + strength, count at right.
+    capability_title_box = card.locator(".review-card-heading h3").bounding_box()
+    suggestion_meter_box = meter.bounding_box()
+    count_box = card.locator(".review-card-count").bounding_box()
+    assert capability_title_box and suggestion_meter_box and count_box
+    title_center_y = capability_title_box["y"] + capability_title_box["height"] / 2
+    meter_center_y = suggestion_meter_box["y"] + suggestion_meter_box["height"] / 2
+    count_center_y = count_box["y"] + count_box["height"] / 2
+    assert abs(title_center_y - meter_center_y) <= 3
+    assert abs(title_center_y - count_center_y) <= 3
+    assert count_box["x"] > suggestion_meter_box["x"]
     confirm_button = card.locator(".confirm-skill-btn")
     expect(confirm_button).to_be_disabled()
     card.locator('label[for="skill-choice-0_working"]').click()

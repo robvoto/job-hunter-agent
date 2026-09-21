@@ -858,8 +858,23 @@
     }
     .capability-card-main {
       display: grid;
+      grid-template-columns: minmax(0, 1fr) max-content;
       gap: 10px;
       min-width: 0;
+      align-items: center;
+    }
+    .capability-card-main > .capability-card-head {
+      grid-column: 1;
+      grid-row: 1;
+    }
+    .capability-card-main > .cap-strength {
+      grid-column: 2;
+      grid-row: 1;
+      margin: 0;
+    }
+    .capability-card-main > .capability-alias-row {
+      grid-column: 1 / -1;
+      grid-row: 2;
     }
     .capability-card-head {
       display: flex;
@@ -1057,6 +1072,15 @@
       .capability-card {
         grid-template-columns: 1fr;
       }
+      .capability-card-main {
+        grid-template-columns: 1fr;
+      }
+      .capability-card-main > .capability-card-head,
+      .capability-card-main > .cap-strength,
+      .capability-card-main > .capability-alias-row {
+        grid-column: 1;
+        grid-row: auto;
+      }
 
       .capability-card-actions {
         align-items: flex-start;
@@ -1127,6 +1151,54 @@
       font-size: var(--text-role-caption-font-size);
       line-height: var(--text-role-caption-line-height);
       white-space: nowrap;
+    }
+    /* Capability suggestions are a compact decision row: capability, strength, evidence count. */
+    .review-card[data-review-kind="capability"] {
+      grid-template-columns: minmax(0, max-content) max-content minmax(0, 1fr) max-content;
+      align-items: center;
+      column-gap: var(--surface-gap-sm);
+    }
+    .review-card[data-review-kind="capability"] > .review-card-heading {
+      display: contents;
+    }
+    .review-card[data-review-kind="capability"] > .review-card-heading > h3 {
+      grid-column: 1;
+      grid-row: 1;
+      min-width: 0;
+    }
+    .review-card[data-review-kind="capability"] > .capability-strength-meter {
+      grid-column: 2;
+      grid-row: 1;
+      margin: 0;
+    }
+    .review-card[data-review-kind="capability"] > .review-card-heading > .review-card-count {
+      grid-column: 4;
+      grid-row: 1;
+      justify-self: end;
+    }
+    .review-card[data-review-kind="capability"] > .review-examples,
+    .review-card[data-review-kind="capability"] > .card-actions {
+      grid-column: 1 / -1;
+    }
+    @media (max-width: 760px) {
+      .review-card[data-review-kind="capability"] {
+        grid-template-columns: minmax(0, 1fr) max-content;
+      }
+      .review-card[data-review-kind="capability"] > .review-card-heading > h3 {
+        grid-column: 1;
+      }
+      .review-card[data-review-kind="capability"] > .review-card-heading > .review-card-count {
+        grid-column: 2;
+      }
+      .review-card[data-review-kind="capability"] > .capability-strength-meter {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        justify-self: start;
+      }
+      .review-card[data-review-kind="capability"] > .review-examples,
+      .review-card[data-review-kind="capability"] > .card-actions {
+        grid-column: 1 / -1;
+      }
     }
     .review-card p { margin: 0; color: var(--text-muted); line-height: 1.5; }
     .review-card ul { margin: var(--surface-gap-sm) 0 0 18px; padding: 0; }
