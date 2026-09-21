@@ -31,12 +31,7 @@ const RULE_REASON_TITLE_NOT_TARGET = 'TITLE_NOT_TARGET';
 const RULE_REASON_TITLE_BAD_KEYWORD = 'TITLE_BAD_KEYWORD';
 const RULE_REASON_ONET_UNCERTAIN_TITLE = 'ONET_UNCERTAIN_TITLE';
 const DECLINE_CAPABILITY_LABEL = capabilityLabels.decline_capability_label;
-// Keep the current UI clear even if a long-running local server still has the legacy
-// managed label cached. The managed source now owns "Ignore suggestion"; this bridge
-// can disappear once the old "Dismiss" value is no longer possible at runtime.
-const DISMISS_CAPABILITY_SUGGESTION_LABEL = capabilityLabels.dismiss_capability_suggestion_label === 'Dismiss'
-  ? 'Ignore suggestion'
-  : capabilityLabels.dismiss_capability_suggestion_label;
+const DISMISS_CAPABILITY_SUGGESTION_LABEL = capabilityLabels.dismiss_capability_suggestion_label;
 
 function getReviewChoiceMeta(choice) {
   if (!choice) return { label: 'Choose a strength' };
