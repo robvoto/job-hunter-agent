@@ -10,6 +10,7 @@ from job_hunter_agent import server_helpers as srv
 from job_hunter_agent import workspace_renderer, workspace_service
 from job_hunter_agent.io_utils import load_job_history, load_review_data, load_run_stats
 from job_hunter_agent.paths import RESULTS_TEMPLATE_PATH, UI_LABELS_PATH, get_workspace_results_path
+from job_hunter_agent.review_insights import filter_resolved_suggested_tuning
 from job_hunter_agent.routes.responses import json_response
 from job_hunter_agent.run_control import (
     get_run_progress,
@@ -210,7 +211,7 @@ def api_review_data():  # type: ignore[no-untyped-def]
     payload = load_review_data()
 
     if isinstance(payload, dict) and payload:
-        return json_response(payload)
+        return json_response(filter_resolved_suggested_tuning(payload, srv.load_profile()))
 
     return json_response({})
 

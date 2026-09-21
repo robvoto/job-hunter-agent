@@ -80,6 +80,62 @@ def test_api_review_data_returns_saved_suggested_tuning(monkeypatch, isolated_db
     assert payload["suggested_tuning"]["capability_suggestions"][0]["skill"] == "Process mapping"
 
 
+
+def test_api_review_data_filters_suggestions_already_resolved_in_live_profile(
+    monkeypatch, isolated_db
+):
+    monkeypatch.setattr(
+        "job_hunter_agent.fastapi_app.read_session_user",
+        lambda request: {
+            "user_id": "test_user",
+            "email": "test@example.com",
+            "role": "candidate",
+            "access_status": "approved",
+        },
+    )
+    with db_conn() as conn:
+        conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", ("test_user",))
+
+    monkeypatch.setattr(
+        workspace_api,
+        "load_review_data",
+        lambda: {
+            "suggested_tuning": {
+                "summary": {"capability_count": 3, "requirement_count": 1},
+                "capability_suggestions": [
+                    {"skill": "Power BI"},
+                    {"skill": "Quality assurance"},
+                    {"skill": "Process improvement"},
+                ],
+                "requirement_suggestions": [{"skill": "Agile methodologies"}],
+                "rule_suggestions": [],
+            }
+        },
+    )
+    monkeypatch.setattr(
+        workspace_api.srv,
+        "load_profile",
+        lambda: {
+            "candidate_capabilities": [
+                {"name": "Power BI", "level": "working", "aliases": []}
+            ],
+            "must_not_require_skills": ["Quality assurance"],
+            "review_controls": {
+                "ignored_capability_suggestions": ["Agile methodologies"]
+            },
+        },
+    )
+
+    response = TestClient(create_app()).get("/api/review-data")
+
+    assert response.status_code == 200
+    suggestions = response.json()["suggested_tuning"]
+    assert suggestions["capability_suggestions"] == [{"skill": "Process improvement"}]
+    assert suggestions["requirement_suggestions"] == []
+    assert suggestions["summary"]["capability_count"] == 1
+    assert suggestions["summary"]["requirement_count"] == 0
+
+
 def test_api_clean_search_clears_search_state_and_review_buckets(monkeypatch, isolated_db, tmp_path):
     monkeypatch.setattr(
         "job_hunter_agent.fastapi_app.read_session_user",
