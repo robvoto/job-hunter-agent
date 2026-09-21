@@ -102,9 +102,8 @@ def test_search_basics_uses_shared_preferences_and_compensation_columns():
     assert '.search-compensation-group {' in theme_widgets
     assert 'class="search-preference-groups"' in onboarding_html
     assert 'class="search-preference-groups"' in settings_html
-    assert 'grid-template-columns: minmax(0, 2fr) minmax(22rem, 1fr);' in theme_widgets
-    assert 'border-left: 1px solid var(--border-subtle);' in theme_widgets
-    assert '@container (max-width: 72rem)' in theme_widgets
+    assert 'grid-template-columns: minmax(0, 1fr);' in theme_widgets
+    assert 'justify-content: start;' in theme_widgets
     assert 'border-top: 1px solid var(--border-subtle);' in theme_widgets
     assert 'max-width: 11rem;' in theme_widgets
     assert 'salary-preference-card' not in onboarding_html
@@ -142,7 +141,7 @@ def test_search_preferences_order_and_responsive_layout():
     assert 'class="search-preference-groups"' in step_3
     assert 'search-preference-groups' in settings_html
     assert 'container-type: inline-size;' in theme_widgets
-    assert '@container (max-width: 72rem)' in theme_widgets
+    assert '@container (max-width: 72rem)' not in theme_widgets
     assert 'search-preference-fields' not in onboarding_css
     assert 'onboarding-search-preferences-grid' not in onboarding_css
 

@@ -306,24 +306,24 @@ def test_search_basics_location_layout_stays_compact_and_responsive(
     overflow = page.evaluate("document.documentElement.scrollWidth - window.innerWidth")
     assert overflow <= 1, f"mobile horizontal overflow is {overflow}px"
 
-    # Search Basics composition: wide desktop keeps compensation beside the
-    # preference groups, but salary fields sit side-by-side so the right column
-    # does not become a tall isolated tower.
+    # Search Basics composition: compensation is a compact related subgroup
+    # below Work type / Sector / Work mode at desktop widths as well.
     page.set_viewport_size({"width": 1600, "height": 1000})
     preference_groups = page.locator(".search-preference-groups")
     compensation = page.locator(".search-compensation-group")
     salary_fields = compensation.locator(".salary-preference-fields > .onb-field")
     pref_box = box(preference_groups)
     compensation_box = box(compensation)
-    assert compensation_box["x"] > pref_box["x"] + pref_box["width"] - 8
+    assert compensation_box["y"] > pref_box["y"] + pref_box["height"] - 8
+    assert abs(compensation_box["x"] - pref_box["x"]) < 8
     annual_box = box(salary_fields.nth(0))
     daily_box = box(salary_fields.nth(1))
     assert abs(annual_box["y"] - daily_box["y"]) < 8
     salary_gap = daily_box["x"] - (annual_box["x"] + annual_box["width"])
     assert 16 <= salary_gap <= 64, f"salary field gap is {salary_gap}px"
 
-    # At medium width compensation drops below, giving Work type / Sector /
-    # Work mode the full row instead of orphaning Work mode underneath.
+    # At medium width the same grouping remains stable and gives Work type /
+    # Sector / Work mode the full row.
     page.set_viewport_size({"width": 1100, "height": 1100})
     pref_box = box(preference_groups)
     compensation_box = box(compensation)

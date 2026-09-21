@@ -1353,17 +1353,17 @@
 }
 
 /* Shared Search Basics composition used by onboarding and Settings.
-   Wide containers keep preferences and compensation side-by-side; medium
-   containers stack the groups before individual controls start wrapping badly. */
+   Choice groups form the primary row; compensation is a compact related
+   subgroup below rather than a separate right-hand column. */
 .search-basics-container {
   container-type: inline-size;
 }
 
 .search-basics-fields {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(22rem, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
-  gap: calc(var(--surface-gap-lg) * 2);
+  gap: var(--surface-gap-lg);
 }
 
 .search-preference-groups {
@@ -1384,9 +1384,10 @@
 
 .search-compensation-group {
   display: grid;
+  justify-content: start;
   min-width: 0;
-  padding-left: calc(var(--surface-gap-lg) * 2);
-  border-left: 1px solid var(--border-subtle);
+  padding-top: var(--surface-gap-lg);
+  border-top: 1px solid var(--border-subtle);
   row-gap: var(--surface-gap-md);
 }
 
@@ -1405,20 +1406,6 @@
 .currency-input-wrap--compact {
   width: 100%;
   max-width: 11rem;
-}
-
-@container (max-width: 72rem) {
-  .search-basics-fields {
-    grid-template-columns: 1fr;
-  }
-
-  .search-compensation-group {
-    padding-left: 0;
-    padding-top: var(--surface-gap-lg);
-    border-left: 0;
-    border-top: 1px solid var(--border-subtle);
-  }
-
 }
 
 @container (max-width: 30rem) {
