@@ -1,11 +1,11 @@
 ---
 name: mcp-tooling
-description: Use for repository/filesystem access, connected Google/browser/Gmail tooling, or tool/transport failure recovery; apply runtime-specific MCP connector names only when that runtime exposes them.
+description: Use for connector/MCP-mediated repository or filesystem access, connected Google/browser/Gmail tooling, or connector/tool transport failure recovery. Do not load merely because an agent has native local shell/filesystem access.
 ---
 
 # Skill: MCP Tooling
 
-Use for project filesystem/tool access and whenever MCP execution is unreliable.
+Use when access is connector/MCP-mediated, when the task uses connected services, or when connector/tool execution is unreliable. Native local coding agents should keep using their own filesystem/shell unless the task actually crosses into MCP or connected-service tooling.
 
 ## Multi-agent Human MCP rule
 - Many ChatGPT chats, Claude agents and MCP processes are expected and supported. Do not diagnose their mere presence as a conflict.
@@ -28,6 +28,9 @@ Use for project filesystem/tool access and whenever MCP execution is unreliable.
 - One failed MCP call does **not** prove the connector or resource is unavailable.
 - A rejected file patch (`old_text not found`, failed hunk, or equivalent) is a validation stop. Re-read the exact current file, construct a new context-checked patch, and verify the diff; never retry stale patch text.
 - Inspect the actual error and retry with a smaller, safer command.
+- Match command syntax to the shell selected by `cwd`. In the current Human MCP route, Windows drive-letter paths such as `E:\\...` execute through Windows PowerShell, while the Job Hunter WSL path executes through the WSL shell. Do not send Bash chaining such as `&&`/`||` to the Windows PowerShell route; use PowerShell-native sequencing/error checks there, and do not send PowerShell syntax to WSL. A parser error caused by the wrong shell dialect is a command-shape error, not an MCP availability failure.
+- Avoid fragile giant PowerShell one-liners for multiline text edits or replacement content containing apostrophes, quotes, backticks, or nested escaping. Prefer a small temporary script/file with literal content, execute it with the repo-appropriate runtime, verify the diff, then delete the temporary file. Treat PowerShell parser errors from quoting/escaping as command-construction errors; do not classify them as MCP failures and do not keep adding escape layers to the same broken one-liner.
+- Keep optional discovery probes from poisoning the whole diagnostic. Before reading an optional file/path, check whether it exists or isolate that probe so expected absence is reported as `NONE`/not present rather than a tool failure. Likewise, `rg`/`grep` exit code 1 means no match and is not an error when no match is an allowed outcome; do not suppress genuine parser, permission, I/O, or required-file failures. A required file that is missing remains a real failure.
 - In ChatGPT, `HUMAN_MCP_SECURE.run_command` accepts only `cwd` and `command`. Never add a tool-level `timeout` argument; if a command needs bounding, use a shell-level mechanism inside `command` or run it asynchronously and poll its output. Treat an invalid-arguments response for `timeout` as a call-shape error and retry once without that field.
 - For every Python command in the Job Hunter repository, use `uv run python ...`, `uv run pytest ...`, or another `uv run ...` command. Never invoke bare `python`, `python3`, `pytest`, or `ruff`, and never retry a known-missing bare command unchanged. A failure from system Python must never be reported as a Job Hunter dependency/environment failure unless the equivalent repository-runtime command also fails. If a bare command returns 127, classify it as a command-launch failure—not a database, application, repository-access, or dependency failure. For SQLite inspection, use `uv run python` with the standard-library `sqlite3` module or the project's DB helpers instead of requiring a system package.
 - `uv run ...` is the canonical worktree-safe runtime. Let `uv` create/reuse the current worktree's `.venv`; never reach into another worktree's `.venv` to run tests or Python.
