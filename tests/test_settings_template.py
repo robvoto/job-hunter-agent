@@ -521,7 +521,7 @@ def test_settings_review_panel_empty_state_copy_is_defined():
         in js
     )
 
-    assert "Requirements to address" in js
+    assert "Requirements to review" in js
 
     assert "Do you have this capability?" in js
 

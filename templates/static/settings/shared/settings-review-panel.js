@@ -30,18 +30,17 @@ if (!capabilityLabels.onboarding_title || !capabilityLabels.help_text) {
 if (!titleTierLabels.target_roles_label || !titleTierLabels.target_roles_help || !titleTierLabels.target_roles_empty_text) {
   throw new Error('Missing onboarding title tier labels.');
 }
-const capabilityTitle = capabilityLabels.onboarding_title;
 const preferredRolesLabel = titleTierLabels.target_roles_label;
 
 const TUNING_TEXT = {
-  capabilityHeading: capabilityTitle,
-  capabilityCopy: capabilityLabels.help_text,
+  capabilityHeading: 'Capabilities to review',
+  capabilityCopy: '',
   capabilityEmpty: capabilityLabels.onboarding_empty_text,
   optimizationHeading: preferredRolesLabel,
   optimizationCopy: titleTierLabels.target_roles_help,
   optimizationEmpty: titleTierLabels.target_roles_empty_text,
-  requirementHeading: 'Requirements to address',
-  requirementCopy: 'Explicit requirements repeated in kept roles. Confirm them if you already have them, or treat them as a blocker if you do not.',
+  requirementHeading: 'Requirements to review',
+  requirementCopy: 'Explicit capability requirements repeated in jobs you kept. Confirm one only if it is genuinely part of your profile.',
   titleTuningHeading: 'Search/title tuning',
   titleTuningCopy: 'These title-based signals are strong enough to consider a hard blocker later, once you are sure they are consistently wrong.',
   workingFiltersHeading: 'Filters already working correctly',
@@ -57,7 +56,12 @@ const RULE_REASON_TITLE_NOT_TARGET = 'TITLE_NOT_TARGET';
 const RULE_REASON_TITLE_BAD_KEYWORD = 'TITLE_BAD_KEYWORD';
 const RULE_REASON_ONET_UNCERTAIN_TITLE = 'ONET_UNCERTAIN_TITLE';
 const DECLINE_CAPABILITY_LABEL = capabilityLabels.decline_capability_label;
-const DISMISS_CAPABILITY_SUGGESTION_LABEL = capabilityLabels.dismiss_capability_suggestion_label;
+// Keep the current UI clear even if a long-running local server still has the legacy
+// managed label cached. The managed source now owns "Ignore suggestion"; this bridge
+// can disappear once the old "Dismiss" value is no longer possible at runtime.
+const DISMISS_CAPABILITY_SUGGESTION_LABEL = capabilityLabels.dismiss_capability_suggestion_label === 'Dismiss'
+  ? 'Ignore suggestion'
+  : capabilityLabels.dismiss_capability_suggestion_label;
 
 function getReviewChoiceMeta(choice) {
   if (!choice) return { label: 'Choose a strength' };
@@ -190,10 +194,13 @@ function renderTuningSection(title, copy, items, emptyText, renderItem, extraCla
   const body = items.length
     ? `<div class="review-list">${items.map(renderItem).join('')}</div>`
     : `<p class="tuning-empty-state-copy">${escapeHtml(emptyText)}</p>`;
+  const copyHtml = String(copy || '').trim()
+    ? `<p class="tuning-group-copy">${escapeHtml(copy)}</p>`
+    : '';
   return `
     <div class="tuning-group${className}">
       <h3>${escapeHtml(title)}</h3>
-      <p class="tuning-group-copy">${escapeHtml(copy)}</p>
+      ${copyHtml}
       ${body}
     </div>
   `;
@@ -235,6 +242,24 @@ function renderRequirementCard(item) {
       </div>
     </div>
   `;
+}
+
+function reviewSummaryChip(count, singularLabel, pluralLabel = `${singularLabel}s`) {
+  const value = Math.max(0, Number(count) || 0);
+  if (!value) return '';
+  return `<span class="suggestion-chip tuning-summary-item"><strong>${value}</strong> ${escapeHtml(value === 1 ? singularLabel : pluralLabel)}</span>`;
+}
+
+function renderReviewSummary(summary, capabilitySuggestions, requirementSuggestions, optimizationSuggestions, renderedRuleCount) {
+  const items = [
+    reviewSummaryChip(summary.capability_count || capabilitySuggestions.length || 0, 'capability suggestion'),
+    reviewSummaryChip(summary.requirement_count || requirementSuggestions.length || 0, 'requirement suggestion'),
+    reviewSummaryChip(summary.optimization_count || optimizationSuggestions.length || 0, 'role suggestion'),
+    reviewSummaryChip(renderedRuleCount, 'rule suggestion'),
+  ].filter(Boolean);
+  return items.length
+    ? `<div class="tuning-summary" aria-label="Suggestions to review">${items.join('')}</div>`
+    : '<p class="tuning-empty-state-copy">No suggestions to review.</p>';
 }
 
 function renderSuggestedTuning(reviewData) {
@@ -312,12 +337,7 @@ function renderSuggestedTuning(reviewData) {
 
   panel.innerHTML = `
     <div class="tuning-suggestions-content">
-      <div class="tuning-summary">
-        <div class="tuning-summary-card"><strong>${escapeHtml(String(summary.capability_count || capabilitySuggestions.length || 0))}</strong><span>${escapeHtml(`${capabilityTitle} suggestions`)}</span></div>
-        <div class="tuning-summary-card"><strong>${escapeHtml(String(summary.requirement_count || requirementSuggestions.length || 0))}</strong><span>Requirement suggestions</span></div>
-        <div class="tuning-summary-card"><strong>${escapeHtml(String(summary.optimization_count || optimizationSuggestions.length || 0))}</strong><span>${escapeHtml(`${preferredRolesLabel} suggestions`)}</span></div>
-        <div class="tuning-summary-card"><strong>${escapeHtml(String(renderedRuleCount))}</strong><span>Rule suggestions to review</span></div>
-      </div>
+      ${renderReviewSummary(summary, capabilitySuggestions, requirementSuggestions, optimizationSuggestions, renderedRuleCount)}
       ${capabilityHtml}
       ${optimizationHtml}
       ${requirementHtml}

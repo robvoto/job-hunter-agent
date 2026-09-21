@@ -345,6 +345,7 @@ def build_requirement_tuning_suggestions(
     working_min_count = settings[KEY_REVIEW_CAPABILITY_WORKING_MIN_COUNT]
     max_examples = settings[KEY_REVIEW_MAX_EXAMPLES_PER_SKILL]
     known_terms = _collect_known_terms(profile)
+    ignored_terms = _ignored_capability_suggestion_terms(profile)
 
     grouped: dict[str, dict[str, Any]] = {}
     for row in audit_rows:
@@ -361,7 +362,13 @@ def build_requirement_tuning_suggestions(
                 continue
             label, alias = _requirement_entry_from_label(requirement, requirement)
             normalized = _normalize_term(label)
-            if not label or not normalized or normalized in known_terms or normalized in row_seen:
+            if (
+                not label
+                or not normalized
+                or normalized in known_terms
+                or normalized in ignored_terms
+                or normalized in row_seen
+            ):
                 continue
             row_seen.add(normalized)
             entry = grouped.setdefault(

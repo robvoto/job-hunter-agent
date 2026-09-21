@@ -434,6 +434,15 @@ def test_suggested_tuning_separates_factual_no_from_dismiss(candidate_page):
     page.goto("/settings")
     page.locator('[data-section="section-optimise"]').click()
 
+    expect(page.locator("#section-optimise .search-settings-subcard > h3")).to_have_text("Review Suggestions")
+    info = page.locator("#section-optimise .optimise-review-info")
+    expect(info).to_contain_text("Matching → Capability Matrix")
+    expect(info).to_contain_text("will not be suggested again")
+    expect(page.locator("#tuning_suggestions_panel .tuning-summary-card")).to_have_count(0)
+    expect(page.locator("#tuning_suggestions_panel .tuning-summary-item")).to_have_count(1)
+    expect(page.locator("#tuning_suggestions_panel .tuning-summary-item")).to_have_text("1 capability suggestion")
+    expect(page.locator("#tuning_suggestions_panel")).not_to_contain_text("Capabilities are the proven work strengths")
+
     card = page.locator("#tuning_suggestions_panel .review-card").filter(has_text="Power BI")
     expect(card).to_be_visible()
     no_button = card.locator(".do-not-have-skill-btn")

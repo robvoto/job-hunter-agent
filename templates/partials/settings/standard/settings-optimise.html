@@ -2,12 +2,17 @@
           <section class="panel optimise-shell settings-section-shell">
             <div class="settings-section-head">
               <h2>Optimise</h2>
-              <p class="panel-copy">Review tuning suggestions from the latest scrape run.</p>
+              <p class="panel-copy">Review repeated patterns from jobs you kept and decide what should change.</p>
             </div>
             <div class="grid">
-              <section class="subpanel">
-                <h2>Suggested Tuning</h2>
-                <div id="tuning_suggestions_panel" class="help tuning-suggestions-panel">This fills after a scrape run.</div>
+              <section class="subpanel search-settings-subcard">
+                <h3>Review Suggestions</h3>
+                <p class="panel-copy">These are suggestions only. Nothing changes until you confirm it.</p>
+                <div class="help-box optimise-review-info">
+                  <p>How capability suggestions work</p>
+                  <p class="field-help">Job Hunter finds repeated capability signals in jobs you keep. Confirm adds a capability to Matching → Capability Matrix, where you can edit it or add capabilities yourself. If you do not have it, choose “I don't have this”. If it is not useful, choose “Ignore suggestion”; ignored suggestions are saved and will not be suggested again.</p>
+                </div>
+                <div id="tuning_suggestions_panel" class="help tuning-suggestions-panel">Suggestions appear after Job Hunter has kept jobs to learn from.</div>
                 <div class="panel-actions tuning-actions">
                   <button class="jh-button jh-button--secondary" id="refresh_review_data" type="button">Refresh Suggestions</button>
                 </div>
