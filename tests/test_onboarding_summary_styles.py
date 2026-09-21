@@ -100,9 +100,10 @@ def test_search_preferences_order_and_responsive_layout():
     sector_pos = step_3.index('id="prefer_sector_label"')
     mode_pos = step_3.index('id="work_mode_preference_label"')
     assert work_pos < sector_pos < mode_pos
-    assert 'grid-template-columns: minmax(280px, 1.25fr) minmax(210px, 0.8fr) minmax(260px, 1fr);' in onboarding_css
-    assert '@media (max-width: 920px)' in onboarding_css
-    assert '@media (max-width: 720px)' in onboarding_css
+    assert 'display: flex;' in onboarding_css
+    assert 'flex-wrap: wrap;' in onboarding_css
+    assert 'justify-content: flex-start;' in onboarding_css
+    assert 'grid-template-columns: minmax(280px, 1.25fr)' not in onboarding_css
 
 
 def test_onboarding_uses_shared_wide_content_shell():
@@ -117,7 +118,12 @@ def test_location_dense_groups_fill_columns_in_reading_order():
     theme_widgets = (repo_root / "templates" / "static" / "theme" / "themes.widgets.css").read_text(encoding="utf-8")
 
     assert 'const useTwoColumns = groupOptions.length >= 6;' in location_js
+    assert "groupsWrap.className = 'location-checkbox-groups';" in location_js
     assert '--checkbox-list-row-count' in location_js
+    assert 'container-type: inline-size;' in theme_widgets
+    assert '@container (max-width: 64rem)' in theme_widgets
+    assert '@container (max-width: 44rem)' in theme_widgets
+    assert '@container (max-width: 30rem)' in theme_widgets
     assert 'grid-template-rows: repeat(var(--checkbox-list-row-count), auto);' in theme_widgets
     assert 'grid-auto-flow: column;' in theme_widgets
 
@@ -131,3 +137,11 @@ def test_selected_capability_uses_card_state_without_selected_badge():
     assert 'review-capability-selected-badge' not in onboarding_js
     assert '.capability-card.is-selected {' in onboarding_css
     assert '.review-capability-selected-badge' not in onboarding_css
+
+
+def test_shared_full_span_fields_are_not_cancelled_at_mobile_widths():
+    repo_root = Path(__file__).resolve().parents[1]
+    theme_widgets = (repo_root / "templates" / "static" / "theme" / "themes.widgets.css").read_text(encoding="utf-8")
+
+    assert ".settings-form-field--full {\n  grid-column: 1 / -1;" in theme_widgets
+    assert ".settings-form-field--full {\n    grid-column: auto;" not in theme_widgets

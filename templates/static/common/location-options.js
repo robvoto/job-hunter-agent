@@ -151,6 +151,8 @@ export function renderLocationCheckboxOptions(container, options = {}) {
   });
 
   container.innerHTML = '';
+  const groupsWrap = document.createElement('div');
+  groupsWrap.className = 'location-checkbox-groups';
   grouped.forEach((groupOptions, group) => {
     const section = document.createElement('fieldset');
     const useTwoColumns = groupOptions.length >= 6;
@@ -186,8 +188,9 @@ export function renderLocationCheckboxOptions(container, options = {}) {
       optionsWrap.appendChild(item);
     });
     section.appendChild(optionsWrap);
-    container.appendChild(section);
+    groupsWrap.appendChild(section);
   });
+  container.appendChild(groupsWrap);
   syncLocationSelectionLimit(container, options.maxSelected);
 }
 
