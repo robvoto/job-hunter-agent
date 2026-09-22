@@ -56,7 +56,7 @@ def test_market_sector_uses_explicit_value_before_source_classification():
     ) == SECTOR_PRIVATE
 
 
-def test_market_sector_uses_government_evidence_and_private_classification():
+def test_market_sector_requires_positive_evidence_for_classification():
     assert classify_market_sector(
         {"classification_text": "Government & Defence"},
         ["government"],
@@ -64,7 +64,7 @@ def test_market_sector_uses_government_evidence_and_private_classification():
     assert classify_market_sector(
         {"classification_text": "Information & Communication Technology"},
         ["government"],
-    ) == SECTOR_PRIVATE
+    ) == SECTOR_UNKNOWN
     assert classify_market_sector({}, ["government"]) == SECTOR_UNKNOWN
 
 

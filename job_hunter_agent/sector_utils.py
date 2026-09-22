@@ -25,9 +25,9 @@ def normalize_sector_value(value: object) -> str:
 def classify_market_sector(item: dict, government_terms: list[str]) -> str:
     """Classify a market item from explicit or source-backed facts only.
 
-    A source classification is treated as private when it is present and does
-    not contain a configured government term. Without a classification or an
-    explicit sector value, the result stays unknown rather than guessing.
+    Government terms provide positive public-sector evidence. Generic industry
+    categories do not establish that an employer is private, so ambiguous items
+    stay unknown rather than being guessed into either sector.
     """
 
     explicit = normalize_sector_value(item.get("sector"))
@@ -50,11 +50,5 @@ def classify_market_sector(item: dict, government_terms: list[str]) -> str:
     ]
     if any(term in evidence for term in normalized_terms):
         return SECTOR_GOVERNMENT
-
-    if any(str(item.get(key) or "").strip() for key in (
-        "classification_text",
-        "subclassification_text",
-    )):
-        return SECTOR_PRIVATE
 
     return SECTOR_UNKNOWN
