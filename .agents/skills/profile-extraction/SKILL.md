@@ -25,7 +25,6 @@ Use before editing CV/onboarding/profile extraction, capability clustering, elig
 - `profile_learning.py`: free text to profile updates.
 - `profile_store.py`: profile shape and normalisation.
 - `capability_matrix.py`: capability clustering/matrix.
-- `signal_registry.py`: pending learned signals.
 
 ## Role duration freshness (`role_experience[].segments`)
 

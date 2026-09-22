@@ -5,49 +5,22 @@ description: Use ONLY for onboarding wizard/search-basics UI, onboarding templat
 
 # Onboarding UI
 
-See `.agents/skills/onboarding-ui/DETAILS.md` for module ownership notes, UI component maps, reset/resume behaviour, and longer examples.
+Use for onboarding-only behaviour. For CSS/layout/component styling, also load `css-design-system`; for labels/defaults, load `no-hardcoding`. Read `DETAILS.md` only for the relevant module/persistence/reset pattern.
 
-## Load order
-1. Read `AGENTS.md` first.
-2. Read this skill.
-3. If module ownership or field-specific behaviour matters, read `.agents/skills/onboarding-ui/DETAILS.md` for the relevant section only.
+## Rules
 
-## Non-negotiable rules
-- Keep canonical values in the owning server normaliser, DB-backed profile/settings source, or bootstrap source.
+- Canonical values stay in the owning server normaliser, DB-backed profile/settings source, or bootstrap source.
 - Do not invent defaults, labels, fallback values, or business decisions in page code.
-- Preserve the single-term search keyword rule. Do not auto-join title lists or create synthetic search phrases.
-- Preserve reset flow: `?fresh=1` clears user-scoped onboarding draft state, blanks search/salary fields, then loads fresh defaults.
-- Reuse shared theme tokens, widgets, field-label rows, choice strips, and helper functions first.
-- Before changing any token value or control height, read `docs/UI_COMPONENT_MAP.md` — the design standards section documents touch-target minimums, intentional size hierarchy, and the token ownership chain. Some values are accessibility constraints, not style preferences.
-- Do not create onboarding-local CSS for reusable UI components. Reusable visual styling belongs in `templates/static/theme/themes.widgets.css` or the relevant central theme/token file. If no shared pattern fits or the requirement appears to need a genuine onboarding-only visual exception, stop and ask the human before creating it.
-- Onboarding CSS may only define onboarding-specific layout, wizard flow placement, and responsive exceptions. If adding local CSS, add a comment explaining why it cannot be central.
-- Keep onboarding and settings patterns separate where the repo already intentionally does so.
-- Centralise repeated copy in `data/knowledge/ui_labels.json` or the owning server copy source.
-- Remove dead onboarding paths instead of leaving compatibility code behind.
-- Follow the established modular JS ownership pattern; add behaviour to the smallest owning onboarding module.
+- Preserve the single-term search keyword rule; do not synthesize joined title phrases.
+- `?fresh=1` clears user-scoped onboarding draft state and search/salary fields before fresh defaults are loaded.
+- Keep onboarding/settings behaviour separate only where the product intentionally differs; shared controls/styles follow their shared owner.
+- Remove dead onboarding paths rather than retaining compatibility code.
+- Add behaviour to the smallest owning onboarding JS module; do not create a second wizard persistence path.
 
-## Current ownership summary
-- `onboarding-page.js`: DOM refs, page state, step navigation, location rendering, display helpers.
-- `onboarding-storage.js`: wizard draft persistence, search-basics DB persistence, preference field event handlers.
-- `onboarding-search.js`: selected locations and search-basics hydration.
-- `onboarding-flow.js`: review rendering, capability cards, step-transition actions, startup orchestration.
-- `onboarding-upload.js`: CV validation, drop zone, create-profile availability.
-- `server_helpers.py` and `routes/pages.py`: labels/bootstrap globals.
-- `profile_store.py`: runtime profile persistence and onboarding-imported state.
+## Ownership
 
-## Detailed patterns moved to DETAILS.md
-Read only when needed:
-- full module ownership notes
-- persistence model
-- UI component map
-- runtime globals
-- reset/resume behaviour
-- validation details
+Detailed module ownership, bootstrap globals, persistence, reset/resume and field-specific patterns live in `DETAILS.md`; do not duplicate that map here.
 
 ## Validation
-- Check the rendered onboarding page or the smallest relevant browser interaction.
-- Prefer targeted checks over full test runs unless the change crosses multiple owners.
-- Never add a second persistence path for wizard state.
 
-
-
+Verify the smallest relevant onboarding browser flow and targeted tests. Use broader validation only when the change crosses shared owners.

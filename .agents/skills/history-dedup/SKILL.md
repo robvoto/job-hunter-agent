@@ -9,7 +9,7 @@ Use before editing job history, viewed/applied/hidden state, posting timestamps,
 
 ## Rules
 - Preserve valid **current-schema** job history and viewed/applied/hidden state; rebuilds must not lose valid user review state.
-- **Pre-live exception:** malformed, obsolete, or superseded dev/test history is disposable under the canonical-contract rule in `code-change/SKILL.md` and `no-hardcoding/SKILL.md`. Delete/reset incompatible dev data rather than adding migration, alias, fallback, or compatibility logic solely to preserve it.
+- **Pre-live exception:** malformed, obsolete, or superseded dev/test history is disposable under the canonical-contract rule in `code-change/SKILL.md`. Delete/reset incompatible dev data rather than adding migration, alias, fallback, or compatibility logic solely to preserve it.
 - Scrape run outputs (`run_stats`, `audit_records`, `review_data`, `workspace_pool`) are disposable. Current-schema job history is persistent; incompatible pre-live history is not.
 - History retention is centrally managed through Admin/global settings, not hardcoded in feature code.
 - Current retention knobs live in `global_settings.history_settings` and `global_settings.cache_settings`.

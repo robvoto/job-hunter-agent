@@ -1,140 +1,49 @@
 ---
 name: backlog-management
-description: "Use ONLY for backlog work: Google Sheet rows, JH IDs, priorities, duplicates, implementation state, evidence, human review flags, or adding/updating backlog items. Do NOT use for code implementation except to update backlog evidence."
+description: Use ONLY for Job Hunter backlog reads, grooming, JH IDs, duplicates, status, evidence, or adding/updating backlog rows. Do NOT use for product implementation except to update backlog evidence.
 ---
 
 # Skill: Backlog Management
 
-Use when creating, updating, deduplicating, grooming, or analysing backlog items.
-
 ## Source of truth
-- Working backlog: `https://docs.google.com/spreadsheets/d/1-D7RzYB3R39dOmUFZvvsDlWpDfIVn3eRajEae9b7OX0/edit?gid=218702820#gid=218702820`.
-- This Google Sheet is the only backlog source of truth.
-- The shared backlog access identity is `agent-backlog-access@robvoto-agent-platform.iam.gserviceaccount.com`; it should have access to all relevant project backlog spreadsheets. Do not infer that other configured service accounts are prohibited.
-- If the connected Sheets tool reports a different identity, such as a CV/Docs account, treat that as a connector configuration error: do not share the backlog with the reported account and do not use its result as backlog access.
-- Local `docs/backlog/backlog_review.xlsx` is archive/export/reference only unless the human explicitly asks to update it.
-- Read the sheet header row first and update by column name, never by fixed position.
-- Do not add, remove, or rename columns unless explicitly agreed.
 
-## Required skill pairing
-- For every backlog read, search, analysis, or write, use this skill together with an authorised live Google Sheets capability exposed by the current runtime. In a ChatGPT connector runtime, load `.agents/skills/mcp-tooling/SKILL.md` first and use the connector route it defines. The canonical spreadsheet ID and sheet name are pinned below, so routine backlog work does not require generic Drive discovery.
-- Once live backlog access is established through one authorised connector path, keep that path for the backlog/repo investigation. Do not casually switch to a second connector merely because both are available. Escalate to a different connector only when the current authorised path genuinely lacks the required operation, and make that isolated boundary explicit.
-- In Codex/Claude/local runtimes, use their authorised live-Sheets/API capability if one exists. If the current runtime has no authorised live-Sheet capability, stop rather than substituting a local export.
-- This skill owns Job Hunter backlog rules; the Google Sheets skill owns live spreadsheet metadata, bounded reads, validation checks, precise writes, and post-write verification.
-- When the human provides the backlog URL, go directly to this spreadsheet. Do not search local exports or GitHub issues for JH IDs first.
+- Canonical spreadsheet: `1-D7RzYB3R39dOmUFZvvsDlWpDfIVn3eRajEae9b7OX0`, sheet `Backlog`.
+- The live Google Sheet is the only backlog source of truth. Local exports are reference/archive only unless the human explicitly asks otherwise.
+- Use an authorised live Sheets capability. In ChatGPT connector runtimes, load `mcp-tooling` first and keep the same authorised connector path for the task.
+- If live read/write access is unavailable or a required write fails, stop backlog work and report the exact blocked action; do not substitute an export or cached copy.
 
-## How to read and write the sheet
+## Schema contract
 
-Use the authorised live Google Sheets tool available in the current runtime. This may be a local MCP Sheets tool, a cloud Sheets connector, or another approved runtime-specific Sheets integration.
+- Read the live header before backlog work and address fields by column name, never fixed position.
+- Do not encode a fixed column order, allowed-value list, or historical schema in this skill.
+- Do not add, remove, or rename columns without explicit human agreement.
+- Populate only columns that exist in the live header; do not recreate removed fields under new names.
 
-**Spreadsheet ID:** `1-D7RzYB3R39dOmUFZvvsDlWpDfIVn3eRajEae9b7OX0`  
-**Sheet name:** `Backlog`
+## IDs and new rows
 
-### Required access rule
-If no authorised tool can read and write the live Google Sheet, or a write fails:
-- Stop backlog work.
-- Do not claim the sheet was updated.
-- Do not use local exports, docs, copied spreadsheets, or archive files as a substitute backlog.
-- Report the blocker and the exact backlog action that could not be completed.
+- For a new item, read live IDs, find the highest valid `JH-###`, and increment by one. Ignore malformed placeholders.
+- Search existing titles plus descriptive text before creating a row. Update an existing item when it already covers the same work.
+- Turn a rough human idea into a useful row without asking them to fill every field: preserve the intent, concise title/summary, delivery state/priority when those live columns exist, source/context, blockers, next action, and useful references.
+- Do not invent evidence, dependencies, dates, owners, review fields, or other columns absent from the live schema.
 
-### Required operations
-Use the equivalent live-Sheets operations for the current runtime:
-- Read row by `ID` when inspecting one item.
-- Append a row when creating a new item.
-- Update a single cell or row fields when changing an existing item.
-- Read all rows only when needed for deduplication, next-ID lookup, or bounded grooming.
+## Reading and selecting work
 
-### Getting the next JH ID
-Read existing IDs from the live `Backlog` sheet, find the highest valid `JH-###` number, and increment by 1. Ignore malformed placeholders such as `JH-NEXT`.
+- Read one row by `ID` when inspecting one item; read broadly only for deduplication, next-ID lookup, or bounded grooming.
+- Treat the live `Status` column as authoritative. Do not select terminal/obsolete work for implementation unless the human explicitly asks to reopen, audit, or correct it.
+- Do not maintain a hard-coded status/priority/area vocabulary here; use the values present in the live sheet and preserve their meaning.
+- Respect `Blocked By` when present. Do not silently start blocked work.
 
-## Column order (verified 2026-08-14)
-1. ID, 2. Creator, 3. Title, 4. Epic, 5. Type, 6. Priority, 7. Size, 8. Problem, 9. Outcome, 10. Acceptance Criteria, 11. Original Source, 12. Duplicate Of, 13. Depends On, 14. Notes, 15. Implementation State, 16. Implementation Date, 17. Implemented By, 18. Evidence, 19. Human Review Needed, 20. Review Category, 21. Review Reason, 22. Created Date, 23. Modified Date, 24. Resolved Date
+## Updating and grooming
 
-## Creating a backlog row from a rough idea
-When the human gives a rough idea, create a complete row rather than asking them to fill every field.
+- Preserve the human's original intent; improve wording only when clarity improves without changing meaning.
+- Do not delete backlog rows without explicit human agreement.
+- Mark duplicates conservatively using the live fields available (normally `Notes` and/or `External Ref`) rather than inventing a removed duplicate column.
+- Mark work obsolete only when current product/repository evidence supports that conclusion.
+- When implementation is verified, update the live status and record concise evidence in the available evidence-bearing fields (`Notes` and/or `External Ref`); name concrete files/functions/tests where useful.
+- Use `Next Action` for the next actionable follow-up rather than burying it in narrative notes.
+- For grooming, check for duplicates, invalid/misaligned values, stale references, weak summaries/notes, blockers, and completion claims unsupported by current evidence.
+- For large grooming passes, work in bounded ID ranges and report exactly what changed.
 
-Fill the columns that exist in the sheet:
-- `ID`: next stable `JH-###` number.
-- `Creator`: `Human` if the human supplied the idea; `Agent` only if the agent discovered it while working.
-- `Title`: concise action phrase.
-- `Epic`: use an existing epic where possible.
-- `Type`: one of `Story`, `Bug`, `Task`, `Spike`, `Decision`, `Risk`.
-- `Priority`: `High`, `Medium`, or `Low`.
-- `Size`: `S`, `M`, `L`, or `XL`.
-- `Problem`: why this matters.
-- `Outcome`: what success looks like.
-- `Acceptance Criteria`: testable completion checks.
-- `Original Source`: file, conversation, or code area that triggered it.
-- `Duplicate Of`: leave blank unless clearly duplicate.
-- `Depends On`: existing IDs that must happen first.
-- `Notes`: assumptions, uncertainty, or implementation cautions.
-- `Implementation State`: `Not Done` by default unless implementation is verified.
-- `Implementation Date`, `Implemented By`, `Evidence`: fill only when implementation is verified.
-- `Created Date`: set when a new row is created.
-- `Modified Date`: update when the row is materially changed.
-- `Resolved Date`: set when the item is resolved; leave blank while still open.
+## Finish
 
-## Selecting work
-- Do not pick or implement rows where `Implementation State = Done`.
-- Done rows may only be touched when the human explicitly asks to audit, reopen, correct evidence, or revise that specific row.
-- Normal agent task selection must use rows where `Implementation State` is not `Done`, preferably `Not Done` or `Partially Done` after confirming scope.
-
-## Grooming existing rows
-Grooming means improving backlog quality, not implementing product code.
-
-For each row, check only what can be proven from the live sheet and, when needed, the repo:
-- duplicate or near-duplicate item;
-- invalid `Implementation State` value;
-- malformed or shifted columns;
-- stale references to removed files, old JSON paths, or obsolete architecture;
-- weak rows with missing Problem, Outcome, or Acceptance Criteria;
-- rows marked `Done` without file/function/test evidence.
-
-Update conservatively:
-- Do not delete rows unless the human explicitly agrees.
-- Prefer marking duplicates with `Duplicate Of` and evidence.
-- Mark obsolete only when architecture/code evidence proves it.
-- If unsure, use `Human Review Needed`, `Review Category`, and `Review Reason` instead of rewriting the row.
-- For large grooming, work in small ID ranges and report exactly what changed.
-
-## Human review marking
-Use review columns to flag items that need the human's judgement because the agent cannot safely resolve them alone. Examples of useful review reasons include unclear intent, missing information, possible duplicates, possibly old/obsolete items, or items that seem wrong or inconsistent.
-
-Do not use `Needs code check` as a human-review category. Code inspection status is agent work, not useful human triage by itself.
-
-## Updating existing rows
-- Do not delete rows without human agreement.
-- If a row looks duplicate, fill `Duplicate Of` and explain in `Notes` or `Evidence`.
-- If a row is obsolete, set `Implementation State = Obsolete` and add evidence.
-- If implementation is verified, update `Implementation State`, `Implementation Date`, `Implemented By`, and `Evidence` when those columns exist.
-- Preserve original meaning. Do not rewrite human wording unless clarity improves and meaning is preserved.
-
-## Implementation State rules
-- `Implementation State` is a delivery/status field, not an audit todo field.
-- Do not write `Needs Code Check` into `Implementation State`.
-- Allowed values are:
-  - `Done`: code/docs/tests meet the acceptance criteria.
-  - `Not Done`: not implemented yet or not proven done.
-  - `Partially Done`: some required capability exists but acceptance criteria are not fully met.
-  - `Obsolete`: no longer relevant because architecture/product direction changed.
-- Code-check uncertainty belongs in review columns such as `Human Review Needed`, `Review Category`, and `Review Reason`, not in `Implementation State`.
-
-## Code-check evidence
-Evidence must name files/functions/tests, not vague claims.
-Good evidence:
-- `profile_store.save_profile()` now writes to SQLite `user_profile`; test X covers persistence.
-Bad evidence:
-- `Looks implemented`.
-
-## Deduplication
-Before adding a row:
-1. Search workbook titles and notes for similar words.
-2. If similar, update the existing row rather than adding a duplicate.
-3. If uncertain, add the new row but note the possible duplicate in `Notes`.
-
-## Finish format
-Report:
-- Row(s) created or updated.
-- Any duplicates suspected.
-- Any implementation state changes and evidence.
-- Any workbook compatibility concerns.
+Report the row IDs created/updated, any suspected duplicates or blockers, and any status changes with the evidence used. Never claim a live Sheet update unless the write was verified.

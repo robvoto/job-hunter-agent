@@ -26,7 +26,6 @@ Use before editing `fit_scoring.py`, `capability_matching.py`, `signal_detection
 - `profile_store.py`: loads/normalises scoring/profile settings. New top-level `scoring_rules.json` sections must be added to `_load_default_scoring_rules()`'s explicit key whitelist (with a matching `KEY_*` constant) or they are silently dropped and never reach `get_scoring_rules()`.
 - `data/knowledge/scoring_rules.json`: managed scoring policy, including `occupation_alignment` (same/adjacent/different adjustments).
 - `data/knowledge/match_level_defaults.json`: match band thresholds.
-- `data/knowledge/parsing_rules.json`: labels/display text where already owned there.
 
 ## Checklist
 - No `.get(..., fallback)` for scoring business data.

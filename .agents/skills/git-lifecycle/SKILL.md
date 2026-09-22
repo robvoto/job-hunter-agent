@@ -1,122 +1,69 @@
 ---
 name: git-lifecycle
-description: Use for branch/worktree setup, commit, push, pull request, merge/integration, main-branch verification, or whenever Git state is unclear.
+description: Use for branch/worktree setup, commit, push, pull request, merge/integration, main verification, and Git cleanup.
 ---
 
 # Skill: Git Lifecycle
 
-Use this whenever code work is started or finished, or whenever the user asks about commit/push/PR/merge/main/deploy state.
+Use for any branch/worktree, commit, push, PR, merge, or `main` integration work.
 
-## Operator contract
+## Contract
 
-The human should not need to remember Git mechanics.
-
-- Completed intended work is committed and pushed automatically after validation unless the human explicitly says not to push.
-- Stop and ask only for a genuine safety gate: unrelated changes, destructive actions, force-pushes, deployment/restart, credentials/external messages, or unresolved conflicting work.
-- Runtime lifecycle changes are one of those safety gates. Follow the JH/JMM/Human-MCP lifecycle approval rule in `docs/PROJECT_CONTEXT.md`; Git, test, release, deployment-preparation, or version approval never grants permission to start, stop, restart, kill, or otherwise change those runtimes.
-- A pushed task branch is **not** the same as integration to `main`.
-- `commit` or `push` alone never means "merge to main".
-- `approved`, `merge it`, `put it in main`, `ship it`, or equivalent approval referring to the current completed task authorizes integration to `main`.
-- If integration intent is unclear, ask one concise question before merging: `Work is ready on <branch> but is NOT in main. Merge to main now?`
-- Every task branch intended to reach `main` must go through a pull request. Disposable experiment branches that are abandoned rather than integrated do not need a PR.
-- The authoring/working agent owns implementation through validation, commit, push, and PR creation. It must report the PR number/URL when the branch is ready.
-- A separate integration owner/coordinating agent owns PR review and merge: verify current `origin/main`, inspect the diff and mergeability, wait for required CI, resolve only clear/safe integration drift, merge the PR, verify `origin/main`, and clean the branch/worktree.
-- The authoring agent must not merge its own PR as normal workflow. If no separate integration owner is available, leave the PR open for integration rather than bypassing the PR boundary.
-- Do not integrate normal task work by directly merging or pushing a task branch to `main`; merge through the repository's PR mechanism.
-- Git work targets the latest repository state, not the version currently running on AWS. Commit and push approved task work normally even when production is intentionally on an older release; `main` integration still follows the mandatory PR flow.
-- Never treat commit, merge, push, or release approval as permission to deploy AWS. Production deployment requires an explicit AWS instruction from the human.
+- Work intended for `main` uses: **task branch/worktree -> validate -> commit -> push -> PR -> integration review -> merge -> cleanup**.
+- The authoring agent owns implementation through PR creation. The integration owner owns PR review, merge, verification, and cleanup.
+- The authoring agent does not normally merge its own PR. If no integration owner is available, leave the PR open.
+- Do not directly merge or push a normal task branch to `main`.
+- Disposable experiment branches that are abandoned rather than integrated do not need a PR.
+- `commit` or `push` never means the work is in `main`.
+- If integration intent is unclear and the session is not explicitly acting as integration owner, ask once before merging.
+- Git approval does not imply runtime lifecycle or deployment approval; follow `docs/PROJECT_CONTEXT.md` and `release-management` for those concerns.
 
 ## Before editing
 
 1. Fetch `origin`.
-2. Inspect `git status`, current branch/worktree, `HEAD`, and `origin/main`.
-3. Preserve unrelated dirty work. Never stash, reset, overwrite, or commit another agent's changes without explicit coordination.
-4. When concurrent work is possible, use an isolated task branch + worktree based on current `origin/main`; do not code in the shared `main` checkout.
+2. Inspect branch/worktree, `git status`, `HEAD`, and `origin/main`.
+3. Preserve unrelated dirty work; never stash, reset, overwrite, or commit another agent's changes without coordination.
+4. When concurrent work is possible, use an isolated task worktree based on current `origin/main`.
 
-## Failure handling
+## Authoring agent
 
-- Any failed tool call, shell command, merge, or validation is a stop condition: report the failure immediately and do not silently continue down the same line of work.
-- Diagnose the root cause before retrying. If the human has already authorised fixing the task, fix the root cause and add a durable guard/instruction/test when the failure reveals a repeatable process gap.
-- In WSL worktrees, use the repository runtime (`uv run ...`) rather than assuming a bare Python/test executable exists. In a ChatGPT/Human MCP connector run, never run the whole pytest suite in one connector call; use the three separate serial `./scripts/run-pytest-mcp.sh N 3` calls owned by `mcp-tooling`.
-- For browser JavaScript that uses ES-module syntax in a repo where `.js` is not declared as Node ESM, validate with `node --input-type=module --check < path/to/file.js`; do not run plain `node --check path/to/file.js`, which will misparse valid `export`/`import` syntax as CommonJS.
+1. Implement only the task scope and run the required validation.
+2. Commit the validated change.
+3. Fetch `origin` again and inspect drift from `origin/main`.
+4. Push the task branch without force.
+5. Create a PR targeting `main` and report its number/URL.
+6. Stop at `MAIN STATUS: NOT IN MAIN — pushed branch <branch>` unless this session is separately assigned integration ownership for a different author's PR.
 
-## Before integration
+## Integration owner
 
-### Authoring/working agent
+1. Fetch `origin`; inspect the PR diff, task SHA, current `origin/main`, mergeability, and required checks.
+2. If `origin/main` moved, reconcile only clear/safe drift. Return ambiguous conflicts or ownership questions to the author/human.
+3. If both sides changed versioned managed JSON, ensure the integrated version is greater than current `origin/main` when content changes.
+4. Run required local validation and wait for hosted PR checks/CI.
+5. Merge through the repository PR mechanism using the documented strategy; otherwise prefer a normal non-force merge.
+6. Fetch `origin` and verify the task SHA is an ancestor of `origin/main`.
 
-1. Confirm the exact task commit SHA and that validation passed.
-2. Fetch `origin` again and compare the task branch with current `origin/main`.
-   - Capture exact commit IDs with `git rev-parse`; never reconstruct or guess a full SHA from a short display SHA when guarding integration state.
-3. Push the task branch without force and create a PR targeting `main`.
-4. Report the PR number/URL and stop at `MAIN STATUS: NOT IN MAIN — pushed branch <branch>`; do not self-merge the PR.
+## Post-merge cleanup
 
-### Integration owner/coordinating agent
+1. Re-check the task worktree. Never delete a dirty/unmerged worktree.
+2. Remove the clean task worktree.
+3. Delete the merged local and remote task branches.
+4. Run `git worktree prune`.
+5. Run `./scripts/check-git-closure.sh --task-sha <sha> --branch <branch> --worktree <path>`.
+6. For repository-wide cleanup/`merge all`, add `--strict-repo`.
 
-1. Fetch `origin` and inspect the open PR, its task commit SHA, diff, mergeability, required checks, and current `origin/main`.
-2. If `origin/main` advanced since the task branch was cut, do not blindly force-push or pretend the PR is current. Reconcile only clear/safe drift; if conflicts, ownership, or intended behaviour are ambiguous, stop and ask the human or return it to the authoring agent.
-3. Before final validation, inspect any versioned managed JSON changed by both sides. If integrated content differs from current `origin/main`, its `version` must be strictly greater than the version on current `origin/main`; independent branches can legitimately collide on the same version number.
-4. Required local validation and hosted PR checks/CI must pass on the integration candidate.
-5. Merge through the repository's PR mechanism using the documented strategy. If none is documented, prefer a normal non-force merge that preserves both histories.
-6. Fetch `origin` again and verify the task commit is an ancestor of `origin/main` before reporting integration complete.
-7. Never bypass a moved branch, failed check, or rejected merge with force.
+`tests/test_git_hygiene.py` enforces removal of clean local branches already merged into `main`.
 
-## Required verification
+## Reporting
 
-After any claimed integration, prove it instead of inferring it:
+End Git work with:
 
-- Fetch `origin`.
-- Verify the task commit is an ancestor of `origin/main` (for example with `git merge-base --is-ancestor <task-sha> origin/main`).
-- Record the resulting `origin/main` SHA.
-- Do not claim deployment merely because `main` was pushed; verify the repository's actual deployment mechanism separately when deployment matters.
-
-## Mandatory status wording
-
-Never leave the human guessing. End Git-related work with exactly one clear integration state:
-
-- `MAIN STATUS: NOT IN MAIN — uncommitted work`;
-- `MAIN STATUS: NOT IN MAIN — committed on <branch>`;
-- `MAIN STATUS: NOT IN MAIN — pushed branch <branch>`; or
+- `MAIN STATUS: NOT IN MAIN — <uncommitted|committed on branch|pushed branch>`; or
 - `MAIN STATUS: IN MAIN — verified on origin/main at <sha>`.
 
-If the state is not `IN MAIN`, say what single action is still required. Do not use `done`, `shipped`, `merged`, or `deployed` ambiguously.
+For integrated work also report:
 
-## Repository-state reporting
+- `CLEANUP STATUS: COMPLETE — merged task worktree removed`; or `BLOCKED — <reason>`.
+- `BRANCH STATUS: DELETED — local and remote task branches removed`; or `RETAINED — <reason>`.
 
-- `MAIN STATUS` reports remote integration only; `CLEANUP STATUS` reports only the merged task's temporary branch and worktree.
-- Do not call a repository `clean` unless the shared checkout and every active worktree have been checked clean, and the shared checkout is current with `origin/main`.
-- Otherwise state the verified scope precisely, for example: `task worktree clean; other worktrees not assessed`.
-
-## Mandatory post-merge cleanup
-
-A successful integration is **not complete** until the task worktree/branch cleanup is completed or explicitly reported as blocked.
-
-After the task commit is verified as an ancestor of `origin/main`:
-
-1. Re-check the task worktree with `git status --porcelain`.
-2. If it has modified, staged, conflicted, or untracked files, **do not delete it**. Report the exact worktree path and why cleanup is blocked. Never stash, reset, or discard that work merely to make cleanup pass.
-3. If it is clean, remove the task worktree with `git worktree remove <path>`.
-4. Delete the merged local task branch with `git branch -d <branch>`.
-5. If the same remote task branch exists, is fully merged into `origin/main`, and is not still needed by an active worktree/session, delete it with `git push origin --delete <branch>`.
-6. Run `git worktree prune`.
-7. Verify the task worktree no longer appears in `git worktree list` and the merged task branch no longer appears locally.
-8. Run `./scripts/check-git-closure.sh --task-sha <task-sha> --branch <branch> --worktree <path>`. This executable gate must pass before reporting `MAIN STATUS: IN MAIN`.
-9. When the human says `merge all`, asks for repository cleanup, or Git state was already unclear/dirty, also run the same command with `--strict-repo`; do not report repository cleanup complete while it reports dirty worktrees or merged local branches left behind.
-
-Never leave a clean, fully merged task worktree or branch behind "for later". Parallel worktrees are temporary execution spaces, not permanent project folders.
-
-This is enforced, not trusted: `tests/test_git_hygiene.py` fails the whole suite
-while any local branch fully merged into main still exists. The rule and
-`scripts/check-git-closure.sh` both predate seventeen stale worktrees, because
-both depended on an agent choosing to run them. The test does not.
-
-For any integration reported as `IN MAIN`, also report exactly one cleanup state:
-
-- `CLEANUP STATUS: COMPLETE — merged task worktree removed`; or
-- `CLEANUP STATUS: BLOCKED — <exact dirty/unmerged reason and worktree path>`.
-
-Always add one explicit branch state after cleanup:
-
-- `BRANCH STATUS: DELETED — local and remote task branches removed`; or
-- `BRANCH STATUS: RETAINED — <exact branch name and why it cannot be deleted>`.
-
-`CLEANUP STATUS: COMPLETE` is forbidden while any task-related local or remote branch still exists. `rescue/*` branches are not exempt from strict repository closure; if one must be retained to preserve unmerged work, strict closure must fail and the final response must say `BRANCH STATUS: RETAINED` with the branch name and reason.
+Do not call the whole repository clean unless every active worktree was checked and the shared checkout is current with `origin/main`.
