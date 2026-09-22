@@ -609,6 +609,7 @@
     "posting_channel_direct_employer_tooltip": "Posted directly by the employer.",
     "archive_badge_tooltip": "This role was saved from an earlier search and kept on your workspace.",
     "gap_confirm_not_have_label": "No, I don't have this",
+    "ignore_requirement_suggestion_label": "Ignore suggestion",
     "profile_evidence_label": "Profile evidence:",
     "profile_evidence_unconfirmed_label": "Not confirmed",
     "add_to_profile_action_label": "Yes, I have this",

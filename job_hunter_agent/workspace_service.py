@@ -442,6 +442,22 @@ def load_saved_workspace_pool() -> list[dict]:
     return data if isinstance(data, list) else []
 
 
+def save_saved_workspace_pool(records: list[dict]) -> None:
+    from job_hunter_agent.database import db_conn, ensure_user_row
+    from job_hunter_agent.paths import get_active_user_id
+
+    user_id = get_active_user_id()
+    ensure_user_row(user_id)
+
+    with db_conn() as conn:
+        conn.execute(
+            """INSERT INTO workspace_pool (user_id, data, updated_at)
+            VALUES (?, ?, datetime('now'))
+            ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at""",
+            (user_id, json.dumps(records, ensure_ascii=False)),
+        )
+
+
 def build_run_stats(
     audit_rows: list[dict],
     kept_records: list[dict],

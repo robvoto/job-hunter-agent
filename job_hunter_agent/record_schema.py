@@ -89,6 +89,7 @@ POSTING_CHANNEL_VERSION_KEY = "classifier_version"
 POSTING_CHANNEL_CLASSIFIER_VERSION = 4
 RECORD_JOB_QUALITY_SIGNALS_KEY = "job_quality_signals"
 RECORD_REQUIREMENT_COVERAGE_KEY = "requirement_coverage"
+RECORD_IGNORED_REQUIREMENT_SUGGESTIONS_KEY = "ignored_requirement_suggestions"
 # Optional non_capability requirement rows: retained for analysis/debugging but
 # excluded from grade, gate, scoring, and the normal job card.
 RECORD_REQUIREMENT_COVERAGE_HIDDEN_KEY = "requirement_coverage_hidden"
