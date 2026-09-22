@@ -27,7 +27,7 @@ load_repo_dotenv()
 
 from job_hunter_agent.fit_scoring import fit_score_displayed
 from job_hunter_agent.history import viewed_by_user
-from job_hunter_agent.io_utils import configure_console_output, load_run_stats
+from job_hunter_agent.io_utils import configure_console_output, load_job_history, load_run_stats
 from job_hunter_agent.job_identity import find_confirmed_duplicate, normalize_job_key
 from job_hunter_agent.match_labels import score_to_match_label
 from job_hunter_agent.notifiers.email_notifier import send_email_notification
@@ -459,7 +459,7 @@ def run_agent_once(
     applied_job_keys, hidden_job_keys = get_manual_skip_sets(profile)
     workspace_records = build_workspace_record_sets(
         current_records,
-        {},
+        load_job_history(),
         applied_job_keys,
         hidden_job_keys,
         parse_timestamp(
