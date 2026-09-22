@@ -12,7 +12,9 @@ from typing import Any
 
 from job_hunter_agent.global_settings import (
     DEFAULT_SEARCH_SETTINGS,
+    KEY_LINKEDIN_EASY_APPLY_ONLY,
     KEY_LINKEDIN_HOURS_OLD,
+    KEY_SEEK_QUICK_APPLY_ONLY,
     get_job_market_map_parallel_workers,
 )
 from job_hunter_agent.history import finalize_record
@@ -32,11 +34,22 @@ from job_hunter_agent.job_review_pipeline import (
     review_pre_detail_normalized_job,
     review_title_judgment,
 )
+from job_hunter_agent.job_types import load_job_type_filter_groups
 from job_hunter_agent.locations import resolve_location
 from job_hunter_agent.occupation_taxonomy import RESULT_FAR
 from job_hunter_agent.posting_utils import days_since, parse_timestamp
-from job_hunter_agent.profile_store import KEY_EXPLORE_ADJACENT_ROLES
+from job_hunter_agent.profile_store import (
+    ENGAGEMENT_TYPE_DEFAULT_VALUES,
+    KEY_EXPLORE_ADJACENT_ROLES,
+    KEY_WORK_MODE_PREFERENCE,
+    WORK_MODE_PREFERENCE_DEFAULT_VALUES,
+    normalize_engagement_type_preferences,
+    normalize_work_mode_preferences,
+)
 from job_hunter_agent.record_schema import (
+    APPLY_METHOD_EASY_APPLY,
+    APPLY_METHOD_EXTERNAL_APPLY,
+    APPLY_METHOD_QUICK_APPLY,
     APPLY_METHOD_UNKNOWN,
     RECORD_APPLY_METHOD_KEY,
     RECORD_DECISION_EXPLANATION_KEY,
@@ -44,6 +57,7 @@ from job_hunter_agent.record_schema import (
     RECORD_DESCRIPTION_SOURCE_KEY,
     RECORD_DETAILS_STATUS_KEY,
     RECORD_DETAILS_TEXT_KEY,
+    RECORD_DUPLICATE_LINKS_KEY,
     RECORD_JOB_KEY,
     RECORD_MARKET_MAP_IDENTITY_KEY,
     RECORD_MARKET_MAP_JD_FETCHED_AT_KEY,
@@ -57,6 +71,7 @@ from job_hunter_agent.record_schema import (
     RECORD_SOURCE_METADATA_KEY,
     RECORD_SOURCE_NAME_KEY,
     RECORD_SOURCE_PLATFORM_JOB_ID_KEY,
+    RECORD_SOURCE_PROVENANCE_KEY,
     RECORD_TITLE_KEY,
     RECORD_WORK_MODE_EVIDENCE_KEY,
     RECORD_WORK_MODE_KEY,
@@ -72,7 +87,6 @@ from job_hunter_agent.sector_utils import classify_market_sector
 from job_hunter_agent.source_errors import PartialSourceResultsError
 from job_hunter_agent.source_learning import register_pending_learning_signals
 from job_hunter_agent.source_registry import (
-    SOURCE_APSJOBS,
     SOURCE_JOB_MARKET_MAP,
     SOURCE_LINKEDIN,
     SOURCE_SEEK,
@@ -113,6 +127,134 @@ def _source_metadata(item: dict[str, Any], source: str, source_job_id: str) -> d
         }
     )
     return metadata
+
+
+def _matched_source_entries(item: dict[str, Any]) -> list[dict[str, Any]]:
+    raw = item.get("matched_sources")
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise JobMarketMapContractError("Job Market Map matched_sources must be a list")
+
+    entries: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, int | None]] = set()
+    for matched in raw:
+        if not isinstance(matched, dict):
+            raise JobMarketMapContractError("Job Market Map matched_sources entries must be objects")
+        source = str(matched.get("source") or "").strip().lower()
+        if not source:
+            raise JobMarketMapContractError("Job Market Map matched source is missing source")
+        source_job_id = str(matched.get("source_job_id") or "").strip()
+        matched_job_id = matched.get("id")
+        if matched_job_id is not None and (not isinstance(matched_job_id, int) or matched_job_id < 0):
+            raise JobMarketMapContractError("Job Market Map matched source id is invalid")
+        key = (source, source_job_id, matched_job_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        entries.append(dict(matched))
+    return entries
+
+
+def _merge_jmm_matched_sources(record: dict[str, Any], item: dict[str, Any]) -> None:
+    """Preserve JMM's confirmed same-vacancy source evidence on the JH record."""
+    matched_sources = _matched_source_entries(item)
+    if not matched_sources:
+        return
+
+    canonical_source = str(record.get("source") or "").strip().lower()
+    canonical_job_key = str(record.get(RECORD_JOB_KEY) or "").strip()
+    canonical_source_job_id = str(
+        (record.get(RECORD_SOURCE_METADATA_KEY) or {}).get(RECORD_SOURCE_PLATFORM_JOB_ID_KEY) or ""
+    ).strip()
+
+    provenance = record.get(RECORD_SOURCE_PROVENANCE_KEY)
+    provenance = [dict(entry) for entry in provenance if isinstance(entry, dict)] if isinstance(provenance, list) else []
+    if not provenance:
+        provenance.append(
+            {
+                "source": canonical_source,
+                RECORD_SOURCE_NAME_KEY: canonical_source,
+                RECORD_JOB_KEY: canonical_job_key,
+                "url": str(record.get("url") or "").strip(),
+                "title": str(record.get("title") or "").strip(),
+                "company": str(record.get("company") or "").strip(),
+                "location": str(record.get("location") or "").strip(),
+                RECORD_SOURCE_METADATA_KEY: copy.deepcopy(record.get(RECORD_SOURCE_METADATA_KEY) or {}),
+            }
+        )
+
+    duplicate_links = record.get(RECORD_DUPLICATE_LINKS_KEY)
+    duplicate_links = [dict(link) for link in duplicate_links if isinstance(link, dict)] if isinstance(duplicate_links, list) else []
+
+    provenance_keys = {
+        (
+            str(entry.get("source") or entry.get(RECORD_SOURCE_NAME_KEY) or "").strip().lower(),
+            str((entry.get(RECORD_SOURCE_METADATA_KEY) or {}).get(RECORD_SOURCE_PLATFORM_JOB_ID_KEY) or "").strip(),
+        )
+        for entry in provenance
+    }
+    duplicate_keys = {
+        (
+            str(link.get("source") or "").strip().lower(),
+            str((link.get("source_metadata") or {}).get(RECORD_SOURCE_PLATFORM_JOB_ID_KEY) or link.get("job_key") or "").strip(),
+        )
+        for link in duplicate_links
+    }
+
+    for matched in matched_sources:
+        source = str(matched.get("source") or "").strip().lower()
+        source_job_id = str(matched.get("source_job_id") or "").strip()
+        is_canonical = source == canonical_source and (
+            not source_job_id or source_job_id == canonical_source_job_id
+        )
+        if is_canonical:
+            continue
+
+        source_metadata = blank_source_metadata(source)
+        source_metadata[RECORD_SOURCE_PLATFORM_JOB_ID_KEY] = source_job_id
+        matched_url = str(matched.get("canonical_url") or matched.get("url") or "").strip()
+        if matched_url:
+            source_metadata[RECORD_SOURCE_CANONICAL_URL_KEY] = matched_url
+        source_metadata["raw_source_fields"] = {"jmm_matched_source": copy.deepcopy(matched)}
+        job_key = normalize_job_key(source_job_id, source=source) if source_job_id else ""
+        provenance_key = (source, source_job_id)
+        if provenance_key not in provenance_keys:
+            provenance.append(
+                {
+                    "source": source,
+                    RECORD_SOURCE_NAME_KEY: source,
+                    RECORD_JOB_KEY: job_key,
+                    "title": str(record.get("title") or "").strip(),
+                    "company": str(record.get("company") or "").strip(),
+                    "location": str(record.get("location") or "").strip(),
+                    "url": matched_url,
+                    RECORD_SOURCE_METADATA_KEY: source_metadata,
+                }
+            )
+            provenance_keys.add(provenance_key)
+
+        duplicate_key = (source, source_job_id or job_key)
+        if duplicate_key not in duplicate_keys:
+            duplicate_links.append(
+                {
+                    "kind": "confirmed_duplicate",
+                    "matched_on": "jmm_same_vacancy",
+                    "matched_value": str(item.get("id") or ""),
+                    "source": source,
+                    "title": str(record.get("title") or "").strip(),
+                    "company": str(record.get("company") or "").strip(),
+                    "job_key": job_key,
+                    "url": matched_url,
+                    "source_metadata": copy.deepcopy(source_metadata),
+                    "source_provenance": provenance[-1] if provenance else {},
+                }
+            )
+            duplicate_keys.add(duplicate_key)
+
+    record[RECORD_SOURCE_PROVENANCE_KEY] = provenance
+    if duplicate_links:
+        record[RECORD_DUPLICATE_LINKS_KEY] = duplicate_links
 
 
 def normalize_market_job(item: dict[str, Any], *, run_iso: str) -> dict[str, Any]:
@@ -177,13 +319,14 @@ def normalize_market_job(item: dict[str, Any], *, run_iso: str) -> dict[str, Any
     apply_method = str(item.get("apply_method") or APPLY_METHOD_UNKNOWN).strip().lower()
     if apply_method not in {
         APPLY_METHOD_UNKNOWN,
-        "easy_apply",
-        "quick_apply",
-        "external_apply",
+        APPLY_METHOD_EASY_APPLY,
+        APPLY_METHOD_QUICK_APPLY,
+        APPLY_METHOD_EXTERNAL_APPLY,
     }:
         raise ValueError(f"Job Market Map returned unsupported apply_method: {apply_method!r}")
     record[RECORD_APPLY_METHOD_KEY] = apply_method
     record[RECORD_SOURCE_METADATA_KEY][RECORD_SOURCE_PLATFORM_JOB_ID_KEY] = source_job_id
+    _merge_jmm_matched_sources(record, item)
     return record
 
 
@@ -563,90 +706,232 @@ def _posted_after_for_source(context, source: str) -> str:
     return (run_at - timedelta(days=max(1, context.configured_date_range))).isoformat()
 
 
-def _iter_filtered_market_pages(context, client: JobMarketMapClient):
-    """Yield JMM pages for the same board-scoped search inputs used pre-JMM."""
+def _setting_values(settings: dict[str, Any], *keys: str) -> list[str]:
+    for key in keys:
+        raw = settings.get(key)
+        if raw in (None, "", []):
+            continue
+        values = raw if isinstance(raw, (list, tuple, set)) else [raw]
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            text = str(value).strip()
+            marker = text.casefold()
+            if text and marker not in seen:
+                seen.add(marker)
+                cleaned.append(text)
+        return cleaned
+    return []
+
+
+def _employment_type_filters(profile: dict[str, Any]) -> list[str]:
+    preferences = profile.get("match_preferences") or {}
+    selected = normalize_engagement_type_preferences(preferences.get("engagement_type"))
+    if set(selected) == set(ENGAGEMENT_TYPE_DEFAULT_VALUES):
+        return []
+
+    group_labels: set[str] = set()
+    if "permanent" in selected:
+        group_labels.add("permanent")
+    if "contract" in selected:
+        group_labels.add("contract / temp")
+    if "full_time_contract" in selected:
+        group_labels.add("full time contract")
+
+    values: list[str] = []
+    seen: set[str] = set()
+    for group in load_job_type_filter_groups():
+        if str(group.get("label") or "").strip().casefold() not in group_labels:
+            continue
+        for value in group.get("values") or []:
+            text = str(value).strip()
+            marker = text.casefold()
+            if text and marker not in seen:
+                seen.add(marker)
+                values.append(text)
+    return values
+
+
+def _workplace_type_filters(profile: dict[str, Any]) -> list[str]:
+    preferences = profile.get("match_preferences") or {}
+    selected = normalize_work_mode_preferences(preferences.get(KEY_WORK_MODE_PREFERENCE))
+    if set(selected) == set(WORK_MODE_PREFERENCE_DEFAULT_VALUES):
+        return []
+    values: list[str] = []
+    for mode in selected:
+        if mode == "onsite":
+            values.extend(["On-site", "On site", "Onsite"])
+        elif mode:
+            values.append(mode.title())
+    return values
+
+
+def _salary_search_filters(profile: dict[str, Any]) -> list[dict[str, Any]]:
+    salary_preferences = profile.get("salary_preferences") or {}
+    yearly = int(salary_preferences.get("minimum_salary_yearly") or 0)
+    daily = int(salary_preferences.get("minimum_daily_rate") or 0)
+    annual_filter = {
+        "salary_min": yearly,
+        "salary_period": "year",
+        "salary_currency": "AUD",
+    }
+    daily_filter = {
+        "salary_min": daily,
+        "salary_period": "day",
+        "salary_currency": "AUD",
+    }
+    if yearly <= 0 and daily <= 0:
+        return [{}]
+    if yearly > 0 and daily <= 0:
+        return [annual_filter]
+    if daily > 0 and yearly <= 0:
+        return [daily_filter]
+
+    selected = set(
+        normalize_engagement_type_preferences(
+            (profile.get("match_preferences") or {}).get("engagement_type")
+        )
+    )
+    if selected and selected <= {"permanent"}:
+        return [annual_filter]
+    if selected and selected <= {"contract", "full_time_contract"}:
+        return [daily_filter]
+
+    # JMM accepts one salary period/currency per search. When JH has both an
+    # annual and a daily floor, query both neutral scopes and union them by JMM
+    # canonical id. JMM deliberately preserves period-incomparable/uncertain
+    # salaries; the existing JH preference gate remains the final authority.
+    return [annual_filter, daily_filter]
+
+
+def _apply_method_filters(search_settings: dict[str, Any], source: str) -> list[str]:
+    if source == SOURCE_SEEK:
+        setting = search_settings.get(KEY_SEEK_QUICK_APPLY_ONLY)
+        if setting is None:
+            return []
+        return [APPLY_METHOD_QUICK_APPLY if bool(setting) else APPLY_METHOD_EXTERNAL_APPLY]
+    if source == SOURCE_LINKEDIN:
+        setting = search_settings.get(KEY_LINKEDIN_EASY_APPLY_ONLY)
+        if setting is None:
+            return []
+        return [APPLY_METHOD_EASY_APPLY if bool(setting) else APPLY_METHOD_EXTERNAL_APPLY]
+    return []
+
+
+def _location_search_scopes(search_settings: dict[str, Any]) -> list[tuple[list[str], list[str]]]:
+    raw_locations = _setting_values(search_settings, "locations")
+    if not raw_locations:
+        return [([], [])]
+    scopes: list[tuple[list[str], list[str]]] = []
+    for value in raw_locations:
+        resolved = resolve_location(value)
+        geography = str(
+            resolved.get("market_map_geography_code") or resolved.get("code") or ""
+        ).strip().upper()
+        location_values: list[str] = []
+        if str(resolved.get("kind") or "").strip().casefold() == "city":
+            location_name = str(resolved.get("name") or resolved.get("code") or value).strip()
+            if location_name:
+                location_values.append(location_name)
+        scopes.append(([geography] if geography else [], location_values))
+    return scopes
+
+
+def _build_market_search_scopes(context) -> list[dict[str, Any]]:
     search_settings = context.search_settings
     role_terms = ordered_profile_search_terms(search_settings, context.profile)
     if not role_terms:
         raise ValueError(
             "No preferred role is configured. Please complete onboarding and add a preferred role before running."
         )
-    raw_locations = [
-        str(value).strip()
-        for value in search_settings.get("locations", [])
-        if str(value).strip()
-    ]
-    geography_codes = []
-    for value in raw_locations:
-        location = resolve_location(value)
-        geography_codes.append(
-            str(location.get("market_map_geography_code") or location["code"])
-            .strip()
-            .upper()
-        )
-    selected_sources = [
-        str(source).strip().lower()
-        for source in context.enabled_sources
-        if str(source).strip().lower() in {SOURCE_SEEK, SOURCE_LINKEDIN, SOURCE_APSJOBS}
-    ]
-    if not selected_sources:
-        raise ValueError("No SEEK, LinkedIn, or APSJobs source is selected for the JMM search")
-
-    for source in selected_sources:
-        # LinkedIn's pre-JMM target builder produces no targets without a location;
-        # SEEK and APSJobs retain their existing all-location behaviour.
-        if source == SOURCE_LINKEDIN and not geography_codes:
+    selected_sources: list[str] = []
+    for source in context.enabled_sources:
+        source_key = str(source).strip().lower()
+        if not source_key or source_key == SOURCE_JOB_MARKET_MAP or source_key in selected_sources:
             continue
+        selected_sources.append(source_key)
+    if not selected_sources:
+        raise ValueError("No market source is selected for the JMM search")
+
+    # JMM's `classification` filter is textual (`classification_text`). Existing
+    # JH `classification_ids` are source-native board IDs, so forwarding them as
+    # names can falsely exclude valid jobs. Only explicit text classifications
+    # are safe to send until JMM exposes a source-native classification-id field.
+    classifications = _setting_values(search_settings, "classification", "classifications")
+    subclassifications = _setting_values(
+        search_settings, "subclassification", "subclassifications"
+    )
+    companies = _setting_values(search_settings, "company", "companies", "employers")
+    employment_types = _employment_type_filters(context.profile)
+    workplace_types = _workplace_type_filters(context.profile)
+    salary_filters = _salary_search_filters(context.profile)
+
+    scopes: list[dict[str, Any]] = []
+    for source in selected_sources:
+        for geography_codes, locations in _location_search_scopes(search_settings):
+            for salary_filter in salary_filters:
+                scopes.append(
+                    {
+                        "role_terms": role_terms,
+                        "sources": [source],
+                        "geography_codes": geography_codes,
+                        "locations": locations,
+                        # Forward configured classification values verbatim. JH must
+                        # not translate/recreate SEEK, LinkedIn or APS taxonomies.
+                        "classifications": classifications,
+                        "subclassifications": subclassifications,
+                        "employment_types": employment_types,
+                        "workplace_types": workplace_types,
+                        "apply_methods": _apply_method_filters(search_settings, source),
+                        "companies": companies,
+                        "posted_after": _posted_after_for_source(context, source),
+                        **salary_filter,
+                    }
+                )
+    return scopes
+
+
+def _iter_filtered_market_pages(context, client: JobMarketMapClient):
+    """Yield progressive pages inside one fixed market boundary for the whole run."""
+    run_snapshot_max_id: int | None = None
+    for scope in _build_market_search_scopes(context):
         cursor = 0
-        snapshot_max_id: int | None = None
-        posted_after = _posted_after_for_source(context, source)
+        scope_total: int | None = None
         while True:
             page = client.search_page(
-                role_terms=role_terms,
-                sources=[source],
-                geography_codes=geography_codes,
-                posted_after=posted_after,
+                **scope,
                 after_id=cursor,
-                through_id=snapshot_max_id,
+                through_id=run_snapshot_max_id,
             )
             page_snapshot_max_id = page.get("snapshot_max_id")
             if not isinstance(page_snapshot_max_id, int) or page_snapshot_max_id < 0:
                 raise JobMarketMapContractError(
                     "Job Market Map search snapshot_max_id is required"
                 )
-            if snapshot_max_id is None:
-                snapshot_max_id = page_snapshot_max_id
-            elif page_snapshot_max_id != snapshot_max_id:
+            if run_snapshot_max_id is None:
+                run_snapshot_max_id = page_snapshot_max_id
+            elif page_snapshot_max_id != run_snapshot_max_id:
                 raise JobMarketMapContractError(
                     "Job Market Map search snapshot boundary changed during the run"
                 )
+
             page_total = page.get("total")
             if not isinstance(page_total, int) or page_total < 0:
                 raise JobMarketMapContractError("Job Market Map search total is required")
-            # JMM is a live market service: terminal removals/dedupe can legitimately
-            # change the reported count while we page inside a fixed high-water mark.
-            # snapshot_max_id is the paging boundary; total is informational only.
+            if scope_total is None:
+                scope_total = page_total
+            elif page_total != scope_total:
+                raise JobMarketMapContractError(
+                    "Job Market Map search total changed within a fixed search scope"
+                )
+
             yield page
             if not page["has_more"]:
                 break
             next_cursor = int(page["next_cursor"])
             if next_cursor == cursor:
-                raise ValueError("Job Market Map search cursor did not advance")
+                raise JobMarketMapContractError("Job Market Map search cursor did not advance")
             cursor = next_cursor
-
-
-def _load_filtered_market_items(context, client: JobMarketMapClient) -> list[dict]:
-    """Load the complete bounded JMM result set before expensive JH analysis."""
-    items: list[dict] = []
-    seen_ids: set[int] = set()
-    for page in _iter_filtered_market_pages(context, client):
-        for item in page["items"]:
-            item_id = int(item["id"])
-            if item_id in seen_ids:
-                continue
-            seen_ids.add(item_id)
-            items.append(item)
-    return items
 
 
 def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
@@ -685,297 +970,321 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
         total=None,
         determinate=False,
     )
-    page_items = _load_filtered_market_items(context, client)
-    search_total = len(page_items)
-    _set_market_map_progress(
-        "Loading matching jobs",
-        stage="source_collection",
-        headline="Loading matching jobs",
-        detail=f"{search_total} matching jobs loaded",
-        current=0,
-        total=search_total,
-        determinate=True,
-    )
-    page_item_total = len(page_items)
-    page_jobs: list[_IndexedJob] = []
-    for item_index, item in enumerate(page_items):
-        title = str(item.get("title") or "").strip()
-        progress_current = analysed_count + item_index + 1
-        progress_headline = f"Checking job titles — {progress_current} of {search_total}"
+    seen_market_ids: set[int] = set()
+    records_by_market_id: dict[int, dict[str, Any]] = {}
+    for page in _iter_filtered_market_pages(context, client):
+        page_items: list[dict] = []
+        for item in page["items"]:
+            item_id = item.get("id")
+            if not isinstance(item_id, int) or item_id < 0:
+                raise JobMarketMapContractError("Job Market Map search item id is invalid")
+            if item_id in seen_market_ids:
+                existing_record = records_by_market_id.get(item_id)
+                if existing_record is not None:
+                    _merge_jmm_matched_sources(existing_record, item)
+                continue
+            seen_market_ids.add(item_id)
+            page_items.append(item)
+        if not page_items:
+            continue
+
+        # Process this bounded page before requesting the next cursor page. For
+        # overlapping source/location scopes the JMM total is informational; JH
+        # de-duplicates canonical vacancy ids as pages arrive.
+        search_total = max(int(page["total"]), analysed_count + len(page_items))
         _set_market_map_progress(
-            progress_headline,
-            stage="relevance_analysis",
-            headline=progress_headline,
-            detail=title,
-            current=progress_current,
+            "Loading matching jobs",
+            stage="source_collection",
+            headline="Loading matching jobs",
+            detail=f"Processing {len(page_items)} matching jobs from the current page",
+            current=analysed_count,
             total=search_total,
             determinate=True,
         )
-        record = normalize_market_job(item, run_iso=context.run_iso)
-        page_jobs.append(
-            _IndexedJob(
-                index=item_index,
-                record=record,
-                title_assessment=prepare_title_gate_assessment(title, review_context.profile),
+        page_item_total = len(page_items)
+        page_jobs: list[_IndexedJob] = []
+        for item_index, item in enumerate(page_items):
+            title = str(item.get("title") or "").strip()
+            progress_current = analysed_count + item_index + 1
+            progress_headline = f"Checking job titles — {progress_current} of {search_total}"
+            _set_market_map_progress(
+                progress_headline,
+                stage="relevance_analysis",
+                headline=progress_headline,
+                detail=title,
+                current=progress_current,
+                total=search_total,
+                determinate=True,
             )
-        )
-
-    jobs_by_index = {job.index: job for job in page_jobs}
-    title_jobs: list[_IndexedJob] = []
-    title_jobs_by_cache_key: dict[str, _IndexedJob] = {}
-    for job in page_jobs:
-        assessment = job.title_assessment
-        if (
-            bool(assessment.title_analysis.get("ok"))
-            or str(assessment.title_analysis.get("reason") or "") != "TITLE_NOT_TARGET"
-            or assessment.onet is None
-            or (
-                assessment.onet.result == RESULT_FAR
-                and not bool(review_context.profile.get(KEY_EXPLORE_ADJACENT_ROLES, False))
+            record = normalize_market_job(item, run_iso=context.run_iso)
+            records_by_market_id[int(item["id"])] = record
+            page_jobs.append(
+                _IndexedJob(
+                    index=item_index,
+                    record=record,
+                    title_assessment=prepare_title_gate_assessment(title, review_context.profile),
+                )
             )
-        ):
-            continue
-        cache_key = assessment.title_judgment_cache_key
-        if cache_key is None:
-            raise ValueError("JMM title assessment did not provide its cache key")
-        if cache_key not in title_jobs_by_cache_key:
-            title_jobs_by_cache_key[cache_key] = job
-            title_jobs.append(job)
-    if title_jobs:
-        _set_market_map_progress(
-            f"Resolving title matches — 0 of {len(title_jobs)}",
-            stage="relevance_analysis",
-            headline=f"Resolving title matches — 0 of {len(title_jobs)}",
-            detail="Checking uncertain job titles against your target roles",
-            current=0,
-            total=len(title_jobs),
-            determinate=True,
-        )
-    title_results, stopped = _run_parallel_stage(
-        title_jobs,
-        worker_limit=worker_limit,
-        worker=lambda job: _run_title_worker(
-            job,
-            profile=review_context.profile,
-            llm_cache=review_context.llm_cache,
-        ),
-        on_failure=lambda: _release_unfinalized_identity_claims(page_jobs),
-        on_progress=lambda index, completed, total, error: _set_market_map_progress(
-            f"Resolving title matches — {completed} of {total}",
-            stage="relevance_analysis",
-            headline=f"Resolving title matches — {completed} of {total}",
-            detail=str(jobs_by_index[index].record.get("title") or ""),
-            current=completed,
-            total=total,
-            determinate=True,
-        ),
-    )
-    if stopped:
-        _merge_completed_title_cache(review_context, title_results)
-        save_llm_cache(review_context.llm_cache)
-        _release_unfinalized_identity_claims(page_jobs)
-        return kept_records, review_context.audit_rows, skill_observations
-    if run_stop_requested():
-        _merge_completed_title_cache(review_context, title_results)
-        save_llm_cache(review_context.llm_cache)
-        _release_unfinalized_identity_claims(page_jobs)
-        return kept_records, review_context.audit_rows, skill_observations
 
-    title_results_by_cache_key: dict[str, TitleJudgmentResult] = {}
-    for job in title_jobs:
-        if job.index not in title_results:
-            continue
-        cache_key = job.title_assessment.title_judgment_cache_key
-        if cache_key is None:
-            raise ValueError("JMM title result did not have a cache key")
-        title_results_by_cache_key[cache_key] = title_results[job.index][1]
-    for job in page_jobs:
-        cache_key = job.title_assessment.title_judgment_cache_key
-        if cache_key is None or cache_key not in title_results_by_cache_key:
-            continue
-        title_result = _thaw_title_judgment_result(title_results_by_cache_key[cache_key])
-        if title_result.cache_value is not None:
-            review_context.llm_cache[title_result.cache_key] = _thaw(title_result.cache_value)
-        jobs_by_index[job.index] = replace(
-            job,
-            title_assessment=replace(job.title_assessment, title_judgment=title_result),
+        jobs_by_index = {job.index: job for job in page_jobs}
+        title_jobs: list[_IndexedJob] = []
+        title_jobs_by_cache_key: dict[str, _IndexedJob] = {}
+        for job in page_jobs:
+            assessment = job.title_assessment
+            if (
+                bool(assessment.title_analysis.get("ok"))
+                or str(assessment.title_analysis.get("reason") or "") != "TITLE_NOT_TARGET"
+                or assessment.onet is None
+                or (
+                    assessment.onet.result == RESULT_FAR
+                    and not bool(review_context.profile.get(KEY_EXPLORE_ADJACENT_ROLES, False))
+                )
+            ):
+                continue
+            cache_key = assessment.title_judgment_cache_key
+            if cache_key is None:
+                raise ValueError("JMM title assessment did not provide its cache key")
+            if cache_key not in title_jobs_by_cache_key:
+                title_jobs_by_cache_key[cache_key] = job
+                title_jobs.append(job)
+        if title_jobs:
+            _set_market_map_progress(
+                f"Resolving title matches — 0 of {len(title_jobs)}",
+                stage="relevance_analysis",
+                headline=f"Resolving title matches — 0 of {len(title_jobs)}",
+                detail="Checking uncertain job titles against your target roles",
+                current=0,
+                total=len(title_jobs),
+                determinate=True,
+            )
+        title_results, stopped = _run_parallel_stage(
+            title_jobs,
+            worker_limit=worker_limit,
+            worker=lambda job: _run_title_worker(
+                job,
+                profile=review_context.profile,
+                llm_cache=review_context.llm_cache,
+            ),
+            on_failure=lambda: _release_unfinalized_identity_claims(page_jobs),
+            on_progress=lambda index, completed, total, error: _set_market_map_progress(
+                f"Resolving title matches — {completed} of {total}",
+                stage="relevance_analysis",
+                headline=f"Resolving title matches — {completed} of {total}",
+                detail=str(jobs_by_index[index].record.get("title") or ""),
+                current=completed,
+                total=total,
+                determinate=True,
+            ),
         )
-    # Persist completed title judgements before detail/fit work. A server
-    # stop later in this page must not discard valid cache entries, while
-    # job results remain uncommitted until the page
-    # is finalized.
-    save_llm_cache(review_context.llm_cache)
-    page_jobs = [jobs_by_index[index] for index in range(page_item_total)]
+        if stopped:
+            _merge_completed_title_cache(review_context, title_results)
+            save_llm_cache(review_context.llm_cache)
+            _release_unfinalized_identity_claims(page_jobs)
+            return kept_records, review_context.audit_rows, skill_observations
+        if run_stop_requested():
+            _merge_completed_title_cache(review_context, title_results)
+            save_llm_cache(review_context.llm_cache)
+            _release_unfinalized_identity_claims(page_jobs)
+            return kept_records, review_context.audit_rows, skill_observations
 
-    eligible_jobs: list[_IndexedJob] = []
-    for job in page_jobs:
+        title_results_by_cache_key: dict[str, TitleJudgmentResult] = {}
+        for job in title_jobs:
+            if job.index not in title_results:
+                continue
+            cache_key = job.title_assessment.title_judgment_cache_key
+            if cache_key is None:
+                raise ValueError("JMM title result did not have a cache key")
+            title_results_by_cache_key[cache_key] = title_results[job.index][1]
+        for job in page_jobs:
+            cache_key = job.title_assessment.title_judgment_cache_key
+            if cache_key is None or cache_key not in title_results_by_cache_key:
+                continue
+            title_result = _thaw_title_judgment_result(title_results_by_cache_key[cache_key])
+            if title_result.cache_value is not None:
+                review_context.llm_cache[title_result.cache_key] = _thaw(title_result.cache_value)
+            jobs_by_index[job.index] = replace(
+                job,
+                title_assessment=replace(job.title_assessment, title_judgment=title_result),
+            )
+        # Persist completed title judgements before detail/fit work. A server
+        # stop later in this page must not discard valid cache entries, while
+        # job results remain uncommitted until the page
+        # is finalized.
+        save_llm_cache(review_context.llm_cache)
+        page_jobs = [jobs_by_index[index] for index in range(page_item_total)]
+
+        eligible_jobs: list[_IndexedJob] = []
+        for job in page_jobs:
+            if run_stop_requested():
+                _release_unfinalized_identity_claims(page_jobs)
+                return kept_records, review_context.audit_rows, skill_observations
+            job_key = str(job.record.get(RECORD_JOB_KEY) or "")
+            review_context.title_assessments.setdefault(job_key, []).append(job.title_assessment)
+            try:
+                pre_outcome, _, _, should_fetch_details = review_pre_detail_normalized_job(
+                    job.record, review_context
+                )
+            except Exception:
+                _release_unfinalized_identity_claims(page_jobs)
+                raise
+            if pre_outcome["decision"] == "KEEP" and should_fetch_details:
+                eligible_jobs.append(job)
+
+        if eligible_jobs:
+            _set_market_map_progress(
+                f"Getting job descriptions — 0 of {len(eligible_jobs)}",
+                stage="job_detail",
+                headline=f"Getting job descriptions — 0 of {len(eligible_jobs)}",
+                detail="Reading full descriptions for jobs that passed the title checks",
+                current=0,
+                total=len(eligible_jobs),
+                determinate=True,
+            )
+        jd_results, stopped, jd_failures = _run_parallel_stage(
+            eligible_jobs,
+            worker_limit=worker_limit,
+            worker=lambda job: _run_jd_worker(job, client=client),
+            on_failure=lambda: _release_unfinalized_identity_claims(page_jobs),
+            on_progress=lambda index, completed, total, error: _set_market_map_progress(
+                f"Getting job descriptions — {completed} of {total}",
+                stage="job_detail",
+                headline=f"Getting job descriptions — {completed} of {total}",
+                detail=str(jobs_by_index[index].record.get("title") or ""),
+                current=completed,
+                total=total,
+                determinate=True,
+            ),
+            collect_failures=True,
+        )
+        if stopped:
+            _release_unfinalized_identity_claims(page_jobs)
+            return kept_records, review_context.audit_rows, skill_observations
         if run_stop_requested():
             _release_unfinalized_identity_claims(page_jobs)
             return kept_records, review_context.audit_rows, skill_observations
-        job_key = str(job.record.get(RECORD_JOB_KEY) or "")
-        review_context.title_assessments.setdefault(job_key, []).append(job.title_assessment)
-        try:
-            pre_outcome, _, _, should_fetch_details = review_pre_detail_normalized_job(
-                job.record, review_context
+
+        for index in sorted(jd_results):
+            job = jobs_by_index[index]
+            _apply_jd_payload(job.record, _thaw(jd_results[index].payload))
+
+        fit_base_cache = copy.deepcopy(review_context.llm_cache)
+        fit_jobs = [job for job in eligible_jobs if job.index in jd_results]
+        if fit_jobs:
+            _set_market_map_progress(
+                f"Reviewing job fit — 0 of {len(fit_jobs)}",
+                stage="scoring",
+                headline=f"Reviewing job fit — 0 of {len(fit_jobs)}",
+                detail="Comparing job requirements with your profile",
+                current=0,
+                total=len(fit_jobs),
+                determinate=True,
             )
-        except Exception:
-            _release_unfinalized_identity_claims(page_jobs)
-            raise
-        if pre_outcome["decision"] == "KEEP" and should_fetch_details:
-            eligible_jobs.append(job)
-
-    if eligible_jobs:
-        _set_market_map_progress(
-            f"Getting job descriptions — 0 of {len(eligible_jobs)}",
-            stage="job_detail",
-            headline=f"Getting job descriptions — 0 of {len(eligible_jobs)}",
-            detail="Reading full descriptions for jobs that passed the title checks",
-            current=0,
-            total=len(eligible_jobs),
-            determinate=True,
+        fit_results, stopped = _run_parallel_stage(
+            fit_jobs,
+            worker_limit=worker_limit,
+            worker=lambda job: _run_fit_worker(
+                job,
+                context=context,
+                llm_cache=fit_base_cache,
+            ),
+            on_failure=lambda: _release_unfinalized_identity_claims(page_jobs),
+            on_progress=lambda index, completed, total, error: _set_market_map_progress(
+                f"Reviewing job fit — {completed} of {total}",
+                stage="scoring",
+                headline=f"Reviewing job fit — {completed} of {total}",
+                detail=str(jobs_by_index[index].record.get("title") or ""),
+                current=completed,
+                total=total,
+                determinate=True,
+            ),
         )
-    jd_results, stopped, jd_failures = _run_parallel_stage(
-        eligible_jobs,
-        worker_limit=worker_limit,
-        worker=lambda job: _run_jd_worker(job, client=client),
-        on_failure=lambda: _release_unfinalized_identity_claims(page_jobs),
-        on_progress=lambda index, completed, total, error: _set_market_map_progress(
-            f"Getting job descriptions — {completed} of {total}",
-            stage="job_detail",
-            headline=f"Getting job descriptions — {completed} of {total}",
-            detail=str(jobs_by_index[index].record.get("title") or ""),
-            current=completed,
-            total=total,
-            determinate=True,
-        ),
-        collect_failures=True,
-    )
-    if stopped:
-        _release_unfinalized_identity_claims(page_jobs)
-        return kept_records, review_context.audit_rows, skill_observations
-    if run_stop_requested():
-        _release_unfinalized_identity_claims(page_jobs)
-        return kept_records, review_context.audit_rows, skill_observations
-
-    for index in sorted(jd_results):
-        job = jobs_by_index[index]
-        _apply_jd_payload(job.record, _thaw(jd_results[index].payload))
-
-    fit_base_cache = copy.deepcopy(review_context.llm_cache)
-    fit_jobs = [job for job in eligible_jobs if job.index in jd_results]
-    if fit_jobs:
-        _set_market_map_progress(
-            f"Reviewing job fit — 0 of {len(fit_jobs)}",
-            stage="scoring",
-            headline=f"Reviewing job fit — 0 of {len(fit_jobs)}",
-            detail="Comparing job requirements with your profile",
-            current=0,
-            total=len(fit_jobs),
-            determinate=True,
-        )
-    fit_results, stopped = _run_parallel_stage(
-        fit_jobs,
-        worker_limit=worker_limit,
-        worker=lambda job: _run_fit_worker(
-            job,
-            context=context,
-            llm_cache=fit_base_cache,
-        ),
-        on_failure=lambda: _release_unfinalized_identity_claims(page_jobs),
-        on_progress=lambda index, completed, total, error: _set_market_map_progress(
-            f"Reviewing job fit — {completed} of {total}",
-            stage="scoring",
-            headline=f"Reviewing job fit — {completed} of {total}",
-            detail=str(jobs_by_index[index].record.get("title") or ""),
-            current=completed,
-            total=total,
-            determinate=True,
-        ),
-    )
-    if stopped:
-        _merge_completed_fit_cache(review_context, fit_results)
-        save_llm_cache(review_context.llm_cache)
-        _release_unfinalized_identity_claims(page_jobs)
-        return kept_records, review_context.audit_rows, skill_observations
-    if run_stop_requested():
-        _merge_completed_fit_cache(review_context, fit_results)
-        save_llm_cache(review_context.llm_cache)
-        _release_unfinalized_identity_claims(page_jobs)
-        return kept_records, review_context.audit_rows, skill_observations
-
-    retryable_jd_failures = {
-        index: error
-        for index, error in jd_failures.items()
-        if not isinstance(error, JobMarketMapJDUnavailable)
-    }
-    result_indexes = sorted(set(fit_results) | set(jd_failures))
-    for completed_results, index in enumerate(result_indexes, start=1):
-        if run_stop_requested():
+        if stopped:
+            _merge_completed_fit_cache(review_context, fit_results)
+            save_llm_cache(review_context.llm_cache)
             _release_unfinalized_identity_claims(page_jobs)
             return kept_records, review_context.audit_rows, skill_observations
-        job = jobs_by_index[index]
-        if index in jd_failures:
-            error = jd_failures[index]
-            if isinstance(error, JobMarketMapJDUnavailable):
-                _append_terminal_jd_unavailable(review_context, job, error)
-            else:
-                _append_retryable_jd_failure(review_context, job, error)
-            continue
-        result = fit_results[index]
-        _set_market_map_progress(
-            f"Finalising results — {completed_results} of {len(result_indexes)}",
-            stage="finalising",
-            headline=f"Finalising results — {completed_results} of {len(result_indexes)}",
-            detail=str(job.record.get("title") or ""),
-            current=completed_results,
-            total=len(result_indexes),
-            determinate=True,
-        )
-        claim = job.record.get(RUN_IDENTITY_CLAIM_KEY)
-        merged_record = _thaw(result.record)
-        job.record.clear()
-        job.record.update(merged_record)
-        if claim is not None:
-            job.record[RUN_IDENTITY_CLAIM_KEY] = claim
-        review_context.llm_cache.update(_thaw(result.cache_updates))
-        pending_signals = _thaw(result.pending_learning_signals)
-        if pending_signals:
-            register_pending_learning_signals(pending_signals)
-        finalize_record(
-            review_context.job_history,
-            review_context.audit_rows,
-            job.record,
-            review_context.run_iso,
-            persist_full_description=False,
-            update_history=False,
-        )
-        outcome = _thaw(result.outcome)
-        if outcome["decision"] == "KEEP":
-            kept_records.append(remove_transient_jd(job.record))
-            skill_observations.extend(_thaw(result.observations))
+        if run_stop_requested():
+            _merge_completed_fit_cache(review_context, fit_results)
+            save_llm_cache(review_context.llm_cache)
+            _release_unfinalized_identity_claims(page_jobs)
+            return kept_records, review_context.audit_rows, skill_observations
 
-    # Fit workers return immutable cache deltas; save only after the
-    # coordinator merges them in deterministic input order.
-    save_llm_cache(review_context.llm_cache)
+        retryable_jd_failures = {
+            index: error
+            for index, error in jd_failures.items()
+            if not isinstance(error, JobMarketMapJDUnavailable)
+        }
+        result_indexes = sorted(set(fit_results) | set(jd_failures))
+        for completed_results, index in enumerate(result_indexes, start=1):
+            if run_stop_requested():
+                _release_unfinalized_identity_claims(page_jobs)
+                return kept_records, review_context.audit_rows, skill_observations
+            job = jobs_by_index[index]
+            if index in jd_failures:
+                error = jd_failures[index]
+                if isinstance(error, JobMarketMapJDUnavailable):
+                    _append_terminal_jd_unavailable(review_context, job, error)
+                else:
+                    _append_retryable_jd_failure(review_context, job, error)
+                continue
+            result = fit_results[index]
+            _set_market_map_progress(
+                f"Finalising results — {completed_results} of {len(result_indexes)}",
+                stage="finalising",
+                headline=f"Finalising results — {completed_results} of {len(result_indexes)}",
+                detail=str(job.record.get("title") or ""),
+                current=completed_results,
+                total=len(result_indexes),
+                determinate=True,
+            )
+            claim = job.record.get(RUN_IDENTITY_CLAIM_KEY)
+            merged_record = _thaw(result.record)
+            job.record.clear()
+            job.record.update(merged_record)
+            if claim is not None:
+                job.record[RUN_IDENTITY_CLAIM_KEY] = claim
+            review_context.llm_cache.update(_thaw(result.cache_updates))
+            pending_signals = _thaw(result.pending_learning_signals)
+            if pending_signals:
+                register_pending_learning_signals(pending_signals)
+            finalize_record(
+                review_context.job_history,
+                review_context.audit_rows,
+                job.record,
+                review_context.run_iso,
+                persist_full_description=False,
+                update_history=False,
+            )
+            outcome = _thaw(result.outcome)
+            if outcome["decision"] == "KEEP":
+                kept_record = remove_transient_jd(job.record)
+                kept_records.append(kept_record)
+                records_by_market_id[int(job.record[RECORD_MARKET_MAP_JOB_ID_KEY])] = kept_record
+                skill_observations.extend(_thaw(result.observations))
 
-    if run_stop_requested():
-        return kept_records, review_context.audit_rows, skill_observations
-    if retryable_jd_failures:
-        raise PartialSourceResultsError(
-            SOURCE_JOB_MARKET_MAP,
-            kept_records=kept_records,
-            audit_rows=review_context.audit_rows,
-            skill_observations=skill_observations,
-            original_error=retryable_jd_failures[min(retryable_jd_failures)],
-        )
-    analysed_count += page_item_total
+        # Fit workers return immutable cache deltas; save only after the
+        # coordinator merges them in deterministic input order.
+        save_llm_cache(review_context.llm_cache)
+
+        if run_stop_requested():
+            return kept_records, review_context.audit_rows, skill_observations
+        if retryable_jd_failures:
+            raise PartialSourceResultsError(
+                SOURCE_JOB_MARKET_MAP,
+                kept_records=kept_records,
+                audit_rows=review_context.audit_rows,
+                skill_observations=skill_observations,
+                original_error=retryable_jd_failures[min(retryable_jd_failures)],
+            )
+        analysed_count += page_item_total
+
     _set_market_map_progress(
         "Search review complete",
         stage="source_collection",
         headline="Search review complete",
         detail=f"{analysed_count:,} jobs analysed",
         current=analysed_count,
-        total=search_total,
+        total=analysed_count,
         determinate=True,
     )
     return kept_records, review_context.audit_rows, skill_observations
