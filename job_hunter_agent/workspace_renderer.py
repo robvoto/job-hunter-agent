@@ -1126,16 +1126,15 @@ def render_page_size_options() -> str:
     return "".join(options)
 
 
-def render_page_size_select_html() -> str:
-    # Jobs per page sits inline in the Match Controls > Filters grid alongside the
-    # other filter selects, so it must use the same bare workspace-control-field
-    # shape (no on-top label span). Each option text already reads "<n> jobs per
-    # page", so the control is self-describing without a separate visible label.
+def render_page_size_select_html(select_id: str = "page_size_select") -> str:
+    # Keep this selector beside pagination in each workspace tab; it was removed
+    # from that location before. The per-tab IDs let the shared preference stay
+    # available while switching between Potential, Applied, and Hidden jobs.
     labels = load_workspace_page_labels()
     jobs_per_page_label = safe_html(labels["LABEL_WS_JOBS_PER_PAGE_LABEL"])
     return (
         '<label class="workspace-control-field">'
-        f'<select id="page_size_select" class="jh-select" aria-label="{jobs_per_page_label}">'
+        f'<select id="{safe_html(select_id)}" class="jh-select workspace-page-size-select" aria-label="{jobs_per_page_label}">'
         f"{render_page_size_options()}"
         "</select>"
         "</label>"
@@ -2845,7 +2844,8 @@ def render_section(
     panel_body_close = "</div>" if panelized else ""
     dom_id = section_dom_id(title)
     section_data_attribute = f' data-section-id="{safe_html(dom_id)}"'
-    pagination_match_count = '<span class="pagination-match-count"></span>'
+    # Keep pagination to page size, position, and navigation; omit the result
+    # count to avoid repeating the number shown on the scope tab.
     pagination_page_label = '<span class="pagination-label pagination-page-label"></span>'
     pagination_buttons = (
         f'<button class="pagination-button" type="button" data-page-direction="prev">{safe_html(_workspace_label("workspace_card_labels", "pagination_prev_label"))}</button>'
@@ -2853,7 +2853,7 @@ def render_section(
     )
     pagination_footer = (
         '<div class="results-pagination-footer"><div class="section-tools">'
-        f'{pagination_page_label}{pagination_match_count}{pagination_buttons}'
+        f'{pagination_page_label}{pagination_buttons}'
         '</div></div>'
         if panelized
         else ""
@@ -2867,7 +2867,6 @@ def render_section(
             f"{header_nav}"
             "</div>"
             '<div class="section-tools">'
-            f"{pagination_match_count}"
             f"{header_tools}"
             f"{pagination_page_label}"
             f"{pagination_buttons}"

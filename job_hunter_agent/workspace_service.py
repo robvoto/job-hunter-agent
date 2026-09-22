@@ -839,7 +839,6 @@ def render_html(
             "SCORE_FILTER_OPTIONS_HTML": score_filter_options_html,
             "WORK_TYPE_FILTER_OPTIONS_HTML": work_type_filter_options_html,
             "JOB_BOARD_FILTER_CHOICES_HTML": job_board_filter_choices_html,
-            "PAGE_SIZE_SELECT_HTML": render_page_size_select_html(),
             "CURRENT_SECTION_HTML": render_section(
                 "Job Results",
                 shortlist_records,
@@ -848,6 +847,7 @@ def render_html(
                 applied_pool=applied_records,
                 history_clusters=history_clusters,
                 debug_mode=active_debug_mode,
+                header_tools_html=render_page_size_select_html("page_size_select_potential"),
                 header_nav_html=current_tabs_html,
                 show_heading=True,
                 new_to_you_cutoff=run_started_at,
@@ -861,6 +861,7 @@ def render_html(
                 scoring_profile,
                 history_clusters=history_clusters,
                 debug_mode=active_debug_mode,
+                header_tools_html=render_page_size_select_html("page_size_select_applied"),
                 header_nav_html=applied_tabs_html,
             ),
             "HIDDEN_SECTION_HTML": render_section(
@@ -870,6 +871,7 @@ def render_html(
                 scoring_profile,
                 history_clusters=history_clusters,
                 debug_mode=active_debug_mode,
+                header_tools_html=render_page_size_select_html("page_size_select_hidden"),
                 header_nav_html=hidden_tabs_html,
             ),
             "SEARCH_KEYWORDS_LABEL": safe_html(search_roles_label),
