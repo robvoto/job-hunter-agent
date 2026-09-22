@@ -9,13 +9,14 @@ Use for any branch/worktree, commit, push, PR, merge, or `main` integration work
 
 ## Contract
 
-- Work intended for `main` uses: **task branch/worktree -> validate -> commit -> push -> PR -> integration review -> merge -> cleanup**.
-- The authoring agent owns implementation through PR creation. The integration owner owns PR review, merge, verification, and cleanup.
-- The authoring agent does not normally merge its own PR. If no integration owner is available, leave the PR open.
+- Work intended for `main` uses: **task branch/worktree -> implement -> validate -> commit -> push -> human/code review and iteration -> final validation -> merge-ready approval -> PR -> integration review -> merge -> cleanup**.
+- Commits come before PRs so the human can inspect and test stable checkpoints while work is still being refined.
+- A PR is the final integration handoff. Do not create one merely because the first commit is green or the branch has been pushed.
+- The authoring agent owns implementation, validation, commits, pushes, and review/fix iterations until the work is explicitly ready to merge. The integration owner takes over once the PR exists.
+- The authoring agent does not normally merge its own PR. If no integration owner is available, leave the merge-ready PR open.
 - Do not directly merge or push a normal task branch to `main`.
 - Disposable experiment branches that are abandoned rather than integrated do not need a PR.
 - `commit` or `push` never means the work is in `main`.
-- If integration intent is unclear and the session is not explicitly acting as integration owner, ask once before merging.
 - Git approval does not imply runtime lifecycle or deployment approval; follow `docs/PROJECT_CONTEXT.md` and `release-management` for those concerns.
 
 ## Before editing
@@ -28,11 +29,12 @@ Use for any branch/worktree, commit, push, PR, merge, or `main` integration work
 ## Authoring agent
 
 1. Implement only the task scope and run the required validation.
-2. Commit the validated change.
-3. Fetch `origin` again and inspect drift from `origin/main`.
-4. Push the task branch without force.
-5. Create a PR targeting `main` and report its number/URL.
-6. Stop at `MAIN STATUS: NOT IN MAIN — pushed branch <branch>` unless this session is separately assigned integration ownership for a different author's PR.
+2. Commit each stable checkpoint and push the task branch without force so the human can inspect/test it.
+3. Report the branch and commit SHA. While the human is checking the work, continue fixes as additional commits on the same task branch.
+4. **Do not create a PR while implementation, UI checking, code review, or user acceptance is still in progress.**
+5. When the human explicitly says the work is ready to merge / create the PR / equivalent, fetch `origin`, reconcile clear drift, and run final validation on the merge-ready branch.
+6. Only then create the PR targeting `main`, report its number/URL, and hand off to the integration owner.
+7. Stop at `MAIN STATUS: NOT IN MAIN — pushed branch <branch>` until integration completes.
 
 ## Integration owner
 

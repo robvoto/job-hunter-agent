@@ -81,6 +81,32 @@ def _record_source(entry: dict, job_key: str) -> str:
     return str(job_key).split(":", 1)[0].strip().lower() if ":" in str(job_key) else "unknown"
 
 
+def _recover_job_url(job_key: str, snapshot: dict, entry: dict) -> str:
+    """Return a real stored URL or a deterministic platform URL; never invent '#'.
+
+    Applied history created from imported activity can outlive the original rich
+    snapshot. SEEK and LinkedIn job keys contain their platform IDs, so those two
+    URLs can be reconstructed exactly enough to reopen the original listing.
+    Other sources are left unlinked unless a real URL was actually persisted.
+    """
+    stored = str(snapshot.get(RECORD_URL_KEY) or entry.get(RECORD_URL_KEY) or "").strip()
+    if stored and stored != "#":
+        return stored
+
+    key = str(job_key or "").strip()
+    if key.startswith("seek:"):
+        platform_id = key.split(":", 1)[1].strip()
+        if platform_id.isdigit():
+            return f"https://au.seek.com/job/{platform_id}"
+
+    if key.startswith("linkedin:li-"):
+        platform_id = key.removeprefix("linkedin:li-").strip()
+        if platform_id.isdigit():
+            return f"https://www.linkedin.com/jobs/view/{platform_id}"
+
+    return ""
+
+
 def _posting_channel_evidence(entry: dict, snapshot: dict) -> dict:
     value = snapshot.get(RECORD_POSTING_CHANNEL_EVIDENCE_KEY)
     if isinstance(value, dict):
@@ -371,6 +397,24 @@ def build_applied_workspace_record(
 
     snapshot = _optional_review_snapshot(entry, job_key)
 
+    title = str(snapshot.get("title") or entry.get("title") or "").strip()
+    company = str(snapshot.get("company") or entry.get("company") or "").strip()
+    missing_identity_fields = [
+        field
+        for field, value in (("title", title), ("company", company))
+        if not value or value.lower() in {"untitled", "untitled role", "n/a", "na"}
+    ]
+    if missing_identity_fields:
+        missing_text = ", ".join(missing_identity_fields)
+        logger.error(
+            "[APPLIED_HISTORY][INVALID] %s is missing required identity field(s): %s",
+            job_key,
+            missing_text,
+        )
+        raise ValueError(
+            f"Applied job history {job_key} is missing required identity field(s): {missing_text}"
+        )
+
     applied_at = entry.get("last_applied_at") or entry.get("first_applied_at")
 
     applied_age_days = days_since_fn(applied_at, run_started_at) if applied_at else None
@@ -378,9 +422,9 @@ def build_applied_workspace_record(
     return {
         "job_key": job_key,
         "source": _record_source(snapshot or entry, job_key),
-        "title": snapshot.get("title") or entry.get("title") or "Untitled",
-        "company": snapshot.get("company") or entry.get("company") or "N/A",
-        "url": snapshot.get("url") or entry.get("url") or "#",
+        "title": title,
+        "company": company,
+        "url": _recover_job_url(job_key, snapshot, entry),
         "posted": snapshot.get("posted") or "N/A",
         "posted_age_days": snapshot.get("posted_age_days"),
         RECORD_ORIGINAL_POSTED_DATE_KEY: snapshot.get(RECORD_ORIGINAL_POSTED_DATE_KEY) or "",

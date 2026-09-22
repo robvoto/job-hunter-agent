@@ -1013,7 +1013,7 @@
 
 .field-control-shell--with-unit {
   display: grid;
-  grid-template-columns: minmax(0, 8rem) auto;
+  grid-template-columns: 4rem auto;
   align-items: center;
   gap: var(--surface-gap-sm);
   width: fit-content;
@@ -1027,8 +1027,11 @@
 
 .field-control-unit {
   color: var(--text-muted);
-  font-size: var(--text-role-helper-font-size);
-  line-height: var(--text-role-helper-line-height);
+  /* A unit labels the adjacent value, so keep it in the standard control role. */
+  font-family: var(--font-sans);
+  font-size: var(--control-font-size);
+  font-weight: var(--control-font-weight);
+  line-height: var(--control-line-height);
 }
 
 .settings-section-shell {

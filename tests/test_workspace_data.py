@@ -2,6 +2,8 @@
 
 from datetime import datetime
 
+import pytest
+
 from job_hunter_agent.llm_review_state import has_complete_llm_keep_data
 from job_hunter_agent.posting_utils import parse_timestamp
 from job_hunter_agent.record_schema import (
@@ -138,6 +140,49 @@ def test_activity_only_hidden_workspace_record_does_not_require_keep_snapshot():
     assert record["requirement_coverage"] == []
 
 
+def test_applied_workspace_record_recovers_seek_and_linkedin_urls_from_job_key():
+    cases = [
+        ("seek:94506196", "https://au.seek.com/job/94506196"),
+        ("linkedin:li-4456079808", "https://www.linkedin.com/jobs/view/4456079808"),
+    ]
+
+    for job_key, expected_url in cases:
+        source = job_key.split(":", 1)[0]
+        entry = {
+            "job_key": job_key,
+            "source": source,
+            "title": "Business Analyst",
+            "company": "Example Co",
+            "last_applied_at": "2026-09-12T10:00:00+10:00",
+        }
+        record = build_applied_workspace_record(
+            job_key,
+            entry,
+            datetime(2026, 9, 12, 11, 0).astimezone(),
+            days_since_fn=lambda *_args, **_kwargs: 0,
+        )
+        assert record["url"] == expected_url
+
+
+def test_applied_workspace_record_leaves_unrecoverable_url_empty():
+    entry = {
+        "job_key": "gmail:abc123",
+        "source": "gmail",
+        "title": "Business Analyst",
+        "company": "Example Co",
+        "last_applied_at": "2026-09-12T10:00:00+10:00",
+    }
+
+    record = build_applied_workspace_record(
+        "gmail:abc123",
+        entry,
+        datetime(2026, 9, 12, 11, 0).astimezone(),
+        days_since_fn=lambda *_args, **_kwargs: 0,
+    )
+
+    assert record["url"] == ""
+
+
 def test_activity_only_applied_workspace_record_does_not_require_keep_snapshot():
     entry = {
         "job_key": "linkedin:456",
@@ -159,6 +204,36 @@ def test_activity_only_applied_workspace_record_does_not_require_keep_snapshot()
     assert record["applied"] is True
     assert record["full_description"] == ""
     assert record["requirement_coverage"] == []
+
+
+@pytest.mark.parametrize(
+    ("title", "company", "missing_field"),
+    [
+        ("", "Example Co", "title"),
+        ("Untitled", "Example Co", "title"),
+        ("Business Analyst", "", "company"),
+        ("Business Analyst", "N/A", "company"),
+    ],
+)
+def test_applied_workspace_record_fails_when_core_identity_is_missing(
+    title: str,
+    company: str,
+    missing_field: str,
+):
+    entry = {
+        "job_key": "seek:123",
+        "title": title,
+        "company": company,
+        "last_applied_at": "2026-09-12T10:00:00+10:00",
+    }
+
+    with pytest.raises(ValueError, match=rf"missing required identity field\(s\): {missing_field}"):
+        build_applied_workspace_record(
+            "seek:123",
+            entry,
+            datetime(2026, 9, 12, 11, 0).astimezone(),
+            days_since_fn=lambda *_args, **_kwargs: 0,
+        )
 
 def test_build_workspace_record_sets_excludes_applied_and_hidden_current_records():
     records = [

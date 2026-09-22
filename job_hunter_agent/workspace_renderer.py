@@ -87,6 +87,7 @@ from job_hunter_agent.record_schema import (
     RECORD_DECISION_KEY,
     RECORD_DUPLICATE_LINKS_KEY,
     RECORD_EMPLOYER_OUTCOME_KEY,
+    RECORD_IGNORED_REQUIREMENT_SUGGESTIONS_KEY,
     RECORD_IS_LIKED_KEY,
     RECORD_IS_REPOSTED_KEY,
     RECORD_LAST_LIKED_AT_KEY,
@@ -730,6 +731,52 @@ def _render_job_insights_panel(
     )
 
 
+def _render_duplicate_link_row(
+    *,
+    title: str,
+    company: str,
+    source: str,
+    url: str,
+    job_key: str,
+    action_label: str,
+    open_card: bool,
+) -> str:
+    source_label = get_source_display_label(source) if source else ""
+    display_title = compact_whitespace(title) or source_label
+    display_company = compact_whitespace(company)
+    secondary_text = " · ".join(bit for bit in (display_title, display_company) if bit)
+    card_target = _workspace_job_card_id(job_key) if open_card and job_key else ""
+    if card_target:
+        href = f"#{card_target}"
+        action_attrs = f' data-related-card-target="{safe_html(card_target)}"'
+        external_attrs = ""
+    elif url:
+        href = url
+        action_attrs = ""
+        external_attrs = ' target="_blank" rel="noopener noreferrer"'
+    else:
+        href = ""
+        action_attrs = ""
+        external_attrs = ""
+
+    action_html = (
+        f'<a class="jh-button jh-button--secondary jh-button--compact job-related-card-action" '
+        f'href="{safe_html(href)}"{action_attrs}{external_attrs}>'
+        f'{safe_html(action_label)}<span aria-hidden="true">&#8594;</span></a>'
+        if href
+        else ""
+    )
+    return (
+        '<div class="job-related-card-row">'
+        '<div class="job-related-card-copy">'
+        f'<strong class="job-related-card-title">{safe_html(source_label or display_title)}</strong>'
+        f'<span class="job-related-card-company">{safe_html(secondary_text)}</span>'
+        "</div>"
+        f"{action_html}"
+        "</div>"
+    )
+
+
 ARCHIVE_LABEL = _workspace_label("workspace_page_labels", "archive_label")
 ARCHIVE_BADGE_TOOLTIP = _workspace_label("workspace_card_labels", "archive_badge_tooltip")
 
@@ -1125,16 +1172,15 @@ def render_page_size_options() -> str:
     return "".join(options)
 
 
-def render_page_size_select_html() -> str:
-    # Jobs per page sits inline in the Match Controls > Filters grid alongside the
-    # other filter selects, so it must use the same bare workspace-control-field
-    # shape (no on-top label span). Each option text already reads "<n> jobs per
-    # page", so the control is self-describing without a separate visible label.
+def render_page_size_select_html(select_id: str = "page_size_select") -> str:
+    # Keep this selector beside pagination in each workspace tab; it was removed
+    # from that location before. The per-tab IDs let the shared preference stay
+    # available while switching between Potential, Applied, and Hidden jobs.
     labels = load_workspace_page_labels()
     jobs_per_page_label = safe_html(labels["LABEL_WS_JOBS_PER_PAGE_LABEL"])
     return (
         '<label class="workspace-control-field">'
-        f'<select id="page_size_select" class="jh-select" aria-label="{jobs_per_page_label}">'
+        f'<select id="{safe_html(select_id)}" class="jh-select workspace-page-size-select" aria-label="{jobs_per_page_label}">'
         f"{render_page_size_options()}"
         "</select>"
         "</label>"
@@ -1247,7 +1293,8 @@ def render_job_card(
     company_display = normalize_company_name(
         str(record.get("company") or "")
     ) or compact_whitespace(str(record.get("company") or "N/A"))
-    url = safe_html(record.get("url", "#"))
+    raw_url = str(record.get("url") or "").strip()
+    url = safe_html(raw_url)
     job_key = safe_html(str(record.get("job_key") or ""))
     applied_record = bool(record.get("applied"))
     archived = bool(record.get("archived"))
@@ -1375,6 +1422,27 @@ def render_job_card(
     raw_coverage = display_record.get(RECORD_REQUIREMENT_COVERAGE_KEY)
     raw_coverage_is_list = isinstance(raw_coverage, list)
     coverage_rows = raw_coverage if isinstance(raw_coverage, list) else []
+    ignored_suggestions = display_record.get(RECORD_IGNORED_REQUIREMENT_SUGGESTIONS_KEY)
+    ignored_suggestions = ignored_suggestions if isinstance(ignored_suggestions, list) else []
+    ignored_suggestion_keys = {
+        (
+            str(item.get("requirement_type") or "").strip().lower(),
+            str(item.get("canonical_requirement") or "").strip().casefold(),
+        )
+        for item in ignored_suggestions
+        if isinstance(item, dict)
+    }
+    if ignored_suggestion_keys:
+        coverage_rows = [
+            row
+            for row in coverage_rows
+            if not isinstance(row, dict)
+            or (
+                str(row.get("requirement_type") or "").strip().lower(),
+                str(row.get("canonical_requirement") or "").strip().casefold(),
+            )
+            not in ignored_suggestion_keys
+        ]
     # JH-298: behavioural-expectation rows are a separate frozen list. They are
     # rendered read-only ("Working style") and never fed to the scored requirement
     # groups, the profile-action controls, or _css_modifier_for_row.
@@ -1525,84 +1593,57 @@ def render_job_card(
             ),
         )
     history_warning_signals = assess_history_warning_signals(record, history_clusters)
+    duplicate_panels_html = ""
     if duplicate_links:
-        duplicate_tooltip = _workspace_label(
-            "duplicate_labels",
-            "confirmed_tooltip",
-        )
-        badges.append(
-            render_badge(
-                _workspace_label("duplicate_labels", "confirmed_badge"),
-                "badge-source-neutral",
-                duplicate_tooltip,
+        confirmed_rows = [
+            _render_duplicate_link_row(
+                title=str(link.get("title") or "").strip(),
+                company=str(link.get("company") or "").strip(),
+                source=str(link.get("source") or "").strip(),
+                url=str(link.get("url") or "").strip(),
+                job_key="",
+                action_label=_workspace_label("duplicate_labels", "posting_link_label"),
+                open_card=False,
             )
-        )
+            for link in duplicate_links
+            if isinstance(link, dict)
+        ]
+        confirmed_rows = [row for row in confirmed_rows if row]
+        if confirmed_rows:
+            confirmed_body = (
+                f'<p class="job-related-card-help">'
+                f'{safe_html(_workspace_label("duplicate_labels", "confirmed_help_text"))}</p>'
+                f'<div class="job-related-card-list">{"".join(confirmed_rows)}</div>'
+            )
+            duplicate_panels_html += _render_job_insights_panel(
+                _workspace_label("duplicate_labels", "confirmed_section_heading"),
+                confirmed_body,
+                modifier_class="job-related-cards-panel",
+            )
     if potential_duplicate_links:
-        _pd_first = potential_duplicate_links[0]
-        _pd_title = str(_pd_first.get("related_title") or "").strip()
-        _pd_company = (
-            normalize_company_name(str(_pd_first.get("related_company") or ""))
-            or str(_pd_first.get("related_company") or "").strip()
-        )
-        _pd_count = len(potential_duplicate_links)
-        if _pd_title:
-            _pd_ref = f"{_pd_title} @ {_pd_company}" if _pd_company else _pd_title
-            potential_tooltip = f"Related to {_pd_ref}."
-            if _pd_count > 1:
-                potential_tooltip += f" +{_pd_count - 1} more."
-        else:
-            potential_tooltip = _workspace_label(
-                "duplicate_labels",
-                "potential_tooltip",
-            )
-        badges.append(
-            render_badge(
-                f'{_workspace_label("duplicate_labels", "potential_badge")} ({_pd_count})',
-                "badge-warning",
-                potential_tooltip,
-            )
-        )
-    related_cards_html = ""
-    if potential_duplicate_links:
+        # Keep uncertain matches separate. Revisit and remove this panel if logs
+        # show it never surfaces useful cases for human review.
         related_rows: list[str] = []
         for related in potential_duplicate_links:
             related_title = str(related.get("related_title") or "").strip()
-            related_company = (
-                normalize_company_name(str(related.get("related_company") or ""))
-                or str(related.get("related_company") or "").strip()
-            )
+            related_company = str(related.get("related_company") or "").strip()
             related_job_key = str(related.get("related_job_key") or "").strip()
             related_url = str(related.get("related_url") or "").strip()
-            related_card_target = _workspace_job_card_id(related_job_key) if related_job_key else ""
-            if related_card_target:
-                related_href = f"#{related_card_target}"
-                related_action_attrs = (
-                    f' data-related-card-target="{safe_html(related_card_target)}"'
-                )
-                related_external_attrs = ""
-            elif related_url:
-                related_href = related_url
-                related_action_attrs = ""
-                related_external_attrs = ' target="_blank" rel="noopener noreferrer"'
-            else:
-                related_href = "#"
-                related_action_attrs = ""
-                related_external_attrs = ""
             related_rows.append(
-                '<div class="job-related-card-row">'
-                '<div class="job-related-card-copy">'
-                f'<strong class="job-related-card-title">{safe_html(related_title)}</strong>'
-                f'<span class="job-related-card-company">{safe_html(related_company)}</span>'
-                "</div>"
-                f'<a class="jh-button jh-button--secondary jh-button--compact job-related-card-action" '
-                f'href="{safe_html(related_href)}"{related_action_attrs}{related_external_attrs}>'
-                f'{safe_html(_workspace_label("duplicate_labels", "callout_prefix"))}'
-                '<span aria-hidden="true">&#8594;</span>'
-                "</a>"
-                "</div>"
+                _render_duplicate_link_row(
+                    title=related_title,
+                    company=related_company,
+                    source=str(related.get("related_source") or "").strip(),
+                    url=related_url,
+                    job_key=related_job_key,
+                    action_label=_workspace_label("duplicate_labels", "potential_link_label"),
+                    open_card=True,
+                )
             )
-        related_cards_html = _render_job_insights_panel(
-            _workspace_label("duplicate_labels", "potential_badge"),
+        duplicate_panels_html += _render_job_insights_panel(
+            _workspace_label("duplicate_labels", "potential_section_heading").format(
+                count=len(related_rows)
+            ),
             f'<div class="job-related-card-list">{"".join(related_rows)}</div>',
             modifier_class="job-related-cards-panel",
         )
@@ -2047,9 +2088,17 @@ def render_job_card(
                 f'data-action="confirm_do_not_have" data-capability-name="{safe_html(canonical_requirement)}">'
                 f"{not_have_label}</button>"
             )
+            dismiss_suggestion_label = safe_html(
+                _workspace_label("workspace_card_labels", "ignore_requirement_suggestion_label")
+            )
+            dismiss_suggestion_html = (
+                '<button type="button" class="jh-button jh-button--secondary jh-button--micro job-requirement-action gap-btn" '
+                f'data-action="dismiss_suggestion" data-capability-name="{safe_html(canonical_requirement)}" '
+                f'aria-label="{dismiss_suggestion_label}">{dismiss_suggestion_label}</button>'
+            )
             profile_review_html = (
                 '<span class="req-coverage-detail req-coverage-detail--profile-review">'
-                f'{confirm_have_html}{confirm_not_have_html}'
+                f'{confirm_have_html}{confirm_not_have_html}{dismiss_suggestion_html}'
                 '</span>'
             )
         # Compound professional-capability requirements keep their parent job-fit
@@ -2728,6 +2777,19 @@ def render_job_card(
     card_dom_id = _workspace_job_card_id(job_key)
     title_block_panel_id = f"{card_dom_id}-title-block"
     badges_html = f'<div class="job-badges">{"".join(badges)}</div>' if badges else ""
+    # Keep the exact same title styling whether a URL exists or not. A missing
+    # historical URL must render as plain text, never href="#" (which just
+    # refreshes/jumps the workspace and falsely looks like a working link).
+    if raw_url:
+        title_html = (
+            f'<a class="job-link" href="{url}" target="_blank" rel="noopener noreferrer" '
+            f'data-job-key="{job_key}" data-job-url="{url}" data-job-title="{title}">{title}</a>'
+        )
+    else:
+        title_html = (
+            f'<span class="job-link job-link--inactive" data-job-key="{job_key}" '
+            f'data-job-url="" data-job-title="{title}">{title}</span>'
+        )
 
     return (
         f'<article id="{safe_html(card_dom_id)}" class="{safe_html(card_classes)}" data-fit-score="{fit_points}" data-posted-age="{posted_age_days if posted_age_days is not None else 9999}" data-salary-sort="{salary_value}" data-salary-fit="{safe_html(salary_fit_state)}" data-work-mode="{safe_html(work_mode.lower())}" data-work-type="{safe_html(display_work_type_label(record).lower())}" data-viewed="{1 if seen_by_you else 0}" data-liked="{1 if liked_record else 0}" data-new-to-you="{1 if new_to_you else 0}" data-reposted="{1 if record.get(RECORD_IS_REPOSTED_KEY) is True else 0}" data-record-kind="{record_kind}" data-fit-label="{safe_html(fit_label.lower())}" data-title-search="{safe_html((record.get("title") or "").lower())}" data-company-search="{safe_html(company_display.lower())}" data-company="{safe_html(company_display)}" data-source="{safe_html(source)}" data-posting-channel="{safe_html(channel_kind)}" data-apply-method="{safe_html(apply_method or "unknown")}">'
@@ -2735,7 +2797,7 @@ def render_job_card(
         '<div class="job-header-row">'
         '<div class="job-header-copy">'
         '<div class="job-title-row">'
-        f'<a class="job-link" href="{url}" target="_blank" rel="noopener noreferrer" data-job-key="{job_key}" data-job-url="{url}" data-job-title="{title}">{title}</a>'
+        f"{title_html}"
         f'<span class="job-title-badges">{"".join(title_badges)}</span>'
         + (
             f'<button class="title-block-btn workspace-text-action workspace-text-action--muted" type="button" data-review-action="block_similar" {button_data_attrs} aria-expanded="false" aria-controls="{safe_html(title_block_panel_id)}" title="{safe_html(_workspace_label("workspace_card_labels", "title_block_button_tooltip"))}">{safe_html(_workspace_label("workspace_card_labels", "title_block_button_label"))}</button>'
@@ -2769,7 +2831,7 @@ def render_job_card(
         "</div>"
         f"{summary_html}"
         f'<div class="job-meta">{"".join(meta_items)}</div>'
-        f"{related_cards_html}"
+        f"{duplicate_panels_html}"
         f"{risk_html}"
         f"{job_requirements_html}"
         f"{eligibility_html}"
@@ -2815,7 +2877,8 @@ def render_section(
     panel_body_close = "</div>" if panelized else ""
     dom_id = section_dom_id(title)
     section_data_attribute = f' data-section-id="{safe_html(dom_id)}"'
-    pagination_match_count = '<span class="pagination-match-count"></span>'
+    # Keep pagination to page size, position, and navigation; omit the result
+    # count to avoid repeating the number shown on the scope tab.
     pagination_page_label = '<span class="pagination-label pagination-page-label"></span>'
     pagination_buttons = (
         f'<button class="pagination-button" type="button" data-page-direction="prev">{safe_html(_workspace_label("workspace_card_labels", "pagination_prev_label"))}</button>'
@@ -2823,7 +2886,7 @@ def render_section(
     )
     pagination_footer = (
         '<div class="results-pagination-footer"><div class="section-tools">'
-        f'{pagination_page_label}{pagination_match_count}{pagination_buttons}'
+        f'{pagination_page_label}{pagination_buttons}'
         '</div></div>'
         if panelized
         else ""
@@ -2837,7 +2900,6 @@ def render_section(
             f"{header_nav}"
             "</div>"
             '<div class="section-tools">'
-            f"{pagination_match_count}"
             f"{header_tools}"
             f"{pagination_page_label}"
             f"{pagination_buttons}"

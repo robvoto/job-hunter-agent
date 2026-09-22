@@ -55,7 +55,8 @@
     const RESULTS_HELPER_DISMISSED_KEY = 'jobHunter.workspace.resultsHelperDismissed';
     const REJECTION_FIRST_USE_KEY = 'jobHunter.workspace.rejectionFirstUseSeen';
     const sortSelect = document.getElementById('sort_select');
-    const pageSizeSelect = document.getElementById('page_size_select');
+    // Each workspace tab has the control beside its pagination; mirror it so the saved page size stays global.
+    const pageSizeSelects = Array.from(document.querySelectorAll('.workspace-page-size-select'));
     const jobSearchInput = document.getElementById('job_search_input');
     const postedFilter = document.getElementById('posted_filter');
     const workTypeFilter = document.getElementById('work_type_filter');
@@ -231,16 +232,16 @@
     }
 
     function savePageSizePreference() {
-      if (!pageSizeSelect) return;
+      if (!pageSizeSelects.length) return;
       try {
-        window.localStorage.setItem(WORKSPACE_PAGE_SIZE_KEY, pageSizeSelect.value);
+        window.localStorage.setItem(WORKSPACE_PAGE_SIZE_KEY, pageSizeSelects[0].value);
       } catch (e) {}
     }
 
     function loadPageSizePreference() {
-      if (!pageSizeSelect) return;
       try {
-        setSelectValueIfAvailable(pageSizeSelect, window.localStorage.getItem(WORKSPACE_PAGE_SIZE_KEY));
+        const savedPageSize = window.localStorage.getItem(WORKSPACE_PAGE_SIZE_KEY);
+        pageSizeSelects.forEach(select => setSelectValueIfAvailable(select, savedPageSize));
       } catch (e) {}
     }
 
@@ -308,7 +309,7 @@
       const sectionId = section.dataset.sectionId || 'matches';
       const cards = grid ? Array.from(grid.querySelectorAll('.job-card')) : [];
       const matchingCards = cards.filter(card => card.dataset.matchesFilters !== '0');
-      const pageSize = Number(pageSizeSelect?.value || 12);
+      const pageSize = Number(pageSizeSelects[0]?.value || 12);
       const totalPages = matchingCards.length ? Math.ceil(matchingCards.length / pageSize) : 0;
 
       if (!paginationState[sectionId]) {
@@ -337,10 +338,6 @@
       section.querySelectorAll('.pagination-page-label').forEach(pageLabel => {
         pageLabel.hidden = matchingCards.length === 0;
         pageLabel.textContent = matchingCards.length ? `Page ${currentPage} of ${totalPages}` : '';
-      });
-
-      section.querySelectorAll('.pagination-match-count').forEach(matchCountLabel => {
-        matchCountLabel.textContent = `${matchingCards.length} matches`;
       });
 
       section.querySelectorAll('[data-page-direction="prev"]').forEach(prevButton => {
@@ -1238,10 +1235,13 @@
       });
     }
 
-    pageSizeSelect?.addEventListener('change', () => {
-      resetPagination();
-      savePageSizePreference();
-      applyWorkspaceControls();
+    pageSizeSelects.forEach(pageSizeSelect => {
+      pageSizeSelect.addEventListener('change', () => {
+        pageSizeSelects.forEach(select => { select.value = pageSizeSelect.value; });
+        resetPagination();
+        savePageSizePreference();
+        applyWorkspaceControls();
+      });
     });
 
     jobSearchInput?.addEventListener('input', () => {
@@ -1928,6 +1928,16 @@
             if (data.requires_capability_level) {
               clearProfileGapWorking(activeButton || btn);
               showCapabilityLevelPicker(data.allowed_capability_levels);
+              return;
+            }
+            if (action === 'dismiss_suggestion') {
+              clearProfileGapWorking(activeButton || btn);
+              removeLevelPicker();
+              const row = btn.closest('.job-requirement-item');
+              const group = row ? row.closest('.job-requirement-group') : null;
+              if (row) row.remove();
+              const list = group ? group.querySelector('.job-requirement-list') : null;
+              if (list && !list.children.length) group.remove();
               return;
             }
             const fact = String(data.confirmed_fact || capabilityName).trim();
