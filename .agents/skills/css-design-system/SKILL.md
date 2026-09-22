@@ -59,6 +59,18 @@ CSS changes must improve the shared design system, not create another one-off pa
 4. If page-local CSS is unavoidable, add a short comment naming the exception.
 5. Validate the rendered screen that the user actually sees.
 
+## Job Hunter Search Basics path
+
+For Settings search preferences and onboarding Step 3, use the existing Job Hunter Settings Search Basics as the in-project visual reference:
+
+1. Check `docs/UI_COMPONENT_MAP.md` and identify the owning shared widgets and each page's layout owner.
+2. Compare section width and control arrangement against the reference; fix shared geometry in `themes.widgets.css` and keep page CSS to layout placement.
+3. Reuse the composition on onboarding Step 3 while preserving its existing field IDs, labels/data source, hydration, and persistence behavior.
+4. Keep Location full-width with its three groups evenly laid out; order the preference groups Work type, Sector preference, then Work mode, with compensation grouped below.
+5. Update the component-map entry and inspect both rendered Settings and onboarding screens at desktop and phone widths.
+
+Keep this guidance in the Job Hunter-owned component map and skill. Do not create a cross-project UX standard from this screen-specific pattern.
+
 ## Reusable output
 
 When a CSS fix reveals a reusable pattern, update this skill or the owning DETAILS.md so future projects can copy the pattern.

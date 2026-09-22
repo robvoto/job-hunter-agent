@@ -35,46 +35,8 @@
   border-top: var(--onboarding-actions-border);
 }
 
-/* Step 3 uses the same two-column onboarding composition as the other
-   review/summary steps, with a wider Location card and a narrower controls card. */
+/* UI note: Step 3 follows Settings Search Basics: full-width location, then the shared preference and compensation groups. */
 .wizard-step[data-step="3"] .review-grid--search-basics {
-  grid-template-columns: minmax(0, 3fr) minmax(24rem, 2fr);
-  align-items: start;
-}
-
-.wizard-step[data-step="3"] .search-preference-groups {
-  display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--surface-gap-lg);
-}
-
-.wizard-step[data-step="3"] .search-preference-groups > .onb-field {
-  width: 100%;
-}
-
-@media (max-width: 1450px) {
-  .wizard-step[data-step="3"] .review-grid--search-basics {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .wizard-step[data-step="3"] .search-preference-groups {
-    display: flex;
-    flex-wrap: wrap;
-  }
-
-  .wizard-step[data-step="3"] .search-preference-groups > .onb-field {
-    width: max-content;
-    max-width: 100%;
-  }
-}
-
-@media (max-width: 720px) {
-  .wizard-step[data-step="3"] .search-preference-groups {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .wizard-step[data-step="3"] .search-preference-groups > .onb-field {
-    width: 100%;
-  }
+  align-items: start;
 }

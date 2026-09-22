@@ -2621,8 +2621,8 @@
 }
 .location-checkbox-groups {
   display: grid;
-  grid-template-columns: repeat(3, max-content);
-  width: max-content;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
   max-width: 100%;
   padding: var(--surface-gap-md);
   border: 1px solid var(--border-subtle);
