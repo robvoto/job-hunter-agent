@@ -255,6 +255,10 @@
   text-decoration: underline;
 }
 
+.job-link--inactive:hover {
+  text-decoration: none;
+}
+
 .job-company {
   color: color-mix(in srgb, var(--text-primary) 72%, var(--text-muted));
   font-size: 0.98rem;

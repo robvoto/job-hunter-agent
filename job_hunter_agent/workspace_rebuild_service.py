@@ -14,6 +14,7 @@ from job_hunter_agent.global_settings import (
 from job_hunter_agent.io_utils import (
     configure_console_output,
     load_audit_rows,
+    load_job_history,
     load_run_stats,
     write_run_stats,
 )
@@ -55,7 +56,7 @@ def rebuild_workspace_results(
 
     # Rebuild from the saved JMM-backed workspace pool and JH-305's projected
     # manual state. Legacy JH market snapshots are not a rebuild source.
-    job_history: dict[str, dict] = {}
+    job_history = load_job_history()
     applied_job_keys, hidden_job_keys = get_manual_skip_sets(profile)
 
     saved_workspace_records = workspace_service.load_saved_workspace_pool()

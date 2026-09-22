@@ -6,11 +6,11 @@ import re
 
 from fastapi import APIRouter, Body, Query
 
-from job_hunter_agent import llm_gate
+from job_hunter_agent import llm_gate, workspace_service
 from job_hunter_agent import server_helpers as srv
-from job_hunter_agent import workspace_service
 from job_hunter_agent.eligibility_profile import prepare_eligibility_fact
 from job_hunter_agent.experience_requirements import extract_required_experience_months
+from job_hunter_agent.io_utils import load_job_history
 from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.llm_protocol import (
     LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES,
@@ -39,6 +39,7 @@ from job_hunter_agent.profile_store import (
 from job_hunter_agent.record_schema import (
     RECORD_IGNORED_REQUIREMENT_SUGGESTIONS_KEY,
     RECORD_JOB_KEY,
+    RECORD_LAST_KEPT_SNAPSHOT_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
 )
 from job_hunter_agent.review_history_service import (
@@ -422,18 +423,18 @@ def _profile_gap_requirement_coverage(job_key: str) -> list[dict]:
     normalized_job_key = normalize_job_key(job_key)
     if not normalized_job_key:
         return []
-    for record in workspace_service.load_saved_workspace_pool():
-        if not isinstance(record, dict):
-            continue
-        if normalize_job_key(str(record.get(RECORD_JOB_KEY) or "")) != normalized_job_key:
-            continue
-        coverage = record.get(RECORD_REQUIREMENT_COVERAGE_KEY)
-        return (
-            [item for item in coverage if isinstance(item, dict)]
-            if isinstance(coverage, list)
-            else []
-        )
-    return []
+    history = load_job_history()
+    entry = history.get(normalized_job_key)
+    if not isinstance(entry, dict):
+        return []
+    coverage = entry.get(RECORD_REQUIREMENT_COVERAGE_KEY)
+    if not isinstance(coverage, list):
+        snapshot = entry.get(RECORD_LAST_KEPT_SNAPSHOT_KEY)
+        if isinstance(snapshot, dict):
+            coverage = snapshot.get(RECORD_REQUIREMENT_COVERAGE_KEY)
+    if not isinstance(coverage, list):
+        return []
+    return [item for item in coverage if isinstance(item, dict)]
 
 
 def _profile_gap_coverage_name(item: dict) -> str:

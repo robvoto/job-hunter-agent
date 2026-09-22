@@ -16,6 +16,8 @@ Use before editing job history, viewed/applied/hidden state, posting timestamps,
 - Deduplication should be stable across SEEK, LinkedIn, and APSJobs where possible; prefer source-native IDs before expensive work and cross-source identity only where evidence is strong enough.
 - Job keys must not depend on unstable UI-only text when stronger identifiers exist.
 - Posting timestamps should be normalised consistently before ranking/filtering.
+- Historical/applied cards must fail visibly on missing core identity instead of inventing `Untitled`/`N/A`; never create a fake `href="#"` job link. Recover SEEK/LinkedIn URLs only from stable source job IDs when the persisted URL is missing.
+- Confirmed cross-source duplicates are alternate postings of the same vacancy: present them as **Also posted on** with the source link when available. Keep uncertain candidates separate as **Possible same job** for human review; do not call both cases “Related cards”.
 
 ## Owners
 - `history.py`: review state.

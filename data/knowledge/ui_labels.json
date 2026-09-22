@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 145,
+  "version": 146,
   "updated_at": "2026-09-21T00:00:00+00:00",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -518,21 +518,13 @@
     "no_comparable_salary_rate": "No salary info was available, so pay fit could not be compared",
     "limited_description_confidence": "The full description wasn't captured clearly, so some scoring may be missing"
   },
-  "duplicate_labels_description": "Display labels and copy for workspace duplicate and related-job cards.",
+  "duplicate_labels_description": "Labels for confirmed alternate job-board postings and uncertain same-job candidates.",
   "duplicate_labels": {
-    "confirmed_badge": "Duplicate in workspace",
-    "potential_badge": "Related cards",
-    "confirmed_tooltip": "This job already has a matching card in your workspace.",
-    "potential_tooltip": "This job looks related to another card in your workspace.",
-    "confirmed_section_heading": "Matching cards",
-    "callout_prefix": "Open matching card",
-    "help_text": "This is the matching card in your workspace. Use it to compare details.",
-    "match_on_normalized_title": "same title",
-    "match_on_company_name": "same company",
-    "match_on_job_key": "same job ID",
-    "match_on_url": "same URL",
-    "match_on_ats_requisition_id": "same ATS requisition",
-    "match_on_platform_job_id": "same platform job ID"
+    "confirmed_section_heading": "Also posted on",
+    "confirmed_help_text": "You can also apply through these postings.",
+    "posting_link_label": "View posting",
+    "potential_section_heading": "Possible same job ({count})",
+    "potential_link_label": "Review match"
   },
   "workspace_card_labels_description": "Labels and tooltips for workspace job cards.",
   "workspace_card_labels": {

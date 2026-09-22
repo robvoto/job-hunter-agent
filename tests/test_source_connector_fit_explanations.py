@@ -2442,6 +2442,33 @@ def test_score_to_tone_class_uses_same_bands_as_match_labels():
     assert score_to_tone_class(54) == "tone-low"
 
 
+def test_job_card_without_url_keeps_title_colour_class_without_fake_link():
+    record = {
+        "job_key": "gmail:abc123",
+        "title": "Business Analyst",
+        "company": "Example Co",
+        "url": "",
+        "title_reason": "OK",
+        "content_reason": "OK",
+        "llm_fit_grade": "SOLID",
+        "location": "Sydney NSW",
+        "work_type": "Full Time",
+        "work_mode": "Hybrid",
+        "salary": "N/A",
+        "full_description": "",
+        "fit_highlights": [],
+        "source": "gmail",
+        "applied": True,
+    }
+
+    html = workspace_renderer.render_job_card(record, _test_profile())
+
+    assert '<span class="job-link job-link--inactive"' in html
+    assert 'data-job-key="gmail:abc123"' in html
+    assert 'href="#"' not in html
+    assert '>Business Analyst</span>' in html
+
+
 def test_applied_and_hidden_cards_render_undo_actions():
     base_record = {
         "job_key": "test-undo",
@@ -2607,7 +2634,7 @@ def test_attention_strip_prefers_red_flag_over_everything_else():
                 }
             ],
             debug_mode=True,
-    )
+        )
 
     assert "Checks before applying" in html
     assert "Suspicious reposting pattern." in html
@@ -3085,19 +3112,67 @@ def test_potential_duplicate_card_shows_compact_related_cards_section():
         _test_profile(),
     )
 
-    assert 'Related cards (1)' in html
+    assert 'Possible same job (1)' in html
+    assert 'Related cards' not in html
     assert 'job-related-cards-panel' in html
     assert html.index('class="job-meta"') < html.index('job-related-cards-panel')
     assert html.count('class="job-related-card-row"') == 1
-    assert 'class="job-related-card-title">Senior Business Analyst</strong>' in html
-    assert 'class="job-related-card-company">acme' in html
-    assert "Open matching card" in html
+    assert 'class="job-related-card-title">LinkedIn</strong>' in html
+    assert 'class="job-related-card-company">Senior Business Analyst · Acme Pty Ltd' in html
+    assert "Review match" in html
     assert "&#8594;" in html
     assert 'href="#job-card-linkedin-2"' in html
     assert 'data-related-card-target="job-card-linkedin-2"' in html
 
 
-def test_potential_duplicate_card_renders_all_related_cards_in_one_disclosure():
+def test_confirmed_duplicates_render_other_board_postings_inside_one_card():
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "seek:primary-role",
+            "title": "Business Analyst",
+            "company": "Talent International",
+            "url": "https://seek.com.au/job/primary-role",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "full_description": "Requirements elicitation across delivery teams. " * 40,
+            "fit_highlights": [],
+            "source": "seek",
+            "duplicate_links": [
+                {
+                    "kind": "confirmed_duplicate",
+                    "source": "linkedin",
+                    "title": "Business Analyst",
+                    "company": "Talent International",
+                    "url": "https://linkedin.com/jobs/view/123",
+                },
+                {
+                    "kind": "confirmed_duplicate",
+                    "source": "apsjobs",
+                    "title": "Business Analyst",
+                    "company": "Talent International",
+                    "url": "https://apsjobs.gov.au/job/456",
+                },
+            ],
+        },
+        _test_profile(),
+    )
+
+    assert 'Also posted on' in html
+    assert 'You can also apply through these postings.' in html
+    assert html.count('class="job-related-card-row"') == 2
+    assert 'class="job-related-card-title">LinkedIn</strong>' in html
+    assert 'class="job-related-card-title">APSJobs</strong>' in html
+    assert 'href="https://linkedin.com/jobs/view/123"' in html
+    assert 'href="https://apsjobs.gov.au/job/456"' in html
+    assert 'Duplicate in workspace' not in html
+
+
+def test_potential_duplicate_card_renders_all_possible_matches_in_one_disclosure():
     html = workspace_renderer.render_job_card(
         {
             "job_key": "seek:new-role",
@@ -3130,11 +3205,12 @@ def test_potential_duplicate_card_renders_all_related_cards_in_one_disclosure():
         _test_profile(),
     )
 
-    assert 'Related cards (2)' in html
+    assert 'Possible same job (2)' in html
+    assert 'Related cards' not in html
     assert html.count('class="job-related-card-row"') == 2
     assert 'href="#job-card-linkedin-2"' in html
     assert 'href="#job-card-apsjobs-3"' in html
-    assert html.count('Open matching card') == 2
+    assert html.count('Review match') == 2
 
 
 def test_positive_note_does_not_repeat_first_why_it_fits_bullet():
@@ -4800,7 +4876,9 @@ def test_add_to_profile_button_carries_capability_data_attributes():
     assert "Not confirmed" not in html
     assert "Yes, I have this" in html
     assert "Add evidence" not in html
-    assert html.count("jh-button--micro job-requirement-action gap-btn") == 2
+    assert html.count("jh-button--micro job-requirement-action gap-btn") == 3
+    assert 'data-action="dismiss_suggestion" data-capability-name="Stakeholder management"' in html
+    assert ">Ignore</button>" in html
     assert "Needs confirmation" not in html
 
 

@@ -658,14 +658,12 @@ def test_rendered_workspace_html_content(tmp_path):
         assert 'aria-label="Work mode"' in rendered_html
         assert 'aria-label="Sector"' in rendered_html
         assert 'aria-label="Match level"' in rendered_html
-        assert 'id="page_size_select_potential"' in rendered_html
-        assert 'id="page_size_select_applied"' in rendered_html
-        assert 'id="page_size_select_hidden"' in rendered_html
-        assert rendered_html.count('class="jh-select workspace-page-size-select"') == 3
-        assert "12 jobs per page" in rendered_html
+        assert 'id="page_size_select_potential"' in captured_tools["header_tools_html"]
+        assert 'class="jh-select workspace-page-size-select"' in captured_tools["header_tools_html"]
+        assert "12 jobs per page" in captured_tools["header_tools_html"]
+        assert 'id="page_size_select_potential"' not in rendered_html
         assert 'id="job_search_input"' in rendered_html
         assert 'placeholder="Search title or company"' in rendered_html
-        assert 'id="page_size_select_potential"' in captured_tools["header_tools_html"]
 
         # Assert runtime config injection structure
         assert "window.__JOB_HUNTER_WORKSPACE__" in rendered_html
@@ -773,6 +771,7 @@ def test_workspace_rebuild_renders_saved_workspace_pool_when_present(monkeypatch
     workspace_path = tmp_path / "workspace_results.html"
     saved_pool = [{"job_key": "linkedin:saved-1"}, {"job_key": "linkedin:saved-2"}]
     latest_run_keeps = [{"job_key": "linkedin:audit-1"}]
+    saved_history = {"gmail:history-1": {"title": "Business Analyst", "company": "Example Agency"}}
 
     monkeypatch.setattr(workspace_rebuild_service, "configure_console_output", lambda: None)
     monkeypatch.setattr(workspace_rebuild_service, "get_user_id_for_runtime", lambda: "user-1")
@@ -796,6 +795,7 @@ def test_workspace_rebuild_renders_saved_workspace_pool_when_present(monkeypatch
         "load_audit_rows",
         lambda: [{"source": "linkedin", "search_location": "Sydney", "page": 1, "decision": "KEEP"}],
     )
+    monkeypatch.setattr(workspace_rebuild_service, "load_job_history", lambda: saved_history)
     monkeypatch.setattr(workspace_service, "load_last_kept_records", lambda: latest_run_keeps)
     monkeypatch.setattr(workspace_service, "load_saved_workspace_pool", lambda: saved_pool)
     monkeypatch.setattr(workspace_rebuild_service, "write_run_stats", lambda payload: None)
@@ -814,6 +814,7 @@ def test_workspace_rebuild_renders_saved_workspace_pool_when_present(monkeypatch
         reference_time,
     ):
         captured["render_kept_records"] = kept_records
+        captured["render_job_history"] = job_history
 
     monkeypatch.setattr(workspace_service, "render_html", fake_render_html)
 
@@ -821,3 +822,4 @@ def test_workspace_rebuild_renders_saved_workspace_pool_when_present(monkeypatch
 
     assert result == str(workspace_path)
     assert captured["render_kept_records"] == saved_pool
+    assert captured["render_job_history"] == saved_history
