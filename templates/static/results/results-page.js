@@ -1930,6 +1930,16 @@
               showCapabilityLevelPicker(data.allowed_capability_levels);
               return;
             }
+            if (action === 'dismiss_suggestion') {
+              clearProfileGapWorking(activeButton || btn);
+              removeLevelPicker();
+              const row = btn.closest('.job-requirement-item');
+              const group = row ? row.closest('.job-requirement-group') : null;
+              if (row) row.remove();
+              const list = group ? group.querySelector('.job-requirement-list') : null;
+              if (list && !list.children.length) group.remove();
+              return;
+            }
             const fact = String(data.confirmed_fact || capabilityName).trim();
             const target = String(data.profile_target || fact).trim();
             const formatLabel = function(template, values) {

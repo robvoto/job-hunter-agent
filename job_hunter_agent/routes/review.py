@@ -8,9 +8,9 @@ from fastapi import APIRouter, Body, Query
 
 from job_hunter_agent import llm_gate
 from job_hunter_agent import server_helpers as srv
+from job_hunter_agent import workspace_service
 from job_hunter_agent.eligibility_profile import prepare_eligibility_fact
 from job_hunter_agent.experience_requirements import extract_required_experience_months
-from job_hunter_agent.io_utils import load_job_history
 from job_hunter_agent.job_identity import normalize_job_key
 from job_hunter_agent.llm_protocol import (
     LLM_ALLOWED_COVERAGE_REQUIREMENT_TYPES,
@@ -37,7 +37,8 @@ from job_hunter_agent.profile_store import (
     VALID_CAPABILITY_RULE_LEVELS,
 )
 from job_hunter_agent.record_schema import (
-    RECORD_LAST_KEPT_SNAPSHOT_KEY,
+    RECORD_IGNORED_REQUIREMENT_SUGGESTIONS_KEY,
+    RECORD_JOB_KEY,
     RECORD_REQUIREMENT_COVERAGE_KEY,
 )
 from job_hunter_agent.review_history_service import (
@@ -403,7 +404,9 @@ def api_rule_title_block_delete(body: dict = Body(...)):  # type: ignore[no-unty
     return json_response({"ok": True, "reject_title_rules": saved.get("reject_title_rules", [])})
 
 
-_PROFILE_GAP_VALID_ACTIONS = frozenset({"confirm_have", "confirm_do_not_have"})
+_PROFILE_GAP_VALID_ACTIONS = frozenset(
+    {"confirm_have", "confirm_do_not_have", "dismiss_suggestion"}
+)
 # Owned by profile_gaps.CONFIRMABLE_REQUIREMENT_STATUSES. A partially_supported row is
 # confirmable too: api_profile_gap re-checks classify_requirement_status below and
 # returns already_present when the canonical fact is present, so an already-covered
@@ -419,18 +422,18 @@ def _profile_gap_requirement_coverage(job_key: str) -> list[dict]:
     normalized_job_key = normalize_job_key(job_key)
     if not normalized_job_key:
         return []
-    history = load_job_history()
-    entry = history.get(normalized_job_key)
-    if not isinstance(entry, dict):
-        return []
-    coverage = entry.get(RECORD_REQUIREMENT_COVERAGE_KEY)
-    if not isinstance(coverage, list):
-        snapshot = entry.get(RECORD_LAST_KEPT_SNAPSHOT_KEY)
-        if isinstance(snapshot, dict):
-            coverage = snapshot.get(RECORD_REQUIREMENT_COVERAGE_KEY)
-    if not isinstance(coverage, list):
-        return []
-    return [item for item in coverage if isinstance(item, dict)]
+    for record in workspace_service.load_saved_workspace_pool():
+        if not isinstance(record, dict):
+            continue
+        if normalize_job_key(str(record.get(RECORD_JOB_KEY) or "")) != normalized_job_key:
+            continue
+        coverage = record.get(RECORD_REQUIREMENT_COVERAGE_KEY)
+        return (
+            [item for item in coverage if isinstance(item, dict)]
+            if isinstance(coverage, list)
+            else []
+        )
+    return []
 
 
 def _profile_gap_coverage_name(item: dict) -> str:
@@ -783,6 +786,7 @@ def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
 
     confirm_have        → add the canonical profile item to the matching profile bucket
     confirm_do_not_have → add the canonical negative profile signal to the matching bucket
+    dismiss_suggestion  → hide this requirement suggestion for this job only
     """
     try:
         action = str(body.get("action", "")).strip()
@@ -804,6 +808,45 @@ def api_profile_gap(body: dict = Body(...)):  # type: ignore[no-untyped-def]
             )
         canonical_item_name = str(canonical_item["canonical_requirement"]).strip()
         requirement_type = str(canonical_item.get("requirement_type") or "capability").strip().lower()
+
+        if action == "dismiss_suggestion":
+            pool = workspace_service.load_saved_workspace_pool()
+            for record in pool:
+                if not isinstance(record, dict):
+                    continue
+                if (
+                    normalize_job_key(str(record.get(RECORD_JOB_KEY) or ""))
+                    != normalize_job_key(job_key)
+                ):
+                    continue
+                ignored = record.get(RECORD_IGNORED_REQUIREMENT_SUGGESTIONS_KEY)
+                ignored = ignored if isinstance(ignored, list) else []
+                ignored_key = (requirement_type, canonical_item_name.casefold())
+                if not any(
+                    isinstance(item, dict)
+                    and str(item.get("requirement_type") or "").strip().lower()
+                    == ignored_key[0]
+                    and str(item.get("canonical_requirement") or "").strip().casefold()
+                    == ignored_key[1]
+                    for item in ignored
+                ):
+                    ignored.append(
+                        {
+                            "requirement_type": requirement_type,
+                            "canonical_requirement": canonical_item_name,
+                        }
+                    )
+                record[RECORD_IGNORED_REQUIREMENT_SUGGESTIONS_KEY] = ignored
+                workspace_service.save_saved_workspace_pool(pool)
+                srv.rebuild_workspace_after_rule_change("requirement suggestion dismissed")
+                return json_response(
+                    {
+                        "ok": True,
+                        "confirmed_fact": canonical_item_name,
+                        "change_kind": "dismissed",
+                    }
+                )
+            raise ValueError("job was not found in the saved workspace")
 
         profile = srv.load_profile()
         current_status = classify_requirement_status(

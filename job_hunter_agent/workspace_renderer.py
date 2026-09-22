@@ -87,6 +87,7 @@ from job_hunter_agent.record_schema import (
     RECORD_DECISION_KEY,
     RECORD_DUPLICATE_LINKS_KEY,
     RECORD_EMPLOYER_OUTCOME_KEY,
+    RECORD_IGNORED_REQUIREMENT_SUGGESTIONS_KEY,
     RECORD_IS_LIKED_KEY,
     RECORD_IS_REPOSTED_KEY,
     RECORD_LAST_LIKED_AT_KEY,
@@ -1375,6 +1376,27 @@ def render_job_card(
     raw_coverage = display_record.get(RECORD_REQUIREMENT_COVERAGE_KEY)
     raw_coverage_is_list = isinstance(raw_coverage, list)
     coverage_rows = raw_coverage if isinstance(raw_coverage, list) else []
+    ignored_suggestions = display_record.get(RECORD_IGNORED_REQUIREMENT_SUGGESTIONS_KEY)
+    ignored_suggestions = ignored_suggestions if isinstance(ignored_suggestions, list) else []
+    ignored_suggestion_keys = {
+        (
+            str(item.get("requirement_type") or "").strip().lower(),
+            str(item.get("canonical_requirement") or "").strip().casefold(),
+        )
+        for item in ignored_suggestions
+        if isinstance(item, dict)
+    }
+    if ignored_suggestion_keys:
+        coverage_rows = [
+            row
+            for row in coverage_rows
+            if not isinstance(row, dict)
+            or (
+                str(row.get("requirement_type") or "").strip().lower(),
+                str(row.get("canonical_requirement") or "").strip().casefold(),
+            )
+            not in ignored_suggestion_keys
+        ]
     # JH-298: behavioural-expectation rows are a separate frozen list. They are
     # rendered read-only ("Working style") and never fed to the scored requirement
     # groups, the profile-action controls, or _css_modifier_for_row.
@@ -2047,9 +2069,17 @@ def render_job_card(
                 f'data-action="confirm_do_not_have" data-capability-name="{safe_html(canonical_requirement)}">'
                 f"{not_have_label}</button>"
             )
+            dismiss_suggestion_label = safe_html(
+                _workspace_label("workspace_card_labels", "ignore_requirement_suggestion_label")
+            )
+            dismiss_suggestion_html = (
+                '<button type="button" class="jh-button jh-button--secondary jh-button--micro job-requirement-action gap-btn" '
+                f'data-action="dismiss_suggestion" data-capability-name="{safe_html(canonical_requirement)}" '
+                f'aria-label="{dismiss_suggestion_label}">{dismiss_suggestion_label}</button>'
+            )
             profile_review_html = (
                 '<span class="req-coverage-detail req-coverage-detail--profile-review">'
-                f'{confirm_have_html}{confirm_not_have_html}'
+                f'{confirm_have_html}{confirm_not_have_html}{dismiss_suggestion_html}'
                 '</span>'
             )
         # Compound professional-capability requirements keep their parent job-fit
