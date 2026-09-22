@@ -32,7 +32,7 @@ It is a strict, explainable job-fit system, not a vague recommender.
 
 ## Project-specific skill routing
 
-Use `.agents/skills/INDEX.md` as the single skill-routing catalogue. Load the smallest matching skill, then combine with reusable skills only when the task crosses ownership boundaries. Do not duplicate the active skill list here.
+Use `.agents/skills/INDEX.md` as the single skill-routing catalogue. Load the smallest matching skill, then combine with reusable skills only when the task crosses ownership boundaries. Do not duplicate the active skill list here. Git workflow and PR/branch cleanup are single-owned by `.agents/skills/git-lifecycle/SKILL.md`; project docs should not retain PR-specific handoff links or obsolete branch references.
 
 ## Backlog
 

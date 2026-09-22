@@ -45,6 +45,12 @@ Use for any branch/worktree, commit, push, PR, merge, or `main` integration work
 5. Merge through the repository PR mechanism using the documented strategy; otherwise prefer a normal non-force merge.
 6. Fetch `origin` and verify the task SHA is an ancestor of `origin/main`.
 
+## Closed or abandoned PR cleanup
+
+- A closed, unmerged PR is not durable project state. Remove its local/remote task branch when it is no longer needed and safe to delete.
+- Remove tracked docs, skills, handoff notes, or links that point specifically to the closed PR or its obsolete branch; keep only durable workflow rules.
+- Before reporting cleanup complete, verify the PR-specific branch/reference is gone and search tracked files for stale PR/branch references.
+
 ## Post-merge cleanup
 
 1. Re-check the task worktree. Never delete a dirty/unmerged worktree.
