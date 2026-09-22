@@ -32,7 +32,7 @@ Use for any branch/worktree, commit, push, PR, merge, or `main` integration work
 
 1. Implement only the task scope and run the required validation.
 2. Commit stable checkpoints on the task branch and push them without force. Report the branch, commit SHA, validation performed, and how Rob can test the app from local `main`.
-3. To expose a checkpoint in Rob's normal app setup, fetch `origin` and confirm the local `main` checkout is clean and contains current `origin/main`. Fast-forward local `main` to the task branch when possible. If local `main` has commits not on the task branch, preserve them and use a normal local merge only when it is conflict-free and keeps the task branch as the PR source. Do not commit separate test changes on local `main` or push test integrations to `origin`.
+3. To expose a checkpoint in Rob's normal app setup, fetch `origin` and confirm the local `main` checkout is clean and contains current `origin/main`. Fast-forward local `main` to the task branch when possible. If local `main` has commits not on the task branch, preserve them and use a normal local merge only when it is conflict-free and keeps the task branch as the PR source. Do not commit separate test changes on local `main` or push test integrations to `origin`. Keep the task worktree locked while its clean branch is included in local `main` but is still awaiting Rob's testing or PR integration; this protects the required PR source from merged-branch cleanup.
 4. Continue implementation and feedback on the task branch. For each checkpoint Rob needs to test, fast-forward or safely merge the updated task branch into local `main`, following step 3. Stop if local `main` is dirty, conflicts occur, or the histories cannot be reconciled without rewriting or losing work.
 5. Do not create a PR during implementation or app-testing iterations. When Rob confirms the app change is good, fetch `origin`, reconcile only clear/safe drift, run final validation, and create a PR from the task branch targeting `main`. Return ambiguous conflicts or ownership questions to Rob. If both sides changed versioned managed JSON, ensure the integrated version is greater than current `origin/main` when content changes.
 6. Keep the PR open for an independent agent cross-check and required checks. Wait for hosted PR checks/CI. If the reviewer requests a fix, update the task branch and PR; fast-forward or safely merge the checkpoint into local `main` for retesting when the app behavior changes.
@@ -54,7 +54,7 @@ Use for any branch/worktree, commit, push, PR, merge, or `main` integration work
 ## Post-merge cleanup
 
 1. Re-check the task worktree. Never delete a dirty/unmerged worktree.
-2. Remove the clean task worktree.
+2. Unlock the task worktree, then remove it once clean and integrated or abandoned.
 3. Delete the merged local and remote task branches.
 4. Run `git worktree prune`.
 5. Run `./scripts/check-git-closure.sh --task-sha <sha> --branch <branch> --worktree <path>`.
