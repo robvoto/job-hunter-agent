@@ -32,8 +32,8 @@ Use for any branch/worktree, commit, push, PR, merge, or `main` integration work
 2. Commit each stable checkpoint and push the task branch without force so the human can inspect/test it.
 3. Report the branch and commit SHA. While the human is checking the work, continue fixes as additional commits on the same task branch.
 4. **Do not create a PR while implementation, UI checking, code review, or user acceptance is still in progress.**
-5. When the human explicitly says the work is ready to merge / create the PR / equivalent, fetch `origin`, reconcile clear drift, and run final validation on the merge-ready branch.
-6. Only then create the PR targeting `main`, report its number/URL, and hand off to the integration owner.
+5. Do not create a PR until the human has explicitly confirmed the review/test checkpoint is good and the work is ready for merge handoff (for example: `create the PR`, `ready to merge`, or equivalent). Then fetch `origin`, reconcile clear drift, and run final validation on the merge-ready branch.
+6. Only after that explicit confirmation and final validation, create the PR targeting `main`, report its number/URL, and hand off to the integration owner.
 7. Stop at `MAIN STATUS: NOT IN MAIN — pushed branch <branch>` until integration completes.
 
 ## Integration owner
@@ -44,6 +44,12 @@ Use for any branch/worktree, commit, push, PR, merge, or `main` integration work
 4. Run required local validation and wait for hosted PR checks/CI.
 5. Merge through the repository PR mechanism using the documented strategy; otherwise prefer a normal non-force merge.
 6. Fetch `origin` and verify the task SHA is an ancestor of `origin/main`.
+
+## Closed or abandoned PR cleanup
+
+- A closed, unmerged PR is not durable project state. Remove its local/remote task branch when it is no longer needed and safe to delete.
+- Remove tracked docs, skills, handoff notes, or links that point specifically to the closed PR or its obsolete branch; keep only durable workflow rules.
+- Before reporting cleanup complete, verify the PR-specific branch/reference is gone and search tracked files for stale PR/branch references.
 
 ## Post-merge cleanup
 

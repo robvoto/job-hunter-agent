@@ -327,7 +327,7 @@
     "privacy_sensitive_item_address": "street address",
     "privacy_sensitive_item_birth_date": "date of birth",
     "privacy_sensitive_item_identity": "national identity numbers",
-    "privacy_footer": "Your uploaded CV is not stored. We only extract temporary job-related information needed to match you with suitable roles.",
+    "privacy_footer": "We store job-related details from your CV, such as skills, roles and experience, to build your matching profile.",
     "guidance_title": "What makes a good CV for setup?",
     "guidance_include_title": "Include",
     "guidance_include_recent_roles": "Recent and older roles with dates",
