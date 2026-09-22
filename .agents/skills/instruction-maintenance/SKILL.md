@@ -1,79 +1,41 @@
 ---
 name: instruction-maintenance
-description: "Use ONLY when editing agent instruction files: AGENTS.md, adapter files, .agents/skills, DETAILS.md, or docs that define agent workflow. Do NOT use for product/code changes."
+description: Use ONLY when editing AGENTS.md, agent adapters, .agents/skills, DETAILS.md, or docs that define agent workflow.
 ---
 
 # Skill: Instruction Maintenance
 
-Use when editing `AGENTS.md`, agent-specific instruction files, `.agents/skills/*/SKILL.md`, or important project markdown that guides agents.
+Keep agent instructions small, current, single-owned, and easy to interpret.
 
-## Purpose
-Keep agent instructions useful, small, current, and non-contradictory.
+## Ownership
 
-## Source hierarchy
-- `AGENTS.md`: project-wide rules all agents should read first.
-- Agent-specific adapter files, when present, are self-contained thin bootstrap layers. Shared project docs/tests must not enumerate or depend on particular adapter filenames. Do not duplicate core rules in adapters.
-- `.agents/skills/*/SKILL.md`: compact domain rules loaded only for that work area.
-- `.agents/skills/*/DETAILS.md`: longer reference material split out of a noisy skill.
-- `docs/*`: human/reference documentation, not agent operating rules unless explicitly linked.
-- Google Sheet backlog: planning/tracking only, not instructions.
+- `AGENTS.md`: minimal universal routing and stable project-wide rules.
+- `.agents/skills/*/SKILL.md`: concise domain operating rules.
+- `.agents/skills/*/DETAILS.md`: longer diagnostics, examples, and reference material.
+- `docs/*`: project/human reference unless explicitly linked as an operating contract.
+- Backlog: planning/tracking, not agent instructions.
 
-## Cleanup rules
-- Prefer deleting or moving noise over adding more instructions.
-- Keep `SKILL.md` files concise. If a skill grows too large, move detailed examples/patterns to `DETAILS.md` and keep `SKILL.md` as the loader/rule summary.
-- Remove stale architecture claims when verified wrong.
-- Do not edit agent-specific files to redefine rules owned by `AGENTS.md`, `docs/PROJECT_CONTEXT.md`, or `.agents/skills/*/SKILL.md`; point back to the owning file instead.
-- Avoid duplicating the same rule across many files.
-- Preserve important project constraints: no hardcoding, Google Sheet backlog source of truth, Excel export support only when the workflow explicitly uses the export, Definition of Done, and do-not-pick-Done-items.
-- If unsure whether information is stale, mark it for review instead of rewriting as fact.
+## Rules
 
-## Cross-agent portability
-- Shared `AGENTS.md` and `.agents/skills/*` rules must be runtime-neutral. Describe required capability/behaviour first; do not assume a particular agent product, adapter filename, or tool namespace.
-- Runtime-specific tool names, connector names, local paths, or browser bridges are allowed only in the owning tooling/project-context instruction and must be explicitly scoped to the runtime where they exist.
-- A local coding agent already running in the repository may use its direct filesystem/shell. A connector-based runtime should use its authorised connector and documented fallback. Neither should be told to invoke a tool that runtime does not expose.
-- Do not create parallel agent-specific copies of domain rules. Keep shared behaviour in `AGENTS.md`/skills; each runtime adapter owns only its own bootstrap.
-- Examples are explanatory only. Do not let an example title, company, user profile, location, threshold, or observed phrase become an implementation rule.
+- Put each durable rule in the narrowest existing owner. Other files should point to that owner instead of restating it.
+- Remove duplicate prose, obsolete architecture claims, temporary commentary, incident history, and superseded instructions once the durable rule is clear.
+- Keep `SKILL.md` operational. Move detailed diagnostics/examples to `DETAILS.md`; delete detail that no longer helps current operation.
+- Do not use `AGENTS.md` as a dumping ground for Git, UI, tooling, runtime, or implementation detail.
+- Shared instructions must be runtime-neutral except in the tooling/project-context owner that genuinely needs runtime-specific names or paths.
+- Verify current source/tool/runtime truth before changing a claim merely because old instructions say it is true.
+- Do not create parallel agent-specific copies of shared domain rules.
+- Preserve canonical project constraints by linking to their owner rather than duplicating them.
 
 ## Audit checklist
-When cleaning instructions, check:
-- Does this rule still match current architecture?
-- Is it actionable for an agent?
-- Is it in the right file according to the source hierarchy?
-- Is it duplicated elsewhere?
-- Is it too verbose for a `SKILL.md`?
-- Does it conflict with `AGENTS.md`?
-- Does it accidentally encourage hardcoding, fallbacks, or broad rewrites?
 
-## File format
-- All tracked instruction Markdown uses UTF-8 with LF line endings. `.gitattributes` and `.editorconfig` own the policy.
-- Do not trust a clean Git status alone to prove the physical worktree format: `git ls-files --eol` can reveal `w/crlf` or `w/mixed` files whose normalized Git content is otherwise unchanged.
-- After editing instructions, check the affected instruction files with `git ls-files --eol`; normalize any `w/crlf` or `w/mixed` file to LF.
-- A repository-wide line-ending cleanup belongs in its own maintenance commit, separate from feature behaviour changes.
+Before finishing an instruction change, check:
 
-## Safe edit pattern
-1. Inspect current files first.
-2. Make small targeted edits.
-3. Preserve long useful content by moving it to `DETAILS.md`, not deleting it outright.
-4. Report exactly what changed and what was left alone.
+- Is every rule actionable and still true?
+- Does one file clearly own it?
+- Is equivalent prose repeated elsewhere?
+- Is any sentence explaining an old incident instead of current behaviour?
+- Is a detail better placed in `DETAILS.md` or project docs?
+- Did the edit add unnecessary safety prose or compatibility language?
+- Are affected instruction files UTF-8/LF (`git ls-files --eol`)?
 
-## Repeated mistake protocol
-- If the same agent/tooling mistake happens more than once and the correction is known, update the owning skill in the same work session instead of relying on conversational memory.
-- Put the rule at the narrowest correct scope: universal behaviour in `AGENTS.md`, tooling failures in the tooling skill, UI consistency in the UI/design-system skill, etc.
-- Record the cause and recovery rule, not the incident narrative. Example: an MCP `UnicodeDecodeError` is an output-decoding failure; retry with bounded ASCII-safe output rather than declaring the filesystem unavailable.
-- Do not create duplicate rules in several skills. Link or route to the single owner.
-
-## Ongoing maintenance
-- When a durable rule should apply across future sessions, first put it in the existing skill that owns that behaviour.
-- If no suitable skill exists, create a focused skill and add it to `.agents/skills/INDEX.md`; do not use `AGENTS.md` as the fallback dumping ground.
-- Keep `AGENTS.md` as routing plus only genuinely universal, stable rules. It may point to an owner but must not duplicate the owner's detailed instructions.
-- If a rule needs examples or long explanation, move those details to `DETAILS.md` or `docs/*`.
-- When new instructions are added, check whether they made the wrong file bigger or duplicated an existing owner.
-- After any instruction-structure cleanup, update `docs/AGENT_OPERATING_MODEL.md` and `docs/DOC_INDEX.md` if ownership or structure changed.
-
-## Do not
-- Do not rewrite all instructions in one pass.
-- Do not add broad inspirational guidance.
-- Do not turn backlog rows into operating rules.
-- Do not add rules that conflict with the project Definition of Done.
-
-
+Use narrow, context-checked edits and inspect the final diff. Update instruction indexes/docs only when ownership or structure actually changes.

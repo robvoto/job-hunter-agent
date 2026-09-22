@@ -11,7 +11,6 @@ Use before editing location, salary, contract, government, work mode, or prefere
 - Explicitly incompatible work type, sector, work mode, minimum contract length, and salary minimum are **hard eligibility filters**, not score adjustments. Each passes through when the job value is unknown or cannot be compared safely.
 - The hard filter entry point is `passes_preference_filters(record, profile)` — returns `(bool, reason_code)`. Salary comparison must stay neutral unless the source provides an explicit comparable pay period.
 - Do not infer compensation or pay period from free-text ad prose or work type alone. If the source salary is missing or ambiguous, keep salary `N/A` and skip salary comparison.
-- Any new heuristic or hardcoded preference/comparison rule is a red flag and requires explicit human approval before implementation.
 - `assess_location_preference()` supplies the canonical location-preference signal, and `salary_fit_adjustment()` handles the remaining salary scoring path. Do not reference removed contract or government scoring helpers.
 - Thresholds, aliases, labels, and scoring impacts come from profile/config/parsing rules, not feature code.
 - Preference helpers should return canonical labelled signals for consumers.

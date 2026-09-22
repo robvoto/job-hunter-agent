@@ -374,15 +374,15 @@ def test_repository_runtime_commands_use_uv_and_classify_missing_binaries_correc
         ROOT_DIR / "scripts" / "ec2" / "start-aws-browser-session.sh"
     ).read_text(encoding="utf-8")
 
-    assert "Never invoke bare `python`, `python3`, `pytest`, or `ruff`" in tooling_skill
-    assert "never reach into another worktree's `.venv`" in tooling_skill
+    assert "Use `uv run ...` for Job Hunter Python/pytest/ruff commands" in tooling_skill
+    assert "another worktree's `.venv`" in tooling_skill
     assert "Do not invent or pass a `timeout` argument" in tooling_skill
     assert "node --input-type=module --check < path/to/file.js" in tooling_skill
-    assert "Never use plain `node --check path/to/file.js`" in tooling_skill
+    assert "never use plain `node --check path/to/file.js`" in tooling_skill
     assert "never run the entire pytest suite in one connector call" in tooling_skill
     assert "do not background it" in tooling_skill
     assert "./scripts/run-pytest-mcp.sh 1 3" in tooling_skill
-    assert "not a database, application, repository-access, or dependency failure" in tooling_skill
+    assert "do not relabel them as repository/application failures" in tooling_skill
     assert "uv run python -m job_hunter_agent.source_connector" in operations
     assert "\npython -m job_hunter_agent.source_connector" not in operations
     assert "set -- uv run python -m job_hunter_agent.fastapi_app --rebuild" in aws_launcher

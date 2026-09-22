@@ -61,13 +61,9 @@ Signal for an `uncertain` element or an unresolved mandatory `non_capability` el
 still created **deterministically afterward** by `build_ad_learning_signals()`. See
 `docs/REQUIREMENT_DECOMPOSITION_RATIONALE.md`.
 
-**Behavioural-expectation rows never mint pending signals (JH-298).** Capability
-rows the fit-review LLM tags `requirement_kind=behavioural_expectation` are
-partitioned into the record's `requirement_coverage_behavioural` field before
-`build_ad_learning_signals()` runs, which iterates `requirement_coverage` only.
-Generic conduct / disposition wording ("works autonomously", "attention to
-detail", "willingness to embrace AI") therefore produces no pending
-`capability_concept` Signal and no AI-development capability concept.
+**Behavioural-expectation rows never mint pending signals.** They are partitioned into
+`requirement_coverage_behavioural` before learning; `build_ad_learning_signals()` consumes
+`requirement_coverage`, so behavioural rows remain display-only employer context.
 
 **Consequence:** jobs decided by the full LLM review produce no LLM-proposed learning candidates. Any learning-only candidate must still use a category from `signal_schema.VALID_SIGNAL_CATEGORIES`.
 
@@ -82,7 +78,7 @@ Keep this split clear:
 Core map:
 - Start at `job_hunter_agent/source_documents.py`.
 - `run_onboarding()` builds both deterministic `pipeline_patch` from `cv_pipeline.py` and learning `learning_patch` from `profile_learning.py`.
-- Final saved `candidate_capabilities` currently come from the learning path.
+- Final saved `candidate_capabilities` are produced by `build_learning_patch()` in the learning path.
 - `profile_store.normalize_capability_rules()` only cleans and dedupes aliases. It does not create new ones.
 
 If aliases look sparse, inspect `profile_learning._llm_extract_from_cv()`.
