@@ -1272,9 +1272,27 @@
 }
 
 .search-source-panel-head {
-  justify-content: space-between;
+  /* Keep the enabled switch beside its source label instead of stranded at the card edge. */
+  justify-content: flex-start;
+  gap: var(--surface-gap-md);
   padding-bottom: var(--surface-pad-block-lg);
   border-bottom: 1px solid var(--border-subtle);
+}
+
+.search-source-panel .source-number-input {
+  width: min(100%, 6rem);
+}
+
+.search-source-panel #seek_max_pages_choices.choice-strip {
+  width: 100%;
+  max-width: none;
+  gap: 4px;
+}
+
+.search-source-panel #seek_max_pages_choices.choice-strip > .choice-card--seek-pages {
+  min-width: 2rem;
+  min-height: 2rem;
+  padding: 5px 7px;
 }
 
 .search-source-panel.is-source-disabled > :not(.search-source-panel-head) {
@@ -2621,7 +2639,8 @@
 }
 .location-checkbox-groups {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* The state list needs more room than city/territory lists to avoid label collisions. */
+  grid-template-columns: minmax(16rem, 1fr) minmax(26rem, 1.5fr) minmax(16rem, 1fr);
   width: 100%;
   max-width: 100%;
   padding: var(--surface-gap-md);
@@ -2717,22 +2736,19 @@
 }
 .checkbox-list-option input:disabled + span { opacity: 0.55; }
 
-@container (max-width: 48rem) {
+@container (max-width: 60rem) {
   .location-checkbox-groups {
     grid-template-columns: minmax(0, 1fr);
     width: 100%;
   }
-  .location-checkbox-group {
+  .checkbox-list-group {
     grid-column: auto;
     justify-self: stretch;
     padding: var(--surface-gap-md) 0;
   }
-  .location-checkbox-group + .location-checkbox-group {
+  .checkbox-list-group + .checkbox-list-group {
     border-left: 0;
     border-top: 1px solid var(--border-subtle);
-  }
-  .location-checkbox-group:nth-child(3) {
-    margin-top: 0;
   }
 }
 
