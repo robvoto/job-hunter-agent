@@ -1009,7 +1009,7 @@
   "search_source_labels_description": "Display labels and helper copy for search source controls.",
   "search_source_labels": {
     "section_title": "Job board search",
-    "section_copy": "Choose which job boards Job Hunter searches.",
+    "section_copy": "Choose which boards to search and set each board’s search limits.",
     "shared_inputs_copy": "Shared search inputs that apply across all enabled sources.",
     "seek_toggle_label": "Include SEEK in search",
     "seek_toggle_help": "Select if you want to include SEEK in search runs.",
