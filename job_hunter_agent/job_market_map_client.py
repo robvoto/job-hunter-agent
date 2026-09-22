@@ -131,6 +131,7 @@ def validate_market_job_salary_normalized(
         "period": raw_salary.get("period"),
         "currency": raw_salary.get("currency"),
         "qualifier": raw_salary.get("qualifier"),
+        "bound": raw_salary.get("bound"),
     }
     return normalized
 
