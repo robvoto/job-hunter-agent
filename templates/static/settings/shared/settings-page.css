@@ -309,24 +309,41 @@
       font-size: var(--text-role-body-compact-font-size);
       line-height: var(--text-role-body-compact-line-height);
     }
-    /* Local layout exception: schedule uses the same two-column source grid but only fills one column. */
-    .schedule-source-panels {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* Local layout exception: keep the one schedule card compact while reusing the source-card component. */
+    .search-source-panels.schedule-source-panels {
+      grid-template-columns: minmax(0, 42rem);
       margin-top: 0;
     }
     .schedule-source-panel {
-      grid-column: 1;
+      grid-template-columns: minmax(0, 14rem) minmax(0, 1fr);
+      align-items: end;
+      height: auto;
     }
-    /* Local layout exception: the schedule time input should stay compact inside the source-style column. */
+    .schedule-source-panel > .search-source-panel-head {
+      grid-column: 1 / -1;
+    }
+    /* Keep the time control and runtime status together in the compact schedule card. */
     .schedule-time-field > input {
-      width: min(100%, 14rem);
-      justify-self: start;
+      width: 100%;
     }
     .search-operation-runtime-status {
+      align-self: end;
       margin: 0;
+      padding-bottom: var(--surface-pad-block-sm);
       font-size: var(--help-copy-font-size);
       line-height: var(--help-copy-line-height);
       color: var(--text-muted);
+    }
+    @media (max-width: 560px) {
+      .schedule-source-panel {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .schedule-source-panel > .search-source-panel-head {
+        grid-column: auto;
+      }
+      .search-operation-runtime-status {
+        padding-bottom: 0;
+      }
     }
     .search-operation-runtime-status[data-state="running"] {
       color: var(--state-success-text);
