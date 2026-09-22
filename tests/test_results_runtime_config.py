@@ -156,10 +156,10 @@ def test_render_section_uses_results_header_sibling_layout_for_tools_and_paginat
     assert 'class="results-section-body"' in html
     assert 'data-test-header-tool="1"' in html
     assert 'class="pagination-label pagination-page-label"' in html
-    assert 'class="pagination-match-count"' in html
+    assert 'class="pagination-match-count"' not in html
     assert 'section-head--with-tools' not in html
     assert re.search(
-        r'<div class="results-header"><div class="results-header__left">.*?class="scope-tabs".*?</div><div class="section-tools">.*?class="pagination-match-count".*?class="section-head-tools".*?class="pagination-label pagination-page-label"',
+        r'<div class="results-header"><div class="results-header__left">.*?class="scope-tabs".*?</div><div class="section-tools">.*?class="section-head-tools".*?class="pagination-label pagination-page-label"',
         html,
     )
     assert 'class="results-pagination-footer"' in html
@@ -182,7 +182,7 @@ def test_workspace_history_section_is_pageable_without_duplicate_heading():
     assert 'class="section job-section section--results-panel"' in html
     assert '<h2>Applied Jobs</h2>' not in html
     assert 'data-section-id="applied-jobs"' in html
-    assert 'class="pagination-match-count"' in html
+    assert 'class="pagination-match-count"' not in html
     assert html.count('data-page-direction="prev"') == 2
     assert html.count('data-page-direction="next"') == 2
 
@@ -216,7 +216,7 @@ def test_render_empty_results_keeps_count_controls_but_omits_footer_pagination()
 
     assert 'data-section-id="job-results"' in html
     assert 'class="pagination-label pagination-page-label"' in html
-    assert 'class="pagination-match-count"' in html
+    assert 'class="pagination-match-count"' not in html
     assert 'data-page-direction="prev"' in html
     assert 'data-page-direction="next"' in html
     assert 'class="empty-state">No jobs right now.</p>' in html
@@ -658,11 +658,14 @@ def test_rendered_workspace_html_content(tmp_path):
         assert 'aria-label="Work mode"' in rendered_html
         assert 'aria-label="Sector"' in rendered_html
         assert 'aria-label="Match level"' in rendered_html
-        assert 'id="page_size_select"' in rendered_html
+        assert 'id="page_size_select_potential"' in rendered_html
+        assert 'id="page_size_select_applied"' in rendered_html
+        assert 'id="page_size_select_hidden"' in rendered_html
+        assert rendered_html.count('class="jh-select workspace-page-size-select"') == 3
         assert "12 jobs per page" in rendered_html
         assert 'id="job_search_input"' in rendered_html
         assert 'placeholder="Search title or company"' in rendered_html
-        assert captured_tools["header_tools_html"] == ""
+        assert 'id="page_size_select_potential"' in captured_tools["header_tools_html"]
 
         # Assert runtime config injection structure
         assert "window.__JOB_HUNTER_WORKSPACE__" in rendered_html

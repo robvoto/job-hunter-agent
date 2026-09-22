@@ -673,8 +673,7 @@ body {
 }
 
 .pagination-label,
-.pagination-page-label,
-.pagination-match-count {
+.pagination-page-label {
   color: var(--muted);
   font-size: 0.9rem;
 }
