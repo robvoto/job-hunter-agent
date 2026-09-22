@@ -251,12 +251,28 @@ class JobMarketMapClient:
         role_terms: list[str],
         sources: list[str],
         geography_codes: list[str],
-        posted_after: str,
+        locations: list[str] | None = None,
+        classifications: list[str] | None = None,
+        subclassifications: list[str] | None = None,
+        employment_types: list[str] | None = None,
+        workplace_types: list[str] | None = None,
+        apply_methods: list[str] | None = None,
+        companies: list[str] | None = None,
+        posted_after: str | None = None,
+        salary_min: float | int | None = None,
+        salary_max: float | int | None = None,
+        salary_period: str | None = None,
+        salary_currency: str | None = None,
         after_id: int = 0,
         through_id: int | None = None,
         limit: int | None = None,
     ) -> dict[str, Any]:
-        """Read one filtered canonical-vacancy page without consumer state."""
+        """Read one bounded `/v3/jobs/search` page without consumer state.
+
+        This client deliberately forwards only neutral JMM search fields. Source
+        semantics, salary comparability and uncertain-field eligibility remain
+        JMM responsibilities; JH applies personal filtering/scoring afterwards.
+        """
         payload = self._request(
             "GET",
             "/jobs/search",
@@ -264,7 +280,18 @@ class JobMarketMapClient:
                 "q": role_terms,
                 "source": sources,
                 "geography_code": geography_codes,
+                "location": locations or [],
+                "classification": classifications or [],
+                "subclassification": subclassifications or [],
+                "employment_type": employment_types or [],
+                "workplace_type": workplace_types or [],
+                "apply_method": apply_methods or [],
+                "company": companies or [],
                 "posted_after": posted_after,
+                "salary_min": salary_min,
+                "salary_max": salary_max,
+                "salary_period": salary_period,
+                "salary_currency": salary_currency,
                 "after_id": after_id,
                 "through_id": through_id,
                 "include_archived": False,
