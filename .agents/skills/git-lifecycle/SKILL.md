@@ -9,14 +9,16 @@ Use for any branch/worktree, commit, push, PR, merge, or `main` integration work
 
 ## Contract
 
-- Work intended for `main` uses: **task branch/worktree -> implement -> validate -> commit -> push -> human/code review and iteration -> final validation -> merge-ready approval -> PR -> integration review -> merge -> cleanup**.
-- Commits come before PRs so the human can inspect and test stable checkpoints while work is still being refined.
-- A PR is the final integration handoff. Do not create one merely because the first commit is green or the branch has been pushed.
-- The authoring agent owns implementation, validation, commits, pushes, and review/fix iterations until the work is explicitly ready to merge. The integration owner takes over once the PR exists.
-- The authoring agent does not normally merge its own PR. If no integration owner is available, leave the merge-ready PR open.
-- Do not directly merge or push a normal task branch to `main`.
-- Disposable experiment branches that are abandoned rather than integrated do not need a PR.
-- `commit` or `push` never means the work is in `main`.
+- Work intended for shared `origin/main` uses: **task branch/worktree -> implement and self-check -> commit/push task branch -> fast-forward local `main` for Rob's app testing -> iterate until Rob is satisfied -> open PR -> independent agent cross-check and required checks -> merge PR to `origin/main` -> sync local `main` -> cleanup**.
+- The authoring agent commits work on the task branch. Local `main` is Rob's app-testing lane: fast-forward it to tested checkpoints so he can run the app in his normal setup without checking out task branches.
+- Local test integrations are not shared integrations. Never push those test checkpoints from local `main` to `origin/main`.
+- Rob is the manual app tester and product/technical lead. Give him concise app test instructions and findings; do not ask him to review code diffs.
+- Keep the task branch as the source for the eventual PR. Fast-forward local `main` from the task branch when possible so the task commits and PR ancestry are preserved.
+- Do not create the PR while implementation and Rob's app testing are still in progress. Create it once Rob says the app change is good and ready for integration.
+- Every normal integration to `origin/main` requires a PR with an independent agent cross-check. The authoring agent cannot count its own review as the independent cross-check. Resolve review findings and required checks before merging.
+- Rob's confirmation that the app change is good authorizes the PR and, once the independent cross-check and required checks pass, its merge. Do not ask for another `put it in main` instruction. Honor any instruction to hold or stop.
+- If the PR cross-check finds a defect, fix it on the task branch, fast-forward the checkpoint into local `main` when needed for Rob to retest, update the PR, and repeat the cross-check.
+- Do not push a task branch directly to `origin/main` or bypass a required PR/check. `commit` or `push` alone never means the work is in shared `origin/main`.
 - Git approval does not imply runtime lifecycle or deployment approval; follow `docs/PROJECT_CONTEXT.md` and `release-management` for those concerns.
 
 ## Before editing
@@ -29,21 +31,19 @@ Use for any branch/worktree, commit, push, PR, merge, or `main` integration work
 ## Authoring agent
 
 1. Implement only the task scope and run the required validation.
-2. Commit each stable checkpoint and push the task branch without force so the human can inspect/test it.
-3. Report the branch and commit SHA. While the human is checking the work, continue fixes as additional commits on the same task branch.
-4. **Do not create a PR while implementation, UI checking, code review, or user acceptance is still in progress.**
-5. Do not create a PR until the human has explicitly confirmed the review/test checkpoint is good and the work is ready for merge handoff (for example: `create the PR`, `ready to merge`, or equivalent). Then fetch `origin`, reconcile clear drift, and run final validation on the merge-ready branch.
-6. Only after that explicit confirmation and final validation, create the PR targeting `main`, report its number/URL, and hand off to the integration owner.
-7. Stop at `MAIN STATUS: NOT IN MAIN — pushed branch <branch>` until integration completes.
+2. Commit stable checkpoints on the task branch and push them without force. Report the branch, commit SHA, validation performed, and how Rob can test the app from local `main`.
+3. To expose a checkpoint in Rob's normal app setup, fetch `origin` and confirm the local `main` checkout is clean and contains current `origin/main`. Fast-forward local `main` to the task branch when possible. If local `main` has commits not on the task branch, preserve them and use a normal local merge only when it is conflict-free and keeps the task branch as the PR source. Do not commit separate test changes on local `main` or push test integrations to `origin`.
+4. Continue implementation and feedback on the task branch. For each checkpoint Rob needs to test, fast-forward or safely merge the updated task branch into local `main`, following step 3. Stop if local `main` is dirty, conflicts occur, or the histories cannot be reconciled without rewriting or losing work.
+5. Do not create a PR during implementation or app-testing iterations. When Rob confirms the app change is good, fetch `origin`, reconcile only clear/safe drift, run final validation, and create a PR from the task branch targeting `main`. Return ambiguous conflicts or ownership questions to Rob. If both sides changed versioned managed JSON, ensure the integrated version is greater than current `origin/main` when content changes.
+6. Keep the PR open for an independent agent cross-check and required checks. Wait for hosted PR checks/CI. If the reviewer requests a fix, update the task branch and PR; fast-forward or safely merge the checkpoint into local `main` for retesting when the app behavior changes.
+7. Once the independent cross-check and required checks pass, merge the PR through the repository PR mechanism using its documented strategy. Fetch `origin` and verify the task changes are represented in `origin/main`. Bring local `main` up to date without losing unrelated local work; remove only local test-merge history after verifying its content is present on `origin/main`. If unrelated local commits prevent exact synchronization, preserve them and report the difference rather than resetting them.
+8. Verify the task changes are represented in `origin/main`. Report local app-test state separately from shared remote integration state.
 
-## Integration owner
+## PR cross-check
 
-1. Fetch `origin`; inspect the PR diff, task SHA, current `origin/main`, mergeability, and required checks.
-2. If `origin/main` moved, reconcile only clear/safe drift. Return ambiguous conflicts or ownership questions to the author/human.
-3. If both sides changed versioned managed JSON, ensure the integrated version is greater than current `origin/main` when content changes.
-4. Run required local validation and wait for hosted PR checks/CI.
-5. Merge through the repository PR mechanism using the documented strategy; otherwise prefer a normal non-force merge.
-6. Fetch `origin` and verify the task SHA is an ancestor of `origin/main`.
+1. The reviewer must be a different agent from the authoring agent.
+2. Review the PR changes against the task request, relevant project contracts, and test evidence. Report concrete findings; do not treat opening a PR as proof that cross-checking happened.
+3. Resolve blocking findings and rerun affected checks before merging. If no independent reviewer is available, leave the PR unmerged and report that blocker.
 
 ## Closed or abandoned PR cleanup
 
@@ -64,10 +64,12 @@ Use for any branch/worktree, commit, push, PR, merge, or `main` integration work
 
 ## Reporting
 
-End Git work with:
+Report local testing and shared integration separately:
 
-- `MAIN STATUS: NOT IN MAIN — <uncommitted|committed on branch|pushed branch>`; or
-- `MAIN STATUS: IN MAIN — verified on origin/main at <sha>`.
+- `LOCAL TEST STATUS: NOT IN LOCAL MAIN — <reason>`; or
+- `LOCAL TEST STATUS: IN LOCAL MAIN — app-test checkpoint at <sha>`.
+- `ORIGIN MAIN STATUS: NOT IN ORIGIN/MAIN — PR <number|not created>, branch <branch> at <sha>`; or
+- `ORIGIN MAIN STATUS: IN ORIGIN/MAIN — verified at <sha>`.
 
 For integrated work also report:
 
