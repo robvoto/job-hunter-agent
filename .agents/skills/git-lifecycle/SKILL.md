@@ -32,8 +32,8 @@ Use for any branch/worktree, commit, push, PR, merge, or `main` integration work
 2. Commit each stable checkpoint and push the task branch without force so the human can inspect/test it.
 3. Report the branch and commit SHA. While the human is checking the work, continue fixes as additional commits on the same task branch.
 4. **Do not create a PR while implementation, UI checking, code review, or user acceptance is still in progress.**
-5. When the human explicitly says the work is ready to merge / create the PR / equivalent, fetch `origin`, reconcile clear drift, and run final validation on the merge-ready branch.
-6. Only then create the PR targeting `main`, report its number/URL, and hand off to the integration owner.
+5. Do not create a PR until the human has explicitly confirmed the review/test checkpoint is good and the work is ready for merge handoff (for example: `create the PR`, `ready to merge`, or equivalent). Then fetch `origin`, reconcile clear drift, and run final validation on the merge-ready branch.
+6. Only after that explicit confirmation and final validation, create the PR targeting `main`, report its number/URL, and hand off to the integration owner.
 7. Stop at `MAIN STATUS: NOT IN MAIN — pushed branch <branch>` until integration completes.
 
 ## Integration owner
