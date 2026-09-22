@@ -435,7 +435,7 @@ def test_market_source_searches_selected_scope_and_requests_current_jd(monkeypat
     assert progress_states[-1]["headline"] == "Search review complete"
 
 
-def test_market_source_tolerates_live_total_changes_after_snapshot_boundary_is_fixed(monkeypatch):
+def test_market_source_rejects_total_changes_inside_fixed_scope(monkeypatch):
     pages = iter(
         [
             _feed_page(
@@ -450,7 +450,7 @@ def test_market_source_tolerates_live_total_changes_after_snapshot_boundary_is_f
                 next_cursor=2,
                 has_more=False,
                 snapshot_max_id=2,
-                total=1,
+                total=3,
             ),
         ]
     )
@@ -467,10 +467,10 @@ def test_market_source_tolerates_live_total_changes_after_snapshot_boundary_is_f
 
     monkeypatch.setattr(market_map_source, "JobMarketMapClient", FakeClient)
     client = FakeClient()
-    returned_pages = list(market_map_source._iter_filtered_market_pages(_market_context(), client))
-    items = [item for page in returned_pages for item in page["items"]]
 
-    assert [int(item["id"]) for item in items] == [1, 2]
+    with pytest.raises(JobMarketMapContractError, match="total changed"):
+        list(market_map_source._iter_filtered_market_pages(_market_context(), client))
+
     assert calls == [(0, None), (1, 2)]
 
 
@@ -1139,7 +1139,8 @@ def test_jh311_maps_existing_search_preferences_to_neutral_jmm_filters():
     context.enabled_sources = ["seek", "linkedin", "apsjobs"]
     context.search_settings.update(
         {
-            "classification_ids": ["Information & Communication Technology"],
+            "classification_ids": ["6281"],
+            "classification": ["Information & Communication Technology"],
             "subclassification": ["Business/Systems Analysts"],
             "company": ["Acme"],
             "seek_quick_apply_only": True,
@@ -1171,6 +1172,74 @@ def test_jh311_maps_existing_search_preferences_to_neutral_jmm_filters():
     assert all(scope["salary_min"] == 120000 for scope in scopes)
     assert all(scope["salary_period"] == "year" for scope in scopes)
     assert all(scope["salary_currency"] == "AUD" for scope in scopes)
+    assert all("6281" not in scope["classifications"] for scope in scopes)
+
+
+def test_jh311_does_not_misroute_seek_classification_ids_into_jmm_text_filter():
+    context = _market_context()
+    context.search_settings.pop("classification", None)
+    context.search_settings.pop("classifications", None)
+    context.search_settings["classification_ids"] = ["6281"]
+
+    scopes = market_map_source._build_market_search_scopes(context)
+
+    assert scopes
+    assert all(scope["classifications"] == [] for scope in scopes)
+
+
+def test_jh311_accepts_future_jmm_sources_without_board_allowlist():
+    context = _market_context()
+    context.enabled_sources = ["futureboard"]
+
+    scopes = market_map_source._build_market_search_scopes(context)
+
+    assert [scope["sources"] for scope in scopes] == [["futureboard"]]
+    assert scopes[0]["apply_methods"] == []
+
+
+def test_jh311_uses_one_snapshot_boundary_across_source_scopes():
+    calls: list[tuple[str, int | None]] = []
+
+    class FakeClient:
+        def search_page(self, **kwargs):
+            source = kwargs["sources"][0]
+            calls.append((source, kwargs["through_id"]))
+            return _feed_page(
+                items=[],
+                next_cursor=0,
+                has_more=False,
+                snapshot_max_id=10,
+                total=0,
+            )
+
+    context = _market_context()
+    context.enabled_sources = ["seek", "linkedin"]
+
+    list(market_map_source._iter_filtered_market_pages(context, FakeClient()))
+
+    assert calls == [("seek", None), ("linkedin", 10)]
+
+
+def test_jh311_rejects_snapshot_change_between_source_scopes():
+    calls = 0
+
+    class FakeClient:
+        def search_page(self, **kwargs):
+            nonlocal calls
+            calls += 1
+            return _feed_page(
+                items=[],
+                next_cursor=0,
+                has_more=False,
+                snapshot_max_id=10 if calls == 1 else 11,
+                total=0,
+            )
+
+    context = _market_context()
+    context.enabled_sources = ["seek", "linkedin"]
+
+    with pytest.raises(JobMarketMapContractError, match="snapshot boundary changed"):
+        list(market_map_source._iter_filtered_market_pages(context, FakeClient()))
 
 
 def test_jh311_processes_each_cursor_page_before_requesting_the_next(monkeypatch):
@@ -1219,6 +1288,7 @@ def test_jh311_processes_each_cursor_page_before_requesting_the_next(monkeypatch
 def test_jh311_mixed_source_scopes_dedupe_the_same_canonical_vacancy(monkeypatch):
     searched_sources: list[str] = []
     analysed_ids: list[int] = []
+    analysed_records: list[dict] = []
 
     class FakeClient:
         @classmethod
@@ -1226,11 +1296,18 @@ def test_jh311_mixed_source_scopes_dedupe_the_same_canonical_vacancy(monkeypatch
             return cls()
 
         def search_page(self, **kwargs):
-            searched_sources.append(kwargs["sources"][0])
+            source = kwargs["sources"][0]
+            searched_sources.append(source)
+            if source == "linkedin":
+                assert kwargs["through_id"] == 7
             item = {
                 **_item(7),
                 "matched_sources": [
-                    {"source": kwargs["sources"][0], "source_job_id": f"{kwargs['sources'][0]}-7"}
+                    {
+                        "id": 7 if source == "seek" else 17,
+                        "source": source,
+                        "source_job_id": "7" if source == "seek" else "linkedin-7",
+                    }
                 ],
             }
             return _feed_page(
@@ -1243,6 +1320,7 @@ def test_jh311_mixed_source_scopes_dedupe_the_same_canonical_vacancy(monkeypatch
 
     def pre(record, _context):
         analysed_ids.append(int(record["market_map_job_id"]))
+        analysed_records.append(record)
         return ({"decision": "REJECT"}, record, [], False)
 
     context = _market_context()
@@ -1255,6 +1333,37 @@ def test_jh311_mixed_source_scopes_dedupe_the_same_canonical_vacancy(monkeypatch
 
     assert searched_sources == ["seek", "linkedin"]
     assert analysed_ids == [7]
+    assert len(analysed_records) == 1
+    assert [link["source"] for link in analysed_records[0]["duplicate_links"]] == ["linkedin"]
+    assert [entry["source"] for entry in analysed_records[0]["source_provenance"]] == [
+        "seek",
+        "linkedin",
+    ]
+
+
+def test_jh311_preserves_cross_source_match_when_canonical_primary_is_other_board():
+    item = {
+        **_item(21),
+        "matched_sources": [
+            {"id": 31, "source": "linkedin", "source_job_id": "linkedin-21"}
+        ],
+    }
+
+    record = market_map_source.normalize_market_job(
+        item, run_iso="2026-09-12T12:00:00+00:00"
+    )
+
+    assert record["source"] == "seek"
+    assert record["job_key"] == "seek:21"
+    assert [link["source"] for link in record["duplicate_links"]] == ["linkedin"]
+    assert record["duplicate_links"][0]["kind"] == "confirmed_duplicate"
+    assert record["duplicate_links"][0]["job_key"] == "linkedin:linkedin-21"
+    assert [entry["source"] for entry in record["source_provenance"]] == ["seek", "linkedin"]
+    assert (
+        record["source_provenance"][1]["source_metadata"]["raw_source_fields"]
+        ["jmm_matched_source"]["id"]
+        == 31
+    )
 
 
 def test_jh311_jmm_salary_filter_keeps_uncertain_salary_for_jh_review(monkeypatch):

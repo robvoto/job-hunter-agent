@@ -57,6 +57,7 @@ from job_hunter_agent.record_schema import (
     RECORD_DESCRIPTION_SOURCE_KEY,
     RECORD_DETAILS_STATUS_KEY,
     RECORD_DETAILS_TEXT_KEY,
+    RECORD_DUPLICATE_LINKS_KEY,
     RECORD_JOB_KEY,
     RECORD_MARKET_MAP_IDENTITY_KEY,
     RECORD_MARKET_MAP_JD_FETCHED_AT_KEY,
@@ -70,6 +71,7 @@ from job_hunter_agent.record_schema import (
     RECORD_SOURCE_METADATA_KEY,
     RECORD_SOURCE_NAME_KEY,
     RECORD_SOURCE_PLATFORM_JOB_ID_KEY,
+    RECORD_SOURCE_PROVENANCE_KEY,
     RECORD_TITLE_KEY,
     RECORD_WORK_MODE_EVIDENCE_KEY,
     RECORD_WORK_MODE_KEY,
@@ -85,7 +87,6 @@ from job_hunter_agent.sector_utils import classify_market_sector
 from job_hunter_agent.source_errors import PartialSourceResultsError
 from job_hunter_agent.source_learning import register_pending_learning_signals
 from job_hunter_agent.source_registry import (
-    SOURCE_APSJOBS,
     SOURCE_JOB_MARKET_MAP,
     SOURCE_LINKEDIN,
     SOURCE_SEEK,
@@ -126,6 +127,134 @@ def _source_metadata(item: dict[str, Any], source: str, source_job_id: str) -> d
         }
     )
     return metadata
+
+
+def _matched_source_entries(item: dict[str, Any]) -> list[dict[str, Any]]:
+    raw = item.get("matched_sources")
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise JobMarketMapContractError("Job Market Map matched_sources must be a list")
+
+    entries: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, int | None]] = set()
+    for matched in raw:
+        if not isinstance(matched, dict):
+            raise JobMarketMapContractError("Job Market Map matched_sources entries must be objects")
+        source = str(matched.get("source") or "").strip().lower()
+        if not source:
+            raise JobMarketMapContractError("Job Market Map matched source is missing source")
+        source_job_id = str(matched.get("source_job_id") or "").strip()
+        matched_job_id = matched.get("id")
+        if matched_job_id is not None and (not isinstance(matched_job_id, int) or matched_job_id < 0):
+            raise JobMarketMapContractError("Job Market Map matched source id is invalid")
+        key = (source, source_job_id, matched_job_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        entries.append(dict(matched))
+    return entries
+
+
+def _merge_jmm_matched_sources(record: dict[str, Any], item: dict[str, Any]) -> None:
+    """Preserve JMM's confirmed same-vacancy source evidence on the JH record."""
+    matched_sources = _matched_source_entries(item)
+    if not matched_sources:
+        return
+
+    canonical_source = str(record.get("source") or "").strip().lower()
+    canonical_job_key = str(record.get(RECORD_JOB_KEY) or "").strip()
+    canonical_source_job_id = str(
+        (record.get(RECORD_SOURCE_METADATA_KEY) or {}).get(RECORD_SOURCE_PLATFORM_JOB_ID_KEY) or ""
+    ).strip()
+
+    provenance = record.get(RECORD_SOURCE_PROVENANCE_KEY)
+    provenance = [dict(entry) for entry in provenance if isinstance(entry, dict)] if isinstance(provenance, list) else []
+    if not provenance:
+        provenance.append(
+            {
+                "source": canonical_source,
+                RECORD_SOURCE_NAME_KEY: canonical_source,
+                RECORD_JOB_KEY: canonical_job_key,
+                "url": str(record.get("url") or "").strip(),
+                "title": str(record.get("title") or "").strip(),
+                "company": str(record.get("company") or "").strip(),
+                "location": str(record.get("location") or "").strip(),
+                RECORD_SOURCE_METADATA_KEY: copy.deepcopy(record.get(RECORD_SOURCE_METADATA_KEY) or {}),
+            }
+        )
+
+    duplicate_links = record.get(RECORD_DUPLICATE_LINKS_KEY)
+    duplicate_links = [dict(link) for link in duplicate_links if isinstance(link, dict)] if isinstance(duplicate_links, list) else []
+
+    provenance_keys = {
+        (
+            str(entry.get("source") or entry.get(RECORD_SOURCE_NAME_KEY) or "").strip().lower(),
+            str((entry.get(RECORD_SOURCE_METADATA_KEY) or {}).get(RECORD_SOURCE_PLATFORM_JOB_ID_KEY) or "").strip(),
+        )
+        for entry in provenance
+    }
+    duplicate_keys = {
+        (
+            str(link.get("source") or "").strip().lower(),
+            str((link.get("source_metadata") or {}).get(RECORD_SOURCE_PLATFORM_JOB_ID_KEY) or link.get("job_key") or "").strip(),
+        )
+        for link in duplicate_links
+    }
+
+    for matched in matched_sources:
+        source = str(matched.get("source") or "").strip().lower()
+        source_job_id = str(matched.get("source_job_id") or "").strip()
+        is_canonical = source == canonical_source and (
+            not source_job_id or source_job_id == canonical_source_job_id
+        )
+        if is_canonical:
+            continue
+
+        source_metadata = blank_source_metadata(source)
+        source_metadata[RECORD_SOURCE_PLATFORM_JOB_ID_KEY] = source_job_id
+        matched_url = str(matched.get("canonical_url") or matched.get("url") or "").strip()
+        if matched_url:
+            source_metadata[RECORD_SOURCE_CANONICAL_URL_KEY] = matched_url
+        source_metadata["raw_source_fields"] = {"jmm_matched_source": copy.deepcopy(matched)}
+        job_key = normalize_job_key(source_job_id, source=source) if source_job_id else ""
+        provenance_key = (source, source_job_id)
+        if provenance_key not in provenance_keys:
+            provenance.append(
+                {
+                    "source": source,
+                    RECORD_SOURCE_NAME_KEY: source,
+                    RECORD_JOB_KEY: job_key,
+                    "title": str(record.get("title") or "").strip(),
+                    "company": str(record.get("company") or "").strip(),
+                    "location": str(record.get("location") or "").strip(),
+                    "url": matched_url,
+                    RECORD_SOURCE_METADATA_KEY: source_metadata,
+                }
+            )
+            provenance_keys.add(provenance_key)
+
+        duplicate_key = (source, source_job_id or job_key)
+        if duplicate_key not in duplicate_keys:
+            duplicate_links.append(
+                {
+                    "kind": "confirmed_duplicate",
+                    "matched_on": "jmm_same_vacancy",
+                    "matched_value": str(item.get("id") or ""),
+                    "source": source,
+                    "title": str(record.get("title") or "").strip(),
+                    "company": str(record.get("company") or "").strip(),
+                    "job_key": job_key,
+                    "url": matched_url,
+                    "source_metadata": copy.deepcopy(source_metadata),
+                    "source_provenance": provenance[-1] if provenance else {},
+                }
+            )
+            duplicate_keys.add(duplicate_key)
+
+    record[RECORD_SOURCE_PROVENANCE_KEY] = provenance
+    if duplicate_links:
+        record[RECORD_DUPLICATE_LINKS_KEY] = duplicate_links
 
 
 def normalize_market_job(item: dict[str, Any], *, run_iso: str) -> dict[str, Any]:
@@ -197,6 +326,7 @@ def normalize_market_job(item: dict[str, Any], *, run_iso: str) -> dict[str, Any
         raise ValueError(f"Job Market Map returned unsupported apply_method: {apply_method!r}")
     record[RECORD_APPLY_METHOD_KEY] = apply_method
     record[RECORD_SOURCE_METADATA_KEY][RECORD_SOURCE_PLATFORM_JOB_ID_KEY] = source_job_id
+    _merge_jmm_matched_sources(record, item)
     return record
 
 
@@ -714,17 +844,20 @@ def _build_market_search_scopes(context) -> list[dict[str, Any]]:
         raise ValueError(
             "No preferred role is configured. Please complete onboarding and add a preferred role before running."
         )
-    selected_sources = [
-        str(source).strip().lower()
-        for source in context.enabled_sources
-        if str(source).strip().lower() in {SOURCE_SEEK, SOURCE_LINKEDIN, SOURCE_APSJOBS}
-    ]
+    selected_sources: list[str] = []
+    for source in context.enabled_sources:
+        source_key = str(source).strip().lower()
+        if not source_key or source_key == SOURCE_JOB_MARKET_MAP or source_key in selected_sources:
+            continue
+        selected_sources.append(source_key)
     if not selected_sources:
-        raise ValueError("No SEEK, LinkedIn, or APSJobs source is selected for the JMM search")
+        raise ValueError("No market source is selected for the JMM search")
 
-    classifications = _setting_values(
-        search_settings, "classification", "classifications", "classification_ids"
-    )
+    # JMM's `classification` filter is textual (`classification_text`). Existing
+    # JH `classification_ids` are source-native board IDs, so forwarding them as
+    # names can falsely exclude valid jobs. Only explicit text classifications
+    # are safe to send until JMM exposes a source-native classification-id field.
+    classifications = _setting_values(search_settings, "classification", "classifications")
     subclassifications = _setting_values(
         search_settings, "subclassification", "subclassifications"
     )
@@ -759,30 +892,39 @@ def _build_market_search_scopes(context) -> list[dict[str, Any]]:
 
 
 def _iter_filtered_market_pages(context, client: JobMarketMapClient):
-    """Yield bounded JMM search pages and process each before requesting the next."""
+    """Yield progressive pages inside one fixed market boundary for the whole run."""
+    run_snapshot_max_id: int | None = None
     for scope in _build_market_search_scopes(context):
         cursor = 0
-        snapshot_max_id: int | None = None
+        scope_total: int | None = None
         while True:
             page = client.search_page(
                 **scope,
                 after_id=cursor,
-                through_id=snapshot_max_id,
+                through_id=run_snapshot_max_id,
             )
             page_snapshot_max_id = page.get("snapshot_max_id")
             if not isinstance(page_snapshot_max_id, int) or page_snapshot_max_id < 0:
                 raise JobMarketMapContractError(
                     "Job Market Map search snapshot_max_id is required"
                 )
-            if snapshot_max_id is None:
-                snapshot_max_id = page_snapshot_max_id
-            elif page_snapshot_max_id != snapshot_max_id:
+            if run_snapshot_max_id is None:
+                run_snapshot_max_id = page_snapshot_max_id
+            elif page_snapshot_max_id != run_snapshot_max_id:
                 raise JobMarketMapContractError(
                     "Job Market Map search snapshot boundary changed during the run"
                 )
+
             page_total = page.get("total")
             if not isinstance(page_total, int) or page_total < 0:
                 raise JobMarketMapContractError("Job Market Map search total is required")
+            if scope_total is None:
+                scope_total = page_total
+            elif page_total != scope_total:
+                raise JobMarketMapContractError(
+                    "Job Market Map search total changed within a fixed search scope"
+                )
+
             yield page
             if not page["has_more"]:
                 break
@@ -829,6 +971,7 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
         determinate=False,
     )
     seen_market_ids: set[int] = set()
+    records_by_market_id: dict[int, dict[str, Any]] = {}
     for page in _iter_filtered_market_pages(context, client):
         page_items: list[dict] = []
         for item in page["items"]:
@@ -836,6 +979,9 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
             if not isinstance(item_id, int) or item_id < 0:
                 raise JobMarketMapContractError("Job Market Map search item id is invalid")
             if item_id in seen_market_ids:
+                existing_record = records_by_market_id.get(item_id)
+                if existing_record is not None:
+                    _merge_jmm_matched_sources(existing_record, item)
                 continue
             seen_market_ids.add(item_id)
             page_items.append(item)
@@ -871,6 +1017,7 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
                 determinate=True,
             )
             record = normalize_market_job(item, run_iso=context.run_iso)
+            records_by_market_id[int(item["id"])] = record
             page_jobs.append(
                 _IndexedJob(
                     index=item_index,
@@ -1110,7 +1257,9 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
             )
             outcome = _thaw(result.outcome)
             if outcome["decision"] == "KEEP":
-                kept_records.append(remove_transient_jd(job.record))
+                kept_record = remove_transient_jd(job.record)
+                kept_records.append(kept_record)
+                records_by_market_id[int(job.record[RECORD_MARKET_MAP_JOB_ID_KEY])] = kept_record
                 skill_observations.extend(_thaw(result.observations))
 
         # Fit workers return immutable cache deltas; save only after the
