@@ -9,6 +9,7 @@ from typing import TypedDict
 from job_hunter_agent import workspace_data, workspace_service
 from job_hunter_agent.config import DEBUG_MODE
 from job_hunter_agent.io_utils import (
+    load_job_history,
     load_ui_labels,
     prune_llm_cache_for_current_profile,
     save_job_history,
@@ -579,6 +580,12 @@ def finalize_scrape_run(
     )
     kept_records = deduplicate_across_sources(kept_records)
 
+    # JMM-backed analysis keeps legacy JH history out of run decisions, while
+    # the workspace still needs it to resolve Applied Jobs identities.
+    workspace_job_history = (
+        load_job_history() if context.use_market_map else context.job_history
+    )
+
     pool = _load_workspace_pool()
 
     pool_was_empty = len(pool) == 0
@@ -665,7 +672,7 @@ def finalize_scrape_run(
             context.configured_date_range,
             context.sort_newest_first,
             run_stats,
-            context.job_history,
+            workspace_job_history,
             context.applied_job_keys,
             context.hidden_job_keys,
             datetime.now().astimezone(),
@@ -765,7 +772,7 @@ def finalize_scrape_run(
 
     workspace_records = workspace_service.build_workspace_record_sets(
         merged_pool,
-        context.job_history,
+        workspace_job_history,
         context.applied_job_keys,
         context.hidden_job_keys,
         context.run_started_at,
@@ -821,7 +828,7 @@ def finalize_scrape_run(
         context.configured_date_range,
         context.sort_newest_first,
         run_stats,
-        context.job_history,
+        workspace_job_history,
         context.applied_job_keys,
         context.hidden_job_keys,
         context.run_started_at,
