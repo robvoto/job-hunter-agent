@@ -85,6 +85,10 @@ def test_onboarding_page_uses_shared_choice_strip_widget(monkeypatch):
     assert "Search Basics" in html
     assert "Check Setup" in html
     assert "Minimum compensation" in html
+    assert 'id="os_extraction_lookback_years"' in html
+    assert "How far back should Job Hunter analyse your CV?" in html
+    assert 'id="os_capability_strength_preset"' not in html
+    assert "full optional checklist" not in html
     assert "__JOB_HUNTER_ONBOARDING_PAGE_MINIMUM_COMPENSATION_LABEL__" not in html
     assert "__JOB_HUNTER_MINIMUM_COMPENSATION_LABEL__" not in html
     assert "This draft was built from your CV." in html
@@ -262,13 +266,16 @@ def test_onboarding_flow_labels_include_capability_review_copy():
     assert labels["create_profile_status_reviewing"] == "Calculating experience duration and recency..."
 
 
-def test_onboarding_guidance_links_to_user_guide():
+def test_onboarding_guidance_is_self_contained_and_uses_real_cv_lookback_copy():
     labels = server_helpers.load_onboarding_page_labels()
 
-    assert "Plain, detailed content beats pretty formatting." in labels["guidance_note"]
+    assert labels["guidance_note"] == "Plain, detailed content beats pretty formatting."
+    assert "User Guide" not in labels["guidance_note"]
+    assert "<a" not in labels["guidance_note"]
+    assert labels["cv_lookback_label"] == "How far back should Job Hunter analyse your CV?"
+    assert "building your draft profile" in labels["cv_lookback_help"]
+    assert "matching" not in labels["cv_lookback_help"].lower()
     assert labels["extraction_review_caution"].startswith("This draft was built from your CV.")
-    assert 'class="text-link" href="/docs/view?doc=docs/USER_GUIDE.md"' in labels["guidance_note"]
-    assert "User Guide" in labels["guidance_note"]
 
 
 def test_shared_location_help_explains_source_specific_scope():
@@ -634,14 +641,15 @@ def test_api_onboarding_import_logs_selected_capability_strength_preset(monkeypa
                     "engagement_type": ["permanent", "contract"],
                 },
                 "onboarding_settings": {
-                    "capability_strength_preset": "balanced",
+                    "capability_strength_preset": "recent_focus",
+                    "extraction_lookback_years": 12,
                 },
             }
         )
 
     assert response.status_code == 200
     assert "ONBOARDING_IMPORT" in caplog.text
-    assert "balanced" in caplog.text
+    assert "recent_focus" in caplog.text
 
 
 def test_api_onboarding_confirm_allows_no_sector_preference(monkeypatch):
@@ -1089,10 +1097,12 @@ def test_normalize_onboarding_settings_payload_supports_current_key():
             "signal_cluster_min_alias_hits": 3,
             "signal_cluster_min_snippet_hits": 4,
             "signal_cluster_dense_snippet_alias_hits": 5,
+            "capability_strength_preset": "include_older_experience",
         }
     )
 
     assert normalized["extraction_lookback_years"] == 12
+    assert normalized["capability_strength_preset"] == "include_older_experience"
     assert normalized["title_extraction_min_months"] == 9
     assert normalized["max_target_patterns"] == 10
     assert normalized["max_secondary_patterns"] == 7
@@ -1100,6 +1110,17 @@ def test_normalize_onboarding_settings_payload_supports_current_key():
     assert normalized["signal_cluster_min_alias_hits"] == 3
     assert normalized["signal_cluster_min_snippet_hits"] == 4
     assert normalized["signal_cluster_dense_snippet_alias_hits"] == 5
+
+
+def test_cv_lookback_rule_limits_role_and_capability_extraction():
+    rule = profile_learning._cv_work_history_lookback_rule(12)
+
+    assert "most recent 12 years" in rule
+    assert "role_experience" in rule
+    assert "preferred_role_titles" in rule
+    assert "capabilities" in rule
+    assert "roles entirely older than the window" in rule
+    assert "Qualifications and current eligibility facts" in rule
 
 
 def test_validate_capabilities_uses_managed_alias_limit():

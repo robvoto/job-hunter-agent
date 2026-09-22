@@ -128,18 +128,15 @@
 
             <section class="check-card onboarding-priority-card onb-field">
               <div class="field-label-row">
-                <label for="os_capability_strength_preset">__JOB_HUNTER_ONBOARDING_PAGE_EXPERIENCE_PRIORITY_LABEL__</label>
+                <label for="os_extraction_lookback_years">__JOB_HUNTER_ONBOARDING_PAGE_CV_LOOKBACK_LABEL__</label>
                 <details class="field-info-drawer">
                   <summary class="field-info" aria-label="Help">i</summary>
-                  <div class="field-info-panel">__JOB_HUNTER_ONBOARDING_PAGE_EXPERIENCE_PRIORITY_HELP__</div>
+                  <div class="field-info-panel">__JOB_HUNTER_ONBOARDING_PAGE_CV_LOOKBACK_HELP__</div>
                 </details>
               </div>
-              <div class="field-control-shell">
-                <select id="os_capability_strength_preset" class="jh-select">
-                  <option value="recent_focus">__JOB_HUNTER_ONBOARDING_PAGE_EXPERIENCE_PRIORITY_OPTION_RECENT__</option>
-                  <option value="balanced">__JOB_HUNTER_ONBOARDING_PAGE_EXPERIENCE_PRIORITY_OPTION_BALANCED__</option>
-                  <option value="include_older_experience">__JOB_HUNTER_ONBOARDING_PAGE_EXPERIENCE_PRIORITY_OPTION_FULL__</option>
-                </select>
+              <div class="field-control-shell field-control-shell--with-unit">
+                <input id="os_extraction_lookback_years" type="number" inputmode="numeric" step="1" autocomplete="off">
+                <span class="field-control-unit">__JOB_HUNTER_ONBOARDING_PAGE_CV_LOOKBACK_UNIT_LABEL__</span>
               </div>
             </section>
           </div>

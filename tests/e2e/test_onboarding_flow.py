@@ -449,7 +449,7 @@ def test_onboarding_capability_review_reuses_shared_strength_and_persists_choice
     expect(restored_meter.locator(".capability-strength-dot.is-filled")).to_have_count(2)
 
 
-def test_step1_disclosures_share_content_spacing_and_guide_link_style(fresh_candidate_page):
+def test_step1_disclosures_share_content_spacing(fresh_candidate_page):
     page = fresh_candidate_page
     page.set_viewport_size({"width": 1400, "height": 1000})
     page.goto('/start')
@@ -476,15 +476,24 @@ def test_step1_disclosures_share_content_spacing_and_guide_link_style(fresh_cand
     guidance_gap = guidance_first['y'] - (guidance_summary['y'] + guidance_summary['height'])
     assert abs(privacy_gap - guidance_gap) <= 2, (privacy_gap, guidance_gap)
 
-    guide_link = guidance.locator('a.text-link[href="/docs/view?doc=docs/USER_GUIDE.md"]')
-    expect(guide_link).to_have_count(1)
-    link_color = guide_link.evaluate('el => getComputedStyle(el).color')
-    probe_color = page.evaluate("""() => {
-        const probe = document.createElement('span');
-        probe.style.color = 'var(--selection-accent)';
-        document.body.appendChild(probe);
-        const color = getComputedStyle(probe).color;
-        probe.remove();
-        return color;
-    }""")
-    assert link_color == probe_color
+
+def test_step1_cv_lookback_control_exposes_real_extraction_setting(fresh_candidate_page):
+    page = fresh_candidate_page
+    page.set_viewport_size({"width": 1400, "height": 1000})
+    page.goto('/start')
+
+    lookback = page.locator('#os_extraction_lookback_years')
+    expect(lookback).to_have_count(1)
+    expect(lookback).to_have_value('8')
+    expect(lookback).to_have_attribute('min', '1')
+    expect(lookback).to_have_attribute('max', '20')
+    expect(page.locator('label[for="os_extraction_lookback_years"]')).to_have_text(
+        'How far back should Job Hunter analyse your CV?'
+    )
+    expect(lookback.locator('xpath=..').locator('.field-control-unit')).to_have_text('years')
+    expect(page.locator('a[href*="USER_GUIDE.md"]')).to_have_count(0)
+
+    card = lookback.locator('xpath=ancestor::section[1]')
+    card.locator('.field-info').click()
+    expect(card.locator('.field-info-panel')).to_contain_text('building your draft profile')
+    expect(card.locator('.field-info-panel')).not_to_contain_text('matching')

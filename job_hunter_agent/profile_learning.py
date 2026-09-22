@@ -150,10 +150,10 @@ def resolve_role_family(
 _BULLET_PREFIX_RE = re.compile(r"^[\-*•–—]+\s*")
 
 # Bump whenever the extracted CV shape changes so every cached extraction misses
-# and is genuinely re-run. v4 adds role_experience[].duration_as_of (the real
-# extraction date) for current roles; stamping today's date onto a stale cached
-# duration_months would be a lie, so the bump is what makes the backfill honest.
-_CV_EXTRACTION_CACHE_CONTRACT_VERSION = 4
+# and is genuinely re-run. v4 added role_experience[].duration_as_of; v5 makes
+# extraction_lookback_years part of the actual LLM instruction rather than only
+# the cache key/logging contract, so older cached extractions must not be reused.
+_CV_EXTRACTION_CACHE_CONTRACT_VERSION = 5
 _cv_extraction_cache: dict[str, dict[str, Any]] = {}
 _cv_extraction_cache_loaded = False
 
@@ -269,6 +269,17 @@ def _resolve_onboarding_int(
 
 def _resolve_extraction_lookback_years(onboarding_settings: dict[str, Any] | None = None) -> int:
     return _resolve_onboarding_int(onboarding_settings, KEY_LOOKBACK_YEARS)
+
+
+def _cv_work_history_lookback_rule(lookback_years: int) -> str:
+    return (
+        f"Use only work-history evidence from the most recent {lookback_years} years when extracting "
+        "role_experience, role_titles, preferred_role_titles, alternative_role_titles, and capabilities. "
+        "A role is in scope when it is current or overlaps that lookback window. Do not derive those "
+        "fields from roles entirely older than the window. Qualifications and current eligibility facts "
+        "may still be extracted when they are explicitly stated because they can remain current beyond "
+        "the work-history window."
+    )
 
 
 # ── Text utilities ─────────────────────────────────────────────────────────────
@@ -429,6 +440,7 @@ def _llm_extract_from_cv(
         "Rules:\n"
         f"- Current year is {_CURRENT_YEAR}.\n"
         "- Treat the raw CV text as the source of truth.\n"
+        f"- {_cv_work_history_lookback_rule(lookback_years)}\n"
         "- capabilities: extract 8–15 transferable professional skills when the CV supports them. "
         "Not company names, employer names, job titles, or raw phrase fragments. "
         "Each capability must be one atomic reusable skill or practice area grounded in the CV bullets, skills section, summary, or experience text. "

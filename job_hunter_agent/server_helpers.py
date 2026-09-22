@@ -477,11 +477,10 @@ _ONBOARDING_PAGE_LABEL_KEYS = (
     "guidance_avoid_missing_dates",
     "guidance_avoid_mixed_directions",
     "guidance_note",
-    "experience_priority_label",
-    "experience_priority_help",
-    "experience_priority_option_recent",
-    "experience_priority_option_balanced",
-    "experience_priority_option_full",
+    "cv_lookback_label",
+    "cv_lookback_help",
+    "cv_lookback_unit_label",
+    "cv_lookback_validation_error",
     "build_draft_profile_label",
     "continue_label",
     "need_help_label",
@@ -1808,7 +1807,7 @@ def _normalize_search_settings_payload(payload: dict | None) -> dict[str, Any]:
     return normalize_search_settings(current_search_settings)
 
 
-def _normalize_onboarding_settings_payload(payload: dict | None) -> dict[str, int]:
+def _normalize_onboarding_settings_payload(payload: dict | None) -> dict[str, Any]:
     allowed_keys = (
         KEY_CAPABILITY_ALIAS_LIMIT,
         KEY_LOOKBACK_YEARS,
@@ -1832,7 +1831,13 @@ def _normalize_onboarding_settings_payload(payload: dict | None) -> dict[str, in
             source = dict(DEFAULT_ONBOARDING_SETTINGS)
 
     normalized = normalize_onboarding_settings(source)
-    return {key: int(normalized[key]) for key in allowed_keys if key in normalized}
+    result: dict[str, Any] = {
+        key: int(normalized[key]) for key in allowed_keys if key in normalized
+    }
+    result["capability_strength_preset"] = str(
+        normalized["capability_strength_preset"]
+    ).strip()
+    return result
 
 
 def describe_capability_strength_preset(preset_name: str) -> dict[str, Any]:

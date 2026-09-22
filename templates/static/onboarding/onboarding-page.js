@@ -29,7 +29,7 @@ export const refs = Object.freeze({
   createProfileButton: document.getElementById('create_profile'),
   continueToReview: document.getElementById('continue_to_review'),
   stepNavButtons: Array.from(document.querySelectorAll('[data-step-nav]')),
-  capabilityStrengthPreset: document.getElementById('os_capability_strength_preset'),
+  extractionLookbackYears: document.getElementById('os_extraction_lookback_years'),
   minContractMonths: document.getElementById('min_contract_months'),
   reviewMinimumSalaryYearly: document.getElementById('review_minimum_salary_yearly'),
   reviewMinimumDailyRate: document.getElementById('review_minimum_daily_rate'),
@@ -58,7 +58,7 @@ const {
   createProfileButton,
   continueToReview: continueToReviewEl,
   stepNavButtons,
-  capabilityStrengthPreset: capabilityStrengthPresetEl,
+  extractionLookbackYears: extractionLookbackYearsEl,
   reviewMinimumSalaryYearly: reviewMinimumSalaryYearlyEl,
   reviewMinimumDailyRate: reviewMinimumDailyRateEl,
   reviewCapabilityFilter: reviewCapabilityFilterEl,
@@ -74,7 +74,11 @@ export const CHECK_STEP = 4;
 const capabilityLabels = onboardingCapabilityUi.labels;
 const escapeHtml = onboardingSettingsUtils.escapeHtml;
 const onboardingFlowLabels = window.__JOB_HUNTER_ONBOARDING_FLOW_LABELS__;
-const ONBOARDING_CV_PAGE_LIMIT = Number(window.__JOB_HUNTER_ONBOARDING_DEFAULTS__.cv_max_pages);
+const onboardingDefaults = window.__JOB_HUNTER_ONBOARDING_DEFAULTS__;
+if (!onboardingDefaults) {
+  throw new Error('Missing onboarding defaults.');
+}
+const ONBOARDING_CV_PAGE_LIMIT = Number(onboardingDefaults.cv_max_pages);
 const salaryLimits = window.__JOB_HUNTER_SALARY_LIMITS__;
 const minContractMonthOptions = window.__JOB_HUNTER_MIN_CONTRACT_MONTH_OPTIONS__;
 const minContractMonthValues = new Set(minContractMonthOptions.map((option) => String(option.value).trim()));
@@ -99,6 +103,24 @@ if (!onboardingPageTitleTierLabels) {
 }
 if (!onboardingGlobalSettings?.limits?.search?.locations_max_selected) {
   throw new Error('Missing global search location limits.');
+}
+const extractionLookbackLimits = onboardingGlobalSettings?.limits?.onboarding?.extraction_lookback_years;
+const extractionLookbackMin = Number(extractionLookbackLimits?.min);
+const extractionLookbackMax = Number(extractionLookbackLimits?.max);
+const defaultExtractionLookbackYears = Number(onboardingDefaults.extraction_lookback_years);
+if (
+  !Number.isInteger(extractionLookbackMin)
+  || !Number.isInteger(extractionLookbackMax)
+  || extractionLookbackMin > extractionLookbackMax
+  || !Number.isInteger(defaultExtractionLookbackYears)
+) {
+  throw new Error('Missing onboarding CV lookback configuration.');
+}
+let capabilityStrengthPresetValue = String(onboardingDefaults.capability_strength_preset || 'balanced').trim() || 'balanced';
+if (extractionLookbackYearsEl) {
+  extractionLookbackYearsEl.min = String(extractionLookbackMin);
+  extractionLookbackYearsEl.max = String(extractionLookbackMax);
+  extractionLookbackYearsEl.value = String(defaultExtractionLookbackYears);
 }
 if (!capabilityLabels || !capabilityLabels.onboarding_title || !capabilityLabels.help_text || !capabilityLabels.filter_placeholder) {
   throw new Error('Missing capability UI labels.');
@@ -721,14 +743,20 @@ export function applyProfileDefaults(profile) {
     throw new Error('Missing onboarding profile data.');
   }
   const onboarding = profile.onboarding_settings;
-  const preset = onboarding.capability_strength_preset;
-  if (!preset) {
-    throw new Error('Missing capability strength preset.');
+  const preset = String(onboarding.capability_strength_preset || '').trim();
+  if (preset) capabilityStrengthPresetValue = preset;
+  const lookbackYears = Number(onboarding.extraction_lookback_years);
+  if (
+    extractionLookbackYearsEl
+    && Number.isInteger(lookbackYears)
+    && lookbackYears >= extractionLookbackMin
+    && lookbackYears <= extractionLookbackMax
+  ) {
+    extractionLookbackYearsEl.value = String(lookbackYears);
   }
   const matchPreferences = profile.match_preferences;
   const salaryPreferences = profile.salary_preferences;
 
-  if (capabilityStrengthPresetEl) capabilityStrengthPresetEl.value = String(preset);
   if (!reviewTargetTitles.length && !reviewSecondaryTitles.length) {
     if (!Array.isArray(profile.target_roles) || !Array.isArray(profile.also_consider_roles)) {
       throw new Error('Missing target role lists.');
@@ -782,9 +810,10 @@ export function applyProfileDefaults(profile) {
 }
 
 export function onboardingSettingsPayload() {
-  const capabilityStrengthPreset = capabilityStrengthPresetEl?.value.trim() || '';
+  const extractionLookbackYears = Number(extractionLookbackYearsEl?.value);
   return {
-    capability_strength_preset: capabilityStrengthPreset || 'balanced',
+    extraction_lookback_years: extractionLookbackYears,
+    capability_strength_preset: capabilityStrengthPresetValue,
   };
 }
 
@@ -795,9 +824,13 @@ export function updateCompensationVisibility() {
 }
 
 export function validateOnboardingSettings(settings) {
-  const preset = String(settings.capability_strength_preset).trim();
-  if (!['recent_focus', 'balanced', 'include_older_experience'].includes(preset)) {
-    throw new Error('Please choose how older experience should be treated.');
+  const lookbackYears = Number(settings.extraction_lookback_years);
+  if (
+    !Number.isInteger(lookbackYears)
+    || lookbackYears < extractionLookbackMin
+    || lookbackYears > extractionLookbackMax
+  ) {
+    throw new Error(onboardingPageLabels.cv_lookback_validation_error);
   }
 }
 
