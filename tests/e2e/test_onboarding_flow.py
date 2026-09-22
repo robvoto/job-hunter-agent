@@ -447,3 +447,44 @@ def test_onboarding_capability_review_reuses_shared_strength_and_persists_choice
     restored_meter = restored_card.locator(".capability-strength-meter")
     expect(restored_meter.locator(".capability-strength-label")).to_have_text("Working")
     expect(restored_meter.locator(".capability-strength-dot.is-filled")).to_have_count(2)
+
+
+def test_step1_disclosures_share_content_spacing_and_guide_link_style(fresh_candidate_page):
+    page = fresh_candidate_page
+    page.set_viewport_size({"width": 1400, "height": 1000})
+    page.goto('/start')
+
+    drawers = page.locator('.onboarding-upload-card > details.workflow-drawer')
+    expect(drawers).to_have_count(2)
+    for index in range(2):
+        drawers.nth(index).evaluate('el => { el.open = true; }')
+
+    privacy = drawers.nth(0)
+    guidance = drawers.nth(1)
+
+    def box(locator):
+        result = locator.bounding_box()
+        assert result is not None
+        return result
+
+    privacy_summary = box(privacy.locator('.workflow-drawer-summary'))
+    privacy_first = box(privacy.locator('.workflow-drawer-body > p').first)
+    guidance_summary = box(guidance.locator('.workflow-drawer-summary'))
+    guidance_first = box(guidance.locator('.guidance-grid h3').first)
+
+    privacy_gap = privacy_first['y'] - (privacy_summary['y'] + privacy_summary['height'])
+    guidance_gap = guidance_first['y'] - (guidance_summary['y'] + guidance_summary['height'])
+    assert abs(privacy_gap - guidance_gap) <= 2, (privacy_gap, guidance_gap)
+
+    guide_link = guidance.locator('a.text-link[href="/docs/view?doc=docs/USER_GUIDE.md"]')
+    expect(guide_link).to_have_count(1)
+    link_color = guide_link.evaluate('el => getComputedStyle(el).color')
+    probe_color = page.evaluate("""() => {
+        const probe = document.createElement('span');
+        probe.style.color = 'var(--selection-accent)';
+        document.body.appendChild(probe);
+        const color = getComputedStyle(probe).color;
+        probe.remove();
+        return color;
+    }""")
+    assert link_color == probe_color

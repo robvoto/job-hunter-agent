@@ -106,13 +106,13 @@ def data_file(resource_path: str):  # type: ignore[no-untyped-def]
 @router.get("/docs/view")
 def docs_viewer(doc: str = "docs/ARCHITECTURE.md"):  # type: ignore[no-untyped-def]
     from job_hunter_agent.config import ALLOWED_DOC_REL_PATHS
-    from job_hunter_agent.paths import ROOT_DIR
+    from job_hunter_agent.paths import REPO_ROOT
 
     rel = doc.strip("/")
     if rel not in ALLOWED_DOC_REL_PATHS:
         return json_response({"error": "Doc not found"}, 404)
 
-    file_path = (ROOT_DIR / rel).resolve()
+    file_path = (REPO_ROOT / rel).resolve()
     if not file_path.is_file():
         return json_response({"error": "Doc not found"}, 404)
 

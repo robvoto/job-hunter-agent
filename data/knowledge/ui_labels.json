@@ -340,7 +340,7 @@
     "guidance_avoid_image_layouts": "Image-heavy layouts where the text is hard to extract",
     "guidance_avoid_missing_dates": "CVs with missing dates or vague role names",
     "guidance_avoid_mixed_directions": "Multiple different target directions crammed into a short summary",
-    "guidance_note": "Plain, detailed content beats pretty formatting. For the full optional checklist, see <a href=\"/docs/view?doc=docs/USER_GUIDE.md\" target=\"_blank\" rel=\"noopener\">the User Guide</a>.",
+    "guidance_note": "Plain, detailed content beats pretty formatting. For the full optional checklist, see <a class=\"text-link\" href=\"/docs/view?doc=docs/USER_GUIDE.md\" target=\"_blank\" rel=\"noopener\">the User Guide</a>.",
     "experience_priority_label": "Prioritise recent or total experience?",
     "experience_priority_help": "Choose how much older experience should count when matching you to jobs.",
     "experience_priority_option_recent": "Focus on recent experience",

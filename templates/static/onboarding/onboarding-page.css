@@ -392,12 +392,14 @@ body {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
-  margin-top: 12px;
+  margin-top: 0;
 }
 
 .guidance-grid h3 {
   margin: 0 0 8px;
-  font-size: var(--font-size-3xl);
+  font-size: var(--text-role-field-label-font-size);
+  font-weight: var(--text-role-field-label-font-weight);
+  line-height: var(--text-role-field-label-line-height);
 }
 
 .guidance-list {

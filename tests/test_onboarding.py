@@ -267,7 +267,7 @@ def test_onboarding_guidance_links_to_user_guide():
 
     assert "Plain, detailed content beats pretty formatting." in labels["guidance_note"]
     assert labels["extraction_review_caution"].startswith("This draft was built from your CV.")
-    assert 'href="/docs/view?doc=docs/USER_GUIDE.md"' in labels["guidance_note"]
+    assert 'class="text-link" href="/docs/view?doc=docs/USER_GUIDE.md"' in labels["guidance_note"]
     assert "User Guide" in labels["guidance_note"]
 
 
