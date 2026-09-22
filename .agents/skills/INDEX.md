@@ -8,7 +8,7 @@ Pick the smallest skill that matches the task. Do not load every skill. Detailed
 - `code-change/SKILL.md` — code, tests, runtime, and integration implementation, including implementation/review hygiene (no duplicate/dead/superseded code); detailed diagnosis patterns live in `code-change/DETAILS.md`.
 - `css-design-system/SKILL.md` — reusable CSS, spacing, layout, components, and design tokens.
 - `dashboard-ui/SKILL.md` — workspace/settings UI and related dashboard behaviour.
-- `git-lifecycle/SKILL.md` — branch/worktree, commit, push, review-before-PR, merge, closed-PR cleanup, and verified `main` integration.
+- `git-lifecycle/SKILL.md` — task branches, local-`main` app-test checkpoints, PR cross-check, and verified `origin/main` integration.
 - `history-dedup/SKILL.md` — job history state, duplicate identity, applied/viewed/hidden handling.
 - `instruction-maintenance/SKILL.md` — AGENTS.md, adapter files, skills, and instruction docs.
 - `job-market-map-integration/SKILL.md` — Job Hunter/JMM HTTP contract, consumer paging/checkpoints, run-scoped snapshot boundaries, JD/identity integration, and JMM integration tests.
