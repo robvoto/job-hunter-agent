@@ -1043,7 +1043,9 @@
     "rejected_before_label": "Rejected before",
     "possible_previous_application_label": "Possible previous application",
     "linkedin_freshness_unverified_warning": "Freshness may be unreliable \u2014 LinkedIn can show a reposted date for external-apply listings, and the original posting date could not be verified.",
-    "employer_outcome_history_template": "Your history with $employer: rejected $rejections. Latest outcome $last_date.",
+    "employer_outcome_history_zero_template": "Your history with $employer. Latest activity $last_date.",
+    "employer_outcome_history_one_template": "Your history with $employer: 1 rejection. Latest activity $last_date.",
+    "employer_outcome_history_many_template": "Your history with $employer: $rejections rejections. Latest activity $last_date.",
     "employer_outcome_unavailable": "Could not check your history with this employer."
   },
   "scoring_audit_labels_description": "Labels for the debug-only scoring audit table and decision trace shown on job cards.",
@@ -1088,10 +1090,9 @@
     "eligibility_gate_prefix": "Eligibility gate:",
     "occupation_alignment_prefix": "Occupation alignment:"
   },
-  "candidate_history_labels_description": "Labels for the candidate application history panel on job cards. review_reason_prefix is debug-only.",
+  "candidate_history_labels_description": "Labels for historical-application context shown in Checks before applying. Evidence and review reason are debug-only.",
   "candidate_history_labels": {
-    "summary": "Candidate application history",
-    "role_prefix": "Role:",
+    "open_previous_role_label": "Open previous role",
     "evidence_prefix": "Evidence:",
     "review_reason_prefix": "Review reason:"
   },

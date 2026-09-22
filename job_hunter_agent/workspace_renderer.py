@@ -818,7 +818,6 @@ def _build_checks_before_applying_items(
     description_issue: bool,
     is_possible_repost: bool,
     similar_applied_record: Optional[dict],
-    candidate_history: Optional[dict],
     hard_block_reasons_list: list[str],
     salary_fit_state: str,
     soft_risk_reasons: Optional[list[str]] = None,
@@ -863,21 +862,6 @@ def _build_checks_before_applying_items(
         )
     elif is_possible_repost:
         add(f"{possible_repost_prefix}.")
-
-    if isinstance(candidate_history, dict) and candidate_history:
-        cand_company = compact_whitespace(str(candidate_history.get("llm_company") or ""))
-        cand_role = compact_whitespace(str(candidate_history.get("llm_role") or ""))
-        if cand_company or cand_role:
-            history_label = (
-                _workspace_label("check_item_labels", "rejected_before_label")
-                if candidate_history_is_confirmed_rejection(candidate_history)
-                else _workspace_label("check_item_labels", "possible_previous_application_label")
-            )
-            history_bits = [bit for bit in [cand_company, cand_role] if bit]
-            add(
-                history_label
-                + (f": {' — '.join(history_bits)}" if history_bits else "")
-            )
 
     if employer_outcome:
         add(
@@ -1362,6 +1346,14 @@ def render_job_card(
     fit_label = score_to_match_label(fit_points, match_levels)
     fit_tone_class = score_to_tone_class(fit_points, scoring_profile)
     description_issue = fit_confidence_level == "LOW"
+    if description_issue:
+        logger.warning(
+            "[RENDERER] description_capture_issue job=%s source=%s title=%r confidence=%s",
+            str(record.get("job_key") or "<unknown>"),
+            str(record.get("source") or "unknown").strip().lower(),
+            str(record.get("title") or "").strip(),
+            fit_confidence_level,
+        )
     work_mode = str(display_record.get("work_mode") or "N/A")
     posted_age_days = current_posted_age_days(record)
     salary_value = salary_sort_value(str(display_record.get("salary") or ""))
@@ -1655,12 +1647,17 @@ def render_job_card(
             if candidate_history_is_confirmed_rejection(_cand_hist)
             else _workspace_label("check_item_labels", "possible_previous_application_label")
         )
+        _history_identity = _cand_hist.get("historical_identity_evidence")
+        _history_source_url = ""
+        if isinstance(_history_identity, dict):
+            _history_source_url = str(_history_identity.get("source_url") or "").strip()
         _cand_hist_details = {
             "company": str(_cand_hist.get("llm_company") or "").strip(),
             "role": str(_cand_hist.get("llm_role") or "").strip(),
             "run_date": str(_cand_hist.get("run_date") or "").strip(),
             "confidence": _ch_confidence,
             "evidence": str(_cand_hist.get("llm_evidence") or "").strip(),
+            "source_url": _history_source_url,
         }
     score_percent = max(min(int(fit_points), 100), 0)
     score_html = (
@@ -1805,10 +1802,9 @@ def render_job_card(
         )
     check_items = _build_checks_before_applying_items(
         history_warning_signals,
-        description_issue,
+        description_issue and active_debug_mode,
         is_possible_repost,
         similar_applied_record,
-        _cand_hist,
         blocking_reasons,
         salary_fit_state,
         soft_risk_reasons,
@@ -2621,38 +2617,45 @@ def render_job_card(
         _ch_run_date = _cand_hist_details["run_date"]
         _ch_confidence = _cand_hist_details["confidence"]
         _ch_evidence_raw = _cand_hist_details["evidence"]
-        # Skip the details block when there's nothing actionable to show — low
-        # confidence with no evidence or role means the LLM failed at import and
-        # the only data is the raw company name from the sheet, which the badge
-        # already signals.
+        _ch_source_url = _cand_hist_details["source_url"]
+        # Suppress failed/empty historical matches; otherwise render one concise
+        # user-facing line. Raw evidence/review diagnostics are debug-only.
         if not (_ch_confidence == "low" and not _ch_evidence_raw and not _ch_role):
             _ch_formatted_date = (
                 format_timestamp_label(_ch_run_date, include_time=False)
                 if _ch_run_date
                 else ""
             )
-            _ch_items = []
-            _ch_header_parts = [p for p in [_ch_company, _ch_formatted_date] if p]
-            if _ch_header_parts:
-                _ch_items.append(" — ".join(_ch_header_parts))
-            if _ch_role:
-                _ch_items.append(f"{_workspace_label('candidate_history_labels', 'role_prefix')} {_ch_role}")
-            if _ch_evidence_raw:
-                _ch_items.append(
-                    f"{_workspace_label('candidate_history_labels', 'evidence_prefix')} {_ch_evidence_raw}"
+            _ch_main_parts = [part for part in [_ch_company, _ch_role, _ch_formatted_date] if part]
+            _ch_main_text = _cand_hist_badge_label
+            if _ch_main_parts:
+                _ch_main_text += f": {' — '.join(_ch_main_parts)}"
+            _ch_link_html = ""
+            if re.match(r"^https?://", _ch_source_url, flags=re.IGNORECASE):
+                _ch_link_html = (
+                    ' <a class="jh-button jh-button--secondary jh-button--micro" '
+                    f'href="{safe_html(_ch_source_url)}" target="_blank" rel="noopener noreferrer">'
+                    f'{safe_html(_workspace_label("candidate_history_labels", "open_previous_role_label"))}'
+                    "</a>"
                 )
-            # The classification/company-match confidence values were noise even in
-            # debug and have been dropped. The review reason stays debug-only: it is
-            # the one diagnostic that explains why a row was flagged for a human.
+            _ch_items_html = f"<li>{safe_html(_ch_main_text)}{_ch_link_html}</li>"
+            if active_debug_mode and _ch_evidence_raw:
+                _ch_items_html += (
+                    "<li>"
+                    f"{safe_html(_workspace_label('candidate_history_labels', 'evidence_prefix'))} "
+                    f"{safe_html(_ch_evidence_raw)}"
+                    "</li>"
+                )
             if active_debug_mode and _cand_hist_review_reason:
-                _ch_items.append(
-                    f"{_workspace_label('candidate_history_labels', 'review_reason_prefix')} "
-                    f"{_cand_hist_review_reason}"
+                _ch_items_html += (
+                    "<li>"
+                    f"{safe_html(_workspace_label('candidate_history_labels', 'review_reason_prefix'))} "
+                    f"{safe_html(_cand_hist_review_reason)}"
+                    "</li>"
                 )
             candidate_history_html = (
-                '<div class="job-insight-group is-secondary job-candidate-history">'
-                f"<strong>{safe_html(_workspace_label('candidate_history_labels', 'summary'))}</strong>"
-                f"<ul>{''.join(f'<li>{safe_html(item)}</li>' for item in _ch_items)}</ul>"
+                '<div class="job-insight-group job-insight-warning job-candidate-history">'
+                f"<ul>{_ch_items_html}</ul>"
                 "</div>"
             )
 
@@ -2720,7 +2723,7 @@ def render_job_card(
         actions_html = ""
 
     card_classes = f"job-card {fit_tone_class}" + (
-        " is-description-issue" if description_issue else ""
+        " is-description-issue" if description_issue and active_debug_mode else ""
     )
     card_dom_id = _workspace_job_card_id(job_key)
     title_block_panel_id = f"{card_dom_id}-title-block"

@@ -43,6 +43,7 @@ def load_historical_application_evidence(
             "id": str(row["evidence_id"]),
             "message_id": str(row["message_id"] or "") or None,
             "date": str(row["event_date"] or ""),
+            "run_date": str(row["event_date"] or ""),
             "company": str(row["employer_raw"] or ""),
             "role": str(row["role_title"] or ""),
             "status": str(row["outcome"] or ""),

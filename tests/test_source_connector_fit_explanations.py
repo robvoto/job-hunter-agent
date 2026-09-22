@@ -1414,7 +1414,6 @@ def test_eligibility_mismatch_renders_in_clearance_panel_not_checks_before_apply
         description_issue=False,
         is_possible_repost=False,
         similar_applied_record=None,
-        candidate_history=None,
         hard_block_reasons_list=[],
         salary_fit_state="unknown",
         soft_risk_reasons=[],
@@ -2607,6 +2606,7 @@ def test_attention_strip_prefers_red_flag_over_everything_else():
                     "source": "seek",
                 }
             ],
+            debug_mode=True,
     )
 
     assert "Checks before applying" in html
@@ -2660,6 +2660,7 @@ def test_attention_strip_prefers_description_issue_over_lower_priority_alerts():
                 "source": "seek",
             }
         ],
+        debug_mode=True,
     )
 
     assert "Checks before applying" in html
@@ -2682,12 +2683,6 @@ def test_checks_before_applying_returns_all_items_without_truncation():
             "company": "Acme",
             "source": "seek",
         },
-        candidate_history={
-            "llm_application_status": "rejection",
-            "llm_confidence": "high",
-            "llm_company": "Acme",
-            "llm_role": "Business Analyst",
-        },
         hard_block_reasons_list=[
             "Missing mandatory requirement: SAP certification",
         ],
@@ -2708,7 +2703,6 @@ def test_checks_before_applying_returns_all_items_without_truncation():
         "Repeated role refreshes.",
         "Description issue: full job description was not captured clearly.",
         "Possible repost of applied job: Business Analyst — Acme — SEEK",
-        "Rejected before: Acme — Business Analyst",
         "Salary below target.",
         "Missing mandatory requirement: SAP Certification",
         "Freshness may be unreliable — LinkedIn can show a reposted date for external-apply listings, and the original posting date could not be verified.",
@@ -2759,13 +2753,13 @@ def test_candidate_application_history_warnings_stay_in_checks_panel_without_cha
         == history_html.split('data-fit-score="', 1)[1].split('"', 1)[0]
     )
     assert "Checks before applying" in history_html
-    assert "Rejected before: Acme — Business Analyst" in history_html
+    assert "Rejected before: Acme — Business Analyst — 15 Jan 2025" in history_html
+    assert history_html.count("Rejected before: Acme") == 1
     assert "Possible previous application" not in history_html
-    assert "Needs review" not in history_html
-    assert "Acme" in history_html
-    assert "Role: Business Analyst" in history_html
+    assert "Candidate application history" not in history_html
+    assert "Role: Business Analyst" not in history_html
     assert "Confidence: high" not in history_html
-    assert "Evidence: We regret to inform you" in history_html
+    assert "Evidence: We regret to inform you" not in history_html
     assert "Review reason: Company mismatch needs a manual check." not in history_html
 
 
@@ -2902,21 +2896,29 @@ def test_candidate_application_history_renders_expanded_details_section():
                 "We appreciate your interest in the position and have completed our review. "
                 "This is a longer note so the workspace should show it in full without truncating.",
                 "llm_review_reason": "Company mismatch needs a manual check.",
+                "historical_identity_evidence": {
+                    "source_url": "https://example.com/previous-role"
+                },
             },
         },
         _test_profile(),
         debug_mode=True,
     )
 
-    assert "Candidate application history" in html
-    assert "MUFG Pension &amp; Market Services — 7 May 2026" in html
+    assert "Candidate application history" not in html
+    assert (
+        "Rejected before: MUFG Pension &amp; Market Services — Technical Analyst — 7 May 2026"
+        in html
+    )
     assert "5/7/2026 18:37:57" not in html
-    assert "Role: Technical Analyst" in html
+    assert "Role: Technical Analyst" not in html
+    assert 'href="https://example.com/previous-role"' in html
+    assert "Open previous role" in html
     # Classification / company-match confidence values are no longer rendered.
     assert "Confidence: high" not in html
     assert "Company match confidence" not in html
     assert "Company match reason" not in html
-    # Evidence shows in full, no truncation.
+    # Raw evidence remains available only in debug and is not truncated.
     assert "Evidence: Thank you for your recent application" in html
     assert "show it in full without truncating." in html
     assert "..." not in html.split("Evidence:")[1].split("</li>")[0]
@@ -2925,7 +2927,7 @@ def test_candidate_application_history_renders_expanded_details_section():
     risk_start = html.index('<details class="job-insights job-risk-panel">')
     risk_end = html.index("</details>", risk_start)
     risk_panel_html = html[risk_start:risk_end]
-    assert "Candidate application history" in risk_panel_html
+    assert "Rejected before:" in risk_panel_html
     assert '<details class="job-candidate-history">' not in html
 
 
@@ -2963,8 +2965,10 @@ def test_candidate_application_history_review_reason_is_debug_only():
     )
     debug_html = workspace_renderer.render_job_card(record, _test_profile(), debug_mode=True)
 
-    assert "Role: Technical Analyst" in normal_html
-    assert "Evidence: We regret to inform you" in normal_html
+    assert "Rejected before: Acme — Technical Analyst — 7 May 2026" in normal_html
+    assert "Role: Technical Analyst" not in normal_html
+    assert "Evidence: We regret to inform you" not in normal_html
+    assert "Evidence: We regret to inform you" in debug_html
 
     # Classification / company-match confidence values are never rendered.
     for dropped in (
@@ -3190,6 +3194,7 @@ def test_low_confidence_card_shows_single_description_issue_section():
             "source": "linkedin",
         },
         _test_profile(),
+        debug_mode=True,
     )
 
     assert "Checks before applying" in html
@@ -3203,6 +3208,32 @@ def test_low_confidence_card_shows_single_description_issue_section():
     assert "Checks before applying" in risk_panel_html
     assert "Description issue: full job description was not captured clearly." in risk_panel_html
     assert "Why this is a good fit" not in html
+
+
+def test_low_confidence_capture_diagnostic_is_hidden_in_normal_mode_and_logged(caplog):
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-low-description-normal",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "teaser": "Business analyst role.",
+            "fit_highlights": [],
+            "source": "linkedin",
+        },
+        _test_profile(),
+    )
+
+    assert "Description issue: full job description was not captured clearly." not in html
+    assert "is-description-issue" not in html
+    assert "description_capture_issue job=test-low-description-normal" in caplog.text
 
 
 def test_deterministic_review_counts_only_capability_highlights():
