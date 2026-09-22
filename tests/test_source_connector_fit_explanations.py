@@ -2606,6 +2606,7 @@ def test_attention_strip_prefers_red_flag_over_everything_else():
                     "source": "seek",
                 }
             ],
+            debug_mode=True,
     )
 
     assert "Checks before applying" in html
@@ -2659,6 +2660,7 @@ def test_attention_strip_prefers_description_issue_over_lower_priority_alerts():
                 "source": "seek",
             }
         ],
+        debug_mode=True,
     )
 
     assert "Checks before applying" in html
@@ -3192,6 +3194,7 @@ def test_low_confidence_card_shows_single_description_issue_section():
             "source": "linkedin",
         },
         _test_profile(),
+        debug_mode=True,
     )
 
     assert "Checks before applying" in html
@@ -3205,6 +3208,32 @@ def test_low_confidence_card_shows_single_description_issue_section():
     assert "Checks before applying" in risk_panel_html
     assert "Description issue: full job description was not captured clearly." in risk_panel_html
     assert "Why this is a good fit" not in html
+
+
+def test_low_confidence_capture_diagnostic_is_hidden_in_normal_mode_and_logged(caplog):
+    html = workspace_renderer.render_job_card(
+        {
+            "job_key": "test-low-description-normal",
+            "title": "Business Analyst",
+            "company": "Acme",
+            "url": "https://example.com/job",
+            "title_reason": "OK",
+            "content_reason": "OK",
+            "llm_fit_grade": "SOLID",
+            "location": "Sydney NSW",
+            "work_type": "Full Time",
+            "work_mode": "Hybrid",
+            "salary": "N/A",
+            "teaser": "Business analyst role.",
+            "fit_highlights": [],
+            "source": "linkedin",
+        },
+        _test_profile(),
+    )
+
+    assert "Description issue: full job description was not captured clearly." not in html
+    assert "is-description-issue" not in html
+    assert "description_capture_issue job=test-low-description-normal" in caplog.text
 
 
 def test_deterministic_review_counts_only_capability_highlights():

@@ -1346,6 +1346,14 @@ def render_job_card(
     fit_label = score_to_match_label(fit_points, match_levels)
     fit_tone_class = score_to_tone_class(fit_points, scoring_profile)
     description_issue = fit_confidence_level == "LOW"
+    if description_issue:
+        logger.warning(
+            "[RENDERER] description_capture_issue job=%s source=%s title=%r confidence=%s",
+            str(record.get("job_key") or "<unknown>"),
+            str(record.get("source") or "unknown").strip().lower(),
+            str(record.get("title") or "").strip(),
+            fit_confidence_level,
+        )
     work_mode = str(display_record.get("work_mode") or "N/A")
     posted_age_days = current_posted_age_days(record)
     salary_value = salary_sort_value(str(display_record.get("salary") or ""))
@@ -1794,7 +1802,7 @@ def render_job_card(
         )
     check_items = _build_checks_before_applying_items(
         history_warning_signals,
-        description_issue,
+        description_issue and active_debug_mode,
         is_possible_repost,
         similar_applied_record,
         blocking_reasons,
@@ -2715,7 +2723,7 @@ def render_job_card(
         actions_html = ""
 
     card_classes = f"job-card {fit_tone_class}" + (
-        " is-description-issue" if description_issue else ""
+        " is-description-issue" if description_issue and active_debug_mode else ""
     )
     card_dom_id = _workspace_job_card_id(job_key)
     title_block_panel_id = f"{card_dom_id}-title-block"
