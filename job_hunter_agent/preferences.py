@@ -389,7 +389,10 @@ def _resolve_salary_comparison(
         period = str(market_salary.get("period") or "").strip().casefold()
         currency = str(market_salary.get("currency") or "").strip().upper()
         qualifier = str(market_salary.get("qualifier") or "").strip().casefold()
+        bound = str(market_salary.get("bound") or "").strip().casefold()
         if currency != "AUD" or qualifier in {"includes_super", "package"}:
+            return None
+        if bound not in {"exact", "range", "from", "up_to"}:
             return None
         if period == "day":
             target_period = "daily"
@@ -420,26 +423,29 @@ def _resolve_salary_comparison(
         except (TypeError, ValueError):
             return None
 
-        # JMM expresses bound semantics only through structured min/max:
-        # equal min/max = exact, both unequal = range, min only = from,
-        # max only = up_to. Do not reparse raw salary text or invent conversions.
-        # Compare only when those deterministic facts prove which side of the
-        # user's floor the role sits on.
-        if minimum is not None and maximum is not None:
-            if minimum > maximum:
+        # JMM owns salary interpretation. JH trusts the explicit JMM bound and
+        # never reconstructs it from min/max shape or reparses raw salary text.
+        if bound == "exact":
+            if minimum is None or maximum is None or minimum != maximum:
                 return None
-            if minimum == maximum:
-                return minimum, minimum_target
+            return minimum, minimum_target
+        if bound == "range":
+            if minimum is None or maximum is None or minimum > maximum:
+                return None
             if maximum < minimum_target:
                 return maximum, minimum_target
             if minimum >= minimum_target:
                 return minimum, minimum_target
             return None
-        if minimum is not None:
+        if bound == "from":
+            if minimum is None:
+                return None
             if minimum >= minimum_target:
                 return minimum, minimum_target
             return None
-        if maximum is not None:
+        if bound == "up_to":
+            if maximum is None:
+                return None
             if maximum < minimum_target:
                 return maximum, minimum_target
             return None
