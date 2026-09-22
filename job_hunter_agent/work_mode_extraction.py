@@ -87,6 +87,19 @@ def _lookup_label(text: str) -> Optional[str]:
     return _LABEL_TO_CANONICAL.get(_normalise_label(text))
 
 
+def canonical_work_mode_value(value: object) -> str:
+    """Canonicalise one already-proven structured work-mode value.
+
+    This is shape normalisation only. It never scans surrounding text or
+    infers a mode from other fields, so callers can preserve a source owner's
+    explicit known/unknown field-state semantics.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return WORK_MODE_UNKNOWN
+    return _lookup_label(text) or WORK_MODE_UNKNOWN
+
+
 def _extract_parenthetical_mode(line: str) -> Optional[str]:
     """Return a canonical mode if the line contains a parenthesised work mode token.
 

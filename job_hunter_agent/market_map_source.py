@@ -21,9 +21,12 @@ from job_hunter_agent.history import finalize_record
 from job_hunter_agent.io_utils import load_parsing_rules, save_llm_cache
 from job_hunter_agent.job_identity import RUN_IDENTITY_CLAIM_KEY, normalize_job_key
 from job_hunter_agent.job_market_map_client import (
+    JMM_FIELD_STATE_KNOWN,
     JobMarketMapClient,
     JobMarketMapContractError,
     JobMarketMapJDUnavailable,
+    validate_market_job_field_states,
+    validate_market_job_salary_normalized,
 )
 from job_hunter_agent.job_review_pipeline import (
     ReviewPipelineContext,
@@ -59,10 +62,12 @@ from job_hunter_agent.record_schema import (
     RECORD_DETAILS_TEXT_KEY,
     RECORD_DUPLICATE_LINKS_KEY,
     RECORD_JOB_KEY,
+    RECORD_MARKET_MAP_FIELD_STATES_KEY,
     RECORD_MARKET_MAP_IDENTITY_KEY,
     RECORD_MARKET_MAP_JD_FETCHED_AT_KEY,
     RECORD_MARKET_MAP_JD_SOURCE_KEY,
     RECORD_MARKET_MAP_JOB_ID_KEY,
+    RECORD_MARKET_MAP_SALARY_NORMALIZED_KEY,
     RECORD_REJECT_REASON_KEY,
     RECORD_RETRY_REASON_KEY,
     RECORD_RETRYABLE_KEY,
@@ -73,10 +78,6 @@ from job_hunter_agent.record_schema import (
     RECORD_SOURCE_PLATFORM_JOB_ID_KEY,
     RECORD_SOURCE_PROVENANCE_KEY,
     RECORD_TITLE_KEY,
-    RECORD_WORK_MODE_EVIDENCE_KEY,
-    RECORD_WORK_MODE_KEY,
-    RECORD_WORK_MODE_NEEDS_REVIEW_KEY,
-    RECORD_WORK_MODE_SOURCE_KEY,
     REJECT_REASON_JMM_JD_ENRICHMENT_FAILED,
     REJECT_REASON_JMM_JD_UNAVAILABLE,
 )
@@ -91,7 +92,10 @@ from job_hunter_agent.source_registry import (
     SOURCE_LINKEDIN,
     SOURCE_SEEK,
 )
-from job_hunter_agent.work_mode_extraction import WORK_MODE_UNKNOWN, extract_from_linkedin
+from job_hunter_agent.work_mode_extraction import (
+    WORK_MODE_UNKNOWN,
+    canonical_work_mode_value,
+)
 
 
 def _source_metadata(item: dict[str, Any], source: str, source_job_id: str) -> dict[str, Any]:
@@ -121,12 +125,54 @@ def _source_metadata(item: dict[str, Any], source: str, source_job_id: str) -> d
                     "sector",
                     "classification_text",
                     "subclassification_text",
+                    "field_states",
+                    "salary_normalized",
                 )
                 if key in item
             },
         }
     )
     return metadata
+
+
+_JMM_FIELD_VALUE_KEYS = {
+    "title": "title",
+    "company": "employer",
+    "location": "location",
+    "geography_code": "geography_code",
+    "posted_at": "posted_at",
+    "classification": "classification_text",
+    "subclassification": "subclassification_text",
+    "employment_type": "employment_type",
+    "workplace_type": "workplace_type",
+    "apply_method": "apply_method",
+    "salary": "salary_text",
+    "description": "full_description",
+}
+
+
+def _known_market_value(
+    item: dict[str, Any], field_states: dict[str, str], field: str
+) -> Any:
+    """Return a JMM fact only when JMM explicitly marks that field as current/known."""
+    if field_states[field] != JMM_FIELD_STATE_KNOWN:
+        return ""
+    value_key = _JMM_FIELD_VALUE_KEYS[field]
+    value = item.get(value_key)
+    if value is None or (isinstance(value, str) and not value.strip()):
+        raise JobMarketMapContractError(
+            f"Job Market Map marked {field!r} known but returned no current value"
+        )
+    return value
+
+
+def _trusted_market_item(item: dict[str, Any], field_states: dict[str, str]) -> dict[str, Any]:
+    """Build a view that cannot accidentally treat stale non-known values as current truth."""
+    trusted = dict(item)
+    for field, value_key in _JMM_FIELD_VALUE_KEYS.items():
+        if field_states[field] != JMM_FIELD_STATE_KNOWN:
+            trusted[value_key] = ""
+    return trusted
 
 
 def _matched_source_entries(item: dict[str, Any]) -> list[dict[str, Any]]:
@@ -273,32 +319,50 @@ def normalize_market_job(item: dict[str, Any], *, run_iso: str) -> dict[str, Any
     if not job_key:
         raise ValueError("Job Market Map item has no usable JH job identity")
 
-    posted_at = str(item.get("posted_at") or "").strip()
+    field_states = validate_market_job_field_states(item)
+    salary_normalized = validate_market_job_salary_normalized(item, field_states)
+    title = str(_known_market_value(item, field_states, "title") or "").strip()
+    company = str(_known_market_value(item, field_states, "company") or "").strip()
+    location = str(_known_market_value(item, field_states, "location") or "").strip()
+    geography_code = str(
+        _known_market_value(item, field_states, "geography_code") or ""
+    ).strip()
+    posted_at = str(_known_market_value(item, field_states, "posted_at") or "").strip()
+    employment_type = str(
+        _known_market_value(item, field_states, "employment_type") or ""
+    ).strip()
+    workplace_type = str(
+        _known_market_value(item, field_states, "workplace_type") or ""
+    ).strip()
+    salary_text = str(_known_market_value(item, field_states, "salary") or "").strip()
     posted_age_days = days_since(posted_at, parse_timestamp(run_iso) or datetime.now(timezone.utc))
-    work_mode_result = extract_from_linkedin(
-        {
-            "workplace_type": item.get("workplace_type"),
-            "location": item.get("location"),
-        }
+    workplace_state = field_states["workplace_type"]
+    work_mode = (
+        canonical_work_mode_value(workplace_type)
+        if workplace_state == JMM_FIELD_STATE_KNOWN
+        else WORK_MODE_UNKNOWN
+    )
+    work_mode_needs_review = workplace_state == "unknown" or (
+        workplace_state == JMM_FIELD_STATE_KNOWN and work_mode == WORK_MODE_UNKNOWN
     )
     source_metadata = _source_metadata(item, source, source_job_id)
     record = build_initial_flat_record(
         run_iso=run_iso,
-        search_location=str(item.get("geography_code") or item.get("location") or ""),
+        search_location=geography_code or location,
         search_keywords="",
         source=source,
         job_key=job_key,
-        title=str(item.get("title") or "").strip(),
-        company=str(item.get("employer") or "").strip(),
-        location=str(item.get("location") or "").strip(),
+        title=title,
+        company=company,
+        location=location,
         posted_text=posted_at,
         posted_age_days=posted_age_days,
-        work_mode=str(work_mode_result.get(RECORD_WORK_MODE_KEY) or WORK_MODE_UNKNOWN),
-        work_mode_source=str(work_mode_result.get(RECORD_WORK_MODE_SOURCE_KEY) or ""),
-        work_mode_evidence=list(work_mode_result.get(RECORD_WORK_MODE_EVIDENCE_KEY) or []),
-        work_mode_needs_review=bool(work_mode_result.get(RECORD_WORK_MODE_NEEDS_REVIEW_KEY)),
-        work_type=str(item.get("employment_type") or "").strip(),
-        salary_str=str(item.get("salary_text") or "").strip(),
+        work_mode=work_mode,
+        work_mode_source="job_market_map",
+        work_mode_evidence=[workplace_type] if workplace_type else [],
+        work_mode_needs_review=work_mode_needs_review,
+        work_type=employment_type,
+        salary_str=salary_text,
         url=str(item["canonical_url"]).strip(),
         teaser=str(item.get("teaser_text") or "").strip(),
         details_text="",
@@ -313,17 +377,27 @@ def normalize_market_job(item: dict[str, Any], *, run_iso: str) -> dict[str, Any
         if isinstance(government_config, dict)
         else []
     )
-    record[RECORD_SECTOR_KEY] = classify_market_sector(item, government_terms)
+    record[RECORD_SECTOR_KEY] = classify_market_sector(
+        _trusted_market_item(item, field_states), government_terms
+    )
     record[RECORD_MARKET_MAP_JOB_ID_KEY] = int(item["id"])
     record[RECORD_MARKET_MAP_IDENTITY_KEY] = str(item["identity_key"]).strip()
-    apply_method = str(item.get("apply_method") or APPLY_METHOD_UNKNOWN).strip().lower()
+    record[RECORD_MARKET_MAP_FIELD_STATES_KEY] = copy.deepcopy(field_states)
+    record[RECORD_MARKET_MAP_SALARY_NORMALIZED_KEY] = copy.deepcopy(salary_normalized)
+    apply_method = (
+        str(_known_market_value(item, field_states, "apply_method") or "").strip().lower()
+        if field_states["apply_method"] == JMM_FIELD_STATE_KNOWN
+        else APPLY_METHOD_UNKNOWN
+    )
     if apply_method not in {
         APPLY_METHOD_UNKNOWN,
         APPLY_METHOD_EASY_APPLY,
         APPLY_METHOD_QUICK_APPLY,
         APPLY_METHOD_EXTERNAL_APPLY,
     }:
-        raise ValueError(f"Job Market Map returned unsupported apply_method: {apply_method!r}")
+        raise JobMarketMapContractError(
+            f"Job Market Map returned unsupported known apply_method: {apply_method!r}"
+        )
     record[RECORD_APPLY_METHOD_KEY] = apply_method
     record[RECORD_SOURCE_METADATA_KEY][RECORD_SOURCE_PLATFORM_JOB_ID_KEY] = source_job_id
     _merge_jmm_matched_sources(record, item)

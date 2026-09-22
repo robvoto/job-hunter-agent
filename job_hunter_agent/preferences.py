@@ -5,6 +5,7 @@ import re
 from typing import Optional, Tuple
 
 from job_hunter_agent.io_utils import load_parsing_rules
+from job_hunter_agent.job_market_map_client import JMM_FIELD_STATE_KNOWN
 from job_hunter_agent.job_types import load_job_type
 from job_hunter_agent.paths import UNCERTAINTY_LOG_PATH
 from job_hunter_agent.profile_store import (
@@ -21,7 +22,11 @@ from job_hunter_agent.profile_store import (
     normalize_match_preferences,
     normalize_work_mode_preferences,
 )
-from job_hunter_agent.record_schema import RECORD_SECTOR_KEY
+from job_hunter_agent.record_schema import (
+    RECORD_MARKET_MAP_FIELD_STATES_KEY,
+    RECORD_MARKET_MAP_SALARY_NORMALIZED_KEY,
+    RECORD_SECTOR_KEY,
+)
 from job_hunter_agent.runtime_helpers import append_uncertainty_log, build_uncertainty_entry
 from job_hunter_agent.salary_utils import (
     salary_is_total_package,
@@ -340,8 +345,71 @@ def _normalize_work_mode(value: str) -> str:
 
 def _resolve_salary_comparison(
     record: dict, profile: Optional[dict] = None
-) -> Optional[tuple[int, int]]:
+) -> Optional[tuple[float, int]]:
     """Returns (parsed_value, minimum_target) when salary is stated and comparable, else None."""
+
+    market_states = record.get(RECORD_MARKET_MAP_FIELD_STATES_KEY)
+    market_salary = record.get(RECORD_MARKET_MAP_SALARY_NORMALIZED_KEY)
+    if isinstance(market_states, dict) or isinstance(market_salary, dict):
+        if not isinstance(market_states, dict) or not isinstance(market_salary, dict):
+            return None
+        if str(market_states.get("salary") or "").strip().casefold() != JMM_FIELD_STATE_KNOWN:
+            return None
+        if str(market_salary.get("state") or "").strip().casefold() != JMM_FIELD_STATE_KNOWN:
+            return None
+
+        period = str(market_salary.get("period") or "").strip().casefold()
+        currency = str(market_salary.get("currency") or "").strip().upper()
+        qualifier = str(market_salary.get("qualifier") or "").strip().casefold()
+        bound = str(market_salary.get("bound") or "").strip().casefold()
+        if currency != "AUD" or qualifier in {"includes_super", "package"}:
+            return None
+        if period == "day":
+            target_period = "daily"
+        elif period == "year":
+            target_period = "annual"
+        else:
+            return None
+
+        active_profile = profile or load_profile()
+        salary_preferences = active_profile.get("salary_preferences", {})
+        minimum_salary_yearly = int(salary_preferences.get("minimum_salary_yearly", 0) or 0)
+        minimum_daily_rate = int(salary_preferences.get("minimum_daily_rate", 0) or 0)
+        minimum_target = minimum_daily_rate if target_period == "daily" else minimum_salary_yearly
+        if minimum_target <= 0:
+            return None
+
+        try:
+            minimum = (
+                float(market_salary["min_amount"])
+                if market_salary.get("min_amount") is not None
+                else None
+            )
+            maximum = (
+                float(market_salary["max_amount"])
+                if market_salary.get("max_amount") is not None
+                else None
+            )
+        except (TypeError, ValueError):
+            return None
+
+        # Only return a comparison when the deterministic JMM bounds prove
+        # which side of the user's floor the role sits on. A range crossing
+        # the floor, a lower-bound-only salary below it, or an upper-bound-only
+        # salary above it stays eligible and unscored rather than being guessed.
+        if bound == "exact" and minimum is not None and maximum is not None:
+            return maximum, minimum_target
+        if bound == "range" and minimum is not None and maximum is not None:
+            if maximum < minimum_target:
+                return maximum, minimum_target
+            if minimum >= minimum_target:
+                return minimum, minimum_target
+            return None
+        if bound == "from" and minimum is not None and minimum >= minimum_target:
+            return minimum, minimum_target
+        if bound == "up_to" and maximum is not None and maximum < minimum_target:
+            return maximum, minimum_target
+        return None
 
     salary_text = str(record.get("salary") or "").strip()
 

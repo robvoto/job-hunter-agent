@@ -27,6 +27,29 @@ def _job(job_id: int) -> dict:
         "apply_method": "quick_apply",
         "posted_at": "2026-09-14T00:00:00+00:00",
         "teaser_text": "A role",
+        "field_states": {
+            "title": "known",
+            "company": "known",
+            "location": "known",
+            "geography_code": "unknown",
+            "posted_at": "known",
+            "classification": "unknown",
+            "subclassification": "unknown",
+            "employment_type": "known",
+            "workplace_type": "known",
+            "apply_method": "known",
+            "salary": "known",
+            "description": "unknown",
+        },
+        "salary_normalized": {
+            "state": "known",
+            "min_amount": 100000,
+            "max_amount": 100000,
+            "period": "year",
+            "currency": "AUD",
+            "qualifier": None,
+            "bound": "exact",
+        },
     }
 
 
