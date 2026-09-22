@@ -1,6 +1,7 @@
 """Route handlers for workspace api."""
 
 import logging
+import time
 from pathlib import Path
 
 from fastapi import APIRouter
@@ -22,6 +23,7 @@ from job_hunter_agent.workspace_rebuild_service import rebuild_workspace_results
 from job_hunter_agent.workspace_refresh_service import workspace_refresh_status
 
 logger = logging.getLogger(__name__)
+_WORKSPACE_API_STARTED_AT_NS = time.time_ns()
 
 router = APIRouter()
 
@@ -38,10 +40,16 @@ def _workspace_render_source_paths() -> tuple[Path, ...]:
 
 
 def _workspace_results_are_stale(results_path: Path) -> bool:
-    """Detect generated HTML that predates the renderer or its display inputs."""
+    """Detect HTML rendered by an older process or older display inputs."""
     try:
         generated_at = results_path.stat().st_mtime_ns
     except OSError:
+        return True
+
+    # A previous long-running process can render after the source files changed,
+    # making mtime-only invalidation think stale HTML is fresh. Any snapshot that
+    # predates this process gets one rebuild on first access.
+    if generated_at < _WORKSPACE_API_STARTED_AT_NS:
         return True
 
     return any(

@@ -315,6 +315,32 @@ def test_api_results_html_rebuilds_when_no_error_and_file_missing(monkeypatch, t
     assert "workspace" in response.text
 
 
+def test_workspace_results_are_stale_when_snapshot_predates_current_process(
+    monkeypatch, tmp_path
+):
+    workspace_path = tmp_path / "workspace_results.html"
+    workspace_path.write_text("<html><body>old process</body></html>", encoding="utf-8")
+    generated_at = workspace_path.stat().st_mtime_ns
+
+    monkeypatch.setattr(workspace_api, "_workspace_render_source_paths", lambda: ())
+    monkeypatch.setattr(workspace_api, "_WORKSPACE_API_STARTED_AT_NS", generated_at + 1)
+
+    assert workspace_api._workspace_results_are_stale(workspace_path) is True
+
+
+def test_workspace_results_are_not_stale_when_snapshot_is_from_current_process(
+    monkeypatch, tmp_path
+):
+    workspace_path = tmp_path / "workspace_results.html"
+    workspace_path.write_text("<html><body>current process</body></html>", encoding="utf-8")
+    generated_at = workspace_path.stat().st_mtime_ns
+
+    monkeypatch.setattr(workspace_api, "_workspace_render_source_paths", lambda: ())
+    monkeypatch.setattr(workspace_api, "_WORKSPACE_API_STARTED_AT_NS", generated_at - 1)
+
+    assert workspace_api._workspace_results_are_stale(workspace_path) is False
+
+
 def test_api_results_html_rebuilds_when_generated_file_is_stale(monkeypatch, tmp_path):
     monkeypatch.setattr(
         "job_hunter_agent.fastapi_app.read_session_user",
