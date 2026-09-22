@@ -14,6 +14,32 @@ from urllib.request import Request, urlopen
 MARKET_MAP_BASE_URL_ENV = "JOB_HUNTER_MARKET_MAP_BASE_URL"
 MARKET_MAP_TIMEOUT_ENV = "JOB_HUNTER_MARKET_MAP_TIMEOUT_SECONDS"
 MARKET_MAP_API_VERSION = "v3"
+JMM_FIELD_STATE_KNOWN = "known"
+JMM_FIELD_STATE_NOT_PRESENT = "not_present"
+JMM_FIELD_STATE_UNKNOWN = "unknown"
+JMM_FIELD_STATE_NOT_APPLICABLE = "not_applicable"
+JMM_FIELD_STATES = frozenset(
+    {
+        JMM_FIELD_STATE_KNOWN,
+        JMM_FIELD_STATE_NOT_PRESENT,
+        JMM_FIELD_STATE_UNKNOWN,
+        JMM_FIELD_STATE_NOT_APPLICABLE,
+    }
+)
+JMM_NEUTRAL_FIELDS = (
+    "title",
+    "company",
+    "location",
+    "geography_code",
+    "posted_at",
+    "classification",
+    "subclassification",
+    "employment_type",
+    "workplace_type",
+    "apply_method",
+    "salary",
+    "description",
+)
 _PERSONAL_ACTIVITY_FIELDS = frozenset(
     {
         "presented_by_agent",
@@ -42,6 +68,72 @@ class JobMarketMapJDUnavailable(JobMarketMapError):
 
 class JobMarketMapContractError(JobMarketMapError):
     """JMM returned a response that is not the supported canonical contract."""
+
+
+def validate_market_job_field_states(item: dict[str, Any]) -> dict[str, str]:
+    """Validate JMM's complete neutral field-state map and return a detached copy."""
+    raw_states = item.get("field_states")
+    if not isinstance(raw_states, dict):
+        raise JobMarketMapContractError("Job Market Map job field_states must be an object")
+
+    expected = set(JMM_NEUTRAL_FIELDS)
+    actual = set(raw_states)
+    if actual != expected:
+        missing = sorted(expected - actual)
+        unexpected = sorted(actual - expected)
+        detail: list[str] = []
+        if missing:
+            detail.append(f"missing {missing}")
+        if unexpected:
+            detail.append(f"unexpected {unexpected}")
+        raise JobMarketMapContractError(
+            "Job Market Map job field_states does not match the supported neutral contract"
+            + (f": {', '.join(detail)}" if detail else "")
+        )
+
+    states: dict[str, str] = {}
+    for field in JMM_NEUTRAL_FIELDS:
+        state = str(raw_states.get(field) or "").strip().casefold()
+        if state not in JMM_FIELD_STATES:
+            raise JobMarketMapContractError(
+                f"Job Market Map field state for {field!r} is invalid: {raw_states.get(field)!r}"
+            )
+        states[field] = state
+    return states
+
+
+def validate_market_job_salary_normalized(
+    item: dict[str, Any], field_states: dict[str, str]
+) -> dict[str, Any]:
+    """Validate JMM's deterministic salary envelope without reinterpreting it."""
+    raw_salary = item.get("salary_normalized")
+    if not isinstance(raw_salary, dict):
+        raise JobMarketMapContractError(
+            "Job Market Map job salary_normalized must be an object"
+        )
+
+    state = str(raw_salary.get("state") or "").strip().casefold()
+    if state not in JMM_FIELD_STATES:
+        raise JobMarketMapContractError(
+            f"Job Market Map normalized salary state is invalid: {raw_salary.get('state')!r}"
+        )
+
+    field_state = field_states["salary"]
+    if field_state != JMM_FIELD_STATE_KNOWN and state != field_state:
+        raise JobMarketMapContractError(
+            "Job Market Map normalized salary state conflicts with salary field state"
+        )
+
+    normalized = {
+        "state": state,
+        "min_amount": raw_salary.get("min_amount"),
+        "max_amount": raw_salary.get("max_amount"),
+        "period": raw_salary.get("period"),
+        "currency": raw_salary.get("currency"),
+        "qualifier": raw_salary.get("qualifier"),
+        "bound": raw_salary.get("bound"),
+    }
+    return normalized
 
 
 @dataclass(frozen=True)

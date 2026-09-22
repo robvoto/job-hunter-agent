@@ -97,6 +97,29 @@ def _item(job_id: int, *, full_description: str = "") -> dict:
         "apply_method": "quick_apply",
         "posted_at": "2026-09-11T00:00:00+00:00",
         "teaser_text": "A role",
+        "field_states": {
+            "title": "known",
+            "company": "known",
+            "location": "known",
+            "geography_code": "unknown",
+            "posted_at": "known",
+            "classification": "unknown",
+            "subclassification": "unknown",
+            "employment_type": "known",
+            "workplace_type": "known",
+            "apply_method": "known",
+            "salary": "known",
+            "description": "known" if full_description else "unknown",
+        },
+        "salary_normalized": {
+            "state": "known",
+            "min_amount": 100000,
+            "max_amount": 100000,
+            "period": "year",
+            "currency": "AUD",
+            "qualifier": None,
+            "bound": "exact",
+        },
     }
     if full_description:
         item["full_description"] = full_description
@@ -320,6 +343,221 @@ def test_market_record_keeps_jmm_identity_without_copying_jd():
     assert record["market_map_identity_key"] == "seek:id:7"
     assert record["market_map_job_id"] == 7
     assert record["full_description"] == ""
+
+
+@pytest.mark.parametrize(
+    ("state", "expected_work_mode", "expected_apply_method", "needs_review"),
+    [
+        ("known", "hybrid", "quick_apply", False),
+        ("not_present", "unknown", "unknown", False),
+        ("unknown", "unknown", "unknown", True),
+        ("not_applicable", "unknown", "unknown", False),
+    ],
+)
+def test_jh312_field_states_control_work_mode_and_apply_method_without_reinference(
+    state, expected_work_mode, expected_apply_method, needs_review
+):
+    item = _item(40)
+    item["location"] = "Remote, Australia"
+    item["workplace_type"] = "Hybrid"
+    item["apply_method"] = "quick_apply"
+    item["field_states"] = {
+        **item["field_states"],
+        "workplace_type": state,
+        "apply_method": state,
+    }
+
+    record = market_map_source.normalize_market_job(
+        item, run_iso="2026-09-12T12:00:00+00:00"
+    )
+
+    assert record["work_mode"] == expected_work_mode
+    assert record["apply_method"] == expected_apply_method
+    assert record["work_mode_needs_review"] is needs_review
+    assert record["market_map_field_states"]["workplace_type"] == state
+    assert record["market_map_field_states"]["apply_method"] == state
+
+
+def test_jh312_known_unrecognised_workplace_value_stays_reviewable_without_text_inference():
+    item = _item(48)
+    item["workplace_type"] = "Flexible arrangement"
+
+    record = market_map_source.normalize_market_job(
+        item, run_iso="2026-09-12T12:00:00+00:00"
+    )
+
+    assert record["market_map_field_states"]["workplace_type"] == "known"
+    assert record["source_metadata"]["raw_source_fields"]["workplace_type"] == (
+        "Flexible arrangement"
+    )
+    assert record["work_mode"] == "unknown"
+    assert record["work_mode_needs_review"] is True
+
+
+def test_jh312_not_applicable_future_source_does_not_turn_stale_values_into_rejection():
+    from job_hunter_agent.preferences import passes_preference_filters
+
+    item = _item(41)
+    item.update(
+        {
+            "source": "futureboard",
+            "source_job_id": "future-41",
+            "identity_key": "futureboard:id:future-41",
+            "canonical_url": "https://futureboard.example/jobs/41",
+            "workplace_type": "On-site",
+            "apply_method": "external_apply",
+        }
+    )
+    item["field_states"] = {
+        **item["field_states"],
+        "workplace_type": "not_applicable",
+        "apply_method": "not_applicable",
+    }
+
+    record = market_map_source.normalize_market_job(
+        item, run_iso="2026-09-12T12:00:00+00:00"
+    )
+    eligible, _reason = passes_preference_filters(
+        record,
+        {"match_preferences": {"work_mode_preference": ["remote"]}},
+    )
+
+    assert record["source"] == "futureboard"
+    assert record["work_mode"] == "unknown"
+    assert record["apply_method"] == "unknown"
+    assert eligible is True
+
+
+@pytest.mark.parametrize("state", ["not_present", "unknown", "not_applicable"])
+def test_jh312_non_known_salary_state_ignores_stale_salary_and_remains_eligible(state):
+    from job_hunter_agent.preferences import passes_preference_filters
+
+    item = _item(42)
+    item["salary_text"] = "$40,000 per year"
+    item["field_states"] = {**item["field_states"], "salary": state}
+    item["salary_normalized"] = {
+        "state": state,
+        "min_amount": 40000,
+        "max_amount": 40000,
+        "period": "year",
+        "currency": "AUD",
+        "qualifier": None,
+        "bound": "exact",
+    }
+
+    record = market_map_source.normalize_market_job(
+        item, run_iso="2026-09-12T12:00:00+00:00"
+    )
+    eligible, _reason = passes_preference_filters(
+        record,
+        {"salary_preferences": {"minimum_salary_yearly": 120000, "minimum_daily_rate": 0}},
+    )
+
+    assert record["salary"] == ""
+    assert record["market_map_field_states"]["salary"] == state
+    assert record["market_map_salary_normalized"]["state"] == state
+    assert eligible is True
+    assert record["source_metadata"]["raw_source_fields"]["salary_text"] == "$40,000 per year"
+
+
+def test_jh312_known_normalized_salary_drives_filter_without_reparsing_text(monkeypatch):
+    from job_hunter_agent import preferences
+
+    item = _item(43)
+    item["salary_text"] = "JMM already normalised this deterministic amount"
+    item["salary_normalized"] = {
+        "state": "known",
+        "min_amount": 90000,
+        "max_amount": 100000,
+        "period": "year",
+        "currency": "AUD",
+        "qualifier": "plus_super",
+        "bound": "range",
+    }
+    record = market_map_source.normalize_market_job(
+        item, run_iso="2026-09-12T12:00:00+00:00"
+    )
+
+    def fail_reparse(*_args, **_kwargs):
+        raise AssertionError("JMM salary text must not be reparsed by JH")
+
+    monkeypatch.setattr(preferences, "salary_is_total_package", fail_reparse)
+    monkeypatch.setattr(preferences, "salary_period_classification", fail_reparse)
+    monkeypatch.setattr(preferences, "salary_max_value", fail_reparse)
+
+    eligible, reason = preferences.passes_preference_filters(
+        record,
+        {"salary_preferences": {"minimum_salary_yearly": 120000, "minimum_daily_rate": 0}},
+    )
+
+    assert eligible is False
+    assert reason == "PREF_SALARY_BELOW_MIN"
+
+
+def test_jh312_known_but_unresolved_normalized_salary_stays_eligible_without_reparse(monkeypatch):
+    from job_hunter_agent import preferences
+
+    item = _item(44)
+    item["salary_text"] = "Competitive"
+    item["salary_normalized"] = {
+        "state": "unknown",
+        "min_amount": None,
+        "max_amount": None,
+        "period": None,
+        "currency": None,
+        "qualifier": None,
+        "bound": None,
+    }
+    record = market_map_source.normalize_market_job(
+        item, run_iso="2026-09-12T12:00:00+00:00"
+    )
+
+    monkeypatch.setattr(
+        preferences,
+        "salary_max_value",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("JMM salary text must not be reparsed by JH")
+        ),
+    )
+    eligible, _reason = preferences.passes_preference_filters(
+        record,
+        {"salary_preferences": {"minimum_salary_yearly": 120000, "minimum_daily_rate": 0}},
+    )
+
+    assert record["salary"] == "Competitive"
+    assert record["market_map_field_states"]["salary"] == "known"
+    assert record["market_map_salary_normalized"]["state"] == "unknown"
+    assert eligible is True
+
+
+def test_jh312_non_known_classification_cannot_reuse_stale_value_for_sector():
+    item = _item(45)
+    item["classification_text"] = "Government & Defence"
+    item["field_states"] = {**item["field_states"], "classification": "not_present"}
+
+    record = market_map_source.normalize_market_job(
+        item, run_iso="2026-09-12T12:00:00+00:00"
+    )
+
+    assert record["sector"] != "government"
+    assert record["market_map_field_states"]["classification"] == "not_present"
+
+
+def test_jh312_rejects_incomplete_or_invalid_jmm_field_state_contract():
+    incomplete = _item(46)
+    incomplete["field_states"] = dict(incomplete["field_states"])
+    incomplete["field_states"].pop("salary")
+    with pytest.raises(JobMarketMapContractError, match="field_states"):
+        market_map_source.normalize_market_job(
+            incomplete, run_iso="2026-09-12T12:00:00+00:00"
+        )
+
+    invalid = _item(47)
+    invalid["field_states"] = {**invalid["field_states"], "workplace_type": "maybe"}
+    with pytest.raises(JobMarketMapContractError, match="field state"):
+        market_map_source.normalize_market_job(
+            invalid, run_iso="2026-09-12T12:00:00+00:00"
+        )
 
 
 def test_market_source_searches_selected_scope_and_requests_current_jd(monkeypatch):
@@ -1391,6 +1629,10 @@ def test_jh311_jmm_salary_filter_keeps_uncertain_salary_for_jh_review(monkeypatc
                         "salary_match_basis": "uncertain_preserved",
                     }
                 ],
+            }
+            uncertain_item["field_states"] = {
+                **uncertain_item["field_states"],
+                "salary": "unknown",
             }
             return _feed_page(
                 items=[uncertain_item],
