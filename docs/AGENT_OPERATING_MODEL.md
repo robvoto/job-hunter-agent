@@ -16,7 +16,7 @@ Keep always-loaded instructions small and reliable. Agents should load only the 
 
 2. `docs/PROJECT_CONTEXT.md`
    - Job Hunter-specific context.
-   - Owns product goal, runtime truth, repo-root and LangGraph orchestration details, project-specific source hierarchy, project-specific skill routing, non-negotiables, startup/run notes, and a pointer to backlog workflow.
+   - Owns product goal, runtime truth, repo-root/runtime coordination details, project-specific skill routing, and a pointer to backlog workflow.
    - Points to `.agents/skills/backlog-management/SKILL.md` for backlog details instead of duplicating the full workflow.
 
 3. Agent-specific adapter files, when present

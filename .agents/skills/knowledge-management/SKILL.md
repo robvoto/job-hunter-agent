@@ -20,17 +20,7 @@ Use before editing managed JSON knowledge, rule loaders, paths, or approval-back
 
 `data/config/global_settings.json` is NOT a knowledge entry — it is stored in the `global_settings` DB table and always overwritten by `db_seed --upgrade`. When adding new required fields to the global settings schema, ship the JSON change and document that `--upgrade` is needed on deploy.
 
-Retention and cache knobs also live here. Current examples:
-- `history_settings.job_history_max_entries`
-- `history_settings.job_history_max_age_days`
-- `cache_settings.llm_cache_max_entries`
-- `cache_settings.llm_cache_max_age_days`
-- `cache_settings.cv_extraction_cache_max_entries`
-- `cache_settings.cv_extraction_cache_max_age_days`
-- `cache_settings.candidate_application_history_cache_max_entries`
-- `cache_settings.candidate_application_history_cache_max_age_days`
-- `cache_settings.occupation_title_cache_max_entries`
-- `cache_settings.occupation_title_cache_max_age_days`
+Retention and cache knobs are managed through `data/config/global_settings.json` and the `global_settings` DB table; feature code must not define private copies.
 
 ## Rules
 - Business knowledge belongs in managed JSON/profile/config, not sealed Python constants.
@@ -43,10 +33,9 @@ Retention and cache knobs also live here. Current examples:
 
 ## Owners
 - `paths.py`: file paths.
-- `profile_store.py`: profile, scoring, settings normalisation.
 - `capability_knowledge.py`: capability knowledge.
 - `hard_blocker_rules.py`: hard blocker patterns.
-- `profile_store.py`: candidate-owned `target_roles` and `also_consider_roles`.
+- `profile_store.py`: candidate profile/settings normalisation, including `target_roles` and `also_consider_roles`.
 - `filters.py`: title-rule evaluation and parsing-rule synonyms.
 - `occupation_taxonomy.py`: O*NET-backed title classification and taxonomy access.
 - `job_quality.py`: quality-rule loaders and learnable CV-farming patterns.

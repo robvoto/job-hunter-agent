@@ -1,16 +1,7 @@
-"""Fail the suite when merged task branches are left behind.
+"""Enforce post-merge cleanup of local task branches.
 
-`.agents/skills/git-lifecycle/SKILL.md` already requires deleting a task branch and
-worktree once the work is in main, and `scripts/check-git-closure.sh` already
-implements the check. Neither stopped seventeen stale worktrees accumulating,
-because both rely on an agent choosing to run them at the right moment.
-
-This test removes that choice. It runs on every `pytest` invocation, the same
-enforcement model `tests/test_no_hardcoding.py` uses for managed labels.
-
-Deliberately narrow: it only flags branches fully merged into main, which have
-no reason to exist. Uncommitted work, unmerged branches and active worktrees are
-normal mid-task states and are not touched here.
+Dirty or explicitly locked worktrees remain exempt because deleting them could
+destroy active work.
 """
 
 from __future__ import annotations

@@ -13,7 +13,7 @@ It is a strict, explainable job-fit system, not a vague recommender.
 ## Runtime truth
 
 - Repo root: `/home/robvoto/projects/job-hunter-agent`.
-- Agent orchestration: LangGraph-based bounded workflow (classify -> cost/risk estimate -> approval gate -> run agent -> log). OpenClaw is retired; do not reference it as the runtime.
+- Agent orchestration: scheduled/on-demand coordination is implemented in `job_hunter_agent/agent_runner.py`.
 - Job Market Map is the local market-data and current-JD owner. Local Job Hunter consumes it through the /v3 HTTP API; JMM is not hosted or deployed on AWS.
 - Runtime state lives in SQLite via `JOB_HUNTER_DB_PATH`.
 - Workspace output is account-scoped and resolved from the authenticated session; the on-disk path is an internal runtime detail.
@@ -21,7 +21,7 @@ It is a strict, explainable job-fit system, not a vague recommender.
 - Global admin settings seed lives in `data/config/global_settings.json`.
 - Runtime signal files live in `data/signals/*.json` and are gitignored.
 - Treat `instruction_file` and `instruction_skills` as project metadata references, not automatically injected runtime instructions.
-- **Runtime lifecycle approval (JH / JMM / Human MCP):** never start, stop, restart, relaunch, kill, terminate, or otherwise change the lifecycle state of Job Hunter, Job Market Map, the canonical Human MCP server, or its shared browser broker unless Rob explicitly approves that exact target and action in the current conversation/task. Approval is action-specific and single-use: once the approved lifecycle action has been completed, it is consumed and must not be reused later (for example, an earlier `stop JH` does not authorise stopping JH again if another process later starts it). Code changes, tests, commits, merges, pushes, deployment preparation, release/version checks, health checks, or requests to verify readiness do not imply lifecycle permission. Read-only process/service inspection is allowed; if a protected runtime is unexpectedly running or stopped, report the state and do not correct it without fresh approval.
+- **Runtime lifecycle approval:** starting, stopping, restarting, killing, or relaunching JH, JMM, Human MCP, or its shared browser broker requires explicit approval for that target/action in the current conversation. Approval is single-use and does not carry over; Git/test/release/health work never implies it. Read-only inspection is allowed, but unexpected runtime state is reported rather than corrected without fresh approval.
 
 ## Project reference docs
 
@@ -33,17 +33,6 @@ It is a strict, explainable job-fit system, not a vague recommender.
 
 Use `.agents/skills/INDEX.md` as the single skill-routing catalogue. Load the smallest matching skill, then combine with reusable skills only when the task crosses ownership boundaries. Do not duplicate the active skill list here.
 
-## Job Hunter non-negotiables
-
-- Deterministic filters run before LLM.
-- Hard rejection is only for explicit blockers backed by approved rules.
-- Weak or uncertain signals are preserved for review, not silently deleted.
-- Learning flows through the signal registry before becoming runtime knowledge.
-- Deterministic salary extraction is allowed only where the source structure makes the interpretation reliable and testable. If a reliable value is not present, preserve salary as unknown and let the LLM identify missing evidence where the workflow supports it; never guess.
-- New heuristics must be deterministic, source-grounded, testable, and explicitly approved. Unreliable heuristics or hidden hardcoded business/display rules are not acceptable.
-
 ## Backlog
 
-For backlog work, read `.agents/skills/backlog-management/SKILL.md` first. Do not implement rows marked `Implementation State = Done` unless the human explicitly asks to audit, reopen, correct, or revise them.
-
-Backlog items (tasks, stories, bugs) live only in the Google Sheet via `.agents/skills/backlog-management/SKILL.md`. Never track them with the TodoWrite tool — TodoWrite is for in-conversation step tracking only, not backlog state.
+Backlog items live only in the canonical Google Sheet. For any backlog read/write/grooming task, use `.agents/skills/backlog-management/SKILL.md`; do not create a parallel backlog in repository files or runtime-specific task tools.
