@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import pytest
+
 from job_hunter_agent import run_control, scrape_finalize, source_learning, workspace_service
 from job_hunter_agent.database import db_conn
 from job_hunter_agent.record_schema import (
@@ -102,12 +104,16 @@ def test_merge_into_pool_updates_fresh_review_score_and_non_score_fields():
     assert merged[0][RECORD_FIT_TONE_CLASS_KEY] == "tone-low"
 
 
-def test_finalize_scrape_run_writes_outputs(monkeypatch, tmp_path, capsys, caplog):
+@pytest.mark.parametrize("use_market_map", [False, True])
+def test_finalize_scrape_run_writes_outputs(monkeypatch, tmp_path, capsys, caplog, use_market_map):
     import logging as _logging
 
     caplog.set_level(_logging.INFO)
 
     context = _build_context()
+    context.use_market_map = use_market_map
+    saved_workspace_history = {"job:1": {"title": "Saved title", "company": "Acme"}}
+    monkeypatch.setattr(scrape_finalize, "load_job_history", lambda: saved_workspace_history)
 
     workspace_path = tmp_path / "workspace.html"
 
@@ -140,10 +146,16 @@ def test_finalize_scrape_run_writes_outputs(monkeypatch, tmp_path, capsys, caplo
         calls.append(("render_html", (args, kwargs)))
 
     monkeypatch.setattr(scrape_finalize.workspace_service, "render_html", _render_html)
+    workspace_record_calls = []
+
+    def _build_workspace_record_sets(*args, **kwargs):
+        workspace_record_calls.append((args, kwargs))
+        return {"shortlist_records": [{"job_key": "job:1"}]}
+
     monkeypatch.setattr(
         scrape_finalize.workspace_service,
         "build_workspace_record_sets",
-        lambda *args, **kwargs: {"shortlist_records": [{"job_key": "job:1"}]},
+        _build_workspace_record_sets,
     )
 
     monkeypatch.setattr(
@@ -197,7 +209,15 @@ def test_finalize_scrape_run_writes_outputs(monkeypatch, tmp_path, capsys, caplo
 
     assert ("save_llm_cache", context.llm_cache) in calls
 
-    assert ("save_job_history", context.job_history) in calls
+    if use_market_map:
+        assert not any(name == "save_job_history" for name, _ in calls)
+    else:
+        assert ("save_job_history", context.job_history) in calls
+
+    expected_workspace_history = (
+        saved_workspace_history if use_market_map else context.job_history
+    )
+    assert workspace_record_calls[0][0][1] == expected_workspace_history
 
     assert any(name == "write_debug_json" for name, _ in calls)
 
@@ -210,6 +230,7 @@ def test_finalize_scrape_run_writes_outputs(monkeypatch, tmp_path, capsys, caplo
     assert any(name == "render_html" for name, _ in calls)
     render_args, render_kwargs = next(payload for name, payload in calls if name == "render_html")
     assert render_args[0] == workspace_path
+    assert render_args[6] == expected_workspace_history
     assert render_kwargs["workspace_records"] == {"shortlist_records": [{"job_key": "job:1"}]}
 
     capsys.readouterr()

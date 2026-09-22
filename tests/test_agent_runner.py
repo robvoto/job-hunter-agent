@@ -2,6 +2,7 @@
 
 from datetime import datetime
 
+from job_hunter_agent import agent_runner
 from job_hunter_agent.agent_runner import (
     SCHEDULE_ACTION_MISSED_WINDOW,
     SCHEDULE_ACTION_RUN,
@@ -68,6 +69,44 @@ def test_scheduled_state_updates_record_success_details():
     assert payload["last_scheduled_finished_at"] == "2026-07-28T09:12:00+10:00"
     assert payload["last_scheduled_success_at"] == "2026-07-28T09:12:00+10:00"
     assert payload["last_scheduled_summary_path"] == "/tmp/agent_last_summary.txt"
+
+
+def test_run_agent_once_builds_digest_with_saved_job_history(monkeypatch):
+    saved_history = {"seek:94004529": {"title": "Product Owner", "company": "Shiftcare"}}
+    workspace_record_calls = []
+
+    monkeypatch.setattr(agent_runner, "load_user_settings", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(agent_runner, "load_agent_state", lambda: {})
+    monkeypatch.setattr(agent_runner, "save_agent_state", lambda _state: None)
+    monkeypatch.setattr(agent_runner, "load_last_kept_records", lambda: [])
+    monkeypatch.setattr(agent_runner, "rebuild_workspace_results", lambda **_kwargs: None)
+    monkeypatch.setattr(agent_runner, "load_latest_run_stats", lambda: {})
+    monkeypatch.setattr(agent_runner, "load_profile", lambda: {})
+    monkeypatch.setattr(agent_runner, "get_manual_skip_sets", lambda _profile: (set(), set()))
+    monkeypatch.setattr(agent_runner, "load_job_history", lambda: saved_history)
+    monkeypatch.setattr(
+        agent_runner,
+        "build_workspace_record_sets",
+        lambda *args, **kwargs: workspace_record_calls.append((args, kwargs)) or {},
+    )
+    monkeypatch.setattr(
+        agent_runner,
+        "build_digest_payload",
+        lambda *_args: {
+            "run_finished_at": "2026-09-22T09:00:00+10:00",
+            "current_keys": [],
+            agent_runner.KEY_DIGEST_WORKSPACE_REF: "workspace-ref",
+        },
+    )
+    monkeypatch.setattr(agent_runner, "format_daily_summary", lambda _payload: "summary")
+    monkeypatch.setattr(
+        agent_runner, "format_daily_summary_html", lambda _payload: "<p>summary</p>"
+    )
+    monkeypatch.setattr(agent_runner, "write_last_summary", lambda _summary: None)
+
+    agent_runner.run_agent_once(no_scrape=True, notify=False)
+
+    assert workspace_record_calls[0][0][1] == saved_history
 
 
 def test_run_agent_loop_stops_cleanly_when_stop_requested(monkeypatch):
