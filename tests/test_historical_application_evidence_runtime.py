@@ -8,7 +8,6 @@ from job_hunter_agent.candidate_application_history import (
 from job_hunter_agent.database import db_conn, ensure_user_row
 from job_hunter_agent.employer_outcome_store import get_employer_outcome
 from job_hunter_agent.historical_application_evidence import load_historical_application_evidence
-from job_hunter_agent.workspace_renderer import _build_checks_before_applying_items
 
 
 def _insert_history(db, *, outcome: str = "rejected", role: str = "Technical Business Analyst") -> None:
@@ -39,8 +38,7 @@ def test_exact_company_and_role_surfaces_confirmed_rejection(isolated_db):
     assert match["llm_application_status"] == "rejection"
     assert match["_match_score"] == 1.0
     assert candidate_history_is_confirmed_rejection(match) is True
-    checks = _build_checks_before_applying_items([], False, False, None, match, [], "unknown")
-    assert "Rejected before: Northwind Networks — Technical Business Analyst" in checks
+    assert match["run_date"] == "2026-08-23"
 
 
 def test_same_employer_different_role_stays_possible_previous_application(isolated_db):
@@ -52,8 +50,7 @@ def test_same_employer_different_role_stays_possible_previous_application(isolat
     match = record["candidate_application_history"]
 
     assert candidate_history_is_confirmed_rejection(match) is False
-    checks = _build_checks_before_applying_items([], False, False, None, match, [], "unknown")
-    assert any("Possible previous application" in item for item in checks)
+    assert match["run_date"] == "2026-08-23"
 
 
 def test_gmail_confirmation_job_key_rolls_up_application_and_rejection_by_employer(isolated_db):

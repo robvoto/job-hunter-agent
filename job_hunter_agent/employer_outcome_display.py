@@ -22,6 +22,7 @@ from string import Template
 from typing import Any
 
 from job_hunter_agent import employer_outcome_store as store
+from job_hunter_agent.posting_utils import format_timestamp_label
 
 STATE_HISTORY = "history"
 STATE_NONE = "none"
@@ -72,10 +73,23 @@ def build_employer_outcome_check_item(
 
     rollup = resolved.get("rollup") or {}
     counts = rollup.get("counts") or {}
-    return Template(label_lookup("employer_outcome_history_template")).substitute(
+    rejections = int(counts.get(store.EVENT_REJECTED, 0) or 0)
+    last_date_raw = str(rollup.get("last_event_date") or "").strip()
+    last_date = (
+        format_timestamp_label(last_date_raw, include_time=False)
+        if last_date_raw
+        else ""
+    )
+    if rejections <= 0:
+        template_key = "employer_outcome_history_zero_template"
+    elif rejections == 1:
+        template_key = "employer_outcome_history_one_template"
+    else:
+        template_key = "employer_outcome_history_many_template"
+    return Template(label_lookup(template_key)).substitute(
         employer=rollup.get("employer_display") or "",
-        rejections=counts.get(store.EVENT_REJECTED, 0),
-        last_date=rollup.get("last_event_date") or "",
+        rejections=rejections,
+        last_date=last_date,
     )
 
 

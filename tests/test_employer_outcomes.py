@@ -170,7 +170,16 @@ def test_history_line_reports_rejections_and_the_latest_date():
     )
     assert "Northwind Systems" in line
     assert "5" in line
-    assert "2026-08-24" in line
+    assert "24 Aug 2026" in line
+
+
+def test_history_line_with_zero_rejections_avoids_zero_count_noise():
+    line = display.build_employer_outcome_check_item(
+        display.resolve_employer_outcome_state(_rollup(applied=1, rejected=0)),
+        _label,
+    )
+    assert line == "Your history with Northwind Systems. Latest activity 24 Aug 2026."
+    assert "rejection" not in line.lower()
 
 
 def test_history_line_does_not_render_unmeasured_counters():
@@ -180,7 +189,7 @@ def test_history_line_does_not_render_unmeasured_counters():
         display.resolve_employer_outcome_state(_rollup(applied=2, rejected=1, interview=1)),
         _label,
     )
-    assert "rejected 1" in line
+    assert "1 rejection" in line
     assert "applied" not in line
     assert "interviewed" not in line
     assert "no reply" not in line
@@ -193,7 +202,7 @@ def test_unknown_state_raises_rather_than_rendering_something_plausible():
 
 def _checks(employer_outcome):
     return _build_checks_before_applying_items(
-        [], False, False, None, None, [], "ok", None, None, employer_outcome
+        [], False, False, None, [], "ok", None, None, employer_outcome
     )
 
 
