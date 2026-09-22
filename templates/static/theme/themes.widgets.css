@@ -2640,7 +2640,7 @@
 .location-checkbox-groups {
   display: grid;
   /* The state list needs more room than city/territory lists to avoid label collisions. */
-  grid-template-columns: minmax(16rem, 1fr) minmax(26rem, 1.5fr) minmax(16rem, 1fr);
+  grid-template-columns: minmax(16rem, 1fr) minmax(24rem, 1.5fr) minmax(16rem, 1fr);
   width: 100%;
   max-width: 100%;
   padding: var(--surface-gap-md);
@@ -2673,7 +2673,7 @@
   grid-template-columns: repeat(2, max-content);
   grid-template-rows: repeat(var(--checkbox-list-row-count), auto);
   grid-auto-flow: column;
-  column-gap: calc(var(--surface-gap-lg) * 2);
+  column-gap: var(--surface-gap-lg);
 }
 .checkbox-list-option {
   display: grid;
@@ -2736,7 +2736,7 @@
 }
 .checkbox-list-option input:disabled + span { opacity: 0.55; }
 
-@container (max-width: 60rem) {
+@container (max-width: 58rem) {
   .location-checkbox-groups {
     grid-template-columns: minmax(0, 1fr);
     width: 100%;
