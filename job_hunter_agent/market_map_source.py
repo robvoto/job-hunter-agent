@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextvars
 import copy
+import logging
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
@@ -24,6 +25,7 @@ from job_hunter_agent.job_market_map_client import (
     JMM_FIELD_STATE_KNOWN,
     JobMarketMapClient,
     JobMarketMapContractError,
+    JobMarketMapJDNotCached,
     JobMarketMapJDUnavailable,
     validate_market_job_field_states,
     validate_market_job_salary_normalized,
@@ -79,6 +81,7 @@ from job_hunter_agent.record_schema import (
     RECORD_SOURCE_PROVENANCE_KEY,
     RECORD_TITLE_KEY,
     REJECT_REASON_JMM_JD_ENRICHMENT_FAILED,
+    REJECT_REASON_JMM_JD_NOT_CACHED,
     REJECT_REASON_JMM_JD_UNAVAILABLE,
 )
 from job_hunter_agent.run_control import run_stop_requested, set_run_progress_state
@@ -92,10 +95,60 @@ from job_hunter_agent.source_registry import (
     SOURCE_LINKEDIN,
     SOURCE_SEEK,
 )
+from job_hunter_agent.system_warnings import (
+    make_system_warning_fingerprint,
+    record_system_warning,
+)
 from job_hunter_agent.work_mode_extraction import (
     WORK_MODE_UNKNOWN,
     canonical_work_mode_value,
 )
+
+logger = logging.getLogger(__name__)
+
+
+def _jmm_readiness_degraded_sources(readiness: dict[str, Any]) -> list[str]:
+    degraded: list[str] = []
+    source_runs = readiness.get("source_runs") or {}
+    for source in ("seek", "linkedin"):
+        run = source_runs.get(source) if isinstance(source_runs, dict) else None
+        status = str((run or {}).get("status") or "NOT_RUN").strip().upper()
+        if (
+            status == "NOT_RUN"
+            or status in {"STOPPED", "FAILED", "ERROR"}
+            or "FAIL" in status
+            or status.startswith("PARTIAL_")
+            or status.startswith("INCOMPLETE")
+        ):
+            degraded.append(f"{source}:{status}")
+    return degraded
+
+
+def _record_jmm_readiness(readiness: dict[str, Any], *, run_id: str) -> None:
+    source_runs = readiness.get("source_runs") or {}
+    coverage = readiness.get("jd_coverage") or {}
+    seek_status = str((source_runs.get("seek") or {}).get("status") or "NOT_RUN")
+    linkedin_status = str((source_runs.get("linkedin") or {}).get("status") or "NOT_RUN")
+    logger.info(
+        "[JMM][READINESS] seek_status=%s linkedin_status=%s jd_available=%s jd_missing_not_cached=%s jd_failed=%s",
+        seek_status,
+        linkedin_status,
+        coverage.get("available", 0),
+        coverage.get("missing_not_cached", 0),
+        coverage.get("failed", 0),
+    )
+    degraded = _jmm_readiness_degraded_sources(readiness)
+    if degraded:
+        message = "Job Market Map source readiness is degraded: " + ", ".join(degraded)
+        record_system_warning(
+            severity="warning",
+            category="jmm_readiness",
+            source=SOURCE_JOB_MARKET_MAP,
+            message=message,
+            fingerprint=make_system_warning_fingerprint("jmm_readiness", *degraded),
+            run_id=run_id,
+            context=readiness,
+        )
 
 
 def _source_metadata(item: dict[str, Any], source: str, source_job_id: str) -> dict[str, Any]:
@@ -652,6 +705,34 @@ def _append_retryable_jd_failure(
             registry.release(token)
 
 
+def _append_jd_not_cached(
+    review_context: ReviewPipelineContext,
+    job: _IndexedJob,
+    error: JobMarketMapJDNotCached,
+) -> None:
+    """Audit a per-job JMM cache miss without treating it as source failure."""
+    record = job.record
+    claim = record.pop(RUN_IDENTITY_CLAIM_KEY, None)
+    record[RECORD_DECISION_KEY] = "REJECT"
+    record[RECORD_REJECT_REASON_KEY] = REJECT_REASON_JMM_JD_NOT_CACHED
+    record[RECORD_DECISION_EXPLANATION_KEY] = str(error)
+    record[RECORD_RETRYABLE_KEY] = True
+    record[RECORD_RETRY_REASON_KEY] = REJECT_REASON_JMM_JD_NOT_CACHED
+    try:
+        finalize_record(
+            review_context.job_history,
+            review_context.audit_rows,
+            record,
+            review_context.run_iso,
+            persist_full_description=False,
+            update_history=False,
+        )
+    finally:
+        if isinstance(claim, tuple) and len(claim) == 2:
+            registry, token = claim
+            registry.release(token)
+
+
 def _append_terminal_jd_unavailable(
     review_context: ReviewPipelineContext,
     job: _IndexedJob,
@@ -1016,6 +1097,9 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
         headline="Finding matching jobs",
     )
     client = JobMarketMapClient.from_environment()
+    readiness_reader = getattr(client, "get_readiness", None)
+    if callable(readiness_reader):
+        _record_jmm_readiness(readiness_reader(), run_id=context.run_iso)
     review_context = ReviewPipelineContext(
         profile=context.profile,
         job_history=context.job_history,
@@ -1035,6 +1119,7 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
     skill_observations: list[dict] = []
     worker_limit = get_job_market_map_parallel_workers()
     analysed_count = 0
+    jd_cache_miss_count = 0
     _set_market_map_progress(
         "Loading matching jobs",
         stage="source_collection",
@@ -1286,7 +1371,7 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
         retryable_jd_failures = {
             index: error
             for index, error in jd_failures.items()
-            if not isinstance(error, JobMarketMapJDUnavailable)
+            if not isinstance(error, (JobMarketMapJDUnavailable, JobMarketMapJDNotCached))
         }
         result_indexes = sorted(set(fit_results) | set(jd_failures))
         for completed_results, index in enumerate(result_indexes, start=1):
@@ -1296,7 +1381,10 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
             job = jobs_by_index[index]
             if index in jd_failures:
                 error = jd_failures[index]
-                if isinstance(error, JobMarketMapJDUnavailable):
+                if isinstance(error, JobMarketMapJDNotCached):
+                    jd_cache_miss_count += 1
+                    _append_jd_not_cached(review_context, job, error)
+                elif isinstance(error, JobMarketMapJDUnavailable):
                     _append_terminal_jd_unavailable(review_context, job, error)
                 else:
                     _append_retryable_jd_failure(review_context, job, error)
@@ -1352,11 +1440,16 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
             )
         analysed_count += page_item_total
 
+    logger.info(
+        "[JMM][JD_CACHE] available_fit_jobs=%d not_cached=%d",
+        len(kept_records),
+        jd_cache_miss_count,
+    )
     _set_market_map_progress(
         "Search review complete",
         stage="source_collection",
         headline="Search review complete",
-        detail=f"{analysed_count:,} jobs analysed",
+        detail=f"{analysed_count:,} jobs analysed; {jd_cache_miss_count:,} JDs not cached",
         current=analysed_count,
         total=analysed_count,
         determinate=True,
