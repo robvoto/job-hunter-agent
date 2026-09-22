@@ -5,7 +5,11 @@ import re
 from typing import Optional, Tuple
 
 from job_hunter_agent.io_utils import load_parsing_rules
-from job_hunter_agent.job_market_map_client import JMM_FIELD_STATE_KNOWN
+from job_hunter_agent.job_market_map_client import (
+    JMM_FIELD_STATE_KNOWN,
+    JMM_FIELD_STATE_NOT_APPLICABLE,
+    JMM_FIELD_STATE_NOT_PRESENT,
+)
 from job_hunter_agent.job_types import load_job_type
 from job_hunter_agent.paths import UNCERTAINTY_LOG_PATH
 from job_hunter_agent.profile_store import (
@@ -49,6 +53,19 @@ from job_hunter_agent.text_processing import compact_whitespace
 logger = logging.getLogger(__name__)
 
 
+_JMM_NON_UNCERTAIN_ABSENCE_STATES = {
+    JMM_FIELD_STATE_NOT_PRESENT,
+    JMM_FIELD_STATE_NOT_APPLICABLE,
+}
+
+
+def _jmm_field_state(record: dict, field: str) -> str:
+    states = record.get(RECORD_MARKET_MAP_FIELD_STATES_KEY)
+    if not isinstance(states, dict):
+        return ""
+    return str(states.get(field) or "").strip().lower()
+
+
 def passes_preference_filters(record: dict, profile: Optional[dict] = None) -> Tuple[bool, str]:
     """Hard eligibility gate: exclude only when a value is explicitly known to be incompatible.
 
@@ -73,7 +90,13 @@ def passes_preference_filters(record: dict, profile: Optional[dict] = None) -> T
 
     is_full_time_contract = _is_full_time_contract(raw_work_type)
 
-    if not is_perm and not is_contract:
+    employment_type_state = _jmm_field_state(record, "employment_type")
+
+    if (
+        not is_perm
+        and not is_contract
+        and employment_type_state not in _JMM_NON_UNCERTAIN_ABSENCE_STATES
+    ):
         work_type = str(record.get("work_type") or "").strip()
 
         entry = build_uncertainty_entry(
@@ -131,7 +154,9 @@ def passes_preference_filters(record: dict, profile: Optional[dict] = None) -> T
     if work_mode_prefs:
         work_mode = _normalize_work_mode(record.get("work_mode") or "")
 
-        if not work_mode:
+        workplace_type_state = _jmm_field_state(record, "workplace_type")
+
+        if not work_mode and workplace_type_state not in _JMM_NON_UNCERTAIN_ABSENCE_STATES:
             entry = build_uncertainty_entry(
                 reason_code="WORK_MODE_UNCLEAR",
                 stage="preference_filter",
@@ -165,7 +190,10 @@ def passes_preference_filters(record: dict, profile: Optional[dict] = None) -> T
                 UNCERTAINTY_LOG_PATH,
             )
 
-        elif work_mode not in work_mode_prefs:
+        elif (
+            workplace_type_state not in _JMM_NON_UNCERTAIN_ABSENCE_STATES
+            and work_mode not in work_mode_prefs
+        ):
             return False, "PREF_WORK_MODE"
 
     selected_sector_prefs = set(preferences.get(KEY_PREFER_SECTOR) or [])

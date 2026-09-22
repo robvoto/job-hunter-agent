@@ -14,6 +14,7 @@ import pytest
 
 from job_hunter_agent import (
     market_map_source,
+    preferences,
     run_context,
     run_control,
     source_runner,
@@ -376,6 +377,77 @@ def test_jh312_field_states_control_work_mode_and_apply_method_without_reinferen
     assert record["work_mode_needs_review"] is needs_review
     assert record["market_map_field_states"]["workplace_type"] == state
     assert record["market_map_field_states"]["apply_method"] == state
+
+
+@pytest.mark.parametrize("state", ["not_present", "not_applicable"])
+def test_jh312_absent_employment_type_stays_eligible_without_unknown_warning(
+    state, tmp_path, monkeypatch, caplog):
+    item = _item(42)
+    item["employment_type"] = "Contract/Temp"
+    item["field_states"] = {
+        **item["field_states"],
+        "employment_type": state,
+    }
+    record = market_map_source.normalize_market_job(
+        item, run_iso="2026-09-12T12:00:00+00:00"
+    )
+    log_path = tmp_path / "uncertainty.jsonl"
+    monkeypatch.setattr(preferences, "UNCERTAINTY_LOG_PATH", log_path)
+    warnings = []
+    monkeypatch.setattr(
+        preferences,
+        "record_system_warning",
+        lambda **kwargs: warnings.append(kwargs) or kwargs,
+    )
+
+    with caplog.at_level("INFO", logger="job_hunter_agent.preferences"):
+        eligible, reason = preferences.passes_preference_filters(
+            record,
+            {"match_preferences": {"engagement_type": ["contract"]}},
+        )
+
+    assert eligible is True
+    assert reason == "OK"
+    assert record["market_map_field_states"]["employment_type"] == state
+    assert "[PREFERENCE][WORK_TYPE_UNKNOWN]" not in caplog.text
+    assert not warnings
+    assert not log_path.exists()
+
+
+@pytest.mark.parametrize("state", ["not_present", "not_applicable"])
+def test_jh312_absent_workplace_type_stays_eligible_without_unknown_warning(
+    state, tmp_path, monkeypatch, caplog
+):
+    item = _item(43)
+    item["workplace_type"] = "On-site"
+    item["field_states"] = {
+        **item["field_states"],
+        "workplace_type": state,
+    }
+    record = market_map_source.normalize_market_job(
+        item, run_iso="2026-09-12T12:00:00+00:00"
+    )
+    log_path = tmp_path / "uncertainty.jsonl"
+    monkeypatch.setattr(preferences, "UNCERTAINTY_LOG_PATH", log_path)
+    warnings = []
+    monkeypatch.setattr(
+        preferences,
+        "record_system_warning",
+        lambda **kwargs: warnings.append(kwargs) or kwargs,
+    )
+
+    with caplog.at_level("INFO", logger="job_hunter_agent.preferences"):
+        eligible, reason = preferences.passes_preference_filters(
+            record,
+            {"match_preferences": {"work_mode_preference": ["remote"]}},
+        )
+
+    assert eligible is True
+    assert reason == "OK"
+    assert record["market_map_field_states"]["workplace_type"] == state
+    assert "[PREFERENCE][WORK_MODE_UNKNOWN]" not in caplog.text
+    assert not warnings
+    assert not log_path.exists()
 
 
 def test_jh312_known_unrecognised_workplace_value_stays_reviewable_without_text_inference():
