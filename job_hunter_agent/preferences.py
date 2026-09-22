@@ -10,6 +10,7 @@ from job_hunter_agent.paths import UNCERTAINTY_LOG_PATH
 from job_hunter_agent.profile_store import (
     DEFAULT_PROFILE,
     ENGAGEMENT_TYPE_OPTIONS,
+    KEY_PREFER_SECTOR,
     KEY_WORK_MODE_PREFERENCE,
     VALID_ENGAGEMENT_TYPES,
     Engagement,
@@ -20,6 +21,7 @@ from job_hunter_agent.profile_store import (
     normalize_match_preferences,
     normalize_work_mode_preferences,
 )
+from job_hunter_agent.record_schema import RECORD_SECTOR_KEY
 from job_hunter_agent.runtime_helpers import append_uncertainty_log, build_uncertainty_entry
 from job_hunter_agent.salary_utils import (
     salary_is_total_package,
@@ -27,6 +29,12 @@ from job_hunter_agent.salary_utils import (
     salary_period_classification,
 )
 from job_hunter_agent.scoring_utils import build_scoring_source_text, extract_contract_months
+from job_hunter_agent.sector_utils import (
+    SECTOR_GOVERNMENT,
+    SECTOR_PRIVATE,
+    SECTOR_UNKNOWN,
+    normalize_sector_value,
+)
 from job_hunter_agent.system_warnings import (
     make_system_warning_fingerprint,
     record_system_warning,
@@ -39,7 +47,8 @@ logger = logging.getLogger(__name__)
 def passes_preference_filters(record: dict, profile: Optional[dict] = None) -> Tuple[bool, str]:
     """Hard eligibility gate: exclude only when a value is explicitly known to be incompatible.
 
-    Unknown / unlisted values always pass through."""
+    Unknown / unlisted values pass through, except that a selected sector
+    requires a confirmed sector classification."""
 
     active_profile = profile or load_profile()
 
@@ -153,6 +162,19 @@ def passes_preference_filters(record: dict, profile: Optional[dict] = None) -> T
 
         elif work_mode not in work_mode_prefs:
             return False, "PREF_WORK_MODE"
+
+    selected_sector_prefs = set(preferences.get(KEY_PREFER_SECTOR) or [])
+    all_sector_values = {SECTOR_GOVERNMENT, SECTOR_PRIVATE}
+
+    # Sector is a hard filter. An empty selection and both values selected mean
+    # no sector restriction; a single selected value excludes the other sector
+    # and fails closed when the source did not provide a confirmed classification.
+    if selected_sector_prefs and selected_sector_prefs != all_sector_values:
+        sector = normalize_sector_value(record.get(RECORD_SECTOR_KEY))
+        if sector == SECTOR_UNKNOWN:
+            return False, "SECTOR_UNKNOWN_FOR_HARD_FILTER"
+        if sector not in selected_sector_prefs:
+            return False, "PREF_SECTOR_OUTSIDE_SELECTED"
 
     # Min contract length — exclude only when the job is a contract and the stated duration is below the minimum.
 

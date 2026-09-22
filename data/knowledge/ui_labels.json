@@ -1,7 +1,7 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 144,
+  "version": 145,
   "updated_at": "2026-09-21T00:00:00+00:00",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
@@ -480,6 +480,7 @@
     "MANUALLY_HIDDEN": "Already hidden by you",
     "PREF_WORK_MODE": "Rejected because work mode is outside selected modes.",
     "PREF_SECTOR_OUTSIDE_SELECTED": "Rejected because job sector is outside selected sectors.",
+    "SECTOR_UNKNOWN_FOR_HARD_FILTER": "Rejected because the job sector could not be confirmed.",
     "PREF_CONTRACT_TYPE": "Rejected because work type is outside selected work types.",
     "UNKNOWN": "Other filtered-out roles"
   },
@@ -1109,7 +1110,7 @@
     "work_mode_preference_help_text": "Choose the work arrangements you prefer.",
     "work_type_preference_help_text": "Choose the worktype you prefer.",
     "sector_option_no_preference": "No preference",
-    "sector_preference_help_text": "Select both if sector preference does not matter.",
+    "sector_preference_help_text": "Choose Public sector, Private sector, or both. Selecting one excludes the other sector; jobs with no confirmed sector are excluded when only one is selected.",
     "salary_min_annual_label": "Minimum annual base (excludes super)",
     "salary_min_daily_label": "Minimum daily rate (excludes super)",
     "salary_min_compensation_help_text": "Set the lowest pay you want included in search.",

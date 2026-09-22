@@ -16,7 +16,7 @@ from job_hunter_agent.global_settings import (
     get_job_market_map_parallel_workers,
 )
 from job_hunter_agent.history import finalize_record
-from job_hunter_agent.io_utils import save_llm_cache
+from job_hunter_agent.io_utils import load_parsing_rules, save_llm_cache
 from job_hunter_agent.job_identity import RUN_IDENTITY_CLAIM_KEY, normalize_job_key
 from job_hunter_agent.job_market_map_client import (
     JobMarketMapClient,
@@ -52,6 +52,7 @@ from job_hunter_agent.record_schema import (
     RECORD_REJECT_REASON_KEY,
     RECORD_RETRY_REASON_KEY,
     RECORD_RETRYABLE_KEY,
+    RECORD_SECTOR_KEY,
     RECORD_SOURCE_CANONICAL_URL_KEY,
     RECORD_SOURCE_METADATA_KEY,
     RECORD_SOURCE_NAME_KEY,
@@ -67,6 +68,7 @@ from job_hunter_agent.record_schema import (
 from job_hunter_agent.run_control import run_stop_requested, set_run_progress_state
 from job_hunter_agent.scrapers.base import blank_source_metadata, build_initial_flat_record
 from job_hunter_agent.search_terms import ordered_profile_search_terms
+from job_hunter_agent.sector_utils import classify_market_sector
 from job_hunter_agent.source_errors import PartialSourceResultsError
 from job_hunter_agent.source_learning import register_pending_learning_signals
 from job_hunter_agent.source_registry import (
@@ -102,6 +104,9 @@ def _source_metadata(item: dict[str, Any], source: str, source_job_id: str) -> d
                     "posted_at",
                     "apply_method",
                     "teaser_text",
+                    "sector",
+                    "classification_text",
+                    "subclassification_text",
                 )
                 if key in item
             },
@@ -159,6 +164,14 @@ def normalize_market_job(item: dict[str, Any], *, run_iso: str) -> dict[str, Any
         source_metadata=source_metadata,
     )
     record[RECORD_SOURCE_NAME_KEY] = source
+    parsing_rules = load_parsing_rules()
+    government_config = parsing_rules.get("government_discovery_config")
+    government_terms = (
+        government_config.get("government_terms", [])
+        if isinstance(government_config, dict)
+        else []
+    )
+    record[RECORD_SECTOR_KEY] = classify_market_sector(item, government_terms)
     record[RECORD_MARKET_MAP_JOB_ID_KEY] = int(item["id"])
     record[RECORD_MARKET_MAP_IDENTITY_KEY] = str(item["identity_key"]).strip()
     apply_method = str(item.get("apply_method") or APPLY_METHOD_UNKNOWN).strip().lower()
