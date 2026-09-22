@@ -9,13 +9,12 @@ Use for any branch/worktree, commit, push, PR, merge, or `main` integration work
 
 ## Contract
 
-- Work intended for `main` uses: **task branch/worktree -> implement -> validate -> commit -> push -> human review/test and iteration -> final validation -> explicitly authorized integration -> cleanup**.
+- Work intended for `main` uses: **task branch/worktree -> implement -> validate -> commit -> push -> human review/test and iteration -> final validation -> integration -> cleanup**.
 - Commits and pushes provide stable checkpoints for the human to inspect and test. Keep review changes on the same task branch unless there is a concrete reason to split the work.
 - Do not create a PR or integrate the work while implementation or the human's review/test is still in progress.
 - A PR is optional. Create one only when the human requests it or repository rules require it. Do not infer a PR request from a pushed branch or from the human saying the work is ready.
-- When the human explicitly asks to merge or put the reviewed work in `main`, integrate it directly without a PR unless repository rules require a PR. Do not ask for another approval for the same requested integration.
-- If the human approves the review but has not directed integration, keep the branch out of `main` and wait for their integration instruction.
-- The authoring agent may perform a safe direct integration after that explicit instruction. If a PR is requested or required, create it only after review is complete and final validation passes, then hand off to the integration owner.
+- When the human confirms that the reviewed/tested change is good, treat that as approval to integrate it. Do not require a second `put it in main` instruction. Honor any instruction to hold the branch or not merge it.
+- After that confirmation, integrate directly without a PR unless the human requests a PR or repository rules require one. If a PR is requested or required, create it only after review is complete and final validation passes, then hand off to the integration owner.
 - Never push a normal task branch directly to `main`; direct integration means merging the task branch into current `main`, validating the result, then pushing `main` without force.
 - If branch protection, required checks, or repository rules prevent direct integration, follow those rules and report the specific constraint. Never bypass them.
 - Disposable experiment branches that are abandoned rather than integrated do not need a PR.
@@ -35,9 +34,9 @@ Use for any branch/worktree, commit, push, PR, merge, or `main` integration work
 2. Commit each stable checkpoint and push the task branch without force so the human can inspect/test it.
 3. Report the branch and commit SHA. While the human is checking the work, continue fixes as additional commits on the same task branch.
 4. **Do not create a PR while implementation, UI checking, code review, or user acceptance is still in progress.**
-5. After review, wait for an explicit integration instruction before changing `main`. A review approval alone does not authorize integration.
+5. After review, wait for the human to confirm the tested change is good. That confirmation authorizes integration; do not ask for a separate `put it in main` instruction. If the human says to hold or keep it out of `main`, follow that direction.
 6. If the human requests a PR, or repository rules require one, fetch `origin`, reconcile clear drift, run final validation, then create the PR targeting `main` and report its number/URL. Hand it to the integration owner when one is assigned.
-7. If the human explicitly requests direct integration and repository rules allow it, follow the direct integration procedure below. Do not create a PR as an extra approval step.
+7. Otherwise, after that confirmation and final validation, follow the direct integration procedure below. Do not create a PR as an extra approval step.
 8. Until integration completes, report `MAIN STATUS: NOT IN MAIN — pushed branch <branch>`.
 
 ## Direct integration without a PR
