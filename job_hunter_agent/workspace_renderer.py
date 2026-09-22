@@ -1233,6 +1233,8 @@ def humanize_reject_reason(reason: Optional[str]) -> str:
         return f"Learned blocker: {cleaned_detail.split(':')[-1].strip()}"
     if prefix == "PREF_SECTOR_OUTSIDE_SELECTED":
         return "Rejected because job sector is outside selected sectors."
+    if prefix == "SECTOR_UNKNOWN_FOR_HARD_FILTER":
+        return "Rejected because the job sector could not be confirmed."
     if prefix == TITLE_REASON_POTENTIAL_MATCH:
         return _workspace_label("title_match_labels", "secondary_match")
     if prefix == "CARD_SPECIALIST" and cleaned_detail:

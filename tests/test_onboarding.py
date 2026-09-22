@@ -182,6 +182,30 @@ def test_onboarding_work_mode_hydration_always_applies_saved_values():
     assert "if (!getWorkModePreferenceValues().length)" not in search_js_text
 
 
+def test_onboarding_sector_hydration_always_applies_saved_values():
+    page_js_path = (
+        Path(__file__).resolve().parents[1]
+        / "templates"
+        / "static"
+        / "onboarding"
+        / "onboarding-page.js"
+    )
+    search_js_path = (
+        Path(__file__).resolve().parents[1]
+        / "templates"
+        / "static"
+        / "onboarding"
+        / "onboarding-search.js"
+    )
+    page_js_text = page_js_path.read_text(encoding="utf-8")
+    search_js_text = search_js_path.read_text(encoding="utf-8")
+
+    assert "setSectorPreferenceValues(matchPreferences.prefer_sector);" in page_js_text
+    assert "setSectorPreferenceValues(matchPreferences.prefer_sector || []);" in search_js_text
+    assert "if (!document.querySelectorAll('input[name=\"prefer_sector\"]:checked').length)" not in page_js_text
+    assert "if (!document.querySelectorAll('input[name=\"prefer_sector\"]:checked').length)" not in search_js_text
+
+
 def test_onboarding_template_uses_shared_primary_cv_copy_placeholders():
     html_path = Path(__file__).resolve().parents[1] / "templates" / "onboarding.html"
     html_text = html_path.read_text(encoding="utf-8")

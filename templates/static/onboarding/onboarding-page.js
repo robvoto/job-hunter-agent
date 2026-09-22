@@ -764,18 +764,16 @@ export function applyProfileDefaults(profile) {
   }
   setOnboardingEngagementTypeValues(matchPreferences.engagement_type);
   syncContractDurationState();
-   if (!Array.isArray(matchPreferences.work_mode_preference)) {
-     throw new Error('Missing work mode preferences.');
-   }
-   setOnboardingWorkModePreferenceValues(matchPreferences.work_mode_preference);
-   updateSearchPreferenceSummaries();
-   if (!document.querySelectorAll('input[name="prefer_sector"]:checked').length) {
-     if (!Array.isArray(matchPreferences.prefer_sector)) {
-       throw new Error('Missing sector preferences.');
-    }
-    setSectorPreferenceValues(matchPreferences.prefer_sector);
-    updateSearchPreferenceSummaries();
+  if (!Array.isArray(matchPreferences.work_mode_preference)) {
+    throw new Error('Missing work mode preferences.');
   }
+  setOnboardingWorkModePreferenceValues(matchPreferences.work_mode_preference);
+  updateSearchPreferenceSummaries();
+  if (!Array.isArray(matchPreferences.prefer_sector)) {
+    throw new Error('Missing sector preferences.');
+  }
+  setSectorPreferenceValues(matchPreferences.prefer_sector);
+  updateSearchPreferenceSummaries();
   if (!selectedLocations.length && Array.isArray(profile.search_settings.locations) && profile.search_settings.locations.length) {
     setSelectedLocations(profile.search_settings.locations);
     renderLocationSelect();

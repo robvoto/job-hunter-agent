@@ -113,7 +113,7 @@ SEEK also has its own on/off switch in the Search section. Turn it off when you 
 
 SEEK uses a persistent browser profile by default. The first run may ask you to sign in; complete that sign-in in the open SEEK browser and later searches can reuse the saved session. If SEEK asks for a CAPTCHA or another human check, Job Hunter shows a `SEEK needs you` alert and waits once for you to complete it. If the wait expires, results already collected are kept and the run summary explains why SEEK stopped and how to retry it.
 
-Sector preference now uses the same checkbox-strip pattern as work mode and work type. Pick Public sector, Private sector, or both if you do not care which sector a role is in.
+Sector preference now uses the same checkbox-strip pattern as work mode and work type. Select Public sector, Private sector, or both. Selecting one excludes roles confirmed to be in the other sector; roles without a confirmed sector are excluded under a single-sector preference.
 
 ## What Admin Is For
 
@@ -180,8 +180,9 @@ Changes here affect the app globally, but users do not edit them from their own 
 
 `Sector preference`
 
-- optional public/private preference for search
-- leave it at no preference unless you want sector filtering to be active
+- hard public/private eligibility filter for search and review
+- select both sectors when you do not want a sector restriction
+- with one sector selected, roles confirmed in the other sector—and roles whose sector is unknown—are excluded
 
 `Work type`
 

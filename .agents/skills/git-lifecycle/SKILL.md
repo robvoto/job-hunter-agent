@@ -18,8 +18,12 @@ The human should not need to remember Git mechanics.
 - `commit` or `push` alone never means "merge to main".
 - `approved`, `merge it`, `put it in main`, `ship it`, or equivalent approval referring to the current completed task authorizes integration to `main`.
 - If integration intent is unclear, ask one concise question before merging: `Work is ready on <branch> but is NOT in main. Merge to main now?`
-- A pull request is optional unless the repository explicitly requires one or the human explicitly asks for one. Do not create a PR merely because a branch was pushed.
-- Git work targets the latest repository state, not the version currently running on AWS. Commit, integrate, and push approved work to `main` normally even when production is intentionally on an older release.
+- Every task branch intended to reach `main` must go through a pull request. Disposable experiment branches that are abandoned rather than integrated do not need a PR.
+- The authoring/working agent owns implementation through validation, commit, push, and PR creation. It must report the PR number/URL when the branch is ready.
+- A separate integration owner/coordinating agent owns PR review and merge: verify current `origin/main`, inspect the diff and mergeability, wait for required CI, resolve only clear/safe integration drift, merge the PR, verify `origin/main`, and clean the branch/worktree.
+- The authoring agent must not merge its own PR as normal workflow. If no separate integration owner is available, leave the PR open for integration rather than bypassing the PR boundary.
+- Do not integrate normal task work by directly merging or pushing a task branch to `main`; merge through the repository's PR mechanism.
+- Git work targets the latest repository state, not the version currently running on AWS. Commit and push approved task work normally even when production is intentionally on an older release; `main` integration still follows the mandatory PR flow.
 - Never treat commit, merge, push, or release approval as permission to deploy AWS. Production deployment requires an explicit AWS instruction from the human.
 
 ## Before editing
@@ -38,15 +42,23 @@ The human should not need to remember Git mechanics.
 
 ## Before integration
 
+### Authoring/working agent
+
 1. Confirm the exact task commit SHA and that validation passed.
 2. Fetch `origin` again and compare the task branch with current `origin/main`.
    - Capture exact commit IDs with `git rev-parse`; never reconstruct or guess a full SHA from a short display SHA when guarding integration state.
-3. If `origin/main` advanced since the task branch was cut, do not blindly push, force-push, or pretend it is a fast-forward.
-4. Build the integration result from the **current** `origin/main` plus the task branch, using the repository's documented merge strategy. If none is documented, prefer a normal non-force merge that preserves both histories.
-5. If there are conflicts, unrelated-history surprises, unclear ownership, failed tests, or ambiguity about how to reconcile changes, stop and ask the human instead of improvising.
-6. Before validation, inspect any versioned managed JSON changed by both sides. If merged content differs from current `origin/main`, its integrated `version` must be strictly greater than the version on current `origin/main`; independent branches can legitimately collide on the same version number.
-7. Re-run the required validation on the integrated result before updating `main`.
-8. Push `main` without force. If the remote moved again and rejects the push, fetch and reassess; never bypass the rejection with force.
+3. Push the task branch without force and create a PR targeting `main`.
+4. Report the PR number/URL and stop at `MAIN STATUS: NOT IN MAIN — pushed branch <branch>`; do not self-merge the PR.
+
+### Integration owner/coordinating agent
+
+1. Fetch `origin` and inspect the open PR, its task commit SHA, diff, mergeability, required checks, and current `origin/main`.
+2. If `origin/main` advanced since the task branch was cut, do not blindly force-push or pretend the PR is current. Reconcile only clear/safe drift; if conflicts, ownership, or intended behaviour are ambiguous, stop and ask the human or return it to the authoring agent.
+3. Before final validation, inspect any versioned managed JSON changed by both sides. If integrated content differs from current `origin/main`, its `version` must be strictly greater than the version on current `origin/main`; independent branches can legitimately collide on the same version number.
+4. Required local validation and hosted PR checks/CI must pass on the integration candidate.
+5. Merge through the repository's PR mechanism using the documented strategy. If none is documented, prefer a normal non-force merge that preserves both histories.
+6. Fetch `origin` again and verify the task commit is an ancestor of `origin/main` before reporting integration complete.
+7. Never bypass a moved branch, failed check, or rejected merge with force.
 
 ## Required verification
 

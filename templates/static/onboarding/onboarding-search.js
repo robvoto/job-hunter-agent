@@ -52,8 +52,6 @@ export function hydrateSearchBasics(profile) {
   const engagementType = Array.isArray(matchPreferences.engagement_type) ? matchPreferences.engagement_type : [];
   setEngagementTypeValues(engagementType);
   setWorkModePreferenceValues(matchPreferences.work_mode_preference || []);
-  if (!document.querySelectorAll('input[name="prefer_sector"]:checked').length) {
-    setSectorPreferenceValues(matchPreferences.prefer_sector || []);
-  }
+  setSectorPreferenceValues(matchPreferences.prefer_sector || []);
   onboardingPage.updateCompensationVisibility();
 }
