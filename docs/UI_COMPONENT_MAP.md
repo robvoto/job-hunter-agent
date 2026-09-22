@@ -52,16 +52,28 @@ These rules exist for accessibility and visual-hierarchy reasons. Do not change 
 
 Chips (~34px) are always shorter than inputs/selects (~44px). This is correct and follows every major design system — Material Design chips are 32dp vs 56dp inputs (a 24dp gap). The difference signals visual hierarchy: chips are compact selection tokens; inputs and dropdowns are primary form controls. Do not attempt to equalise them.
 
-### Typography scale
+### Typography roles
 
-| Token | Resolved value | Used on |
-|---|---|---|
-| `--control-font-size` → `--text-role-control-label-font-size` | 0.92rem | All inputs, selects, textareas |
-| `--field-label-font-size` | 0.92rem | Field labels — intentionally matches control text |
-| `--text-role-chip-font-size` | 0.82rem | Chip labels — intentionally smaller than controls |
-| `--help-copy-font-size` | 0.8rem | Help text / summary lines |
+Typography is semantic, not page- or component-owned. Two pieces of text with the same semantic role must consume the same token even when one is a checkbox option, another is an input value, and another is a select value. Visual state may change colour or weight; it must not silently change the type scale.
 
-Chip text is smaller by design. Do not raise `--text-role-chip-font-size` to match controls — it would make chips visually indistinguishable from inputs.
+| Semantic role | Canonical token | Baseline | Examples |
+|---|---|---|---|
+| Page title | `--text-role-page-title-*` | existing display role | Build your job profile |
+| Section title | `--text-role-section-title-*` | existing section hierarchy | Search Settings |
+| Panel/card title | `--text-role-panel-title-*` | existing compact panel hierarchy | Job board search, Draft profile |
+| Field/group label | `--text-role-field-label-*` via `--field-label-*` | 0.875rem / 14px, bold | Location, Capital cities, Work type, Annual base, Max pages to check |
+| Control value / selectable option | `--text-role-control-value-*` via `--control-*` | 0.875rem / 14px, regular | Brisbane, `$0`, Last 7 days, Permanent, Hybrid, `49`, page `5` |
+| Helper text | `--text-role-helper-*` via `--help-copy-*` | compact secondary copy | All sectors selected, field help |
+| Chip/tag | `--text-role-chip-*` | compact metadata | role/capability chips |
+| Status/meta | `--text-role-status-*` / caption or micro roles where documented | compact status hierarchy | Strong, TEST, counts |
+
+**Control-value rule:** ordinary editable/selectable values use the same 14px base size across inputs, number/currency inputs, selects, checkbox options and choice controls. A selected choice may become stronger or use accent colour, but it does not get its own font size. This follows productive enterprise UI patterns in Carbon/Fluent where ordinary field/menu/control text uses a consistent 14px body role.
+
+**Field-label rule:** equivalent field/group labels share one canonical label role. Do not make a Location legend, salary label, results-per-search label, or preference label larger/smaller because of the page that contains it.
+
+**Chip exception:** chips/tags are compact metadata rather than ordinary form values, so they intentionally retain the smaller chip role. Buttons, badges, hero/display copy, KPI figures, job-result headlines and other status/display content also keep their own semantic roles. Any new typography exception must be documented here or in the relevant component-map row rather than introduced as a literal page-specific `font-size`.
+
+**Governance:** shared semantic typography belongs in `themes.tokens.css` and shared component rules. Page CSS may place/reflow components but must not change a shared semantic role's font size simply to make a page fit.
 
 ### Token ownership chain
 

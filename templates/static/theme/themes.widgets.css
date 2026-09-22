@@ -548,9 +548,9 @@
   background: transparent;
   color: color-mix(in srgb, var(--text-muted) 82%, var(--text-primary));
   font: inherit;
-  font-size: var(--text-role-caption-font-size);
-  font-weight: var(--text-role-status-font-weight);
-  line-height: 1.15;
+  font-size: var(--text-role-control-value-font-size);
+  font-weight: var(--text-role-control-value-font-weight);
+  line-height: var(--text-role-control-value-line-height);
   text-align: center;
   white-space: nowrap;
   cursor: pointer;
@@ -763,7 +763,9 @@
   background: transparent;
   border-color: color-mix(in srgb, var(--text-muted) 18%, var(--border-subtle));
   color: color-mix(in srgb, var(--text-muted) 82%, var(--text-primary));
-  font-size: var(--text-role-caption-font-size);
+  font-size: var(--text-role-control-value-font-size);
+  font-weight: var(--text-role-control-value-font-weight);
+  line-height: var(--text-role-control-value-line-height);
   box-shadow: none;
 }
 
@@ -800,8 +802,9 @@
   background: color-mix(in srgb, var(--accent) 8%, var(--bg-surface));
   box-shadow: none;
   color: var(--text-primary);
-  font-size: var(--text-role-caption-font-size);
-  font-weight: var(--text-role-button-font-weight);
+  font-size: var(--text-role-control-value-font-size);
+  font-weight: var(--text-role-control-value-font-weight);
+  line-height: var(--text-role-control-value-line-height);
   font-variant-numeric: tabular-nums;
   justify-content: center;
   text-align: center;
@@ -2642,6 +2645,7 @@
   line-height: var(--control-line-height);
   cursor: pointer;
 }
+
 .jh-checkbox {
   appearance: none;
   display: inline-grid;

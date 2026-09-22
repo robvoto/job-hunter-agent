@@ -24,6 +24,25 @@ textarea {
   font: inherit;
 }
 
+/* Semantic form-value typography. Page/component chrome may change geometry,
+   but ordinary editable/selectable values share one application role. */
+input[type="text"],
+input[type="number"],
+input[type="search"],
+input[type="email"],
+input[type="url"],
+input[type="tel"],
+input[type="password"],
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+select,
+textarea {
+  font-size: var(--text-role-control-value-font-size);
+  font-weight: var(--text-role-control-value-font-weight);
+  line-height: var(--text-role-control-value-line-height);
+}
+
 /* Shared page-shell input chrome for pages that use the .page wrapper. */
 .page input:not([type="checkbox"]):not([type="radio"]),
 .page textarea {
@@ -427,6 +446,8 @@ body.job-hunter-wait-active {
   position: absolute;
   left: 14px;
   color: var(--text-muted);
+  font-size: var(--text-role-control-value-font-size);
+  line-height: var(--text-role-control-value-line-height);
   font-weight: 600;
   pointer-events: none;
   z-index: 1;

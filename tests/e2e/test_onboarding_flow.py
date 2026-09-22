@@ -251,10 +251,56 @@ def test_search_basics_location_layout_stays_compact_and_responsive(
     groups = location.locator(".location-checkbox-group")
     expect(groups).to_have_count(3)
 
+    def computed(locator, prop):
+        return locator.evaluate("(el, prop) => getComputedStyle(el)[prop]", prop)
+
+    def resolved_token(token, prop="fontSize"):
+        return page.evaluate(
+            """([token, prop]) => {
+                const probe = document.createElement('span');
+                probe.style.fontSize = `var(${token})`;
+                probe.style.fontWeight = `var(${token})`;
+                probe.style.lineHeight = `var(${token})`;
+                document.body.appendChild(probe);
+                const value = getComputedStyle(probe)[prop];
+                probe.remove();
+                return value;
+            }""",
+            [token, prop],
+        )
+
+    location_value = page.locator(".location-checkbox-option").first
+    preference_value = page.locator("#engagement_type_choices .choice-card--work-mode").first
+    salary_value = page.locator("#review_minimum_salary_yearly")
+    expected_value_size = resolved_token("--text-role-control-value-font-size")
+    assert computed(location_value, "fontSize") == expected_value_size
+    assert computed(preference_value, "fontSize") == expected_value_size
+    assert computed(salary_value, "fontSize") == expected_value_size
+
+    label_selectors = [
+        page.locator("#location_search_label"),
+        page.locator(".location-checkbox-group legend").first,
+        page.locator("#engagement_type_label"),
+        page.locator('label[for="review_minimum_salary_yearly"]'),
+    ]
+    label_sizes = {computed(locator, "fontSize") for locator in label_selectors}
+    label_weights = {computed(locator, "fontWeight") for locator in label_selectors}
+    assert label_sizes == {resolved_token("--text-role-field-label-font-size")}
+    assert label_weights == {resolved_token("--text-role-field-label-font-weight", "fontWeight")}
+
     def box(locator):
         result = locator.bounding_box()
         assert result is not None
         return result
+
+    step3_grid = page.locator('.review-grid--search-basics')
+    step3_cards = step3_grid.locator(':scope > .review-block')
+    expect(step3_cards).to_have_count(2)
+    desktop_cards = [box(step3_cards.nth(i)) for i in range(2)]
+    assert abs(desktop_cards[0]["y"] - desktop_cards[1]["y"]) < 8
+    assert desktop_cards[0]["width"] > desktop_cards[1]["width"]
+    ratio = desktop_cards[0]["width"] / desktop_cards[1]["width"]
+    assert 1.3 <= ratio <= 1.7, f"step 3 desktop card ratio is {ratio}"
 
     # Desktop: all three groups stay on one row, with bounded deliberate gaps.
     location_box = box(location)
@@ -272,9 +318,10 @@ def test_search_basics_location_layout_stays_compact_and_responsive(
     gap_2 = third_left - second_right
     assert 16 <= gap_1 <= 96, f"capital/states visible gap is {gap_1}px"
     assert 16 <= gap_2 <= 96, f"states/territories visible gap is {gap_2}px"
-    # The selector content should not present as a giant mostly-empty row.
+    # In the two-column Step 3 composition, Location should use its narrower
+    # card efficiently rather than recreating a mostly-empty full-width row.
     assert wrap_box["width"] <= 950
-    assert wrap_box["width"] < location_box["width"] * 0.85
+    assert 0.9 <= wrap_box["width"] / location_box["width"] <= 1.01
 
     # Internal two-column lists also remain compact.
     sydney = box(groups.nth(0).locator('.checkbox-list-option:has-text("Sydney")'))
@@ -314,6 +361,10 @@ def test_search_basics_location_layout_stays_compact_and_responsive(
     salary_fields = compensation.locator(".salary-preference-fields > .onb-field")
     pref_box = box(preference_groups)
     compensation_box = box(compensation)
+    preference_items = preference_groups.locator(":scope > .onb-field")
+    pref_item_boxes = [box(preference_items.nth(i)) for i in range(3)]
+    assert pref_item_boxes[1]["y"] > pref_item_boxes[0]["y"]
+    assert pref_item_boxes[2]["y"] > pref_item_boxes[1]["y"]
     assert compensation_box["y"] > pref_box["y"] + pref_box["height"] - 8
     assert abs(compensation_box["x"] - pref_box["x"]) < 8
     annual_box = box(salary_fields.nth(0))
@@ -325,6 +376,8 @@ def test_search_basics_location_layout_stays_compact_and_responsive(
     # At medium width the same grouping remains stable and gives Work type /
     # Sector / Work mode the full row.
     page.set_viewport_size({"width": 1100, "height": 1100})
+    medium_cards = [box(step3_cards.nth(i)) for i in range(2)]
+    assert medium_cards[1]["y"] > medium_cards[0]["y"]
     pref_box = box(preference_groups)
     compensation_box = box(compensation)
     assert compensation_box["y"] > pref_box["y"] + pref_box["height"] - 8
@@ -335,8 +388,15 @@ def test_search_basics_location_layout_stays_compact_and_responsive(
     daily_box = box(salary_fields.nth(1))
     assert abs(annual_box["y"] - daily_box["y"]) < 8
 
-    # Phone stacks the salary fields as well.
+    # Phone stacks the two Step 3 cards and every control group.
     page.set_viewport_size({"width": 390, "height": 1000})
+    phone_cards = [box(step3_cards.nth(i)) for i in range(2)]
+    assert phone_cards[1]["y"] > phone_cards[0]["y"]
+    pref_item_boxes = [box(preference_items.nth(i)) for i in range(3)]
+    assert pref_item_boxes[1]["y"] > pref_item_boxes[0]["y"]
+    assert pref_item_boxes[2]["y"] > pref_item_boxes[1]["y"]
+
+    # Phone stacks the salary fields as well.
     annual_box = box(salary_fields.nth(0))
     daily_box = box(salary_fields.nth(1))
     assert daily_box["y"] > annual_box["y"]

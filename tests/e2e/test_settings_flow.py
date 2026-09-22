@@ -786,6 +786,47 @@ def test_search_basics_shared_layout_stays_balanced_at_settings_width(candidate_
     groups = locations.locator(".location-checkbox-group")
     expect(groups).to_have_count(3)
 
+    def computed(locator, prop):
+        return locator.evaluate("(el, prop) => getComputedStyle(el)[prop]", prop)
+
+    def resolved_token(token, prop="fontSize"):
+        return page.evaluate(
+            """([token, prop]) => {
+                const probe = document.createElement('span');
+                probe.style.fontSize = `var(${token})`;
+                probe.style.fontWeight = `var(${token})`;
+                probe.style.lineHeight = `var(${token})`;
+                document.body.appendChild(probe);
+                const value = getComputedStyle(probe)[prop];
+                probe.remove();
+                return value;
+            }""",
+            [token, prop],
+        )
+
+    value_controls = [
+        page.locator(".location-checkbox-option").first,
+        page.locator("#engagement_type_choices .choice-card--work-mode").first,
+        page.locator("#minimum_salary_yearly"),
+        page.locator("#search_date_window"),
+        page.locator("#seek_max_pages_choices .choice-card--seek-pages").first,
+        page.locator("#linkedin_results_per_search"),
+    ]
+    expected_value_size = resolved_token("--text-role-control-value-font-size")
+    assert {computed(locator, "fontSize") for locator in value_controls} == {expected_value_size}
+
+    label_controls = [
+        page.locator('label[for="locations"]'),
+        page.locator(".location-checkbox-group legend").first,
+        page.locator("#engagement_type_label"),
+        page.locator('label[for="minimum_salary_yearly"]'),
+        page.locator('label[for="search_date_window"]'),
+        page.locator("#seek_max_pages_label"),
+        page.locator('label[for="linkedin_results_per_search"]'),
+    ]
+    assert {computed(locator, "fontSize") for locator in label_controls} == {resolved_token("--text-role-field-label-font-size")}
+    assert {computed(locator, "fontWeight") for locator in label_controls} == {resolved_token("--text-role-field-label-font-weight", "fontWeight")}
+
     def box(locator):
         result = locator.bounding_box()
         assert result is not None
