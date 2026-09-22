@@ -105,9 +105,20 @@ def api_profile_patch(body: dict = Body(...)):  # type: ignore[no-untyped-def]
         updated = srv.patch_profile(patch)
 
         changed_rule_keys = srv.SettingsHandler._changed_matching_rule_keys(current, updated)
-        if changed_rule_keys:
+        # The workspace summary is cached HTML, so profile-backed locations need the same refresh.
+        current_search_locations = (current.get("search_settings") or {}).get("locations", [])
+        updated_search_locations = (updated.get("search_settings") or {}).get("locations", [])
+        search_locations_changed = current_search_locations != updated_search_locations
+        if changed_rule_keys or search_locations_changed:
+            refresh_reasons = []
+            if changed_rule_keys:
+                refresh_reasons.append(
+                    f"profile matching rules saved: {', '.join(sorted(changed_rule_keys))}"
+                )
+            if search_locations_changed:
+                refresh_reasons.append("profile search locations saved")
             srv.rebuild_workspace_after_rule_change(
-                f"profile matching rules saved: {', '.join(sorted(changed_rule_keys))}"
+                "; ".join(refresh_reasons)
             )
 
     except Exception as exc:
