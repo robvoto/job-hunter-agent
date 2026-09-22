@@ -6,7 +6,8 @@ html {
   color-scheme: light;
 }
 
-[data-theme="dark-professional"] html {
+/* The theme is applied to <html>; tell the browser to render native controls for that theme. */
+html[data-theme="dark-professional"] {
   color-scheme: dark;
 }
 
