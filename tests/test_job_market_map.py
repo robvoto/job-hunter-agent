@@ -181,16 +181,33 @@ def test_search_client_forwards_scope_filters_as_repeated_query_values():
     page = client.search_page(
         role_terms=["Business Analyst", "Product Manager"],
         sources=["seek", "linkedin"],
-        geography_codes=["SYDNEY", "MELBOURNE"],
+        geography_codes=["NSW", "VIC"],
+        locations=["Sydney", "Melbourne"],
+        classifications=["Information & Communication Technology"],
+        subclassifications=["Business/Systems Analysts"],
+        employment_types=["Full time", "Contract/Temp"],
+        workplace_types=["Hybrid", "Remote"],
+        apply_methods=["quick_apply"],
+        companies=["Acme"],
         posted_after="2026-09-08T12:00:00+00:00",
+        salary_min=120000,
+        salary_max=180000,
+        salary_period="year",
+        salary_currency="AUD",
     )
 
     assert page["items"][0]["id"] == 55
     assert requested_urls == [
         "https://jmm.example/v3/jobs/search?q=Business+Analyst&q=Product+Manager"
-        "&source=seek&source=linkedin&geography_code=SYDNEY&geography_code=MELBOURNE"
-        "&posted_after=2026-09-08T12%3A00%3A00%2B00%3A00&after_id=0"
-        "&include_archived=False&include_raw=False"
+        "&source=seek&source=linkedin&geography_code=NSW&geography_code=VIC"
+        "&location=Sydney&location=Melbourne"
+        "&classification=Information+%26+Communication+Technology"
+        "&subclassification=Business%2FSystems+Analysts"
+        "&employment_type=Full+time&employment_type=Contract%2FTemp"
+        "&workplace_type=Hybrid&workplace_type=Remote&apply_method=quick_apply"
+        "&company=Acme&posted_after=2026-09-08T12%3A00%3A00%2B00%3A00"
+        "&salary_min=120000&salary_max=180000&salary_period=year&salary_currency=AUD"
+        "&after_id=0&include_archived=False&include_raw=False"
     ]
 
 
@@ -397,9 +414,8 @@ def test_market_source_searches_selected_scope_and_requests_current_jd(monkeypat
     assert all(call["geography_codes"] == ["NSW"] for call in search_calls)
     assert all(call["posted_after"] == "2026-09-08T12:00:00+00:00" for call in search_calls)
     assert jd_calls == [1, 2]
-    # JMM pages are prefetched into one bounded result set before analysis, so
-    # title-stage and fit-stage cache state are each persisted once for the batch.
-    assert len(saved_caches) == 2
+    # Progressive JMM paging persists title/fit cache state after each page.
+    assert len(saved_caches) == 4
     assert [row["job_key"] for row in audit] == ["seek:1", "seek:2"]
     assert len(kept) == 2
     assert all("full_description" not in record for record in kept)
@@ -408,10 +424,10 @@ def test_market_source_searches_selected_scope_and_requests_current_jd(monkeypat
     assert final_progress_detail["source"] == "job_market_map"
     assert progress_states[0]["headline"] == "Finding matching jobs"
     assert any(state["headline"] == "Checking job titles — 1 of 2" for state in progress_states)
-    assert any(state["headline"] == "Getting job descriptions — 1 of 2" for state in progress_states)
-    assert any(state["headline"] == "Reviewing job fit — 1 of 2" for state in progress_states)
+    assert any(state["headline"] == "Getting job descriptions — 1 of 1" for state in progress_states)
+    assert any(state["headline"] == "Reviewing job fit — 1 of 1" for state in progress_states)
     assert any(
-        state["headline"] == "Finalising results — 1 of 2"
+        state["headline"] == "Finalising results — 1 of 1"
         and state["detail"] == "Business Analyst 1"
         for state in progress_states
     )
@@ -419,7 +435,7 @@ def test_market_source_searches_selected_scope_and_requests_current_jd(monkeypat
     assert progress_states[-1]["headline"] == "Search review complete"
 
 
-def test_market_source_tolerates_live_total_changes_after_snapshot_boundary_is_fixed(monkeypatch):
+def test_market_source_rejects_total_changes_inside_fixed_scope(monkeypatch):
     pages = iter(
         [
             _feed_page(
@@ -434,7 +450,7 @@ def test_market_source_tolerates_live_total_changes_after_snapshot_boundary_is_f
                 next_cursor=2,
                 has_more=False,
                 snapshot_max_id=2,
-                total=1,
+                total=3,
             ),
         ]
     )
@@ -451,9 +467,10 @@ def test_market_source_tolerates_live_total_changes_after_snapshot_boundary_is_f
 
     monkeypatch.setattr(market_map_source, "JobMarketMapClient", FakeClient)
     client = FakeClient()
-    items = market_map_source._load_filtered_market_items(_market_context(), client)
 
-    assert [int(item["id"]) for item in items] == [1, 2]
+    with pytest.raises(JobMarketMapContractError, match="total changed"):
+        list(market_map_source._iter_filtered_market_pages(_market_context(), client))
+
     assert calls == [(0, None), (1, 2)]
 
 
@@ -1104,3 +1121,345 @@ def test_normal_runtime_dispatches_only_to_jmm_and_surfaces_unavailable_failure(
     assert skills == []
     assert context.source_failure_message == "job_market_map failed: JMM unavailable"
     assert context.source_cache_stats["job_market_map"]["health"] == "full_failure"
+
+
+def test_jh311_maps_existing_search_preferences_to_neutral_jmm_filters():
+    context = _market_context(
+        profile={
+            "match_preferences": {
+                "engagement_type": ["permanent"],
+                "work_mode_preference": ["hybrid"],
+            },
+            "salary_preferences": {
+                "minimum_salary_yearly": 120000,
+                "minimum_daily_rate": 0,
+            },
+        }
+    )
+    context.enabled_sources = ["seek", "linkedin", "apsjobs"]
+    context.search_settings.update(
+        {
+            "classification_ids": ["6281"],
+            "classification": ["Information & Communication Technology"],
+            "subclassification": ["Business/Systems Analysts"],
+            "company": ["Acme"],
+            "seek_quick_apply_only": True,
+            "linkedin_easy_apply_only": False,
+            "linkedin_hours_old": 48,
+        }
+    )
+
+    scopes = market_map_source._build_market_search_scopes(context)
+
+    assert [scope["sources"] for scope in scopes] == [["seek"], ["linkedin"], ["apsjobs"]]
+    assert all(scope["role_terms"] == ["Business Analyst"] for scope in scopes)
+    assert all(scope["geography_codes"] == ["NSW"] for scope in scopes)
+    assert all(scope["locations"] == ["Sydney"] for scope in scopes)
+    assert all(
+        scope["classifications"] == ["Information & Communication Technology"]
+        for scope in scopes
+    )
+    assert all(scope["subclassifications"] == ["Business/Systems Analysts"] for scope in scopes)
+    assert all(scope["employment_types"] == ["Permanent", "Full time"] for scope in scopes)
+    assert all(scope["workplace_types"] == ["Hybrid"] for scope in scopes)
+    assert all(scope["companies"] == ["Acme"] for scope in scopes)
+    assert scopes[0]["apply_methods"] == ["quick_apply"]
+    assert scopes[1]["apply_methods"] == ["external_apply"]
+    assert scopes[2]["apply_methods"] == []
+    assert scopes[0]["posted_after"] == "2026-09-08T12:00:00+00:00"
+    assert scopes[1]["posted_after"] == "2026-09-09T12:00:00+00:00"
+    assert scopes[2]["posted_after"] == "2026-09-08T12:00:00+00:00"
+    assert all(scope["salary_min"] == 120000 for scope in scopes)
+    assert all(scope["salary_period"] == "year" for scope in scopes)
+    assert all(scope["salary_currency"] == "AUD" for scope in scopes)
+    assert all("6281" not in scope["classifications"] for scope in scopes)
+
+
+def test_jh311_does_not_misroute_seek_classification_ids_into_jmm_text_filter():
+    context = _market_context()
+    context.search_settings.pop("classification", None)
+    context.search_settings.pop("classifications", None)
+    context.search_settings["classification_ids"] = ["6281"]
+
+    scopes = market_map_source._build_market_search_scopes(context)
+
+    assert scopes
+    assert all(scope["classifications"] == [] for scope in scopes)
+
+
+def test_jh311_accepts_future_jmm_sources_without_board_allowlist():
+    context = _market_context()
+    context.enabled_sources = ["futureboard"]
+
+    scopes = market_map_source._build_market_search_scopes(context)
+
+    assert [scope["sources"] for scope in scopes] == [["futureboard"]]
+    assert scopes[0]["apply_methods"] == []
+
+
+def test_jh311_uses_one_snapshot_boundary_across_source_scopes():
+    calls: list[tuple[str, int | None]] = []
+
+    class FakeClient:
+        def search_page(self, **kwargs):
+            source = kwargs["sources"][0]
+            calls.append((source, kwargs["through_id"]))
+            return _feed_page(
+                items=[],
+                next_cursor=0,
+                has_more=False,
+                snapshot_max_id=10,
+                total=0,
+            )
+
+    context = _market_context()
+    context.enabled_sources = ["seek", "linkedin"]
+
+    list(market_map_source._iter_filtered_market_pages(context, FakeClient()))
+
+    assert calls == [("seek", None), ("linkedin", 10)]
+
+
+def test_jh311_rejects_snapshot_change_between_source_scopes():
+    calls = 0
+
+    class FakeClient:
+        def search_page(self, **kwargs):
+            nonlocal calls
+            calls += 1
+            return _feed_page(
+                items=[],
+                next_cursor=0,
+                has_more=False,
+                snapshot_max_id=10 if calls == 1 else 11,
+                total=0,
+            )
+
+    context = _market_context()
+    context.enabled_sources = ["seek", "linkedin"]
+
+    with pytest.raises(JobMarketMapContractError, match="snapshot boundary changed"):
+        list(market_map_source._iter_filtered_market_pages(context, FakeClient()))
+
+
+def test_jh311_processes_each_cursor_page_before_requesting_the_next(monkeypatch):
+    analysed_ids: list[int] = []
+    calls: list[tuple[int, int | None]] = []
+
+    class FakeClient:
+        @classmethod
+        def from_environment(cls):
+            return cls()
+
+        def search_page(self, **kwargs):
+            calls.append((kwargs["after_id"], kwargs["through_id"]))
+            if kwargs["after_id"] == 0:
+                return _feed_page(
+                    items=[_item(1)],
+                    next_cursor=1,
+                    has_more=True,
+                    snapshot_max_id=2,
+                    total=2,
+                )
+            assert analysed_ids == [1], "JH fetched page 2 before analysing page 1"
+            return _feed_page(
+                items=[_item(2)],
+                next_cursor=2,
+                has_more=False,
+                snapshot_max_id=2,
+                total=2,
+            )
+
+    def pre(record, _context):
+        analysed_ids.append(int(record["market_map_job_id"]))
+        return ({"decision": "REJECT"}, record, [], False)
+
+    monkeypatch.setattr(market_map_source, "JobMarketMapClient", FakeClient)
+    monkeypatch.setattr(market_map_source, "review_pre_detail_normalized_job", pre)
+    monkeypatch.setattr(market_map_source, "save_llm_cache", lambda _cache: None)
+
+    kept, _audit, _skills = market_map_source.run_market_map_source(_market_context())
+
+    assert kept == []
+    assert analysed_ids == [1, 2]
+    assert calls == [(0, None), (1, 2)]
+
+
+def test_jh311_mixed_source_scopes_dedupe_the_same_canonical_vacancy(monkeypatch):
+    searched_sources: list[str] = []
+    analysed_ids: list[int] = []
+    analysed_records: list[dict] = []
+
+    class FakeClient:
+        @classmethod
+        def from_environment(cls):
+            return cls()
+
+        def search_page(self, **kwargs):
+            source = kwargs["sources"][0]
+            searched_sources.append(source)
+            if source == "linkedin":
+                assert kwargs["through_id"] == 7
+            item = {
+                **_item(7),
+                "matched_sources": [
+                    {
+                        "id": 7 if source == "seek" else 17,
+                        "source": source,
+                        "source_job_id": "7" if source == "seek" else "linkedin-7",
+                    }
+                ],
+            }
+            return _feed_page(
+                items=[item],
+                next_cursor=7,
+                has_more=False,
+                snapshot_max_id=7,
+                total=1,
+            )
+
+    def pre(record, _context):
+        analysed_ids.append(int(record["market_map_job_id"]))
+        analysed_records.append(record)
+        return ({"decision": "REJECT"}, record, [], False)
+
+    context = _market_context()
+    context.enabled_sources = ["seek", "linkedin"]
+    monkeypatch.setattr(market_map_source, "JobMarketMapClient", FakeClient)
+    monkeypatch.setattr(market_map_source, "review_pre_detail_normalized_job", pre)
+    monkeypatch.setattr(market_map_source, "save_llm_cache", lambda _cache: None)
+
+    market_map_source.run_market_map_source(context)
+
+    assert searched_sources == ["seek", "linkedin"]
+    assert analysed_ids == [7]
+    assert len(analysed_records) == 1
+    assert [link["source"] for link in analysed_records[0]["duplicate_links"]] == ["linkedin"]
+    assert [entry["source"] for entry in analysed_records[0]["source_provenance"]] == [
+        "seek",
+        "linkedin",
+    ]
+
+
+def test_jh311_preserves_cross_source_match_when_canonical_primary_is_other_board():
+    item = {
+        **_item(21),
+        "matched_sources": [
+            {"id": 31, "source": "linkedin", "source_job_id": "linkedin-21"}
+        ],
+    }
+
+    record = market_map_source.normalize_market_job(
+        item, run_iso="2026-09-12T12:00:00+00:00"
+    )
+
+    assert record["source"] == "seek"
+    assert record["job_key"] == "seek:21"
+    assert [link["source"] for link in record["duplicate_links"]] == ["linkedin"]
+    assert record["duplicate_links"][0]["kind"] == "confirmed_duplicate"
+    assert record["duplicate_links"][0]["job_key"] == "linkedin:linkedin-21"
+    assert [entry["source"] for entry in record["source_provenance"]] == ["seek", "linkedin"]
+    assert (
+        record["source_provenance"][1]["source_metadata"]["raw_source_fields"]
+        ["jmm_matched_source"]["id"]
+        == 31
+    )
+
+
+def test_jh311_jmm_salary_filter_keeps_uncertain_salary_for_jh_review(monkeypatch):
+    from job_hunter_agent.preferences import passes_preference_filters
+
+    reviewed_ids: list[int] = []
+
+    class FakeClient:
+        @classmethod
+        def from_environment(cls):
+            return cls()
+
+        def search_page(self, **kwargs):
+            assert kwargs["salary_min"] == 120000
+            assert kwargs["salary_period"] == "year"
+            assert kwargs["salary_currency"] == "AUD"
+            uncertain_item = {
+                **_item(9),
+                "salary_text": "",
+                "salary_normalized": {"state": "unknown"},
+                "matched_sources": [
+                    {
+                        "source": "seek",
+                        "source_job_id": "9",
+                        "salary_match_basis": "uncertain_preserved",
+                    }
+                ],
+            }
+            return _feed_page(
+                items=[uncertain_item],
+                next_cursor=9,
+                has_more=False,
+                snapshot_max_id=9,
+                total=1,
+            )
+
+    context = _market_context(
+        profile={
+            "salary_preferences": {
+                "minimum_salary_yearly": 120000,
+                "minimum_daily_rate": 0,
+            }
+        }
+    )
+
+    def pre(record, _review_context):
+        reviewed_ids.append(int(record["market_map_job_id"]))
+        eligible, _reason = passes_preference_filters(record, context.profile)
+        assert eligible is True
+        return ({"decision": "REJECT"}, record, [], False)
+
+    monkeypatch.setattr(market_map_source, "JobMarketMapClient", FakeClient)
+    monkeypatch.setattr(market_map_source, "review_pre_detail_normalized_job", pre)
+    monkeypatch.setattr(market_map_source, "save_llm_cache", lambda _cache: None)
+
+    market_map_source.run_market_map_source(context)
+
+    assert reviewed_ids == [9]
+
+
+def test_jh311_maps_both_salary_floors_as_separate_neutral_scopes():
+    context = _market_context(
+        profile={
+            "match_preferences": {
+                "engagement_type": ["permanent", "contract", "full_time_contract"],
+            },
+            "salary_preferences": {
+                "minimum_salary_yearly": 120000,
+                "minimum_daily_rate": 900,
+            },
+        }
+    )
+
+    scopes = market_map_source._build_market_search_scopes(context)
+
+    assert len(scopes) == 2
+    assert {
+        (scope["salary_min"], scope["salary_period"], scope["salary_currency"])
+        for scope in scopes
+    } == {(120000, "year", "AUD"), (900, "day", "AUD")}
+
+
+def test_jh311_search_failure_propagates_without_direct_source_fallback(monkeypatch):
+    class FailedClient:
+        @classmethod
+        def from_environment(cls):
+            return cls()
+
+        def search_page(self, **_kwargs):
+            raise JobMarketMapUnavailable("JMM unavailable during /v3/jobs/search")
+
+    monkeypatch.setattr(market_map_source, "JobMarketMapClient", FailedClient)
+
+    try:
+        market_map_source.run_market_map_source(_market_context())
+    except JobMarketMapUnavailable as exc:
+        assert "/v3/jobs/search" in str(exc)
+    else:
+        raise AssertionError("JMM search failure was swallowed instead of failing clearly")
