@@ -76,6 +76,23 @@ class _Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler contract
         parsed = urlsplit(self.path)
         query = parse_qs(parsed.query)
+        if parsed.path == "/v3/readiness":
+            self._json(
+                {
+                    "api_version": "v3",
+                    "schema_version": 8,
+                    "source_runs": {
+                        "seek": {"status": "COMPLETE"},
+                        "linkedin": {"status": "COMPLETE"},
+                    },
+                    "jd_coverage": {
+                        "available": len(self.state.jobs),
+                        "missing_not_cached": 0,
+                        "failed": 0,
+                    },
+                }
+            )
+            return
         if parsed.path.startswith("/v3/jobs/") and parsed.path.endswith("/jd"):
             job_id = int(parsed.path.split("/")[3])
             self._json(

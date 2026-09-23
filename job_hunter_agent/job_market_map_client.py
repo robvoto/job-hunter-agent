@@ -66,6 +66,10 @@ class JobMarketMapJDUnavailable(JobMarketMapError):
     """JMM confirmed that a job's current JD is no longer available."""
 
 
+class JobMarketMapJDNotCached(JobMarketMapError):
+    """JMM is healthy but this job does not have a cached JD yet."""
+
+
 class JobMarketMapContractError(JobMarketMapError):
     """JMM returned a response that is not the supported canonical contract."""
 
@@ -217,6 +221,8 @@ class JobMarketMapClient:
             message = f"Job Market Map request failed: {exc}"
             if detail:
                 message = f"{message}: {detail}"
+            if terminal_jd_unavailable and exc.code == 409:
+                raise JobMarketMapJDNotCached(message) from exc
             if terminal_jd_unavailable and exc.code == 410:
                 raise JobMarketMapJDUnavailable(message) from exc
             raise JobMarketMapUnavailable(message) from exc
@@ -458,6 +464,27 @@ class JobMarketMapClient:
             raise JobMarketMapContractError(
                 "Job Market Map exact lookup returned a different source identity"
             )
+        return payload
+
+    def get_readiness(self) -> dict[str, Any]:
+        payload = self._request("GET", "/readiness")
+        self._validate_metadata(payload)
+        source_runs = payload.get("source_runs")
+        coverage = payload.get("jd_coverage")
+        if not isinstance(source_runs, dict) or not isinstance(coverage, dict):
+            raise JobMarketMapContractError("Job Market Map readiness payload is incomplete")
+        for source in ("seek", "linkedin"):
+            run = source_runs.get(source)
+            if not isinstance(run, dict) or not str(run.get("status") or "").strip():
+                raise JobMarketMapContractError(
+                    f"Job Market Map readiness source status is invalid: {source}"
+                )
+        for key in ("available", "missing_not_cached", "failed"):
+            value = coverage.get(key)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise JobMarketMapContractError(
+                    f"Job Market Map readiness JD count is invalid: {key}"
+                )
         return payload
 
     def get_cached_jd(self, *, jmm_job_id: int, identity_key: str) -> dict[str, Any]:

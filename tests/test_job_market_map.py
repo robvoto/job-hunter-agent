@@ -23,6 +23,7 @@ from job_hunter_agent import (
 from job_hunter_agent.job_market_map_client import (
     JobMarketMapClient,
     JobMarketMapContractError,
+    JobMarketMapJDNotCached,
     JobMarketMapJDUnavailable,
     JobMarketMapUnavailable,
 )
@@ -1777,3 +1778,226 @@ def test_jh311_search_failure_propagates_without_direct_source_fallback(monkeypa
         assert "/v3/jobs/search" in str(exc)
     else:
         raise AssertionError("JMM search failure was swallowed instead of failing clearly")
+
+
+def test_jh313_cached_jd_409_is_not_cached_and_never_posts():
+    requests = []
+
+    def opener(request, **_kwargs):
+        requests.append((request.get_method(), request.full_url))
+        raise HTTPError(
+            request.full_url,
+            409,
+            "Conflict",
+            {},
+            BytesIO(b'{"detail":"JD not cached yet"}'),
+        )
+
+    client = JobMarketMapClient("https://jmm.example/v3", opener=opener)
+
+    with pytest.raises(JobMarketMapJDNotCached, match="JD not cached yet"):
+        client.get_cached_jd(jmm_job_id=9, identity_key="seek:id:9")
+
+    assert requests == [
+        ("GET", "https://jmm.example/v3/jobs/9/jd?identity_key=seek%3Aid%3A9")
+    ]
+
+
+def test_jh313_one_409_is_audited_skipped_and_does_not_fail_run(monkeypatch):
+    fit_ids = []
+
+    class CacheMissClient:
+        @classmethod
+        def from_environment(cls):
+            return cls()
+
+        def get_readiness(self):
+            return {
+                "source_runs": {
+                    "seek": {"status": "COMPLETE"},
+                    "linkedin": {"status": "COMPLETE"},
+                },
+                "jd_coverage": {
+                    "available": 2,
+                    "missing_not_cached": 1,
+                    "failed": 0,
+                },
+            }
+
+        def search_page(self, **_kwargs):
+            return _feed_page(
+                items=[_item(i) for i in range(1083, 1086)],
+                next_cursor=1085,
+                has_more=False,
+            )
+
+        def get_cached_jd(self, *, jmm_job_id, identity_key):
+            if jmm_job_id == 1084:
+                raise JobMarketMapJDNotCached(
+                    "Job Market Map request failed: HTTP Error 409: Conflict: JD not cached yet"
+                )
+            return {
+                "full_description": f"JD {jmm_job_id}",
+                "jd_source": "jmm",
+                "jd_fetched_at": "2026-09-14T00:00:00+00:00",
+            }
+
+    monkeypatch.setattr(market_map_source, "JobMarketMapClient", CacheMissClient)
+    monkeypatch.setattr(
+        market_map_source,
+        "review_pre_detail_normalized_job",
+        lambda record, _context: ({"decision": "KEEP"}, record, [], True),
+    )
+
+    def keep_after_fit(record, _context):
+        fit_ids.append(record["market_map_job_id"])
+        return {"decision": "KEEP"}, record, []
+
+    monkeypatch.setattr(
+        market_map_source,
+        "review_post_detail_normalized_job",
+        keep_after_fit,
+    )
+    monkeypatch.setattr("job_hunter_agent.paths.get_active_user_id", lambda: "rob")
+
+    result = source_runner._run_market_map_source(_market_context())
+
+    assert [record["market_map_job_id"] for record in result.kept_records] == [1083, 1085]
+    assert fit_ids == [1083, 1085]
+    miss_row = next(
+        row for row in result.audit_rows if row["market_map_job_id"] == 1084
+    )
+    assert miss_row["reject_reason"] == "JMM_JD_NOT_CACHED"
+    assert miss_row["retryable"] is True
+    assert miss_row["retry_reason"] == "JMM_JD_NOT_CACHED"
+    assert result.error is None
+    assert result.source_collection_complete is True
+
+
+def test_jh313_multiple_409s_are_counted_and_skipped(monkeypatch, caplog):
+    class MultipleCacheMissClient:
+        @classmethod
+        def from_environment(cls):
+            return cls()
+
+        def get_readiness(self):
+            return {
+                "source_runs": {
+                    "seek": {"status": "COMPLETE"},
+                    "linkedin": {"status": "COMPLETE"},
+                },
+                "jd_coverage": {
+                    "available": 1,
+                    "missing_not_cached": 2,
+                    "failed": 0,
+                },
+            }
+
+        def search_page(self, **_kwargs):
+            return _feed_page(
+                items=[_item(i) for i in range(1083, 1086)],
+                next_cursor=1085,
+                has_more=False,
+            )
+
+        def get_cached_jd(self, *, jmm_job_id, identity_key):
+            if jmm_job_id in {1083, 1084}:
+                raise JobMarketMapJDNotCached(
+                    "Job Market Map request failed: HTTP Error 409: Conflict: JD not cached yet"
+                )
+            return {
+                "full_description": f"JD {jmm_job_id}",
+                "jd_source": "jmm",
+                "jd_fetched_at": "2026-09-14T00:00:00+00:00",
+            }
+
+    monkeypatch.setattr(
+        market_map_source, "JobMarketMapClient", MultipleCacheMissClient
+    )
+    monkeypatch.setattr(
+        market_map_source,
+        "review_pre_detail_normalized_job",
+        lambda record, _context: ({"decision": "KEEP"}, record, [], True),
+    )
+    monkeypatch.setattr(
+        market_map_source,
+        "review_post_detail_normalized_job",
+        lambda record, _context: ({"decision": "KEEP"}, record, []),
+    )
+    monkeypatch.setattr("job_hunter_agent.paths.get_active_user_id", lambda: "rob")
+
+    with caplog.at_level("INFO", logger="job_hunter_agent.market_map_source"):
+        result = source_runner._run_market_map_source(_market_context())
+
+    misses = [
+        row
+        for row in result.audit_rows
+        if row.get("reject_reason") == "JMM_JD_NOT_CACHED"
+    ]
+    assert len(misses) == 2
+    assert [record["market_map_job_id"] for record in result.kept_records] == [1085]
+    assert result.error is None
+    assert result.source_collection_complete is True
+    assert "not_cached=2" in caplog.text
+
+
+def test_jh313_degraded_readiness_uses_existing_system_warning_surface(monkeypatch):
+    warnings = []
+    monkeypatch.setattr(
+        market_map_source,
+        "record_system_warning",
+        lambda **kwargs: warnings.append(kwargs) or kwargs,
+    )
+    readiness = {
+        "source_runs": {
+            "seek": {
+                "status": "PARTIAL_JD",
+                "started_at": "2026-09-22T00:00:00+00:00",
+            },
+            "linkedin": {
+                "status": "COMPLETE",
+                "started_at": "2026-09-22T01:00:00+00:00",
+            },
+        },
+        "jd_coverage": {
+            "available": 100,
+            "missing_not_cached": 7,
+            "failed": 2,
+        },
+    }
+
+    market_map_source._record_jmm_readiness(readiness, run_id="run-313")
+
+    assert len(warnings) == 1
+    assert warnings[0]["category"] == "jmm_readiness"
+    assert warnings[0]["severity"] == "warning"
+    assert warnings[0]["context"]["jd_coverage"]["missing_not_cached"] == 7
+
+
+def test_jh313_readiness_client_reads_get_only():
+    requests = []
+
+    def opener(request, **_kwargs):
+        requests.append((request.get_method(), request.full_url))
+        return _Response(
+            {
+                "api_version": "v3",
+                "schema_version": 12,
+                "source_runs": {
+                    "seek": {"status": "COMPLETE"},
+                    "linkedin": {"status": "COMPLETE"},
+                },
+                "jd_coverage": {
+                    "available": 100,
+                    "missing_not_cached": 7,
+                    "failed": 2,
+                },
+            }
+        )
+
+    client = JobMarketMapClient("https://jmm.example/v3", opener=opener)
+
+    payload = client.get_readiness()
+
+    assert payload["jd_coverage"]["failed"] == 2
+    assert requests == [("GET", "https://jmm.example/v3/readiness")]
