@@ -2070,57 +2070,11 @@ def test_jh314_neutral_market_filters_use_text_settings_and_capabilities():
     assert by_source["apsjobs"]["companies"] == []
 
 
-def test_auto_market_source_uses_scraping_when_jmm_is_unavailable(monkeypatch):
-    from job_hunter_agent import run_context
-
-    monkeypatch.setattr(
-        run_context.JobMarketMapClient,
-        "from_environment",
-        classmethod(lambda cls: (_ for _ in ()).throw(JobMarketMapUnavailable("not configured"))),
-    )
-    assert run_context._auto_market_map_ready(["seek", "linkedin"]) is False
-
-
-def test_auto_market_source_uses_jmm_only_for_usable_selected_sources(monkeypatch):
-    from job_hunter_agent import run_context
-
-    class ReadyClient:
-        def readiness(self):
-            return {
-                "source_runs": {
-                    "seek": {"status": "COMPLETE"},
-                    "linkedin": {"status": "PARTIAL_FAILURE"},
-                },
-                "jd_coverage": {"available": 10, "missing_not_cached": 1, "failed": 1},
-            }
-
-    monkeypatch.setattr(run_context.JobMarketMapClient, "from_environment", classmethod(lambda cls: ReadyClient()))
-    assert run_context._auto_market_map_ready(["seek", "linkedin"]) is True
-
-    class NotReadyClient:
-        def readiness(self):
-            return {
-                "source_runs": {
-                    "seek": {"status": "RUNNING"},
-                    "linkedin": {"status": "COMPLETE"},
-                },
-                "jd_coverage": {"available": 10, "missing_not_cached": 1, "failed": 1},
-            }
-
-    monkeypatch.setattr(run_context.JobMarketMapClient, "from_environment", classmethod(lambda cls: NotReadyClient()))
-    assert run_context._auto_market_map_ready(["seek", "linkedin"]) is False
-
-
 def test_market_source_mode_resolves_before_run(monkeypatch):
     from job_hunter_agent import run_context
 
     monkeypatch.setattr(run_context, "get_market_source_mode", lambda: "scrape")
-    monkeypatch.setattr(
-        run_context,
-        "_auto_market_map_ready",
-        lambda *_args: pytest.fail("explicit scrape mode must not call JMM readiness"),
-    )
-    assert run_context._resolve_use_market_map(["seek"]) is False
+    assert run_context._resolve_use_market_map() is False
 
     monkeypatch.setattr(run_context, "get_market_source_mode", lambda: "jmm")
-    assert run_context._resolve_use_market_map(["seek"]) is True
+    assert run_context._resolve_use_market_map() is True

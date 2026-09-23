@@ -139,7 +139,8 @@ KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS = "linkedin_parallel_search_workers"
 KEY_LINKEDIN_PARALLEL_REVIEW_WORKERS = "linkedin_parallel_review_workers"
 KEY_JOB_MARKET_MAP_PARALLEL_WORKERS = "job_market_map_parallel_workers"
 KEY_MARKET_SOURCE_MODE = "market_source_mode"
-MARKET_SOURCE_MODES = frozenset({"auto", "jmm", "scrape"})
+MARKET_SOURCE_MODES = frozenset({"jmm", "scrape"})
+# Auto is intentionally deferred until JH owns a reviewed readiness/coverage policy.
 KEY_APSJOBS_RESULTS_PER_SEARCH = "apsjobs_results_per_search"
 KEY_SORT_NEWEST_FIRST = "sort_newest_first"
 KEY_PLAYWRIGHT_VIEWPORT_WIDTH = "playwright_viewport_width"
@@ -176,7 +177,7 @@ DEFAULT_SEARCH_SETTINGS.setdefault(KEY_APSJOBS_ENABLED, True)
 DEFAULT_SEARCH_SETTINGS.setdefault(KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS, 3)
 DEFAULT_SEARCH_SETTINGS.setdefault(KEY_LINKEDIN_PARALLEL_REVIEW_WORKERS, 3)
 DEFAULT_SEARCH_SETTINGS.setdefault(KEY_JOB_MARKET_MAP_PARALLEL_WORKERS, 3)
-DEFAULT_SEARCH_SETTINGS.setdefault(KEY_MARKET_SOURCE_MODE, "auto")
+DEFAULT_SEARCH_SETTINGS.setdefault(KEY_MARKET_SOURCE_MODE, "jmm")
 SEARCH_SETTING_LIMITS = copy.deepcopy(_MANAGED_GLOBAL_SETTINGS_SEED[KEY_LIMITS]["search"])
 SEARCH_SETTING_LIMITS.setdefault(
     KEY_LINKEDIN_PARALLEL_SEARCH_WORKERS,

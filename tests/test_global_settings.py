@@ -599,9 +599,9 @@ def test_managed_global_settings_normalizes_fit_review_debug_match_diagnostics_e
     )
 
 
-def test_market_source_mode_defaults_to_auto_and_rejects_unknown_values():
+def test_market_source_mode_defaults_to_jmm_and_rejects_unknown_values():
     normalized = normalize_global_settings({"search_settings": {}}, strict_managed=False)
-    assert normalized["search_settings"]["market_source_mode"] == "auto"
+    assert normalized["search_settings"]["market_source_mode"] == "jmm"
 
     normalized = normalize_global_settings(
         {"search_settings": {"market_source_mode": "SCRAPE"}},

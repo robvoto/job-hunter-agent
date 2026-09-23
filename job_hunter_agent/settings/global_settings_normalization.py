@@ -551,7 +551,7 @@ def _normalize_llm_prompt_settings(
 
 
 def _normalize_market_source_mode(source: dict[str, Any]) -> str:
-    mode = str(source.get(KEY_MARKET_SOURCE_MODE, DEFAULT_SEARCH_SETTINGS.get(KEY_MARKET_SOURCE_MODE, "auto"))).strip().lower()
+    mode = str(source.get(KEY_MARKET_SOURCE_MODE, DEFAULT_SEARCH_SETTINGS.get(KEY_MARKET_SOURCE_MODE, "jmm"))).strip().lower()
     if mode not in MARKET_SOURCE_MODES:
         raise ValueError(
             f"global_settings.{KEY_SEARCH_SETTINGS}.{KEY_MARKET_SOURCE_MODE} "

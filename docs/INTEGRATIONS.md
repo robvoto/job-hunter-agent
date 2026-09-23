@@ -6,10 +6,10 @@ This guide describes which integrations exist, which ones are packaged product b
 
 ### Job Market Map (JH-306)
 
-- Job Hunter chooses one market-acquisition lane before each run: JMM or Job Hunter's
-  built-in scrapers. `JMM` and `Scrape` force that lane; `Auto` evaluates JMM readiness
-  before the run and chooses one lane for the whole run. There is no mid-run fallback
-  between JMM and scraping.
+- Job Hunter chooses one explicit market-acquisition lane before each run: JMM or Job Hunter's
+  built-in scrapers. `JMM` and `Scrape` force that lane for the whole run; there is no
+  mid-run fallback between them. Automatic selection is intentionally deferred until JH
+  has an explicit, reviewed policy for interpreting JMM readiness/coverage facts.
 - Configure the local Job Hunter .env with
   `JOB_HUNTER_MARKET_MAP_BASE_URL=http://127.0.0.1:8770/v3`; there is no
   direct SQLite access. When JMM is the selected lane, JH consumes only JMM's supported
