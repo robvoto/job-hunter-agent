@@ -108,12 +108,12 @@ def test_search_basics_uses_shared_preferences_and_compensation_columns():
     assert 'salary-preference-card' not in onboarding_html
     assert 'class="compensation-card' not in onboarding_html
     assert 'class="salary-pair"' not in onboarding_html
-    assert '__JOB_HUNTER_ONBOARDING_PAGE_MINIMUM_COMPENSATION_LABEL__ (excludes super)' in onboarding_html
-    assert '<label for="review_minimum_salary_yearly">Annual base</label>' in onboarding_html
-    assert '<label for="review_minimum_daily_rate">Daily rate</label>' in onboarding_html
-    assert '<strong>Minimum compensation (excludes super)</strong>' in settings_html
-    assert '<label for="minimum_salary_yearly">Annual base</label>' in settings_html
-    assert '<label for="minimum_daily_rate">Daily rate</label>' in settings_html
+    assert '__JOB_HUNTER_ONBOARDING_PAGE_MINIMUM_COMPENSATION_LABEL__' not in onboarding_html
+    assert '<label for="review_minimum_salary_yearly">Annual base (excl. super)</label>' in onboarding_html
+    assert '<label for="review_minimum_daily_rate">Daily rate (excl. super)</label>' in onboarding_html
+    assert '<strong>Minimum compensation (excludes super)</strong>' not in settings_html
+    assert '<label for="minimum_salary_yearly">Annual base (excl. super)</label>' in settings_html
+    assert '<label for="minimum_daily_rate">Daily rate (excl. super)</label>' in settings_html
 
 
 
