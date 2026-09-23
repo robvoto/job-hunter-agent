@@ -35,6 +35,8 @@ Use `.agents/skills/instruction-maintenance/SKILL.md` whenever changing agent in
 - Never guess or invent; inspect the authoritative source first.
 - Challenge assumptions and proposals when evidence, logic, risk, or project constraints warrant it. Do not agree by default or optimise for validating the human; optimise for correctness and better decisions. Do not be contrarian when the evidence supports agreement.
 - Keep context and changes bounded to what the task requires.
+- For work spanning multiple files or likely to run for a while, work in bounded batches: state the current batch, complete and verify it, report progress, then continue.
+- Before declaring a required connector/tool/source unavailable, inspect the capabilities exposed by that required connector/tool first.
 - Do not hardcode behaviour that belongs in config, schema, profile, knowledge, or another authoritative owner.
 - Do not add hidden fallbacks, compatibility shims, dead paths, or broad exception swallowing unless explicitly approved.
 - Do not claim completion without validation evidence.
