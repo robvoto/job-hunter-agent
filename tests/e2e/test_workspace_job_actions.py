@@ -39,7 +39,7 @@ def test_workspace_search_and_page_size_persist_on_potential(workspace_job_page)
 
     card = page.locator("[data-fit-score]").first
     search = page.locator("#job_search_input")
-    page_size = page.locator("#page_size_select")
+    page_size = page.locator(".workspace-page-size-select").first
     expect(search).to_be_visible()
     expect(page_size).to_be_visible()
 
@@ -59,7 +59,7 @@ def test_workspace_search_and_page_size_persist_on_potential(workspace_job_page)
     assert stored == "24"
 
     page.reload()
-    expect(page.locator("#page_size_select")).to_have_value("24")
+    expect(page.locator(".workspace-page-size-select").first).to_have_value("24")
 
 
 def test_workspace_save_action_round_trips(workspace_job_page):
@@ -81,7 +81,7 @@ def test_workspace_save_action_round_trips(workspace_job_page):
 
     search = page.locator("#job_search_input")
     expect(search).to_be_visible()
-    expect(page.locator("#posted_filter")).to_be_visible()
+    expect(page.locator("#posted_filter")).to_be_hidden()
     search.fill("Acme")
     expect(page.locator('[data-record-kind="applied"]')).to_be_visible()
     search.fill("Company That Does Not Exist")
@@ -124,7 +124,7 @@ def test_workspace_dismiss_action_round_trips(workspace_job_page):
 
     search = page.locator("#job_search_input")
     expect(search).to_be_visible()
-    expect(page.locator("#posted_filter")).to_be_visible()
+    expect(page.locator("#posted_filter")).to_be_hidden()
     search.fill("Acme")
     expect(page.locator('[data-record-kind="hidden"]')).to_be_visible()
     search.fill("Company That Does Not Exist")

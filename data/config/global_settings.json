@@ -275,6 +275,7 @@
   },
   "history_settings": {
     "potential_retention_days": 15,
+    "potential_posted_age_limit_days": 14,
     "posted_age_badge_threshold_days": [3, 7, 15],
     "hidden_retention_days": 60,
     "applied_retention_days": 0,

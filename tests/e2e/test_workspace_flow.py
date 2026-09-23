@@ -11,6 +11,11 @@ def test_workspace_loads_and_filters_are_interactive(candidate_page):
 
     sort_select = page.locator("#sort_select")
     sort_select.wait_for(state="visible")
+    posted_filter = page.locator("#posted_filter")
+    posted_filter.wait_for(state="visible")
+    assert posted_filter.input_value() == "1"
+    assert posted_filter.locator('option[value="all"]').count() == 0
+    assert posted_filter.locator('option[value="30"]').count() == 0
 
     for select_id in ("#posted_filter", "#work_type_filter", "#score_filter"):
         locator = page.locator(select_id)

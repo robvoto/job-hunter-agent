@@ -1,8 +1,8 @@
 {
   "kind": "ui_labels",
   "name": "ui_labels",
-  "version": 146,
-  "updated_at": "2026-09-21T00:00:00+00:00",
+  "version": 147,
+  "updated_at": "2026-09-23T00:00:00+00:00",
   "work_mode_labels_description": "Display labels used for inferred work mode values.",
   "work_mode_labels": {
     "remote_label": "Remote",
@@ -12,11 +12,10 @@
   },
   "posted_threshold_labels_description": "Display labels for posted-date filters in the workspace.",
   "posted_threshold_labels": {
-    "1": "Posted today",
+    "1": "Last 24 hours",
     "3": "Last 3 days",
     "7": "Last 7 days",
-    "14": "Last 14 days",
-    "30": "Last 30 days"
+    "14": "Last 14 days"
   },
   "title_match_labels_description": "Display labels for preferred- and alternative-role score breakdown entries.",
   "title_match_labels": {

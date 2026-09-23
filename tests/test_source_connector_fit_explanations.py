@@ -4132,13 +4132,11 @@ def test_posted_filter_options_show_explicit_day_windows():
         ]
     )
 
-    assert "Any posted date (4)" in options_html
-    assert "Posted today (1)" in options_html
+    assert 'value="1" selected>Last 24 hours (1)' in options_html
     assert "Last 3 days (2)" in options_html
     assert "Last 7 days (3)" in options_html
-    # Last 14/30 days would repeat the same count as Last 7 days (no jobs
-    # older than 4 days in this fixture), so they're omitted as redundant.
-    assert "Last 14 days" not in options_html
+    assert "Last 14 days (3)" in options_html
+    assert "Any posted date" not in options_html
     assert "Last 30 days" not in options_html
 
 
@@ -4150,15 +4148,13 @@ def test_posted_filter_options_omit_windows_that_repeat_the_same_count():
         ]
     )
 
-    assert "Any posted date (2)" in options_html
-    assert "Posted today (2)" in options_html
-    # Every job is already captured by "Posted today", so every wider
-    # window would show the same count (2) and is left out entirely.
+    assert 'value="1" selected>Last 24 hours (2)' in options_html
+    # Keep the 14-day ceiling visible even when it repeats a narrower count.
     assert "Last 3 days" not in options_html
     assert "Last 7 days" not in options_html
-    assert "Last 14 days" not in options_html
+    assert "Last 14 days (2)" in options_html
+    assert "Any posted date" not in options_html
     assert "Last 30 days" not in options_html
-    # assert "Last 30 days (3)" in options_html
 
 
 def test_workspace_renders_requirement_coverage_with_status_classes():

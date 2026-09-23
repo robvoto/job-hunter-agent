@@ -115,6 +115,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_PLAYWRIGHT_VIEWPORT_HEIGHT,
     KEY_PLAYWRIGHT_VIEWPORT_WIDTH,
     KEY_POSTED_AGE_BADGE_THRESHOLD_DAYS,
+    KEY_POTENTIAL_POSTED_AGE_LIMIT_DAYS,
     KEY_POTENTIAL_RETENTION_DAYS,
     KEY_PREFERENCE_WEIGHTS,
     KEY_REPEATED_LISTING_MIN_SPAN_DAYS,
@@ -914,6 +915,13 @@ def normalize_global_settings(
             DEFAULT_HISTORY_SETTINGS[KEY_POTENTIAL_RETENTION_DAYS],
             1,
             365,
+        ),
+        KEY_POTENTIAL_POSTED_AGE_LIMIT_DAYS: _require_int(
+            history_source,
+            KEY_POTENTIAL_POSTED_AGE_LIMIT_DAYS,
+            DEFAULT_HISTORY_SETTINGS[KEY_POTENTIAL_POSTED_AGE_LIMIT_DAYS],
+            1,
+            14,
         ),
         KEY_POSTED_AGE_BADGE_THRESHOLD_DAYS: _require_int_list(
             history_source,

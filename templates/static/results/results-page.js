@@ -271,7 +271,7 @@
     function resetWorkspaceFiltersToDefaults() {
       if (sortSelect) sortSelect.value = 'fit';
       if (jobSearchInput) jobSearchInput.value = '';
-      if (postedFilter) postedFilter.value = 'all';
+      if (postedFilter) postedFilter.value = '1';
       if (workTypeFilter) workTypeFilter.value = 'all';
       if (workModeFilter) workModeFilter.value = 'all';
       if (sectorFilter) sectorFilter.value = 'all';
@@ -388,10 +388,8 @@
       const cardWorkType = (card.dataset.workType || '').toLowerCase();
       const cardWorkMode = (card.dataset.workMode || '').toLowerCase();
       const cardSector = (card.dataset.roleSector || 'unknown').toLowerCase();
-      const postedAge = Number(card.dataset.postedAge || 9999);
       const cardSource = (card.dataset.source || '').toLowerCase();
 
-      if (filters.postedLimit !== 'all' && postedAge > Number(filters.postedLimit)) return false;
       if (filters.workTypeValues && !filters.workTypeValues.includes(cardWorkType)) return false;
       if (filters.workMode !== 'all' && cardWorkMode !== filters.workMode) return false;
       if (filters.sector === 'public' && cardSector !== 'public') return false;

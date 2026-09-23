@@ -265,6 +265,10 @@ def get_potential_retention_days() -> int:
     return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_POTENTIAL_RETENTION_DAYS])
 
 
+def get_potential_posted_age_limit_days() -> int:
+    return int(load_global_settings()[KEY_HISTORY_SETTINGS][KEY_POTENTIAL_POSTED_AGE_LIMIT_DAYS])
+
+
 def get_posted_age_badge_threshold_days() -> tuple[int, ...]:
     values = load_global_settings()[KEY_HISTORY_SETTINGS][KEY_POSTED_AGE_BADGE_THRESHOLD_DAYS]
     return tuple(int(value) for value in values)

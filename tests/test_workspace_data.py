@@ -296,6 +296,40 @@ def test_build_workspace_record_sets_excludes_stale_archive_from_potential_short
     assert [record["job_key"] for record in result["stale_archive_records"]] == ["seek:stale"]
 
 
+def test_build_workspace_record_sets_keeps_potential_fresh_and_dated_before_scoring():
+    records = [
+        {"job_key": "seek:fresh", "posted_age_days": 2},
+        {"job_key": "seek:boundary", "posted_age_days": 14},
+        {"job_key": "seek:old", "posted_age_days": 15},
+        {"job_key": "seek:unknown", "posted_age_days": None},
+    ]
+    scored = []
+
+    result = build_workspace_record_sets(
+        records,
+        {},
+        set(),
+        set(),
+        datetime(2026, 9, 23).astimezone(),
+        profile={},
+        is_workspace_eligible_fn=lambda record, profile: True,
+        fit_score_fn=lambda record, profile: scored.append(record["job_key"]) or 90,
+        viewed_by_user_fn=lambda record: False,
+        normalize_job_key_fn=lambda value: value.strip().lower(),
+        parse_timestamp_fn=lambda value: None,
+        build_archive_records_fn=lambda *args: [],
+        build_applied_records_fn=lambda *args: [],
+        build_hidden_records_fn=lambda *args: [],
+        deduplicate_records_fn=lambda records: records,
+    )
+
+    assert [record["job_key"] for record in result["shortlist_records"]] == [
+        "seek:fresh",
+        "seek:boundary",
+    ]
+    assert set(scored) == {"seek:fresh", "seek:boundary"}
+
+
 def test_build_hidden_records_excludes_jobs_older_than_retention():
     history = {
         "seek:recent": {"last_hidden_at": "2026-09-04T00:00:00+10:00"},

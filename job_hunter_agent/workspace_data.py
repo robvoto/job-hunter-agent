@@ -6,6 +6,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Callable, Optional
 
+from job_hunter_agent.global_settings import get_potential_posted_age_limit_days
+from job_hunter_agent.posting_utils import current_posted_age_days
 from job_hunter_agent.record_schema import (
     RECORD_APPLY_METHOD_KEY,
     RECORD_COMPANY_KEY,
@@ -556,8 +558,19 @@ def build_workspace_record_sets(
     # Collapse canonical identity/content duplicates before eligibility and
     # workspace collection construction. A duplicate must not be scored or
     # admitted through a separate current/archive path.
+    max_posted_age_days = get_potential_posted_age_limit_days()
+
+    def _is_fresh_potential_record(record: dict) -> bool:
+        age_days = current_posted_age_days(record, now=reference_time)
+        return age_days is not None and age_days <= max_posted_age_days
+
+    # Bound Potential before fit ranking and card rendering; unknown dates are not fresh.
     canonical_kept_records = deduplicate_records_fn(kept_records)
-    curated_kept_records = [record for record in canonical_kept_records if _is_eligible(record)]
+    curated_kept_records = [
+        record
+        for record in canonical_kept_records
+        if _is_fresh_potential_record(record) and _is_eligible(record)
+    ]
 
     def _rank_by_fit(record: dict) -> tuple:
 
@@ -635,7 +648,9 @@ def build_workspace_record_sets(
         [
             record
             for record in archive_records
-            if not record.get("is_stale") and _is_eligible(record)
+            if not record.get("is_stale")
+            and _is_fresh_potential_record(record)
+            and _is_eligible(record)
         ],
         key=_rank_archive_by_fit,
     )

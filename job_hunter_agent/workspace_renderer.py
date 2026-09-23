@@ -1111,22 +1111,22 @@ def posted_filter_option_label(threshold: int) -> str:
 
 
 def render_posted_filter_options(records: List[dict], now: Optional[datetime] = None) -> str:
-    options = [f'<option value="all" selected>Any posted date ({len(records)})</option>']
+    labels = load_ui_labels().get("posted_threshold_labels", {})
+    thresholds = sorted(int(value) for value in labels)
+    options = []
     previous_count = -1
-    for threshold in [1, 3, 7, 14, 30]:
+    for index, threshold in enumerate(thresholds):
         count = sum(
             1
             for record in records
             if (age_days := current_posted_age_days(record, now)) is not None
             and age_days <= threshold
         )
-        if count == previous_count:
-            # A wider window that captures no additional jobs is a duplicate
-            # of the narrower option already shown — offering it just repeats
-            # the same count and implies a distinction that doesn't exist.
+        if count == previous_count and index < len(thresholds) - 1:
+            # Skip redundant intermediate windows but always show the 14-day cap.
             continue
         options.append(
-            f'<option value="{threshold}">'
+            f'<option value="{threshold}"{" selected" if index == 0 else ""}>'
             f"{safe_html(posted_filter_option_label(threshold))} ({count})</option>"
         )
         previous_count = count

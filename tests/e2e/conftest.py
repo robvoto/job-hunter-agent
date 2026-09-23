@@ -29,6 +29,7 @@ import sys
 import threading
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -267,7 +268,7 @@ def _seed_kept_job(email: str) -> None:
     display, save/"applied", dismiss/"hidden") that filter-only workspace
     coverage never exercises.
     """
-    run_started_at = "2026-07-20T08:00:00+00:00"
+    run_started_at = datetime.now(timezone.utc).isoformat()
     _seed_workspace_records(
         email,
         [
@@ -279,6 +280,7 @@ def _seed_kept_job(email: str) -> None:
                 "teaser": "Build and ship backend services.",
                 "location": "Remote",
                 "posted": run_started_at,
+                "posted_age_days": 0.5,
                 "source": "seek",
                 "decision": "KEEP",
                 "run_started_at": run_started_at,
@@ -301,7 +303,7 @@ def _seed_kept_job(email: str) -> None:
 
 def _seed_linkedin_freshness_job(email: str) -> None:
     """Seed one LinkedIn external-apply job whose original post date is unverified."""
-    run_started_at = "2026-07-20T08:00:00+00:00"
+    run_started_at = datetime.now(timezone.utc).isoformat()
     _seed_workspace_records(
         email,
         [
