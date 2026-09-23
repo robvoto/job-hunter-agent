@@ -281,15 +281,18 @@
               </div>
 
                 <div class="search-compensation-group">
-                  <!-- Keep the compensation basis beside each field instead of repeating a group heading. -->
+                  <!-- Keep compensation scope and its help in the shared group heading. -->
+                  <div class="field-label-row">
+                    <strong>__JOB_HUNTER_ONBOARDING_PAGE_MINIMUM_COMPENSATION_LABEL__ (excludes super)</strong>
+                    <details class="field-info-drawer">
+                      <summary class="field-info" aria-label="Help for minimum compensation">i</summary>
+                      <div class="field-info-panel">__JOB_HUNTER_ONBOARDING_PAGE_MINIMUM_COMPENSATION_HELP__</div>
+                    </details>
+                  </div>
                   <div class="salary-preference-fields">
                     <div id="salary_yearly_block" class="onb-field">
                       <div class="field-label-row">
-                        <label for="review_minimum_salary_yearly">Annual base (excl. super)</label>
-                        <details class="field-info-drawer">
-                          <summary class="field-info" aria-label="Help for minimum compensation">i</summary>
-                          <div class="field-info-panel">__JOB_HUNTER_ONBOARDING_PAGE_MINIMUM_COMPENSATION_HELP__</div>
-                        </details>
+                        <label for="review_minimum_salary_yearly">Annual base</label>
                       </div>
                       <div class="field-control-shell">
                         <div class="currency-input-wrap currency-input-wrap--compact">
@@ -301,7 +304,7 @@
 
                     <div id="salary_daily_block" class="onb-field">
                       <div class="field-label-row">
-                        <label for="review_minimum_daily_rate">Daily rate (excl. super)</label>
+                        <label for="review_minimum_daily_rate">Daily rate</label>
                       </div>
                       <div class="field-control-shell">
                         <div class="currency-input-wrap currency-input-wrap--compact">

@@ -1020,6 +1020,17 @@
   max-width: 100%;
 }
 
+/* Keep short preference selects compact on wide screens; fill the container only when narrow. */
+.field-control-shell--compact-select {
+  width: min(100%, var(--setting-control-width));
+}
+
+@container (max-width: 30rem) {
+  .field-control-shell--compact-select {
+    width: 100%;
+  }
+}
+
 .field-control-shell--with-unit > input {
   width: 100%;
   min-width: 0;
