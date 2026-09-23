@@ -92,6 +92,11 @@ def get_default_country_suffix() -> str:
     return str(load_global_settings()[KEY_DEFAULT_COUNTRY_SUFFIX]).strip()
 
 
+def get_market_source_mode() -> str:
+    """Return the global pre-run market acquisition mode: auto, jmm, or scrape."""
+    return str(load_global_settings()[KEY_SEARCH_SETTINGS][KEY_MARKET_SOURCE_MODE]).strip().lower()
+
+
 def get_globally_enabled_sources() -> list[str]:
     search_settings = load_global_settings()[KEY_SEARCH_SETTINGS]
     enabled_sources: list[str] = []

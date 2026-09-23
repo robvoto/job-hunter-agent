@@ -17,6 +17,7 @@
         "keywords": "Default search keyword string. Usually empty because candidate search terms come from onboarding/profile setup.",
         "locations": "Default search locations used when no user/profile location is supplied.",
         "classification_ids": "Default job-board classification IDs used for broad pre-filtering.",
+        "market_source_mode": "Controls how Job Hunter acquires market data. Auto uses JMM only when its selected source runs are usable; otherwise the run uses Job Hunter built-in scraping. JMM and Scrape force one path for the whole run.",
         "date_range_days": "How many days back SEEK-style searches should look by default.",
         "seek_max_pages": "Maximum number of SEEK result pages to crawl by default.",
         "sort_newest_first": "When true, workspace/search defaults prefer newer listings first.",

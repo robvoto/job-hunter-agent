@@ -58,6 +58,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_JOB_HISTORY_MAX_AGE_DAYS,
     KEY_JOB_HISTORY_MAX_ENTRIES,
     KEY_JOB_MARKET_MAP_PARALLEL_WORKERS,
+    KEY_MARKET_SOURCE_MODE,
     KEY_LIMITS,
     KEY_LINKEDIN_EASY_APPLY_ONLY,
     KEY_LINKEDIN_ENABLED,
@@ -145,6 +146,7 @@ from job_hunter_agent.settings.global_settings_defaults import (
     KEY_SOURCE_DOCUMENT_SETTINGS,
     KEY_SOURCE_DOCUMENT_SUFFIXES,
     KEY_UI_SETTINGS,
+    MARKET_SOURCE_MODES,
     ONBOARDING_SETTING_LIMITS,
     SEARCH_SETTING_LIMITS,
 )
@@ -546,6 +548,16 @@ def _normalize_llm_prompt_settings(
         KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_ITEMS: rejection_blocker_max_items,
         KEY_LLM_PROMPT_REJECTION_BLOCKER_MAX_WORDS: rejection_blocker_max_words,
     }
+
+
+def _normalize_market_source_mode(source: dict[str, Any]) -> str:
+    mode = str(source.get(KEY_MARKET_SOURCE_MODE, DEFAULT_SEARCH_SETTINGS.get(KEY_MARKET_SOURCE_MODE, "auto"))).strip().lower()
+    if mode not in MARKET_SOURCE_MODES:
+        raise ValueError(
+            f"global_settings.{KEY_SEARCH_SETTINGS}.{KEY_MARKET_SOURCE_MODE} "
+            f"must be one of {sorted(MARKET_SOURCE_MODES)}, got {mode!r}"
+        )
+    return mode
 
 
 def _normalize_bool(source: dict[str, Any], key: str, default: bool) -> bool:
@@ -1284,6 +1296,7 @@ def normalize_global_settings(
                 KEY_APSJOBS_ENABLED,
                 _search_setting_default_bool(KEY_APSJOBS_ENABLED, True),
             ),
+            KEY_MARKET_SOURCE_MODE: _normalize_market_source_mode(search_source),
             KEY_SEEK_MAX_PAGES: _require_int(
                 search_source,
                 KEY_SEEK_MAX_PAGES,

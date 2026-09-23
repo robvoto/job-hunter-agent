@@ -295,6 +295,16 @@ class JobMarketMapClient:
             raise JobMarketMapContractError("Job Market Map search total is required")
         return payload
 
+    def readiness(self) -> dict[str, Any]:
+        """Read JMM's neutral consumer readiness facts."""
+        payload = self._request("GET", "/readiness")
+        self._validate_metadata(payload)
+        source_runs = payload.get("source_runs")
+        jd_coverage = payload.get("jd_coverage")
+        if not isinstance(source_runs, dict) or not isinstance(jd_coverage, dict):
+            raise JobMarketMapContractError("Job Market Map readiness payload is incomplete")
+        return payload
+
     def consumer_state(self, *, consumer_key: str) -> dict[str, Any]:
         """Read the named consumer checkpoint plus JMM's fixed pending-work snapshot."""
         payload = self._request(
