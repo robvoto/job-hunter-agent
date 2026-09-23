@@ -6,19 +6,23 @@ This guide describes which integrations exist, which ones are packaged product b
 
 ### Job Market Map (JH-306)
 
-- Normal local Job Hunter discovery is consumed from JMM's supported `/v3` HTTP API.
+- Job Hunter chooses one market-acquisition lane before each run: JMM or Job Hunter's
+  built-in scrapers. `JMM` and `Scrape` force that lane; `Auto` evaluates JMM readiness
+  before the run and chooses one lane for the whole run. There is no mid-run fallback
+  between JMM and scraping.
 - Configure the local Job Hunter .env with
   `JOB_HUNTER_MARKET_MAP_BASE_URL=http://127.0.0.1:8770/v3`; there is no
-  direct SQLite access or silent scraper fallback.
+  direct SQLite access. When JMM is the selected lane, JH consumes only JMM's supported
+  `/v3` HTTP API and must not fall back to direct board scraping mid-run.
 - JMM remains local-only. Job Hunter's AWS deployment intentionally omits this
   variable and must not point to a deployed or same-host JMM service.
 - JMM owns neutral identity, card facts, current JD storage/enrichment, source collection,
   field states, structured salary facts, and source readiness. JH owns candidate analysis,
   personal filtering, salary floors, warnings, and decisions.
-- JH consumes cached JDs only through `GET /v3/jobs/{id}/jd` after the card gate says
+- In JMM mode, JH consumes cached JDs only through `GET /v3/jobs/{id}/jd` after the card gate says
   detail is needed. HTTP 409 `JD not cached yet` is a per-job cache miss: JH audits/skips
   that fit review and continues the run. JH never POST-enriches a JD or falls back to a
-  direct board scraper. The JD remains transient analysis input; JH retains only JMM
+  direct board scraper mid-run. The JD remains transient analysis input; JH retains only JMM
   identity/provenance, not another permanent raw-JD copy.
 - JH sends its role terms, selected boards, locations/geography, freshness window,
   existing work-type/work-mode/apply-method controls, personal salary floor, and optional
