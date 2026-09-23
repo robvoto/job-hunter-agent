@@ -148,6 +148,14 @@ The existing `.btn*`, `.primary`, `.secondary`, `.mini-button`, and semantic `ga
 
 ## Shared selectable choice
 
+### Responsive and reuse contract
+
+All consumers of the shared selectable-choice pattern must preserve readable text at every supported container width. Grid/flex children use `min-width: 0`; long labels wrap or the group stacks before siblings can collide. No consumer may hide, clip, shrink, or overlap user-facing labels to preserve a desktop arrangement.
+
+Work type, Contract, FTC, Sector, Work mode, quick filters, and page-limit choices use the same geometry and shared owner. FTC is an ordinary option and must not receive a special selector or layout exception. New screens and HTML mockups must reuse the JH tokens and component classes rather than approximating them with a new orange button style.
+
+Validation includes rendered inspection at desktop, tablet, narrow content-pane, and phone widths, including the intermediate width where the layout changes.
+
 **Owner:** `templates/static/theme/themes.widgets.css`
 
 Use `jh-choice-group` for the group and `jh-choice` for every checkbox/radio/button that behaves as a selectable option. This includes Work type, Work mode, Sector preference, Quick filters, and Strong/Working/Basic.

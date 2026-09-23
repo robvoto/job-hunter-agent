@@ -45,6 +45,22 @@ CSS changes must improve the shared design system, not create another one-off pa
 - Fix the smallest owning shared selector when multiple screens share the same visual problem.
 - Do not solve overflow by hiding content unless that is the explicit UX requirement.
 
+## Non-negotiable responsive contract
+
+- At every supported width, text must remain readable: no overlap, clipping, collision with a sibling, or content escaping a card.
+- Treat the container width—not only the viewport—as the breakpoint input. A narrow settings column, preview pane, or onboarding card must receive the same responsive treatment as a narrow viewport.
+- Use `min-width: 0` on grid/flex children, allow long labels to wrap, and stack groups before text becomes crowded. Do not use `white-space: nowrap` for user-facing labels unless the container has a proven safe width.
+- Do not fix overflow by shrinking text, hiding words, or allowing one control to cover another. Change the layout: wrap, stack, or give the group a deliberate scroll treatment.
+- Check desktop, tablet, narrow pane, and phone widths, including the intermediate width where the layout changes. A screenshot that looks correct at one width is not validation.
+
+## Reuse is the default; exceptions are explicit
+
+- Reuse the existing JH tokens, shared classes, markup primitives, and component geometry before writing CSS. A standalone mockup must reproduce the real JH component rather than inventing an approximate orange button.
+- Selectable preferences use the shared choice pattern (`jh-choice-group` + `jh-choice`, or the existing owning hook that maps to it). Work type, Contract, FTC, Sector, Work mode, quick filters, and page limits are the same control family.
+- FTC is a normal option, not a special layout or styling rule. Never create an FTC-specific exception merely because its label is short.
+- If a label does not fit the shared control, fix the parent layout or breakpoint; do not create a second component variant.
+- When a new exception is genuinely required, record the reason in the component map and get human approval before adding it.
+
 ## Theme discipline
 
 - Themes must change visual treatment only: colours, shadows, borders, surfaces, and tokens.
@@ -58,6 +74,7 @@ CSS changes must improve the shared design system, not create another one-off pa
 3. Prefer central token/component fixes over page-local overrides.
 4. If page-local CSS is unavoidable, add a short comment naming the exception.
 5. Validate the rendered screen that the user actually sees.
+6. Inspect the rendered bounds at multiple container widths and confirm that no text or control rectangles intersect before declaring the UI ready.
 
 ## Job Hunter Search Basics path
 
