@@ -250,7 +250,11 @@ def test_onboarding_privacy_copy_links_to_docs(monkeypatch):
 
     client = TestClient(create_app())
     html = client.get("/onboarding").text
-    assert "Your uploaded CV is not stored." in html
+    assert (
+        "We store job-related details from your CV, such as skills, roles and experience, "
+        "to build your matching profile."
+    ) in html
+    assert "Your uploaded CV is not stored." not in html
     assert "fuller retention decision" not in html.lower()
     assert "the docs list" not in html.lower()
 
