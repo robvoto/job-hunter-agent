@@ -309,13 +309,15 @@
       font-size: var(--text-role-body-compact-font-size);
       line-height: var(--text-role-body-compact-line-height);
     }
-    /* Run & Schedule uses the same responsive three-column card grid as Job board search. */
+    /* UI exception: Run & Schedule uses the same responsive three-column card grid as Job board search. */
     .search-source-panels.schedule-source-panels {
       margin-top: 0;
     }
+    /* UI exception: scheduled source cards size to content rather than stretching vertically. */
     .schedule-source-panel {
       height: auto;
     }
+    /* UI exception: schedule time inputs fill the local field width. */
     .schedule-time-field > input {
       width: 100%;
     }
