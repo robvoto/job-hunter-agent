@@ -43,7 +43,6 @@ from job_hunter_agent.runtime_helpers import (
 )
 from job_hunter_agent.user_settings import get_workspace_minimum_score
 
-
 logger = logging.getLogger(__name__)
 _JMM_USABLE_SOURCE_STATUSES = frozenset({"COMPLETE", "INCOMPLETE_CAP", "PARTIAL_FAILURE"})
 
