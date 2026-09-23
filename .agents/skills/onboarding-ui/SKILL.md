@@ -17,13 +17,6 @@ Use for onboarding-only behaviour. For CSS/layout/component styling, also load `
 - Remove dead onboarding paths rather than retaining compatibility code.
 - Add behaviour to the smallest owning onboarding JS module; do not create a second wizard persistence path.
 
-## Responsive and reuse guardrails
-
-- Onboarding Step 3 must use the same shared JH choice, input, toggle, card, spacing, and typography patterns as Settings Search Basics unless a documented product difference exists.
-- No supported width may produce overlapping or clipped labels. Use container-aware wrapping/stacking and `min-width: 0`; never rely on a desktop-only width assumption.
-- Work type, Contract, FTC, Sector, and Work mode are the same selectable-control family. FTC is not a special CSS exception.
-- Validate the actual rendered onboarding page at desktop, tablet, narrow-pane, and phone widths before handing it back.
-
 ## Ownership
 
 Detailed module ownership, bootstrap globals, persistence, reset/resume and field-specific patterns live in `DETAILS.md`; do not duplicate that map here.

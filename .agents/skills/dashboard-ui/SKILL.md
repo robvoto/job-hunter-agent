@@ -17,13 +17,6 @@ Use for workspace/dashboard/settings UI. For CSS/layout/component styling, also 
 - Preserve explainability: concise human summary first; diagnostics/details must remain readable without exposing raw implementation noise.
 - Follow existing modular JS ownership; do not add one-off global scripts.
 
-## Responsive and reuse guardrails
-
-- Settings and dashboard controls must not overlap, clip, or escape their cards at any supported viewport or narrow content pane.
-- Reuse the shared JH component and token owner identified in `docs/UI_COMPONENT_MAP.md`; do not recreate orange choice buttons, toggles, inputs, or cards in page CSS.
-- Work type, Contract, FTC, Sector, Work mode, quick filters, and result/page-limit choices are one selectable-control family. FTC has no special visual or layout exception.
-- Long labels must wrap or trigger a deliberate group stack before they collide with adjacent controls. Validate the rendered page at desktop, tablet, narrow-pane, and phone widths.
-
 ## Workspace output
 
 Generated per-user `workspace_results.html` is output, not source of truth. Edit the owning template/renderer, regenerate when required, and verify the live rendered page rather than assuming a source-template edit is already visible.

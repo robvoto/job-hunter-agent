@@ -36,30 +36,12 @@ CSS changes must improve the shared design system, not create another one-off pa
 - Keep vertical rhythm consistent between cards, rows, field groups, help text, and actions.
 - If a spacing value becomes a pattern, promote it to a token or shared component rule.
 
-## Component discipline
+## UI implementation contract
 
-- Reuse existing cards, rows, buttons, chips, badges, toggles, choice strips, drawers, alerts, and help patterns.
-- **Before creating or styling any action control, search the repo and `docs/UI_COMPONENT_MAP.md` for the same semantic action** (for example remove/delete, add, edit, save, close). If an equivalent exists, reuse its markup/class/component rather than introducing a visually different control.
-- A semantic equivalent beats a page-specific preference: a remove action that is an icon elsewhere must not become a text button on a new editor without an explicit product decision.
-- Do not duplicate component variants because one screen looks slightly different.
-- Fix the smallest owning shared selector when multiple screens share the same visual problem.
-- Do not solve overflow by hiding content unless that is the explicit UX requirement.
-
-## Non-negotiable responsive contract
-
-- At every supported width, text must remain readable: no overlap, clipping, collision with a sibling, or content escaping a card.
-- Treat the container width—not only the viewport—as the breakpoint input. A narrow settings column, preview pane, or onboarding card must receive the same responsive treatment as a narrow viewport.
-- Use `min-width: 0` on grid/flex children, allow long labels to wrap, and stack groups before text becomes crowded. Do not use `white-space: nowrap` for user-facing labels unless the container has a proven safe width.
-- Do not fix overflow by shrinking text, hiding words, or allowing one control to cover another. Change the layout: wrap, stack, or give the group a deliberate scroll treatment.
-- Check desktop, tablet, narrow pane, and phone widths, including the intermediate width where the layout changes. A screenshot that looks correct at one width is not validation.
-
-## Reuse is the default; exceptions are explicit
-
-- Reuse the existing JH tokens, shared classes, markup primitives, and component geometry before writing CSS. A standalone mockup must reproduce the real JH component rather than inventing an approximate orange button.
-- Selectable preferences use the shared choice pattern (`jh-choice-group` + `jh-choice`, or the existing owning hook that maps to it). Work type, Contract, FTC, Sector, Work mode, quick filters, and page limits are the same control family.
-- FTC is a normal option, not a special layout or styling rule. Never create an FTC-specific exception merely because its label is short.
-- If a label does not fit the shared control, fix the parent layout or breakpoint; do not create a second component variant.
-- When a new exception is genuinely required, record the reason in the component map and get human approval before adding it.
+- Start with `docs/UI_COMPONENT_MAP.md` and the owning JH tokens/widgets. Reuse the existing markup and geometry; extend the shared owner when a real gap exists.
+- The rendered layout must remain readable inside its actual container: use `min-width: 0`, wrap or stack before labels collide, and never hide or clip user-facing text.
+- Use one selectable-choice family for comparable options. FTC is a normal work-type option, not a special layout or styling case. Preserve intentional differences between Settings and onboarding, such as a choice strip versus a sector select.
+- Page CSS may place shared components, but reusable visual styling belongs in the shared theme. Escalate only when the required behaviour or product decision is unclear.
 
 ## Theme discipline
 
@@ -74,7 +56,7 @@ CSS changes must improve the shared design system, not create another one-off pa
 3. Prefer central token/component fixes over page-local overrides.
 4. If page-local CSS is unavoidable, add a short comment naming the exception.
 5. Validate the rendered screen that the user actually sees.
-6. Inspect the rendered bounds at multiple container widths and confirm that no text or control rectangles intersect before declaring the UI ready.
+6. Inspect the rendered result at desktop, tablet, narrow-pane, phone, and the intermediate breakpoint; confirm that text and control rectangles do not intersect.
 
 ## Job Hunter Search Basics path
 
@@ -82,9 +64,9 @@ For Settings search preferences and onboarding Step 3, use the existing Job Hunt
 
 1. Check `docs/UI_COMPONENT_MAP.md` and identify the owning shared widgets and each page's layout owner.
 2. Compare section width and control arrangement against the reference; fix shared geometry in `themes.widgets.css` and keep page CSS to layout placement.
-3. Reuse the composition on onboarding Step 3 while preserving its existing field IDs, labels/data source, hydration, and persistence behavior.
-4. Keep Location full-width with its three groups evenly laid out; order the preference groups Work type, Sector preference, then Work mode, with compensation grouped below.
-5. Update the component-map entry and inspect both rendered Settings and onboarding screens at desktop and phone widths.
+3. Reuse shared visual components on onboarding Step 3 while preserving its existing field IDs, labels/data source, hydration, persistence, and intentional control differences.
+4. Keep Location full-width; give long labels enough room and stack the groups at the owning container breakpoint. Keep Work type → Sector preference → Work mode, with compensation grouped below.
+5. Inspect both rendered Settings and onboarding screens at desktop, tablet, narrow-pane, phone, and the intermediate breakpoint.
 
 Keep this guidance in the Job Hunter-owned component map and skill. Do not create a cross-project UX standard from this screen-specific pattern.
 

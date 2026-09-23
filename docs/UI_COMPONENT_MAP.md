@@ -2,7 +2,7 @@
 
 Quick reference for every interactive widget pattern in settings and onboarding. Before adding a new control, find the closest match here and reuse the pattern.
 
-**Governance rule:** before creating any new component, selector, or DOM structure, search this table first. If the closest match isn't an exact fit, extend that entry rather than inventing a parallel pattern. A missing reusable pattern gets added here and to the owning central CSS file — it does not get patched separately into one page. If the shared extension is unclear or the agent believes the screen genuinely needs a page-specific visual pattern, stop and ask the human before creating that exception. See `.agents/skills/dashboard-ui/SKILL.md` and `.agents/skills/css-design-system/SKILL.md` for the enforcement rules this table backs.
+**Governance rule:** before creating a component, selector, or DOM structure, search this table first. Extend the closest owning pattern instead of creating a parallel one. Add a new map entry only when the reusable pattern is genuinely new; escalate only when the required behaviour or product decision is unclear. The CSS skill owns the responsive/reuse implementation contract.
 
 ---
 
@@ -147,14 +147,6 @@ The shared `jh-button.is-working` modifier adds the component-owned spinner for 
 The existing `.btn*`, `.primary`, `.secondary`, `.mini-button`, and semantic `gap-btn--*` visual systems are legacy. Do not use them for new ordinary application actions. `btn-add` remains the shared add-control component and `jh-icon-button` remains the shared icon-only component.
 
 ## Shared selectable choice
-
-### Responsive and reuse contract
-
-All consumers of the shared selectable-choice pattern must preserve readable text at every supported container width. Grid/flex children use `min-width: 0`; long labels wrap or the group stacks before siblings can collide. No consumer may hide, clip, shrink, or overlap user-facing labels to preserve a desktop arrangement.
-
-Work type, Contract, FTC, Sector, Work mode, quick filters, and page-limit choices use the same geometry and shared owner. FTC is an ordinary option and must not receive a special selector or layout exception. New screens and HTML mockups must reuse the JH tokens and component classes rather than approximating them with a new orange button style.
-
-Validation includes rendered inspection at desktop, tablet, narrow content-pane, and phone widths, including the intermediate width where the layout changes.
 
 **Owner:** `templates/static/theme/themes.widgets.css`
 
