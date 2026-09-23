@@ -253,7 +253,7 @@ export const JobHunterAdminSettings = (function () {
     setFieldValue('highlight_max_highlights', fitHl.max_highlights);
 
     setFieldValue('search_default_date_range_days', searchDefaults.date_range_days);
-    setFieldValue('search_default_market_source_mode', searchDefaults.market_source_mode || 'auto');
+    setFieldValue('search_default_market_source_mode', searchDefaults.market_source_mode || 'jmm');
     setToggleChecked('search_default_seek_enabled', searchDefaults.seek_enabled !== false);
     setToggleChecked('search_default_linkedin_enabled', searchDefaults.linkedin_enabled !== false);
     setToggleChecked('search_default_apsjobs_enabled', searchDefaults.apsjobs_enabled !== false);
@@ -467,7 +467,7 @@ export const JobHunterAdminSettings = (function () {
       },
       search_settings: {
         ...currentSearch,
-        market_source_mode: document.getElementById('search_default_market_source_mode')?.value || 'auto',
+        market_source_mode: document.getElementById('search_default_market_source_mode')?.value || 'jmm',
         seek_enabled: Boolean(document.getElementById('search_default_seek_enabled')?.checked),
         linkedin_enabled: Boolean(document.getElementById('search_default_linkedin_enabled')?.checked),
         apsjobs_enabled: Boolean(document.getElementById('search_default_apsjobs_enabled')?.checked),

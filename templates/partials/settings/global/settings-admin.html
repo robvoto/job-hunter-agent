@@ -119,11 +119,10 @@
 
             <label for="search_default_market_source_mode">Market data mode</label>
             <select id="search_default_market_source_mode" class="jh-select">
-              <option value="auto">Auto</option>
               <option value="jmm">JMM</option>
               <option value="scrape">Scrape</option>
             </select>
-            <div class="field-help">Auto uses JMM only when its selected source runs are ready; otherwise the run uses Job Hunter's built-in scrapers. JMM never falls back mid-run.</div>
+            <div class="field-help">JMM uses Job Market Map for the whole run. Scrape uses Job Hunter's built-in scrapers for the whole run. Automatic selection is intentionally deferred.</div>
 
             <label class="toggle-switch" for="search_default_seek_enabled">
               <span class="toggle-switch-copy">

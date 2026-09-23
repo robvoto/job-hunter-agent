@@ -22,7 +22,7 @@
     "seek_enabled": true,
     "linkedin_enabled": true,
     "apsjobs_enabled": true,
-    "market_source_mode": "auto",
+    "market_source_mode": "jmm",
     "date_range_days": 3,
     "seek_max_pages": 3,
     "seek_quick_apply_only": null,

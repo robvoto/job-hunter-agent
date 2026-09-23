@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -31,7 +30,6 @@ from job_hunter_agent.io_utils import (
     write_run_attempt,
 )
 from job_hunter_agent.job_identity import RunIdentityRegistry
-from job_hunter_agent.job_market_map_client import JobMarketMapClient, JobMarketMapError
 from job_hunter_agent.posting_utils import get_manual_skip_sets
 from job_hunter_agent.profile_store import get_search_settings, load_profile
 from job_hunter_agent.retention_housekeeping import run_retention_housekeeping
@@ -43,44 +41,19 @@ from job_hunter_agent.runtime_helpers import (
 )
 from job_hunter_agent.user_settings import get_workspace_minimum_score
 
-logger = logging.getLogger(__name__)
-_JMM_USABLE_SOURCE_STATUSES = frozenset({"COMPLETE", "INCOMPLETE_CAP", "PARTIAL_FAILURE"})
 
+def _resolve_use_market_map() -> bool:
+    """Resolve the explicitly selected market-acquisition lane for this run.
 
-def _auto_market_map_ready(enabled_sources: list[str]) -> bool:
-    """Use JMM only when its readiness endpoint confirms usable selected source runs."""
-    try:
-        payload = JobMarketMapClient.from_environment().readiness()
-    except (JobMarketMapError, ValueError) as exc:
-        logger.info("[MARKET_SOURCE] AUTO selected scraping because JMM is unavailable: %s", exc)
-        return False
-
-    source_runs = payload.get("source_runs") or {}
-    jmm_sources = [source for source in enabled_sources if source in {"seek", "linkedin"}]
-    if not jmm_sources:
-        logger.info("[MARKET_SOURCE] AUTO selected scraping because no JMM-backed source is enabled")
-        return False
-    not_ready = {
-        source: str((source_runs.get(source) or {}).get("status") or "NOT_RUN").upper()
-        for source in jmm_sources
-        if str((source_runs.get(source) or {}).get("status") or "NOT_RUN").upper()
-        not in _JMM_USABLE_SOURCE_STATUSES
-    }
-    if not_ready:
-        logger.info("[MARKET_SOURCE] AUTO selected scraping because JMM source runs are not ready: %s", not_ready)
-        return False
-    logger.info("[MARKET_SOURCE] AUTO selected JMM; selected source runs are usable")
-    return True
-
-
-def _resolve_use_market_map(enabled_sources: list[str]) -> bool:
+    Auto selection is intentionally deferred until Job Hunter has an explicit,
+    reviewed policy for interpreting JMM readiness/coverage facts. For now, the
+    selected setting is authoritative and the run never switches lanes mid-run.
+    """
     mode = get_market_source_mode()
     if mode == "jmm":
         return True
     if mode == "scrape":
         return False
-    if mode == "auto":
-        return _auto_market_map_ready(enabled_sources)
     raise ValueError(f"Unsupported {KEY_MARKET_SOURCE_MODE}: {mode!r}")
 
 
@@ -209,7 +182,7 @@ def build_scrape_run_context(argv: list[str] | None = None) -> ScrapeRunContext:
     enabled_sources = [
         source for source in profile_enabled_sources if source and source in globally_enabled_sources
     ]
-    use_market_map = _resolve_use_market_map(enabled_sources)
+    use_market_map = _resolve_use_market_map()
     if use_market_map:
         # JMM owns neutral market truth. The normal JMM path must not read or
         # mutate the retired JH market/history projection; manual state comes

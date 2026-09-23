@@ -4,13 +4,14 @@ This file contains Job Hunter-specific context for otherwise reusable agent inst
 
 ## Product
 
-Job Hunter is a local-first job discovery system. A run first selects one market-acquisition
-lane, then keeps that lane for the whole run:
+Job Hunter is a local-first job discovery system. A run uses the explicitly selected
+market-acquisition lane and keeps that lane for the whole run:
 
 `JMM neutral search OR built-in source scrapers -> deterministic personal filters -> optional LLM -> fit score -> workspace`
 
 When JMM is selected, current JDs are consumed through JMM's cached-JD GET contract and
 JMM remains the neutral market owner. There is no mid-run switch from JMM to direct scraping.
+Automatic lane selection is intentionally deferred until its readiness policy is explicitly defined.
 
 It is a strict, explainable job-fit system, not a vague recommender.
 
