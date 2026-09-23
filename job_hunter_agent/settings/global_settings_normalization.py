@@ -1241,6 +1241,21 @@ def normalize_global_settings(
                 for value in search_source.get("classification_ids", [])
                 if str(value).strip()
             ],
+            "classifications": [
+                str(value).strip()
+                for value in search_source.get("classifications", [])
+                if str(value).strip()
+            ],
+            "subclassifications": [
+                str(value).strip()
+                for value in search_source.get("subclassifications", [])
+                if str(value).strip()
+            ],
+            "companies": [
+                str(value).strip()
+                for value in search_source.get("companies", [])
+                if str(value).strip()
+            ],
             KEY_DATE_RANGE_DAYS: _require_int(
                 search_source,
                 KEY_DATE_RANGE_DAYS,

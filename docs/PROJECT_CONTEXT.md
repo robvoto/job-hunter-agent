@@ -6,7 +6,7 @@ This file contains Job Hunter-specific context for otherwise reusable agent inst
 
 Job Hunter is a local-first job discovery system:
 
-`local JMM discovery -> card fetch -> on-demand JD -> deterministic filters -> optional LLM -> fit score -> workspace`
+`JMM neutral search -> cached JD GET -> deterministic personal filters -> optional LLM -> fit score -> workspace`
 
 It is a strict, explainable job-fit system, not a vague recommender.
 

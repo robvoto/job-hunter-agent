@@ -466,6 +466,21 @@ class JobMarketMapClient:
             )
         return payload
 
+    def get_field_capabilities(self) -> dict[str, Any]:
+        """Read JMM's neutral field capability contract without source-specific inference."""
+        payload = self._request("GET", "/capabilities/fields")
+        self._validate_metadata(payload)
+        fields = payload.get("fields")
+        sources = payload.get("sources")
+        if not isinstance(fields, list) or not all(str(field or "").strip() for field in fields):
+            raise JobMarketMapContractError("Job Market Map field capabilities are invalid")
+        if not isinstance(sources, dict):
+            raise JobMarketMapContractError("Job Market Map source capabilities are invalid")
+        for source, capabilities in sources.items():
+            if not str(source or "").strip() or not isinstance(capabilities, dict):
+                raise JobMarketMapContractError("Job Market Map source capabilities are invalid")
+        return payload
+
     def get_readiness(self) -> dict[str, Any]:
         payload = self._request("GET", "/readiness")
         self._validate_metadata(payload)

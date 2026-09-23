@@ -10,6 +10,9 @@ export const JobHunterChipEditor = (function () {
     target_roles: { kind: 'list', listId: 'target_roles_chips', inputId: 'target_roles_add', emptyText: titleTierLabels.target_roles_empty_text },
     also_consider_roles: { kind: 'list', listId: 'also_consider_roles_chips', inputId: 'also_consider_roles_add', emptyText: titleTierLabels.also_consider_roles_empty_text },
     must_not_require_skills: { kind: 'list', listId: 'must_not_require_skills_chips', inputId: 'must_not_require_skills_add', emptyText: 'No required skills to reject yet.' },
+    classifications: { kind: 'list', listId: 'classifications_chips', inputId: 'classifications_add', emptyText: 'Any classification.' },
+    subclassifications: { kind: 'list', listId: 'subclassifications_chips', inputId: 'subclassifications_add', emptyText: 'Any subclassification.' },
+    companies: { kind: 'list', listId: 'companies_chips', inputId: 'companies_add', emptyText: 'Any employer.' },
     reject_title_rules: { kind: 'rule', key: 'pattern', listId: 'reject_title_rules_chips', inputId: 'reject_title_rules_add', emptyText: 'No blocked job titles or kewords yet.' },
     reject_description_phrase_rules: { kind: 'rule', key: 'phrase', listId: 'reject_description_phrase_rules_chips', inputId: 'reject_description_phrase_rules_add', emptyText: 'No excluded keywords or phrases yet.' },
   };

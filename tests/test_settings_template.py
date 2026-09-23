@@ -726,3 +726,23 @@ def test_settings_review_panel_separates_factual_absence_from_dismiss():
     assert "applyOneSkipDecision(skill, 'dismiss')" in js
     assert ui_labels["workspace_card_labels"]["gap_confirm_not_have_label"] == "No, I don't have this"
     assert ui_labels["capability_ui_labels"]["dismiss_capability_suggestion_label"] == "Ignore suggestion"
+
+
+def test_search_settings_exposes_neutral_jmm_market_filters_without_board_ids():
+    html = SETTINGS_SEARCH_PARTIAL_PATH.read_text(encoding="utf-8")
+    js = (
+        ROOT_DIR / "templates" / "static" / "settings" / "shared" / "settings-page.js"
+    ).read_text(encoding="utf-8")
+    chip_js = (
+        ROOT_DIR / "templates" / "static" / "settings" / "shared" / "settings-chip-editor.js"
+    ).read_text(encoding="utf-8")
+
+    assert "Optional market filters" in html
+    assert "source wording, not board IDs" in html
+    for field in ("classifications", "subclassifications", "companies"):
+        assert f'id="{field}" hidden' in html
+        assert f'data-chip-input="{field}"' in html
+        assert f"search_settings.{field}" in js
+        assert f"{field}:" in chip_js
+    assert "classification_ids: toLines" in js
+    assert "classifications: toLines" in js

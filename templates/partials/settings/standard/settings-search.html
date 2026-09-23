@@ -144,6 +144,62 @@
 
                 </section>
 
+                <section class="subpanel search-settings-subcard market-filter-panel">
+                  <div class="settings-section-head">
+                    <h3>Optional market filters</h3>
+                    <p class="panel-copy">Narrow Job Market Map using source wording, not board IDs. Leave these blank unless you want a stricter market search. Unknown source facts remain eligible for review.</p>
+                  </div>
+                  <div class="settings-form-grid settings-form-grid--search-basics">
+                    <div class="settings-form-field">
+                      <div class="field-label-row">
+                        <label for="classifications_add">Classification</label>
+                        <details class="field-info-drawer">
+                          <summary class="field-info" aria-label="Help">i</summary>
+                          <div class="field-info-panel">Use the classification text shown by a job board, for example Information &amp; Communication Technology. Do not enter numeric board IDs.</div>
+                        </details>
+                      </div>
+                      <textarea id="classifications" hidden></textarea>
+                      <div id="classifications_chips" class="badge-editor-list" aria-live="polite"></div>
+                      <div class="badge-editor-form token-input-group">
+                        <input id="classifications_add" class="token-input-field" type="text" data-chip-input="classifications" placeholder="e.g. Information & Communication Technology">
+                        <button class="btn-add token-input-action" type="button" data-add-chip="classifications" aria-label="__JOB_HUNTER_ADD_BUTTON_ARIA_LABEL__" title="__JOB_HUNTER_ADD_BUTTON_TITLE__">__JOB_HUNTER_ADD_BUTTON_LABEL__</button>
+                      </div>
+                    </div>
+
+                    <div class="settings-form-field">
+                      <div class="field-label-row">
+                        <label for="subclassifications_add">Subclassification</label>
+                        <details class="field-info-drawer">
+                          <summary class="field-info" aria-label="Help">i</summary>
+                          <div class="field-info-panel">Optional source text such as Business/Systems Analysts. Job Hunter does not translate or guess board taxonomies.</div>
+                        </details>
+                      </div>
+                      <textarea id="subclassifications" hidden></textarea>
+                      <div id="subclassifications_chips" class="badge-editor-list" aria-live="polite"></div>
+                      <div class="badge-editor-form token-input-group">
+                        <input id="subclassifications_add" class="token-input-field" type="text" data-chip-input="subclassifications" placeholder="e.g. Business/Systems Analysts">
+                        <button class="btn-add token-input-action" type="button" data-add-chip="subclassifications" aria-label="__JOB_HUNTER_ADD_BUTTON_ARIA_LABEL__" title="__JOB_HUNTER_ADD_BUTTON_TITLE__">__JOB_HUNTER_ADD_BUTTON_LABEL__</button>
+                      </div>
+                    </div>
+
+                    <div class="settings-form-field settings-form-field--full">
+                      <div class="field-label-row">
+                        <label for="companies_add">Employer</label>
+                        <details class="field-info-drawer">
+                          <summary class="field-info" aria-label="Help">i</summary>
+                          <div class="field-info-panel">Optional employer names to include in the neutral Job Market Map search.</div>
+                        </details>
+                      </div>
+                      <textarea id="companies" hidden></textarea>
+                      <div id="companies_chips" class="badge-editor-list" aria-live="polite"></div>
+                      <div class="badge-editor-form token-input-group">
+                        <input id="companies_add" class="token-input-field" type="text" data-chip-input="companies" placeholder="e.g. Atlassian">
+                        <button class="btn-add token-input-action" type="button" data-add-chip="companies" aria-label="__JOB_HUNTER_ADD_BUTTON_ARIA_LABEL__" title="__JOB_HUNTER_ADD_BUTTON_TITLE__">__JOB_HUNTER_ADD_BUTTON_LABEL__</button>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
                 <section class="subpanel search-settings-subcard search-source-panel-group">
                   <h3>Job board search</h3>
                   <p class="panel-copy">__JOB_HUNTER_SEARCH_SOURCE_SECTION_COPY__</p>

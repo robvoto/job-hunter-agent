@@ -12,16 +12,22 @@ This guide describes which integrations exist, which ones are packaged product b
   direct SQLite access or silent scraper fallback.
 - JMM remains local-only. Job Hunter's AWS deployment intentionally omits this
   variable and must not point to a deployed or same-host JMM service.
-- JMM owns neutral identity, card facts, current JD storage, source collection,
-  and on-demand JD enrichment. JH owns candidate analysis and decisions.
-- JH requests a current JD from JMM only after the JH card gate says detail is
-  needed. JMM's current JD is transient analysis input; new JH workspace/history
-  records retain JMM identity and JD provenance without copying the JD.
-- JMM processing cursors are namespaced per authenticated JH user. They are
-  workflow checkpoints, not personal activity; JH-305 remains the activity owner.
-- JH sends its existing role terms, locations, date window, and selected boards to
-  JMM's stateless `/v3/jobs/search` endpoint. JMM evaluates those filters against
-  any active linked source row and returns each canonical vacancy once.
+- JMM owns neutral identity, card facts, current JD storage/enrichment, source collection,
+  field states, structured salary facts, and source readiness. JH owns candidate analysis,
+  personal filtering, salary floors, warnings, and decisions.
+- JH consumes cached JDs only through `GET /v3/jobs/{id}/jd` after the card gate says
+  detail is needed. HTTP 409 `JD not cached yet` is a per-job cache miss: JH audits/skips
+  that fit review and continues the run. JH never POST-enriches a JD or falls back to a
+  direct board scraper. The JD remains transient analysis input; JH retains only JMM
+  identity/provenance, not another permanent raw-JD copy.
+- JH sends its role terms, selected boards, locations/geography, freshness window,
+  existing work-type/work-mode/apply-method controls, personal salary floor, and optional
+  neutral text filters to JMM's stateless `/v3/jobs/search` endpoint. JMM evaluates those
+  filters against active linked source rows and returns each canonical vacancy once.
+- Optional neutral `classification`, `subclassification`, and `company` settings preserve
+  the user's literal source wording. Legacy source-native `classification_ids` remain
+  source-specific and are never forwarded as JMM classification text. JH may consult
+  `/v3/capabilities/fields`; capability `unknown` is not treated as unsupported.
 - Each JH market search uses a transient JMM snapshot boundary for its stateless
   search pages. It is not persisted and does not advance a consumer checkpoint.
 - Existing JH scraper/history data is retained only for the bounded JH-308

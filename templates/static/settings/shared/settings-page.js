@@ -252,6 +252,9 @@ function captureCandidateSettingsSnapshot(profile, userSettings) {
     : [];
   return {
     locations: normalizedProfile.search_settings?.locations || [],
+    classifications: normalizedProfile.search_settings?.classifications || [],
+    subclassifications: normalizedProfile.search_settings?.subclassifications || [],
+    companies: normalizedProfile.search_settings?.companies || [],
     searchDateWindow: normalizedProfile.search_settings?.date_range_days ?? '',
     seekMaxPages: normalizedProfile.search_settings?.seek_max_pages ?? '',
     seekQuickApplyOnly: normalizedProfile.search_settings?.seek_quick_apply_only ?? '',
@@ -282,6 +285,9 @@ function captureCandidateSettingsSnapshot(profile, userSettings) {
 
 const candidateSettingsSummaryFields = [
   { key: 'locations', path: 'search_settings.locations', fieldId: 'locations', format: formatSummaryList },
+  { key: 'classifications', path: 'search_settings.classifications', fieldId: 'classifications', format: formatSummaryList },
+  { key: 'subclassifications', path: 'search_settings.subclassifications', fieldId: 'subclassifications', format: formatSummaryList },
+  { key: 'companies', path: 'search_settings.companies', fieldId: 'companies', format: formatSummaryList },
   { key: 'searchDateWindow', path: 'search_settings.date_range_days', fieldId: 'search_date_window', format: (value) => formatSummarySelect('search_date_window', value) },
   { key: 'seekMaxPages', path: 'search_settings.seek_max_pages', fieldId: 'seek_max_pages', format: formatSummaryText },
   { key: 'seekQuickApplyOnly', path: 'search_settings.seek_quick_apply_only', fieldId: 'seek_quick_apply_only', format: formatSummaryText },
@@ -597,7 +603,11 @@ async function collectProfile() {
   return {
     search_settings: {
       locations: getSelectedLocationValues(),
+      // Legacy classification_ids remain SEEK-only; neutral JMM filters are literal text.
       classification_ids: toLines(document.getElementById('classification_ids').value),
+      classifications: toLines(document.getElementById('classifications').value),
+      subclassifications: toLines(document.getElementById('subclassifications').value),
+      companies: toLines(document.getElementById('companies').value),
       date_range_days: searchDateWindow === 0 ? 30 : searchDateWindow,
       linkedin_hours_old: hoursMap[searchDateWindow] ?? 72,
       seek_max_pages: seekMaxPages,
@@ -646,6 +656,9 @@ async function collectProfile() {
 function fillForm(profile) {
   renderLocationOptions();
   document.getElementById('classification_ids').value = (profile.search_settings?.classification_ids || []).join('\n');
+  document.getElementById('classifications').value = (profile.search_settings?.classifications || []).join('\n');
+  document.getElementById('subclassifications').value = (profile.search_settings?.subclassifications || []).join('\n');
+  document.getElementById('companies').value = (profile.search_settings?.companies || []).join('\n');
   setChoiceGroupValue('seek_max_pages', profile.search_settings?.seek_max_pages);
   const _seekQuickApply = profile.search_settings?.[SEEK_QUICK_APPLY_ONLY];
   document.getElementById(SEEK_QUICK_APPLY_ONLY).value = (_seekQuickApply === null || _seekQuickApply === undefined) ? '' : String(_seekQuickApply);

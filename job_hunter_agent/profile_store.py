@@ -1139,6 +1139,34 @@ def patch_profile(
     )
 
 
+def _normalize_neutral_market_filter_values(value: Any) -> list[str]:
+    """Normalize user-entered neutral JMM text filters without interpreting them.
+
+    JMM owns board taxonomy semantics. JH only trims/deduplicates the literal text
+    and observes JMM's public per-parameter bounds; it never turns source IDs into names.
+    """
+    if isinstance(value, str):
+        values = value.splitlines()
+    elif isinstance(value, (list, tuple, set)):
+        values = list(value)
+    else:
+        values = []
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw in values:
+        cleaned = str(raw or "").strip()
+        if not cleaned or len(cleaned) > 300:
+            continue
+        identity = cleaned.casefold()
+        if identity in seen:
+            continue
+        seen.add(identity)
+        normalized.append(cleaned)
+        if len(normalized) >= 100:
+            break
+    return normalized
+
+
 def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
     merged = deep_merge(copy.deepcopy(DEFAULT_SEARCH_SETTINGS), settings or {})
     # JobSpy stall protection is global runtime safety, not candidate search intent.
@@ -1262,6 +1290,8 @@ def normalize_search_settings(settings: dict[str, Any] | None) -> dict[str, Any]
         if len(normalized_locations) >= max_locations:
             break
     merged["locations"] = normalized_locations
+    for key in ("classifications", "subclassifications", "companies"):
+        merged[key] = _normalize_neutral_market_filter_values(merged.get(key))
     quick_apply_only = merged.get(KEY_SEEK_QUICK_APPLY_ONLY)
     if quick_apply_only is None or quick_apply_only == "":
         merged[KEY_SEEK_QUICK_APPLY_ONLY] = None

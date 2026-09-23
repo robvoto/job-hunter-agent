@@ -76,6 +76,25 @@ class _Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler contract
         parsed = urlsplit(self.path)
         query = parse_qs(parsed.query)
+        if parsed.path == "/v3/capabilities/fields":
+            fields = [
+                "title", "company", "location", "geography_code", "posted_at",
+                "classification", "subclassification", "employment_type",
+                "workplace_type", "apply_method", "salary", "description",
+            ]
+            self._json(
+                {
+                    "api_version": "v3",
+                    "schema_version": 8,
+                    "field_states": ["known", "not_present", "unknown", "not_applicable"],
+                    "fields": fields,
+                    "sources": {
+                        "seek": {field: "supported" for field in fields},
+                        "linkedin": {field: "unknown" for field in fields},
+                    },
+                }
+            )
+            return
         if parsed.path == "/v3/readiness":
             self._json(
                 {

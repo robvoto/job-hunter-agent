@@ -67,6 +67,9 @@ def test_default_search_settings_are_candidate_agnostic():
     assert DEFAULT_SEARCH_SETTINGS["locations"] == []
 
     assert DEFAULT_SEARCH_SETTINGS["classification_ids"] == []
+    assert DEFAULT_SEARCH_SETTINGS["classifications"] == []
+    assert DEFAULT_SEARCH_SETTINGS["subclassifications"] == []
+    assert DEFAULT_SEARCH_SETTINGS["companies"] == []
 
     assert DEFAULT_SEARCH_SETTINGS["seek_max_pages"] > 0
 
@@ -757,3 +760,17 @@ def test_tracked_text_files_use_lf_line_endings():
         "Tracked text files must use LF line endings. Normalize these files before committing:\n"
         + "\n".join(bad)
     )
+
+
+def test_search_settings_normalize_neutral_market_filters_without_taxonomy_inference():
+    normalized = normalize_search_settings(
+        {
+            "classifications": [" ICT ", "ict", "Accounting"],
+            "subclassifications": "Business/Systems Analysts\nProject Management",
+            "companies": [" Acme ", "acme", "Atlassian"],
+        }
+    )
+
+    assert normalized["classifications"] == ["ICT", "Accounting"]
+    assert normalized["subclassifications"] == ["Business/Systems Analysts", "Project Management"]
+    assert normalized["companies"] == ["Acme", "Atlassian"]

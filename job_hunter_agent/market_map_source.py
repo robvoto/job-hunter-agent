@@ -992,7 +992,28 @@ def _location_search_scopes(search_settings: dict[str, Any]) -> list[tuple[list[
     return scopes
 
 
-def _build_market_search_scopes(context) -> list[dict[str, Any]]:
+def _neutral_filter_for_source(
+    values: list[str],
+    *,
+    source: str,
+    field: str,
+    source_capabilities: dict[str, Any] | None,
+) -> list[str]:
+    """Respect explicit JMM capability limits without treating `unknown` as unsupported."""
+    if not values or not isinstance(source_capabilities, dict):
+        return values
+    capabilities = source_capabilities.get(source)
+    if not isinstance(capabilities, dict):
+        return values
+    status = str(capabilities.get(field) or "unknown").strip().casefold()
+    if status in {"unsupported", "not_supported", "not_applicable"}:
+        return []
+    return values
+
+
+def _build_market_search_scopes(
+    context, source_capabilities: dict[str, Any] | None = None
+) -> list[dict[str, Any]]:
     search_settings = context.search_settings
     role_terms = ordered_profile_search_terms(search_settings, context.profile)
     if not role_terms:
@@ -1033,12 +1054,27 @@ def _build_market_search_scopes(context) -> list[dict[str, Any]]:
                         "locations": locations,
                         # Forward configured classification values verbatim. JH must
                         # not translate/recreate SEEK, LinkedIn or APS taxonomies.
-                        "classifications": classifications,
-                        "subclassifications": subclassifications,
+                        "classifications": _neutral_filter_for_source(
+                            classifications,
+                            source=source,
+                            field="classification",
+                            source_capabilities=source_capabilities,
+                        ),
+                        "subclassifications": _neutral_filter_for_source(
+                            subclassifications,
+                            source=source,
+                            field="subclassification",
+                            source_capabilities=source_capabilities,
+                        ),
                         "employment_types": employment_types,
                         "workplace_types": workplace_types,
                         "apply_methods": _apply_method_filters(search_settings, source),
-                        "companies": companies,
+                        "companies": _neutral_filter_for_source(
+                            companies,
+                            source=source,
+                            field="company",
+                            source_capabilities=source_capabilities,
+                        ),
                         "posted_after": _posted_after_for_source(context, source),
                         **salary_filter,
                     }
@@ -1046,10 +1082,15 @@ def _build_market_search_scopes(context) -> list[dict[str, Any]]:
     return scopes
 
 
-def _iter_filtered_market_pages(context, client: JobMarketMapClient):
+def _iter_filtered_market_pages(
+    context,
+    client: JobMarketMapClient,
+    *,
+    source_capabilities: dict[str, Any] | None = None,
+):
     """Yield progressive pages inside one fixed market boundary for the whole run."""
     run_snapshot_max_id: int | None = None
-    for scope in _build_market_search_scopes(context):
+    for scope in _build_market_search_scopes(context, source_capabilities):
         cursor = 0
         scope_total: int | None = None
         while True:
@@ -1100,6 +1141,11 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
     readiness_reader = getattr(client, "get_readiness", None)
     if callable(readiness_reader):
         _record_jmm_readiness(readiness_reader(), run_id=context.run_iso)
+    capability_reader = getattr(client, "get_field_capabilities", None)
+    capability_payload = capability_reader() if callable(capability_reader) else {}
+    source_capabilities = (
+        capability_payload.get("sources") if isinstance(capability_payload, dict) else None
+    )
     review_context = ReviewPipelineContext(
         profile=context.profile,
         job_history=context.job_history,
@@ -1131,7 +1177,9 @@ def run_market_map_source(context) -> tuple[list[dict], list[dict], list[dict]]:
     )
     seen_market_ids: set[int] = set()
     records_by_market_id: dict[int, dict[str, Any]] = {}
-    for page in _iter_filtered_market_pages(context, client):
+    for page in _iter_filtered_market_pages(
+        context, client, source_capabilities=source_capabilities
+    ):
         page_items: list[dict] = []
         for item in page["items"]:
             item_id = item.get("id")

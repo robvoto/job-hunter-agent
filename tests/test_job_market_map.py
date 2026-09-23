@@ -2001,3 +2001,69 @@ def test_jh313_readiness_client_reads_get_only():
 
     assert payload["jd_coverage"]["failed"] == 2
     assert requests == [("GET", "https://jmm.example/v3/readiness")]
+
+
+def test_jh314_reads_jmm_field_capabilities_with_get_only():
+    requests = []
+
+    def opener(request, **_kwargs):
+        requests.append((request.get_method(), request.full_url))
+        return _Response(
+            {
+                "api_version": "v3",
+                "schema_version": 12,
+                "fields": ["classification", "subclassification", "company"],
+                "sources": {
+                    "seek": {"classification": "supported"},
+                    "linkedin": {"classification": "unknown"},
+                },
+            }
+        )
+
+    client = JobMarketMapClient("https://jmm.example/v3", opener=opener)
+    payload = client.get_field_capabilities()
+
+    assert payload["sources"]["seek"]["classification"] == "supported"
+    assert requests == [("GET", "https://jmm.example/v3/capabilities/fields")]
+
+
+def test_jh314_neutral_market_filters_use_text_settings_and_capabilities():
+    context = _market_context()
+    context.enabled_sources = ["seek", "linkedin", "apsjobs"]
+    context.search_settings.update(
+        {
+            "classification_ids": ["6281"],
+            "classifications": ["Information & Communication Technology"],
+            "subclassifications": ["Business/Systems Analysts"],
+            "companies": ["Acme"],
+        }
+    )
+    capabilities = {
+        "seek": {
+            "classification": "supported",
+            "subclassification": "supported",
+            "company": "supported",
+        },
+        "linkedin": {
+            "classification": "unknown",
+            "subclassification": "unknown",
+            "company": "supported",
+        },
+        "apsjobs": {
+            "classification": "not_supported",
+            "subclassification": "not_supported",
+            "company": "not_supported",
+        },
+    }
+
+    scopes = market_map_source._build_market_search_scopes(context, capabilities)
+    by_source = {scope["sources"][0]: scope for scope in scopes}
+
+    for source in ("seek", "linkedin"):
+        assert by_source[source]["classifications"] == ["Information & Communication Technology"]
+        assert by_source[source]["subclassifications"] == ["Business/Systems Analysts"]
+        assert by_source[source]["companies"] == ["Acme"]
+        assert "6281" not in by_source[source]["classifications"]
+    assert by_source["apsjobs"]["classifications"] == []
+    assert by_source["apsjobs"]["subclassifications"] == []
+    assert by_source["apsjobs"]["companies"] == []
