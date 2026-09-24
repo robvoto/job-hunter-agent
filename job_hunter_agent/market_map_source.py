@@ -127,9 +127,8 @@ def _jmm_readiness_degraded_sources(readiness: dict[str, Any]) -> list[str]:
 JMM_LOW_FAILURE_RATE_PERCENT = 1.0
 
 
-def _jmm_recent_jd_failure_rate_percent(readiness: dict[str, Any]) -> float | None:
-    """Return the recorded hard-JD-failure rate for the recent coverage window."""
-    coverage = readiness.get("jd_coverage_recent_3d") or readiness.get("jd_coverage") or {}
+def _jmm_jd_failure_rate_percent(coverage: dict[str, Any]) -> float | None:
+    """Return recorded hard-JD failures as a percentage of counted JD outcomes."""
     try:
         available = max(0, int(coverage.get("available", 0)))
         missing = max(0, int(coverage.get("missing_not_cached", 0)))
@@ -140,6 +139,12 @@ def _jmm_recent_jd_failure_rate_percent(readiness: dict[str, Any]) -> float | No
     if total <= 0:
         return None
     return failed / total * 100
+
+
+def _jmm_recent_jd_failure_rate_percent(readiness: dict[str, Any]) -> float | None:
+    """Return the recorded hard-JD-failure rate for the recent coverage window."""
+    coverage = readiness.get("jd_coverage_recent_3d") or readiness.get("jd_coverage") or {}
+    return _jmm_jd_failure_rate_percent(coverage)
 
 
 def _jmm_readiness_messages(readiness: dict[str, Any]) -> list[str]:
@@ -190,13 +195,19 @@ def _record_jmm_readiness(readiness: dict[str, Any], *, run_id: str) -> None:
     coverage = readiness.get("jd_coverage") or {}
     seek_status = str((source_runs.get("seek") or {}).get("status") or "NOT_RUN")
     linkedin_status = str((source_runs.get("linkedin") or {}).get("status") or "NOT_RUN")
+    recent_failure_rate = _jmm_recent_jd_failure_rate_percent(readiness)
+    overall_failure_rate = _jmm_jd_failure_rate_percent(coverage)
     logger.info(
-        "[JMM][READINESS] seek_status=%s linkedin_status=%s jd_available=%s jd_missing_not_cached=%s jd_failed=%s",
+        "[JMM][READINESS] seek_status=%s linkedin_status=%s "
+        "jd_available=%s jd_missing_not_cached=%s jd_failed=%s "
+        "jd_failed_pct_recent=%s jd_failed_pct_overall=%s",
         seek_status,
         linkedin_status,
         coverage.get("available", 0),
         coverage.get("missing_not_cached", 0),
         coverage.get("failed", 0),
+        f"{recent_failure_rate:.1f}%" if recent_failure_rate is not None else "n/a",
+        f"{overall_failure_rate:.1f}%" if overall_failure_rate is not None else "n/a",
     )
     degraded = _jmm_readiness_degraded_sources(readiness)
     if degraded:

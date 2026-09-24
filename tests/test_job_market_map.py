@@ -1975,6 +1975,36 @@ def test_jh313_degraded_readiness_uses_existing_system_warning_surface(monkeypat
     assert warnings[0]["context"]["jd_coverage"]["missing_not_cached"] == 7
 
 
+def test_jh313_readiness_log_includes_failure_percentages(monkeypatch, caplog):
+    monkeypatch.setattr(
+        market_map_source,
+        "record_system_warning",
+        lambda **kwargs: kwargs,
+    )
+    readiness = {
+        "source_runs": {
+            "seek": {"status": "PARTIAL_TIME_LIMIT"},
+            "linkedin": {"status": "PARTIAL_FAILURE"},
+        },
+        "jd_coverage": {
+            "available": 990,
+            "missing_not_cached": 9,
+            "failed": 1,
+        },
+        "jd_coverage_recent_3d": {
+            "available": 99,
+            "missing_not_cached": 0,
+            "failed": 1,
+        },
+    }
+
+    with caplog.at_level("INFO", logger="job_hunter_agent.market_map_source"):
+        market_map_source._record_jmm_readiness(readiness, run_id="run-log-pct")
+
+    assert "jd_failed_pct_recent=1.0%" in caplog.text
+    assert "jd_failed_pct_overall=0.1%" in caplog.text
+
+
 def test_jh313_readiness_message_is_calm_for_time_limit_and_low_failure_rate():
     readiness = {
         "source_runs": {
