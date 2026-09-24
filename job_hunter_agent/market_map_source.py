@@ -124,6 +124,67 @@ def _jmm_readiness_degraded_sources(readiness: dict[str, Any]) -> list[str]:
     return degraded
 
 
+JMM_LOW_FAILURE_RATE_PERCENT = 1.0
+
+
+def _jmm_recent_jd_failure_rate_percent(readiness: dict[str, Any]) -> float | None:
+    """Return the recorded hard-JD-failure rate for the recent coverage window."""
+    coverage = readiness.get("jd_coverage_recent_3d") or readiness.get("jd_coverage") or {}
+    try:
+        available = max(0, int(coverage.get("available", 0)))
+        missing = max(0, int(coverage.get("missing_not_cached", 0)))
+        failed = max(0, int(coverage.get("failed", 0)))
+    except (TypeError, ValueError):
+        return None
+    total = available + missing + failed
+    if total <= 0:
+        return None
+    return failed / total * 100
+
+
+def _jmm_readiness_messages(readiness: dict[str, Any]) -> list[str]:
+    """Translate JMM lifecycle statuses into accurate, user-facing warnings."""
+    source_runs = readiness.get("source_runs") or {}
+    failure_rate = _jmm_recent_jd_failure_rate_percent(readiness)
+    messages: list[str] = []
+    for source in ("seek", "linkedin"):
+        run = source_runs.get(source) if isinstance(source_runs, dict) else None
+        status = str((run or {}).get("status") or "NOT_RUN").strip().upper()
+        label = {"seek": "Seek", "linkedin": "LinkedIn"}.get(source, source.title())
+        if status == "PARTIAL_TIME_LIMIT":
+            messages.append(
+                f"{label} collection reached its time limit; partial results are available."
+            )
+        elif status.startswith("PARTIAL_") or status.startswith("INCOMPLETE"):
+            if status == "PARTIAL_FAILURE" and failure_rate is not None:
+                if failure_rate <= JMM_LOW_FAILURE_RATE_PERCENT:
+                    messages.append(
+                        f"{label} collection is usable; some JD enrichment remains pending, "
+                        f"but recorded hard failures are low "
+                        f"({failure_rate:.1f}% in recent coverage)."
+                    )
+                else:
+                    messages.append(
+                        f"{label} collection is partially complete; some JD enrichment "
+                        f"failed or remains pending "
+                        f"({failure_rate:.1f}% recorded hard failures in recent coverage)."
+                    )
+            else:
+                messages.append(
+                    f"{label} collection is partially complete; some coverage or JD "
+                    "enrichment remains pending. Results are still available."
+                )
+        elif (
+            status == "NOT_RUN"
+            or status in {"STOPPED", "FAILED", "ERROR"}
+            or "FAIL" in status
+        ):
+            messages.append(
+                f"{label} source is unavailable ({status.lower().replace("_", " ")})."
+            )
+    return messages
+
+
 def _record_jmm_readiness(readiness: dict[str, Any], *, run_id: str) -> None:
     source_runs = readiness.get("source_runs") or {}
     coverage = readiness.get("jd_coverage") or {}
@@ -139,7 +200,8 @@ def _record_jmm_readiness(readiness: dict[str, Any], *, run_id: str) -> None:
     )
     degraded = _jmm_readiness_degraded_sources(readiness)
     if degraded:
-        message = "Job Market Map source readiness is degraded: " + ", ".join(degraded)
+        messages = _jmm_readiness_messages(readiness)
+        message = "Job Market Map source readiness: " + " ".join(messages)
         record_system_warning(
             severity="warning",
             category="jmm_readiness",
