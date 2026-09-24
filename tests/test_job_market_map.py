@@ -1975,6 +1975,45 @@ def test_jh313_degraded_readiness_uses_existing_system_warning_surface(monkeypat
     assert warnings[0]["context"]["jd_coverage"]["missing_not_cached"] == 7
 
 
+def test_jh313_readiness_message_is_calm_for_time_limit_and_low_failure_rate():
+    readiness = {
+        "source_runs": {
+            "seek": {"status": "PARTIAL_TIME_LIMIT"},
+            "linkedin": {"status": "PARTIAL_FAILURE"},
+        },
+        "jd_coverage_recent_3d": {
+            "available": 990,
+            "missing_not_cached": 9,
+            "failed": 1,
+        },
+    }
+
+    messages = market_map_source._jmm_readiness_messages(readiness)
+
+    assert messages == [
+        "Seek collection reached its time limit; partial results are available.",
+        "LinkedIn collection is usable; some JD enrichment remains pending, "
+        "but recorded hard failures are low (0.1% in recent coverage).",
+    ]
+
+
+def test_jh313_readiness_message_stays_clear_for_high_failure_rate():
+    readiness = {
+        "source_runs": {
+            "seek": {"status": "COMPLETE"},
+            "linkedin": {"status": "PARTIAL_FAILURE"},
+        },
+        "jd_coverage": {"available": 50, "missing_not_cached": 10, "failed": 40},
+    }
+
+    messages = market_map_source._jmm_readiness_messages(readiness)
+
+    assert messages == [
+        "LinkedIn collection is partially complete; some JD enrichment failed "
+        "or remains pending (40.0% recorded hard failures in recent coverage)."
+    ]
+
+
 def test_jh313_readiness_client_reads_get_only():
     requests = []
 
