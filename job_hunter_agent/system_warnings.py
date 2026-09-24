@@ -21,6 +21,10 @@ _SYSTEM_WARNING_DIAGNOSTIC_WARNING_CATEGORIES = frozenset(
         "llm_requirement_coverage",
         "preference_uncertainty",
         "requirement_coverage_uncertainty",
+        # Run-stat warnings are historical run diagnostics, not current operator
+        # incidents. Keep them grouped behind Technical diagnostics so repeated
+        # source hiccups do not flood the default System health incident feed.
+        "run_stats_warning",
     }
 )
 _SCRAPER_VALIDATION_CATEGORIES = frozenset(

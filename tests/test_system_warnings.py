@@ -250,9 +250,15 @@ def test_system_warning_operator_action_only_offers_a_real_supported_check():
         "category": "json_parse_failure",
         "source": "load_json_dict",
     }
+    run_stats_warning = {
+        "severity": "warning",
+        "category": "run_stats_warning",
+        "source": "run_stats",
+    }
 
     assert is_actionable_system_warning(source_failure) is True
     assert is_actionable_system_warning(source_timeout) is True
+    assert is_actionable_system_warning(run_stats_warning) is False
     expected_scraper_action = {
         "type": "run_scraper_validation",
         "label_key": "system_health_scraper_validation_action_label",
@@ -260,4 +266,39 @@ def test_system_warning_operator_action_only_offers_a_real_supported_check():
     }
     assert system_warning_operator_action(source_failure) == expected_scraper_action
     assert system_warning_operator_action(source_timeout) == expected_scraper_action
+    assert system_warning_operator_action(run_stats_warning) is None
     assert system_warning_operator_action(data_failure) is None
+
+
+def test_run_stats_warnings_aggregate_into_one_compact_diagnostic_group(tmp_path):
+    db = tmp_path / "warnings.db"
+    init_db(db)
+
+    for message in (
+        "Job Market Map: request failed: timed out",
+        "Job Market Map: partial_failure",
+        "Job Market Map: request failed: connection refused",
+    ):
+        record_system_warning(
+            severity="warning",
+            category="run_stats_warning",
+            source="run_stats",
+            message=message,
+            fingerprint=message,
+            run_id="2026-09-17T17:04:30+10:00",
+            db_path=db,
+        )
+
+    diagnostics = [
+        warning
+        for warning in list_system_warnings(db_path=db)
+        if not is_actionable_system_warning(warning)
+    ]
+    groups = aggregate_system_warning_diagnostics(diagnostics)
+
+    assert len(diagnostics) == 3
+    assert len(groups) == 1
+    assert groups[0]["category"] == "run_stats_warning"
+    assert groups[0]["source"] == "run_stats"
+    assert groups[0]["record_count"] == 3
+    assert groups[0]["occurrence_count"] == 3
