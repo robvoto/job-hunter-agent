@@ -837,6 +837,22 @@ def test_search_basics_shared_layout_stays_balanced_at_settings_width(candidate_
     group_boxes = [box(groups.nth(i)) for i in range(3)]
     assert max(abs(group_boxes[i]["y"] - group_boxes[0]["y"]) for i in range(1, 3)) < 8
 
+    # Location groups are content-sized on wide screens; do not regress to
+    # stretched 1fr tracks that leave large empty columns around the labels.
+    def content_extent(group):
+        option_boxes = [
+            box(group.locator(".location-checkbox-option").nth(i))
+            for i in range(group.locator(".location-checkbox-option").count())
+        ]
+        return min(item["x"] for item in option_boxes), max(
+            item["x"] + item["width"] for item in option_boxes
+        )
+
+    for group, group_box in zip((groups.nth(i) for i in range(3)), group_boxes):
+        content_left, content_right = content_extent(group)
+        empty_space = group_box["width"] - (content_right - content_left)
+        assert empty_space <= 64, f"location group has {empty_space}px of empty width"
+
     basics = page.locator(".search-basics-fields")
     preference_groups = basics.locator(".search-preference-groups")
     compensation = basics.locator(".search-compensation-group")

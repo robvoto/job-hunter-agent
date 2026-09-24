@@ -2650,8 +2650,11 @@
 }
 .location-checkbox-groups {
   display: grid;
-  /* Keep all three lists together until the owning container is genuinely narrow. */
-  grid-template-columns: minmax(12rem, 1fr) minmax(20rem, 1.5fr) minmax(12rem, 1fr);
+  /* Size each list to its labels; the parent may keep the remaining space as
+     outer breathing room instead of stretching empty space inside each group. */
+  grid-template-columns: max-content max-content max-content;
+  column-gap: calc(var(--surface-gap-lg) * 2);
+  justify-content: start;
   width: 100%;
   max-width: 100%;
   padding: var(--surface-gap-md);
@@ -2747,9 +2750,10 @@
 }
 .checkbox-list-option input:disabled + span { opacity: 0.55; }
 
-/* At this breakpoint the three-list layout no longer has enough room for its
-   longest labels; stack the groups instead of allowing overlap or overflow. */
-@container (max-width: 48rem) {
+/* At this breakpoint the content-sized three-list layout no longer has enough
+   room for its longest labels; stack the groups instead of allowing overlap or
+   horizontal overflow. */
+@container (max-width: 52rem) {
   .location-checkbox-groups {
     grid-template-columns: minmax(0, 1fr);
     width: 100%;
