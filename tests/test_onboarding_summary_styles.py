@@ -166,7 +166,7 @@ def test_location_dense_groups_fill_columns_in_reading_order():
     assert 'container-type: inline-size;' in theme_widgets
     assert 'grid-template-columns: max-content max-content max-content;' in theme_widgets
     assert 'justify-content: start;' in theme_widgets
-    assert '@container (max-width: 52rem)' in theme_widgets
+    assert '@container (max-width: 48rem)' in theme_widgets
     assert '@container (max-width: 64rem)' not in theme_widgets
     assert '@container (max-width: 30rem)' in theme_widgets
     assert 'grid-template-rows: repeat(var(--checkbox-list-row-count), auto);' in theme_widgets

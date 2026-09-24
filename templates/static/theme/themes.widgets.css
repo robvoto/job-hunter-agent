@@ -2753,7 +2753,7 @@
 /* At this breakpoint the content-sized three-list layout no longer has enough
    room for its longest labels; stack the groups instead of allowing overlap or
    horizontal overflow. */
-@container (max-width: 52rem) {
+@container (max-width: 48rem) {
   .location-checkbox-groups {
     grid-template-columns: minmax(0, 1fr);
     width: 100%;
