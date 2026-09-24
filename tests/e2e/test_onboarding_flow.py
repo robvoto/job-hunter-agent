@@ -294,34 +294,22 @@ def test_search_basics_location_layout_stays_compact_and_responsive(
         return result
 
     step3_grid = page.locator('.review-grid--search-basics')
-    step3_cards = step3_grid.locator(':scope > .review-block')
-    expect(step3_cards).to_have_count(2)
-    desktop_cards = [box(step3_cards.nth(i)) for i in range(2)]
-    assert abs(desktop_cards[0]["y"] - desktop_cards[1]["y"]) < 8
-    assert desktop_cards[0]["width"] > desktop_cards[1]["width"]
-    ratio = desktop_cards[0]["width"] / desktop_cards[1]["width"]
-    assert 1.3 <= ratio <= 1.7, f"step 3 desktop card ratio is {ratio}"
+    step3_sections = step3_grid.locator(':scope > section')
+    expect(step3_sections).to_have_count(2)
+    desktop_sections = [box(step3_sections.nth(i)) for i in range(2)]
+    assert desktop_sections[1]["y"] > desktop_sections[0]["y"]
+    assert abs(desktop_sections[0]["width"] - desktop_sections[1]["width"]) < 8
 
-    # Desktop: all three groups stay on one row, with bounded deliberate gaps.
+    # Desktop: location fills its section with balanced columns rather than a
+    # content-sized cluster stranded at the left of a wide card.
     location_box = box(location)
     wrap_box = box(groups_wrap)
     group_boxes = [box(groups.nth(i)) for i in range(3)]
     assert max(abs(group_boxes[i]["y"] - group_boxes[0]["y"]) for i in range(1, 3)) < 8
-    def content_extent(group):
-        option_boxes = [box(group.locator(".checkbox-list-option").nth(i)) for i in range(group.locator(".checkbox-list-option").count())]
-        return min(item["x"] for item in option_boxes), max(item["x"] + item["width"] for item in option_boxes)
-
-    first_left, first_right = content_extent(groups.nth(0))
-    second_left, second_right = content_extent(groups.nth(1))
-    third_left, third_right = content_extent(groups.nth(2))
-    gap_1 = second_left - first_right
-    gap_2 = third_left - second_right
-    assert 16 <= gap_1 <= 96, f"capital/states visible gap is {gap_1}px"
-    assert 16 <= gap_2 <= 96, f"states/territories visible gap is {gap_2}px"
-    # In the two-column Step 3 composition, Location should use its narrower
-    # card efficiently rather than recreating a mostly-empty full-width row.
-    assert wrap_box["width"] <= 950
-    assert 0.9 <= wrap_box["width"] / location_box["width"] <= 1.01
+    assert max(item["width"] for item in group_boxes) - min(item["width"] for item in group_boxes) < 8
+    assert wrap_box["width"] <= location_box["width"]
+    assert wrap_box["x"] >= location_box["x"]
+    assert wrap_box["x"] + wrap_box["width"] <= location_box["x"] + location_box["width"] + 1
 
     # Internal two-column lists also remain compact.
     sydney = box(groups.nth(0).locator('.checkbox-list-option:has-text("Sydney")'))
@@ -337,7 +325,9 @@ def test_search_basics_location_layout_stays_compact_and_responsive(
     group_boxes = [box(groups.nth(i)) for i in range(3)]
     assert max(abs(group_boxes[i]["y"] - group_boxes[0]["y"]) for i in range(1, 3)) < 8
     nsw_box = box(groups.nth(1).locator('.checkbox-list-option:has-text("New South Wales")'))
-    assert nsw_box["height"] < 32
+    # The balanced column can wrap a long state label at medium width; it must
+    # grow vertically rather than overlap or force horizontal overflow.
+    assert nsw_box["height"] < 48
 
     # Narrow: switch directly to one stacked column rather than 2 + 1.
     page.set_viewport_size({"width": 760, "height": 1100})
@@ -363,8 +353,7 @@ def test_search_basics_location_layout_stays_compact_and_responsive(
     compensation_box = box(compensation)
     preference_items = preference_groups.locator(":scope > .onb-field")
     pref_item_boxes = [box(preference_items.nth(i)) for i in range(3)]
-    assert pref_item_boxes[1]["y"] > pref_item_boxes[0]["y"]
-    assert pref_item_boxes[2]["y"] > pref_item_boxes[1]["y"]
+    assert max(abs(pref_item_boxes[i]["y"] - pref_item_boxes[0]["y"]) for i in range(1, 3)) < 8
     assert compensation_box["y"] > pref_box["y"] + pref_box["height"] - 8
     assert abs(compensation_box["x"] - pref_box["x"]) < 8
     annual_box = box(salary_fields.nth(0))
@@ -376,8 +365,8 @@ def test_search_basics_location_layout_stays_compact_and_responsive(
     # At medium width the same grouping remains stable and gives Work type /
     # Sector / Work mode the full row.
     page.set_viewport_size({"width": 1100, "height": 1100})
-    medium_cards = [box(step3_cards.nth(i)) for i in range(2)]
-    assert medium_cards[1]["y"] > medium_cards[0]["y"]
+    medium_sections = [box(step3_sections.nth(i)) for i in range(2)]
+    assert medium_sections[1]["y"] > medium_sections[0]["y"]
     pref_box = box(preference_groups)
     compensation_box = box(compensation)
     assert compensation_box["y"] > pref_box["y"] + pref_box["height"] - 8
@@ -390,7 +379,7 @@ def test_search_basics_location_layout_stays_compact_and_responsive(
 
     # Phone stacks the two Step 3 cards and every control group.
     page.set_viewport_size({"width": 390, "height": 1000})
-    phone_cards = [box(step3_cards.nth(i)) for i in range(2)]
+    phone_cards = [box(step3_sections.nth(i)) for i in range(2)]
     assert phone_cards[1]["y"] > phone_cards[0]["y"]
     pref_item_boxes = [box(preference_items.nth(i)) for i in range(3)]
     assert pref_item_boxes[1]["y"] > pref_item_boxes[0]["y"]

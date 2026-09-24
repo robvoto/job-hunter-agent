@@ -35,19 +35,18 @@ def test_search_basics_reuses_review_layout_primitives():
     step_3 = onboarding_html.split('data-step="3" hidden>', 1)[1].split('data-step="4" hidden>', 1)[0]
 
     assert '<div class="review-grid review-grid--search-basics">' in step_3
-    assert 'class="review-block onb-field"' in step_3
-    assert 'class="review-block search-basics-container"' in step_3
+    assert '<section class="onb-field">' in step_3
+    assert '<section class="search-basics-container">' in step_3
     assert 'Search preferences' not in step_3
     assert 'search-basics-fields' in step_3
     assert step_3.count('class="onb-field"') >= 3
-    assert step_3.count('class="review-block search-basics-container"') == 1
+    assert step_3.count('<section class="search-basics-container">') == 1
     assert 'class="search-compensation-group"' in step_3
     assert '__JOB_HUNTER_ONBOARDING_PAGE_MINIMUM_COMPENSATION_LABEL__' in step_3
     assert 'id="salary_yearly_block" class="onb-field"' in step_3
     assert 'id="salary_daily_block" class="onb-field"' in step_3
     assert 'review-grid--search-basics' in onboarding_review_css
-    assert 'grid-template-columns: minmax(0, 3fr) minmax(24rem, 2fr);' in onboarding_review_css
-    assert '@media (max-width: 1450px)' in onboarding_review_css
+    assert 'grid-template-columns: minmax(0, 1fr);' in onboarding_review_css
     assert ".compensation-card" not in theme_widgets
 
 
@@ -73,12 +72,11 @@ def test_onboarding_and_settings_share_location_checkbox_component():
     assert "export function renderLocationCheckboxOptions" in common_location_js
     assert "onboardingLocationUi.renderLocationCheckboxOptions" in onboarding_js
     theme_widgets = (repo_root / "templates" / "static" / "theme" / "themes.widgets.css").read_text(encoding="utf-8")
-    assert "grid-template-columns: repeat(3, max-content);" in theme_widgets
-    assert "grid-template-columns: repeat(2, max-content);" in theme_widgets
-    assert "width: max-content;" in theme_widgets
+    assert "grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--layout-grid-min-group)), 1fr));" in theme_widgets
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in theme_widgets
     assert "max-width: 100%;" in theme_widgets
     assert "justify-items: start;" in theme_widgets
-    assert "column-gap: calc(var(--surface-gap-lg) * 2);" in theme_widgets
+    assert "gap: var(--surface-gap-lg);" in theme_widgets
     assert "locationUi.renderLocationCheckboxOptions" in settings_js
     assert '<select id="location_search"' not in onboarding_html
 
@@ -164,13 +162,13 @@ def test_location_dense_groups_fill_columns_in_reading_order():
     assert "groupsWrap.className = 'location-checkbox-groups';" in location_js
     assert '--checkbox-list-row-count' in location_js
     assert 'container-type: inline-size;' in theme_widgets
-    assert 'grid-template-columns: max-content max-content max-content;' in theme_widgets
-    assert 'justify-content: start;' in theme_widgets
+    assert 'grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--layout-grid-min-group)), 1fr));' in theme_widgets
     assert '@container (max-width: 48rem)' in theme_widgets
     assert '@container (max-width: 64rem)' not in theme_widgets
     assert '@container (max-width: 30rem)' in theme_widgets
     assert 'grid-template-rows: repeat(var(--checkbox-list-row-count), auto);' in theme_widgets
     assert 'grid-auto-flow: column;' in theme_widgets
+    assert 'white-space: normal;' in theme_widgets
 
 
 def test_selected_capability_uses_card_state_without_selected_badge():
