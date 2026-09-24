@@ -41,6 +41,9 @@
   /* Settings and onboarding can use more horizontal space for dense review/editing grids. */
   --settings-shell-max-width: var(--wide-shell-max-width);
   --onboarding-shell-max-width: var(--wide-shell-max-width);
+  /* Responsive grid floors keep repeated settings groups readable before they stack. */
+  --layout-grid-min-group: 16rem;
+  --layout-grid-min-compact: 14rem;
   --onboarding-shell-padding-top: 24px;
   --onboarding-shell-padding-inline: var(--surface-pad-inline-sm);
   --onboarding-shell-padding-bottom: 44px;

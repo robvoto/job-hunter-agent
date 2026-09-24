@@ -1422,17 +1422,18 @@
 }
 
 .search-preference-groups {
-  display: flex;
-  flex-wrap: wrap;
+  /* Helper note: the grid owns the responsive transition; child fields must not
+     grow from content width or collide when the viewport changes. */
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--layout-grid-min-compact)), 1fr));
   align-items: flex-start;
-  gap: var(--surface-gap-lg) calc(var(--surface-gap-lg) * 2);
+  gap: var(--surface-gap-lg);
   min-width: 0;
 }
 
 .search-preference-groups > .settings-form-field,
 .search-preference-groups > .onb-field {
-  flex: 0 0 auto;
-  width: max-content;
+  width: 100%;
   max-width: 100%;
   min-width: 0;
 }
@@ -2650,11 +2651,11 @@
 }
 .location-checkbox-groups {
   display: grid;
-  /* Size each list to its labels; the parent may keep the remaining space as
-     outer breathing room instead of stretching empty space inside each group. */
-  grid-template-columns: max-content max-content max-content;
-  column-gap: calc(var(--surface-gap-lg) * 2);
-  justify-content: start;
+  /* Helper note: equal columns use the card width without leaving a dead zone;
+     auto-fit stacks whole groups before labels can collide. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--layout-grid-min-group)), 1fr));
+  gap: var(--surface-gap-lg);
+  align-items: start;
   width: 100%;
   max-width: 100%;
   padding: var(--surface-gap-md);
@@ -2668,10 +2669,13 @@
   justify-items: start;
   min-width: 0;
   margin: 0;
-  padding: 0 var(--surface-gap-lg);
+  padding: 0;
   border: 0;
 }
-.checkbox-list-group + .checkbox-list-group { border-left: 1px solid var(--border-subtle); }
+.checkbox-list-group + .checkbox-list-group {
+  padding-left: var(--surface-gap-lg);
+  border-left: 1px solid var(--border-subtle);
+}
 .checkbox-list-group legend {
   margin-bottom: var(--surface-gap-sm);
   padding: 0;
@@ -2684,7 +2688,7 @@
   gap: var(--surface-gap-sm) var(--surface-gap-lg);
 }
 .checkbox-list-group--dense .checkbox-list-options {
-  grid-template-columns: repeat(2, max-content);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-rows: repeat(var(--checkbox-list-row-count), auto);
   grid-auto-flow: column;
   column-gap: var(--surface-gap-lg);
@@ -2744,9 +2748,9 @@
 }
 .checkbox-list-option span {
   min-width: 0;
-  overflow-wrap: normal;
+  overflow-wrap: anywhere;
   word-break: normal;
-  white-space: nowrap;
+  white-space: normal;
 }
 .checkbox-list-option input:disabled + span { opacity: 0.55; }
 
@@ -2764,6 +2768,7 @@
     padding: var(--surface-gap-md) 0;
   }
   .checkbox-list-group + .checkbox-list-group {
+    padding-left: 0;
     border-left: 0;
     border-top: 1px solid var(--border-subtle);
   }
